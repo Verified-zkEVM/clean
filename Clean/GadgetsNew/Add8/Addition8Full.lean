@@ -32,18 +32,18 @@ def Inputs (p : ℕ) : TypePair := ⟨
 instance : ProvableType (F p) (Inputs p) where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
-  from_vars v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩ ⟩
+  from_vars v :=
+    let ⟨ [x, y, carry_in], _ ⟩ := v
+    ⟨ x, y, carry_in ⟩
   to_values s := vec [s.x, s.y, s.carry_in]
-  from_values v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩ ⟩
+  from_values v :=
+    let ⟨ [x, y, carry_in], _ ⟩ := v
+    ⟨ x, y, carry_in ⟩
 
 def add8_full (input : (Inputs p).var) := do
   let ⟨x, y, carry_in⟩ := input
 
-  let res ← subcircuit Add8FullCarry.circuit {
-    x := x,
-    y := y,
-    carry_in := carry_in
-  }
+  let res ← subcircuit Add8FullCarry.circuit { x, y, carry_in }
 
   return res.z
 
@@ -85,13 +85,13 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- satisfy `Add8FullCarry.assumptions` by using our own assumptions
     let ⟨ asx, asy, as_carry_in ⟩ := as
-    have as': Add8FullCarry.circuit.assumptions { x := x, y := y, carry_in := carry_in } := ⟨asx, asy, as_carry_in⟩
+    have as': Add8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
     specialize h_holds (by assumption)
     dsimp [ProvableType.from_values] at h_holds
 
     guard_hyp h_holds : Add8FullCarry.circuit.spec
-      { x := x, y := y, carry_in := carry_in }
-      { z := z, carry_out := env (ctx.offset + 1) }
+      { x, y, carry_in }
+      { z, carry_out := env (ctx.offset + 1) }
 
     -- unfold `Add8FullCarry` statements to show what the hypothesis is in our context
     dsimp [Add8FullCarry.circuit, Add8FullCarry.spec] at h_holds

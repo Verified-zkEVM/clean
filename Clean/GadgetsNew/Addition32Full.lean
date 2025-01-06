@@ -33,17 +33,13 @@ def Inputs (p : ℕ) : TypePair := ⟨
 instance : ProvableType (F p) (Inputs p) where
   size := 9 -- 4 + 4 + 1
   to_vars s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.carry_in]
-  from_vars v := ⟨
-    ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩,
-    ⟨ v.get ⟨ 4, by norm_num ⟩, v.get ⟨ 5, by norm_num ⟩, v.get ⟨ 6, by norm_num ⟩, v.get ⟨ 7, by norm_num ⟩ ⟩,
-    v.get ⟨ 8, by norm_num ⟩
-  ⟩
+  from_vars v :=
+    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
+    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
   to_values s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.carry_in]
-  from_values v := ⟨
-    ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩,
-    ⟨ v.get ⟨ 4, by norm_num ⟩, v.get ⟨ 5, by norm_num ⟩, v.get ⟨ 6, by norm_num ⟩, v.get ⟨ 7, by norm_num ⟩ ⟩,
-    v.get ⟨ 8, by norm_num ⟩
-  ⟩
+  from_values v :=
+    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
+    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
 
 
 structure OutputStruct (F : Type) where
@@ -58,15 +54,13 @@ def Outputs (p : ℕ) : TypePair := ⟨
 instance : ProvableType (F p) (Outputs p) where
   size := 5 -- 4 + 1
   to_vars s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.carry_out]
-  from_vars v := ⟨
-    ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩,
-    v.get ⟨ 4, by norm_num ⟩
-  ⟩
+  from_vars v :=
+    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
+    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
   to_values s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.carry_out]
-  from_values v := ⟨
-    ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩,
-    v.get ⟨ 4, by norm_num ⟩
-  ⟩
+  from_values v :=
+    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
+    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
 def add32_full (input : (Inputs p).var) : Stateful (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input

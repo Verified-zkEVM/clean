@@ -32,9 +32,13 @@ def Inputs (p : ℕ) : TypePair := ⟨
 instance : ProvableType (F p) (Inputs p) where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
-  from_vars v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩ ⟩
+  from_vars v :=
+    let ⟨ [x, y, carry_in], _ ⟩ := v
+    ⟨ x, y, carry_in ⟩
   to_values s := vec [s.x, s.y, s.carry_in]
-  from_values v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩ ⟩
+  from_values v :=
+    let ⟨ [x, y, carry_in], _ ⟩ := v
+    ⟨ x, y, carry_in ⟩
 
 
 structure OutputStruct (F : Type) where
@@ -49,9 +53,13 @@ def Outputs (p : ℕ) : TypePair := ⟨
 instance : ProvableType (F p) (Outputs p) where
   size := 2
   to_vars s := vec [s.z, s.carry_out]
-  from_vars v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩ ⟩
+  from_vars v :=
+    let ⟨ [z, carry_out], _ ⟩ := v
+    ⟨ z, carry_out ⟩
   to_values s := vec [s.z, s.carry_out]
-  from_values v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩ ⟩
+  from_values v :=
+    let ⟨ [z, carry_out], _ ⟩ := v
+    ⟨ z, carry_out ⟩
 
 def add8_full_carry (input : (Inputs p).var) : Stateful (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
@@ -164,7 +172,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     show goal_byte ∧ goal_bool ∧ goal_add
 
     -- proving that z is contained in the Byte table is simple,
-    -- so we just do it inline aspplying the fact that every byte is contained in
+    -- so we just do it inline applying the fact that every byte is contained in
     -- the Byte table
     have completeness1 : goal_byte := ByteTable.completeness z (by
       dsimp [z]
