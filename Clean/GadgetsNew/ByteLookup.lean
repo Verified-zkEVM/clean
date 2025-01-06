@@ -33,6 +33,18 @@ def ByteTable.soundness (x: F p) : ByteTable.contains (vec [x]) → x.val < 256 
   rw [h'']
   exact i.is_lt
 
+def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x]) := by
+  intro h
+  dsimp [Table.contains, ByteTable]
+  use x.val
+  simp [from_byte]
+  dsimp [vec]
+  rw [←Vector.vec_eq]
+  have h' : (x.val) % 256 = x.val := by
+    rw [Nat.mod_eq_iff_lt]; assumption; norm_num
+  simp [h']
+  rw [FieldUtils.nat_to_field_of_val_eq_iff]
+
 def byte_lookup (x: Expression (F p)) := lookup {
   table := ByteTable
   entry := vec [x]
@@ -42,19 +54,3 @@ def byte_lookup (x: Expression (F p)) := lookup {
     then ⟨x, h⟩
     else ⟨0, by show 0 < 256; norm_num⟩
 }
-
-inductive Byte (F: Type) where
-  | private mk : (Variable F) → Byte F
-
-namespace Byte
-def var (b: Byte (F p)) := Expression.var b.1
-
-def witness (compute : Unit → F p) := do
-  let x ← witness_var compute
-  byte_lookup x
-  return Byte.mk x
-
-instance : Coe (Byte (F p)) (Expression (F p)) where
-  coe x := x.var
-end Byte
-end ByteLookup

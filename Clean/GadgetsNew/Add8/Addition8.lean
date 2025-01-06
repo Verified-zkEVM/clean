@@ -8,7 +8,7 @@ import Clean.Circuit.Basic
 import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
 import Clean.GadgetsNew.Boolean
-import Clean.GadgetsNew.Addition8Full
+import Clean.GadgetsNew.Add8.Addition8Full
 
 namespace Add8
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
@@ -19,35 +19,58 @@ open Provable (field field2 fields)
 open ByteLookup
 open Expression
 
-def add8 (input : Vector (Expression (F p)) 2) := do
-  let ⟨ [x, y], _ ⟩ := input
-  let z ← subcircuit Add8Full.circuit (vec [x, y, const 0])
+structure InputStruct (F : Type) where
+  x: F
+  y: F
+
+def Inputs (p : ℕ) : TypePair := ⟨
+  InputStruct (Expression (F p)),
+  InputStruct (F p)
+⟩
+
+instance : ProvableType (F p) (Inputs p) where
+  size := 2
+  to_vars s := vec [s.x, s.y]
+  from_vars v :=
+    let ⟨ [x, y], _ ⟩ := v
+    ⟨ x, y ⟩
+  to_values s := vec [s.x, s.y]
+  from_values v :=
+    let ⟨ [x, y], _ ⟩ := v
+    ⟨ x, y ⟩
+
+
+def add8 (input : (Inputs p).var) := do
+  let ⟨x, y⟩ := input
+  let z ← subcircuit Add8Full.circuit { x, y, carry_in := const 0 }
   return z
 
-def spec (input : Vector (F p) 2) (z: F p) :=
-  let ⟨ [x, y], _ ⟩ := input
+def spec (input : (Inputs p).value) (z: F p) :=
+  let ⟨x, y⟩ := input
   z.val = (x.val + y.val) % 256
 
-def assumptions (input : Vector (F p) 2) :=
-  let ⟨ [x, y], _ ⟩ := input
+def assumptions (input : (Inputs p).value) :=
+  let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def circuit : FormalCircuit (F p) (fields (F p) 2) (field (F p)) where
+/--
+  Compute the 8-bit addition of two numbers.
+  Returns the sum.
+-/
+def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
   main := add8
   assumptions := assumptions
   spec := spec
   soundness := by
     -- introductions
-    rintro ctx env ⟨ inputs, _ ⟩ ⟨ inputs_var, _ ⟩ h_inputs as
-    let [x, y] := inputs
-    let [x_var, y_var] := inputs_var
+    rintro ctx env inputs inputs_var h_inputs as
+    let ⟨x, y⟩ := inputs
+    let ⟨x_var, y_var⟩ := inputs_var
     intro h_holds z
 
     -- characterize inputs
-    injection h_inputs with h_inputs
-    injection h_inputs with hx h_inputs
-    injection h_inputs with hy h_inputs
-    dsimp at hx hy
+    have hx : x_var.eval_env env = x := by injection h_inputs
+    have hy : y_var.eval_env env = y := by injection h_inputs
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8Full.circuit`
@@ -59,10 +82,11 @@ def circuit : FormalCircuit (F p) (fields (F p) 2) (field (F p)) where
 
     -- satisfy `Add8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
-    have as': Add8Full.assumptions (vec [x, y, 0]) := ⟨asx, asy, by tauto⟩
+    have as': Add8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
     specialize h_holds as'
+    dsimp [ProvableType.from_values] at h_holds
 
-    guard_hyp h_holds : Add8Full.circuit.spec (vec [x, y, 0]) z
+    guard_hyp h_holds : Add8Full.circuit.spec { x, y, carry_in := 0 } z
 
     -- unfold `Add8Full` statements to show what the hypothesis is in our context
     dsimp [Add8Full.circuit, Add8Full.spec] at h_holds
@@ -73,16 +97,14 @@ def circuit : FormalCircuit (F p) (fields (F p) 2) (field (F p)) where
 
   completeness := by
     -- introductions
-    rintro ctx ⟨ inputs, _ ⟩ ⟨ inputs_var, _ ⟩ h_inputs
-    let [x, y] := inputs
-    let [x_var, y_var] := inputs_var
+    rintro ctx inputs inputs_var h_inputs
+    let ⟨x, y⟩ := inputs
+    let ⟨x_var, y_var⟩ := inputs_var
     rintro as
 
     -- characterize inputs
-    injection h_inputs with h_inputs
-    injection h_inputs with hx h_inputs
-    injection h_inputs with hy h_inputs
-    dsimp at hx hy
+    have hx : x_var.eval = x := by injection h_inputs
+    have hy : y_var.eval = y := by injection h_inputs
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as

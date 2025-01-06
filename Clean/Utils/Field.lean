@@ -61,6 +61,22 @@ theorem byte_sum_and_bit_do_not_wrap (x y b: F p) [p_large_enough: Fact (p > 512
   rw [add_assoc, sum_do_not_wrap_around b (x + y) sum_lt_p,
     byte_sum_do_not_wrap x y hx hy, ←add_assoc]
 
+theorem byte_sum_and_bit_do_not_wrap' (x y b: F p) [p_large_enough: Fact (p > 512)]:
+    x.val < 256 -> y.val < 256 -> b.val < 2 -> (x + y + b).val = x.val + y.val + b.val := by
+  intros hx hy hb
+  have sum_bound := byte_sum_le_bound x y hx hy
+  have sum_lt_512 : b.val + (x + y).val ≤ 511 := by
+    apply Nat.le_sub_one_of_lt at sum_bound
+    apply Nat.le_sub_one_of_lt at hb
+    simp at sum_bound
+    simp at hb
+    apply Nat.add_le_add hb sum_bound
+  have sum_lt_p : b.val + (x + y).val < p := Nat.lt_trans
+    (by apply Nat.lt_add_one_of_le at sum_lt_512; assumption) p_large_enough.elim
+  rw [add_comm] at sum_lt_p
+  rw [sum_do_not_wrap_around (x + y) b sum_lt_p,
+    byte_sum_do_not_wrap x y hx hy]
+
 theorem byte_plus_256_do_not_wrap (x: F p) [p_large_enough: Fact (p > 512)]:
     x.val < 256 -> (x + 256).val = x.val + 256 := by
   intro hx
@@ -96,5 +112,29 @@ theorem nat_to_field_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = nat_to_field n l
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)
   · rw [hx]; rfl
+
+theorem nat_to_field_of_val_eq_iff {x : F p} {lt: x.val < p} : nat_to_field (x.val) lt = x := by
+  cases p
+  · exact False.elim (Nat.not_lt_zero x.val lt)
+  · dsimp [nat_to_field]; aesop
+
+theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = n := by
+  cases p
+  · exact False.elim (Nat.not_lt_zero n lt)
+  · rfl
+
+def less_than_p [p_pos: Fact (p ≠ 0)] (x: F p) : x.val < p := by
+  rcases p
+  · have : 0 ≠ 0 := p_pos.elim; tauto
+  · exact x.is_lt
+
+def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
+  FieldUtils.nat_to_field (x.val % c) (by linarith [Nat.mod_lt x.val c.pos, lt])
+
+def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
+  mod x 256 (by linarith [p_large_enough.elim])
+
+def floordiv [Fact (p ≠ 0)] (x: F p) (c: ℕ+) : F p :=
+  FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
 end FieldUtils

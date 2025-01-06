@@ -5,7 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
-import Clean.GadgetsNew.Addition8
+import Clean.GadgetsNew.Add8.Addition8
 
 section
 
@@ -20,7 +20,7 @@ open Expression (const)
   let main := do
     let x ← witness (fun _ => 10)
     let y ← witness (fun _ => 20)
-    Add8.add8 (p:=p) (vec [x, y])
+    Add8.add8 (p:=p) (⟨x, y⟩)
   main.operations
 
 end

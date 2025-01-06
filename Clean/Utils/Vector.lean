@@ -11,6 +11,15 @@ instance [Repr α] {n: ℕ} : Repr (Vector α n) where
 def vec (l: List α) : Vector α l.length := ⟨ l, rfl ⟩
 
 namespace Vector
+  theorem vec_eq (l : ℕ) (v w: Vector α l) : v.val = w.val ↔ v = w := by
+    constructor
+    · intro h
+      cases v
+      cases w
+      simp [Subtype.mk_eq_mk] at h
+      simp [h]
+    · aesop
+
   theorem length_matches (v: Vector α n) : v.1.length = n := v.2
 
   @[simp]
