@@ -5,6 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
+import Clean.Circuit.SubCircuit
 import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
 import Clean.GadgetsNew.Boolean
