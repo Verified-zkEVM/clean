@@ -110,7 +110,7 @@ inductive Operation (F : Type) [Field F] where
   | Assert : Expression F → Operation F
   | Lookup : Lookup F → Operation F
   | Assign : Cell F × Variable F → Operation F
-  | Circuit : SubCircuit F → Operation F
+  | SubCircuit : SubCircuit F → Operation F
 
 namespace Operation
 @[simp]
@@ -122,7 +122,7 @@ def update_context (ctx: Context F) : Operation F → Context F
   | Assert _ => ctx
   | Lookup _ => ctx
   | Assign _ => ctx
-  | Circuit { ops, .. } =>
+  | SubCircuit { ops, .. } =>
     let offset := ctx.offset + ops.length
     { ctx with offset }
 
@@ -131,7 +131,7 @@ def toString [Repr F] : (op : Operation F) → String
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
   | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
-  | Circuit { ops, .. } => "(Circuit " ++ reprStr ops ++ ")"
+  | SubCircuit { ops, .. } => "(Circuit " ++ reprStr ops ++ ")"
 
 instance [Repr F] : ToString (Operation F) where
   toString := toString
@@ -208,13 +208,13 @@ def constraints_hold_from_list [Field F] (env: (ℕ → F)) : List (Operation F)
     | Operation.Assert e => (e.eval_env env) = 0
     | Operation.Lookup { table, entry, index := _ } =>
       table.contains (entry.map (fun e => e.eval_env env))
-    | Operation.Circuit { soundness, .. } => soundness env
+    | Operation.SubCircuit { soundness, .. } => soundness env
     | _ => True
   | op :: ops => match op with
     | Operation.Assert e => ((e.eval_env env) = 0) ∧ constraints_hold_from_list env ops
     | Operation.Lookup { table, entry, index := _ } =>
       table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold_from_list env ops
-    | Operation.Circuit { soundness, .. } => soundness env ∧ constraints_hold_from_list env ops
+    | Operation.SubCircuit { soundness, .. } => soundness env ∧ constraints_hold_from_list env ops
     | _ => constraints_hold_from_list env ops
 
 @[reducible, simp]
@@ -234,13 +234,13 @@ def constraints_hold_from_list_default [Field F] : List (Operation F) → Prop
     | Operation.Assert e => e.eval = 0
     | Operation.Lookup { table, entry, index := _ } =>
         table.contains (entry.map Expression.eval)
-    | Operation.Circuit { completeness, .. } => completeness
+    | Operation.SubCircuit { completeness, .. } => completeness
     | _ => True
   | op :: ops => match op with
     | Operation.Assert e => (e.eval = 0) ∧ constraints_hold_from_list_default ops
     | Operation.Lookup { table, entry, index := _ } =>
         table.contains (entry.map Expression.eval) ∧ constraints_hold_from_list_default ops
-    | Operation.Circuit { completeness, .. } => completeness ∧ constraints_hold_from_list_default ops
+    | Operation.SubCircuit { completeness, .. } => completeness ∧ constraints_hold_from_list_default ops
     | _ => constraints_hold_from_list_default ops
 
 @[simp]
@@ -259,7 +259,7 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
     | Operation.Assert e => PreOperation.Assert e :: to_flat_operations ops
     | Operation.Lookup l => PreOperation.Lookup l :: to_flat_operations ops
     | Operation.Assign (c, v) => PreOperation.Assign (c, v) :: to_flat_operations ops
-    | Operation.Circuit circuit => circuit.ops ++ to_flat_operations ops
+    | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
 -- TODO super painful, mainly because `cases` doesn't allow rich patterns -- how does this work again?
 theorem can_flatten_first : ∀ (env: ℕ → F) (ops: List (Operation F)),
@@ -274,13 +274,13 @@ theorem can_flatten_first : ∀ (env: ℕ → F) (ops: List (Operation F)),
     | nil =>
       simp at ih
       cases op with
-      | Circuit c =>
+      | SubCircuit c =>
         sorry
       | _ => simp [PreOperation.constraints_hold]
     | cons op' ops' =>
       let ops := op' :: ops'
       cases op with
-      | Circuit c => sorry
+      | SubCircuit c => sorry
       | Assert e => sorry
       | Witness c =>
         have h_ops : to_flat_operations (Operation.Witness c :: op' :: ops') = PreOperation.Witness c :: to_flat_operations (op' :: ops') := rfl
@@ -397,7 +397,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
 def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := as_circuit (F:=F) (
   fun ctx =>
     let ⟨ a, subcircuit ⟩ := formal_circuit_to_subcircuit ctx circuit b
-    (Operation.Circuit subcircuit, a)
+    (Operation.SubCircuit subcircuit, a)
 )
 end Circuit
 
