@@ -50,7 +50,7 @@ by
     simp [h]
 
 theorem equiv : ∀ x: F p,
-  constraints_hold (assert_bool (const x)) ↔ spec x
+  constraints_hold_default (assert_bool (const x)) ↔ spec x
 := by
   -- simplify
   dsimp
