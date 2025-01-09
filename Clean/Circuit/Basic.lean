@@ -197,7 +197,7 @@ def assign_cell (c: Cell F) (v: Variable F) := as_circuit (
 -- formal concepts of soundness and completeness of a circuit
 
 @[simp]
-def constraints_hold_from_list [Field F] (env: (ℕ → F)) : List (Operation F) → Prop
+def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
     | Operation.Assert e => (e.eval_env env) = 0
@@ -205,12 +205,12 @@ def constraints_hold_from_list [Field F] (env: (ℕ → F)) : List (Operation F)
       table.contains (entry.map (fun e => e.eval_env env))
     | Operation.SubCircuit { soundness, .. } => soundness env
     | _ => True
-  | op :: ops => match op with
-    | Operation.Assert e => ((e.eval_env env) = 0) ∧ constraints_hold_from_list env ops
+  | op :: op' :: ops => match op with
+    | Operation.Assert e => ((e.eval_env env) = 0) ∧ constraints_hold_from_list env (op' :: ops)
     | Operation.Lookup { table, entry, index := _ } =>
-      table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold_from_list env ops
-    | Operation.SubCircuit { soundness, .. } => soundness env ∧ constraints_hold_from_list env ops
-    | _ => constraints_hold_from_list env ops
+      table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold_from_list env (op' :: ops)
+    | Operation.SubCircuit { soundness, .. } => soundness env ∧ constraints_hold_from_list env (op' :: ops)
+    | _ => constraints_hold_from_list env (op' :: ops)
 
 @[reducible, simp]
 def constraints_hold [Field F] (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := .empty) : Prop :=

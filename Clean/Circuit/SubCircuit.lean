@@ -9,47 +9,29 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
   match ops with
   | [] => []
   | op :: ops => match op with
-    | Operation.Witness compute => PreOperation.Witness compute :: to_flat_operations ops
-    | Operation.Assert e => PreOperation.Assert e :: to_flat_operations ops
-    | Operation.Lookup l => PreOperation.Lookup l :: to_flat_operations ops
-    | Operation.Assign (c, v) => PreOperation.Assign (c, v) :: to_flat_operations ops
+    | Operation.Witness compute => Witness compute :: to_flat_operations ops
+    | Operation.Assert e => Assert e :: to_flat_operations ops
+    | Operation.Lookup l => Lookup l :: to_flat_operations ops
+    | Operation.Assign c => Assign c :: to_flat_operations ops
     | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
--- TODO super painful, mainly because `cases` doesn't allow rich patterns -- how does this work again?
+open Circuit (constraints_hold_from_list)
+
 theorem can_flatten_first : ∀ (env: ℕ → F) (ops: List (Operation F)),
   PreOperation.constraints_hold env (to_flat_operations ops)
-  → Circuit.constraints_hold_from_list env ops
+  → constraints_hold_from_list env ops
 := by
   intro env ops
-  induction ops with
-  | nil => intro h; exact h
-  | cons op ops ih =>
-    cases ops with
-    | nil =>
-      simp at ih
-      cases op with
-      | SubCircuit c =>
-        sorry
-      | _ => simp [PreOperation.constraints_hold]
-    | cons op' ops' =>
-      let ops := op' :: ops'
-      cases op with
-      | SubCircuit c => sorry
-      | Assert e => sorry
-      | Witness c =>
-        have h_ops : to_flat_operations (Operation.Witness c :: op' :: ops') = PreOperation.Witness c :: to_flat_operations (op' :: ops') := rfl
-        rw [h_ops]
-        intro h_pre
-        have h1 : PreOperation.constraints_hold env (to_flat_operations (op' :: ops')) := by
-          rw [PreOperation.constraints_hold] at h_pre
-          · exact h_pre
-          · sorry
-          · simp
-          · simp
-        have ih1 := ih h1
-        simp [ih1]
-      | Lookup l => sorry
-      | Assign a => sorry
+  induction ops using to_flat_operations.induct with
+  | case1 => dsimp only [to_flat_operations]; tauto
+  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
+    dsimp only [to_flat_operations]; intro h
+    cases ops
+    <;> generalize to_flat_operations (F:=F) _ = flatops at h ih
+    <;> cases flatops
+    <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
+  | case6 ops _ ih =>
+    sorry
 
 theorem can_flatten : ∀ (ops: List (Operation F)),
   Circuit.constraints_hold_from_list_default ops →
