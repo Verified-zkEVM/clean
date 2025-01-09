@@ -59,6 +59,9 @@ def toString [Repr F] : (op : PreOperation F) → String
   | Lookup l => reprStr l
   | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
 
+instance [Repr F] : Repr (PreOperation F) where
+  reprPrec op _ := toString op
+
 def constraints_hold (env: ℕ → F) : List (PreOperation F) → Prop
   | [] => True
   | op :: [] => match op with
@@ -67,7 +70,7 @@ def constraints_hold (env: ℕ → F) : List (PreOperation F) → Prop
       table.contains (entry.map (fun e => e.eval_env env))
     | _ => True
   | op :: ops => match op with
-    | PreOperation.Assert e => ((e.eval_env env) = 0) ∧ constraints_hold env ops
+    | Assert e => ((e.eval_env env) = 0) ∧ constraints_hold env ops
     | Lookup { table, entry, index := _ } =>
       table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold env ops
     | _ => constraints_hold env ops
@@ -80,7 +83,7 @@ def constraints_hold_default : List (PreOperation F) → Prop
       table.contains (entry.map (fun e => e.eval))
     | _ => True
   | op :: ops => match op with
-    | PreOperation.Assert e => (e.eval = 0) ∧ constraints_hold_default ops
+    | Assert e => (e.eval = 0) ∧ constraints_hold_default ops
     | Lookup { table, entry, index := _ } =>
       table.contains (entry.map (fun e => e.eval)) ∧ constraints_hold_default ops
     | _ => constraints_hold_default ops
@@ -129,7 +132,7 @@ def toString [Repr F] : (op : Operation F) → String
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
   | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
-  | Circuit { ops, .. } => "(Circuit " ++ reprStr (ops.map PreOperation.toString) ++ ")"
+  | Circuit { ops, .. } => "(Circuit " ++ reprStr ops ++ ")"
 
 instance [Repr F] : ToString (Operation F) where
   toString := toString

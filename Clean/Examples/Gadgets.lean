@@ -20,7 +20,7 @@ open Expression (const)
   let main := do
     let x ← witness (fun _ => 10)
     let y ← witness (fun _ => 20)
-    Add8.add8 (p:=p) (⟨x, y⟩)
+    Add8.add8 (p:=p) { x, y }
   main.operations
 
 end
