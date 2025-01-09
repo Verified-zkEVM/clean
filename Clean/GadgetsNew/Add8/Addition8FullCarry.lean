@@ -5,6 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
+import Clean.Circuit.SubCircuit
 import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
 import Clean.GadgetsNew.Boolean
@@ -67,7 +68,7 @@ def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := 
 
   -- witness the output carry
   let carry_out ← witness (fun () => FieldUtils.floordiv (x + y + carry_in) 256)
-  assert_bool carry_out
+  assertion Boolean.circuit carry_out
 
   assert_zero (x + y + carry_in - z - carry_out * (const 256))
 
@@ -120,19 +121,18 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
     guard_hyp h_byte: ByteTable.contains (vec [z])
-    guard_hyp h_bool_carry: carry_out * (carry_out + -1 * 1) = 0
     guard_hyp h_add: x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
+    change True → (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
+    specialize h_bool_carry trivial
 
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
-    -- reuse Boolean.equiv
-    have h_bool_carry': carry_out = 0 ∨ carry_out = 1 := (Boolean.equiv carry_out).mp h_bool_carry
     -- reuse ByteTable.soundness
     have h_byte': z.val < 256 := ByteTable.soundness z h_byte
 
     have ⟨as_x, as_y, as_carry_in⟩ := as
-    apply Add8Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry' h_add
+    apply Add8Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry h_add
 
   completeness := by
    -- introductions
@@ -161,9 +161,10 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
     let goal_byte := ByteTable.contains (vec [z])
-    let goal_bool := carry_out * (carry_out + -1 * 1) = 0
+    let goal_bool := carry_out = 0 ∨ carry_out = 1
     let goal_add := x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
-    show goal_byte ∧ goal_bool ∧ goal_add
+    show goal_byte ∧ (True ∧ goal_bool) ∧ goal_add
+    suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
     -- proving that z is contained in the Byte table is simple,
     -- so we just do it inline applying the fact that every byte is contained in
