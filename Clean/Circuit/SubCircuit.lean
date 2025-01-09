@@ -106,6 +106,48 @@ def formal_circuit_to_subcircuit (ctx: Context F)
     exact PreOperation.can_flatten ops h_holds
 
   ⟨ a_var, s ⟩
+
+def formal_assertion_to_subcircuit (ctx: Context F)
+  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F :=
+  let res := circuit.main b_var ctx
+  let ops := res.1.2
+
+  have s: SubCircuit F := by
+    let flat_ops := PreOperation.to_flat_operations ops
+    let soundness := subassertion_soundness circuit b_var
+    let completeness := subassertion_completeness circuit b_var
+    use flat_ops, soundness, completeness
+
+    -- `imply_soundness`
+    -- we are given an environment where the constraints hold, and can assume the assumptions are true
+    intro env h_holds
+    show soundness env
+
+    let b : β.value := Provable.eval_env env b_var
+    rintro (as : circuit.assumptions b)
+    show circuit.spec b
+
+    -- by soundness of the circuit, the spec is satisfied if only the constraints hold
+    suffices h: constraints_hold_from_list env ops by
+      exact circuit.soundness ctx env b b_var rfl as h
+
+    -- so we just need to go from flattened constraints to constraints
+    guard_hyp h_holds : PreOperation.constraints_hold env (PreOperation.to_flat_operations ops)
+    exact PreOperation.can_flatten_first env ops h_holds
+
+    -- `implied_by_completeness`
+    -- we are given that the assumptions and the spec are true
+    intro h_completeness
+    let b := Provable.eval F b_var
+    have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
+
+    -- by completeness of the circuit, this means we can make the constraints hold
+    have h_holds : constraints_hold_from_list_default ops := circuit.completeness ctx b b_var rfl as.left as.right
+
+    -- so we just need to go from constraints to flattened constraints
+    exact PreOperation.can_flatten ops h_holds
+
+  s
 end Circuit
 
 -- run a sub-circuit
@@ -114,4 +156,11 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := Circuit.as_circui
   fun ctx =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx circuit b
     (Operation.SubCircuit subcircuit, a)
+)
+
+@[simp]
+def subassertion (circuit: FormalAssertion F β) (b: β.var) := Circuit.as_circuit (F:=F) (
+  fun ctx =>
+    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx circuit b
+    (Operation.SubCircuit subcircuit, ())
 )
