@@ -131,7 +131,7 @@ def toString [Repr F] : (op : Operation F) → String
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
   | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
-  | SubCircuit { ops, .. } => "(Circuit " ++ reprStr ops ++ ")"
+  | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 
 instance [Repr F] : ToString (Operation F) where
   toString := toString
