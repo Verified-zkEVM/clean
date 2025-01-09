@@ -5,7 +5,6 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 
-namespace Circuit
 variable {F: Type}
 
 structure Table (F : Type) where
@@ -112,8 +111,8 @@ inductive Operation (F : Type) [Field F] where
   | Lookup : Lookup F → Operation F
   | Assign : Cell F × Variable F → Operation F
   | Circuit : SubCircuit F → Operation F
-namespace Operation
 
+namespace Operation
 @[simp]
 def run (ctx: Context F) : Operation F → Context F
   | Witness compute =>
@@ -139,10 +138,11 @@ instance [Repr F] : ToString (Operation F) where
 end Operation
 
 @[simp]
-def Stateful (F : Type) [Field F] (α : Type) :=
+def Circuit (F : Type) [Field F] (α : Type) :=
   Context F → (Context F × List (Operation F)) × α
 
-instance : Monad (Stateful F) where
+namespace Circuit
+instance : Monad (Circuit F) where
   pure a ctx := ((ctx, []), a)
   bind f g ctx :=
     let ((ctx', ops), a) := f ctx
@@ -150,20 +150,20 @@ instance : Monad (Stateful F) where
     ((ctx'', ops ++ ops'), b)
 
 @[simp]
-def Stateful.run (circuit: Stateful F α) : List (Operation F) × α :=
+def run (circuit: Circuit F α) : List (Operation F) × α :=
   let ((_, ops), a) := circuit Context.empty
   (ops, a)
 
 @[reducible]
-def Stateful.operations (circuit: Stateful F α) : List (Operation F) :=
-  (circuit Context.empty).1.2
+def operations (circuit: Circuit F α) : List (Operation F) :=
+  (circuit .empty).1.2
 
 @[reducible]
-def output (circuit: Stateful F α) (ctx : Context F := Context.empty) : α :=
+def output (circuit: Circuit F α) (ctx : Context F := Context.empty) : α :=
   (circuit ctx).2
 
-@[simp]
-def as_stateful (f: Context F → Operation F × α) : Stateful F α := fun ctx  =>
+@[reducible]
+def as_circuit (f: Context F → Operation F × α) : Circuit F α := fun ctx  =>
   let (op, a) := f ctx
   let ctx' := Operation.run ctx op
   ((ctx', [op]), a)
@@ -172,7 +172,7 @@ def as_stateful (f: Context F → Operation F × α) : Stateful F α := fun ctx 
 
 -- create a new variable
 @[simp]
-def witness_var (compute : Unit → F) := as_stateful (fun ctx =>
+def witness_var (compute : Unit → F) := as_circuit (fun ctx =>
   let var: Variable F := ⟨ ctx.offset, compute ⟩
   (Operation.Witness compute, var)
 )
@@ -184,25 +184,25 @@ def witness (compute : Unit → F) := do
 
 -- add a constraint
 @[simp]
-def assert_zero (e: Expression F) := as_stateful (
+def assert_zero (e: Expression F) := as_circuit (
   fun _ => (Operation.Assert e, ())
 )
 
 -- add a lookup
 @[simp]
-def lookup (l: Lookup F) := as_stateful (
+def lookup (l: Lookup F) := as_circuit (
   fun _ => (Operation.Lookup l, ())
 )
 
 -- assign a variable to a cell
 @[simp]
-def assign_cell (c: Cell F) (v: Variable F) := as_stateful (
+def assign_cell (c: Cell F) (v: Variable F) := as_circuit (
   fun _ => (Operation.Assign (c, v), ())
 )
 
 -- TODO derived operations: assert(lhs == rhs), <== (witness + assert)
 
-def to_var [Field F] (x: Expression F) : Stateful F (Variable F) :=
+def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
   match x with
   | Expression.var v => pure v
   | x => do
@@ -218,7 +218,7 @@ def InputCell.set_next [Field F] (c: InputCell F) (v: Expression F) := do
   let v' ← to_var v
   assign_cell { c.cell.val with row := RowIndex.Next } v'
 
-def create_input (value: F) (column: ℕ) : Stateful F (InputCell F) := do
+def create_input (value: F) (column: ℕ) : Circuit F (InputCell F) := do
   let var ← witness_var (fun _ => value)
   let cell: Cell F := ⟨ RowIndex.Current, column ⟩
   assign_cell cell var
@@ -247,7 +247,7 @@ namespace Adversarial
       | _ => constraints_hold_from_list env ops
 
   @[reducible, simp]
-  def constraints_hold [Field F] (env: (ℕ → F)) (circuit: Stateful F α) (ctx : Context F := Context.empty) : Prop :=
+  def constraints_hold [Field F] (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := Context.empty) : Prop :=
     constraints_hold_from_list env (circuit ctx).1.2
 end Adversarial
 
@@ -274,9 +274,9 @@ def constraints_hold_from_list [Field F] : List (Operation F) → Prop
     | _ => constraints_hold_from_list ops
 
 @[simp]
-def constraints_hold (circuit: Stateful F α) (ctx : Context F := Context.empty) : Prop :=
+def constraints_hold (circuit: Circuit F α) (ctx : Context F := Context.empty) : Prop :=
   constraints_hold_from_list (circuit ctx).1.2
-
+end Circuit
 
 namespace PreOperation
 -- in the following, we prove equivalence between flattened and nested constraints
@@ -294,7 +294,7 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
 -- TODO super painful, mainly because `cases` doesn't allow rich patterns -- how does this work again?
 theorem can_flatten_first : ∀ (env: ℕ → F) (ops: List (Operation F)),
   PreOperation.constraints_hold env (to_flat_operations ops)
-  → Adversarial.constraints_hold_from_list env ops
+  → Circuit.Adversarial.constraints_hold_from_list env ops
 := by
   intro env ops
   induction ops with
@@ -328,12 +328,13 @@ theorem can_flatten_first : ∀ (env: ℕ → F) (ops: List (Operation F)),
       | Assign a => sorry
 
 theorem can_flatten : ∀ (ops: List (Operation F)),
-  constraints_hold_from_list ops →
+  Circuit.constraints_hold_from_list ops →
   PreOperation.constraints_hold_default (to_flat_operations ops)
 := by
  sorry
 end PreOperation
 
+namespace Circuit
 variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
 namespace Provable
 
@@ -343,13 +344,13 @@ private def witness' := witness (F:=F)
 def witness {F: Type} [Field F] [ProvableType F α] (compute : Unit → α.value) :=
   let n := ProvableType.size F α
   let values : Vector F n := ProvableType.to_values (compute ())
-  let varsM : Vector (Stateful F (Expression F)) n := values.map (fun v => witness' (fun () => v))
+  let varsM : Vector (Circuit F (Expression F)) n := values.map (fun v => witness' (fun () => v))
   do
     let vars ← varsM.mapM
     return ProvableType.from_vars vars
 
 @[simp]
-def assert_equal {F: Type} [Field F] [ProvableType F α] (a a': α.var) : Stateful F Unit :=
+def assert_equal {F: Type} [Field F] [ProvableType F α] (a a': α.var) : Circuit F Unit :=
   let n := ProvableType.size F α
   let vars: Vector (Expression F) n := ProvableType.to_vars a
   let vars': Vector (Expression F) n := ProvableType.to_vars a'
@@ -362,7 +363,7 @@ structure FormalCircuit (F: Type) (β α: TypePair)
   [Field F] [ProvableType F α] [ProvableType F β]
 where
   -- β = inputs, α = outputs
-  main: β.var → Stateful F α.var
+  main: β.var → Circuit F α.var
 
   assumptions: β.value → Prop
   spec: β.value → α.value → Prop
@@ -446,7 +447,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
 
 -- run a sub-circuit
 @[simp]
-def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := as_stateful (F:=F) (
+def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := as_circuit (F:=F) (
   fun ctx =>
     let ⟨ a, subcircuit ⟩ := formal_circuit_to_subcircuit ctx circuit b
     (Operation.Circuit subcircuit, a)

@@ -62,7 +62,7 @@ instance : ProvableType (F p) (Outputs p) where
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
-def add32_full (input : (Inputs p).var) : Stateful (F p) (Outputs p).var := do
+def add32_full (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
 
   let {

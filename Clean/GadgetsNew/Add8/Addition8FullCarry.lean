@@ -61,7 +61,7 @@ instance : ProvableType (F p) (Outputs p) where
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
-def add8_full_carry (input : (Inputs p).var) : Stateful (F p) (Outputs p).var := do
+def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
