@@ -21,7 +21,7 @@ def var (b: Byte (F p)) := Expression.var b.1
 
 def witness (compute : Unit → F p) := do
   let x ← witness_var compute
-  ByteLookup.byte_lookup x
+  byte_lookup x
   return Byte.mk x
 
 instance : Coe (Byte (F p)) (Expression (F p)) where

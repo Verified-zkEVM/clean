@@ -17,7 +17,6 @@ variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)
-open ByteLookup
 
 structure InputStruct (F : Type) where
   x: U32 F
