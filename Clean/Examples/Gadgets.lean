@@ -9,9 +9,6 @@ import Clean.GadgetsNew.Add8.Addition8
 
 section
 
-open Circuit
-open Expression (const)
-
 #eval!
   let p := 1009
   let p_prime := Fact.mk prime_1009

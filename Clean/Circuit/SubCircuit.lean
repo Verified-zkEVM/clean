@@ -110,7 +110,7 @@ end Circuit
 
 -- run a sub-circuit
 @[simp]
-def subcircuit (circuit: Circuit.FormalCircuit F β α) (b: β.var) := Circuit.as_circuit (F:=F) (
+def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := Circuit.as_circuit (F:=F) (
   fun ctx =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx circuit b
     (Operation.SubCircuit subcircuit, a)

@@ -16,7 +16,6 @@ namespace Addition32Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
 open Provable (field field2 fields)
 open ByteLookup
 open Expression

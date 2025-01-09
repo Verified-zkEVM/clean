@@ -13,8 +13,6 @@ section
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
-
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
 -/

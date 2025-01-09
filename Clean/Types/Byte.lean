@@ -13,8 +13,6 @@ section
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
-
 inductive Byte (F: Type) where
   | private mk : (Variable F) → Byte F
 

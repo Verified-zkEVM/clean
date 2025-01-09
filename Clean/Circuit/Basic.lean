@@ -33,23 +33,16 @@ structure Cell (F : Type) where
   column: ℕ -- index of the column
 deriving Repr
 
-structure Context (F : Type) where
-  offset: ℕ
-deriving Repr
-
-@[simp]
-def Context.empty : Context F := { offset := 0 }
-
 variable {α : Type} [Field F]
 
-inductive PreOperation (F : Type) [Field F] where
+inductive PreOperation (F : Type) where
   | Witness : (compute : Unit → F) → PreOperation F
   | Assert : Expression F → PreOperation F
   | Lookup : Lookup F → PreOperation F
   | Assign : Cell F × Variable F → PreOperation F
 
 namespace PreOperation
-def toString [Repr F] : (op : PreOperation F) → String
+def toString [Repr F] : PreOperation F → String
   | Witness _v => "Witness"
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
@@ -115,6 +108,13 @@ inductive Operation (F : Type) [Field F] where
   | Assign : Cell F × Variable F → Operation F
   | SubCircuit : SubCircuit F → Operation F
 
+structure Context (F : Type) where
+  offset: ℕ
+deriving Repr
+
+@[simp]
+def Context.empty : Context F := { offset := 0 }
+
 namespace Operation
 @[simp]
 def update_context (ctx: Context F) : Operation F → Context F
@@ -122,15 +122,13 @@ def update_context (ctx: Context F) : Operation F → Context F
   | SubCircuit { ops, .. } => ⟨ ctx.offset + PreOperation.witness_length ops ⟩
   | _ => ctx
 
-def toString [Repr F] : (op : Operation F) → String
-  | Witness _v => "Witness"
-  | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
-  | Lookup l => reprStr l
-  | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
-  | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
-
 instance [Repr F] : ToString (Operation F) where
-  toString := toString
+  toString
+    | Witness _v => "Witness"
+    | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
+    | Lookup l => reprStr l
+    | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
+    | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 
 @[simp]
@@ -284,3 +282,5 @@ def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) :=
   let b := Provable.eval F b_var
   circuit.assumptions b
 end Circuit
+
+export Circuit (witness_var witness assert_zero lookup assign_cell FormalCircuit)
