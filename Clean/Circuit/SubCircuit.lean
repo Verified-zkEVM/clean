@@ -16,12 +16,28 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
 
 open Circuit (constraints_hold_from_list constraints_hold_from_list_default)
 
-lemma constraint_holds_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ → F},
+lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : ℕ → F},
+  constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
+  intro op ops env
+  match ops with
+  | [] => tauto
+  | op' :: ops =>
+    constructor
+    · intro h
+      dsimp only [constraints_hold] at h
+      split at h <;> simp_all only [constraints_hold, and_self]
+    · sorry
+
+lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ → F},
   constraints_hold env (a ++ b) → constraints_hold env a ∧ constraints_hold env b := by
   intro a b env h
   induction a with
   | nil => rw [List.nil_append] at h; tauto
   | cons op ops ih =>
+    rw [List.cons_append] at h
+    generalize h' : ops ++ b = rest at *
+    obtain ⟨ h_op, h_rest ⟩ := constraints_hold_cons.mp h
+    obtain ⟨ h_ops, h_b ⟩ := ih h_rest
     sorry
 
 /--
@@ -52,8 +68,8 @@ theorem can_replace_subcircuits : ∀ ops: List (Operation F), ∀ env : ℕ →
       exact circuit.imply_soundness env h
     rename_i op ops
     dsimp only [constraints_hold_from_list]
-    have h_subcircuit : constraints_hold env circuit.ops := (constraint_holds_append h).left
-    have h_rest : constraints_hold env (to_flat_operations (op :: ops)) := (constraint_holds_append h).right
+    have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append h).left
+    have h_rest : constraints_hold env (to_flat_operations (op :: ops)) := (constraints_hold_append h).right
     use circuit.imply_soundness env h_subcircuit
     use ih h_rest
 
