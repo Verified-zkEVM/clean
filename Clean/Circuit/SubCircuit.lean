@@ -16,6 +16,14 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
 
 open Circuit (constraints_hold_from_list constraints_hold_from_list_default)
 
+lemma constraint_holds_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ → F},
+  constraints_hold env (a ++ b) → constraints_hold env a ∧ constraints_hold env b := by
+  intro a b env h
+  induction a with
+  | nil => rw [List.nil_append] at h; tauto
+  | cons op ops ih =>
+    sorry
+
 /--
 This theorem proves equivalence between flattened and nested constraints.
 
@@ -24,24 +32,33 @@ where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
  -/
 theorem can_replace_subcircuits : ∀ ops: List (Operation F), ∀ env : ℕ → F,
-  constraints_hold_from_list env ops ↔ constraints_hold env (to_flat_operations ops)
+  constraints_hold env (to_flat_operations ops) → constraints_hold_from_list env ops
 := by
   intro ops env
   induction ops using to_flat_operations.induct with
   | case1 => dsimp only [to_flat_operations]; tauto
   | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
     dsimp only [to_flat_operations]
-    constructor
-    <;> intro h
-    <;> cases ops
+    intro h
+    cases ops
     <;> generalize to_flat_operations (F:=F) _ = flatops at h ih
     <;> cases flatops
     <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
-  | case6 ops _ ih =>
-    sorry
+  | case6 ops circuit ih =>
+    dsimp only [to_flat_operations]
+    intro h
+    cases ops
+    · simp_all [to_flat_operations]
+      exact circuit.imply_soundness env h
+    rename_i op ops
+    dsimp only [constraints_hold_from_list]
+    have h_subcircuit : constraints_hold env circuit.ops := (constraint_holds_append h).left
+    have h_rest : constraints_hold env (to_flat_operations (op :: ops)) := (constraint_holds_append h).right
+    use circuit.imply_soundness env h_subcircuit
+    use ih h_rest
 
 theorem can_replace_subcircuits_default : ∀ ops: List (Operation F),
-  constraints_hold_from_list_default ops ↔ constraints_hold_default (to_flat_operations ops)
+  constraints_hold_from_list_default ops → constraints_hold_default (to_flat_operations ops)
 := by
  sorry
 end PreOperation
@@ -79,7 +96,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env (PreOperation.to_flat_operations ops)
-    exact (PreOperation.can_replace_subcircuits ops env).mpr h_holds
+    exact PreOperation.can_replace_subcircuits ops env h_holds
 
     -- `implied_by_completeness`
     -- we are given that the assumptions are true
@@ -91,7 +108,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
     have h_holds : constraints_hold_from_list_default ops := circuit.completeness ctx b b_var rfl as
 
     -- so we just need to go from constraints to flattened constraints
-    exact (PreOperation.can_replace_subcircuits_default ops).mp h_holds
+    exact PreOperation.can_replace_subcircuits_default ops h_holds
 
   ⟨ a_var, s ⟩
 end Circuit
