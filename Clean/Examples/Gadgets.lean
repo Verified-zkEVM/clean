@@ -14,7 +14,7 @@ section
   let p_prime := Fact.mk prime_1009
   let p_non_zero := Fact.mk (by norm_num : p ≠ 0)
   let p_large_enough := Fact.mk (by norm_num : p > 512)
-  let main : Circuit _ (Provable.field _).var := do
+  let main := do
     let x ← witness (fun _ => 10)
     let y ← witness (fun _ => 20)
     let z ← Add8.add8 (p:=p) { x, y }
