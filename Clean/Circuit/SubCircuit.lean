@@ -159,7 +159,7 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := Circuit.as_circui
 )
 
 @[simp]
-def subassertion (circuit: FormalAssertion F β) (b: β.var) := Circuit.as_circuit (F:=F) (
+def assertion (circuit: FormalAssertion F β) (b: β.var) := Circuit.as_circuit (F:=F) (
   fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx circuit b
     (Operation.SubCircuit subcircuit, ())
