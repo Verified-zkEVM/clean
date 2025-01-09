@@ -114,7 +114,7 @@ inductive Operation (F : Type) [Field F] where
 
 namespace Operation
 @[simp]
-def run (ctx: Context F) : Operation F → Context F
+def update_context (ctx: Context F) : Operation F → Context F
   | Witness compute =>
     let var := ⟨ ctx.offset, compute ⟩
     let offset := ctx.offset + 1
@@ -165,10 +165,10 @@ def output (circuit: Circuit F α) (ctx : Context F := Context.empty) : α :=
 @[reducible]
 def as_circuit (f: Context F → Operation F × α) : Circuit F α := fun ctx  =>
   let (op, a) := f ctx
-  let ctx' := Operation.run ctx op
+  let ctx' := op.update_context ctx
   ((ctx', [op]), a)
 
--- operations we can do in a circuit
+-- core operations we can do in a circuit
 
 -- create a new variable
 @[simp]
@@ -199,34 +199,6 @@ def lookup (l: Lookup F) := as_circuit (
 def assign_cell (c: Cell F) (v: Variable F) := as_circuit (
   fun _ => (Operation.Assign (c, v), ())
 )
-
--- TODO derived operations: assert(lhs == rhs), <== (witness + assert)
-
-def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
-  match x with
-  | Expression.var v => pure v
-  | x => do
-    let x' ← witness_var (fun _ => x.eval)
-    assert_zero (x - (Expression.var x'))
-    return x'
-
-structure InputCell (F : Type) where
-  cell: { cell: Cell F // cell.row = RowIndex.Current }
-  var: Variable F
-
-def InputCell.set_next [Field F] (c: InputCell F) (v: Expression F) := do
-  let v' ← to_var v
-  assign_cell { c.cell.val with row := RowIndex.Next } v'
-
-def create_input (value: F) (column: ℕ) : Circuit F (InputCell F) := do
-  let var ← witness_var (fun _ => value)
-  let cell: Cell F := ⟨ RowIndex.Current, column ⟩
-  assign_cell cell var
-  let input: InputCell F := ⟨ ⟨ cell, rfl ⟩, var ⟩
-  return input
-
-instance : Coe (InputCell F) (Variable F) where
-  coe x := x.var
 
 -- extract information from circuits by running them
 @[simp]
@@ -334,27 +306,6 @@ end PreOperation
 
 namespace Circuit
 variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
-namespace Provable
-
-private def witness' := witness (F:=F)
-
-@[simp]
-def witness {F: Type} [Field F] [ProvableType F α] (compute : Unit → α.value) :=
-  let n := ProvableType.size F α
-  let values : Vector F n := ProvableType.to_values (compute ())
-  let varsM : Vector (Circuit F (Expression F)) n := values.map (fun v => witness' (fun () => v))
-  do
-    let vars ← varsM.mapM
-    return ProvableType.from_vars vars
-
-@[simp]
-def assert_equal {F: Type} [Field F] [ProvableType F α] (a a': α.var) : Circuit F Unit :=
-  let n := ProvableType.size F α
-  let vars: Vector (Expression F) n := ProvableType.to_vars a
-  let vars': Vector (Expression F) n := ProvableType.to_vars a'
-  let eqs := (vars.zip vars').map (fun ⟨ x, x' ⟩ => assert_zero (x - x'))
-  do let _ ← eqs.mapM
-end Provable
 
 -- goal: define circuit such that we can provably use it as subcircuit
 structure FormalCircuit (F: Type) (β α: TypePair)
@@ -397,18 +348,16 @@ def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) :=
 
 def formal_circuit_to_subcircuit (ctx: Context F)
   (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F :=
-  let main := circuit.main b_var
-  let res := main ctx
+  let res := circuit.main b_var ctx
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
   -- let ((_, ops), a_var) := res
   let ops := res.1.2
   let a_var := res.2
 
-  let flat_ops := PreOperation.to_flat_operations ops
-  let soundness := subcircuit_soundness circuit b_var a_var
-  let completeness := subcircuit_completeness circuit b_var
-
   have s: SubCircuit F := by
+    let flat_ops := PreOperation.to_flat_operations ops
+    let soundness := subcircuit_soundness circuit b_var a_var
+    let completeness := subcircuit_completeness circuit b_var
     use flat_ops, soundness, completeness
 
     -- `imply_soundness`
@@ -450,4 +399,48 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := as_circuit (F:=F)
     let ⟨ a, subcircuit ⟩ := formal_circuit_to_subcircuit ctx circuit b
     (Operation.Circuit subcircuit, a)
 )
+end Circuit
+
+namespace Provable
+variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
+
+@[simp]
+def witness {F: Type} [Field F] [ProvableType F α] (compute : Unit → α.value) :=
+  let n := ProvableType.size F α
+  let values : Vector F n := ProvableType.to_values (compute ())
+  let varsM : Vector (Circuit F (Expression F)) n := values.map (fun v => Circuit.witness (fun () => v))
+  do
+    let vars ← varsM.mapM
+    return ProvableType.from_vars vars
+
+@[simp]
+def assert_equal {F: Type} [Field F] [ProvableType F α] (a a': α.var) : Circuit F Unit :=
+  let n := ProvableType.size F α
+  let vars: Vector (Expression F) n := ProvableType.to_vars a
+  let vars': Vector (Expression F) n := ProvableType.to_vars a'
+  let eqs := (vars.zip vars').map (fun ⟨ x, x' ⟩ => Circuit.assert_zero (x - x'))
+  do let _ ← eqs.mapM
+end Provable
+
+-- inputs, already connected to a cell, that you can assign the next row's value of
+-- TODO figure out if this is the best way to connect to a trace
+namespace Circuit
+def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
+  match x with
+  | Expression.var v => pure v
+  | x => do
+    let x' ← witness_var (fun _ => x.eval)
+    assert_zero (x - (Expression.var x'))
+    return x'
+
+structure InputCell (F : Type) where
+  cell: { cell: Cell F // cell.row = RowIndex.Current }
+  var: Variable F
+
+def InputCell.set_next [Field F] (c: InputCell F) (v: Expression F) := do
+  let v' ← to_var v
+  assign_cell { c.cell.val with row := RowIndex.Next } v'
+
+instance : Coe (InputCell F) (Variable F) where
+  coe x := x.var
 end Circuit
