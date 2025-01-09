@@ -35,13 +35,10 @@ deriving Repr
 
 structure Context (F : Type) where
   offset: ℕ
-  locals: Array (Variable F)
 deriving Repr
 
-namespace Context
 @[simp]
-def empty : Context F := ⟨ 0, #[] ⟩
-end Context
+def Context.empty : Context F := { offset := 0 }
 
 variable {α : Type} [Field F]
 
@@ -86,6 +83,12 @@ def constraints_hold_default : List (PreOperation F) → Prop
     | Lookup { table, entry, index := _ } =>
       table.contains (entry.map (fun e => e.eval)) ∧ constraints_hold_default ops
     | _ => constraints_hold_default ops
+
+def witness_length : List (PreOperation F) → ℕ
+  | [] => 0
+  | (Witness _) :: ops => witness_length ops + 1
+  | _ :: ops => witness_length ops
+
 end PreOperation
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
@@ -115,16 +118,9 @@ inductive Operation (F : Type) [Field F] where
 namespace Operation
 @[simp]
 def update_context (ctx: Context F) : Operation F → Context F
-  | Witness compute =>
-    let var := ⟨ ctx.offset, compute ⟩
-    let offset := ctx.offset + 1
-    { ctx with offset, locals := ctx.locals.push var }
-  | Assert _ => ctx
-  | Lookup _ => ctx
-  | Assign _ => ctx
-  | SubCircuit { ops, .. } =>
-    let offset := ctx.offset + ops.length
-    { ctx with offset }
+  | Witness _ => ⟨ ctx.offset + 1 ⟩
+  | SubCircuit { ops, .. } => ⟨ ctx.offset + PreOperation.witness_length ops ⟩
+  | _ => ctx
 
 def toString [Repr F] : (op : Operation F) → String
   | Witness _v => "Witness"
