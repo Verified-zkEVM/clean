@@ -9,9 +9,6 @@ import Clean.GadgetsNew.Add8.Addition8
 
 section
 
-open Circuit
-open Expression (const)
-
 #eval!
   let p := 1009
   let p_prime := Fact.mk prime_1009
@@ -20,7 +17,7 @@ open Expression (const)
   let main := do
     let x ← witness (fun _ => 10)
     let y ← witness (fun _ => 20)
-    Add8.add8 (p:=p) (⟨x, y⟩)
+    let z ← Add8.add8 (p:=p) { x, y }
+    Add8.add8 (p:=p) { x, y := z }
   main.operations
-
 end

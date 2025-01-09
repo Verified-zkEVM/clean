@@ -8,12 +8,9 @@ import Clean.Circuit.Basic
 import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
 
-
 section
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
-
-open Circuit
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
@@ -36,10 +33,10 @@ def witness (compute : Unit → U32 (F p)) := do
   let x2 ←  witness_var (fun _ => val.x2)
   let x3 ←  witness_var (fun _ => val.x3)
 
-  ByteLookup.byte_lookup x0
-  ByteLookup.byte_lookup x1
-  ByteLookup.byte_lookup x2
-  ByteLookup.byte_lookup x3
+  byte_lookup x0
+  byte_lookup x1
+  byte_lookup x2
+  byte_lookup x3
 
   return U32.mk x0 x1 x2 x3
 

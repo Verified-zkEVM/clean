@@ -5,6 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
+import Clean.Circuit.SubCircuit
 import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
 import Clean.GadgetsNew.Boolean
@@ -14,10 +15,7 @@ namespace Add8Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
 open Provable (field field2 fields)
-open ByteLookup
-open Expression
 
 structure InputStruct (F : Type) where
   x: F

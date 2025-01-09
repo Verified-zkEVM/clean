@@ -10,9 +10,6 @@ import Clean.Utils.Field
 section
 variable {p : ℕ} [Fact p.Prime]
 
-open Circuit
-open Expression
-
 def assert_bool (x: Expression (F p)) := do
   assert_zero (x * (x - 1))
 
@@ -50,7 +47,7 @@ by
     simp [h]
 
 theorem equiv : ∀ x: F p,
-  constraints_hold (assert_bool (const x)) ↔ spec x
+  Circuit.constraints_hold_default (assert_bool (const x)) ↔ spec x
 := by
   -- simplify
   dsimp

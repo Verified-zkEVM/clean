@@ -13,8 +13,6 @@ section
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
-
 inductive Byte (F: Type) where
   | private mk : (Variable F) → Byte F
 
@@ -23,7 +21,7 @@ def var (b: Byte (F p)) := Expression.var b.1
 
 def witness (compute : Unit → F p) := do
   let x ← witness_var compute
-  ByteLookup.byte_lookup x
+  byte_lookup x
   return Byte.mk x
 
 instance : Coe (Byte (F p)) (Expression (F p)) where

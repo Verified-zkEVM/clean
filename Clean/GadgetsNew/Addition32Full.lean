@@ -5,6 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
+import Clean.Circuit.SubCircuit
 import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
 import Clean.GadgetsNew.Boolean
@@ -15,10 +16,7 @@ namespace Addition32Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
 open Provable (field field2 fields)
-open ByteLookup
-open Expression
 
 structure InputStruct (F : Type) where
   x: U32 F
@@ -62,7 +60,7 @@ instance : ProvableType (F p) (Outputs p) where
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
-def add32_full (input : (Inputs p).var) : Stateful (F p) (Outputs p).var := do
+def add32_full (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
 
   let {

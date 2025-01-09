@@ -14,10 +14,7 @@ namespace Add8FullCarry
 variable {p : ℕ} [p_neq_zero: Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Circuit
 open Provable (field field2 fields)
-open ByteLookup
-open Expression
 
 structure InputStruct (F : Type) where
   x: F
@@ -61,7 +58,7 @@ instance : ProvableType (F p) (Outputs p) where
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
-def add8_full_carry (input : (Inputs p).var) : Stateful (F p) (Outputs p).var := do
+def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
@@ -72,12 +69,9 @@ def add8_full_carry (input : (Inputs p).var) : Stateful (F p) (Outputs p).var :=
   let carry_out ← witness (fun () => FieldUtils.floordiv (x + y + carry_in) 256)
   assert_bool carry_out
 
-  assert_zero (x + y + carry_in - z - carry_out * (const ↑(256 : ℕ)))
+  assert_zero (x + y + carry_in - z - carry_out * (const 256))
 
-  return {
-    z := z,
-    carry_out := carry_out
-  }
+  return { z, carry_out }
 
 def assumptions (input : (Inputs p).value) :=
   let ⟨x, y, carry_in⟩ := input
