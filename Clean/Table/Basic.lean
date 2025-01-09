@@ -218,6 +218,3 @@ def table_constraints_hold
     | <+>, _ => True
 
 end Table
-
-
-section Example
