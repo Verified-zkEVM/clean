@@ -23,13 +23,8 @@ structure Lookup (F : Type) where
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
-inductive RowIndex
-  | Current
-  | Next
-deriving Repr
-
 structure Cell (F : Type) where
-  row: RowIndex
+  rowOffset: ℕ
   column: ℕ -- index of the column
 deriving Repr
 
