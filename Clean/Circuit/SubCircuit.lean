@@ -12,7 +12,6 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
     | Operation.Witness compute => PreOperation.Witness compute :: to_flat_operations ops
     | Operation.Assert e => PreOperation.Assert e :: to_flat_operations ops
     | Operation.Lookup l => PreOperation.Lookup l :: to_flat_operations ops
-    | Operation.Assign (c, v) => PreOperation.Assign (c, v) :: to_flat_operations ops
     | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
 -- TODO super painful, mainly because `cases` doesn't allow rich patterns -- how does this work again?
@@ -49,7 +48,6 @@ theorem can_flatten_first : ∀ (env: ℕ → F) (ops: List (Operation F)),
         have ih1 := ih h1
         simp [ih1]
       | Lookup l => sorry
-      | Assign a => sorry
 
 theorem can_flatten : ∀ (ops: List (Operation F)),
   Circuit.constraints_hold_from_list_default ops →
