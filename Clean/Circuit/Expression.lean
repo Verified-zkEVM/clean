@@ -18,6 +18,8 @@ inductive Expression (F : Type) where
   | add : Expression F -> Expression F -> Expression F
   | mul : Expression F -> Expression F -> Expression F
 
+export Expression (var const)
+
 namespace Expression
 variable [Field F]
 

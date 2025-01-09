@@ -10,8 +10,6 @@ import Clean.Utils.Field
 section
 variable {p : ℕ} [Fact p.Prime]
 
-open Expression
-
 def assert_bool (x: Expression (F p)) := do
   assert_zero (x * (x - 1))
 

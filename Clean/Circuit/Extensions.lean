@@ -27,10 +27,10 @@ end Provable
 namespace Circuit
 def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
   match x with
-  | Expression.var v => pure v
+  | var v => pure v
   | x => do
     let x' ← witness_var (fun _ => x.eval)
-    assert_zero (x - (Expression.var x'))
+    assert_zero (x - (var x'))
     return x'
 
 -- inputs, already connected to a cell, that you can assign the next row's value of

@@ -17,7 +17,6 @@ variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)
 open ByteLookup
-open Expression
 
 structure InputStruct (F : Type) where
   x: F
