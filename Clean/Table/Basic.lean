@@ -80,6 +80,9 @@ def forAllRowsOfTrace (trace : TraceOfLength N M (F p)) (prop : Row N (F p) -> P
     | <+>, _ => true
     | rest +> row, prop => prop row ∧ inner rest prop
 
+/--
+  Apply a proposition to every row in the trace except the last one
+-/
 def forAllRowsOfTraceExceptLast (trace : TraceOfLength N M (F p)) (prop : Row N (F p) -> Prop) : Prop :=
   inner trace.val prop
   where
@@ -98,3 +101,33 @@ def forAllRowsOfTraceWithIndex (trace : TraceOfLength N M (F p)) (prop : Row N (
   inner : Trace N (F p) -> (Row N (F p) -> ℕ -> Prop) -> Prop
     | <+>, _ => true
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
+
+/--
+  A cell offset is an offset in a table that points to a specific cell in a row.
+  It is used to define a relative position in the trace.
+  `W` is the size of the "vertical window", which means that we can reference at most
+  `W` rows above the current row.
+  To make sure that the vertical offset is bounded, it is represented as a `Fin W`.
+-/
+structure CellOffset (M W: ℕ+) where
+  rowOffset: Fin W
+  column: Fin M
+deriving Repr
+
+@[reducible]
+def CellAssignment (F : Type) (M W: ℕ+) := Variable F -> Option (CellOffset M W)
+
+inductive TableOperation
+    (F : Type) [Field F]
+    {β α : TypePair} [ProvableType F α] [ProvableType F β]
+    (M : ℕ+) where
+  | Boundary: FormalCircuit F β α -> CellAssignment F M 1 -> (row : ℕ) -> TableOperation F M
+  | EveryRow: FormalCircuit F β α -> CellAssignment F M 1 -> TableOperation F M
+  | EveryRowExceptLast: FormalCircuit F β α -> CellAssignment F M 2 -> TableOperation F M
+
+
+
+end Table
+
+
+section Example

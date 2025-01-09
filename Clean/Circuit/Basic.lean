@@ -23,25 +23,18 @@ structure Lookup (F : Type) where
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
-structure Cell (F : Type) where
-  rowOffset: ℕ
-  column: ℕ -- index of the column
-deriving Repr
-
 variable {α : Type} [Field F]
 
 inductive PreOperation (F : Type) where
   | Witness : (compute : Unit → F) → PreOperation F
   | Assert : Expression F → PreOperation F
   | Lookup : Lookup F → PreOperation F
-  | Assign : Cell F × Variable F → PreOperation F
 
 namespace PreOperation
 def toString [Repr F] : PreOperation F → String
   | Witness _v => "Witness"
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
-  | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
 
 instance [Repr F] : Repr (PreOperation F) where
   reprPrec op _ := toString op
@@ -100,7 +93,6 @@ inductive Operation (F : Type) [Field F] where
   | Witness : (compute : Unit → F) → Operation F
   | Assert : Expression F → Operation F
   | Lookup : Lookup F → Operation F
-  | Assign : Cell F × Variable F → Operation F
   | SubCircuit : SubCircuit F → Operation F
 
 structure Context (F : Type) where
@@ -122,7 +114,6 @@ instance [Repr F] : ToString (Operation F) where
     | Witness _v => "Witness"
     | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | Lookup l => reprStr l
-    | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
     | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 
@@ -181,12 +172,6 @@ def assert_zero (e: Expression F) := as_circuit (
 @[simp]
 def lookup (l: Lookup F) := as_circuit (
   fun _ => (Operation.Lookup l, ())
-)
-
--- assign a variable to a cell
-@[simp]
-def assign_cell (c: Cell F) (v: Variable F) := as_circuit (
-  fun _ => (Operation.Assign (c, v), ())
 )
 
 -- formal concepts of soundness and completeness of a circuit
@@ -278,4 +263,4 @@ def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) :=
   circuit.assumptions b
 end Circuit
 
-export Circuit (witness_var witness assert_zero lookup assign_cell FormalCircuit)
+export Circuit (witness_var witness assert_zero lookup FormalCircuit)
