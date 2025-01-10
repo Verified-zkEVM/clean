@@ -221,7 +221,7 @@ def formal_assertion_to_subcircuit (ctx: Context F)
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env (PreOperation.to_flat_operations ops)
-    exact PreOperation.can_flatten_first env ops h_holds
+    exact PreOperation.can_replace_subcircuits h_holds
 
     -- `implied_by_completeness`
     -- we are given that the assumptions and the spec are true
@@ -233,7 +233,7 @@ def formal_assertion_to_subcircuit (ctx: Context F)
     have h_holds : constraints_hold_from_list_default ops := circuit.completeness ctx b b_var rfl as.left as.right
 
     -- so we just need to go from constraints to flattened constraints
-    exact PreOperation.can_flatten ops h_holds
+    exact PreOperation.can_replace_subcircuits_default h_holds
 
   s
 end Circuit
