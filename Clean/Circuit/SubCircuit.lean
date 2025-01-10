@@ -8,7 +8,7 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
   match ops with
   | [] => []
   | op :: ops => match op with
-    | Operation.Witness compute => Witness compute :: to_flat_operations ops
+    | Operation.Witness c => Witness c :: to_flat_operations ops
     | Operation.Assert e => Assert e :: to_flat_operations ops
     | Operation.Lookup l => Lookup l :: to_flat_operations ops
     | Operation.Assign c => Assign c :: to_flat_operations ops
@@ -51,7 +51,7 @@ Main soundness theorem which proves that flattened constraints imply nested cons
 It thereby justifies relying on the nested version `Circuit.constraints_hold_from_list`,
 where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
- -/
+-/
 theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ → F},
   constraints_hold env (to_flat_operations ops) → constraints_hold_from_list env ops
 := by
@@ -108,6 +108,17 @@ lemma constraints_hold_default_append : ∀ {a b: List (PreOperation F)},
       have h_rest := ih.mpr ⟨ h_ops, h_b ⟩
       exact constraints_hold_default_cons.mpr ⟨ h_op, h_rest ⟩
 
+/--
+Main completeness theorem which proves that nested constraints imply flattened constraints
+using the default witness generator.
+
+This justifies only proving the nested version `Circuit.constraints_hold_from_list_default`,
+where constraints of subcircuits are replaced with higher-level statements
+that imply (or are implied by) those constraints.
+
+Note: Ideally, `can_replace_subcircuits` would prove both directions, and this would be just a special
+case. See https://github.com/Verified-zkEVM/clean/issues/42
+-/
 theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)},
   constraints_hold_from_list_default ops → constraints_hold_default (to_flat_operations ops)
 := by
