@@ -22,11 +22,11 @@ lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOper
   match ops with
   | [] => tauto
   | op' :: ops =>
-    constructor
-    · intro h
+    constructor <;> (
+      rintro h
       dsimp only [constraints_hold] at h
-      split at h <;> simp_all only [constraints_hold, and_self]
-    · sorry
+      split at h
+      <;> simp_all only [constraints_hold, and_self])
 
 lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ → F},
   constraints_hold env (a ++ b) → constraints_hold env a ∧ constraints_hold env b := by
@@ -35,10 +35,9 @@ lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ
   | nil => rw [List.nil_append] at h; tauto
   | cons op ops ih =>
     rw [List.cons_append] at h
-    generalize h' : ops ++ b = rest at *
     obtain ⟨ h_op, h_rest ⟩ := constraints_hold_cons.mp h
     obtain ⟨ h_ops, h_b ⟩ := ih h_rest
-    sorry
+    exact ⟨ constraints_hold_cons.mpr ⟨ h_op, h_ops ⟩, h_b ⟩
 
 /--
 This theorem proves equivalence between flattened and nested constraints.
@@ -47,7 +46,7 @@ It thereby justifies relying on the nested variant `Circuit.constraints_hold_fro
 where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
  -/
-theorem can_replace_subcircuits : ∀ ops: List (Operation F), ∀ env : ℕ → F,
+theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ → F},
   constraints_hold env (to_flat_operations ops) → constraints_hold_from_list env ops
 := by
   intro ops env
@@ -61,16 +60,13 @@ theorem can_replace_subcircuits : ∀ ops: List (Operation F), ∀ env : ℕ →
     <;> cases flatops
     <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
   | case6 ops circuit ih =>
-    dsimp only [to_flat_operations]
     intro h
-    cases ops
-    · simp_all [to_flat_operations]
-      exact circuit.imply_soundness env h
-    rename_i op ops
-    dsimp only [constraints_hold_from_list]
+    dsimp only [to_flat_operations] at h
     have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append h).left
-    have h_rest : constraints_hold env (to_flat_operations (op :: ops)) := (constraints_hold_append h).right
-    use circuit.imply_soundness env h_subcircuit
+    have h_rest : constraints_hold env (to_flat_operations ops) := (constraints_hold_append h).right
+    cases ops
+    <;> dsimp only [constraints_hold_from_list]
+    <;> use (circuit.imply_soundness env) h_subcircuit
     use ih h_rest
 
 theorem can_replace_subcircuits_default : ∀ ops: List (Operation F),
@@ -112,7 +108,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env (PreOperation.to_flat_operations ops)
-    exact PreOperation.can_replace_subcircuits ops env h_holds
+    exact PreOperation.can_replace_subcircuits h_holds
 
     -- `implied_by_completeness`
     -- we are given that the assumptions are true
