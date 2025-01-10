@@ -29,50 +29,110 @@ lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOper
       <;> simp_all only [constraints_hold, and_self])
 
 lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ → F},
-  constraints_hold env (a ++ b) → constraints_hold env a ∧ constraints_hold env b := by
-  intro a b env h
+  constraints_hold env (a ++ b) ↔ constraints_hold env a ∧ constraints_hold env b := by
+  intro a b env
   induction a with
-  | nil => rw [List.nil_append] at h; tauto
+  | nil => rw [List.nil_append]; tauto
   | cons op ops ih =>
-    rw [List.cons_append] at h
-    obtain ⟨ h_op, h_rest ⟩ := constraints_hold_cons.mp h
-    obtain ⟨ h_ops, h_b ⟩ := ih h_rest
-    exact ⟨ constraints_hold_cons.mpr ⟨ h_op, h_ops ⟩, h_b ⟩
+    constructor
+    · intro h
+      rw [List.cons_append] at h
+      obtain ⟨ h_op, h_rest ⟩ := constraints_hold_cons.mp h
+      obtain ⟨ h_ops, h_b ⟩ := ih.mp h_rest
+      exact ⟨ constraints_hold_cons.mpr ⟨ h_op, h_ops ⟩, h_b ⟩
+    · rintro ⟨ h_a, h_b ⟩
+      obtain ⟨ h_op, h_ops ⟩ := constraints_hold_cons.mp h_a
+      have h_rest := ih.mpr ⟨ h_ops, h_b ⟩
+      exact constraints_hold_cons.mpr ⟨ h_op, h_rest ⟩
 
 /--
-This theorem proves equivalence between flattened and nested constraints.
+Main soundness theorem which proves that flattened constraints imply nested constraints.
 
-It thereby justifies relying on the nested variant `Circuit.constraints_hold_from_list`,
+It thereby justifies relying on the nested version `Circuit.constraints_hold_from_list`,
 where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
  -/
 theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ → F},
   constraints_hold env (to_flat_operations ops) → constraints_hold_from_list env ops
 := by
-  intro ops env
+  intro ops env h
+  -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
+  -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
   induction ops using to_flat_operations.induct with
-  | case1 => dsimp only [to_flat_operations]; tauto
+  | case1 => tauto
+  -- we can handle all non-empty cases except `SubCircuit` at once
   | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
-    dsimp only [to_flat_operations]
-    intro h
+    dsimp only [to_flat_operations] at h
+    generalize to_flat_operations ops = flatops at h ih
     cases ops
-    <;> generalize to_flat_operations (F:=F) _ = flatops at h ih
     <;> cases flatops
     <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
   | case6 ops circuit ih =>
-    intro h
     dsimp only [to_flat_operations] at h
-    have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append h).left
-    have h_rest : constraints_hold env (to_flat_operations ops) := (constraints_hold_append h).right
+    have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append.mp h).left
+    have h_rest : constraints_hold env (to_flat_operations ops) := (constraints_hold_append.mp h).right
     cases ops
     <;> dsimp only [constraints_hold_from_list]
     <;> use (circuit.imply_soundness env) h_subcircuit
     use ih h_rest
 
-theorem can_replace_subcircuits_default : ∀ ops: List (Operation F),
+-- TODO the following two lemmas would be unnecessary if we could prove `constraints_hold_default` to be a special case of `constraints_hold`
+-- see https://github.com/Verified-zkEVM/clean/issues/42
+
+lemma constraints_hold_default_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)},
+  constraints_hold_default (op :: ops) ↔ constraints_hold_default [op] ∧ constraints_hold_default ops := by
+  intro op ops
+  match ops with
+  | [] => tauto
+  | op' :: ops =>
+    constructor <;> (
+      rintro h
+      dsimp only [constraints_hold_default] at h
+      split at h
+      <;> simp_all only [constraints_hold_default, and_self])
+
+lemma constraints_hold_default_append : ∀ {a b: List (PreOperation F)},
+  constraints_hold_default (a ++ b) ↔ constraints_hold_default a ∧ constraints_hold_default b := by
+  intro a b
+  induction a with
+  | nil => rw [List.nil_append]; tauto
+  | cons op ops ih =>
+    constructor
+    · intro h
+      rw [List.cons_append] at h
+      obtain ⟨ h_op, h_rest ⟩ := constraints_hold_default_cons.mp h
+      obtain ⟨ h_ops, h_b ⟩ := ih.mp h_rest
+      exact ⟨ constraints_hold_default_cons.mpr ⟨ h_op, h_ops ⟩, h_b ⟩
+    · rintro ⟨ h_a, h_b ⟩
+      obtain ⟨ h_op, h_ops ⟩ := constraints_hold_default_cons.mp h_a
+      have h_rest := ih.mpr ⟨ h_ops, h_b ⟩
+      exact constraints_hold_default_cons.mpr ⟨ h_op, h_rest ⟩
+
+theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)},
   constraints_hold_from_list_default ops → constraints_hold_default (to_flat_operations ops)
 := by
- sorry
+  intro ops h
+  -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
+  -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
+  induction ops using to_flat_operations.induct with
+  | case1 => tauto
+  -- we can handle all non-empty cases except `SubCircuit` at once
+  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
+    dsimp only [to_flat_operations]
+    generalize to_flat_operations ops = flatops at *
+    cases ops
+    <;> dsimp only [constraints_hold_from_list_default] at h
+    <;> cases flatops
+    <;> dsimp only [constraints_hold_default]
+    <;> tauto
+  | case6 ops circuit ih =>
+    dsimp only [to_flat_operations]
+    apply constraints_hold_default_append.mpr
+    cases ops
+    · use circuit.implied_by_completeness h; tauto
+    dsimp only [constraints_hold_from_list_default] at h
+    exact ⟨ circuit.implied_by_completeness h.left, ih h.right ⟩
+
 end PreOperation
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
@@ -120,7 +180,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
     have h_holds : constraints_hold_from_list_default ops := circuit.completeness ctx b b_var rfl as
 
     -- so we just need to go from constraints to flattened constraints
-    exact PreOperation.can_replace_subcircuits_default ops h_holds
+    exact PreOperation.can_replace_subcircuits_default h_holds
 
   ⟨ a_var, s ⟩
 end Circuit
