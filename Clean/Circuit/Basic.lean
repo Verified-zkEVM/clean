@@ -73,6 +73,7 @@ def constraints_hold_default : List (PreOperation F) → Prop
       table.contains (entry.map (fun e => e.eval)) ∧ constraints_hold_default ops
     | _ => constraints_hold_default ops
 
+@[simp]
 def witness_length : List (PreOperation F) → ℕ
   | [] => 0
   | (Witness _) :: ops => witness_length ops + 1

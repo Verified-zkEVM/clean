@@ -19,6 +19,7 @@ def Inputs (p : ℕ) : TypePair := ⟨
   InputStruct (F p)
 ⟩
 
+@[simp]
 instance : ProvableType (F p) (Inputs p) where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
@@ -40,6 +41,7 @@ def Outputs (p : ℕ) : TypePair := ⟨
   OutputStruct (F p)
 ⟩
 
+@[simp]
 instance : ProvableType (F p) (Outputs p) where
   size := 2
   to_vars s := vec [s.z, s.carry_out]
