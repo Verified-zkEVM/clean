@@ -11,14 +11,13 @@ instance [Repr α] {n: ℕ} : Repr (Vector α n) where
 def vec (l: List α) : Vector α l.length := ⟨ l, rfl ⟩
 
 namespace Vector
-  theorem vec_eq (l : ℕ) (v w: Vector α l) : v.val = w.val ↔ v = w := by
-    constructor
-    · intro h
-      cases v
-      cases w
-      simp [Subtype.mk_eq_mk] at h
-      simp [h]
-    · aesop
+  @[ext]
+  theorem ext (l : ℕ) (v w: Vector α l) : v.val = w.val → v = w := by
+    intro h
+    cases v
+    cases w
+    simp [Subtype.mk_eq_mk] at h
+    simp [h]
 
   theorem length_matches (v: Vector α n) : v.1.length = n := v.2
 
@@ -37,16 +36,11 @@ namespace Vector
     v.val.get i'
 
   -- map over monad
-  @[simp]
-  def mapM { M : Type → Type } [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
-    -- there `List.mapM` which we can use, but there doesn't seem to be an equivalent of `List.length_map` for monads
-    do
-      let l' ← List.mapM id v.val
-      return ⟨ l', by sorry ⟩
-
-  -- other direction
-  @[simp]
-  def unmapM { M : Type → Type } [Monad M] (v : M (Vector α n)) : Vector (M α) n :=
-    sorry
-
+  def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
+    match (v : Vector (M α) n) with
+    | ⟨ [], h ⟩ => pure ⟨ [], h ⟩
+    | ⟨ a :: as, h ⟩ => do
+      let hd ← a
+      let tl ← mapM ⟨ as, rfl ⟩
+      pure ⟨ hd :: tl.val, by rwa [List.length_cons, length_matches]⟩
 end Vector
