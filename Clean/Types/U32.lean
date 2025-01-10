@@ -75,5 +75,25 @@ lemma wrapping_add_correct (x y z: U32 (F p)) :
     x.wrapping_add y = z ↔ z.value = (x.value + y.value) % 2^32 := by
   sorry
 
+-- U32-related Nat lemmas
+variable [p_large_enough': Fact (p > 2*256^2)]
+
+lemma val_eq_256 {p} [Fact (p.Prime)] [pl : Fact (p > 512)] : (256 : F p).val = 256 :=
+  FieldUtils.val_lt_p 256 (by linarith [pl.elim])
+
+-- TODO how can this be so hard???
+lemma value_lt_1 {x0 x1: F p} (h0 : x0.val < 256) (h1 : x1.val < 256) :
+  (x0 + x1 * 256).val < 256^2 ∧ x0.val + x1.val * 256 = (x0 + x1 * 256).val
+:= by
+  have : x1.val * 256 ≤ 255 * 256 := by linarith [h1, p_large_enough.elim]
+  have : x1.val * (256 : F p).val < p := by rw [val_eq_256]; linarith [this, p_large_enough'.elim]
+  have : x1.val * (256 : F p).val = (x1 * 256).val := ZMod.val_mul_of_lt this |>.symm
+  have : x1.val * 256 = (x1 * 256).val := by rw [← this, val_eq_256]
+  sorry
+
+lemma value_eq {x0 x1 x2 x3: F p} (h0 : x0.val < 256) (h1 : x1.val < 256) (h2 : x2.val < 256) (h3 : x3.val < 256) :
+  x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3 = (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3).val  := by
+  sorry
+
 end U32
 end

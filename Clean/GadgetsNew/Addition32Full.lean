@@ -85,9 +85,9 @@ def assumptions (input : (Inputs p).value) :=
 def spec (input : (Inputs p).value) (out: (Outputs p).value) :=
   let ⟨x, y, carry_in⟩ := input
   let ⟨z, carry_out⟩ := out
-  z.value = (x.value + y.value + carry_in.val) % 2^32 ∧
-  z.is_normalized ∧
-  carry_out.val = (x.value + y.value + carry_in.val) / 2^32
+  z.value = (x.value + y.value + carry_in.val) % 2^32
+  ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
+  ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
 def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
   main := add32_full
@@ -241,8 +241,8 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rw [‹ctx.offset = i0›, (by rfl: env (i0 + 7) = c3)]
     rw [(by rfl: env i0 = z0), (by rfl: env (i0 + 2) = z1), (by rfl: env (i0 + 4) = z2), (by rfl: env (i0 + 6) = z3)]
 
-    let z := U32.mk z0 z1 z2 z3
-    let lhs := z0 + z1*256 + z2*256^2 + z3*256^3 + c3*256^4
+    let z := z0 + z1*256 + z2*256^2 + z3*256^3
+    let lhs := z + c3*256^4
 
     -- add up all the equations
     have h_add :=
@@ -260,10 +260,30 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
       _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2 + -1 * (c2 * 256)) + 256^3*(x3 + y3 + c2 + -1 * z3 + -1 * (c3 * 256)) := by rw [h3]
       _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2) + 256^3*(x3 + y3 + -1 * z3 + -1 * (c3 * 256)) := by ring
       -- simplify
-      _ = lhs - (z0 + z1*256 + z2*256^2 + z3*256^3) + (x0 + 256*x1 + 256^2*x2 + 256^3*x3) + (y0 + 256*y1 + 256^2*y2 + 256^3*y3) + carry_in - 256^4*c3 := by ring
-      _ = (x0 + 256*x1 + 256^2*x2 + 256^3*x3) + (y0 + 256*y1 + 256^2*y2 + 256^3*y3) + carry_in := by
-        rw [(by rfl: lhs = z0 + z1*256 + z2*256^2 + z3*256^3 + c3*256^4)]; ring
+      _ = lhs - (z0 + z1*256 + z2*256^2 + z3*256^3) + (x0 + x1*256 + x2*256^2 + x3*256^3) + (y0 + y1*256 + y2*256^2 + y3*256^3) + carry_in - c3*256^4 := by ring
+      _ = (x0 + 256*x1 + 256^2*x2 + 256^3*x3) + (y0 + 256*y1 + 256^2*y2 + 256^3*y3) + carry_in := by ring
+
+    -- show that lhs is < p
+    have h_lt : lhs.val < p := by sorry
+
+    -- show that lhs splits into low and high 32 bits
+    have h_low : z.val = lhs.val % 2^32 := by sorry
+    have h_high : c3.val = lhs.val / 2^32 := by sorry
+
+    constructor
+    · rw [h_add] at h_low
+      -- use ZMod.val_add_lt, ZMod.val_mul_lt
+
+      -- exact ZMod.cast_eq_val
+      sorry
+
+    constructor
+    · sorry
+
+    constructor
+    exact ⟨ z0_byte, z1_byte, z2_byte, z3_byte ⟩
 
     sorry
+
   completeness := by sorry
 end Addition32Full
