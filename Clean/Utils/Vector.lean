@@ -1,4 +1,6 @@
 import Mathlib.Data.Fintype.Basic
+import Mathlib.Tactic.Basic
+import Mathlib.Data.ZMod.Basic
 
 variable {α β : Type} {n : ℕ}
 
@@ -19,28 +21,28 @@ namespace Vector
     simp [Subtype.mk_eq_mk] at h
     simp [h]
 
-  theorem length_matches (v: Vector α n) : v.1.length = n := v.2
-
   @[simp]
   def map (f: α → β) : Vector α n → Vector β n
     | ⟨ l, h ⟩ => ⟨ l.map f, by rw [List.length_map, h] ⟩
 
-  @[simp]
-  def zip : Vector α n → Vector β n → Vector (α × β) n
+  def zip {n} : Vector α n → Vector β n → Vector (α × β) n
     | ⟨ [], ha ⟩, ⟨ [], _ ⟩  => ⟨ [], ha ⟩
-    | ⟨ a::as, ha ⟩, ⟨ b::bs, hb ⟩ => ⟨ (a, b) :: List.zip as bs, by sorry ⟩
+    | ⟨ a::as, (ha : as.length + 1 = n) ⟩,
+      ⟨ b::bs, (hb : bs.length + 1 = n) ⟩ =>
+      let ⟨ z, hz ⟩ := zip ⟨ as, rfl ⟩ ⟨ bs, by apply Nat.add_one_inj.mp; rw [ha, hb] ⟩
+      ⟨ (a, b) :: z, by show z.length + 1 = n; rw [hz, ha] ⟩
 
   @[simp]
   def get (v: Vector α n) (i: Fin n) : α :=
-    let i' : Fin v.1.length := Fin.cast (length_matches v).symm i
+    let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
 
   -- map over monad
   def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
     match (v : Vector (M α) n) with
     | ⟨ [], h ⟩ => pure ⟨ [], h ⟩
-    | ⟨ a :: as, h ⟩ => do
+    | ⟨ a :: as, (h : as.length + 1 = n) ⟩ => do
       let hd ← a
       let tl ← mapM ⟨ as, rfl ⟩
-      pure ⟨ hd :: tl.val, by rwa [List.length_cons, length_matches]⟩
+      pure ⟨ hd :: tl.val, by rwa [List.length_cons, tl.prop]⟩
 end Vector
