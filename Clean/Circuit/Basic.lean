@@ -1,7 +1,3 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 

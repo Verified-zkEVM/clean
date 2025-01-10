@@ -1,13 +1,4 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
-import Clean.Utils.Field
 import Clean.GadgetsNew.ByteLookup
-
 
 section
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]

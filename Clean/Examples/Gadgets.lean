@@ -1,10 +1,4 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
 import Clean.GadgetsNew.Add8.Addition8
 
 section
