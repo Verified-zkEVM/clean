@@ -172,4 +172,69 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
 
   completeness := by
     sorry
+
+  open Add8FullCarry (add8_full_carry)
+
+-- I think this will be easier to use in proofs
+def add32_full' (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
+let ⟨x, y, carry_in⟩ := input
+
+let { z := z0, carry_out := c0 } ← add8_full_carry ⟨ x.x0, y.x0, carry_in ⟩
+let { z := z1, carry_out := c1 } ← add8_full_carry ⟨ x.x1, y.x1, c0 ⟩
+let { z := z2, carry_out := c2 } ← add8_full_carry ⟨ x.x2, y.x2, c1 ⟩
+let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
+
+return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
+
+def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
+  main := add32_full'
+  assumptions := assumptions
+  spec := spec
+  soundness := by
+    rintro ctx env ⟨ x, y, carry_in ⟩ ⟨ x_var, y_var, carry_in_var ⟩ h_inputs as h
+    let ⟨ x0, x1, x2, x3 ⟩ := x
+    let ⟨ y0, y1, y2, y3 ⟩ := y
+    let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
+    let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
+    have : x0_var.eval_env env = x0 := by injection h_inputs with x; injection x
+    have : x1_var.eval_env env = x1 := by injection h_inputs with x; injection x
+    have : x2_var.eval_env env = x2 := by injection h_inputs with x; injection x
+    have : x3_var.eval_env env = x3 := by injection h_inputs with x; injection x
+    have : y0_var.eval_env env = y0 := by injection h_inputs with _ y; injection y
+    have : y1_var.eval_env env = y1 := by injection h_inputs with _ y; injection y
+    have : y2_var.eval_env env = y2 := by injection h_inputs with _ y; injection y
+    have : y3_var.eval_env env = y3 := by injection h_inputs with _ y; injection y
+    have : carry_in_var.eval_env env = carry_in := by injection h_inputs
+
+    -- simplify assumptions
+    dsimp [assumptions, U32.is_normalized] at as
+    have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
+    have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
+    have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
+
+    -- simplify circuit
+    dsimp [add32_full', Boolean.circuit, Circuit.formal_assertion_to_subcircuit] at h
+    let i0 := ctx.offset
+    have : ctx.offset = i0 := rfl
+    let z0 := env i0
+    let c0 := env (i0 + 1)
+    let z1 := env (i0 + 2)
+    let c1 := env (i0 + 3)
+    let z2 := env (i0 + 4)
+    let c2 := env (i0 + 5)
+    let z3 := env (i0 + 6)
+    let c3 := env (i0 + 7)
+    rw [‹x0_var.eval_env env = x0›, ‹y0_var.eval_env env = y0›, ‹carry_in_var.eval_env env = carry_in›] at h
+    rw [‹x1_var.eval_env env = x1›, ‹y1_var.eval_env env = y1›] at h
+    rw [‹x2_var.eval_env env = x2›, ‹y2_var.eval_env env = y2›] at h
+    rw [‹x3_var.eval_env env = x3›, ‹y3_var.eval_env env = y3›] at h
+    rw [‹ctx.offset = i0›, (by rfl: env i0 = z0), (by rfl : env (i0 + 1) = c0)] at h
+    rw [(by rfl: env (i0 + 2) = z1), (by rfl : env (i0 + 3) = c1)] at h
+    rw [(by rfl: env (i0 + 4) = z2), (by rfl : env (i0 + 5) = c2)] at h
+    rw [(by rfl: env (i0 + 6) = z3), (by rfl : env (i0 + 7) = c3)] at h
+    rw [ByteTable.equiv z0, ByteTable.equiv z1, ByteTable.equiv z2, ByteTable.equiv z3] at h
+    simp only [true_implies] at h
+
+    sorry
+  completeness := by sorry
 end Addition32Full
