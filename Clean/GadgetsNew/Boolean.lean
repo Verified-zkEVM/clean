@@ -29,7 +29,7 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
 
 def spec (x: F p) := x = 0 ∨ x = 1
 
-theorem dsimp_equiv : ∀ x: F p,
+theorem equiv : ∀ x: F p,
   x * (x + -1 * 1) = 0 ↔ x = 0 ∨ x = 1 :=
 by
   intro x
@@ -46,13 +46,27 @@ by
     show x + -1 = 0
     simp [h]
 
-theorem equiv : ∀ x: F p,
-  Circuit.constraints_hold_default (assert_bool (const x)) ↔ spec x
-:= by
-  -- simplify
-  dsimp
-  show ∀ (x : F p), x * (x + -1 * 1) = 0 ↔ spec x
+open Provable (field)
 
-  -- proof
-  exact dsimp_equiv
+/--
+Asserts that x = 0 ∨ x = 1 by adding the constraint x * (x - 1) = 0
+-/
+def circuit : FormalAssertion (F p) (field (F p)) where
+  main := assert_bool
+  assumptions _ := True
+  spec := spec
+
+  soundness := by
+    intro ctx env x x_var hx _ h_holds
+    change x_var.eval_env env = x at hx
+    dsimp at h_holds
+    rw [hx] at h_holds
+    apply (equiv x).mp h_holds
+
+  completeness := by
+    intro ctx x x_var hx _ spec
+    change x_var.eval = x at hx
+    dsimp
+    rw [hx]
+    apply (equiv x).mpr spec
 end Boolean

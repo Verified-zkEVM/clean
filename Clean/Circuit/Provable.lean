@@ -55,6 +55,16 @@ def const (F: Type) [ProvableType F α] (x: α.value) : α.var :=
   ProvableType.from_vars (values.map (fun v => Expression.const v))
 
 @[reducible]
+def unit : TypePair := ⟨ Unit, Unit ⟩
+
+instance : ProvableType F unit where
+  size := 0
+  to_vars _ := vec []
+  from_vars _ := ()
+  to_values _ := vec []
+  from_values _ := ()
+
+@[reducible]
 def field (F : Type) : TypePair := ⟨ Expression F, F ⟩
 
 @[simp]
