@@ -205,10 +205,8 @@ theorem completeness_bool [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
     y.val < 256 ->
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
-    carry_out * (carry_out + -1 * 1) = 0 := by
+    carry_out = 0 ∨ carry_out = 1 := by
   intro as_x as_y carry_in_bound
-  simp
-  rw [add_eq_zero_iff_eq_neg, neg_neg]
   dsimp [FieldUtils.floordiv]
 
   -- we show that the carry_out is either 0 or 1 by explicitly

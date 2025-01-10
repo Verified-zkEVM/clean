@@ -281,6 +281,52 @@ def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_va
 def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) :=
   let b := Provable.eval F b_var
   circuit.assumptions b
+
+/--
+`FormalAssertion` models a subcircuit that is "assertion-like":
+- it doesn't return anything
+- by design, it is not complete: it further constrains its inputs
+
+The notion of _soundness_ is the same as for `FormalCircuit`: some `assumptions` + constraints imply a `spec`.
+
+However, the _completeness_ statement is weaker:
+If both the assumptions AND the spec are true, then the constraints hold.
+
+In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
+(In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
+-/
+structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β] where
+  main: β.var → Circuit F Unit
+
+  assumptions: β.value → Prop
+  spec: β.value → Prop
+
+  soundness:
+    -- for all environments that determine witness generation
+    ∀ ctx : Context F, ∀ env: ℕ → F,
+    -- for all inputs that satisfy the assumptions
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b → assumptions b →
+    -- if the constraints hold
+    constraints_hold env (main b_var) ctx →
+    -- the spec holds
+    spec b
+
+  completeness:
+    ∀ ctx : Context F,
+    -- for all inputs that satisfy the assumptions AND the spec
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval F b_var = b → assumptions b → spec b →
+    -- the constraints hold (using the internal witness generator)
+    constraints_hold_default (main b_var) ctx
+
+@[simp]
+def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: ℕ → F) :=
+  let b := Provable.eval_env env b_var
+  circuit.assumptions b → circuit.spec b
+
+@[simp]
+def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) :=
+  let b := Provable.eval F b_var
+  circuit.assumptions b ∧ circuit.spec b
 end Circuit
 
-export Circuit (witness_var witness assert_zero lookup assign_cell FormalCircuit)
+export Circuit (witness_var witness assert_zero lookup assign_cell FormalCircuit FormalAssertion)
