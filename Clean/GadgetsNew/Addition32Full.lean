@@ -196,14 +196,14 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let ⟨ y0, y1, y2, y3 ⟩ := y
     let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
     let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-    have : x0_var.eval_env env = x0 := by injection h_inputs with x; injection x
-    have : x1_var.eval_env env = x1 := by injection h_inputs with x; injection x
-    have : x2_var.eval_env env = x2 := by injection h_inputs with x; injection x
-    have : x3_var.eval_env env = x3 := by injection h_inputs with x; injection x
-    have : y0_var.eval_env env = y0 := by injection h_inputs with _ y; injection y
-    have : y1_var.eval_env env = y1 := by injection h_inputs with _ y; injection y
-    have : y2_var.eval_env env = y2 := by injection h_inputs with _ y; injection y
-    have : y3_var.eval_env env = y3 := by injection h_inputs with _ y; injection y
+    have : x0_var.eval_env env = x0 := by injection h_inputs with hx; injection hx
+    have : x1_var.eval_env env = x1 := by injection h_inputs with hx; injection hx
+    have : x2_var.eval_env env = x2 := by injection h_inputs with hx; injection hx
+    have : x3_var.eval_env env = x3 := by injection h_inputs with hx; injection hx
+    have : y0_var.eval_env env = y0 := by injection h_inputs with _ hy; injection hy
+    have : y1_var.eval_env env = y1 := by injection h_inputs with _ hy; injection hy
+    have : y2_var.eval_env env = y2 := by injection h_inputs with _ hy; injection hy
+    have : y3_var.eval_env env = y3 := by injection h_inputs with _ hy; injection hy
     have : carry_in_var.eval_env env = carry_in := by injection h_inputs
 
     -- simplify assumptions
@@ -234,6 +234,35 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rw [(by rfl: env (i0 + 6) = z3), (by rfl : env (i0 + 7) = c3)] at h
     rw [ByteTable.equiv z0, ByteTable.equiv z1, ByteTable.equiv z2, ByteTable.equiv z3] at h
     simp only [true_implies] at h
+    have ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
+
+    -- simplify spec
+    dsimp [spec, U32.value, U32.is_normalized]
+    rw [‹ctx.offset = i0›, (by rfl: env (i0 + 7) = c3)]
+    rw [(by rfl: env i0 = z0), (by rfl: env (i0 + 2) = z1), (by rfl: env (i0 + 4) = z2), (by rfl: env (i0 + 6) = z3)]
+
+    let z := U32.mk z0 z1 z2 z3
+    let lhs := z0 + z1*256 + z2*256^2 + z3*256^3 + c3*256^4
+
+    -- add up all the equations
+    have h_add :=
+      calc lhs
+      _ = lhs + 0 + 256*0 + 256^2*0 + 256^3*0 := by ring
+      -- add the first equation
+      _ = lhs + (x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256)) + 256*0 + 256^2*0 + 256^3*0 := by rw [h0]
+      -- add 2nd equation, cancel c0, simplify
+      _ = lhs +  (x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256)) + 256*(x1 + y1 + c0 + -1 * z1 + -1 * (c1 * 256)) + 256^2*0 + 256^3*0 := by rw [h1]
+      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 - 256^2*c1 + 256^2*0 + 256^3*0 := by ring
+      -- add 3rd equation and cancel c1
+      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 - 256^2*c1 + 256^2*(x2 + y2 + c1 + -1 * z2 + -1 * (c2 * 256)) + 256^3*0 := by rw [h2]
+      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2 + -1 * (c2 * 256)) + 256^3*0 := by ring
+      -- add 4th equation and cancel c2
+      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2 + -1 * (c2 * 256)) + 256^3*(x3 + y3 + c2 + -1 * z3 + -1 * (c3 * 256)) := by rw [h3]
+      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2) + 256^3*(x3 + y3 + -1 * z3 + -1 * (c3 * 256)) := by ring
+      -- simplify
+      _ = lhs - (z0 + z1*256 + z2*256^2 + z3*256^3) + (x0 + 256*x1 + 256^2*x2 + 256^3*x3) + (y0 + 256*y1 + 256^2*y2 + 256^3*y3) + carry_in - 256^4*c3 := by ring
+      _ = (x0 + 256*x1 + 256^2*x2 + 256^3*x3) + (y0 + 256*y1 + 256^2*y2 + 256^3*y3) + carry_in := by
+        rw [(by rfl: lhs = z0 + z1*256 + z2*256^2 + z3*256^3 + c3*256^4)]; ring
 
     sorry
   completeness := by sorry

@@ -45,6 +45,12 @@ def value (x: U32 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3
 
 /--
+Return the value of a 32-bit unsigned integer as a field
+-/
+def value_field (x: U32 (F p)) : F p :=
+  x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3
+
+/--
   Return a 32-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
