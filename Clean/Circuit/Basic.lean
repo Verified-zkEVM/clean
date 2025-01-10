@@ -213,7 +213,7 @@ def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F) → Prop
     | _ => constraints_hold_from_list env ops
 
 @[reducible, simp]
-def constraints_hold [Field F] (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := .empty) : Prop :=
+def constraints_hold (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := .empty) : Prop :=
   constraints_hold_from_list env (circuit ctx).1.2
 
 /--
@@ -223,7 +223,7 @@ witness generator, checking all constraints would not fail.
 For subcircuits, since we proved completeness, this only means we need to satisfy the assumptions!
 -/
 @[simp]
-def constraints_hold_from_list_default [Field F] : List (Operation F) → Prop
+def constraints_hold_from_list_default : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
     | Operation.Assert e => e.eval = 0
