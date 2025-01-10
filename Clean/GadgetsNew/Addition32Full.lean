@@ -162,6 +162,12 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rw [‹ctx.offset = i0›, (by rfl : env (i4 + 1) = c2), (by rfl: env i6 = z3), (by rfl : env (i6 + 1) = c3)] at h3
     have c2_bool : c2 = 0 ∨ c2 = 1 := by sorry
     specialize h3 ⟨ x3_byte, y3_byte, c2_bool ⟩
+
+    -- simplify spec
+    dsimp [spec, U32.value, U32.is_normalized]
+    rw [‹ctx.offset = i0›, (by rfl: env i7 = c3)]
+    rw [(by rfl: env i0 = z0), (by rfl: env i2 = z1), (by rfl: env i4 = z2), (by rfl: env i6 = z3)]
+
     sorry
 
   completeness := by
