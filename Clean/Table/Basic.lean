@@ -260,27 +260,6 @@ def assign {F : Type} {M W : ℕ+} [Field F] (v: Variable F) (off : CellOffset M
 
 end TableConstraint
 
-section Example
-#eval!
-  let p := 1009
-  let p_prime := Fact.mk prime_1009
-  let p_non_zero := Fact.mk (by norm_num : p ≠ 0)
-  let p_large_enough := Fact.mk (by norm_num : p > 512)
-  let ex : TableConstraint (F p) 3 1 _ := do
-    let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
-    let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
-    let add8Inputs : (Add8.Inputs p).var := ⟨x, y⟩
-    let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit add8Inputs
-    let z_var : Variable (F p) := match z with
-      | var v => v
-      | _ => Variable.mk 42 (fun _ => 42)
-    TableConstraint.assign z_var (CellOffset.curr 1)
-    return z
-  ex.operations
-
-
-end Example
-
 
 @[reducible]
 def SingleRowConstraint (F : Type) [Field F] (M : ℕ+) := TableConstraint F M 1 Unit
@@ -313,7 +292,7 @@ inductive TableOperation (F : Type) [Field F] (M : ℕ+) where
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 def table_constraints_hold
-    (F : Type) [Field F] (M : ℕ+) (N : ℕ)
+    {F : Type} [Field F] {M : ℕ+} {N : ℕ}
     (constraints : List (TableOperation F M)) (trace: TraceOfLength F M N) : Prop :=
   foldl constraints trace.val constraints
   where
@@ -366,3 +345,64 @@ def table_constraints_hold
 
     -- if the trace is empty, we are done
     | <+>, _ => True
+
+
+section Example
+variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
+variable [p_large_enough: Fact (p > 512)]
+
+def add8_inline : SingleRowConstraint (F p) 3 := do
+  let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
+  let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
+  let add8Inputs : (Add8.Inputs p).var := ⟨x, y⟩
+  let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit add8Inputs
+
+  --TODO: Is this ok? Gadgets return an `Expression` but we need a `Variable`
+  if let var z := z then
+    TableConstraint.assign z (CellOffset.curr 2)
+
+def add8Table : List (TableOperation (F p) 3) := [
+  TableOperation.EveryRow add8_inline
+]
+
+
+def assumptions {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
+  trace.forAllRowsOfTrace (fun row =>
+    (row 0).val < 256 ∧ (row 1).val < 256
+  )
+
+def spec {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
+  trace.forAllRowsOfTrace (fun row => (row 2).val = ((row 0).val + (row 1).val) % 256)
+
+theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
+    assumptions trace ->
+    table_constraints_hold add8Table trace ->
+    spec trace :=
+  by
+    intro trace assumptions_hold
+    simp [table_constraints_hold, add8Table, spec, table_constraints_hold.foldl]
+    simp [TraceOfLength.forAllRowsOfTrace]
+    simp [assumptions] at assumptions_hold
+
+    induction trace.val with
+    | empty => {
+      simp [table_constraints_hold.foldl, TraceOfLength.forAllRowsOfTrace.inner]
+    }
+    | cons rest row ih => {
+      simp [table_constraints_hold.foldl, TraceOfLength.forAllRowsOfTrace.inner]
+
+      -- simplify induction
+      intros h_curr h_rest
+      have ih' := ih h_rest
+      simp [ih']
+
+      -- now we prove a local property about the current row
+      simp [TableConstraint.constraints_hold_on_window,
+        TableConstraint.constraints_hold_on_window.foldl] at h_curr
+      simp [ProvableType.from_values, TraceOfLength.get, Trace.getLe, CellOffset.column] at h_curr
+
+      sorry
+    }
+
+
+end Example
