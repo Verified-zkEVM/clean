@@ -60,17 +60,17 @@ end Trace
 /--
   A trace of length M is a trace with exactly M rows.
 -/
-def TraceOfLength (M : ℕ+) (N : ℕ) (F : Type) : Type := { env : Trace M F // env.len = N }
+def TraceOfLength (F : Type) (M : ℕ+) (N : ℕ) : Type := { env : Trace M F // env.len = N }
 
 namespace TraceOfLength
 
-def get {N: ℕ+} {M : ℕ} {F : Type} : (env : TraceOfLength N M F) -> (i : Fin M) -> (j : Fin N) -> F
+def get {N: ℕ+} {M : ℕ} {F : Type} : (env : TraceOfLength F N M) -> (i : Fin M) -> (j : Fin N) -> F
   | ⟨env, h⟩, i, j => env.getLe (by rw [←h] at i; exact i) j
 
 /--
   Apply a proposition to every row in the trace
 -/
-def forAllRowsOfTrace {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength N M F) (prop : Row N F -> Prop) : Prop :=
+def forAllRowsOfTrace {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N M) (prop : Row N F -> Prop) : Prop :=
   inner trace.val prop
   where
   inner : Trace N F -> (Row N F -> Prop) -> Prop
@@ -80,7 +80,7 @@ def forAllRowsOfTrace {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength N M 
 /--
   Apply a proposition to every row in the trace except the last one
 -/
-def forAllRowsOfTraceExceptLast {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength N M F) (prop : Row N F -> Prop) : Prop :=
+def forAllRowsOfTraceExceptLast {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N M) (prop : Row N F -> Prop) : Prop :=
   inner trace.val prop
   where
   inner : Trace N F -> (Row N F -> Prop) -> Prop
@@ -92,7 +92,7 @@ def forAllRowsOfTraceExceptLast {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfL
 /--
   Apply a proposition, which could be dependent on the row index, to every row of the trace
 -/
-def forAllRowsOfTraceWithIndex {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength N M F) (prop : Row N F -> ℕ -> Prop) : Prop :=
+def forAllRowsOfTraceWithIndex {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N M) (prop : Row N F -> ℕ -> Prop) : Prop :=
   inner trace.val prop
   where
   inner : Trace N F -> (Row N F -> ℕ -> Prop) -> Prop
@@ -112,6 +112,13 @@ structure CellOffset (M W: ℕ+) where
   rowOffset: Fin W
   column: Fin M
 deriving Repr
+
+namespace CellOffset
+
+def curr {M : ℕ+} (j : Fin M) : CellOffset M 1 := ⟨0, j⟩
+def next {M : ℕ+} (j : Fin M) : CellOffset M 1 := ⟨1, j⟩
+
+end CellOffset
 
 /--
   Mapping from the index of a variable to a cell offset in the table.
@@ -200,9 +207,34 @@ def as_table_operation {α: Type} {F : Type} {M W : ℕ+} [Field F]
   let ctx' := TableConstraintOperation.update_context ctx op
   ((ctx', [op]), a)
 
-def operations {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConstraint F M W α) : List (TableConstraintOperation F M W) :=
+def operations {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConstraint F M W α):
+    List (TableConstraintOperation F M W) :=
   let ((_, ops), _) := table TableContext.empty
   ops
+
+def assignment {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConstraint F M W α):
+    CellAssignment M W :=
+  let ((ctx, _), _) := table TableContext.empty
+  ctx.assignment
+
+def constraints_hold_on_window {F : Type} {M W : ℕ+} [Field F]
+    (table : TableConstraint F M W Unit) (window: TraceOfLength F M W) : Prop :=
+  let ((ctx, ops), ()) := table TableContext.empty
+
+  -- construct an env by simply taking the result of the assignment function
+  let env : ℕ -> F := fun x =>
+    match ctx.assignment x with
+    | ⟨i, j⟩ => window.get i j
+
+  -- then we fold over allocated sub-circuits
+  -- lifting directly to the soundness of the sub-circuit
+  foldl ops env
+  where foldl : List (TableConstraintOperation F M W) -> (env: ℕ -> F) -> Prop
+    | [], _ => true
+    | op :: ops, env =>
+      match op with
+      | TableConstraintOperation.Allocate {soundness ..} => soundness env ∧ foldl ops env
+      | _ => foldl ops env
 
 def output {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConstraint F M W α) : α :=
   let ((_, _), a) := table TableContext.empty
@@ -235,14 +267,14 @@ section Example
   let p_non_zero := Fact.mk (by norm_num : p ≠ 0)
   let p_large_enough := Fact.mk (by norm_num : p > 512)
   let ex : TableConstraint (F p) 3 1 _ := do
-    let x <- TableConstraint.witness_cell ⟨0, 0⟩ (fun _ => (10 : F p))
-    let y <- TableConstraint.witness_cell ⟨0, 1⟩ (fun _ => (20 : F p))
+    let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
+    let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
     let add8Inputs : (Add8.Inputs p).var := ⟨x, y⟩
     let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit add8Inputs
     let z_var : Variable (F p) := match z with
       | var v => v
       | _ => Variable.mk 42 (fun _ => 42)
-    TableConstraint.assign z_var ⟨0, 2⟩
+    TableConstraint.assign z_var (CellOffset.curr 1)
     return z
   ex.operations
 
@@ -250,28 +282,29 @@ section Example
 end Example
 
 
+@[reducible]
+def SingleRowConstraint (F : Type) [Field F] (M : ℕ+) := TableConstraint F M 1 Unit
+
+@[reducible]
+def TwoRowsConstraint (F : Type) [Field F] (M : ℕ+) := TableConstraint F M 2 Unit
 
 inductive TableOperation (F : Type) [Field F] (M : ℕ+) where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
-  | Boundary (β α : TypePair) [ProvableType F α] [ProvableType F β]:
-      FormalCircuit F β α -> CellAssignment M 1 -> (row : ℕ) -> TableOperation F M
+  | Boundary: SingleRowConstraint F M -> (row : ℕ) -> TableOperation F M
 
   /--
     An `EveryRow` constraint is a constraint that is applied to every row.
     It can only reference cells on the same row
   -/
-  | EveryRow {β α : TypePair} [ProvableType F α] [ProvableType F β]:
-      FormalCircuit F β α -> CellAssignment M 1 -> TableOperation F M
+  | EveryRow: SingleRowConstraint F M -> TableOperation F M
 
   /--
     An `EveryRowExceptLast` constraint is a constraint that is applied to every row except the last.
     It can reference cells from the current row, or the next row
   -/
-  | EveryRowExceptLast (β α : TypePair) [ProvableType F α] [ProvableType F β]:
-      FormalCircuit F β α -> CellAssignment M 2 -> TableOperation F M
-
+  | EveryRowExceptLast: TwoRowsConstraint F M -> TableOperation F M
 
 
 /--
@@ -281,7 +314,7 @@ inductive TableOperation (F : Type) [Field F] (M : ℕ+) where
 -/
 def table_constraints_hold
     (F : Type) [Field F] (M : ℕ+) (N : ℕ)
-    (constraints : List (TableOperation F M)) (trace: TraceOfLength M N F) : Prop :=
+    (constraints : List (TableOperation F M)) (trace: TraceOfLength F M N) : Prop :=
   foldl constraints trace.val constraints
   where
   /--
@@ -304,41 +337,27 @@ def table_constraints_hold
   foldl (cs : List (TableOperation F M)) : Trace M F -> (cs_iterator: List (TableOperation F M)) -> Prop
 
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
-    | trace +> curr +> next, (TableOperation.EveryRowExceptLast β α circuit assignment)::rest =>
-        let env : ℕ -> F := fun x =>
-          match assignment x with
-          | ⟨⟨0, _⟩, j⟩ => curr j
-          | ⟨⟨1, _⟩, j⟩ => next j
+    | trace +> curr +> next, (TableOperation.EveryRowExceptLast constraint)::rest =>
         let others := foldl cs (trace +> curr +> next) rest
-        (∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b →
-        Circuit.constraints_hold env (circuit.main b_var)) ∧ others
+        let window : TraceOfLength F M 2 := ⟨<+> +> curr +> next, rfl ⟩
+        constraint.constraints_hold_on_window window ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
-    | trace +> row, (TableOperation.Boundary β α circuit assignment idx)::rest =>
-        let env : ℕ -> F := fun x =>
-          match assignment x with
-          | ⟨⟨0, _⟩, j⟩ => row j
+    | trace +> row, (TableOperation.Boundary constraint idx)::rest =>
         let others := foldl cs (trace +> row) rest
-        if trace.len = idx
-        then
-          (∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b →
-          Circuit.constraints_hold env (circuit.main b_var)) ∧ others
-        else
-          others
+        let window : TraceOfLength F M 1 := ⟨<+> +> row, rfl⟩
+        if trace.len = idx then constraint.constraints_hold_on_window window ∧ others else others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
-    | trace +> row, (TableOperation.EveryRow (β :=β) (α:=α) circuit assignment)::rest =>
-        let env : ℕ -> F := fun x =>
-          match assignment x with
-          | ⟨⟨0, _⟩, j⟩ => row j
+    | trace +> row, (TableOperation.EveryRow constraint)::rest =>
         let others := foldl cs (trace +> row) rest
-        (∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b →
-        Circuit.constraints_hold env (circuit.main b_var)) ∧ others
+        let window : TraceOfLength F M 1 := ⟨<+> +> row, rfl⟩
+        constraint.constraints_hold_on_window window ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
     -- TODO: this is fine if the trace length M is >= 2, but we should check this somehow
-    | trace, (TableOperation.EveryRowExceptLast _ _ _ _)::rest =>
+    | trace, (TableOperation.EveryRowExceptLast _)::rest =>
         foldl cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
