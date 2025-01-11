@@ -379,29 +379,43 @@ theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
     table_constraints_hold add8Table trace ->
     spec trace :=
   by
-    intro trace assumptions_hold
+    intro trace
+    simp [assumptions]
     simp [table_constraints_hold, add8Table, spec, table_constraints_hold.foldl]
     simp [TraceOfLength.forAllRowsOfTrace]
-    simp [assumptions] at assumptions_hold
 
     induction trace.val with
     | empty => {
       simp [table_constraints_hold.foldl, TraceOfLength.forAllRowsOfTrace.inner]
     }
     | cons rest row ih => {
-      simp [table_constraints_hold.foldl, TraceOfLength.forAllRowsOfTrace.inner]
-
       -- simplify induction
-      intros h_curr h_rest
-      have ih' := ih h_rest
-      simp [ih']
+      simp [table_constraints_hold.foldl, TraceOfLength.forAllRowsOfTrace.inner]
+      intros lookup_x lookup_y lookup_rest h_curr h_rest
+      specialize ih lookup_rest h_rest
+      simp [ih]
 
       -- now we prove a local property about the current row
-      simp [TableConstraint.constraints_hold_on_window,
-        TableConstraint.constraints_hold_on_window.foldl] at h_curr
-      simp [ProvableType.from_values, TraceOfLength.get, Trace.getLe, CellOffset.column] at h_curr
+      simp [TableConstraint.constraints_hold_on_window] at h_curr
+      simp [TableConstraint.constraints_hold_on_window.foldl] at h_curr
 
-      sorry
+      -- TODO: simp should suffice, but couldn't get it to work
+      have h_varx : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+        := by rfl
+      have h_vary : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+        := by rfl
+      have h_varz : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
+        := by rfl
+
+      simp [ProvableType.from_values] at h_curr
+      simp [TraceOfLength.get] at h_curr
+      simp [Trace.getLe, CellOffset.column] at h_curr
+      rw [h_varx, h_vary, h_varz] at h_curr
+
+      -- and now it is easy!
+      dsimp [Add8.circuit, Add8.assumptions] at h_curr
+      simp [lookup_x, lookup_y] at h_curr
+      assumption
     }
 
 
