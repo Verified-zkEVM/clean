@@ -115,8 +115,8 @@ deriving Repr
 
 namespace CellOffset
 
-def curr {M : ℕ+} (j : Fin M) : CellOffset M 1 := ⟨0, j⟩
-def next {M : ℕ+} (j : Fin M) : CellOffset M 1 := ⟨1, j⟩
+def curr {M W : ℕ+} (j : Fin M) : CellOffset M W := ⟨0, j⟩
+def next {M W: ℕ+} (j : Fin M) : CellOffset M W := ⟨1, j⟩
 
 end CellOffset
 
@@ -354,8 +354,7 @@ variable [p_large_enough: Fact (p > 512)]
 def add8_inline : SingleRowConstraint (F p) 3 := do
   let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
   let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
-  let add8Inputs : (Add8.Inputs p).var := ⟨x, y⟩
-  let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit add8Inputs
+  let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit {x, y}
 
   --TODO: Is this ok? Gadgets return an `Expression` but we need a `Variable`
   if let var z := z then
@@ -417,6 +416,18 @@ theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
       simp [lookup_x, lookup_y] at h_curr
       assumption
     }
+
+def fib_relation : TwoRowsConstraint (F p) 2 := do
+  let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
+  let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
+  let add8Inputs : (Add8.Inputs p).var := ⟨x, y⟩
+  let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit add8Inputs
+
+  if let var z := z then
+    TableConstraint.assign z (CellOffset.next 1)
+  -- TODO: we also need to enforce assertion-like constraints, like this:
+  -- TableConstraint.subcircuit Equality {CellOffset.curr 1, CellOffset.curr 0}
+  -- but maybe requires a new operation
 
 
 end Example
