@@ -1,9 +1,3 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 
@@ -32,8 +26,7 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x
   dsimp [Table.contains, ByteTable]
   use x.val
   simp [from_byte]
-  dsimp [vec]
-  rw [←Vector.vec_eq]
+  ext1
   have h' : (x.val) % 256 = x.val := by
     rw [Nat.mod_eq_iff_lt]; assumption; norm_num
   simp [h']
