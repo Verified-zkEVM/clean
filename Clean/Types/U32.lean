@@ -1,9 +1,10 @@
 import Clean.GadgetsNew.ByteLookup
 
 section
-variable {p : ℕ} [NeZero p] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2*2^32)]
 
+instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
 instance : Fact (p > 512) := by apply Fact.mk; linarith [p_large_enough.elim]
 
 /--
@@ -77,8 +78,7 @@ lemma wrapping_add_correct (x y z: U32 (F p)) :
     x.wrapping_add y = z ↔ z.value = (x.value + y.value) % 2^32 := by
   sorry
 
--- U32-related Nat lemmas
-omit [NeZero p]
+-- U32-related tactic and lemmas
 
 lemma val_eq_256 : (256 : F p).val = 256 := FieldUtils.val_lt_p 256 (by linarith [p_large_enough.elim])
 lemma val_eq_256p2 : (256^2 : F p).val = 256^2 := by ring_nf; exact FieldUtils.val_lt_p (256^2) (by linarith [p_large_enough.elim])

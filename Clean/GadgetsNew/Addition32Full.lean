@@ -213,6 +213,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     set z3 := FieldUtils.mod_256 (x3 + y3 + c2)
     set c3 := FieldUtils.floordiv (x3 + y3 + c2) 256
 
+    -- the add8 completeness proof, four times
     have : z0.val < 256 := FieldUtils.mod_256_lt (x0 + y0 + carry_in)
     use ByteTable.completeness z0 this
     have : carry_in.val < 2 := FieldUtils.boolean_lt_2 carry_in_bool
