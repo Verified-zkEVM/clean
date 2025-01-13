@@ -10,9 +10,13 @@ instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 namespace FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
 
+instance : NeZero p := ⟨p_prime.elim.ne_zero⟩
 
-theorem p_neq_zero : p ≠ 0 :=
-  Nat.Prime.ne_zero p_prime.elim
+theorem p_neq_zero : p ≠ 0 := p_prime.elim.ne_zero
+
+theorem ext {x y : F p} (h : x.val = y.val) : x = y := by
+  cases p; cases p_neq_zero rfl
+  exact Fin.ext h
 
 theorem sum_do_not_wrap_around (x y: F p) :
     x.val + y.val < p -> (x + y).val = x.val + y.val := by
@@ -137,4 +141,29 @@ def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
 def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
+theorem mod_256_lt [Fact (p > 512)] (x : F p) : (mod_256 x).val < 256 := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  show (x.val % 256) < 256
+  exact Nat.mod_lt x.val (by norm_num)
+
+theorem floordiv_bool [Fact (p > 512)] {x: F p} (h : x.val < 512) :
+  floordiv x 256 = 0 ∨ floordiv x 256 = 1 := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  let z := x.val / 256
+  have : z < 2 := Nat.div_lt_of_lt_mul h
+  -- show z = 0 ∨ z = 1
+  rcases (Nat.lt_trichotomy z 1) with _ | h1 | _
+  · left; apply ext; show z = 0; linarith
+  · right; apply ext; show z = ZMod.val 1; rw [h1, ZMod.val_one]
+  · linarith -- contradiction
+
+theorem mod_add_div_256 [Fact (p > 512)] (x : F p) : x = mod_256 x + 256 * (floordiv x 256) := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  let p := n + 1
+  apply ext
+  rw [ZMod.val_add, ZMod.val_mul]
+  have : ZMod.val 256 = 256 := val_lt_p (p:=p) 256 (by linarith [‹Fact (p > 512)›.elim])
+  rw [this, Nat.add_mod_mod]
+  show x.val = (x.val % 256 + 256 * (x.val / 256)) % p
+  rw [Nat.mod_add_div, (Nat.mod_eq_of_lt x.is_lt : x.val % p = x.val)]
 end FieldUtils

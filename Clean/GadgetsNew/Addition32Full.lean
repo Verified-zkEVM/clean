@@ -72,6 +72,8 @@ def spec (input : (Inputs p).value) (out: (Outputs p).value) :=
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
+set_option linter.unusedVariables false
+
 def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
   main := add32_full
   assumptions := assumptions
@@ -82,14 +84,14 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let ⟨ y0, y1, y2, y3 ⟩ := y
     let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
     let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-    have : x0_var.eval_env env = x0 := by injection h_inputs with hx; injection hx
-    have : x1_var.eval_env env = x1 := by injection h_inputs with hx; injection hx
-    have : x2_var.eval_env env = x2 := by injection h_inputs with hx; injection hx
-    have : x3_var.eval_env env = x3 := by injection h_inputs with hx; injection hx
-    have : y0_var.eval_env env = y0 := by injection h_inputs with _ hy; injection hy
-    have : y1_var.eval_env env = y1 := by injection h_inputs with _ hy; injection hy
-    have : y2_var.eval_env env = y2 := by injection h_inputs with _ hy; injection hy
-    have : y3_var.eval_env env = y3 := by injection h_inputs with _ hy; injection hy
+    have : x0_var.eval_env env = x0 := by injections
+    have : x1_var.eval_env env = x1 := by injections
+    have : x2_var.eval_env env = x2 := by injections
+    have : x3_var.eval_env env = x3 := by injections
+    have : y0_var.eval_env env = y0 := by injections
+    have : y1_var.eval_env env = y1 := by injections
+    have : y2_var.eval_env env = y2 := by injections
+    have : y3_var.eval_env env = y3 := by injections
     have : carry_in_var.eval_env env = carry_in := by injection h_inputs
 
     -- simplify assumptions
@@ -175,7 +177,78 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     use ⟨ z0_byte, z1_byte, z2_byte, z3_byte ⟩
     use c3_bool
 
-  completeness := by sorry
+  completeness := by
+    rintro ctx ⟨ x, y, carry_in ⟩ ⟨ x_var, y_var, carry_in_var ⟩ h_inputs as
+    let ⟨ x0, x1, x2, x3 ⟩ := x
+    let ⟨ y0, y1, y2, y3 ⟩ := y
+    let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
+    let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
+    have : x0_var.eval = x0 := by injections
+    have : x1_var.eval = x1 := by injections
+    have : x2_var.eval = x2 := by injections
+    have : x3_var.eval = x3 := by injections
+    have : y0_var.eval = y0 := by injections
+    have : y1_var.eval = y1 := by injections
+    have : y2_var.eval = y2 := by injections
+    have : y3_var.eval = y3 := by injections
+    have : carry_in_var.eval = carry_in := by injections
+
+    -- simplify assumptions
+    dsimp [assumptions, U32.is_normalized] at as
+    have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
+    have ⟨ _, _, _, _ ⟩ := x_norm
+    have ⟨ _, _, _, _ ⟩ := y_norm
+
+    -- simplify circuit
+    dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit]
+    rw [‹x0_var.eval = x0›, ‹y0_var.eval = y0›, ‹carry_in_var.eval = carry_in›]
+    rw [‹x1_var.eval = x1›, ‹y1_var.eval = y1›]
+    rw [‹x2_var.eval = x2›, ‹y2_var.eval = y2›]
+    rw [‹x3_var.eval = x3›, ‹y3_var.eval = y3›]
+    set z0 := FieldUtils.mod_256 (x0 + y0 + carry_in)
+    set c0 := FieldUtils.floordiv (x0 + y0 + carry_in) 256
+    set z1 := FieldUtils.mod_256 (x1 + y1 + c0)
+    set c1 := FieldUtils.floordiv (x1 + y1 + c0) 256
+    set z2 := FieldUtils.mod_256 (x2 + y2 + c1)
+    set c2 := FieldUtils.floordiv (x2 + y2 + c1) 256
+    set z3 := FieldUtils.mod_256 (x3 + y3 + c2)
+    set c3 := FieldUtils.floordiv (x3 + y3 + c2) 256
+
+    have : z0.val < 256 := FieldUtils.mod_256_lt (x0 + y0 + carry_in)
+    use ByteTable.completeness z0 this
+    have : carry_in.val < 2 := FieldUtils.boolean_lt_2 carry_in_bool
+    have : (x0 + y0 + carry_in).val < 512 := by field_to_nat_u32
+    have : c0 = 0 ∨ c0 = 1 := FieldUtils.floordiv_bool this
+    use ⟨ trivial, this ⟩
+    constructor
+    · rw [FieldUtils.mod_add_div_256 (x0 + y0 + carry_in)]; ring
+
+    have : z1.val < 256 := FieldUtils.mod_256_lt (x1 + y1 + c0)
+    use ByteTable.completeness z1 this
+    have : c0.val < 2 := FieldUtils.boolean_lt_2 ‹c0 = 0 ∨ c0 = 1›
+    have : (x1 + y1 + c0).val < 512 := by field_to_nat_u32
+    have : c1 = 0 ∨ c1 = 1 := FieldUtils.floordiv_bool this
+    use ⟨ trivial, this ⟩
+    constructor
+    · rw [FieldUtils.mod_add_div_256 (x1 + y1 + c0)]; ring
+
+    have : z2.val < 256 := FieldUtils.mod_256_lt (x2 + y2 + c1)
+    use ByteTable.completeness z2 this
+    have : c1.val < 2 := FieldUtils.boolean_lt_2 ‹c1 = 0 ∨ c1 = 1›
+    have : (x2 + y2 + c1).val < 512 := by field_to_nat_u32
+    have : c2 = 0 ∨ c2 = 1 := FieldUtils.floordiv_bool this
+    use ⟨ trivial, this ⟩
+    constructor
+    · rw [FieldUtils.mod_add_div_256 (x2 + y2 + c1)]; ring
+
+    have : z3.val < 256 := FieldUtils.mod_256_lt (x3 + y3 + c2)
+    use ByteTable.completeness z3 this
+    have : c2.val < 2 := FieldUtils.boolean_lt_2 ‹c2 = 0 ∨ c2 = 1›
+    have : (x3 + y3 + c2).val < 512 := by field_to_nat_u32
+    have : c3 = 0 ∨ c3 = 1 := FieldUtils.floordiv_bool this
+    use ⟨ trivial, this ⟩
+    rw [FieldUtils.mod_add_div_256 (x3 + y3 + c2)]
+    ring
 
 -- alternative formulation using subcircuits, seems harder to prove
 
