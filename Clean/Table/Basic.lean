@@ -8,6 +8,7 @@ import Clean.Circuit.Provable
 import Clean.Utils.Field
 
 import Clean.GadgetsNew.Add8.Addition8
+import Clean.GadgetsNew.Equality
 
 -- TODO: this should be something so that we can give names to the columns
 def Row (M : ℕ+) (F : Type) := Fin M -> F
@@ -254,6 +255,15 @@ def subcircuit
   let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.subContext circuit b
   (TableConstraintOperation.Allocate subcircuit, a)
 
+@[simp]
+def assertion
+    {F : Type} {M W : ℕ+} [Field F]
+    {β : TypePair} [ProvableType F β]
+    (circuit: FormalAssertion F β) (b: β.var) : TableConstraint F M W Unit :=
+  as_table_operation fun ctx =>
+    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.subContext circuit b
+    (TableConstraintOperation.Allocate subcircuit, ())
+
 def assign {F : Type} {M W : ℕ+} [Field F] (v: Variable F) (off : CellOffset M W) : TableConstraint F M W Unit :=
   as_table_operation fun _ =>
   (TableConstraintOperation.Assign v off, ())
@@ -399,11 +409,11 @@ theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
       simp [TableConstraint.constraints_hold_on_window.foldl] at h_curr
 
       -- TODO: simp should suffice, but couldn't get it to work
-      have h_varx : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+      have h_varx : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
         := by rfl
-      have h_vary : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have h_vary : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
         := by rfl
-      have h_varz : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
+      have h_varz : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
         := by rfl
 
       simp [ProvableType.from_values] at h_curr
@@ -420,14 +430,12 @@ theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
 def fib_relation : TwoRowsConstraint (F p) 2 := do
   let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
   let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
-  let add8Inputs : (Add8.Inputs p).var := ⟨x, y⟩
-  let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit add8Inputs
+  let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit {x, y}
 
   if let var z := z then
     TableConstraint.assign z (CellOffset.next 1)
-  -- TODO: we also need to enforce assertion-like constraints, like this:
-  -- TableConstraint.subcircuit Equality {CellOffset.curr 1, CellOffset.curr 0}
-  -- but maybe requires a new operation
 
+  let x_next <- TableConstraint.witness_cell (CellOffset.next 0) (fun _ => (20 : F p))
+  TableConstraint.assertion Equality.circuit ⟨y, x_next⟩
 
 end Example
