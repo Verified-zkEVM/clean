@@ -52,7 +52,6 @@ instance : ProvableType (F p) (Outputs p) where
 
 open Add8FullCarry (add8_full_carry)
 
--- I think this will be easier to use in proofs
 def add32_full (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
   let { z := z0, carry_out := c0 } ← add8_full_carry ⟨ x.x0, y.x0, carry_in ⟩
