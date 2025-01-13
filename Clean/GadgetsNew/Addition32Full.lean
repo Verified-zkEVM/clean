@@ -101,24 +101,20 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
 
     -- simplify circuit
     dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit] at h
-    let i0 := ctx.offset
+    set i0 := ctx.offset
     have : ctx.offset = i0 := rfl
-    let z0 := env i0
-    let c0 := env (i0 + 1)
-    let z1 := env (i0 + 2)
-    let c1 := env (i0 + 3)
-    let z2 := env (i0 + 4)
-    let c2 := env (i0 + 5)
-    let z3 := env (i0 + 6)
-    let c3 := env (i0 + 7)
+    set z0 := env i0
+    set c0 := env (i0 + 1)
+    set z1 := env (i0 + 2)
+    set c1 := env (i0 + 3)
+    set z2 := env (i0 + 4)
+    set c2 := env (i0 + 5)
+    set z3 := env (i0 + 6)
+    set c3 := env (i0 + 7)
     rw [‹x0_var.eval_env env = x0›, ‹y0_var.eval_env env = y0›, ‹carry_in_var.eval_env env = carry_in›] at h
     rw [‹x1_var.eval_env env = x1›, ‹y1_var.eval_env env = y1›] at h
     rw [‹x2_var.eval_env env = x2›, ‹y2_var.eval_env env = y2›] at h
     rw [‹x3_var.eval_env env = x3›, ‹y3_var.eval_env env = y3›] at h
-    rw [‹ctx.offset = i0›, (by rfl: env i0 = z0), (by rfl : env (i0 + 1) = c0)] at h
-    rw [(by rfl: env (i0 + 2) = z1), (by rfl : env (i0 + 3) = c1)] at h
-    rw [(by rfl: env (i0 + 4) = z2), (by rfl : env (i0 + 5) = c2)] at h
-    rw [(by rfl: env (i0 + 6) = z3), (by rfl : env (i0 + 7) = c3)] at h
     rw [ByteTable.equiv z0, ByteTable.equiv z1, ByteTable.equiv z2, ByteTable.equiv z3] at h
     simp only [true_implies] at h
     have ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
@@ -195,8 +191,8 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     -- simplify assumptions
     dsimp [assumptions, U32.is_normalized] at as
     have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
-    have ⟨ _, _, _, _ ⟩ := x_norm
-    have ⟨ _, _, _, _ ⟩ := y_norm
+    have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
+    have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
     -- simplify circuit
     dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit]
@@ -213,40 +209,27 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     set z3 := FieldUtils.mod_256 (x3 + y3 + c2)
     set c3 := FieldUtils.floordiv (x3 + y3 + c2) 256
 
+    simp only [true_and]
+
     -- the add8 completeness proof, four times
-    have : z0.val < 256 := FieldUtils.mod_256_lt (x0 + y0 + carry_in)
-    use ByteTable.completeness z0 this
-    have : carry_in.val < 2 := FieldUtils.boolean_lt_2 carry_in_bool
-    have : (x0 + y0 + carry_in).val < 512 := by field_to_nat_u32
-    have : c0 = 0 ∨ c0 = 1 := FieldUtils.floordiv_bool this
-    use ⟨ trivial, this ⟩
-    constructor
-    · rw [FieldUtils.mod_add_div_256 (x0 + y0 + carry_in)]; ring
+    have add8_completeness {x y c_in : F p} :
+      let z := FieldUtils.mod_256 (x + y + c_in);
+      let c_out := FieldUtils.floordiv (x + y + c_in) 256;
+      x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
+      ByteTable.contains (vec [z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -1 * z + -1 * (c_out * 256) = 0
+    := by
+      intro z c_out _ _ hc
+      have : z.val < 256 := FieldUtils.mod_256_lt (x + y + c_in)
+      use ByteTable.completeness z this
+      have : c_in.val < 2 := FieldUtils.boolean_lt_2 hc
+      have : (x + y + c_in).val < 512 := by field_to_nat_u32
+      use FieldUtils.floordiv_bool this
+      rw [FieldUtils.mod_add_div_256 (x + y + c_in)]
+      ring
 
-    have : z1.val < 256 := FieldUtils.mod_256_lt (x1 + y1 + c0)
-    use ByteTable.completeness z1 this
-    have : c0.val < 2 := FieldUtils.boolean_lt_2 ‹c0 = 0 ∨ c0 = 1›
-    have : (x1 + y1 + c0).val < 512 := by field_to_nat_u32
-    have : c1 = 0 ∨ c1 = 1 := FieldUtils.floordiv_bool this
-    use ⟨ trivial, this ⟩
-    constructor
-    · rw [FieldUtils.mod_add_div_256 (x1 + y1 + c0)]; ring
-
-    have : z2.val < 256 := FieldUtils.mod_256_lt (x2 + y2 + c1)
-    use ByteTable.completeness z2 this
-    have : c1.val < 2 := FieldUtils.boolean_lt_2 ‹c1 = 0 ∨ c1 = 1›
-    have : (x2 + y2 + c1).val < 512 := by field_to_nat_u32
-    have : c2 = 0 ∨ c2 = 1 := FieldUtils.floordiv_bool this
-    use ⟨ trivial, this ⟩
-    constructor
-    · rw [FieldUtils.mod_add_div_256 (x2 + y2 + c1)]; ring
-
-    have : z3.val < 256 := FieldUtils.mod_256_lt (x3 + y3 + c2)
-    use ByteTable.completeness z3 this
-    have : c2.val < 2 := FieldUtils.boolean_lt_2 ‹c2 = 0 ∨ c2 = 1›
-    have : (x3 + y3 + c2).val < 512 := by field_to_nat_u32
-    have : c3 = 0 ∨ c3 = 1 := FieldUtils.floordiv_bool this
-    use ⟨ trivial, this ⟩
-    rw [FieldUtils.mod_add_div_256 (x3 + y3 + c2)]
-    ring
+    have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness x0_byte y0_byte carry_in_bool
+    have ⟨ z1_byte, c1_bool, h1 ⟩ := add8_completeness x1_byte y1_byte c0_bool
+    have ⟨ z2_byte, c2_bool, h2 ⟩ := add8_completeness x2_byte y2_byte c1_bool
+    have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness x3_byte y3_byte c2_bool
+    exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 end Addition32Full
