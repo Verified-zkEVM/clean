@@ -3,7 +3,7 @@ import Clean.Types.U32
 
 namespace Addition32Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2*256^4)]
+variable [p_large_enough: Fact (p > 2*2^32)]
 
 open Provable (field field2 fields)
 
@@ -245,13 +245,13 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let z := z0 + z1*256 + z2*256^2 + z3*256^3
     let x := x0 + x1*256 + x2*256^2 + x3*256^3
     let y := y0 + y1*256 + y2*256^2 + y3*256^3
-    let lhs := z + c3*256^4
+    let lhs := z + c3*2^32
     let rhs₀ := x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256) -- h0 expression
     let rhs₁ := x1 + y1 + c0 + -1 * z1 + -1 * (c1 * 256) -- h1 expression
     let rhs₂ := x2 + y2 + c1 + -1 * z2 + -1 * (c2 * 256) -- h2 expression
     let rhs₃ := x3 + y3 + c2 + -1 * z3 + -1 * (c3 * 256) -- h3 expression
 
-    have h_add := calc z + c3*256^4
+    have h_add := calc z + c3*2^32
       -- substitute equations
       _ = lhs + 0 + 256*0 + 256^2*0 + 256^3*0 := by ring
       _ = lhs + rhs₀ + 256*rhs₁ + 256^2*rhs₂ + 256^3*rhs₃ := by dsimp [rhs₀, rhs₁, rhs₂, rhs₃]; rw [h0, h1, h2, h3]
@@ -267,7 +267,7 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have : carry_in.val < 2 := FieldUtils.boolean_lt_2 carry_in_bool
 
     have h_add_nat := calc z_nat + c3.val*2^32
-      _ = (z + c3*256^4).val := by dsimp only [z_nat]; field_to_nat_u32
+      _ = (z + c3*2^32).val := by dsimp only [z_nat]; field_to_nat_u32
       _ = (x + y + carry_in).val := congrArg ZMod.val h_add
       _ = x_nat + y_nat + carry_in.val := by dsimp only [x_nat, y_nat]; field_to_nat_u32
 

@@ -2,7 +2,7 @@ import Clean.GadgetsNew.ByteLookup
 
 section
 variable {p : ℕ} [NeZero p] [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2*256^4)]
+variable [p_large_enough: Fact (p > 2*2^32)]
 
 instance : Fact (p > 512) := by apply Fact.mk; linarith [p_large_enough.elim]
 
@@ -84,6 +84,7 @@ lemma val_eq_256 : (256 : F p).val = 256 := FieldUtils.val_lt_p 256 (by linarith
 lemma val_eq_256p2 : (256^2 : F p).val = 256^2 := by ring_nf; exact FieldUtils.val_lt_p (256^2) (by linarith [p_large_enough.elim])
 lemma val_eq_256p3 : (256^3 : F p).val = 256^3 := by ring_nf; exact FieldUtils.val_lt_p (256^3) (by linarith [p_large_enough.elim])
 lemma val_eq_256p4 : (256^4 : F p).val = 256^4 := by ring_nf; exact FieldUtils.val_lt_p (256^4) (by linarith [p_large_enough.elim])
+lemma val_eq_2p32 : (2^32 : F p).val = 2^32 := by have := val_eq_256p4 (p:=p); ring_nf at *; assumption
 
 /--
 tactic script to fully rewrite a ZMod expression to its Nat version, given that
@@ -101,22 +102,23 @@ expected context:
 if no sufficient inequalities are in the context, then the tactic will leave an equation of the form `expr : Nat < p` unsolved
 
 note: this version is optimized for uint32 arithmetic:
-- specifically handles field constants 256, 256^2, 256^3, 256^4
+- specifically handles field constants 256, 256^2, 256^3, 256^4 = 2^32
 - expects `[Fact (p > 2*256^4)]` in the context
 -/
 syntax "field_to_nat_u32" : tactic
 macro_rules
   | `(tactic|field_to_nat_u32) =>
     `(tactic|(
-      repeat rw [ZMod.val_add]
-      repeat rw [ZMod.val_mul]
+      repeat rw [ZMod.val_add] -- (a + b).val = (a.val + b.val) % p
+      repeat rw [ZMod.val_mul] -- (a * b).val = (a.val * b.val) % p
       repeat rw [U32.val_eq_256]
       repeat rw [U32.val_eq_256p2]
       repeat rw [U32.val_eq_256p3]
       repeat rw [U32.val_eq_256p4]
+      repeat rw [U32.val_eq_2p32]
       simp only [Nat.reducePow, Nat.add_mod_mod, Nat.mod_add_mod, Nat.mul_mod_mod, Nat.mod_mul_mod]
       rw [Nat.mod_eq_of_lt _]
-      repeat linarith [‹Fact (_ > 2 * 256^4)›.elim]))
+      repeat linarith [‹Fact (_ > 2 * 2^32)›.elim]))
 
 lemma value_eq {x0 x1 x2 x3: F p} (h0 : x0.val < 256) (h1 : x1.val < 256) (h2 : x2.val < 256) (h3 : x3.val < 256) :
   (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3).val = x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3 := by
