@@ -247,6 +247,13 @@ def witness_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W) (compu
   (TableConstraintOperation.Witness off compute, ⟨ ctx.subContext.offset, compute ⟩)
 
 @[simp]
+def get_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W): TableConstraint F M W (Variable F) :=
+  as_table_operation fun ctx =>
+  -- TODO: how to handle multiple withenss functions?
+  (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.subContext.offset, (fun _ => 0) ⟩)
+
+
+@[simp]
 def subcircuit
     {F : Type} {M W : ℕ+} [Field F]
     {α β : TypePair} [ProvableType F β] [ProvableType F α]
@@ -281,7 +288,7 @@ inductive TableOperation (F : Type) [Field F] (M : ℕ+) where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
-  | Boundary: SingleRowConstraint F M -> (row : ℕ) -> TableOperation F M
+  | Boundary: ℕ -> SingleRowConstraint F M -> TableOperation F M
 
   /--
     An `EveryRow` constraint is a constraint that is applied to every row.
@@ -333,7 +340,7 @@ def table_constraints_hold
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
-    | trace +> row, (TableOperation.Boundary constraint idx)::rest =>
+    | trace +> row, (TableOperation.Boundary idx constraint)::rest =>
         let others := foldl cs (trace +> row) rest
         let window : TraceOfLength F M 1 := ⟨<+> +> row, rfl⟩
         if trace.len = idx then constraint.constraints_hold_on_window window ∧ others else others
@@ -357,16 +364,36 @@ def table_constraints_hold
     | <+>, _ => True
 
 
+structure FormalTable {F : Type} [Field F] where
+  -- number of columns
+  M : ℕ+
+
+  -- list of constraints that are applied over the table
+  constraints : List (TableOperation F M)
+
+  -- assumptions for the table
+  assumptions {N : ℕ} : TraceOfLength F M N -> Prop
+
+  -- specification for the table
+  spec {N : ℕ} : TraceOfLength F M N -> Prop
+
+  -- the soundness states that if the assumptions hold, then
+  -- the constraints hold implies that the spec holds
+  soundness :
+    ∀ (N : ℕ) (trace: TraceOfLength F M N),
+    assumptions trace ->
+    table_constraints_hold constraints trace ->
+    spec trace
+
 section Example
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 def add8_inline : SingleRowConstraint (F p) 3 := do
-  let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
-  let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
+  let x <- TableConstraint.get_cell (CellOffset.curr 0)
+  let y <- TableConstraint.get_cell (CellOffset.curr 1)
   let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit {x, y}
 
-  --TODO: Is this ok? Gadgets return an `Expression` but we need a `Variable`
   if let var z := z then
     TableConstraint.assign z (CellOffset.curr 2)
 
@@ -374,21 +401,20 @@ def add8Table : List (TableOperation (F p) 3) := [
   TableOperation.EveryRow add8_inline
 ]
 
-
 def assumptions {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
-  trace.forAllRowsOfTrace (fun row =>
-    (row 0).val < 256 ∧ (row 1).val < 256
-  )
+  trace.forAllRowsOfTrace (fun row => (row 0).val < 256 ∧ (row 1).val < 256)
+
 
 def spec {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row 2).val = ((row 0).val + (row 1).val) % 256)
 
-theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
-    assumptions trace ->
-    table_constraints_hold add8Table trace ->
-    spec trace :=
-  by
-    intro trace
+def formal_add8_table : FormalTable (F:=(F p)) := {
+  M := 3,
+  constraints := add8Table,
+  assumptions := assumptions,
+  spec := spec,
+  soundness := by
+    intro N trace
     simp [assumptions]
     simp [table_constraints_hold, add8Table, spec, table_constraints_hold.foldl]
     simp [TraceOfLength.forAllRowsOfTrace]
@@ -426,16 +452,30 @@ theorem soundness (N : ℕ): ∀ (trace : TraceOfLength (F p) 3 N),
       simp [lookup_x, lookup_y] at h_curr
       assumption
     }
+}
 
+/-
+  Fibonacci example
+-/
 def fib_relation : TwoRowsConstraint (F p) 2 := do
-  let x <- TableConstraint.witness_cell (CellOffset.curr 0) (fun _ => (10 : F p))
-  let y <- TableConstraint.witness_cell (CellOffset.curr 1) (fun _ => (20 : F p))
+  let x <- TableConstraint.get_cell (CellOffset.curr 0)
+  let y <- TableConstraint.get_cell (CellOffset.curr 1)
   let z : Expression (F p) <- TableConstraint.subcircuit Add8.circuit {x, y}
 
   if let var z := z then
     TableConstraint.assign z (CellOffset.next 1)
 
-  let x_next <- TableConstraint.witness_cell (CellOffset.next 0) (fun _ => (20 : F p))
+  let x_next <- TableConstraint.get_cell (CellOffset.next 0)
   TableConstraint.assertion Equality.circuit ⟨y, x_next⟩
+
+def fib_table : List (TableOperation (F p) 2) := [
+  TableOperation.Boundary 0 (do
+    let x <- TableConstraint.get_cell (CellOffset.curr 0)
+    let y <- TableConstraint.get_cell (CellOffset.curr 1)
+    TableConstraint.assertion Equality.circuit ⟨x, 0⟩
+    TableConstraint.assertion Equality.circuit ⟨y, 1⟩
+  ),
+  TableOperation.EveryRowExceptLast fib_relation,
+]
 
 end Example
