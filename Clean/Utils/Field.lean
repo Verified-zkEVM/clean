@@ -123,9 +123,9 @@ theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = 
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
 
-def less_than_p [p_pos: Fact (p ≠ 0)] (x: F p) : x.val < p := by
+def less_than_p [p_pos: NeZero p] (x: F p) : x.val < p := by
   rcases p
-  · have : 0 ≠ 0 := p_pos.elim; tauto
+  · have : 0 ≠ 0 := p_pos.out; tauto
   · exact x.is_lt
 
 def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
@@ -134,7 +134,7 @@ def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
 def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
   mod x 256 (by linarith [p_large_enough.elim])
 
-def floordiv [Fact (p ≠ 0)] (x: F p) (c: ℕ+) : F p :=
+def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
 end FieldUtils

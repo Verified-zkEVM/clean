@@ -1,8 +1,10 @@
 import Clean.GadgetsNew.ByteLookup
 
 section
-variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [NeZero p] [Fact p.Prime]
+variable [p_large_enough: Fact (p > 2*256^4)]
+
+instance : Fact (p > 512) := by apply Fact.mk; linarith [p_large_enough.elim]
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
@@ -76,24 +78,47 @@ lemma wrapping_add_correct (x y z: U32 (F p)) :
   sorry
 
 -- U32-related Nat lemmas
-variable [p_large_enough': Fact (p > 2*256^2)]
+omit [NeZero p]
 
-lemma val_eq_256 {p} [Fact (p.Prime)] [pl : Fact (p > 512)] : (256 : F p).val = 256 :=
-  FieldUtils.val_lt_p 256 (by linarith [pl.elim])
+lemma val_eq_256 : (256 : F p).val = 256 := FieldUtils.val_lt_p 256 (by linarith [p_large_enough.elim])
+lemma val_eq_256p2 : (256^2 : F p).val = 256^2 := by ring_nf; exact FieldUtils.val_lt_p (256^2) (by linarith [p_large_enough.elim])
+lemma val_eq_256p3 : (256^3 : F p).val = 256^3 := by ring_nf; exact FieldUtils.val_lt_p (256^3) (by linarith [p_large_enough.elim])
+lemma val_eq_256p4 : (256^4 : F p).val = 256^4 := by ring_nf; exact FieldUtils.val_lt_p (256^4) (by linarith [p_large_enough.elim])
 
--- TODO how can this be so hard???
-lemma value_lt_1 {x0 x1: F p} (h0 : x0.val < 256) (h1 : x1.val < 256) :
-  (x0 + x1 * 256).val < 256^2 ∧ x0.val + x1.val * 256 = (x0 + x1 * 256).val
-:= by
-  have : x1.val * 256 ≤ 255 * 256 := by linarith [h1, p_large_enough.elim]
-  have : x1.val * (256 : F p).val < p := by rw [val_eq_256]; linarith [this, p_large_enough'.elim]
-  have : x1.val * (256 : F p).val = (x1 * 256).val := ZMod.val_mul_of_lt this |>.symm
-  have : x1.val * 256 = (x1 * 256).val := by rw [← this, val_eq_256]
-  sorry
+/--
+tactic script to show equivalence of any ZMod expression with its Nat version
+
+```
+example (x y : F p) (hx: x.val < 256) (hy: y.val < 256) :
+  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat_u32
+```
+
+expected context:
+- the equation to prove as the goal
+- size assumptions on variables and a sufficient `p > ...` instance
+
+if no sufficient inequalities are in the context, then the tactic will leave an equation of the form `expr : Nat < p` unsolved
+
+note: this version is optimized for uint32 arithmetic:
+- handles field constants 256, 256^2, 256^3, 256^4
+- expects `[Fact (p > 2*256^4)]` in the context
+-/
+syntax "field_to_nat_u32" : tactic
+macro_rules
+  | `(tactic|field_to_nat_u32) =>
+    `(tactic|(
+      repeat rw [ZMod.val_add]
+      repeat rw [ZMod.val_mul]
+      repeat rw [U32.val_eq_256]
+      repeat rw [U32.val_eq_256p2]
+      repeat rw [U32.val_eq_256p3]
+      repeat rw [U32.val_eq_256p4]
+      simp only [Nat.reducePow, Nat.add_mod_mod, Nat.mod_add_mod, Nat.mul_mod_mod, Nat.mod_mul_mod]
+      rw [Nat.mod_eq_of_lt _]
+      repeat linarith [‹Fact (_ > 2 * 256^4)›.elim]))
 
 lemma value_eq {x0 x1 x2 x3: F p} (h0 : x0.val < 256) (h1 : x1.val < 256) (h2 : x2.val < 256) (h3 : x3.val < 256) :
-  x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3 = (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3).val  := by
-  sorry
-
+  (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3).val = x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3 := by
+  field_to_nat_u32
 end U32
 end
