@@ -177,14 +177,12 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
 
 -- I think this will be easier to use in proofs
 def add32_full' (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
-let ⟨x, y, carry_in⟩ := input
-
-let { z := z0, carry_out := c0 } ← add8_full_carry ⟨ x.x0, y.x0, carry_in ⟩
-let { z := z1, carry_out := c1 } ← add8_full_carry ⟨ x.x1, y.x1, c0 ⟩
-let { z := z2, carry_out := c2 } ← add8_full_carry ⟨ x.x2, y.x2, c1 ⟩
-let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
-
-return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
+  let ⟨x, y, carry_in⟩ := input
+  let { z := z0, carry_out := c0 } ← add8_full_carry ⟨ x.x0, y.x0, carry_in ⟩
+  let { z := z1, carry_out := c1 } ← add8_full_carry ⟨ x.x1, y.x1, c0 ⟩
+  let { z := z2, carry_out := c2 } ← add8_full_carry ⟨ x.x2, y.x2, c1 ⟩
+  let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
+  return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
 
 def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
   main := add32_full'
@@ -281,9 +279,8 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
       rw [Nat.mod_eq_of_lt ‹z_nat < 2^32›]
 
     have h_high : c3.val = (x_nat + y_nat + carry_in.val) / 2^32 := by
-      rw [← h_add_nat]
-      rw [FieldUtils.div_add_of_add_mul_div _ _ (2^32)]
-      rw [FieldUtils.div_zero_of_lt _ _ ‹z_nat < 2^32›, zero_add]
+      rw [← h_add_nat, Nat.add_mul_div_right _ _ (by norm_num)]
+      rw [Nat.div_eq_of_lt ‹z_nat < 2^32›, zero_add]
 
     use h_low
     use h_high

@@ -137,10 +137,4 @@ def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
 def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
-theorem div_add_of_add_mul_div (x y c : ℕ) : (x + y * c) / c = x / c + y := by
-  sorry
-
-theorem div_zero_of_lt (x c : ℕ) : x < c → x / c = 0 := by
-  sorry
-
 end FieldUtils
