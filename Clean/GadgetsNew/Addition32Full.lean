@@ -3,7 +3,7 @@ import Clean.Types.U32
 
 namespace Addition32Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable [p_large_enough: Fact (p > 2*256^4)]
 
 open Provable (field field2 fields)
 
@@ -241,49 +241,54 @@ def circuit' : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rw [‹ctx.offset = i0›, (by rfl: env (i0 + 7) = c3)]
     rw [(by rfl: env i0 = z0), (by rfl: env (i0 + 2) = z1), (by rfl: env (i0 + 4) = z2), (by rfl: env (i0 + 6) = z3)]
 
-    let z := z0 + z1*256 + z2*256^2 + z3*256^3
-    let lhs := z + c3*256^4
-
     -- add up all the equations
-    have h_add :=
-      calc lhs
-      _ = lhs + 0 + 256*0 + 256^2*0 + 256^3*0 := by ring
-      -- add the first equation
-      _ = lhs + (x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256)) + 256*0 + 256^2*0 + 256^3*0 := by rw [h0]
-      -- add 2nd equation, cancel c0, simplify
-      _ = lhs +  (x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256)) + 256*(x1 + y1 + c0 + -1 * z1 + -1 * (c1 * 256)) + 256^2*0 + 256^3*0 := by rw [h1]
-      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 - 256^2*c1 + 256^2*0 + 256^3*0 := by ring
-      -- add 3rd equation and cancel c1
-      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 - 256^2*c1 + 256^2*(x2 + y2 + c1 + -1 * z2 + -1 * (c2 * 256)) + 256^3*0 := by rw [h2]
-      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2 + -1 * (c2 * 256)) + 256^3*0 := by ring
-      -- add 4th equation and cancel c2
-      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2 + -1 * (c2 * 256)) + 256^3*(x3 + y3 + c2 + -1 * z3 + -1 * (c3 * 256)) := by rw [h3]
-      _ = lhs + x0 + 256*x1 + y0 + 256*y1 + carry_in - z0 - 256*z1 + 256^2*(x2 + y2 + -1 * z2) + 256^3*(x3 + y3 + -1 * z3 + -1 * (c3 * 256)) := by ring
-      -- simplify
-      _ = lhs - (z0 + z1*256 + z2*256^2 + z3*256^3) + (x0 + x1*256 + x2*256^2 + x3*256^3) + (y0 + y1*256 + y2*256^2 + y3*256^3) + carry_in - c3*256^4 := by ring
-      _ = (x0 + 256*x1 + 256^2*x2 + 256^3*x3) + (y0 + 256*y1 + 256^2*y2 + 256^3*y3) + carry_in := by ring
+    let z := z0 + z1*256 + z2*256^2 + z3*256^3
+    let x := x0 + x1*256 + x2*256^2 + x3*256^3
+    let y := y0 + y1*256 + y2*256^2 + y3*256^3
+    let lhs := z + c3*256^4
+    let rhs₀ := x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256) -- h0 expression
+    let rhs₁ := x1 + y1 + c0 + -1 * z1 + -1 * (c1 * 256) -- h1 expression
+    let rhs₂ := x2 + y2 + c1 + -1 * z2 + -1 * (c2 * 256) -- h2 expression
+    let rhs₃ := x3 + y3 + c2 + -1 * z3 + -1 * (c3 * 256) -- h3 expression
 
-    -- show that lhs is < p
-    have h_lt : lhs.val < p := by sorry
+    have h_add := calc z + c3*256^4
+      -- substitute equations
+      _ = lhs + 0 + 256*0 + 256^2*0 + 256^3*0 := by ring
+      _ = lhs + rhs₀ + 256*rhs₁ + 256^2*rhs₂ + 256^3*rhs₃ := by dsimp [rhs₀, rhs₁, rhs₂, rhs₃]; rw [h0, h1, h2, h3]
+      -- simplify
+      _ = x + y + carry_in := by ring
+
+    -- move added equation into Nat
+    let z_nat := z0.val + z1.val*256 + z2.val*256^2 + z3.val*256^3
+    let x_nat := x0.val + x1.val*256 + x2.val*256^2 + x3.val*256^3
+    let y_nat := y0.val + y1.val*256 + y2.val*256^2 + y3.val*256^3
+
+    have : c3.val < 2 := FieldUtils.boolean_lt_2 c3_bool
+    have : carry_in.val < 2 := FieldUtils.boolean_lt_2 carry_in_bool
+
+    have h_add_nat := calc z_nat + c3.val*2^32
+      _ = (z + c3*256^4).val := by dsimp only [z_nat]; field_to_nat_u32
+      _ = (x + y + carry_in).val := congrArg ZMod.val h_add
+      _ = x_nat + y_nat + carry_in.val := by dsimp only [x_nat, y_nat]; field_to_nat_u32
 
     -- show that lhs splits into low and high 32 bits
-    have h_low : z.val = lhs.val % 2^32 := by sorry
-    have h_high : c3.val = lhs.val / 2^32 := by sorry
+    have : z_nat < 2^32 := by dsimp only [z_nat]; linarith
 
-    constructor
-    · rw [h_add] at h_low
-      -- use ZMod.val_add_lt, ZMod.val_mul_lt
+    have h_low : z_nat = (x_nat + y_nat + carry_in.val) % 2^32 := by
+      suffices h : z_nat = z_nat % 2^32 by
+        rw [← h_add_nat, ← Nat.add_mod_mod, ← Nat.mul_mod_mod]
+        simpa using h
+      rw [Nat.mod_eq_of_lt ‹z_nat < 2^32›]
 
-      -- exact ZMod.cast_eq_val
-      sorry
+    have h_high : c3.val = (x_nat + y_nat + carry_in.val) / 2^32 := by
+      rw [← h_add_nat]
+      rw [FieldUtils.div_add_of_add_mul_div _ _ (2^32)]
+      rw [FieldUtils.div_zero_of_lt _ _ ‹z_nat < 2^32›, zero_add]
 
-    constructor
-    · sorry
-
-    constructor
-    exact ⟨ z0_byte, z1_byte, z2_byte, z3_byte ⟩
-
-    sorry
+    use h_low
+    use h_high
+    use ⟨ z0_byte, z1_byte, z2_byte, z3_byte ⟩
+    use c3_bool
 
   completeness := by sorry
 end Addition32Full

@@ -98,7 +98,7 @@ theorem val_lt_p (x: ℕ) : (x < p) -> (x : F p).val = x := by
   assumption
 
 
-theorem boolean_le_2 (b : F p) (hb : b = 0 ∨ b = 1) : b.val < 2 := by
+theorem boolean_lt_2 {b : F p} (hb : b = 0 ∨ b = 1) : b.val < 2 := by
   rcases hb with h0 | h1
   · rw [h0]; simp
   · rw [h1]; simp [ZMod.val_one]
@@ -125,7 +125,7 @@ theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = 
 
 def less_than_p [p_pos: NeZero p] (x: F p) : x.val < p := by
   rcases p
-  · have : 0 ≠ 0 := p_pos.out; tauto
+  · have : 0 ≠ 0 := p_pos.out; contradiction
   · exact x.is_lt
 
 def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
@@ -136,5 +136,11 @@ def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
 
 def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
+
+theorem div_add_of_add_mul_div (x y c : ℕ) : (x + y * c) / c = x / c + y := by
+  sorry
+
+theorem div_zero_of_lt (x c : ℕ) : x < c → x / c = 0 := by
+  sorry
 
 end FieldUtils

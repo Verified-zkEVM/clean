@@ -86,7 +86,8 @@ lemma val_eq_256p3 : (256^3 : F p).val = 256^3 := by ring_nf; exact FieldUtils.v
 lemma val_eq_256p4 : (256^4 : F p).val = 256^4 := by ring_nf; exact FieldUtils.val_lt_p (256^4) (by linarith [p_large_enough.elim])
 
 /--
-tactic script to show equivalence of any ZMod expression with its Nat version
+tactic script to fully rewrite a ZMod expression to its Nat version, given that
+the expression is smaller than the modulus.
 
 ```
 example (x y : F p) (hx: x.val < 256) (hy: y.val < 256) :
@@ -100,7 +101,7 @@ expected context:
 if no sufficient inequalities are in the context, then the tactic will leave an equation of the form `expr : Nat < p` unsolved
 
 note: this version is optimized for uint32 arithmetic:
-- handles field constants 256, 256^2, 256^3, 256^4
+- specifically handles field constants 256, 256^2, 256^3, 256^4
 - expects `[Fact (p > 2*256^4)]` in the context
 -/
 syntax "field_to_nat_u32" : tactic
