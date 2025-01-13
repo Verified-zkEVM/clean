@@ -167,10 +167,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
       rw [← h_add_nat, Nat.add_mul_div_right _ _ (by norm_num)]
       rw [Nat.div_eq_of_lt ‹z_nat < 2^32›, zero_add]
 
-    use h_low
-    use h_high
-    use ⟨ z0_byte, z1_byte, z2_byte, z3_byte ⟩
-    use c3_bool
+    exact ⟨ h_low, h_high, ⟨ z0_byte, z1_byte, z2_byte, z3_byte ⟩, c3_bool ⟩
 
   completeness := by
     rintro ctx ⟨ x, y, carry_in ⟩ ⟨ x_var, y_var, carry_in_var ⟩ h_inputs as
@@ -231,5 +228,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have ⟨ z1_byte, c1_bool, h1 ⟩ := add8_completeness x1_byte y1_byte c0_bool
     have ⟨ z2_byte, c2_bool, h2 ⟩ := add8_completeness x2_byte y2_byte c1_bool
     have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness x3_byte y3_byte c2_bool
+
     exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 end Addition32Full
