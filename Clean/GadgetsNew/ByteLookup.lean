@@ -32,6 +32,9 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x
   simp [h']
   rw [FieldUtils.nat_to_field_of_val_eq_iff]
 
+def ByteTable.equiv (x: F p) : ByteTable.contains (vec [x]) ↔ x.val < 256 :=
+  ⟨ByteTable.soundness x, ByteTable.completeness x⟩
+
 def byte_lookup (x: Expression (F p)) := lookup {
   table := ByteTable
   entry := vec [x]

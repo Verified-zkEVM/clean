@@ -19,6 +19,7 @@ def Inputs (p : ℕ) : TypePair := ⟨
   InputStruct (F p)
 ⟩
 
+@[simp]
 instance : ProvableType (F p) (Inputs p) where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
@@ -40,6 +41,7 @@ def Outputs (p : ℕ) : TypePair := ⟨
   OutputStruct (F p)
 ⟩
 
+@[simp]
 instance : ProvableType (F p) (Outputs p) where
   size := 2
   to_vars s := vec [s.z, s.carry_out]
@@ -169,7 +171,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
       linarith)
 
     have ⟨as_x, as_y, as_carry_in⟩ := as
-    have carry_in_bound := FieldUtils.boolean_le_2 carry_in as_carry_in
+    have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
     have completeness2 : goal_bool := by
       apply Add8Theorems.completeness_bool

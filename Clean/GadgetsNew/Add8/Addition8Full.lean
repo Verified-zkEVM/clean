@@ -74,7 +74,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     let ⟨ asx, asy, as_carry_in ⟩ := as
     have as': Add8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
     specialize h_holds (by assumption)
-    dsimp [ProvableType.from_values] at h_holds
 
     guard_hyp h_holds : Add8FullCarry.circuit.spec
       { x, y, carry_in }
