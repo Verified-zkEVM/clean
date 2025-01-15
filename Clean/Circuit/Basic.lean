@@ -1,7 +1,7 @@
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 
-variable {F: Type}
+variable {F: Type} {s : ℕ}
 
 structure Table (F : Type) where
   name: String
@@ -11,12 +11,12 @@ structure Table (F : Type) where
 
 def Table.contains (table: Table F) row := ∃ i, row = table.row i
 
-structure Lookup (F : Type) where
+structure Lookup (F : Type) (s : ℕ) where
   table: Table F
-  entry: Vector (Expression F) table.arity
+  entry: Vector (Expression F s) table.arity
   index: Unit → Fin table.length -- index of the entry
 
-instance [Repr F] : Repr (Lookup F) where
+instance [Repr F] : Repr (Lookup F s) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
 inductive RowIndex
@@ -31,23 +31,23 @@ deriving Repr
 
 variable {α : Type} [Field F]
 
-inductive PreOperation (F : Type) where
-  | Witness : (compute : Unit → F) → PreOperation F
-  | Assert : Expression F → PreOperation F
-  | Lookup : Lookup F → PreOperation F
-  | Assign : Cell F × Variable F → PreOperation F
+inductive PreOperation (F : Type) (s : ℕ) where
+  | Witness : (compute : Unit → F) → PreOperation F s
+  | Assert : Expression F s → PreOperation F s
+  | Lookup : Lookup F s → PreOperation F s
+  | Assign : Cell F × Variable F s → PreOperation F s
 
 namespace PreOperation
-def toString [Repr F] : PreOperation F → String
+def toString [Repr F] : PreOperation F s → String
   | Witness _v => "Witness"
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
   | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
 
-instance [Repr F] : Repr (PreOperation F) where
+instance [Repr F] : Repr (PreOperation F s) where
   reprPrec op _ := toString op
 
-def constraints_hold (env: ℕ → F) : List (PreOperation F) → Prop
+def constraints_hold (env: Fin s → F) : List (PreOperation F s) → Prop
   | [] => True
   | op :: [] => match op with
     | Assert e => e.eval_env env = 0
@@ -61,20 +61,13 @@ def constraints_hold (env: ℕ → F) : List (PreOperation F) → Prop
     | _ => constraints_hold env ops
 
 @[simp]
-def witness_length : List (PreOperation F) → ℕ
+def witness_length : List (PreOperation F s) → ℕ
   | [] => 0
   | (Witness _) :: ops => witness_length ops + 1
   | _ :: ops => witness_length ops
 
 @[simp]
-def total_witness_length : List (PreOperation F) → ℕ
-  | [] => 0
-  | (Witness _) :: ops => total_witness_length ops + 1
-  | _ :: ops => total_witness_length ops
-
-@[simp]
-def env_from_vector {n : ℕ} (env: Vector (Unit → F) n) : ℕ → F
-| i => if h : i < n then env.get ⟨ i, h ⟩ () else 0
+def env_from_vector (env: Vector (Unit -> F) s) : Fin s → F := fun i => env.get i ()
 
 /--
 Instantiate an environemtn expressed as a vector of witness generation functions at a given offset.
@@ -97,17 +90,26 @@ def vector_from_env (n : ℕ) (env: ℕ → F) : Vector (Unit → F) n := by
 
 end PreOperation
 
--- this type models a subcircuit: a list of operations that imply a certain spec,
--- for all traces that satisfy the constraints
-structure SubCircuit (F: Type) [Field F] where
-  ops: List (PreOperation F)
+/--
+  This type models a subcircuit: a list of operations that imply a certain spec,
+  for all traces that satisfy the constraints
+-/
+structure SubCircuit (F: Type) [Field F] (s : ℕ) where
+  ops: List (PreOperation F s)
 
-  default_env: Vector (Unit -> F) (PreOperation.witness_length ops)
+  /--
+  To construct a subcircuit we need to prove also that every expression is well-typed
+  which means that the number of witnesses is equal to the addressable variables
+  -/
+  well_typed : s = PreOperation.witness_length ops
+
+  -- default environment for the subcircuit
+  default_env: Vector (Unit -> F) s
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`
   -- and `completeness` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  soundness : (ℕ → F) → Prop
+  soundness : (Fin s → F) → Prop
   completeness : Prop
 
   -- `soundness` needs to follow from the constraints for any witness
@@ -117,34 +119,63 @@ structure SubCircuit (F: Type) [Field F] where
   implied_by_completeness : completeness →
     PreOperation.constraints_hold (PreOperation.env_from_vector default_env) ops
 
-inductive Operation (F : Type) [Field F] where
-  | Witness : (compute : Unit → F) → Operation F
-  | Assert : Expression F → Operation F
-  | Lookup : Lookup F → Operation F
-  | Assign : Cell F × Variable F → Operation F
-  | SubCircuit : SubCircuit F → Operation F
+inductive Operation (F : Type) [Field F] (s : ℕ) where
+  | Witness : (compute : Unit → F) → Operation F s
+  | Assert : Expression F s → Operation F s
+  | Lookup : Lookup F s → Operation F s
+  | Assign : Cell F × Variable F s → Operation F s
+  | SubCircuit {s' : ℕ} : SubCircuit F s' → Operation F s
 
-structure Context (F : Type) where
+structure Context (F : Type) [Field F] where
   offset: ℕ
   default_env: Vector (Unit -> F) offset
+  operations : List (Operation F offset)
 
 @[simp]
-def Context.empty : Context F := { offset := 0, default_env := vec [] }
+def Context.empty : Context F := { offset := 0, default_env := vec [], operations := [] }
 
 namespace Operation
+
+/--
+  Lift a list of operations to a new list of operations, where newly allocated variable(s) have
+  been added to the environment. This implies transforming all the variables from `Fin offset`
+  to `Fin (offset + num_vars)`.
+  This operation is the core to maintaining the "well-typed" property of the circuit, that is
+  the fact that the number of witnesses is equal to the number of addressable variables.
+
+  Intuitively, this is sound because if we have a context with n variables and some operations on
+  them, then if we add `num_vars` variables, the operations are still well-typed in the original
+  "subset" if the environment
+-/
 @[simp]
-def update_context (ctx: Context F) : Operation F → Context F
+def lift_operations (num_vars : ℕ) (ops: List (Operation F s)) : List (Operation F (s + num_vars)) :=
+  ops.map fun
+    | Witness compute => Witness compute
+    | Assert e => Assert (e.lift_vars (by simp))
+    | Lookup l => Lookup (sorry)
+    | Assign (c, v) => Assign (c, (v.lift (by simp)))
+    | SubCircuit (s':=s') sub => SubCircuit (s':=s') (sorry)
+
+@[simp]
+def update_context (ctx: Context F) : Operation F ctx.offset → Context F
   | Witness compute => {
     offset := ctx.offset + 1,
     default_env := ctx.default_env.push compute
+    operations := (lift_operations 1 ctx.operations) ++ [(Witness compute)]
   }
-  | SubCircuit { ops, default_env, .. } => {
+  | SubCircuit (s':=s') { ops, default_env, well_typed .. } => {
     offset := ctx.offset + PreOperation.witness_length ops,
-    default_env := ctx.default_env.append default_env
+    default_env := ctx.default_env.append (by
+      rw [well_typed] at default_env
+      exact default_env)
+    operations := by
+      let ops' := (lift_operations (PreOperation.witness_length ops) ctx.operations)
+      rw [←well_typed] at ops'
+      sorry
   }
   | _ => ctx
 
-instance [Repr F] : ToString (Operation F) where
+instance [Repr F] : ToString (Operation F s) where
   toString
     | Witness _v => "Witness"
     | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
@@ -153,25 +184,35 @@ instance [Repr F] : ToString (Operation F) where
     | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 
+/--
+  The `Circuit` monad, it is a logging monad that keeps track of the current context.
+  It is well-typed in the sense that the list of operations always is indexed by
+  the newly returned context offset.
+  We rely on the fact that the `Context.offset` indicates also the size of the environment,
+  and if we have a list of operations `Operation F ctx.offset` we are sure that are well typed for
+  some context `ctx`.
+  In other words, `Circuit` must return a consistent list of operations that are well-typed for the
+  returned context.
+-/
 @[simp]
 def Circuit (F : Type) [Field F] (α : Type) :=
-  Context F → (Context F × List (Operation F)) × α
+  Context F → Context F × α
 
 namespace Circuit
 instance : Monad (Circuit F) where
-  pure a ctx := ((ctx, []), a)
+  pure a ctx := (ctx, a)
   bind f g ctx :=
     let ((ctx', ops), a) := f ctx
     let ((ctx'', ops'), b) := g a ctx'
     ((ctx'', ops ++ ops'), b)
 
 @[simp]
-def run (circuit: Circuit F α) : List (Operation F) × α :=
+def run (circuit: Circuit F α) : List (Operation F s) × α :=
   let ((_, ops), a) := circuit Context.empty
   (ops, a)
 
 @[reducible]
-def operations (circuit: Circuit F α) : List (Operation F) :=
+def operations (circuit: Circuit F α) : List (Operation F s) :=
   (circuit .empty).1.2
 
 @[reducible]
@@ -179,7 +220,7 @@ def output (circuit: Circuit F α) (ctx : Context F := Context.empty) : α :=
   (circuit ctx).2
 
 @[reducible]
-def as_circuit (f: Context F → Operation F × α) : Circuit F α := fun ctx  =>
+def as_circuit (f: Context F → Operation F s × α) : Circuit F α := fun ctx  =>
   let (op, a) := f ctx
   let ctx' := op.update_context ctx
   ((ctx', [op]), a)
@@ -228,7 +269,7 @@ def env_type (circuit: Circuit F α) : Type :=
 -- formal concepts of soundness and completeness of a circuit
 
 @[simp]
-def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F) → Prop
+def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F s) → Prop
   | [] => True
   | op :: [] => match op with
     | Operation.Assert e => (e.eval_env env) = 0
