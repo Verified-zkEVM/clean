@@ -67,8 +67,33 @@ def witness_length : List (PreOperation F) → ℕ
   | _ :: ops => witness_length ops
 
 @[simp]
+def total_witness_length : List (PreOperation F) → ℕ
+  | [] => 0
+  | (Witness _) :: ops => total_witness_length ops + 1
+  | _ :: ops => total_witness_length ops
+
+@[simp]
 def env_from_vector {n : ℕ} (env: Vector (Unit → F) n) : ℕ → F
 | i => if h : i < n then env.get ⟨ i, h ⟩ () else 0
+
+/--
+Instantiate an environemtn expressed as a vector of witness generation functions at a given offset.
+-/
+@[simp]
+def env_at_offset {n : ℕ} (env: Vector (Unit → F) n) (offset : ℕ) : ℕ → F
+| i => if h : i >= offset ∧ i < offset + n then env.get ⟨ i - offset, by
+  rcases h with ⟨ h1, h2 ⟩
+  apply Nat.sub_lt_left_of_lt_add
+  repeat assumption⟩ ()
+  else 0
+
+@[simp]
+def vector_from_env (n : ℕ) (env: ℕ → F) : Vector (Unit → F) n := by
+  let l := (List.map (fun i => (fun () => env i : Unit -> F)) (List.iota n))
+  let v := vec l
+  have h : l.length = n := by rw [List.length_map, List.length_iota]
+  rw [h] at v
+  exact v
 
 end PreOperation
 
@@ -191,6 +216,15 @@ def assign_cell (c: Cell F) (v: Variable F) := as_circuit (
   fun _ => (Operation.Assign (c, v), ())
 )
 
+/--
+Type of the internal environment of a circuit.
+It is a type safe vector of the witness generation functions.
+-/
+@[simp]
+def env_type (circuit: Circuit F α) : Type :=
+  let n := (circuit .empty).1.1.offset
+  Vector (Unit -> F) n
+
 -- formal concepts of soundness and completeness of a circuit
 
 @[simp]
@@ -217,45 +251,58 @@ variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
 structure FormalCircuit (F: Type) (β α: TypePair)
   [Field F] [ProvableType F α] [ProvableType F β]
+  (input_vars : β.var)
 where
   -- β = inputs, α = outputs
-  main: β.var → Circuit F α.var
+  main: Circuit F α.var
 
   assumptions: β.value → Prop
   spec: β.value → α.value → Prop
-  default_env: ℕ -> F
+  default_env: β.value -> env_type main
 
   soundness:
-    -- for all environments that determine witness generation
-    ∀ ctx : Context F, ∀ env: ℕ → F,
-    -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b → assumptions b →
+    -- for all possible contexts that this circuit is instantiated on
+    ∀ ctx : Context F,
+    -- for all possible assignment of variables
+    ∀ env: (env_type main),
+    -- instantiate the env at the offset of the context
+    let untyped_env := PreOperation.env_at_offset env ctx.offset
+    -- for all possible input values
+    ∀ b : β.value,
+    Provable.eval_env untyped_env input_vars = b →
+    -- if the inputs satisfy the assumptions
+    assumptions b →
     -- if the constraints hold
-    constraints_hold env (main b_var) ctx →
-    -- the spec holds on the input and output
-    let a := Provable.eval_env env (output (main b_var) ctx)
+    constraints_hold untyped_env main ctx →
+    -- then the spec holds on the input and output
+    let a := Provable.eval_env untyped_env (output main ctx)
     spec b a
 
   completeness:
+    -- for all possible contexts that this circuit is instantiated on
     ∀ ctx : Context F,
-    -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env default_env b_var = b → assumptions b →
-    -- constraints hold when using the internal witness generator
-    constraints_hold default_env (main b_var) ctx
+    -- for all possible input values
+    ∀ b : β.value,
+    -- if the inputs satisfy the assumptions
+    assumptions b →
+    -- instantiate the default environment at the offset of the context
+    let untyped_default_env := PreOperation.env_at_offset (default_env b) ctx.offset
+    Provable.eval_env untyped_default_env input_vars = b →
+    -- then the constraints hold on the default environemnt
+    constraints_hold untyped_default_env main ctx
 
 @[simp]
-def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_var : α.var) (env: ℕ → F) :=
+def subcircuit_soundness {b_var : β.var} (circuit: FormalCircuit F β α b_var) (a_var : α.var) (env: ℕ → F) :=
   let b := Provable.eval_env env b_var
   let a := Provable.eval_env env a_var
   circuit.assumptions b → circuit.spec b a
 
 @[simp]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) :=
-  let b := Provable.eval_env circuit.default_env b_var
+def subcircuit_completeness {b_var : β.var} (circuit: FormalCircuit F β α b_var) (b : β.value) :=
   circuit.assumptions b
 
 @[simp]
-def subcircuit_default_env (circuit: FormalCircuit F β α) :=
+def subcircuit_default_env {b_var : β.var} (circuit: FormalCircuit F β α b_var) :=
   circuit.default_env
 
 /--
@@ -271,39 +318,53 @@ If both the assumptions AND the spec are true, then the constraints hold.
 In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β] where
-  main: β.var → Circuit F Unit
+structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β] (input_vars : β.var) where
+  main: Circuit F Unit
 
   assumptions: β.value → Prop
   spec: β.value → Prop
-  default_env: ℕ -> F
+  default_env: β.value -> env_type main
 
   soundness:
-    -- for all environments that determine witness generation
-    ∀ ctx : Context F, ∀ env: ℕ → F,
-    -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b → assumptions b →
+    -- for all possible contexts that this circuit is instantiated on
+    ∀ ctx : Context F,
+    -- for all possible assignment of variables
+    ∀ env: (env_type main),
+    -- instantiate the env at the offset of the context
+    let untyped_env := PreOperation.env_at_offset env ctx.offset
+    -- for all possible input values
+    ∀ b : β.value,
+    Provable.eval_env untyped_env input_vars = b →
+    -- if the inputs satisfy the assumptions
+    assumptions b →
     -- if the constraints hold
-    constraints_hold env (main b_var) ctx →
-    -- the spec holds
+    constraints_hold untyped_env main ctx →
+    -- then the spec holds on the input
     spec b
 
   completeness:
+    -- for all possible contexts that this circuit is instantiated on
     ∀ ctx : Context F,
-    -- for all inputs that satisfy the assumptions AND the spec
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env default_env b_var = b → assumptions b → spec b →
-    -- the constraints hold (using the internal witness generator)
-    constraints_hold default_env (main b_var) ctx
+    -- for all possible input values
+    ∀ b : β.value,
+    -- if the inputs satisfy the assumptions
+    assumptions b →
+    -- and the inputs satisfy the spec
+    spec b →
+    -- instantiate the default environment at the offset of the context
+    let untyped_default_env := PreOperation.env_at_offset (default_env b) ctx.offset
+    Provable.eval_env untyped_default_env input_vars = b →
+    -- then the constraints hold on the default environemnt
+    constraints_hold untyped_default_env main ctx
 
 @[simp]
-def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: ℕ → F) :=
+def subassertion_soundness {b_var : β.var} (circuit: FormalAssertion F β b_var) (env: ℕ → F) :=
   let b := Provable.eval_env env b_var
   circuit.assumptions b → circuit.spec b
 
 @[simp]
-def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) :=
-  let b := Provable.eval_env circuit.default_env b_var
-  circuit.assumptions b ∧ circuit.spec b
+def subassertion_completeness {b_var : β.var} (circuit: FormalAssertion F β b_var) (b : β.value) :=
+    circuit.assumptions b ∧ circuit.spec b
 end Circuit
 
 export Circuit (witness_var witness assert_zero lookup assign_cell FormalCircuit FormalAssertion)

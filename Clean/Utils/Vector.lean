@@ -21,6 +21,9 @@ namespace Vector
     simp [Subtype.mk_eq_mk] at h
     simp [h]
 
+@[simp]
+def len (v: Vector α n) : ℕ := v.val.length
+
   @[simp]
   def map (f: α → β) : Vector α n → Vector β n
     | ⟨ l, h ⟩ => ⟨ l.map f, by rw [List.length_map, h] ⟩

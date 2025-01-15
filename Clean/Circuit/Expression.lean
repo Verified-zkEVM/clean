@@ -4,6 +4,7 @@ variable {F: Type}
 
 structure Variable (F : Type) where
   index: ℕ
+
 instance : Repr (Variable F) where
   reprPrec v _ := "x" ++ repr v.index
 
@@ -21,9 +22,6 @@ variable [Field F]
 /--
 Evaluate expression given an external `environment` that determines the assignment
 of all variables.
-
-This is needed when we want to make statements about a circuit in the adversarial
-situation where the prover can assign anything to variables.
 -/
 @[simp]
 def eval_env (env: ℕ → F) : Expression F → F
