@@ -21,6 +21,9 @@ namespace Vector
     simp [Subtype.mk_eq_mk] at h
     simp [h]
 
+@[simp]
+def len (v: Vector α n) : ℕ := v.val.length
+
   @[simp]
   def map (f: α → β) : Vector α n → Vector β n
     | ⟨ l, h ⟩ => ⟨ l.map f, by rw [List.length_map, h] ⟩
@@ -36,6 +39,14 @@ namespace Vector
   def get (v: Vector α n) (i: Fin n) : α :=
     let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
+
+  @[simp]
+  def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
+    ⟨ a :: v.val, by simp [v.prop] ⟩
+
+  @[simp]
+  def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
+    ⟨ v.val ++ w.val, by simp [v.prop, w.prop] ⟩
 
   -- map over monad
   def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
