@@ -27,6 +27,15 @@ export Expression (var const)
 def Variable.lift {s s' : ℕ} (h : s ≤ s') : Variable F s → Variable F s'
   | ⟨v⟩ => ⟨⟨v, by exact Nat.lt_of_lt_of_le v.is_lt h⟩⟩
 
+/--
+  Lift a single variable from a smaller environment to a larger environment at a given offset
+  This takes a variable defined over `Fin s` and returns a variable defined over `Fin (s + off)` where
+  the index is increased by `off`.
+-/
+@[simp]
+def Variable.lift_offset {s : ℕ} (off : ℕ) : Variable F s → Variable F (s + off)
+  | ⟨v⟩ => ⟨⟨v + off, by simp⟩⟩
+
 namespace Expression
 variable [Field F]
 
@@ -55,6 +64,15 @@ def lift_vars {s s' : ℕ} (h : s ≤ s') : Expression F s → Expression F s'
   | const c => const c
   | add x y => add (lift_vars h x) (lift_vars h y)
   | mul x y => mul (lift_vars h x) (lift_vars h y)
+
+/--
+  Lift an expression from a smaller environment to a larger environment at a given offset.
+-/
+def lift_vars_offset (off : ℕ) : Expression F s → Expression F (s + off)
+  | var v => var (v.lift_offset off)
+  | const c => const c
+  | add x y => add (lift_vars_offset off x) (lift_vars_offset off y)
+  | mul x y => mul (lift_vars_offset off x) (lift_vars_offset off y)
 
 instance [Repr F] : Repr (Expression F s) where
   reprPrec e _ := toString e

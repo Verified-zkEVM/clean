@@ -60,6 +60,29 @@ def constraints_hold (env: Fin s → F) : List (PreOperation F s) → Prop
       table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold env ops
     | _ => constraints_hold env ops
 
+/--
+  Lift a list of preoperations to a new list of preoperations, where newly allocated variable(s) have
+  been added to the environment.
+-/
+@[simp]
+def lift_preoperations (num_vars : ℕ) (ops: List (PreOperation F s)) : List (PreOperation F (s + num_vars)) :=
+  ops.map fun
+    | Witness compute => Witness compute
+    | Assert e => Assert (e.lift_vars (by simp))
+    | Lookup l => Lookup (by sorry)
+    | Assign (c, v) => Assign (c, (v.lift (by simp)))
+
+/--
+  Lift a list of preoperations and allocate it at the **end** of the environment.
+-/
+@[simp]
+def lift_preoperations_offset (offset : ℕ) (ops: List (PreOperation F s)) : List (PreOperation F (s + offset)) :=
+  ops.map fun
+    | Witness compute => Witness compute
+    | Assert e => Assert (e.lift_vars_offset offset)
+    | Lookup l => Lookup (by sorry)
+    | Assign (c, v) => Assign (c, (v.lift_offset offset))
+
 @[simp]
 def witness_length : List (PreOperation F s) → ℕ
   | [] => 0
@@ -67,7 +90,8 @@ def witness_length : List (PreOperation F s) → ℕ
   | _ :: ops => witness_length ops
 
 @[simp]
-def env_from_vector (env: Vector (Unit -> F) s) : Fin s → F := fun i => env.get i ()
+def env_from_vector (env: Vector (Unit -> F) s) : Fin s → F :=
+  fun i => env.get i ()
 
 /--
 Instantiate an environemtn expressed as a vector of witness generation functions at a given offset.
@@ -99,7 +123,7 @@ structure SubCircuit (F: Type) [Field F] (s : ℕ) where
 
   /--
   To construct a subcircuit we need to prove also that every expression is well-typed
-  which means that the number of witnesses is equal to the addressable variables
+  which means that the total number of witnesses is equal to the number of addressable variables
   -/
   well_typed : s = PreOperation.witness_length ops
 
@@ -119,13 +143,30 @@ structure SubCircuit (F: Type) [Field F] (s : ℕ) where
   implied_by_completeness : completeness →
     PreOperation.constraints_hold (PreOperation.env_from_vector default_env) ops
 
+/--
+  An `Operation` represent an operation that can be performed over a circuit. A `List` of operations
+  fully define a circuit.
+-/
 inductive Operation (F : Type) [Field F] (s : ℕ) where
   | Witness : (compute : Unit → F) → Operation F s
   | Assert : Expression F s → Operation F s
   | Lookup : Lookup F s → Operation F s
   | Assign : Cell F × Variable F s → Operation F s
-  | SubCircuit {s' : ℕ} : SubCircuit F s' → Operation F s
+  | SubCircuit {s' : ℕ} :
+    -- proof that the resulting environment is a superset of the subcircuit environment
+    (is_sub_env : s' ≤ s) →
+    SubCircuit F s' → Operation F s
 
+/--
+  `Context` models the current state of the environment of a circuit.
+  It is composed of:
+  - the offset of the environment: the number of variables currently allocated
+  - the default environment: the list of witness generation functions
+  - the list of operations that have been performed so far
+
+  Notice that `default_env` and `operations` are indexed by the offset, so that they are always
+  well-typed for the current context: It is impossible to create a non-well-typed `Context` object.
+-/
 structure Context (F : Type) [Field F] where
   offset: ℕ
   default_env: Vector (Unit -> F) offset
@@ -154,7 +195,8 @@ def lift_operations (num_vars : ℕ) (ops: List (Operation F s)) : List (Operati
     | Assert e => Assert (e.lift_vars (by simp))
     | Lookup l => Lookup (sorry)
     | Assign (c, v) => Assign (c, (v.lift (by simp)))
-    | SubCircuit (s':=s') sub => SubCircuit (s':=s') (sorry)
+    | SubCircuit is_sub_env (s':=s') sub => SubCircuit (s':=s') (by linarith) sub
+
 
 @[simp]
 def update_context (ctx: Context F) : Operation F ctx.offset → Context F
@@ -163,16 +205,15 @@ def update_context (ctx: Context F) : Operation F ctx.offset → Context F
     default_env := ctx.default_env.push compute
     operations := (lift_operations 1 ctx.operations) ++ [(Witness compute)]
   }
-  | SubCircuit (s':=s') { ops, default_env, well_typed .. } => {
-    offset := ctx.offset + PreOperation.witness_length ops,
-    default_env := ctx.default_env.append (by
-      rw [well_typed] at default_env
-      exact default_env)
-    operations := by
-      let ops' := (lift_operations (PreOperation.witness_length ops) ctx.operations)
-      rw [←well_typed] at ops'
-      sorry
-  }
+  | SubCircuit _ (s':=s') sub_circuit =>
+    let { default_env .. } := sub_circuit
+    let lifetd_operations : List (Operation F (ctx.offset + s')) := (lift_operations s' ctx.operations)
+    let lifetd_sub_circuit : Operation F (ctx.offset + s') := SubCircuit (by linarith) sub_circuit
+    {
+      offset := ctx.offset + s',
+      default_env := ctx.default_env.append default_env
+      operations := lifetd_operations ++ [lifetd_sub_circuit]
+    }
   | _ => ctx
 
 instance [Repr F] : ToString (Operation F s) where
@@ -181,7 +222,7 @@ instance [Repr F] : ToString (Operation F s) where
     | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | Lookup l => reprStr l
     | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
-    | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
+    | SubCircuit _ { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 
 /--
@@ -202,18 +243,29 @@ namespace Circuit
 instance : Monad (Circuit F) where
   pure a ctx := (ctx, a)
   bind f g ctx :=
-    let ((ctx', ops), a) := f ctx
-    let ((ctx'', ops'), b) := g a ctx'
-    ((ctx'', ops ++ ops'), b)
-
-@[simp]
-def run (circuit: Circuit F α) : List (Operation F s) × α :=
-  let ((_, ops), a) := circuit Context.empty
-  (ops, a)
+    let (ctx', a) := f ctx
+    let (ctx'', b) := g a ctx'
+    (ctx'', b)
 
 @[reducible]
-def operations (circuit: Circuit F α) : List (Operation F s) :=
-  (circuit .empty).1.2
+def witness_size : Circuit F α -> ℕ :=
+  fun circuit => (circuit .empty).1.offset
+
+@[simp]
+def run (circuit: Circuit F α) : List (Operation F circuit.witness_size) × α := by
+  -- TODO: here as well if we destructure then we loose track of the definitions
+  -- let ⟨ctx, output⟩ := circuit .empty
+  let out := circuit .empty
+  let ctx := out.1
+  let output := out.2
+  let off := ctx.offset
+  have h: off = circuit.witness_size := by rfl
+  rw [←h]
+  exact (ctx.operations, output)
+
+@[reducible]
+def operations (circuit: Circuit F α) : List (Operation F circuit.witness_size) :=
+  circuit.run.1
 
 @[reducible]
 def output (circuit: Circuit F α) (ctx : Context F := Context.empty) : α :=
