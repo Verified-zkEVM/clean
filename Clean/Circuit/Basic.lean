@@ -31,6 +31,17 @@ deriving Repr
 
 variable {α : Type} [Field F]
 
+structure Context (F : Type) where
+  offset: ℕ
+  witness: Vector (Unit → F) offset
+
+@[simp]
+def Context.empty : Context F :=
+  { offset := 0, witness := vec [] }
+
+def Context.default_env (ctx: Context F) : ℕ → F := fun i =>
+  if h : i < ctx.offset then ctx.witness.val.get ⟨ i, by rwa [ctx.witness.prop] ⟩ () else 0
+
 inductive PreOperation (F : Type) where
   | Witness : (compute : Unit → F) → PreOperation F
   | Assert : Expression F → PreOperation F
@@ -60,18 +71,8 @@ def constraints_hold (env: ℕ → F) : List (PreOperation F) → Prop
       table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold env ops
     | _ => constraints_hold env ops
 
-def constraints_hold_default : List (PreOperation F) → Prop
-  | [] => True
-  | op :: [] => match op with
-    | Assert e => e.eval = 0
-    | Lookup { table, entry, index := _ } =>
-      table.contains (entry.map (fun e => e.eval))
-    | _ => True
-  | op :: ops => match op with
-    | Assert e => (e.eval = 0) ∧ constraints_hold_default ops
-    | Lookup { table, entry, index := _ } =>
-      table.contains (entry.map (fun e => e.eval)) ∧ constraints_hold_default ops
-    | _ => constraints_hold_default ops
+def constraints_hold_default (ctx: Context F) : List (PreOperation F) → Prop :=
+  constraints_hold ctx.default_env
 
 @[simp]
 def witness_length : List (PreOperation F) → ℕ
@@ -79,12 +80,28 @@ def witness_length : List (PreOperation F) → ℕ
   | (Witness _) :: ops => witness_length ops + 1
   | _ :: ops => witness_length ops
 
+@[simp]
+def witnesses : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length l)
+  | [] => ⟨ [], rfl ⟩
+  | Witness compute :: ops =>
+    let ⟨ w, h ⟩ := witnesses ops
+    ⟨ compute :: w, by simp [h] ⟩
+  | _ :: ops => by
+    let ⟨ w, h ⟩ := witnesses ops
+    unfold witness_length
+    split
+    next => exact (vec [])
+    next c l h =>
+
+      sorry
+    next a b c => sorry
 end PreOperation
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
 -- for all traces that satisfy the constraints
 structure SubCircuit (F: Type) [Field F] where
   ops: List (PreOperation F)
+  ctx: Context F
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`
@@ -96,7 +113,7 @@ structure SubCircuit (F: Type) [Field F] where
   imply_soundness : ∀ env, PreOperation.constraints_hold env ops → soundness env
 
   -- `completeness` needs to imply the constraints using default witnesses
-  implied_by_completeness : completeness → PreOperation.constraints_hold_default ops
+  implied_by_completeness : completeness → PreOperation.constraints_hold ctx.default_env ops
 
 inductive Operation (F : Type) [Field F] where
   | Witness : (compute : Unit → F) → Operation F
@@ -105,18 +122,12 @@ inductive Operation (F : Type) [Field F] where
   | Assign : Cell F × Variable F → Operation F
   | SubCircuit : SubCircuit F → Operation F
 
-structure Context (F : Type) where
-  offset: ℕ
-deriving Repr
-
-@[simp]
-def Context.empty : Context F := { offset := 0 }
-
 namespace Operation
 @[simp]
 def update_context (ctx: Context F) : Operation F → Context F
-  | Witness _ => ⟨ ctx.offset + 1 ⟩
-  | SubCircuit { ops, .. } => ⟨ ctx.offset + PreOperation.witness_length ops ⟩
+  | Witness compute => ⟨ ctx.offset + 1, ctx.witness.push compute ⟩
+  | SubCircuit { ops, .. } =>
+    ⟨ ctx.offset + PreOperation.witness_length ops, ctx.witness.append (PreOperation.witnesses ops) ⟩
   | _ => ctx
 
 instance [Repr F] : ToString (Operation F) where

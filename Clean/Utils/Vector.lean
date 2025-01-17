@@ -13,6 +13,8 @@ instance [Repr α] {n: ℕ} : Repr (Vector α n) where
 def vec (l: List α) : Vector α l.length := ⟨ l, rfl ⟩
 
 namespace Vector
+  def len (_: Vector α n) : ℕ := n
+
   @[ext]
   theorem ext (l : ℕ) (v w: Vector α l) : v.val = w.val → v = w := by
     intro h
@@ -36,6 +38,14 @@ namespace Vector
   def get (v: Vector α n) (i: Fin n) : α :=
     let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
+
+  @[simp]
+  def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
+    ⟨ a :: v.val, by simp [v.prop] ⟩
+
+  @[simp]
+  def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
+    ⟨ v.val ++ w.val, by simp [v.prop, w.prop] ⟩
 
   -- map over monad
   def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=

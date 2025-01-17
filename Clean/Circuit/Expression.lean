@@ -4,7 +4,6 @@ variable {F: Type}
 
 structure Variable (F : Type) where
   index: ℕ
-  witness: Unit → F
 
 instance : Repr (Variable F) where
   reprPrec v _ := "x" ++ repr v.index
@@ -19,13 +18,6 @@ export Expression (var const)
 
 namespace Expression
 variable [Field F]
-
-@[simp]
-def eval : Expression F → F
-  | var v => v.witness ()
-  | const c => c
-  | add x y => eval x + eval y
-  | mul x y => eval x * eval y
 
 /--
 Evaluate expression given an external `environment` that determines the assignment
@@ -74,9 +66,6 @@ instance : Coe F (Expression F) where
 
 instance : Coe (Variable F) (Expression F) where
   coe x := var x
-
-instance : Coe (Expression F) F where
-  coe x := x.eval
 
 instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
