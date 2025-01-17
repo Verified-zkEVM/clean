@@ -44,7 +44,7 @@ def spec (input: (Inputs p).value) :=
 
 def circuit : FormalAssertion (F p) (Inputs p) where
   main := assert_eq
-  assumptions _ := True
+  assumptions _ := true
   spec := spec
 
   soundness := by
