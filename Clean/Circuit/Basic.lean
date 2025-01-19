@@ -81,20 +81,15 @@ def witness_length : List (PreOperation F) → ℕ
   | _ :: ops => witness_length ops
 
 @[simp]
-def witnesses : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length l)
+def witness : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length l)
   | [] => ⟨ [], rfl ⟩
-  | Witness compute :: ops =>
-    let ⟨ w, h ⟩ := witnesses ops
-    ⟨ compute :: w, by simp [h] ⟩
-  | _ :: ops => by
-    let ⟨ w, h ⟩ := witnesses ops
-    unfold witness_length
-    split
-    next => exact (vec [])
-    next c l h =>
-
-      sorry
-    next a b c => sorry
+  | op :: ops =>
+    let ⟨ w, h ⟩ := witness ops
+    match op with
+    | Witness compute =>
+      ⟨ compute :: w, by simp [h] ⟩
+    | Assert _ | Lookup _ | Assign _ =>
+      ⟨ w, by simp_all only [witness_length]⟩
 end PreOperation
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
@@ -127,7 +122,7 @@ namespace Operation
 def update_context (ctx: Context F) : Operation F → Context F
   | Witness compute => ⟨ ctx.offset + 1, ctx.witness.push compute ⟩
   | SubCircuit { ops, .. } =>
-    ⟨ ctx.offset + PreOperation.witness_length ops, ctx.witness.append (PreOperation.witnesses ops) ⟩
+    ⟨ ctx.offset + PreOperation.witness_length ops, ctx.witness.append (PreOperation.witness ops) ⟩
   | _ => ctx
 
 instance [Repr F] : ToString (Operation F) where
@@ -175,7 +170,7 @@ def as_circuit (f: Context F → Operation F × α) : Circuit F α := fun ctx  =
 -- create a new variable
 @[simp]
 def witness_var (compute : Unit → F) := as_circuit (fun ctx =>
-  let var: Variable F := ⟨ ctx.offset, compute ⟩
+  let var: Variable F := ⟨ ctx.offset ⟩
   (Operation.Witness compute, var)
 )
 
@@ -231,24 +226,25 @@ witness generator, checking all constraints would not fail.
 For subcircuits, since we proved completeness, this only means we need to satisfy the assumptions!
 -/
 @[simp]
-def constraints_hold_from_list_default : List (Operation F) → Prop
+def constraints_hold_from_list_default (default_env: ℕ → F) : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
-    | Operation.Assert e => e.eval = 0
+    | Operation.Assert e => e.eval_env default_env = 0
     | Operation.Lookup { table, entry, index := _ } =>
-        table.contains (entry.map Expression.eval)
+        table.contains (entry.map (fun e => e.eval_env default_env))
     | Operation.SubCircuit { completeness, .. } => completeness
     | _ => True
   | op :: ops => match op with
-    | Operation.Assert e => (e.eval = 0) ∧ constraints_hold_from_list_default ops
+    | Operation.Assert e => (e.eval_env default_env = 0) ∧ constraints_hold_from_list_default default_env ops
     | Operation.Lookup { table, entry, index := _ } =>
-        table.contains (entry.map Expression.eval) ∧ constraints_hold_from_list_default ops
-    | Operation.SubCircuit { completeness, .. } => completeness ∧ constraints_hold_from_list_default ops
-    | _ => constraints_hold_from_list_default ops
+        table.contains (entry.map (fun e => e.eval_env default_env)) ∧ constraints_hold_from_list_default default_env ops
+    | Operation.SubCircuit { completeness, .. } => completeness ∧ constraints_hold_from_list_default default_env ops
+    | _ => constraints_hold_from_list_default default_env ops
 
 @[simp]
 def constraints_hold_default (circuit: Circuit F α) (ctx : Context F := Context.empty) : Prop :=
-  constraints_hold_from_list_default (circuit ctx).1.2
+  let ((ctx', ops), _) := circuit ctx
+  constraints_hold_from_list_default ctx'.default_env ops
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -275,7 +271,7 @@ where
   completeness:
     ∀ ctx : Context F,
     -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval F b_var = b → assumptions b →
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.default_env b_var = b → assumptions b →
     -- constraints hold when using the internal witness generator
     constraints_hold_default (main b_var) ctx
 
@@ -286,8 +282,8 @@ def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_va
   circuit.assumptions b → circuit.spec b a
 
 @[simp]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) :=
-  let b := Provable.eval F b_var
+def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (env: ℕ → F) :=
+  let b := Provable.eval_env env b_var
   circuit.assumptions b
 
 /--
@@ -322,7 +318,7 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
   completeness:
     ∀ ctx : Context F,
     -- for all inputs that satisfy the assumptions AND the spec
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval F b_var = b → assumptions b → spec b →
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.default_env b_var = b → assumptions b → spec b →
     -- the constraints hold (using the internal witness generator)
     constraints_hold_default (main b_var) ctx
 
@@ -332,8 +328,8 @@ def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env
   circuit.assumptions b → circuit.spec b
 
 @[simp]
-def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) :=
-  let b := Provable.eval F b_var
+def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (env: ℕ → F) :=
+  let b := Provable.eval_env env b_var
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
 
