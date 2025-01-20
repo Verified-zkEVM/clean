@@ -31,16 +31,10 @@ deriving Repr
 
 variable {α : Type} [Field F]
 
-structure Context (F : Type) where
-  offset: ℕ
-  witness: Vector (Unit → F) offset
+def Witness (F: Type) [Field F] (n: ℕ) := Vector (Unit → F) n
 
-@[simp]
-def Context.empty : Context F :=
-  { offset := 0, witness := vec [] }
-
-def Context.default_env (ctx: Context F) : ℕ → F := fun i =>
-  if h : i < ctx.offset then ctx.witness.val.get ⟨ i, by rwa [ctx.witness.prop] ⟩ () else 0
+def Witness.default_env {n} (w: Witness F n) : ℕ → F := fun i =>
+  if h : i < n then w.val.get ⟨ i, by rwa [w.prop] ⟩ () else 0
 
 inductive PreOperation (F : Type) where
   | Witness : (compute : Unit → F) → PreOperation F
@@ -89,26 +83,26 @@ def witness : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length
       ⟨ w, by simp_all only [witness_length]⟩
 end PreOperation
 
-def Context.extend (ctx: Context F) (ops: List (PreOperation F)) : Context F :=
-  { offset := ctx.offset + PreOperation.witness_length ops,
-    witness := ctx.witness.append (PreOperation.witness ops) }
+def Witness.extend {n} (wit: Witness F n) (ops: List (PreOperation F)) : Witness F (n + PreOperation.witness_length ops) :=
+  wit.append (PreOperation.witness ops)
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
 -- for all traces that satisfy the constraints
 structure SubCircuit (F: Type) [Field F] where
+  offset: ℕ
   ops: List (PreOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`
   -- and `completeness` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   soundness : (ℕ → F) → Prop
-  completeness : Context F → Prop
+  completeness : Witness F offset → Prop
 
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env, PreOperation.constraints_hold env ops → soundness env
 
   -- `completeness` needs to imply the constraints using default witnesses
-  implied_by_completeness : ∀ ctx : Context F, completeness ctx → PreOperation.constraints_hold (ctx.extend ops).default_env ops
+  implied_by_completeness : ∀ wit, completeness wit → PreOperation.constraints_hold (wit.extend ops).default_env ops
 
 inductive Operation (F : Type) [Field F] where
   | Witness : (compute : Unit → F) → Operation F
@@ -116,6 +110,15 @@ inductive Operation (F : Type) [Field F] where
   | Lookup : Lookup F → Operation F
   | Assign : Cell F × Variable F → Operation F
   | SubCircuit : SubCircuit F → Operation F
+
+-- this needs to become an inductive type!!
+structure Context (F : Type) where
+  offset: ℕ
+  witness: Vector (Unit → F) offset
+
+@[simp]
+def Context.empty : Context F :=
+  { offset := 0, witness := vec [] }
 
 namespace Operation
 @[simp]
@@ -323,7 +326,8 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.default_env b_var = b → assumptions b → spec b →
     -- the constraints hold (using the internal witness generator)
-    constraints_hold_default (main b_var) ctx
+    constraints_hold_from_list_default ctx ((main b_var).operations ctx)
+    -- constraints_hold_default (main b_var) ctx
 
 @[simp]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: ℕ → F) :=
