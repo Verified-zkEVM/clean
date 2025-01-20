@@ -95,7 +95,6 @@ lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
   rw [var1, var2, var3] at h
 
   simp [Add8.circuit, Add8.assumptions, Add8.spec] at h
-  simp [PreOperation.to_flat_operations, PreOperation.witness_length] at h
   rw [var4] at h
   simp [Equality.circuit, Equality.spec] at h
   assumption
@@ -119,9 +118,9 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Equality.circuit, Equality.spec] at boundary1 boundary2
 
-      have var1 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+      have var1 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
         := by rfl
-      have var2 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have var2 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
         := by rfl
 
       rw [var1] at boundary1
