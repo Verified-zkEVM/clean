@@ -1,45 +1,79 @@
-import Clean.GenericConstraint
-import Clean.Expression
-import Clean.Gadgets.ByteLookup
 import Mathlib.Algebra.Field.Basic
 import Mathlib.Data.ZMod.Basic
+import Clean.Utils.Primes
+import Clean.Utils.Vector
+import Clean.Circuit.Expression
+import Clean.Circuit.Provable
+import Clean.Circuit.Basic
+import Clean.Utils.Field
 
-
-/-
-  Equality constraint gadget: x and y must be equal
--/
-namespace Equality
-open Expression
+section
 variable {p : ℕ} [Fact p.Prime]
 
-def circuit (N : ℕ+) (M : ℕ) (x y : Expression N M (F p)) : ConstraintGadget p N M :=
-  ⟨[x-y], [], []⟩
 
-def spec (N : ℕ+) (M : ℕ) (x y: Expression N M (F p)) : TraceOfLength N M (F p) -> Prop :=
-  fun trace => (trace.eval x) = (trace.eval y)
+namespace Gadgets.Equality
+structure InputStruct (F : Type) where
+  x: F
+  y: F
 
-theorem equiv (N : ℕ+) (M : ℕ) (x y: Expression N M (F p)) :
-  (∀ X,
-    (forallList (fullLookupSet (circuit N M x y)) (fun lookup => lookup.prop X))
-    -> (
-      (forallList (fullConstraintSet (circuit N M x y)) (fun constraint => X.eval constraint = 0))
-      ↔
-      spec N M x y X
-    )
-  ) := by
+def Inputs (p : ℕ) : TypePair := ⟨
+  InputStruct (Expression (F p)),
+  InputStruct (F p)
+⟩
 
-  simp [forallList, fullLookupSet, fullConstraintSet]
-  intro X
-  simp [TraceOfLength.eval]
-  rw [←sub_eq_add_neg, sub_eq_zero]
-  simp [spec]
+instance : ProvableType (F p) (Inputs p) where
+  size := 2
+  to_vars s := vec [s.x, s.y]
+  from_vars v :=
+    let ⟨ [x, y], _ ⟩ := v
+    ⟨ x, y ⟩
+  to_values s := vec [s.x, s.y]
+  from_values v :=
+    let ⟨ [x, y], _ ⟩ := v
+    ⟨ x, y ⟩
 
 
-instance EqConstraint (N : ℕ+) (M : ℕ) (x y: Expression N M (F p)) : Constraint N M p :=
-{
-  circuit := circuit N M x y,
-  spec := spec N M x y,
-  equiv := equiv N M x y
-}
+def assert_eq (input : (Inputs p).var) := do
+  let ⟨x, y⟩ := input
+  assert_zero (x - y)
 
-end Equality
+def spec (input: (Inputs p).value) :=
+  let ⟨x, y⟩ := input
+  x = y
+
+
+def circuit : FormalAssertion (F p) (Inputs p) where
+  main := assert_eq
+  assumptions _ := true
+  spec := spec
+
+  soundness := by
+    intro ctx env input vars h_inputs _ h_holds
+    let ⟨x, y⟩ := input
+    let ⟨x_var, y_var⟩ := vars
+
+    dsimp at h_holds
+    have hx : x_var.eval_env env = x := by injection h_inputs
+    have hy : y_var.eval_env env = y := by injection h_inputs
+    rw [hx, hy] at h_holds
+
+    dsimp [spec]
+    ring_nf at h_holds
+    rw [sub_eq_zero] at h_holds
+    assumption
+
+  completeness := by
+    -- introductions
+    rintro ctx inputs inputs_var h_inputs _
+    let ⟨x, y⟩ := inputs
+    let ⟨x_var, y_var⟩ := inputs_var
+
+    -- characterize inputs
+    have hx : x_var.eval = x := by injection h_inputs
+    have hy : y_var.eval = y := by injection h_inputs
+
+    simp [spec]
+    intro spec
+    rw [hx, hy, spec]
+    ring
+end Gadgets.Equality

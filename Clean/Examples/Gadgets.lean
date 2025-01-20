@@ -1,5 +1,5 @@
 import Clean.Utils.Primes
-import Clean.GadgetsNew.Add8.Addition8
+import Clean.Gadgets.Addition8.Addition8
 
 section
 
@@ -11,7 +11,7 @@ section
   let main := do
     let x ← witness (fun _ => 10)
     let y ← witness (fun _ => 20)
-    let z ← Add8.add8 (p:=p) { x, y }
-    Add8.add8 (p:=p) { x, y := z }
+    let z ← Gadgets.Addition8.add8 (p:=p) { x, y }
+    Gadgets.Addition8.add8 (p:=p) { x, y := z }
   main.operations
 end

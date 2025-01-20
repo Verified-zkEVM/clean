@@ -56,9 +56,9 @@ lemma len_le_succ {M : ℕ+} {F : Type} (trace : Trace M F) (row : Row M F) : tr
     let ih := len_le_succ rest row
     by simp [Trace.len, ih, Nat.le_succ]
 
-lemma len_ge_succ_of_ge {M : ℕ+} {N : ℕ} {F : Type} (trace : Trace M F) (row : Row M F) (h : trace.len ≥ N) : (trace +> row).len ≥ N :=
+lemma len_ge_succ_of_ge {M : ℕ+} {N : ℕ} {F : Type} (trace : Trace M F) (row : Row M F) (_h : trace.len ≥ N) : (trace +> row).len ≥ N :=
   match trace with
-  | <+> => by simp [Trace.len] at *; simp [h]
+  | <+> => by simp [Trace.len] at *; simp [_h]
   | (rest +> row) => by simp [Trace.len] at *; linarith
 
 /--
