@@ -71,9 +71,6 @@ def constraints_hold (env: ℕ → F) : List (PreOperation F) → Prop
       table.contains (entry.map (fun e => e.eval_env env)) ∧ constraints_hold env ops
     | _ => constraints_hold env ops
 
-def constraints_hold_default (ctx: Context F) : List (PreOperation F) → Prop :=
-  constraints_hold ctx.default_env
-
 @[simp]
 def witness_length : List (PreOperation F) → ℕ
   | [] => 0
@@ -92,23 +89,26 @@ def witness : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length
       ⟨ w, by simp_all only [witness_length]⟩
 end PreOperation
 
+def Context.extend (ctx: Context F) (ops: List (PreOperation F)) : Context F :=
+  { offset := ctx.offset + PreOperation.witness_length ops,
+    witness := ctx.witness.append (PreOperation.witness ops) }
+
 -- this type models a subcircuit: a list of operations that imply a certain spec,
 -- for all traces that satisfy the constraints
 structure SubCircuit (F: Type) [Field F] where
   ops: List (PreOperation F)
-  ctx: Context F
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`
   -- and `completeness` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   soundness : (ℕ → F) → Prop
-  completeness : Prop
+  completeness : Context F → Prop
 
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env, PreOperation.constraints_hold env ops → soundness env
 
   -- `completeness` needs to imply the constraints using default witnesses
-  implied_by_completeness : completeness → PreOperation.constraints_hold ctx.default_env ops
+  implied_by_completeness : ∀ ctx : Context F, completeness ctx → PreOperation.constraints_hold (ctx.extend ops).default_env ops
 
 inductive Operation (F : Type) [Field F] where
   | Witness : (compute : Unit → F) → Operation F
@@ -152,11 +152,11 @@ def run (circuit: Circuit F α) : List (Operation F) × α :=
   (ops, a)
 
 @[reducible]
-def operations (circuit: Circuit F α) : List (Operation F) :=
-  (circuit .empty).1.2
+def operations (circuit: Circuit F α) (ctx : Context F := .empty) : List (Operation F) :=
+  (circuit ctx).1.2
 
 @[reducible]
-def output (circuit: Circuit F α) (ctx : Context F := Context.empty) : α :=
+def output (circuit: Circuit F α) (ctx : Context F := .empty) : α :=
   (circuit ctx).2
 
 @[reducible]
@@ -226,25 +226,28 @@ witness generator, checking all constraints would not fail.
 For subcircuits, since we proved completeness, this only means we need to satisfy the assumptions!
 -/
 @[simp]
-def constraints_hold_from_list_default (default_env: ℕ → F) : List (Operation F) → Prop
+def constraints_hold_from_list_default (ctx: Context F) : List (Operation F) → Prop
   | [] => True
-  | op :: [] => match op with
-    | Operation.Assert e => e.eval_env default_env = 0
+  | op :: [] =>
+  match op with
+    | Operation.Assert e => e.eval_env ctx.default_env = 0
     | Operation.Lookup { table, entry, index := _ } =>
-        table.contains (entry.map (fun e => e.eval_env default_env))
-    | Operation.SubCircuit { completeness, .. } => completeness
+        table.contains (entry.map (fun e => e.eval_env ctx.default_env))
+    | Operation.SubCircuit { completeness, .. } => completeness ctx
     | _ => True
-  | op :: ops => match op with
-    | Operation.Assert e => (e.eval_env default_env = 0) ∧ constraints_hold_from_list_default default_env ops
+  | op :: ops =>
+  let ctx' := op.update_context ctx
+  match op with
+    | Operation.Assert e => (e.eval_env ctx.default_env = 0) ∧ constraints_hold_from_list_default ctx' ops
     | Operation.Lookup { table, entry, index := _ } =>
-        table.contains (entry.map (fun e => e.eval_env default_env)) ∧ constraints_hold_from_list_default default_env ops
-    | Operation.SubCircuit { completeness, .. } => completeness ∧ constraints_hold_from_list_default default_env ops
-    | _ => constraints_hold_from_list_default default_env ops
+        table.contains (entry.map (fun e => e.eval_env ctx.default_env)) ∧ constraints_hold_from_list_default ctx' ops
+    | Operation.SubCircuit { completeness .. } => completeness ctx ∧ constraints_hold_from_list_default ctx' ops
+    | _ => constraints_hold_from_list_default ctx' ops
 
 @[simp]
-def constraints_hold_default (circuit: Circuit F α) (ctx : Context F := Context.empty) : Prop :=
-  let ((ctx', ops), _) := circuit ctx
-  constraints_hold_from_list_default ctx'.default_env ops
+def constraints_hold_default (circuit: Circuit F α) (input_ctx : Context F := .empty) : Prop :=
+  let ((_, ops), _) := circuit input_ctx
+  constraints_hold_from_list_default input_ctx ops
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -282,8 +285,8 @@ def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_va
   circuit.assumptions b → circuit.spec b a
 
 @[simp]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (env: ℕ → F) :=
-  let b := Provable.eval_env env b_var
+def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (input_ctx: Context F) :=
+  let b := Provable.eval_env input_ctx.default_env b_var
   circuit.assumptions b
 
 /--

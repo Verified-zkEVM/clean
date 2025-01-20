@@ -76,38 +76,6 @@ theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ 
     <;> use (circuit.imply_soundness env) h_subcircuit
     use ih h_rest
 
--- TODO the following two lemmas would be unnecessary if we could prove `constraints_hold_default` to be a special case of `constraints_hold`
--- see https://github.com/Verified-zkEVM/clean/issues/42
-
-lemma constraints_hold_default_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)},
-  constraints_hold_default (op :: ops) ↔ constraints_hold_default [op] ∧ constraints_hold_default ops := by
-  intro op ops
-  match ops with
-  | [] => tauto
-  | op' :: ops =>
-    constructor <;> (
-      rintro h
-      dsimp only [constraints_hold_default] at h
-      split at h
-      <;> simp_all only [constraints_hold_default, and_self])
-
-lemma constraints_hold_default_append : ∀ {a b: List (PreOperation F)},
-  constraints_hold_default (a ++ b) ↔ constraints_hold_default a ∧ constraints_hold_default b := by
-  intro a b
-  induction a with
-  | nil => rw [List.nil_append]; tauto
-  | cons op ops ih =>
-    constructor
-    · intro h
-      rw [List.cons_append] at h
-      obtain ⟨ h_op, h_rest ⟩ := constraints_hold_default_cons.mp h
-      obtain ⟨ h_ops, h_b ⟩ := ih.mp h_rest
-      exact ⟨ constraints_hold_default_cons.mpr ⟨ h_op, h_ops ⟩, h_b ⟩
-    · rintro ⟨ h_a, h_b ⟩
-      obtain ⟨ h_op, h_ops ⟩ := constraints_hold_default_cons.mp h_a
-      have h_rest := ih.mpr ⟨ h_ops, h_b ⟩
-      exact constraints_hold_default_cons.mpr ⟨ h_op, h_rest ⟩
-
 /--
 Main completeness theorem which proves that nested constraints imply flattened constraints
 using the default witness generator.
@@ -119,10 +87,10 @@ that imply (or are implied by) those constraints.
 Note: Ideally, `can_replace_subcircuits` would prove both directions, and this would be just a special
 case. See https://github.com/Verified-zkEVM/clean/issues/42
 -/
-theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)},
-  constraints_hold_from_list_default ops → constraints_hold_default (to_flat_operations ops)
+theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)}, ∀ {ctx : Context F},
+  constraints_hold_from_list_default ctx ops → constraints_hold (ctx.extend (to_flat_operations ops)).default_env (to_flat_operations ops)
 := by
-  intro ops h
+  intro ops ctx h
   -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
   -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
   induction ops using to_flat_operations.induct with
@@ -134,13 +102,15 @@ theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)},
     cases ops
     <;> dsimp only [constraints_hold_from_list_default] at h
     <;> cases flatops
-    <;> dsimp only [constraints_hold_default]
+    <;> dsimp only [constraints_hold]
     <;> tauto
   | case6 ops circuit ih =>
     dsimp only [to_flat_operations]
-    apply constraints_hold_default_append.mpr
+    apply constraints_hold_append.mpr
     cases ops
-    · use circuit.implied_by_completeness h; tauto
+    · dsimp at h
+      have h := circuit.implied_by_completeness h
+      use h; tauto
     dsimp only [constraints_hold_from_list_default] at h
     exact ⟨ circuit.implied_by_completeness h.left, ih h.right ⟩
 
@@ -183,12 +153,13 @@ def formal_circuit_to_subcircuit (ctx: Context F)
 
     -- `implied_by_completeness`
     -- we are given that the assumptions are true
-    intro h_completeness
-    let b := Provable.eval F b_var
+    intro input_ctx h_completeness
+    let b := Provable.eval_env input_ctx.default_env b_var
     have as : circuit.assumptions b := h_completeness
 
     -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds : constraints_hold_from_list_default ops := circuit.completeness ctx b b_var rfl as
+    let ops' := (circuit.main b_var).operations input_ctx
+    have h_holds : constraints_hold_from_list_default input_ctx ops' := circuit.completeness input_ctx b b_var rfl as
 
     -- so we just need to go from constraints to flattened constraints
     exact PreOperation.can_replace_subcircuits_default h_holds
