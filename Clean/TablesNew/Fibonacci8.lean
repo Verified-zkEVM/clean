@@ -4,12 +4,24 @@ import Clean.Table.Basic
 import Clean.GadgetsNew.Add8.Addition8
 import Clean.GadgetsNew.Equality
 
+
+/-
+  8-bit Fibonacci inductive table definition. The i-th row of the table
+  contains the values of the Fibonacci sequence at i and i+1, modulo 256.
+
+  0        | 1
+  ...
+  fib(i)   | fib(i+1)
+  fib(i+1) | fib(i+2)
+  ...
+
+-/
 namespace Fibonacci8Table
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-/-
-  Fibonacci example
+/--
+  inductive contraints that are applied every two rows of the trace.
 -/
 def fib_relation : TwoRowsConstraint (F p) 2 := do
   let x <- TableConstraint.get_cell (CellOffset.curr 0)
@@ -22,6 +34,10 @@ def fib_relation : TwoRowsConstraint (F p) 2 := do
   let x_next <- TableConstraint.get_cell (CellOffset.next 0)
   TableConstraint.assertion Equality.circuit ⟨y, x_next⟩
 
+/--
+  boundary constraints that are applied at the beginning of the trace.
+  This is our "base case" for the Fibonacci sequence.
+-/
 def boundary_fib : SingleRowConstraint (F p) 2 := do
   let x <- TableConstraint.get_cell (CellOffset.curr 0)
   let y <- TableConstraint.get_cell (CellOffset.curr 1)
@@ -47,9 +63,14 @@ def spec_fib {N : ℕ} (trace : TraceOfLength (F p) 2 N) : Prop :=
     ((row 0).val = fib8 index) ∧ ((row 1).val = fib8 (index + 1)))
 
 
+lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
+  induction' n using Nat.twoStepInduction
+  repeat {simp [fib8]}; apply Nat.mod_lt; simp
+
 -- heavy lifting to transform constraints into specs
--- also this proof is quite heavy computationally to check for Lean
-lemma constraints_hold_sim (curr : Row 2 (F p)) (next : Row 2 (F p)) :
+-- this proof is quite heavy computationally to check for Lean, because of al the `simp` tactics,
+-- but once this is checked and cached, the complete soundness proof is faster to check
+lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
     TableConstraint.constraints_hold_on_window fib_relation ⟨<+> +> curr +> next, by simp⟩ →
     (ZMod.val (curr 0) < 256 → ZMod.val (curr 1) < 256 → ZMod.val (next 1) = (ZMod.val (curr 0) + ZMod.val (curr 1)) % 256) ∧ curr 1 = next 0
     := by
@@ -58,17 +79,17 @@ lemma constraints_hold_sim (curr : Row 2 (F p)) (next : Row 2 (F p)) :
   simp [fib_table, ProvableType.from_values] at h
 
   -- TODO: we should have a better way to do this
-  have var1 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+  have var1 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
     := by rfl
-  have var2 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+  have var2 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
     := by rfl
-  have var3 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1
+  have var3 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1
     := by rfl
-  have var4 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0
+  have var4 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0
     := by rfl
-  have var5 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+  have var5 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
     := by rfl
-  have var6 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+  have var6 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
     := by rfl
 
   rw [var1, var2, var3] at h
@@ -78,7 +99,6 @@ lemma constraints_hold_sim (curr : Row 2 (F p)) (next : Row 2 (F p)) :
   rw [var4] at h
   simp [Equality.circuit, Equality.spec] at h
   assumption
-
 
 def formal_fib_table : FormalTable (F:=(F p)) := {
   M := 2,
@@ -90,11 +110,11 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
     simp [assumptions_fib]
     simp [fib_table, spec_fib]
 
-    intro N_assumption
+    intro _N_assumption
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
     · simp
-    · intro lookup_h
+    · intro _
       simp [fib_table]
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Equality.circuit, Equality.spec] at boundary1 boundary2
@@ -111,6 +131,7 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       apply ZMod.val_one
     · intro lookup_h
       simp at lookup_h
+
       -- first of all, we prove the inductive part of the spec
       unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
       intros constraints_hold
@@ -128,15 +149,17 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
       -- lift the constraints to specs
-      let constraints_hold := constraints_hold_sim curr next constraints_hold.left
+      let constraints_hold := constraints_hold_lift curr next constraints_hold.left
       have ⟨add_holds, eq_holds⟩ := constraints_hold
 
       -- and finally now we prove the actual relations, this is fortunately very easy
       -- now that we have the specs
 
       have lookup_first_col : (curr 0).val < 256 := by
-        -- TODO: this is true also by induction over `rest`
-        sorry
+        -- This is true also by induction, because we proved that
+        -- curr 0 is exactly fib8 index, and fib8 is always less than 256
+        rw [ih2.left.left]
+        apply fib8_less_than_256
 
       specialize add_holds lookup_first_col lookup_h.right.left
 

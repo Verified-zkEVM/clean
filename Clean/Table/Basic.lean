@@ -61,6 +61,11 @@ lemma len_ge_succ_of_ge {M : ℕ+} {N : ℕ} {F : Type} (trace : Trace M F) (row
   | <+> => by simp [Trace.len] at *; simp [h]
   | (rest +> row) => by simp [Trace.len] at *; linarith
 
+/--
+  This induction principle states that if a trace length is at leas two, then to prove a property
+  about the whole trace, we can provide just a proof for the first two rows, and then a proof
+  for the inductive step.
+-/
 def everyRowTwoRowsInduction' {M : ℕ+} {F : Type} {P : (t : Trace M F) → t.len ≥ 2 → Sort*}
     (base : ∀ first second (h : (<+> +> first +> second).len ≥ 2), P (<+> +> first +> second) h)
     (more : ∀ curr next : Row M F,
@@ -78,6 +83,7 @@ def everyRowTwoRowsInduction' {M : ℕ+} {F : Type} {P : (t : Trace M F) → t.l
       let ih' := (everyRowTwoRowsInduction' base more (rest))
       let ih'' := (everyRowTwoRowsInduction' base more (rest +> curr))
       (Nat.lt_or_ge 2 rest.len).by_cases
+        -- TODO: this definition should be similar to Nat.letRec
         (by sorry)
         (by sorry)
 
