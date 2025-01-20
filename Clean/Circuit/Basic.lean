@@ -1,7 +1,3 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 
@@ -65,6 +61,7 @@ def constraints_hold_default : List (PreOperation F) → Prop
       table.contains (entry.map (fun e => e.eval)) ∧ constraints_hold_default ops
     | _ => constraints_hold_default ops
 
+@[simp]
 def witness_length : List (PreOperation F) → ℕ
   | [] => 0
   | (Witness _) :: ops => witness_length ops + 1
@@ -177,7 +174,7 @@ def lookup (l: Lookup F) := as_circuit (
 -- formal concepts of soundness and completeness of a circuit
 
 @[simp]
-def constraints_hold_from_list [Field F] (env: (ℕ → F)) : List (Operation F) → Prop
+def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
     | Operation.Assert e => (e.eval_env env) = 0
@@ -193,7 +190,7 @@ def constraints_hold_from_list [Field F] (env: (ℕ → F)) : List (Operation F)
     | _ => constraints_hold_from_list env ops
 
 @[reducible, simp]
-def constraints_hold [Field F] (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := .empty) : Prop :=
+def constraints_hold (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := .empty) : Prop :=
   constraints_hold_from_list env (circuit ctx).1.2
 
 /--
@@ -203,7 +200,7 @@ witness generator, checking all constraints would not fail.
 For subcircuits, since we proved completeness, this only means we need to satisfy the assumptions!
 -/
 @[simp]
-def constraints_hold_from_list_default [Field F] : List (Operation F) → Prop
+def constraints_hold_from_list_default : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
     | Operation.Assert e => e.eval = 0

@@ -1,15 +1,9 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
 import Clean.GadgetsNew.Add8.Addition8
 
 section
 
-#eval!
+#eval
   let p := 1009
   let p_prime := Fact.mk prime_1009
   let p_non_zero := Fact.mk (by norm_num : p ≠ 0)

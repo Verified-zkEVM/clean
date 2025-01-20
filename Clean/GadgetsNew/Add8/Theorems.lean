@@ -1,10 +1,3 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
 import Clean.Utils.Field
 
 namespace Add8Theorems
@@ -98,7 +91,7 @@ theorem soundness (x y out carry_in carry_out: F p):
     (out.val = (x.val + y.val + carry_in.val) % 256
     ∧ carry_out.val = (x.val + y.val + carry_in.val) / 256):= by
   intros hx hy hout carry_in_bool carry_out_bool h
-  have carry_in_bound := FieldUtils.boolean_le_2 carry_in carry_in_bool
+  have carry_in_bound := FieldUtils.boolean_lt_2 carry_in_bool
 
   rcases carry_out_bool with zero_carry | one_carry
   -- case with zero carry

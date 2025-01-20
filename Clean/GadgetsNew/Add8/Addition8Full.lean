@@ -1,14 +1,3 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
-import Clean.Circuit.SubCircuit
-import Clean.Utils.Field
-import Clean.GadgetsNew.ByteLookup
-import Clean.GadgetsNew.Boolean
 import Clean.GadgetsNew.Add8.Addition8FullCarry
 
 namespace Add8Full
@@ -85,7 +74,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     let ⟨ asx, asy, as_carry_in ⟩ := as
     have as': Add8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
     specialize h_holds (by assumption)
-    dsimp [ProvableType.from_values] at h_holds
 
     guard_hyp h_holds : Add8FullCarry.circuit.spec
       { x, y, carry_in }
