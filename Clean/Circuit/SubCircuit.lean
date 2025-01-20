@@ -8,10 +8,9 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
   match ops with
   | [] => []
   | op :: ops => match op with
-    | Operation.Witness c => Witness c :: to_flat_operations ops
-    | Operation.Assert e => Assert e :: to_flat_operations ops
-    | Operation.Lookup l => Lookup l :: to_flat_operations ops
-    | Operation.Assign c => Assign c :: to_flat_operations ops
+    | Operation.Witness compute => PreOperation.Witness compute :: to_flat_operations ops
+    | Operation.Assert e => PreOperation.Assert e :: to_flat_operations ops
+    | Operation.Lookup l => PreOperation.Lookup l :: to_flat_operations ops
     | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
 open Circuit (constraints_hold_from_list constraints_hold_from_list_default)
@@ -61,13 +60,13 @@ theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ 
   induction ops using to_flat_operations.induct with
   | case1 => tauto
   -- we can handle all non-empty cases except `SubCircuit` at once
-  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
+  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih =>
     dsimp only [to_flat_operations] at h
     generalize to_flat_operations ops = flatops at h ih
     cases ops
     <;> cases flatops
     <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
-  | case6 ops circuit ih =>
+  | case5 ops circuit ih =>
     dsimp only [to_flat_operations] at h
     have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append.mp h).left
     have h_rest : constraints_hold env (to_flat_operations ops) := (constraints_hold_append.mp h).right
@@ -128,7 +127,7 @@ theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)},
   induction ops using to_flat_operations.induct with
   | case1 => tauto
   -- we can handle all non-empty cases except `SubCircuit` at once
-  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
+  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih =>
     dsimp only [to_flat_operations]
     generalize to_flat_operations ops = flatops at *
     cases ops
@@ -136,7 +135,7 @@ theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)},
     <;> cases flatops
     <;> dsimp only [constraints_hold_default]
     <;> tauto
-  | case6 ops circuit ih =>
+  | case5 ops circuit ih =>
     dsimp only [to_flat_operations]
     apply constraints_hold_default_append.mpr
     cases ops

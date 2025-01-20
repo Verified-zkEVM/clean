@@ -33,16 +33,5 @@ def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
     assert_zero (x - (var x'))
     return x'
 
--- inputs, already connected to a cell, that you can assign the next row's value of
--- TODO figure out if this is the best way to connect to a trace
-structure InputCell (F : Type) where
-  cell: { cell: Cell F // cell.row = RowIndex.Current }
-  var: Variable F
 
-def InputCell.set_next [Field F] (c: InputCell F) (v: Expression F) := do
-  let v' ← to_var v
-  assign_cell { c.cell.val with row := RowIndex.Next } v'
-
-instance : Coe (InputCell F) (Variable F) where
-  coe x := x.var
 end Circuit
