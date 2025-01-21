@@ -256,6 +256,29 @@ def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F) → Prop
 def constraints_hold (env: (ℕ → F)) (circuit: Circuit F α) (ctx : SomeContext F := .empty) : Prop :=
   constraints_hold_from_list env (circuit.operations ctx)
 
+@[simp]
+def constraints_hold_from_context {n : ℕ} (ctx: Context F n) (env : ℕ → F) : Prop :=
+  match ctx with
+  | .empty => True
+  | .witness ctx compute => constraints_hold_from_context ctx env
+  | .assert ctx e =>
+    let new_constraint := e.eval_env env = 0
+    match ctx with -- avoid a leading `True ∧` if ctx is empty
+    | .empty => new_constraint
+    | _ => constraints_hold_from_context ctx env ∧ new_constraint
+  | .lookup ctx { table, entry, index := _ } =>
+    let new_constraint := table.contains (entry.map (fun e => e.eval_env env))
+    match ctx with
+    | .empty => new_constraint
+    | _ => constraints_hold_from_context ctx env ∧ new_constraint
+  | .assign ctx _ => constraints_hold_from_context ctx env
+  | .subcircuit ctx s =>
+    let wit := ctx.witnesses
+    let new_constraint := PreOperation.constraints_hold (wit.extend s.ops).default_env s.ops
+    match ctx with
+    | .empty => new_constraint
+    | _ => constraints_hold_from_context ctx env ∧ new_constraint
+
 /--
 Weaker version of `constraints_hold_from_list` that captures the statement that, using the default
 witness generator, checking all constraints would not fail.
