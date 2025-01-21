@@ -37,6 +37,14 @@ namespace Vector
     let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
 
+  @[simp]
+  def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
+    ⟨ a :: v.val, by simp [v.prop] ⟩
+
+  @[simp]
+  def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
+    ⟨ v.val ++ w.val, by simp [v.prop, w.prop] ⟩
+
   -- map over monad
   def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
     match (v : Vector (M α) n) with
@@ -45,4 +53,8 @@ namespace Vector
       let hd ← a
       let tl ← mapM ⟨ as, rfl ⟩
       pure ⟨ hd :: tl.val, by rwa [List.length_cons, tl.prop]⟩
+
+  instance {α : Type} {n : ℕ} {m : ℕ} : HAppend (Vector α n) (Vector α m) (Vector α (n + m)) where
+    hAppend xs ys := append xs ys
+
 end Vector
