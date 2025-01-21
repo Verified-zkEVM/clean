@@ -20,8 +20,21 @@ namespace Vector
     intro h
     cases v
     cases w
-    simp [Subtype.mk_eq_mk] at h
-    simp [h]
+    simp only at h
+    simp only [h]
+
+  @[simp]
+  def nil : Vector α 0 := ⟨ [], rfl ⟩
+
+  @[simp]
+  def cons (a: α) (v: Vector α n)  : Vector α (n + 1) :=
+    ⟨ a :: v.val, by simp [v.prop] ⟩
+
+  theorem canon {n : ℕ}  {v: Vector α n} (l : List α) (hl: l.length = n) : v.val = l → v = ⟨ l, hl ⟩ := by
+    intro hv
+    cases v
+    simp only at hv
+    simp only [hv]
 
   @[simp]
   def map (f: α → β) : Vector α n → Vector β n
@@ -39,13 +52,30 @@ namespace Vector
     let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
 
-  @[simp]
-  def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
-    ⟨ a :: v.val, by simp [v.prop] ⟩
 
   @[simp]
   def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
     ⟨ v.val ++ w.val, by simp [v.prop, w.prop] ⟩
+
+  def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
+    ⟨ v.val ++ [a], by simp [v.prop] ⟩
+
+  theorem push_of_len_succ {n: ℕ} (v: Vector α (n + 1)) : ∃ as: Vector α n, ∃ a: α, v = push as a := by
+    match v with
+    | ⟨ [], h ⟩ => cases h
+    | ⟨ a::as, h ⟩ =>
+      rcases as with _ | ⟨ a', as' ⟩
+      · have : n = 0 := by simp_all only [List.length_singleton, self_eq_add_left]
+        subst this
+        use nil, a
+        simp only [Nat.reduceAdd, push, nil, List.nil_append]
+      have : as'.length + 1 = n := by simp_all only [List.length_cons, add_left_inj]
+      subst this
+      obtain ⟨ as'', a'', ih ⟩ := push_of_len_succ ⟨ a' :: as', rfl ⟩
+      use cons a as'', a''
+      apply ext
+      simp only [push, cons, List.cons_append, List.cons.injEq, true_and]
+      exact congrArg Subtype.val ih
 
   -- map over monad
   def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
@@ -55,4 +85,39 @@ namespace Vector
       let hd ← a
       let tl ← mapM ⟨ as, rfl ⟩
       pure ⟨ hd :: tl.val, by rwa [List.length_cons, tl.prop]⟩
+
+  /- induction principle for Vector.cons -/
+  def induct {motive : {n: ℕ} → Vector α n → Prop}
+    (h0: motive nil)
+    (h1: ∀ {n: ℕ} (a: α) {as: Vector α n}, motive as → motive (cons a as))
+    {n: ℕ} (v: Vector α n) : motive v := by
+    match v with
+    | ⟨ [], prop ⟩ =>
+      have : n = 0 := by rw [←prop, List.length_eq_zero]
+      subst this
+      congr
+    | ⟨ a::as, h ⟩ =>
+      have : as.length + 1 = n := by rw [←h, List.length_cons]
+      subst this
+      have ih := induct (n:=as.length) h0 h1 ⟨ as, rfl ⟩
+      let h' : motive ⟨ a :: as, rfl ⟩ := h1 a ih
+      congr
+
+  /- induction principle for Vector.push -/
+  def induct_push {motive : {n: ℕ} → Vector α n → Prop}
+    (h0: motive nil)
+    (h1: ∀ {n: ℕ} {as: Vector α n} (a: α), motive as → motive (as.push a))
+    {n: ℕ} (v: Vector α n) : motive v := by
+    match v with
+    | ⟨ [], prop ⟩ =>
+      have : n = 0 := by rw [←prop, List.length_eq_zero]
+      subst this
+      congr
+    | ⟨ a::as, h ⟩ =>
+      have : as.length + 1 = n := by rw [←h, List.length_cons]
+      subst this
+      obtain ⟨ as', a', ih ⟩ := push_of_len_succ ⟨ a :: as, rfl ⟩
+      have ih' : motive as' := induct_push h0 h1 as'
+      have h' := h1 a' ih'
+      rwa [ih]
 end Vector
