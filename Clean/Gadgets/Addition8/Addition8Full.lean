@@ -1,6 +1,6 @@
-import Clean.GadgetsNew.Add8.Addition8FullCarry
+import Clean.Gadgets.Addition8.Addition8FullCarry
 
-namespace Add8Full
+namespace Gadgets.Addition8Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -30,7 +30,7 @@ instance : ProvableType (F p) (Inputs p) where
 def add8_full (input : (Inputs p).var) := do
   let ⟨x, y, carry_in⟩ := input
 
-  let res ← subcircuit Add8FullCarry.circuit { x, y, carry_in }
+  let res ← subcircuit Gadgets.Addition8FullCarry.circuit { x, y, carry_in }
 
   return res.z
 
@@ -72,15 +72,15 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- satisfy `Add8FullCarry.assumptions` by using our own assumptions
     let ⟨ asx, asy, as_carry_in ⟩ := as
-    have as': Add8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
+    have as': Gadgets.Addition8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
     specialize h_holds (by assumption)
 
-    guard_hyp h_holds : Add8FullCarry.circuit.spec
+    guard_hyp h_holds : Gadgets.Addition8FullCarry.circuit.spec
       { x, y, carry_in }
       { z, carry_out := env (ctx.offset + 1) }
 
     -- unfold `Add8FullCarry` statements to show what the hypothesis is in our context
-    dsimp [Add8FullCarry.circuit, Add8FullCarry.spec] at h_holds
+    dsimp [Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.spec] at h_holds
     -- discard second part of the spec
     have ⟨ h_holds, _ ⟩ := h_holds
     guard_hyp h_holds : z.val = (x.val + y.val + carry_in.val) % 256
@@ -105,8 +105,8 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold
     -- simplify `Add8Full.assumptions` and prove them easily by using our own assumptions
-    dsimp [Add8FullCarry.circuit, Add8FullCarry.assumptions]
+    dsimp [Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.assumptions]
     have ⟨ asx, asy, as_cin ⟩ := as
     simp [asx, asy, as_cin]
 
-end Add8Full
+end Gadgets.Addition8Full

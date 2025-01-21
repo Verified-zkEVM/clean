@@ -1,6 +1,6 @@
-import Clean.GadgetsNew.Add8.Addition8Full
+import Clean.Gadgets.Addition8.Addition8Full
 
-namespace Add8
+namespace Gadgets.Addition8
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -29,7 +29,7 @@ instance : ProvableType (F p) (Inputs p) where
 
 def add8 (input : (Inputs p).var) := do
   let ⟨x, y⟩ := input
-  let z ← subcircuit Add8Full.circuit { x, y, carry_in := const 0 }
+  let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := const 0 }
   return z
 
 def spec (input : (Inputs p).value) (z: F p) :=
@@ -60,23 +60,23 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     have hy : y_var.eval_env env = y := by injection h_inputs
 
     -- simplify constraints hypothesis
-    -- it's just the `subcircuit_soundness` of `Add8Full.circuit`
+    -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
     dsimp at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy] at h_holds
     rw [←(by rfl : z = env ctx.offset)] at h_holds
 
-    -- satisfy `Add8Full.assumptions` by using our own assumptions
+    -- satisfy `Gadgets.Addition8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
-    have as': Add8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
+    have as': Gadgets.Addition8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
     specialize h_holds as'
     dsimp [ProvableType.from_values] at h_holds
 
-    guard_hyp h_holds : Add8Full.circuit.spec { x, y, carry_in := 0 } z
+    guard_hyp h_holds : Gadgets.Addition8Full.circuit.spec { x, y, carry_in := 0 } z
 
-    -- unfold `Add8Full` statements to show what the hypothesis is in our context
-    dsimp [Add8Full.circuit, Add8Full.spec] at h_holds
+    -- unfold `Gadgets.Addition8Full` statements to show what the hypothesis is in our context
+    dsimp [Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.spec] at h_holds
     guard_hyp h_holds : z.val = (x.val + y.val + (0 : F p).val) % 256
 
     simp at h_holds
@@ -98,11 +98,11 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     dsimp
     rw [hx, hy]
 
-    -- the goal is just the `subcircuit_completeness` of `Add8Full.circuit`, i.e. the assumptions must hold
-    -- simplify `Add8Full.assumptions` and prove them easily by using our own assumptions
-    dsimp [Add8Full.circuit, Add8Full.assumptions]
+    -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold
+    -- simplify `Gadgets.Addition8Full.assumptions` and prove them easily by using our own assumptions
+    dsimp [Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.assumptions]
     show x.val < 256 ∧ y.val < 256 ∧ (0 = 0 ∨ 0 = 1)
     have ⟨ asx, asy ⟩ := as
     exact ⟨ asx, asy, by tauto ⟩
 
-end Add8
+end Gadgets.Addition8

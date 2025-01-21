@@ -1,80 +1,69 @@
-import Clean.Utils.Field
-import Clean.Expression
-import Clean.GenericConstraint
-import Mathlib.Tactic
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Gadgets.Addition8
-import Clean.Table
-import Clean.Gadgets.ByteLookup
+import Clean.Utils.Vector
+import Clean.Circuit.Basic
+import Clean.Table.Basic
+import Clean.Gadgets.Addition8.Addition8
 
-/-
-  Simple addition table: every row in the table must be a valid addition modulo 2^8
--/
-section AdditionTable
-open Expression
-variable (M : ℕ) (p : ℕ) [Fact p.Prime] [Fact (p > 512)]
+namespace Tables.Addition8
+variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
+variable [p_large_enough: Fact (p > 512)]
 
-def additionTable : Table 4 M p := {
-  constraints := [
-     TableConstraint.everyRowSingleRow
-      (λ row => Addition8.circuit 4 M (const (row 0)) (const (row 1)) (const (row 2)) (const (row 3)))
-  ],
+def add8_inline : SingleRowConstraint (F p) 3 := do
+  let x <- TableConstraint.get_cell (CellOffset.curr 0)
+  let y <- TableConstraint.get_cell (CellOffset.curr 1)
+  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {x, y}
 
-  lookups := [
-    TableLookup.everyRow (λ row => ByteLookup.lookup 4 M (const (row 0))),
-    TableLookup.everyRow (λ row => ByteLookup.lookup 4 M (const (row 1))),
-    TableLookup.everyRow (λ row => ByteLookup.lookup 4 M (const (row 2))),
-  ],
+  if let var z := z then
+    TableConstraint.assign z (CellOffset.curr 2)
+
+def add8Table : List (TableOperation (F p) 3) := [
+  TableOperation.EveryRow add8_inline
+]
+
+def assumptions_add8 {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
+  trace.forAllRowsOfTrace (fun row => (row 0).val < 256 ∧ (row 1).val < 256)
 
 
-  spec := fun trace => forAllRowsOfTrace 4 M p trace (λ row =>
-    let x := (trace.eval (const (row 0))).val
-    let y := (trace.eval (const (row 1))).val
-    let out := (trace.eval (const (row 2))).val
-    let carry := (trace.eval (const (row 3))).val
-    out = (x + y) % 256 ∧ carry = (x + y) / 256),
+def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
+  trace.forAllRowsOfTrace (fun row => (row 2).val = ((row 0).val + (row 1).val) % 256)
 
-  equiv := (by
-    intros trace
-    simp [TraceOfLength.eval, ByteLookup.lookup, Addition8.circuit]
-    simp [fullTableConstraintSet, lookupEveryRow,lookupEveryRow.inner, forAllRowsOfTrace, forallList]
-    set trace' := trace.val
-    induction trace' with
+def formal_add8_table : FormalTable (F:=(F p)) := {
+  M := 3,
+  constraints := add8Table,
+  assumptions := assumptions_add8,
+  spec := spec_add8,
+  soundness := by
+    intro N trace
+    simp [assumptions_add8]
+    simp [add8Table, spec_add8]
+
+    induction trace.val with
     | empty => {
-      simp [forAllRowsOfTrace.inner, fullTableConstraintSet.foldl]
+      simp
     }
     | cons rest row ih => {
+      -- simplify induction
       simp
-      simp [forallList] at ih
-      intros byte_x ih_byte_x byte_y ih_byte_y byte_out ih_byte_out
-      have ih' := ih ih_byte_x ih_byte_y ih_byte_out
-      simp [fullConstraintSet.foldl, forAllRowsOfTrace.inner, fullTableConstraintSet.foldl]
-      simp [forallList, fullTableConstraintSet.foldl] at ih'
+      intros lookup_x lookup_y lookup_rest h_curr h_rest
+      specialize ih lookup_rest h_rest
+      simp [ih]
 
-      rw [ih']
-      have thm := Addition8.equiv 4 M (const (row 0)) (const (row 1)) (const (row 2)) (const (row 3)) trace
-      simp [ByteLookup.lookup, TraceOfLength.eval, Addition8.spec] at thm
-      have thm_specialized := thm byte_x byte_y byte_out
+      -- now we prove a local property about the current row
+      -- TODO: simp should suffice, but couldn't get it to work
+      have h_varx : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+        := by rfl
+      have h_vary : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+        := by rfl
+      have h_varz : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
+        := by rfl
 
-      constructor
-      · intro h3
-        constructor
-        · simp [TraceOfLength.eval] at h3
-          have thm_h := And.intro h3.left h3.right.left
-          rw [thm_specialized] at thm_h
-          assumption
-        · exact h3.right.right
-      · intro h3
-        rw [← and_assoc]
-        constructor
-        · simp [TraceOfLength.eval]
-          have thm_h := h3.left
-          rw [←thm_specialized] at thm_h
-          exact thm_h
-        · exact h3.right
+      simp [ProvableType.from_values] at h_curr
+      rw [h_varx, h_vary, h_varz] at h_curr
+
+      -- and now it is easy!
+      dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions] at h_curr
+      simp [lookup_x, lookup_y] at h_curr
+      assumption
     }
-  )
 }
 
-end AdditionTable
+end Tables.Addition8

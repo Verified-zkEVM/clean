@@ -1,4 +1,4 @@
-import Clean.GadgetsNew.ByteLookup
+import Clean.Gadgets.ByteLookup
 
 section
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
