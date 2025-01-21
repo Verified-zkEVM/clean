@@ -88,8 +88,7 @@ def Witness.extend {n} (wit: Witness F n) (ops: List (PreOperation F)) : Witness
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
 -- for all traces that satisfy the constraints
-structure SubCircuit (F: Type) [Field F] where
-  offset: ℕ
+structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   ops: List (PreOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
@@ -104,29 +103,38 @@ structure SubCircuit (F: Type) [Field F] where
   -- `completeness` needs to imply the constraints using default witnesses
   implied_by_completeness : ∀ wit, completeness wit → PreOperation.constraints_hold (wit.extend ops).default_env ops
 
+variable {n: ℕ}
+
+def SubCircuit.witness_length (sc: SubCircuit F n) : ℕ := PreOperation.witness_length sc.ops
+
+inductive Context (F : Type) [Field F] : (n: ℕ) → Type where
+  | empty : Context F 0
+  | witness : {n: ℕ} → Context F n → (compute : Unit → F) → Context F (n + 1)
+  | assert : {n: ℕ} → Context F n → Expression F → Context F n
+  | lookup : {n: ℕ} → Context F n → Lookup F → Context F n
+  | assign : {n: ℕ} → Context F n → Cell F × Variable F → Context F n
+  | subcircuit : {n: ℕ} → Context F n → (s: SubCircuit F n) → Context F (n + s.witness_length)
+
 inductive Operation (F : Type) [Field F] where
   | Witness : (compute : Unit → F) → Operation F
   | Assert : Expression F → Operation F
   | Lookup : Lookup F → Operation F
   | Assign : Cell F × Variable F → Operation F
-  | SubCircuit : SubCircuit F → Operation F
-
--- this needs to become an inductive type!!
-structure Context (F : Type) where
-  offset: ℕ
-  witness: Vector (Unit → F) offset
-
-@[simp]
-def Context.empty : Context F :=
-  { offset := 0, witness := vec [] }
+  | SubCircuit : {n : ℕ} → SubCircuit F n → Operation F
 
 namespace Operation
-@[simp]
-def update_context (ctx: Context F) : Operation F → Context F
-  | Witness compute => ⟨ ctx.offset + 1, ctx.witness.push compute ⟩
-  | SubCircuit { ops, .. } =>
-    ⟨ ctx.offset + PreOperation.witness_length ops, ctx.witness.append (PreOperation.witness ops) ⟩
-  | _ => ctx
+def added_witness : Operation F → ℕ
+  | Witness _ => 1
+  | SubCircuit s => s.witness_length
+  | _ => 0
+
+-- @[simp]
+-- def update_context {n: ℕ} (ctx: Context F n) : (op: Operation F) → Context F (n + op.added_witness)
+--   | Witness compute => Context.witness ctx compute
+--   | Assert e => Context.assert ctx e
+--   | Lookup l => Context.lookup ctx l
+--   | Assign c => Context.assign ctx c
+--   | SubCircuit s => Context.subcircuit ctx s
 
 instance [Repr F] : ToString (Operation F) where
   toString
@@ -137,45 +145,79 @@ instance [Repr F] : ToString (Operation F) where
     | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 
+def Context.operations {n: ℕ} : Context F n → List (Operation F)
+  | .empty => []
+  | .witness ctx c => operations ctx ++ [.Witness c]
+  | .assert ctx e => operations ctx ++ [.Assert e]
+  | .lookup ctx l => operations ctx ++ [.Lookup l]
+  | .assign ctx c => operations ctx ++ [.Assign c]
+  | .subcircuit ctx s => operations ctx ++ [.SubCircuit s]
+
+def Context.witnesses {n: ℕ} : Context F n → Witness F n
+  | .empty => ⟨ [], rfl ⟩
+  | .witness ctx c => (witnesses ctx).push c
+  | .assert ctx _ => witnesses ctx
+  | .lookup ctx _ => witnesses ctx
+  | .assign ctx _ => witnesses ctx
+  | .subcircuit ctx s => (witnesses ctx).extend s.ops
+
+def Context.default_env {n: ℕ} (ctx: Context F n) : ℕ → F :=
+  let witnesses := ctx.witnesses
+  fun i => if h : i < n then (witnesses.val.get ⟨ i, by rwa [witnesses.prop] ⟩) () else 0
+
+structure SomeContext (F : Type) [Field F] where
+  offset: ℕ
+  context: Context F offset
+
+def context : Context F n → SomeContext F
+  | ctx => ⟨ n, ctx ⟩
+
+instance : CoeOut (Context F n) (SomeContext F) where
+  coe ctx := ⟨ n, ctx ⟩
+
+def SomeContext.empty : SomeContext F := ⟨ 0, Context.empty ⟩
+
+def SomeContext.operations : SomeContext F → List (Operation F)
+  | ⟨ _, ctx ⟩ => ctx.operations
+
 @[simp]
 def Circuit (F : Type) [Field F] (α : Type) :=
-  Context F → (Context F × List (Operation F)) × α
+  SomeContext F → SomeContext F × α
 
 namespace Circuit
 instance : Monad (Circuit F) where
-  pure a ctx := ((ctx, []), a)
+  pure a ctx := (ctx, a)
   bind f g ctx :=
-    let ((ctx', ops), a) := f ctx
-    let ((ctx'', ops'), b) := g a ctx'
-    ((ctx'', ops ++ ops'), b)
+    let (ctx', a) := f ctx
+    let (ctx'', b) := g a ctx'
+    (ctx'', b)
 
 @[simp]
 def run (circuit: Circuit F α) : List (Operation F) × α :=
-  let ((_, ops), a) := circuit Context.empty
-  (ops, a)
+  let (ctx, a) := circuit .empty
+  (ctx.operations, a)
 
 @[reducible]
-def operations (circuit: Circuit F α) (ctx : Context F := .empty) : List (Operation F) :=
-  (circuit ctx).1.2
+def operations (circuit: Circuit F α) (ctx : SomeContext F := .empty) : List (Operation F) :=
+  (circuit ctx).1.operations
 
 @[reducible]
-def output (circuit: Circuit F α) (ctx : Context F := .empty) : α :=
+def output (circuit: Circuit F α) (ctx : SomeContext F := .empty) : α :=
   (circuit ctx).2
 
-@[reducible]
-def as_circuit (f: Context F → Operation F × α) : Circuit F α := fun ctx  =>
-  let (op, a) := f ctx
-  let ctx' := op.update_context ctx
-  ((ctx', [op]), a)
+-- @[reducible]
+-- def as_circuit (f: Context F → Operation F × α) : Circuit F α := fun ctx  =>
+--   let (op, a) := f ctx
+--   let ctx' := op.update_context ctx
+--   ((ctx', [op]), a)
 
 -- core operations we can do in a circuit
 
 -- create a new variable
 @[simp]
-def witness_var (compute : Unit → F) := as_circuit (fun ctx =>
+def witness_var (compute : Unit → F) : Circuit F (Variable F) := fun ctx =>
   let var: Variable F := ⟨ ctx.offset ⟩
-  (Operation.Witness compute, var)
-)
+  (Context.witness ctx.context compute, var)
 
 @[simp]
 def witness (compute : Unit → F) := do
@@ -184,21 +226,13 @@ def witness (compute : Unit → F) := do
 
 -- add a constraint
 @[simp]
-def assert_zero (e: Expression F) := as_circuit (
-  fun _ => (Operation.Assert e, ())
-)
+def assert_zero (e: Expression F) : Circuit F Unit := fun ctx =>
+  (Context.assert ctx.context e, ())
 
 -- add a lookup
 @[simp]
-def lookup (l: Lookup F) := as_circuit (
-  fun _ => (Operation.Lookup l, ())
-)
-
--- assign a variable to a cell
-@[simp]
-def assign_cell (c: Cell F) (v: Variable F) := as_circuit (
-  fun _ => (Operation.Assign (c, v), ())
-)
+def lookup (l: Lookup F) : Circuit F Unit := fun ctx =>
+  (Context.lookup ctx.context l, ())
 
 -- formal concepts of soundness and completeness of a circuit
 
@@ -219,8 +253,8 @@ def constraints_hold_from_list (env: (ℕ → F)) : List (Operation F) → Prop
     | _ => constraints_hold_from_list env ops
 
 @[reducible, simp]
-def constraints_hold (env: (ℕ → F)) (circuit: Circuit F α) (ctx : Context F := .empty) : Prop :=
-  constraints_hold_from_list env (circuit ctx).1.2
+def constraints_hold (env: (ℕ → F)) (circuit: Circuit F α) (ctx : SomeContext F := .empty) : Prop :=
+  constraints_hold_from_list env (circuit.operations ctx)
 
 /--
 Weaker version of `constraints_hold_from_list` that captures the statement that, using the default
@@ -229,23 +263,25 @@ witness generator, checking all constraints would not fail.
 For subcircuits, since we proved completeness, this only means we need to satisfy the assumptions!
 -/
 @[simp]
-def constraints_hold_from_list_default (ctx: Context F) : List (Operation F) → Prop
-  | [] => True
-  | op :: [] =>
-  match op with
-    | Operation.Assert e => e.eval_env ctx.default_env = 0
-    | Operation.Lookup { table, entry, index := _ } =>
-        table.contains (entry.map (fun e => e.eval_env ctx.default_env))
-    | Operation.SubCircuit { completeness, .. } => completeness ctx
-    | _ => True
-  | op :: ops =>
-  let ctx' := op.update_context ctx
-  match op with
-    | Operation.Assert e => (e.eval_env ctx.default_env = 0) ∧ constraints_hold_from_list_default ctx' ops
-    | Operation.Lookup { table, entry, index := _ } =>
-        table.contains (entry.map (fun e => e.eval_env ctx.default_env)) ∧ constraints_hold_from_list_default ctx' ops
-    | Operation.SubCircuit { completeness .. } => completeness ctx ∧ constraints_hold_from_list_default ctx' ops
-    | _ => constraints_hold_from_list_default ctx' ops
+def constraints_hold_from_list_default {n : ℕ} : Context F n → Prop
+  | .empty => True
+  | .witness ctx compute => constraints_hold_from_list_default ctx
+  | .assert ctx e =>
+    let new_constraint := e.eval_env ctx.default_env = 0
+    match ctx with -- avoid a leading `True ∧` if ctx is empty
+    | .empty => new_constraint
+    | _ => constraints_hold_from_list_default ctx ∧ new_constraint
+  | .lookup ctx { table, entry, index := _ } =>
+    let new_constraint := table.contains (entry.map (fun e => e.eval_env ctx.default_env))
+    match ctx with
+    | .empty => new_constraint
+    | _ => constraints_hold_from_list_default ctx ∧ new_constraint
+  | .assign ctx _ => constraints_hold_from_list_default ctx
+  | .subcircuit ctx s =>
+    let new_constraint := s.completeness ctx.witnesses
+    match ctx with
+    | .empty => new_constraint
+    | _ => constraints_hold_from_list_default ctx ∧ new_constraint
 
 @[simp]
 def constraints_hold_default (circuit: Circuit F α) (input_ctx : Context F := .empty) : Prop :=
