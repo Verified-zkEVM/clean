@@ -4,6 +4,15 @@ import Clean.Circuit.Expression
 
 variable {F: Type} [Field F]
 
+/--
+   Class of types that represents a structured collection of elements all of the same type.
+   Those structures can be flattened into a vector of elements.
+-/
+class StructuredElements (S : Type -> Type) (E : Type) where
+  size : ℕ
+  to_elements : S E -> Vector E size
+  from_elements : Vector E size -> S E
+
 structure TypePair where
   var: Type
   value: Type
@@ -100,4 +109,17 @@ instance : ProvableType F (fields F n) where
   from_vars v := v
   to_values x := x
   from_values v := v
+
+
+-- implement provableType generically for structured elements
+instance ofStructured (F : Type) (S: Type -> Type)
+    [inst1 : StructuredElements S (Expression F)] [inst2 : StructuredElements S F]
+    (sizes_match : inst1.size = inst2.size):
+    ProvableType F ⟨S (Expression F), S F⟩ where
+  size := inst1.size
+  to_vars x := inst1.to_elements x
+  from_vars v := inst1.from_elements v
+  to_values x := by rw [sizes_match]; exact inst2.to_elements x
+  from_values v := by rw [sizes_match] at v; exact inst2.from_elements v
+
 end Provable
