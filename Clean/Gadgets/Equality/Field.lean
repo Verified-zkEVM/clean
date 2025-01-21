@@ -11,7 +11,7 @@ section
 variable {p : ℕ} [Fact p.Prime]
 
 
-namespace Gadgets.Equality
+namespace Gadgets.Equality.Field
 structure InputStruct (F : Type) where
   x: F
   y: F
@@ -53,6 +53,7 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     let ⟨x_var, y_var⟩ := vars
 
     dsimp at h_holds
+
     have hx : x_var.eval_env env = x := by injection h_inputs
     have hy : y_var.eval_env env = y := by injection h_inputs
     rw [hx, hy] at h_holds
@@ -76,4 +77,4 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     intro spec
     rw [hx, hy, spec]
     ring
-end Gadgets.Equality
+end Gadgets.Equality.Field
