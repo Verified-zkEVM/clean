@@ -326,8 +326,8 @@ def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_va
   circuit.assumptions b → circuit.spec b a
 
 @[simp]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (input_ctx: SomeContext F) :=
-  let b := Provable.eval_env input_ctx.context.default_env b_var
+def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (wit: Witness F n) :=
+  let b := Provable.eval_env wit.default_env b_var
   circuit.assumptions b
 
 /--

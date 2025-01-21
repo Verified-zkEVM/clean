@@ -67,7 +67,7 @@ theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ 
     cases ops
     <;> cases flatops
     <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
-  | case6 ops circuit ih =>
+  | case6 ops _ circuit ih =>
     dsimp only [to_flat_operations] at h
     have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append.mp h).left
     have h_rest : constraints_hold env (to_flat_operations ops) := (constraints_hold_append.mp h).right
@@ -87,23 +87,26 @@ that imply (or are implied by) those constraints.
 Note: Ideally, `can_replace_subcircuits` would prove both directions, and this would be just a special
 case. See https://github.com/Verified-zkEVM/clean/issues/42
 -/
-theorem can_replace_subcircuits_default : ∀ {ops: List (Operation F)}, ∀ {ctx : Context F},
-  constraints_hold_from_list_default ctx ops → constraints_hold (ctx.extend (to_flat_operations ops)).default_env (to_flat_operations ops)
+theorem can_replace_subcircuits_default {n: ℕ} : ∀ {ctx : Context F n},
+  constraints_hold_from_list_default ctx →
+  constraints_hold ctx.default_env (to_flat_operations ctx.operations)
 := by
-  intro ops ctx h
+  intro ctx h
   -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
   -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
-  induction ops using to_flat_operations.induct with
+  induction ctx using to_flat_operations.induct with
   | case1 => tauto
   -- we can handle all non-empty cases except `SubCircuit` at once
   | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih | case5 ops _ ih =>
     dsimp only [to_flat_operations]
     generalize to_flat_operations ops = flatops at *
-    cases ops
-    <;> dsimp only [constraints_hold_from_list_default] at h
     <;> cases flatops
     <;> dsimp only [constraints_hold]
     <;> tauto
+    <;> cases ctx
+    <;> dsimp only [constraints_hold_from_list_default] at h
+    <;> tauto
+
   | case6 ops circuit ih =>
     dsimp only [to_flat_operations]
     apply constraints_hold_append.mpr
@@ -119,18 +122,20 @@ end PreOperation
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
 namespace Circuit
-def formal_circuit_to_subcircuit (ctx: Context F)
-  (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F :=
-  let res := circuit.main b_var ctx
+def formal_circuit_to_subcircuit (input_ctx: SomeContext F)
+  (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F input_ctx.offset :=
+  let n := input_ctx.offset
+  let res := circuit.main b_var input_ctx
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
   -- let ((_, ops), a_var) := res
-  let ops := res.1.2
+  let out_ctx := res.1.context
+  let ops := out_ctx.operations
   let a_var := res.2
 
-  have s: SubCircuit F := by
-    let flat_ops := PreOperation.to_flat_operations ops
+  have s: SubCircuit F n := by
+    let flat_ops := PreOperation.to_flat_operations out_ctx.operations
     let soundness := subcircuit_soundness circuit b_var a_var
-    let completeness := subcircuit_completeness circuit b_var
+    let completeness := subcircuit_completeness (n:=n) circuit b_var
     use flat_ops, soundness, completeness
 
     -- `imply_soundness`
@@ -145,7 +150,7 @@ def formal_circuit_to_subcircuit (ctx: Context F)
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
     suffices h: constraints_hold_from_list env ops by
-      exact circuit.soundness ctx env b b_var rfl as h
+      exact circuit.soundness input_ctx env b b_var rfl as h
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env (PreOperation.to_flat_operations ops)
