@@ -74,6 +74,8 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     let ⟨ asx, asy, as_carry_in ⟩ := as
     have as': Gadgets.Addition8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
     specialize h_holds (by assumption)
+    simp [ProvableType.from_values, ProvableType.to_values] at h_holds
+    simp [StructuredElements.from_elements, StructuredElements.to_elements] at h_holds
 
     guard_hyp h_holds : Gadgets.Addition8FullCarry.circuit.spec
       { x, y, carry_in }

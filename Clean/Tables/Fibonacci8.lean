@@ -2,7 +2,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Basic
 import Clean.Gadgets.Addition8.Addition8
-import Clean.Gadgets.Equality
+import Clean.Gadgets.Equality.Field
 
 
 /-
@@ -32,7 +32,7 @@ def fib_relation : TwoRowsConstraint (F p) 2 := do
     TableConstraint.assign z (CellOffset.next 1)
 
   let x_next <- TableConstraint.get_cell (CellOffset.next 0)
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨y, x_next⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨y, x_next⟩
 
 /--
   boundary constraints that are applied at the beginning of the trace.
@@ -41,8 +41,8 @@ def fib_relation : TwoRowsConstraint (F p) 2 := do
 def boundary_fib : SingleRowConstraint (F p) 2 := do
   let x <- TableConstraint.get_cell (CellOffset.curr 0)
   let y <- TableConstraint.get_cell (CellOffset.curr 1)
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨x, 0⟩
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨y, 1⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨x, 0⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨y, 1⟩
 
 def fib_table : List (TableOperation (F p) 2) := [
   TableOperation.Boundary 0 boundary_fib,
@@ -96,7 +96,7 @@ lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
 
   simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
   rw [var4] at h
-  simp [Gadgets.Equality.circuit, Gadgets.Equality.spec] at h
+  simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec] at h
   assumption
 
 def formal_fib_table : FormalTable (F:=(F p)) := {
@@ -116,7 +116,7 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
     · intro _
       simp [fib_table]
       intros boundary1 boundary2
-      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec] at boundary1 boundary2
+      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
         := by rfl

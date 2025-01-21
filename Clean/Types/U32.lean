@@ -1,4 +1,5 @@
 import Clean.Gadgets.ByteLookup
+import Clean.Circuit.Provable
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -15,6 +16,11 @@ structure U32 (T: Type) where
   x1 : T
   x2 : T
   x3 : T
+
+instance {F : Type} : StructuredElements U32 F where
+  size := 4
+  to_elements x := vec [x.x0, x.x1, x.x2, x.x3]
+  from_elements v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩
 
 namespace U32
 
@@ -58,6 +64,17 @@ def value_field (x: U32 (F p)) : F p :=
   it into four limbs of 8 bits each.
 -/
 def decompose_nat (x: ℕ) : U32 (F p) :=
+  let x0 := FieldUtils.mod x 256 (by linarith [p_large_enough.elim])
+  let x1 := FieldUtils.mod (FieldUtils.floordiv x 256) 256 (by linarith [p_large_enough.elim])
+  let x2 := FieldUtils.mod (FieldUtils.floordiv x 256^2) 256 (by linarith [p_large_enough.elim])
+  let x3 := FieldUtils.mod (FieldUtils.floordiv x 256^3) 256 (by linarith [p_large_enough.elim])
+  ⟨ x0, x1, x2, x3 ⟩
+
+/--
+  Return a 32-bit unsigned integer from a natural number, by decomposing
+  it into four limbs of 8 bits each.
+-/
+def decompose_nat_expr (x: ℕ) : U32 (Expression (F p)) :=
   let x0 := FieldUtils.mod x 256 (by linarith [p_large_enough.elim])
   let x1 := FieldUtils.mod (FieldUtils.floordiv x 256) 256 (by linarith [p_large_enough.elim])
   let x2 := FieldUtils.mod (FieldUtils.floordiv x 256^2) 256 (by linarith [p_large_enough.elim])
