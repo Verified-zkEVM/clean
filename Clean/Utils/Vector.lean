@@ -57,4 +57,7 @@ namespace Vector
   instance {α : Type} {n : ℕ} {m : ℕ} : HAppend (Vector α n) (Vector α m) (Vector α (n + m)) where
     hAppend xs ys := append xs ys
 
+  def finRange (n : ℕ) : Vector (Fin n) n :=
+    ⟨ List.finRange n, List.length_finRange n ⟩
+
 end Vector
