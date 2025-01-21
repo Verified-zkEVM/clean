@@ -284,9 +284,9 @@ def constraints_hold_from_list_default {n : ℕ} : Context F n → Prop
     | _ => constraints_hold_from_list_default ctx ∧ new_constraint
 
 @[simp]
-def constraints_hold_default (circuit: Circuit F α) (input_ctx : Context F := .empty) : Prop :=
-  let ((_, ops), _) := circuit input_ctx
-  constraints_hold_from_list_default input_ctx ops
+def constraints_hold_default (circuit: Circuit F α) (input_ctx : SomeContext F := .empty) : Prop :=
+  let (ctx, _) := circuit input_ctx
+  constraints_hold_from_list_default ctx.context
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -301,9 +301,10 @@ where
 
   soundness:
     -- for all environments that determine witness generation
-    ∀ ctx : Context F, ∀ env: ℕ → F,
+    ∀ ctx : SomeContext F, ∀ env: ℕ → F,
     -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b → assumptions b →
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b →
+    assumptions b →
     -- if the constraints hold
     constraints_hold env (main b_var) ctx →
     -- the spec holds on the input and output
@@ -311,9 +312,10 @@ where
     spec b a
 
   completeness:
-    ∀ ctx : Context F,
+    ∀ ctx : SomeContext F,
     -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.default_env b_var = b → assumptions b →
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.context.default_env b_var = b →
+    assumptions b →
     -- constraints hold when using the internal witness generator
     constraints_hold_default (main b_var) ctx
 
@@ -324,8 +326,8 @@ def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_va
   circuit.assumptions b → circuit.spec b a
 
 @[simp]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (input_ctx: Context F) :=
-  let b := Provable.eval_env input_ctx.default_env b_var
+def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (input_ctx: SomeContext F) :=
+  let b := Provable.eval_env input_ctx.context.default_env b_var
   circuit.assumptions b
 
 /--
@@ -349,21 +351,22 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
 
   soundness:
     -- for all environments that determine witness generation
-    ∀ ctx : Context F, ∀ env: ℕ → F,
+    ∀ ctx : SomeContext F, ∀ env: ℕ → F,
     -- for all inputs that satisfy the assumptions
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b → assumptions b →
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b →
+    assumptions b →
     -- if the constraints hold
     constraints_hold env (main b_var) ctx →
     -- the spec holds
     spec b
 
   completeness:
-    ∀ ctx : Context F,
+    ∀ ctx : SomeContext F,
     -- for all inputs that satisfy the assumptions AND the spec
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.default_env b_var = b → assumptions b → spec b →
+    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env ctx.context.default_env b_var = b →
+    assumptions b → spec b →
     -- the constraints hold (using the internal witness generator)
-    constraints_hold_from_list_default ctx ((main b_var).operations ctx)
-    -- constraints_hold_default (main b_var) ctx
+    constraints_hold_default (main b_var) ctx
 
 @[simp]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: ℕ → F) :=
@@ -376,4 +379,4 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
 
-export Circuit (witness_var witness assert_zero lookup assign_cell FormalCircuit FormalAssertion)
+export Circuit (witness_var witness assert_zero lookup FormalCircuit FormalAssertion)
