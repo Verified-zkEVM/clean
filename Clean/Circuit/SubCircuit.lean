@@ -14,7 +14,7 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
     | Operation.Assign c => Assign c :: to_flat_operations ops
     | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
-open Circuit (constraints_hold_from_list constraints_hold_from_list_default)
+open Circuit (constraints_hold_from_list constraints_hold_from_context_default)
 
 lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : ℕ → F},
   constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
@@ -88,7 +88,7 @@ Note: Ideally, `can_replace_subcircuits` would prove both directions, and this w
 case. See https://github.com/Verified-zkEVM/clean/issues/42
 -/
 theorem can_replace_subcircuits_default {n: ℕ} : ∀ {ctx : Context F n},
-  constraints_hold_from_list_default ctx →
+  constraints_hold_from_context_default ctx →
   constraints_hold ctx.default_env (to_flat_operations ctx.operations)
 := by
   intro ctx h
@@ -231,11 +231,10 @@ end Circuit
 
 -- run a sub-circuit
 @[simp]
-def subcircuit (circuit: FormalCircuit F β α) (b: β.var) := Circuit.as_circuit (F:=F) (
+def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :=
   fun ctx =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx circuit b
-    (Operation.SubCircuit subcircuit, a)
-)
+    (Context.subcircuit ctx.context subcircuit, a)
 
 @[simp]
 def assertion (circuit: FormalAssertion F β) (b: β.var) := Circuit.as_circuit (F:=F) (

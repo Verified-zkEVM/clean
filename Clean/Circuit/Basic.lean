@@ -263,30 +263,30 @@ witness generator, checking all constraints would not fail.
 For subcircuits, since we proved completeness, this only means we need to satisfy the assumptions!
 -/
 @[simp]
-def constraints_hold_from_list_default {n : ℕ} : Context F n → Prop
+def constraints_hold_from_context_default {n : ℕ} : Context F n → Prop
   | .empty => True
-  | .witness ctx compute => constraints_hold_from_list_default ctx
+  | .witness ctx compute => constraints_hold_from_context_default ctx
   | .assert ctx e =>
     let new_constraint := e.eval_env ctx.default_env = 0
     match ctx with -- avoid a leading `True ∧` if ctx is empty
     | .empty => new_constraint
-    | _ => constraints_hold_from_list_default ctx ∧ new_constraint
+    | _ => constraints_hold_from_context_default ctx ∧ new_constraint
   | .lookup ctx { table, entry, index := _ } =>
     let new_constraint := table.contains (entry.map (fun e => e.eval_env ctx.default_env))
     match ctx with
     | .empty => new_constraint
-    | _ => constraints_hold_from_list_default ctx ∧ new_constraint
-  | .assign ctx _ => constraints_hold_from_list_default ctx
+    | _ => constraints_hold_from_context_default ctx ∧ new_constraint
+  | .assign ctx _ => constraints_hold_from_context_default ctx
   | .subcircuit ctx s =>
     let new_constraint := s.completeness ctx.witnesses
     match ctx with
     | .empty => new_constraint
-    | _ => constraints_hold_from_list_default ctx ∧ new_constraint
+    | _ => constraints_hold_from_context_default ctx ∧ new_constraint
 
 @[simp]
 def constraints_hold_default (circuit: Circuit F α) (input_ctx : SomeContext F := .empty) : Prop :=
   let (ctx, _) := circuit input_ctx
-  constraints_hold_from_list_default ctx.context
+  constraints_hold_from_context_default ctx.context
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
