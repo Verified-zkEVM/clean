@@ -128,26 +128,27 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
 
   completeness := by
    -- introductions
-    rintro ctx inputs inputs_var h_inputs
+    rintro i0 env inputs_var henv inputs h_inputs
     let ⟨x, y, carry_in⟩ := inputs
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro as
 
     -- characterize inputs
-    have hx : x_var.eval = x := by injection h_inputs
-    have hy : y_var.eval = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval = carry_in := by injection h_inputs
+    have hx : x_var.eval_env env = x := by injection h_inputs
+    have hy : y_var.eval_env env = y := by injection h_inputs
+    have hcarry_in : carry_in_var.eval_env env = carry_in := by injection h_inputs
 
     -- simplify assumptions
     dsimp [assumptions] at as
 
     -- unfold goal, (re)introduce names for some of unfolded variables
-    dsimp
+    dsimp [Boolean.circuit, assert_bool]
     rw [hx, hy, hcarry_in]
-    let z := FieldUtils.mod_256 (x + y + carry_in)
-    let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
-    rw [←(by rfl : z = FieldUtils.mod_256 (x + y + carry_in))]
-    rw [←(by rfl : carry_out = FieldUtils.floordiv (x + y + carry_in) 256)]
+    set z := env.get i0
+    set carry_out := env.get (i0 + 1)
+
+    have hz : z = mod_256 (x + y + carry_in) := by sorry
+    have hcout : carry_out = floordiv (x + y + carry_in) 256 := by sorry
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
@@ -155,14 +156,14 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let goal_byte := ByteTable.contains (vec [z])
     let goal_bool := carry_out = 0 ∨ carry_out = 1
     let goal_add := x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
-    show goal_byte ∧ (True ∧ goal_bool) ∧ goal_add
+    show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
     -- proving that z is contained in the Byte table is simple,
     -- so we just do it inline applying the fact that every byte is contained in
     -- the Byte table
     have completeness1 : goal_byte := ByteTable.completeness z (by
-      dsimp [z]
+      rw [hz]
       simp only [FieldUtils.mod_256, FieldUtils.mod]
       rw [FieldUtils.val_of_nat_to_field_eq]
       apply Nat.mod_lt
@@ -171,11 +172,13 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have ⟨as_x, as_y, as_carry_in⟩ := as
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
-    have completeness2 : goal_bool := by
+    have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
+      rw [hcout]
       apply Gadgets.Addition8.Theorems.completeness_bool
       repeat assumption
 
-    have completeness3 : goal_add := by
+    have completeness3 : x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0 := by
+      rw [hz, hcout]
       apply Gadgets.Addition8.Theorems.completeness_add
       repeat assumption
 

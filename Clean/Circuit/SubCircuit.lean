@@ -284,6 +284,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
 
   ⟨ a_var, s ⟩
 
+@[simp]
 def formal_assertion_to_subcircuit (n: ℕ)
   (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F n :=
   let res := circuit.main b_var n
