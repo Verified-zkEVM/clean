@@ -28,7 +28,7 @@ def Witness (F: Type) (n: ℕ) := Vector (Unit → F) n
 def Witness.default_env (w: Witness F n) : Environment F := fun i =>
   if h : i < n then w.val.get ⟨ i, by rwa [w.prop] ⟩ () else 0
 
-def Environment.extends_from_offset (env: Environment F) (wit: Witness F n) (offset: ℕ) : Prop :=
+def Environment.extends_vector (env: Environment F) (wit: Witness F n) (offset: ℕ) : Prop :=
   ∀ i : Fin n, env (offset + i) = wit.get i ()
 
 inductive PreOperation (F : Type) where
@@ -91,7 +91,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
     PreOperation.constraints_hold env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using default witnesses for all _local_ variables of this circuit
-  implied_by_completeness : ∀ env, env.extends_from_offset (PreOperation.witness ops) offset →
+  implied_by_completeness : ∀ env, env.extends_vector (PreOperation.witness ops) offset →
     completeness env → PreOperation.constraints_hold env ops
 
 def SubCircuit.witness_length (sc: SubCircuit F n) := PreOperation.witness_length sc.ops
@@ -142,6 +142,13 @@ def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
   | .assert ops e => toList ops ++ [.Assert e]
   | .lookup ops l => toList ops ++ [.Lookup l]
   | .subcircuit ops s => toList ops ++ [.SubCircuit s]
+
+def Operations.initial_offset {n: ℕ} : Operations F n → ℕ
+  | .empty n => n
+  | .witness ops _ => Operations.initial_offset ops
+  | .assert ops _ => Operations.initial_offset ops
+  | .lookup ops _ => Operations.initial_offset ops
+  | .subcircuit ops s => Operations.initial_offset ops
 
 def Operations.locals_length {n: ℕ} : Operations F n → ℕ
   | .empty _ => 0
@@ -248,12 +255,14 @@ def assert_zero (e: Expression F) : Circuit F Unit := fun ops =>
 @[simp]
 def lookup (l: Lookup F) : Circuit F Unit := fun ops =>
   (.lookup ops l, ())
+end Circuit
 
+def Environment.extends (env: Environment F) (ops: Operations F n) : Prop :=
+  -- same as `env.extends_vector ops.local_witnesses ops.initial_offset`
+  ∀ i : Fin ops.locals_length, env (ops.initial_offset + i) = ops.local_witnesses.get i ()
+
+namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
-
-def Environment.extends {offset: ℕ} (env: Environment F) (ops: Operations F offset) : Prop :=
-  -- same as `env.extends_from_offset ops.local_witnesses offset`
-  ∀ i : Fin ops.locals_length, env (offset + i) = ops.local_witnesses.get i ()
 
 @[simp]
 def constraints_hold_from_list (env: Environment F) : List (Operation F) → Prop
@@ -422,7 +431,7 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     ∀ offset : ℕ, ∀ env, ∀ b_var : β.var,
     Environment.extends env (main b_var |>.from offset) →
     -- for all inputs that satisfy the assumptions AND the spec
-    ∀ b : β.value, ∀ b_var : β.var, Provable.eval_env env b_var = b →
+    ∀ b : β.value, Provable.eval_env env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
     constraints_hold_completeness env (main b_var) offset

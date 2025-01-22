@@ -13,7 +13,7 @@ def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation 
     | Operation.Lookup l => PreOperation.Lookup l :: to_flat_operations ops
     | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
-open Circuit (constraints_hold_from_list constraints_hold_from_context_default)
+open Circuit (constraints_hold_from_list constraints_hold_inductive_completeness)
 
 lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : ℕ → F},
   constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
@@ -76,6 +76,32 @@ theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ 
     use ih h_rest
 
 /--
+The witness length from flat and nested operations is the same
+-/
+lemma flat_witness_length_eq_witness_length {n: ℕ} {ops: Operations F n} :
+  witness_length (to_flat_operations ops.toList) = ops.locals_length := by
+  sorry
+
+lemma flat_witness_length_eq_witness_length' {n: ℕ} {ops: Operations F n} :
+  _root_.Witness F (witness_length (to_flat_operations ops.toList)) = _root_.Witness F ops.locals_length := by
+  sorry
+
+/--
+The witnesses created from flat and nested operations are the same
+-/
+lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
+  cast flat_witness_length_eq_witness_length' (witness (to_flat_operations ops.toList)) = ops.local_witnesses := by
+  sorry
+
+/--
+Helper lemma: If an environment respects local witnesses, then it also does so in the flattened variant.
+-/
+lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
+  env.extends_vector (witness (to_flat_operations ops.toList)) ops.initial_offset →
+  env.extends ops :=
+  sorry
+
+/--
 Main completeness theorem which proves that nested constraints imply flattened constraints
 using the default witness generator.
 
@@ -86,9 +112,10 @@ that imply (or are implied by) those constraints.
 Note: Ideally, `can_replace_subcircuits` would prove both directions, and this would be just a special
 case. See https://github.com/Verified-zkEVM/clean/issues/42
 -/
-theorem can_replace_subcircuits_default {n: ℕ} : ∀ {ctx : Operations F n},
-  constraints_hold_from_context_default ctx →
-  constraints_hold ctx.default_env (to_flat_operations ctx.operations)
+theorem can_replace_subcircuits_default {n: ℕ} :
+  ∀ {ops : Operations F n}, ∀ {env : Environment F}, env.extends ops →
+  constraints_hold_inductive_completeness env ops →
+  constraints_hold env (to_flat_operations ops.toList)
 := by
   intro ctx h
   -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
@@ -120,29 +147,22 @@ end PreOperation
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
 namespace Circuit
--- helper lemma: given a witness, there is some context such that the context produces the witness
-lemma exists_context_of_witness {n: ℕ} (w: Witness F n) : ∃ (ctx: Operations F n), ctx.witnesses = w := by
-  induction' w using Vector.induct_push with n' cs c ih
-  · use Operations.empty
-    rw [Operations.witnesses, Vector.nil]
-  · obtain ⟨ ctx, hc ⟩ := ih
-    use Operations.witness ctx c
-    rw [Operations.witnesses, hc]
+-- helper lemma: `Operations.initial_offset` is well-defined
+lemma initial_offset_eq {α} {n: ℕ} {circuit: Circuit F α} :
+  (circuit.from n).initial_offset = n := by sorry
 
-def formal_circuit_to_subcircuit (in_ctx: OperationsList F)
-  (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F in_ctx.offset :=
-  let n := in_ctx.offset
-  let res := circuit.main b_var in_ctx
+def formal_circuit_to_subcircuit (n: ℕ)
+  (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F n :=
+  let res := circuit.main b_var n
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
-  let out_ctx := res.1.context
-  let ops := out_ctx.operations
+  let ops := res.1.withLength
   let a_var := res.2
 
   have s: SubCircuit F n := by
     open PreOperation in
-    let flat_ops := to_flat_operations out_ctx.operations
+    let flat_ops := to_flat_operations ops.toList
     let soundness := subcircuit_soundness circuit b_var a_var
-    let completeness := subcircuit_completeness (n:=n) circuit b_var
+    let completeness := subcircuit_completeness circuit b_var
     use flat_ops, soundness, completeness
 
     -- `imply_soundness`
@@ -156,45 +176,44 @@ def formal_circuit_to_subcircuit (in_ctx: OperationsList F)
     show circuit.spec b a
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    suffices h: constraints_hold_from_list env ops by
-      exact circuit.soundness in_ctx env b b_var rfl as h
+    suffices h: constraints_hold_from_list env ops.toList by
+      exact circuit.soundness n env b b_var rfl as h
 
     -- so we just need to go from flattened constraints to constraints
-    guard_hyp h_holds : PreOperation.constraints_hold env (to_flat_operations ops)
+    guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
     exact PreOperation.can_replace_subcircuits h_holds
 
     -- `implied_by_completeness`
     -- we are given that the assumptions are true
-    intro in_wit h_completeness
+    intro env h_env h_completeness
 
-    let b := Provable.eval_env in_wit.default_env b_var
-    obtain ⟨ in_ctx', h_in_ctx' ⟩ := exists_context_of_witness in_wit
-    subst h_in_ctx'
+    let b := Provable.eval_env env b_var
     have as : circuit.assumptions b := h_completeness
 
-    let in_wit := in_ctx'.witnesses
-    let out_ctx' := (circuit.main b_var in_ctx').1.context
+    have h_env' : env.extends ops := by
+      guard_hyp h_env : env.extends_vector (PreOperation.witness flat_ops) n
+      have hn : ops.initial_offset = n := by apply initial_offset_eq
+      rw [←hn] at h_env
+      exact PreOperation.env_extends_of_flat h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds := circuit.completeness in_ctx' b b_var rfl as
+    have h_holds := circuit.completeness n env b_var h_env' b rfl as
+
     -- so we just need to go from constraints to flattened constraints
-    have h_holds' : PreOperation.constraints_hold out_ctx'.default_env (to_flat_operations out_ctx'.operations)
-      := can_replace_subcircuits_default h_holds
-    show PreOperation.constraints_hold (in_wit.extend flat_ops).default_env (to_flat_operations out_ctx.operations)
-    sorry -- TODO
+    exact PreOperation.can_replace_subcircuits_default h_env' h_holds
 
   ⟨ a_var, s ⟩
 
-def formal_assertion_to_subcircuit (ctx: OperationsList F)
-  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F ctx.offset :=
-  let res := circuit.main b_var ctx
-  let ops := res.1.2
+def formal_assertion_to_subcircuit (n: ℕ)
+  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F n :=
+  let res := circuit.main b_var n
+  let ops := res.1.withLength
 
-  have s: SubCircuit F ctx.offset := by
-    let flat_ops := PreOperation.to_flat_operations ops
+  have s: SubCircuit F n := by
+    let flat_ops := PreOperation.to_flat_operations ops.toList
     let soundness := subassertion_soundness circuit b_var
     let completeness := subassertion_completeness circuit b_var
-    use flat_ops, soundness, completenessInductiveOperations
+    use flat_ops, soundness, completeness
 
     -- `imply_soundness`
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
@@ -206,24 +225,31 @@ def formal_assertion_to_subcircuit (ctx: OperationsList F)
     show circuit.spec b
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    suffices h: constraints_hold_from_list env ops by
-      exact circuit.soundness ctx env b b_var rfl as h
+    suffices h: constraints_hold_from_list env ops.toList by
+      exact circuit.soundness n env b b_var rfl as h
 
     -- so we just need to go from flattened constraints to constraints
-    guard_hyp h_holds : PreOperation.constraints_hold env (PreOperation.to_flat_operations ops)
+    guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
     exact PreOperation.can_replace_subcircuits h_holds
 
     -- `implied_by_completeness`
     -- we are given that the assumptions and the spec are true
-    intro h_completeness
-    let b := Provable.eval F b_var
+    intro env h_env h_completeness
+
+    let b := Provable.eval_env env b_var
     have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
+    have h_env' : env.extends ops := by
+      guard_hyp h_env : env.extends_vector (PreOperation.witness flat_ops) n
+      have hn : ops.initial_offset = n := by apply initial_offset_eq
+      rw [←hn] at h_env
+      exact PreOperation.env_extends_of_flat h_env
+
     -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds : constraints_hold_from_list_default ops := circuit.completeness ctx b b_var rfl as.left as.right
+    have h_holds := circuit.completeness n env b_var h_env' b rfl as.left as.right
 
     -- so we just need to go from constraints to flattened constraints
-    exact PreOperation.can_replace_subcircuits_default h_holds
+    exact PreOperation.can_replace_subcircuits_default h_env' h_holds
 
   s
 end Circuit
@@ -231,12 +257,12 @@ end Circuit
 -- run a sub-circuit
 @[simp]
 def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :=
-  fun ctx =>
-    let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx circuit b
-    (Operations.subcircuit ctx.context subcircuit, a)
+  fun ops =>
+    let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
+    (.subcircuit ops subcircuit, a)
 
 @[simp]
 def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit :=
-  fun ctx =>
-    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx circuit b
-    (Operations.subcircuit ctx.context subcircuit, ())
+  fun ops =>
+    let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
+    (.subcircuit ops subcircuit, ())
