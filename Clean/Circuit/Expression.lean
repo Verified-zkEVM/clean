@@ -16,6 +16,9 @@ inductive Expression (F : Type) where
 
 export Expression (var const)
 
+structure Environment (F: Type) where
+  get: ℕ → F
+
 namespace Expression
 variable [Field F]
 
@@ -27,8 +30,8 @@ This is needed when we want to make statements about a circuit in the adversaria
 situation where the prover can assign anything to variables.
 -/
 @[simp]
-def eval (env: ℕ → F) : Expression F → F
-  | var v => env v.index
+def eval (env: Environment F) : Expression F → F
+  | var v => env.get v.index
   | const c => c
   | add x y => eval env x + eval env y
   | mul x y => eval env x * eval env y
@@ -71,13 +74,6 @@ instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
 end Expression
 
-structure Environment (F: Type) where
-  get: ℕ → F
-
 @[reducible]
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
-  coe env x := x.eval env.get
-
-@[reducible]
-instance [Field F] : Coe (Environment F) (ℕ → F) where
-  coe env := env.get
+  coe env x := x.eval env
