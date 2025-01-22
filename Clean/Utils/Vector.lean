@@ -30,12 +30,6 @@ namespace Vector
   def cons (a: α) (v: Vector α n)  : Vector α (n + 1) :=
     ⟨ a :: v.val, by simp [v.prop] ⟩
 
-  theorem canon {n : ℕ}  {v: Vector α n} (l : List α) (hl: l.length = n) : v.val = l → v = ⟨ l, hl ⟩ := by
-    intro hv
-    cases v
-    simp only at hv
-    simp only [hv]
-
   @[simp]
   def map (f: α → β) : Vector α n → Vector β n
     | ⟨ l, h ⟩ => ⟨ l.map f, by rw [List.length_map, h] ⟩
