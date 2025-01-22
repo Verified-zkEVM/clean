@@ -83,15 +83,15 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let ⟨ y0, y1, y2, y3 ⟩ := y
     let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
     let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-    have : x0_var.eval_env env = x0 := by injections
-    have : x1_var.eval_env env = x1 := by injections
-    have : x2_var.eval_env env = x2 := by injections
-    have : x3_var.eval_env env = x3 := by injections
-    have : y0_var.eval_env env = y0 := by injections
-    have : y1_var.eval_env env = y1 := by injections
-    have : y2_var.eval_env env = y2 := by injections
-    have : y3_var.eval_env env = y3 := by injections
-    have : carry_in_var.eval_env env = carry_in := by injection h_inputs
+    have : x0_var.eval env = x0 := by injections
+    have : x1_var.eval env = x1 := by injections
+    have : x2_var.eval env = x2 := by injections
+    have : x3_var.eval env = x3 := by injections
+    have : y0_var.eval env = y0 := by injections
+    have : y1_var.eval env = y1 := by injections
+    have : y2_var.eval env = y2 := by injections
+    have : y3_var.eval env = y3 := by injections
+    have : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify assumptions
     dsimp [assumptions, U32.is_normalized] at as
@@ -111,10 +111,10 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     set c2 := env (i0 + 5)
     set z3 := env (i0 + 6)
     set c3 := env (i0 + 7)
-    rw [‹x0_var.eval_env env = x0›, ‹y0_var.eval_env env = y0›, ‹carry_in_var.eval_env env = carry_in›] at h
-    rw [‹x1_var.eval_env env = x1›, ‹y1_var.eval_env env = y1›] at h
-    rw [‹x2_var.eval_env env = x2›, ‹y2_var.eval_env env = y2›] at h
-    rw [‹x3_var.eval_env env = x3›, ‹y3_var.eval_env env = y3›] at h
+    rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
+    rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›] at h
+    rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
+    rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at h
     rw [ByteTable.equiv z0, ByteTable.equiv z1, ByteTable.equiv z2, ByteTable.equiv z3] at h
     simp only [true_implies] at h
     have ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h

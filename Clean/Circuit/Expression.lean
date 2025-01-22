@@ -27,11 +27,11 @@ This is needed when we want to make statements about a circuit in the adversaria
 situation where the prover can assign anything to variables.
 -/
 @[simp]
-def eval_env (env: ℕ → F) : Expression F → F
+def eval (env: ℕ → F) : Expression F → F
   | var v => env v.index
   | const c => c
-  | add x y => eval_env env x + eval_env env y
-  | mul x y => eval_env env x * eval_env env y
+  | add x y => eval env x + eval env y
+  | mul x y => eval env x * eval env y
 
 def toString [Repr F] : Expression F → String
   | var v => "x" ++ reprStr v.index
@@ -76,7 +76,7 @@ structure Environment (F: Type) where
 
 @[reducible]
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
-  coe env x := x.eval_env env.get
+  coe env x := x.eval env.get
 
 @[reducible]
 instance [Field F] : Coe (Environment F) (ℕ → F) where

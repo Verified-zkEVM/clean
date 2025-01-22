@@ -250,8 +250,8 @@ def formal_circuit_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value := Provable.eval_env env b_var
-    let a : α.value := Provable.eval_env env a_var
+    let b : β.value := Provable.eval env b_var
+    let a : α.value := Provable.eval env a_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b a
 
@@ -267,7 +267,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
     -- we are given that the assumptions are true
     intro env h_env h_completeness
 
-    let b := Provable.eval_env env b_var
+    let b := Provable.eval env b_var
     have as : circuit.assumptions b := h_completeness
 
     have h_env' : env.extends ops := by
@@ -301,7 +301,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value := Provable.eval_env env b_var
+    let b : β.value := Provable.eval env b_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b
 
@@ -317,7 +317,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     -- we are given that the assumptions and the spec are true
     intro env h_env h_completeness
 
-    let b := Provable.eval_env env b_var
+    let b := Provable.eval env b_var
     have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
     have h_env' : env.extends ops := by

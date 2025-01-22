@@ -56,8 +56,8 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     intro h_holds z
 
     -- characterize inputs
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`

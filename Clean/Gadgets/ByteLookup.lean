@@ -41,7 +41,7 @@ def byte_lookup (x: Expression (F p)) := lookup {
   entry := vec [x]
   -- to make this work, we need to pass an `eval` function to the callback!!
   index := fun env =>
-    let x := x.eval_env env |>.val
+    let x := x.eval env |>.val
     if h : (x < 256)
     then ⟨x, h⟩
     else ⟨0, by show 0 < 256; norm_num⟩

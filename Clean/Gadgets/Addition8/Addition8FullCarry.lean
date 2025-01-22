@@ -93,9 +93,9 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro h_holds outputs
     -- characterize inputs
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval_env env = carry_in := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
+    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify constraints hypothesis
     dsimp at h_holds
@@ -134,9 +134,9 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rintro as
 
     -- characterize inputs
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval_env env = carry_in := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
+    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify assumptions
     dsimp [assumptions] at as

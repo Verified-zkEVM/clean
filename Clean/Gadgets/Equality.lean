@@ -53,8 +53,8 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     let ⟨x_var, y_var⟩ := vars
 
     dsimp at h_holds
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
     rw [hx, hy] at h_holds
 
     dsimp [spec]
@@ -69,8 +69,8 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     let ⟨x_var, y_var⟩ := inputs_var
 
     -- characterize inputs
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
 
     simp [spec]
     rw [hx, hy, spec]
