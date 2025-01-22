@@ -190,7 +190,7 @@ def formal_assertion_to_subcircuit (ctx: OperationsList F)
   let res := circuit.main b_var ctx
   let ops := res.1.2
 
-  have s: SubCircuit F := by
+  have s: SubCircuit F ctx.offset := by
     let flat_ops := PreOperation.to_flat_operations ops
     let soundness := subassertion_soundness circuit b_var
     let completeness := subassertion_completeness circuit b_var

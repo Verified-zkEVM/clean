@@ -30,7 +30,6 @@ inductive PreOperation (F : Type) where
   | Witness : (compute : Unit → F) → PreOperation F
   | Assert : Expression F → PreOperation F
   | Lookup : Lookup F → PreOperation F
-
 namespace PreOperation
 def toString [Repr F] : PreOperation F → String
   | Witness _v => "Witness"
@@ -67,7 +66,7 @@ def witness : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length
     match op with
     | Witness compute =>
       ⟨ compute :: w, by simp [h] ⟩
-    | Assert _ | Lookup _ | Assign _ =>
+    | Assert _ | Lookup _ =>
       ⟨ w, by simp_all only [witness_length]⟩
 end PreOperation
 
@@ -100,7 +99,6 @@ inductive Operations (F : Type) [Field F] : (n: ℕ) → Type where
   | witness : {n: ℕ} → Operations F n → (compute : Unit → F) → Operations F (n + 1)
   | assert : {n: ℕ} → Operations F n → Expression F → Operations F n
   | lookup : {n: ℕ} → Operations F n → Lookup F → Operations F n
-  | assign : {n: ℕ} → Operations F n → Cell F × Variable F → Operations F n
   | subcircuit : {n: ℕ} → Operations F n → (s: SubCircuit F n) → Operations F (n + s.witness_length)
 
 inductive Operation (F : Type) [Field F] where
@@ -108,7 +106,6 @@ inductive Operation (F : Type) [Field F] where
   | Assert : Expression F → Operation F
   | Lookup : Lookup F → Operation F
   | SubCircuit : {n : ℕ} → SubCircuit F n → Operation F
-
 namespace Operation
 def added_witness : Operation F → ℕ
   | Witness _ => 1
@@ -136,7 +133,6 @@ def Operations.operations {n: ℕ} : Operations F n → List (Operation F)
   | .witness ctx c => operations ctx ++ [.Witness c]
   | .assert ctx e => operations ctx ++ [.Assert e]
   | .lookup ctx l => operations ctx ++ [.Lookup l]
-  | .assign ctx c => operations ctx ++ [.Assign c]
   | .subcircuit ctx s => operations ctx ++ [.SubCircuit s]
 
 def Operations.witnesses {n: ℕ} : Operations F n → Witness F n
@@ -144,7 +140,6 @@ def Operations.witnesses {n: ℕ} : Operations F n → Witness F n
   | .witness ctx c => (witnesses ctx).push c
   | .assert ctx _ => witnesses ctx
   | .lookup ctx _ => witnesses ctx
-  | .assign ctx _ => witnesses ctx
   | .subcircuit ctx s => (witnesses ctx).extend s.ops
 
 def Operations.default_env {n: ℕ} (ctx: Operations F n) : ℕ → F :=
@@ -257,7 +252,6 @@ def constraints_hold_from_context {n : ℕ} (ctx: Operations F n) (env : ℕ →
     match ctx with
     | .empty => new_constraint
     | _ => constraints_hold_from_context ctx env ∧ new_constraint
-  | .assign ctx _ => constraints_hold_from_context ctx env
   | .subcircuit ctx s =>
     let wit := ctx.witnesses
     let new_constraint := PreOperation.constraints_hold (wit.extend s.ops).default_env s.ops
@@ -285,7 +279,6 @@ def constraints_hold_from_context_default {n : ℕ} : Operations F n → Prop
     match ctx with
     | .empty => new_constraint
     | _ => constraints_hold_from_context_default ctx ∧ new_constraint
-  | .assign ctx _ => constraints_hold_from_context_default ctx
   | .subcircuit ctx s =>
     let new_constraint := s.completeness ctx.witnesses
     match ctx with
