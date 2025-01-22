@@ -62,10 +62,11 @@ It thereby justifies relying on the nested version `Circuit.constraints_hold_fro
 where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
 -/
-theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ → F},
-  constraints_hold env (to_flat_operations ops) → constraints_hold_from_list env ops
+theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : ℕ → F},
+  constraints_hold env (to_flat_operations ops.toList) → constraints_hold_from_list env ops.toList
 := by
   intro ops env h
+  generalize ops.toList = ops at *
   -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
   -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
   induction ops using to_flat_operations.induct with
@@ -85,6 +86,29 @@ theorem can_replace_subcircuits : ∀ {ops: List (Operation F)}, ∀ {env : ℕ 
     <;> dsimp only [constraints_hold_from_list]
     <;> use (circuit.imply_soundness env) h_subcircuit
     use ih h_rest
+
+/--
+Same as the above, but for the inductive version and in the other direction
+-/
+-- TODO unify these, clearly all three statements are equivalent
+theorem can_replace_subcircuits_inductive {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : Environment F},
+  constraints_hold_inductive env ops → constraints_hold env (to_flat_operations ops.toList)
+:= by
+  intro ops env h
+  rw [←to_flat_operations_eq ops]
+  induction ops with
+  | empty => trivial
+  -- we can handle all non-empty cases except `SubCircuit` at once
+  | witness ops _ ih | assert ops _ ih | lookup ops _ ih =>
+    dsimp only [to_flat_operations_inductive]
+    generalize to_flat_operations_inductive ops = flatops at *
+    apply constraints_hold_append.mpr
+    simp_all only [true_implies, constraints_hold, constraints_hold_inductive, and_self]
+  | subcircuit ops circuit ih =>
+    dsimp only [to_flat_operations_inductive]
+    apply constraints_hold_append.mpr
+    dsimp only [constraints_hold_inductive] at h
+    exact ⟨ ih h.left, h.right ⟩
 
 /--
 The witness length from flat and nested operations is the same
@@ -197,26 +221,7 @@ theorem can_replace_subcircuits_default {n: ℕ} :
   constraints_hold env (to_flat_operations ops.toList)
 := by
   intro ops env h_env h
-  rw [←to_flat_operations_eq ops]
-  replace h : constraints_hold_inductive env ops := plain_of_completeness h_env h
-  induction ops with
-  | empty => trivial
-  -- we can handle all non-empty cases except `SubCircuit` at once
-  | witness ops _ ih | assert ops _ ih | lookup ops _ ih =>
-    dsimp only [to_flat_operations_inductive]
-    generalize to_flat_operations_inductive ops = flatops at *
-    apply constraints_hold_append.mpr
-    try replace h_env := env_extends_witness h_env
-    try replace h_env := env_extends_assert h_env
-    try replace h_env := env_extends_lookup h_env
-    specialize ih h_env
-    simp_all only [true_implies, constraints_hold, constraints_hold_inductive, and_self]
-  | subcircuit ops circuit ih =>
-    dsimp only [to_flat_operations_inductive]
-    apply constraints_hold_append.mpr
-    specialize ih (env_extends_subcircuit h_env)
-    dsimp only [constraints_hold_inductive] at h
-    exact ⟨ ih h.left, h.right ⟩
+  exact can_replace_subcircuits_inductive (plain_of_completeness h_env h)
 end PreOperation
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
