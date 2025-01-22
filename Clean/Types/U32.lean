@@ -1,4 +1,4 @@
-import Clean.GadgetsNew.ByteLookup
+import Clean.Gadgets.ByteLookup
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -48,7 +48,7 @@ def value (x: U32 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3
 
 /--
-Return the value of a 32-bit unsigned integer as a field
+Return the value of a 32-bit unsigned integer as a field element.
 -/
 def value_field (x: U32 (F p)) : F p :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3
@@ -99,7 +99,7 @@ expected context:
 - the equation to prove as the goal
 - size assumptions on variables and a sufficient `p > ...` instance
 
-if no sufficient inequalities are in the context, then the tactic will leave an equation of the form `expr : Nat < p` unsolved
+if no sufficient inequalities are in the context, then the tactic will leave an equation of the form `expr : Nat < p` unsolved.
 
 note: this version is optimized for uint32 arithmetic:
 - specifically handles field constants 256, 256^2, 256^3, 256^4 = 2^32

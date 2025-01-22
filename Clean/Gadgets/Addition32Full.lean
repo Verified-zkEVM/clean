@@ -1,7 +1,7 @@
-import Clean.GadgetsNew.Add8.Addition8FullCarry
+import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
 
-namespace Addition32Full
+namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2*2^32)]
 
@@ -50,7 +50,7 @@ instance : ProvableType (F p) (Outputs p) where
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
-open Add8FullCarry (add8_full_carry)
+open Gadgets.Addition8FullCarry (add8_full_carry)
 
 def add32_full (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
@@ -230,4 +230,4 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness x3_byte y3_byte c2_bool
 
     exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
-end Addition32Full
+end Gadgets.Addition32Full

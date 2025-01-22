@@ -19,16 +19,6 @@ structure Lookup (F : Type) where
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
-inductive RowIndex
-  | Current
-  | Next
-deriving Repr
-
-structure Cell (F : Type) where
-  row: RowIndex
-  column: ℕ -- index of the column
-deriving Repr
-
 variable {α : Type} [Field F]
 
 def Witness (F: Type) [Field F] (n: ℕ) := Vector (Unit → F) n
@@ -40,13 +30,12 @@ inductive PreOperation (F : Type) where
   | Witness : (compute : Unit → F) → PreOperation F
   | Assert : Expression F → PreOperation F
   | Lookup : Lookup F → PreOperation F
-  | Assign : Cell F × Variable F → PreOperation F
+
 namespace PreOperation
 def toString [Repr F] : PreOperation F → String
   | Witness _v => "Witness"
   | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | Lookup l => reprStr l
-  | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
 
 instance [Repr F] : Repr (PreOperation F) where
   reprPrec op _ := toString op
@@ -118,7 +107,6 @@ inductive Operation (F : Type) [Field F] where
   | Witness : (compute : Unit → F) → Operation F
   | Assert : Expression F → Operation F
   | Lookup : Lookup F → Operation F
-  | Assign : Cell F × Variable F → Operation F
   | SubCircuit : {n : ℕ} → SubCircuit F n → Operation F
 
 namespace Operation
@@ -140,7 +128,6 @@ instance [Repr F] : ToString (Operation F) where
     | Witness _v => "Witness"
     | Assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | Lookup l => reprStr l
-    | Assign (c, v) => "(Assign " ++ reprStr c ++ ", " ++ reprStr v ++ ")"
     | SubCircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 

@@ -1,6 +1,6 @@
 import Clean.Utils.Field
 
-namespace Add8Theorems
+namespace Gadgets.Addition8.Theorems
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -242,4 +242,4 @@ theorem completeness_bool [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
       assumption
     · apply ZMod.val_injective
 
-end Add8Theorems
+end Gadgets.Addition8.Theorems

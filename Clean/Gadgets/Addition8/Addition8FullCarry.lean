@@ -1,9 +1,9 @@
 import Clean.Circuit.SubCircuit
-import Clean.GadgetsNew.ByteLookup
-import Clean.GadgetsNew.Boolean
-import Clean.GadgetsNew.Add8.Theorems
+import Clean.Gadgets.ByteLookup
+import Clean.Gadgets.Boolean
+import Clean.Gadgets.Addition8.Theorems
 
-namespace Add8FullCarry
+namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [p_neq_zero: Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -126,7 +126,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have h_byte': z.val < 256 := ByteTable.soundness z h_byte
 
     have ⟨as_x, as_y, as_carry_in⟩ := as
-    apply Add8Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry h_add
+    apply Gadgets.Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry h_add
 
   completeness := by
    -- introductions
@@ -174,13 +174,13 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
     have completeness2 : goal_bool := by
-      apply Add8Theorems.completeness_bool
+      apply Gadgets.Addition8.Theorems.completeness_bool
       repeat assumption
 
     have completeness3 : goal_add := by
-      apply Add8Theorems.completeness_add
+      apply Gadgets.Addition8.Theorems.completeness_add
       repeat assumption
 
     exact ⟨completeness1, completeness2, completeness3⟩
 
-end Add8FullCarry
+end Gadgets.Addition8FullCarry
