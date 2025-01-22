@@ -141,9 +141,44 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   rw [h]
   simp [List.getElem_append]
 
+lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.locals_length = n := by
+  sorry
+
+lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
+  env.extends (ops.subcircuit c) → env.extends_vector (witness c.ops) n
+:= by
+  intro h i
+  simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  unfold SubCircuit.witness_length at h
+  have : ops.locals_length + i < ops.locals_length + witness_length c.ops := by linarith [i.is_lt]
+  specialize h ⟨ ops.locals_length + i, this ⟩
+  simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
+  rw [←add_assoc, total_length_eq] at h
+  rw [h]
+  simp [List.getElem_append, Operations.local_witnesses, SubCircuit.witness]
+  -- definitely true! TODO finish
+  sorry
+
 lemma plain_of_completeness  {n: ℕ} {ops : Operations F n} {env} : env.extends ops →
   constraints_hold_inductive_completeness env ops → constraints_hold_inductive env ops := by
-  sorry
+  intro h_env h
+  induction ops with
+  | empty => trivial
+  | witness ops c ih | assert ops c ih | lookup ops c ih =>
+    try replace h_env := env_extends_witness h_env
+    try replace h_env := env_extends_assert h_env
+    try replace h_env := env_extends_lookup h_env
+    specialize ih h_env
+    cases ops <;> simp_all [constraints_hold_inductive_completeness, constraints_hold_inductive]
+  | subcircuit ops circuit ih =>
+    specialize ih (env_extends_subcircuit h_env)
+    dsimp only [constraints_hold_inductive_completeness] at h
+    dsimp only [constraints_hold_inductive]
+    split at h
+    · use trivial
+      exact circuit.implied_by_completeness env (env_extends_subcircuit_inner h_env) h
+    · use ih h.left
+      exact circuit.implied_by_completeness env (env_extends_subcircuit_inner h_env) h.right
 
 /--
 Main completeness theorem which proves that nested constraints imply flattened constraints
@@ -175,13 +210,12 @@ theorem can_replace_subcircuits_default {n: ℕ} :
     try replace h_env := env_extends_assert h_env
     try replace h_env := env_extends_lookup h_env
     specialize ih h_env
-    cases ops <;> simp_all only [constraints_hold, constraints_hold_inductive, true_implies, and_self]
+    simp_all only [true_implies, constraints_hold, constraints_hold_inductive, and_self]
   | subcircuit ops circuit ih =>
     dsimp only [to_flat_operations_inductive]
     apply constraints_hold_append.mpr
     specialize ih (env_extends_subcircuit h_env)
     dsimp only [constraints_hold_inductive] at h
-    split at h; trivial
     exact ⟨ ih h.left, h.right ⟩
 end PreOperation
 

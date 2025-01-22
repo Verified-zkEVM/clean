@@ -284,16 +284,11 @@ def constraints_hold_from_list (env: Environment F) : List (Operation F) → Pro
 def constraints_hold_inductive {n : ℕ} (env : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops compute => constraints_hold_inductive env ops
-  | .assert ops e =>
-    let constraint := e.eval_env env = 0
-    -- avoid a leading `True ∧` if ops is empty
-    if let .empty m := ops then constraint else constraints_hold_inductive env ops ∧ constraint
+  | .assert ops e => constraints_hold_inductive env ops ∧ e.eval_env env = 0
   | .lookup ops { table, entry, index := _ } =>
-    let constraint := table.contains (entry.map (fun e => e.eval_env env))
-    if let .empty m := ops then constraint else constraints_hold_inductive env ops ∧ constraint
+    constraints_hold_inductive env ops ∧ table.contains (entry.map (fun e => e.eval_env env))
   | .subcircuit ops s =>
-    let constraint := PreOperation.constraints_hold env s.ops
-    if let .empty m := ops then constraint else constraints_hold_inductive env ops ∧ constraint
+    constraints_hold_inductive env ops ∧ PreOperation.constraints_hold env s.ops
 
 -- TODO should this use the inductive or the list version?
 @[reducible, simp]
