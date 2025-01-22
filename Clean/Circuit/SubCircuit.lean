@@ -26,7 +26,7 @@ def to_flat_operations_eq {n: ℕ} (ops: Operations F n) :
 
 open Circuit (constraints_hold_from_list constraints_hold_inductive_completeness constraints_hold_inductive)
 
-lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : ℕ → F},
+lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : Environment F},
   constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
   intro op ops env
   match ops with
@@ -38,7 +38,7 @@ lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOper
       split at h
       <;> simp_all only [constraints_hold, and_self])
 
-lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : ℕ → F},
+lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : Environment F},
   constraints_hold env (a ++ b) ↔ constraints_hold env a ∧ constraints_hold env b := by
   intro a b env
   induction a with
@@ -62,7 +62,7 @@ It thereby justifies relying on the nested version `Circuit.constraints_hold_fro
 where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
 -/
-theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : ℕ → F},
+theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : Environment F},
   constraints_hold env (to_flat_operations ops.toList) → constraints_hold_from_list env ops.toList
 := by
   intro ops env h

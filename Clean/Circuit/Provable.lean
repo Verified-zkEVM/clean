@@ -34,10 +34,10 @@ namespace Provable
 variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
 
 @[simp]
-def eval_env (env: ℕ → F) (x: α.var) : α.value :=
+def eval_env (eval: Environment F) (x: α.var) : α.value :=
   let n := ProvableType.size F α
   let vars : Vector (Expression F) n := ProvableType.to_vars x
-  let values := vars.map (fun v => v.eval_env env)
+  let values := vars.map eval
   ProvableType.from_values values
 
 def const (F: Type) [ProvableType F α] (x: α.value) : α.var :=

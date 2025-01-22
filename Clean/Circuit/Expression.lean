@@ -70,3 +70,14 @@ instance : Coe (Variable F) (Expression F) where
 instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
 end Expression
+
+structure Environment (F: Type) where
+  get: ℕ → F
+
+@[reducible]
+instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+  coe env x := x.eval_env env.get
+
+@[reducible]
+instance [Field F] : Coe (Environment F) (ℕ → F) where
+  coe env := env.get

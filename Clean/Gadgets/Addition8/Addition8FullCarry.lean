@@ -8,6 +8,7 @@ variable {p : ℕ} [p_neq_zero: Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)
+open FieldUtils (mod_256 floordiv)
 
 structure InputStruct (F : Type) where
   x: F
@@ -57,11 +58,11 @@ def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := 
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (fun () => FieldUtils.mod_256 (x + y + carry_in))
+  let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
   byte_lookup z
 
   -- witness the output carry
-  let carry_out ← witness (fun () => FieldUtils.floordiv (x + y + carry_in) 256)
+  let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
   assertion Boolean.circuit carry_out
 
   assert_zero (x + y + carry_in - z - carry_out * (const 256))
@@ -87,7 +88,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
   spec := spec
   soundness := by
     -- introductions
-    rintro ctx env inputs inputs_var h_inputs as
+    rintro i0 env inputs inputs_var h_inputs as
     let ⟨x, y, carry_in⟩ := inputs
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro h_holds outputs
@@ -96,15 +97,12 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have hy : y_var.eval_env env = y := by injection h_inputs
     have hcarry_in : carry_in_var.eval_env env = carry_in := by injection h_inputs
 
-    let i0 := ctx.offset
-    let i1 := ctx.offset + 1
     -- simplify constraints hypothesis
     dsimp at h_holds
-    let z := env i0
-    set carry_out := env i1
-    rw [←(by rfl : z = env i0)] at h_holds
+    set z := env.get i0
+    set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
-    let ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
+    obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     rw [(by rfl : outputs = ⟨z, carry_out⟩)]
 
