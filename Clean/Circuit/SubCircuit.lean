@@ -87,7 +87,7 @@ that imply (or are implied by) those constraints.
 Note: Ideally, `can_replace_subcircuits` would prove both directions, and this would be just a special
 case. See https://github.com/Verified-zkEVM/clean/issues/42
 -/
-theorem can_replace_subcircuits_default {n: ℕ} : ∀ {ctx : Context F n},
+theorem can_replace_subcircuits_default {n: ℕ} : ∀ {ctx : Operations F n},
   constraints_hold_from_context_default ctx →
   constraints_hold ctx.default_env (to_flat_operations ctx.operations)
 := by
@@ -122,15 +122,15 @@ variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
 namespace Circuit
 -- helper lemma: given a witness, there is some context such that the context produces the witness
-lemma exists_context_of_witness {n: ℕ} (w: Witness F n) : ∃ (ctx: Context F n), ctx.witnesses = w := by
+lemma exists_context_of_witness {n: ℕ} (w: Witness F n) : ∃ (ctx: Operations F n), ctx.witnesses = w := by
   induction' w using Vector.induct_push with n' cs c ih
-  · use Context.empty
-    rw [Context.witnesses, Vector.nil]
+  · use Operations.empty
+    rw [Operations.witnesses, Vector.nil]
   · obtain ⟨ ctx, hc ⟩ := ih
-    use Context.witness ctx c
-    rw [Context.witnesses, hc]
+    use Operations.witness ctx c
+    rw [Operations.witnesses, hc]
 
-def formal_circuit_to_subcircuit (in_ctx: SomeContext F)
+def formal_circuit_to_subcircuit (in_ctx: OperationsList F)
   (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F in_ctx.offset :=
   let n := in_ctx.offset
   let res := circuit.main b_var in_ctx
@@ -186,8 +186,8 @@ def formal_circuit_to_subcircuit (in_ctx: SomeContext F)
 
   ⟨ a_var, s ⟩
 
-def formal_assertion_to_subcircuit (ctx: Context F)
-  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F :=
+def formal_assertion_to_subcircuit (ctx: OperationsList F)
+  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F ctx.offset :=
   let res := circuit.main b_var ctx
   let ops := res.1.2
 
@@ -195,7 +195,7 @@ def formal_assertion_to_subcircuit (ctx: Context F)
     let flat_ops := PreOperation.to_flat_operations ops
     let soundness := subassertion_soundness circuit b_var
     let completeness := subassertion_completeness circuit b_var
-    use flat_ops, soundness, completeness
+    use flat_ops, soundness, completenessInductiveOperations
 
     -- `imply_soundness`
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
@@ -234,11 +234,10 @@ end Circuit
 def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :=
   fun ctx =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx circuit b
-    (Context.subcircuit ctx.context subcircuit, a)
+    (Operations.subcircuit ctx.context subcircuit, a)
 
 @[simp]
-def assertion (circuit: FormalAssertion F β) (b: β.var) := Circuit.as_circuit (F:=F) (
+def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit :=
   fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx circuit b
-    (Operation.SubCircuit subcircuit, ())
-)
+    (Operations.subcircuit ctx.context subcircuit, ())
