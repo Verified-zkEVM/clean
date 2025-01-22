@@ -39,8 +39,9 @@ def ByteTable.equiv (x: F p) : ByteTable.contains (vec [x]) ↔ x.val < 256 :=
 def byte_lookup (x: Expression (F p)) := lookup {
   table := ByteTable
   entry := vec [x]
-  index := fun () =>
-    let x := x.eval.val
+  -- to make this work, we need to pass an `eval` function to the callback!!
+  index := fun env =>
+    let x := x.eval_env env |>.val
     if h : (x < 256)
     then ⟨x, h⟩
     else ⟨0, by show 0 < 256; norm_num⟩

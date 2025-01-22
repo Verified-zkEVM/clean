@@ -3,6 +3,8 @@ import Clean.Circuit.Provable
 
 variable {F: Type}
 
+def Environment (F: Type) := ℕ → F
+
 structure Table (F : Type) where
   name: String
   length: ℕ
@@ -14,25 +16,20 @@ def Table.contains (table: Table F) row := ∃ i, row = table.row i
 structure Lookup (F : Type) where
   table: Table F
   entry: Vector (Expression F) table.arity
-  index: Unit → Fin table.length -- index of the entry
+  index: Environment F → Fin table.length -- index of the entry
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
 variable {α : Type} [Field F] {n : ℕ}
 
-def Environment (F: Type) := ℕ → F
-
-def Witness (F: Type) (n: ℕ) := Vector (Unit → F) n
-
-def Witness.default_env (w: Witness F n) : Environment F := fun i =>
-  if h : i < n then w.val.get ⟨ i, by rwa [w.prop] ⟩ () else 0
+def Witness (F: Type) (n: ℕ) := Vector (Environment F → F) n
 
 def Environment.extends_vector (env: Environment F) (wit: Witness F n) (offset: ℕ) : Prop :=
-  ∀ i : Fin n, env (offset + i) = wit.get i ()
+  ∀ i : Fin n, env (offset + i) = wit.get i env
 
 inductive PreOperation (F : Type) where
-  | Witness : (compute : Unit → F) → PreOperation F
+  | Witness : (compute : Environment F → F) → PreOperation F
   | Assert : Expression F → PreOperation F
   | Lookup : Lookup F → PreOperation F
 namespace PreOperation
@@ -64,7 +61,7 @@ def witness_length : List (PreOperation F) → ℕ
   | _ :: ops => witness_length ops
 
 @[simp]
-def witness : (l: List (PreOperation F)) → Vector (Unit → F) (witness_length l)
+def witness : (l: List (PreOperation F)) → _root_.Witness F (witness_length l)
   | [] => ⟨ [], rfl ⟩
   | op :: ops =>
     let ⟨ w, h ⟩ := witness ops
@@ -105,7 +102,7 @@ We use a custom inductive type, rather than a list, so that we can require the o
 -/
 inductive Operations (F : Type) [Field F] : ℕ → Type where
   | empty : (n : ℕ) → Operations F n
-  | witness : {n : ℕ} → Operations F n → (compute : Unit → F) → Operations F (n + 1)
+  | witness : {n : ℕ} → Operations F n → (compute : Environment F → F) → Operations F (n + 1)
   | assert : {n : ℕ} → Operations F n → Expression F → Operations F n
   | lookup : {n : ℕ} → Operations F n → Lookup F → Operations F n
   | subcircuit : {n : ℕ} → Operations F n → (s : SubCircuit F n) → Operations F (n + s.witness_length)
@@ -117,7 +114,7 @@ inductive Operations (F : Type) [Field F] : ℕ → Type where
 Singleton `Operations`, that can be collected in a plain list, for easier processing.
 -/
 inductive Operation (F : Type) [Field F] where
-  | Witness : (compute : Unit → F) → Operation F
+  | Witness : (compute : Environment F → F) → Operation F
   | Assert : Expression F → Operation F
   | Lookup : Lookup F → Operation F
   | SubCircuit : {n : ℕ} → SubCircuit F n → Operation F
@@ -177,7 +174,7 @@ namespace OperationsList
 def from_offset (offset: ℕ) : OperationsList F := ⟨ offset, .empty offset ⟩
 
 -- constructors matching `Operations`
-def witness (ops: OperationsList F) (compute : Unit → F) : OperationsList F :=
+def witness (ops: OperationsList F) (compute : Environment F → F) : OperationsList F :=
   ⟨ ops.offset + 1, .witness ops.withLength compute ⟩
 def assert (ops: OperationsList F) (e: Expression F) : OperationsList F :=
   ⟨ ops.offset, .assert ops.withLength e ⟩
@@ -237,12 +234,12 @@ instance : Coe ℕ (OperationsList F) where
 
 -- create a new variable
 @[simp]
-def witness_var (compute : Unit → F) : Circuit F (Variable F) := fun ops =>
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) := fun ops =>
   let var: Variable F := ⟨ ops.offset ⟩
   (.witness ops compute, var)
 
 @[simp]
-def witness (compute : Unit → F) := do
+def witness (compute : Environment F → F) := do
   let var ← witness_var compute
   return Expression.var var
 
@@ -259,7 +256,7 @@ end Circuit
 
 def Environment.extends (env: Environment F) (ops: Operations F n) : Prop :=
   -- same as `env.extends_vector ops.local_witnesses ops.initial_offset`
-  ∀ i : Fin ops.locals_length, env (ops.initial_offset + i) = ops.local_witnesses.get i ()
+  ∀ i : Fin ops.locals_length, env (ops.initial_offset + i) = ops.local_witnesses.get i env
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit

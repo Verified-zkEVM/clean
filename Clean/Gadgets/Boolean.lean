@@ -13,7 +13,7 @@ inductive Boolean (F: Type) where
 namespace Boolean
 def var (b: Boolean (F p)) := Expression.var b.1
 
-def witness (compute : Unit → F p) := do
+def witness (compute : Environment (F p) → F p) := do
   let x ← witness_var compute
   assert_bool x
   return Boolean.mk x
