@@ -58,8 +58,8 @@ def circuit : FormalAssertion (F p) (field (F p)) where
     apply (equiv x).mp h_holds
 
   completeness := by
-    intro ctx x x_var hx _ spec
-    change x_var.eval = x at hx
+    intro n env x_var _ x hx _ spec
+    change x_var.eval_env env = x at hx
     dsimp
     rw [hx]
     apply (equiv x).mpr spec
