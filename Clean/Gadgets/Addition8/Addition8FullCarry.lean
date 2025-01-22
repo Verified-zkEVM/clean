@@ -146,9 +146,19 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rw [hx, hy, hcarry_in]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
+    let hz' : env.get i0 = z := rfl
+    let hcout' : env.get (i0 + 1) = carry_out := rfl
 
-    have hz : z = mod_256 (x + y + carry_in) := by sorry
-    have hcout : carry_out = floordiv (x + y + carry_in) 256 := by sorry
+    -- simplify local witnesses
+    have hz : z = mod_256 (x + y + carry_in) := by
+      have henv0 := henv (0 : Fin 2)
+      dsimp at henv0
+      rwa [hx, hy, hcarry_in, hz'] at henv0
+
+    have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
+      have henv1 := henv (1 : Fin 2)
+      dsimp at henv1
+      rwa [hx, hy, hcarry_in, hcout'] at henv1
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
@@ -173,12 +183,12 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
     have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
-      rw [hcout]
+      rw [hcarry_out]
       apply Gadgets.Addition8.Theorems.completeness_bool
       repeat assumption
 
     have completeness3 : x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0 := by
-      rw [hz, hcout]
+      rw [hz, hcarry_out]
       apply Gadgets.Addition8.Theorems.completeness_add
       repeat assumption
 

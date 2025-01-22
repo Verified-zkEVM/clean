@@ -52,11 +52,11 @@ namespace Vector
     let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
 
-
   @[simp]
   def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
     ⟨ v.val ++ w.val, by simp [v.prop, w.prop] ⟩
 
+  @[simp]
   def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
     ⟨ v.val ++ [a], by simp [v.prop] ⟩
 

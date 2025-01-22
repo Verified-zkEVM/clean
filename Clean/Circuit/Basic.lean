@@ -89,7 +89,10 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   implied_by_completeness : ∀ env, env.extends_vector (PreOperation.witness ops) offset →
     completeness env → PreOperation.constraints_hold env ops
 
+@[reducible, simp]
 def SubCircuit.witness_length (sc: SubCircuit F n) := PreOperation.witness_length sc.ops
+
+@[reducible]
 def SubCircuit.witness (sc: SubCircuit F n) := PreOperation.witness sc.ops
 
 /--
@@ -138,6 +141,7 @@ def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
   | .lookup ops l => toList ops ++ [.Lookup l]
   | .subcircuit ops s => toList ops ++ [.SubCircuit s]
 
+@[reducible, simp]
 def Operations.initial_offset {n: ℕ} : Operations F n → ℕ
   | .empty n => n
   | .witness ops _ => Operations.initial_offset ops
@@ -145,6 +149,7 @@ def Operations.initial_offset {n: ℕ} : Operations F n → ℕ
   | .lookup ops _ => Operations.initial_offset ops
   | .subcircuit ops s => Operations.initial_offset ops
 
+@[simp]
 def Operations.locals_length {n: ℕ} : Operations F n → ℕ
   | .empty _ => 0
   | .witness ops _ => Operations.locals_length ops + 1
@@ -152,6 +157,7 @@ def Operations.locals_length {n: ℕ} : Operations F n → ℕ
   | .lookup ops _ => Operations.locals_length ops
   | .subcircuit ops s => Operations.locals_length ops + s.witness_length
 
+@[simp]
 def Operations.local_witnesses {n: ℕ} : (ops: Operations F n) → Witness F ops.locals_length
   | .empty _ => ⟨ [], rfl ⟩
   | .witness ops c => (local_witnesses ops).push c
@@ -203,7 +209,7 @@ def Circuit (F : Type) [Field F] (α : Type) :=
 def Circuit.final_offset_from (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   (circuit (.from_offset offset)).1.offset
 
-@[reducible]
+@[reducible, simp]
 def Circuit.from (circuit: Circuit F α) (offset : ℕ) : Operations F (circuit.final_offset_from offset) :=
   (circuit (.from_offset offset)).1.withLength
 
@@ -256,6 +262,7 @@ def lookup (l: Lookup F) : Circuit F Unit := fun ops =>
   (.lookup ops l, ())
 end Circuit
 
+@[simp]
 def Environment.extends (env: Environment F) (ops: Operations F n) : Prop :=
   -- same as `env.extends_vector ops.local_witnesses ops.initial_offset`
   ∀ i : Fin ops.locals_length, env.get (ops.initial_offset + i) = ops.local_witnesses.get i env
