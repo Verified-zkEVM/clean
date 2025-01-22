@@ -287,19 +287,13 @@ def constraints_hold_inductive {n : ℕ} (env : Environment F) : Operations F n 
   | .assert ops e =>
     let constraint := e.eval_env env = 0
     -- avoid a leading `True ∧` if ops is empty
-    match ops with
-    | .empty _ => constraint
-    | _ => constraints_hold_inductive env ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold_inductive env ops ∧ constraint
   | .lookup ops { table, entry, index := _ } =>
     let constraint := table.contains (entry.map (fun e => e.eval_env env))
-    match ops with
-    | .empty _ => constraint
-    | _ => constraints_hold_inductive env ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold_inductive env ops ∧ constraint
   | .subcircuit ops s =>
     let constraint := PreOperation.constraints_hold env s.ops
-    match ops with
-    | .empty _ => constraint
-    | _ => constraints_hold_inductive env ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold_inductive env ops ∧ constraint
 
 -- TODO should this use the inductive or the list version?
 @[reducible, simp]
@@ -312,23 +306,17 @@ Version of `constraints_hold_inductive` that replaces the statement of subcircui
 @[simp]
 def constraints_hold_inductive_completeness {n : ℕ} (env : Environment F) : Operations F n → Prop
   | .empty _ => True
-  | .witness ops compute => constraints_hold_inductive env ops
+  | .witness ops compute => constraints_hold_inductive_completeness env ops
   | .assert ops e =>
     let constraint := e.eval_env env = 0
     -- avoid a leading `True ∧` if ops is empty
-    match ops with
-    | .empty _ => constraint
-    | _ => constraints_hold_inductive env ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold_inductive_completeness env ops ∧ constraint
   | .lookup ops { table, entry, index := _ } =>
     let constraint := table.contains (entry.map (fun e => e.eval_env env))
-    match ops with
-    | .empty _ => constraint
-    | _ => constraints_hold_inductive env ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold_inductive_completeness env ops ∧ constraint
   | .subcircuit ops s =>
     let constraint := s.completeness env
-    match ops with
-    | .empty _ => constraint
-    | _ => constraints_hold_inductive env ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold_inductive_completeness env ops ∧ constraint
 
 def constraints_hold_from_list_completeness (env: Environment F) : List (Operation F) → Prop
   | [] => True

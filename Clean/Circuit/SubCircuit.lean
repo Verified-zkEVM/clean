@@ -4,16 +4,27 @@ variable {F: Type} [Field F]
 
 namespace PreOperation
 
-def to_flat_operations [Field F] (ops: List (Operation F)) : List (PreOperation F) :=
+def to_flat_operations (ops: List (Operation F)) : List (PreOperation F) :=
   match ops with
   | [] => []
   | op :: ops => match op with
-    | Operation.Witness compute => PreOperation.Witness compute :: to_flat_operations ops
-    | Operation.Assert e => PreOperation.Assert e :: to_flat_operations ops
-    | Operation.Lookup l => PreOperation.Lookup l :: to_flat_operations ops
-    | Operation.SubCircuit circuit => circuit.ops ++ to_flat_operations ops
+    | .Witness compute => .Witness compute :: to_flat_operations ops
+    | .Assert e => .Assert e :: to_flat_operations ops
+    | .Lookup l => .Lookup l :: to_flat_operations ops
+    | .SubCircuit circuit => circuit.ops ++ to_flat_operations ops
 
-open Circuit (constraints_hold_from_list constraints_hold_inductive_completeness)
+def to_flat_operations_inductive {n: ℕ} : Operations F n → List (PreOperation F)
+  | .empty _ => []
+  | .witness ops c => to_flat_operations_inductive ops ++ [.Witness c]
+  | .assert ops c => to_flat_operations_inductive ops ++ [.Assert c]
+  | .lookup ops l => to_flat_operations_inductive ops ++ [.Lookup l]
+  | .subcircuit ops circuit => to_flat_operations_inductive ops ++ circuit.ops
+
+def to_flat_operations_eq {n: ℕ} (ops: Operations F n) :
+  to_flat_operations_inductive ops = to_flat_operations ops.toList := by
+  sorry
+
+open Circuit (constraints_hold_from_list constraints_hold_inductive_completeness constraints_hold_inductive)
 
 lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : ℕ → F},
   constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
@@ -101,6 +112,39 @@ lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
   env.extends ops :=
   sorry
 
+lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
+  env.extends (ops.witness c) → env.extends ops
+:= by
+  intro h i
+  simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  specialize h i
+  simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
+  rw [h]
+  simp [List.getElem_append]
+
+lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
+  env.extends (ops.assert c) → env.extends ops := by
+  intro h i; simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses]
+
+lemma env_extends_lookup {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
+  env.extends (ops.lookup c) → env.extends ops := by
+  intro h i; simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses]
+
+lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
+  env.extends (ops.subcircuit c) → env.extends ops
+:= by
+  intro h i
+  simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  have : i < ops.locals_length + c.witness_length := by linarith [i.is_lt]
+  specialize h ⟨ i, this ⟩
+  simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
+  rw [h]
+  simp [List.getElem_append]
+
+lemma plain_of_completeness  {n: ℕ} {ops : Operations F n} {env} : env.extends ops →
+  constraints_hold_inductive_completeness env ops → constraints_hold_inductive env ops := by
+  sorry
+
 /--
 Main completeness theorem which proves that nested constraints imply flattened constraints
 using the default witness generator.
@@ -117,31 +161,28 @@ theorem can_replace_subcircuits_default {n: ℕ} :
   constraints_hold_inductive_completeness env ops →
   constraints_hold env (to_flat_operations ops.toList)
 := by
-  intro ctx h
-  -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
-  -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
-  induction ctx using to_flat_operations.induct with
-  | case1 => tauto
+  intro ops env h_env h
+  rw [←to_flat_operations_eq ops]
+  replace h : constraints_hold_inductive env ops := plain_of_completeness h_env h
+  induction ops with
+  | empty => trivial
   -- we can handle all non-empty cases except `SubCircuit` at once
-  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih =>
-    dsimp only [to_flat_operations]
-    generalize to_flat_operations ops = flatops at *
-    <;> cases flatops
-    <;> dsimp only [constraints_hold]
-    <;> tauto
-    <;> cases ctx
-    <;> dsimp only [constraints_hold_from_list_default] at h
-    <;> tauto
-
-  | case5 ops circuit ih =>
-    dsimp only [to_flat_operations]
+  | witness ops _ ih | assert ops _ ih | lookup ops _ ih =>
+    dsimp only [to_flat_operations_inductive]
+    generalize to_flat_operations_inductive ops = flatops at *
     apply constraints_hold_append.mpr
-    cases ops
-    · dsimp at h
-      have h := circuit.implied_by_completeness h
-      use h; tauto
-    dsimp only [constraints_hold_from_list_default] at h
-    exact ⟨ circuit.implied_by_completeness h.left, ih h.right ⟩
+    try replace h_env := env_extends_witness h_env
+    try replace h_env := env_extends_assert h_env
+    try replace h_env := env_extends_lookup h_env
+    specialize ih h_env
+    cases ops <;> simp_all only [constraints_hold, constraints_hold_inductive, true_implies, and_self]
+  | subcircuit ops circuit ih =>
+    dsimp only [to_flat_operations_inductive]
+    apply constraints_hold_append.mpr
+    specialize ih (env_extends_subcircuit h_env)
+    dsimp only [constraints_hold_inductive] at h
+    split at h; trivial
+    exact ⟨ ih h.left, h.right ⟩
 end PreOperation
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
