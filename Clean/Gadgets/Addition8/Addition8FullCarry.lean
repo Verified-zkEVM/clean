@@ -102,7 +102,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
-    obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
+    obtain ⟨ ⟨ ⟨ _, h_byte⟩, h_bool_carry⟩, h_add ⟩ := h_holds
 
     rw [(by rfl : outputs = ⟨z, carry_out⟩)]
 

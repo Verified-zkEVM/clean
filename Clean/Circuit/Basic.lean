@@ -273,7 +273,7 @@ namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
 
 @[simp]
-def constraints_hold_from_list (eval: Environment F) : List (Operation F) → Prop
+def constraints_hold_from_list.soundness (eval: Environment F) : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
     | .assert e => eval e = 0
@@ -282,46 +282,13 @@ def constraints_hold_from_list (eval: Environment F) : List (Operation F) → Pr
     | .subcircuit { soundness, .. } => soundness eval
     | _ => True
   | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list eval ops
+    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.soundness eval ops
     | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list eval ops
-    | .subcircuit { soundness, .. } => soundness eval ∧ constraints_hold_from_list eval ops
-    | _ => constraints_hold_from_list eval ops
+      table.contains (entry.map eval) ∧ constraints_hold_from_list.soundness eval ops
+    | .subcircuit { soundness, .. } => soundness eval ∧ constraints_hold_from_list.soundness eval ops
+    | _ => constraints_hold_from_list.soundness eval ops
 
-@[simp]
-def constraints_hold_inductive {n : ℕ} (eval : Environment F) : Operations F n → Prop
-  | .empty _ => True
-  | .witness ops compute => constraints_hold_inductive eval ops
-  | .assert ops e => constraints_hold_inductive eval ops ∧ eval e = 0
-  | .lookup ops { table, entry, index := _ } =>
-    constraints_hold_inductive eval ops ∧ table.contains (entry.map eval)
-  | .subcircuit ops s =>
-    constraints_hold_inductive eval ops ∧ PreOperation.constraints_hold eval s.ops
-
--- TODO should this use the inductive or the list version?
-@[reducible, simp]
-def constraints_hold (env: Environment F) (circuit: Circuit F α) (offset: ℕ) : Prop :=
-  constraints_hold_from_list env (circuit.operations offset)
-
-/--
-Version of `constraints_hold_inductive` that replaces the statement of subcircuits with their `completeness`.
--/
-@[simp]
-def constraints_hold_inductive_completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
-  | .empty _ => True
-  | .witness ops compute => constraints_hold_inductive_completeness eval ops
-  | .assert ops e =>
-    let constraint := eval e = 0
-    -- avoid a leading `True ∧` if ops is empty
-    if let .empty m := ops then constraint else constraints_hold_inductive_completeness eval ops ∧ constraint
-  | .lookup ops { table, entry, index := _ } =>
-    let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else constraints_hold_inductive_completeness eval ops ∧ constraint
-  | .subcircuit ops s =>
-    let constraint := s.completeness eval
-    if let .empty m := ops then constraint else constraints_hold_inductive_completeness eval ops ∧ constraint
-
-def constraints_hold_from_list_completeness (eval: Environment F) : List (Operation F) → Prop
+def constraints_hold_from_list.completeness (eval: Environment F) : List (Operation F) → Prop
   | [] => True
   | op :: [] => match op with
     | .assert e => eval e = 0
@@ -330,18 +297,65 @@ def constraints_hold_from_list_completeness (eval: Environment F) : List (Operat
     | .subcircuit { completeness, .. } => completeness eval
     | _ => True
   | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list_completeness eval ops
+    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.completeness eval ops
     | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list_completeness eval ops
-    | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list_completeness eval ops
-    | _ => constraints_hold_from_list_completeness eval ops
+      table.contains (entry.map eval) ∧ constraints_hold_from_list.completeness eval ops
+    | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list.completeness eval ops
+    | _ => constraints_hold_from_list.completeness eval ops
+
+@[simp]
+def constraints_hold_inductive {n : ℕ} (eval : Environment F) : Operations F n → Prop
+  | .empty _ => True
+  | .witness ops compute => constraints_hold_inductive eval ops
+  | .assert ops e => constraints_hold_inductive eval ops ∧ eval e = 0
+  | .lookup ops { table, entry, .. } =>
+    constraints_hold_inductive eval ops ∧ table.contains (entry.map eval)
+  | .subcircuit ops s =>
+    constraints_hold_inductive eval ops ∧ PreOperation.constraints_hold eval s.ops
+
+@[simp]
+def constraints_hold_inductive.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
+  | .empty _ => True
+  | .witness ops compute => constraints_hold_inductive eval ops
+  | .assert ops e =>
+    let constraint := eval e = 0
+    if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
+  | .lookup ops { table, entry, .. } =>
+    let constraint := table.contains (entry.map eval)
+    if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
+  | .subcircuit ops s =>
+    let constraint := s.soundness eval
+    if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
+
+-- TODO should this use the inductive or the list version?
+@[reducible, simp]
+def constraints_hold (env: Environment F) (circuit: Circuit F α) (offset: ℕ) : Prop :=
+  constraints_hold_from_list.soundness env (circuit.operations offset)
+
+/--
+Version of `constraints_hold_inductive` that replaces the statement of subcircuits with their `completeness`.
+-/
+@[simp]
+def constraints_hold_inductive.completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
+  | .empty _ => True
+  | .witness ops compute => constraints_hold_inductive.completeness eval ops
+  | .assert ops e =>
+    let constraint := eval e = 0
+    -- avoid a leading `True ∧` if ops is empty
+    if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
+  | .lookup ops { table, entry, index := _ } =>
+    let constraint := table.contains (entry.map eval)
+    if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
+  | .subcircuit ops s =>
+    let constraint := s.completeness eval
+    if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
 
 /--
 Version of `constraints_hold` suitable for contexts where we prove completeness
 -/
 @[reducible, simp]
 def constraints_hold_completeness (env: Environment F) (circuit: Circuit F α) (offset: ℕ) : Prop :=
-  constraints_hold_inductive_completeness env (circuit.from offset)
+  constraints_hold_inductive.completeness env (circuit.from offset)
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -355,7 +369,7 @@ def Soundness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Provabl
     ∀ b_var : β.var, ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold env (main b_var) offset →
+    constraints_hold_inductive.soundness env (main b_var |>.from offset) →
     -- the spec holds on the input and output
     let a := Provable.eval env (output (main b_var) offset)
     spec b a
@@ -370,7 +384,7 @@ def Completeness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Prov
   ∀ b : β.value, Provable.eval env b_var = b →
   assumptions b →
   -- the constraints hold
-  constraints_hold_inductive_completeness env (main b_var |>.from offset)
+  constraints_hold_inductive.completeness env (main b_var |>.from offset)
 
 structure FormalCircuit (F: Type) (β α: TypePair)
   [Field F] [ProvableType F α] [ProvableType F β]

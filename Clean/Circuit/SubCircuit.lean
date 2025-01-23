@@ -24,7 +24,7 @@ def to_flat_operations_eq {n: ℕ} (ops: Operations F n) :
   to_flat_operations_inductive ops = to_flat_operations ops.toList := by
   sorry
 
-open Circuit (constraints_hold_from_list constraints_hold_inductive_completeness constraints_hold_inductive)
+open Circuit (constraints_hold_from_list.soundness constraints_hold_inductive.completeness constraints_hold_inductive)
 
 lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : Environment F},
   constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
@@ -63,7 +63,7 @@ where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
 -/
 theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : Environment F},
-  constraints_hold env (to_flat_operations ops.toList) → constraints_hold_from_list env ops.toList
+  constraints_hold env (to_flat_operations ops.toList) → constraints_hold_from_list.soundness env ops.toList
 := by
   intro ops env h
   generalize ops.toList = ops at *
@@ -77,38 +77,51 @@ theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env 
     generalize to_flat_operations ops = flatops at h ih
     cases ops
     <;> cases flatops
-    <;> try dsimp only [constraints_hold, constraints_hold_from_list] at h; tauto
+    <;> try dsimp only [constraints_hold, constraints_hold_from_list.soundness] at h; tauto
   | case5 ops _ circuit ih =>
     dsimp only [to_flat_operations] at h
     have h_subcircuit : constraints_hold env circuit.ops := (constraints_hold_append.mp h).left
     have h_rest : constraints_hold env (to_flat_operations ops) := (constraints_hold_append.mp h).right
     cases ops
-    <;> dsimp only [constraints_hold_from_list]
+    <;> dsimp only [constraints_hold_from_list.soundness]
     <;> use (circuit.imply_soundness env) h_subcircuit
     use ih h_rest
 
 /--
-Same as the above, but for the inductive version and in the other direction
+Same as the above, but for the inductive version and in both directions
 -/
--- TODO unify these, clearly all three statements are equivalent
 theorem can_replace_subcircuits_inductive {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : Environment F},
-  constraints_hold_inductive env ops → constraints_hold env (to_flat_operations ops.toList)
+  constraints_hold_inductive env ops ↔ constraints_hold env (to_flat_operations ops.toList)
 := by
-  intro ops env h
+  intro ops env
   rw [←to_flat_operations_eq ops]
   induction ops with
   | empty => trivial
-  -- we can handle all non-empty cases except `SubCircuit` at once
+  -- we can handle all non-empty cases except `subcircuit` at once
   | witness ops _ ih | assert ops _ ih | lookup ops _ ih =>
     dsimp only [to_flat_operations_inductive]
     generalize to_flat_operations_inductive ops = flatops at *
-    apply constraints_hold_append.mpr
-    simp_all only [true_implies, constraints_hold, constraints_hold_inductive, and_self]
+    rw [constraints_hold_append]
+    simp_all only [constraints_hold_inductive, constraints_hold, and_true]
   | subcircuit ops circuit ih =>
     dsimp only [to_flat_operations_inductive]
-    apply constraints_hold_append.mpr
+    rw [constraints_hold_append]
+    dsimp only [constraints_hold_inductive]
+    rw [ih]
+
+theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
+  constraints_hold_inductive env ops → constraints_hold_inductive.soundness env ops := by
+  intro h
+  induction ops with
+  | empty => trivial
+  | witness ops c ih | assert ops c ih | lookup ops c ih =>
+    cases ops <;> simp_all [constraints_hold_inductive.completeness, constraints_hold_inductive]
+  | subcircuit ops circuit ih =>
+    dsimp only [constraints_hold_inductive.soundness]
     dsimp only [constraints_hold_inductive] at h
-    exact ⟨ ih h.left, h.right ⟩
+    split
+    · exact circuit.imply_soundness env h.right
+    · exact ⟨ ih h.left, circuit.imply_soundness env h.right ⟩
 
 /--
 The witness length from flat and nested operations is the same
@@ -183,8 +196,8 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   -- definitely true! TODO finish
   sorry
 
-lemma plain_of_completeness  {n: ℕ} {ops : Operations F n} {env} : env.extends ops →
-  constraints_hold_inductive_completeness env ops → constraints_hold_inductive env ops := by
+theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.extends ops →
+  constraints_hold_inductive.completeness env ops → constraints_hold_inductive env ops := by
   intro h_env h
   induction ops with
   | empty => trivial
@@ -193,10 +206,10 @@ lemma plain_of_completeness  {n: ℕ} {ops : Operations F n} {env} : env.extends
     try replace h_env := env_extends_assert h_env
     try replace h_env := env_extends_lookup h_env
     specialize ih h_env
-    cases ops <;> simp_all [constraints_hold_inductive_completeness, constraints_hold_inductive]
+    cases ops <;> simp_all [constraints_hold_inductive.completeness, constraints_hold_inductive]
   | subcircuit ops circuit ih =>
     specialize ih (env_extends_subcircuit h_env)
-    dsimp only [constraints_hold_inductive_completeness] at h
+    dsimp only [constraints_hold_inductive.completeness] at h
     dsimp only [constraints_hold_inductive]
     split at h
     · use trivial
@@ -217,11 +230,11 @@ case. See https://github.com/Verified-zkEVM/clean/issues/42
 -/
 theorem can_replace_subcircuits_default {n: ℕ} :
   ∀ {ops : Operations F n}, ∀ {env : Environment F}, env.extends ops →
-  constraints_hold_inductive_completeness env ops →
+  constraints_hold_inductive.completeness env ops →
   constraints_hold env (to_flat_operations ops.toList)
 := by
   intro ops env h_env h
-  exact can_replace_subcircuits_inductive (plain_of_completeness h_env h)
+  exact can_replace_subcircuits_inductive.mp (can_replace_completeness h_env h)
 end PreOperation
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
@@ -256,12 +269,13 @@ def formal_circuit_to_subcircuit (n: ℕ)
     show circuit.spec b a
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    suffices h: constraints_hold_from_list env ops.toList by
+    suffices h: constraints_hold_inductive.soundness env ops by
       exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
-    exact PreOperation.can_replace_subcircuits h_holds
+    apply PreOperation.can_replace_soundness
+    exact PreOperation.can_replace_subcircuits_inductive.mpr h_holds
 
     -- `implied_by_completeness`
     -- we are given that the assumptions are true
@@ -306,7 +320,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     show circuit.spec b
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    suffices h: constraints_hold_from_list env ops.toList by
+    suffices h: constraints_hold_from_list.soundness env ops.toList by
       exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
