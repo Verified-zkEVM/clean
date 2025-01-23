@@ -8,16 +8,16 @@ def to_flat_operations (ops: List (Operation F)) : List (PreOperation F) :=
   match ops with
   | [] => []
   | op :: ops => match op with
-    | .Witness compute => .Witness compute :: to_flat_operations ops
-    | .Assert e => .Assert e :: to_flat_operations ops
-    | .Lookup l => .Lookup l :: to_flat_operations ops
-    | .SubCircuit circuit => circuit.ops ++ to_flat_operations ops
+    | .witness compute => witness compute :: to_flat_operations ops
+    | .assert e => assert e :: to_flat_operations ops
+    | .lookup l => lookup l :: to_flat_operations ops
+    | .subcircuit circuit => circuit.ops ++ to_flat_operations ops
 
 def to_flat_operations_inductive {n: ℕ} : Operations F n → List (PreOperation F)
   | .empty _ => []
-  | .witness ops c => to_flat_operations_inductive ops ++ [.Witness c]
-  | .assert ops c => to_flat_operations_inductive ops ++ [.Assert c]
-  | .lookup ops l => to_flat_operations_inductive ops ++ [.Lookup l]
+  | .witness ops c => to_flat_operations_inductive ops ++ [witness c]
+  | .assert ops c => to_flat_operations_inductive ops ++ [assert c]
+  | .lookup ops l => to_flat_operations_inductive ops ++ [lookup l]
   | .subcircuit ops circuit => to_flat_operations_inductive ops ++ circuit.ops
 
 def to_flat_operations_eq {n: ℕ} (ops: Operations F n) :
@@ -125,14 +125,14 @@ lemma flat_witness_length_eq_witness_length' {n: ℕ} {ops: Operations F n} :
 The witnesses created from flat and nested operations are the same
 -/
 lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
-  cast flat_witness_length_eq_witness_length' (witness (to_flat_operations ops.toList)) = ops.local_witnesses := by
+  cast flat_witness_length_eq_witness_length' (witnesses (to_flat_operations ops.toList)) = ops.local_witnesses := by
   sorry
 
 /--
 Helper lemma: If an environment respects local witnesses, then it also does so in the flattened variant.
 -/
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
-  env.extends_vector (witness (to_flat_operations ops.toList)) ops.initial_offset →
+  env.extends_vector (witnesses (to_flat_operations ops.toList)) ops.initial_offset →
   env.extends ops :=
   sorry
 
@@ -169,7 +169,7 @@ lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.
   sorry
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.extends (ops.subcircuit c) → env.extends_vector (witness c.ops) n
+  env.extends (ops.subcircuit c) → env.extends_vector (witnesses c.ops) n
 := by
   intro h i
   simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
@@ -271,7 +271,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
     have as : circuit.assumptions b := h_completeness
 
     have h_env' : env.extends ops := by
-      guard_hyp h_env : env.extends_vector (PreOperation.witness flat_ops) n
+      guard_hyp h_env : env.extends_vector (PreOperation.witnesses flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
       exact PreOperation.env_extends_of_flat h_env
@@ -321,7 +321,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
     have h_env' : env.extends ops := by
-      guard_hyp h_env : env.extends_vector (PreOperation.witness flat_ops) n
+      guard_hyp h_env : env.extends_vector (PreOperation.witnesses flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
       exact PreOperation.env_extends_of_flat h_env
