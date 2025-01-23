@@ -48,7 +48,7 @@ def circuit : FormalAssertion (F p) (Inputs p) where
   spec := spec
 
   soundness := by
-    intro ctx env input vars h_inputs _ h_holds
+    intro ctx env vars input h_inputs _ h_holds
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := vars
 

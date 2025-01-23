@@ -88,7 +88,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
   spec := spec
   soundness := by
     -- introductions
-    rintro i0 env inputs inputs_var h_inputs as
+    rintro i0 env inputs_var inputs h_inputs as
     let ⟨x, y, carry_in⟩ := inputs
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro h_holds outputs

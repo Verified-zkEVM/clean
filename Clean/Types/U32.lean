@@ -2,6 +2,7 @@ import Clean.Gadgets.ByteLookup
 
 section
 variable {p : ℕ} [Fact p.Prime]
+-- TODO: this assumption is false in practice, need to change some proofs to not need it
 variable [p_large_enough: Fact (p > 2*2^32)]
 
 instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
@@ -21,12 +22,12 @@ namespace U32
 /--
   Witness a 32-bit unsigned integer.
 -/
-def witness (compute : Unit → U32 (F p)) := do
-  let val := compute ()
-  let x0 ←  witness_var (fun _ => val.x0)
-  let x1 ←  witness_var (fun _ => val.x1)
-  let x2 ←  witness_var (fun _ => val.x2)
-  let x3 ←  witness_var (fun _ => val.x3)
+def witness (compute : Environment (F p) → U32 (F p)) := do
+  -- TODO: to avoid recomputation, would be nice if we could witness a vector
+  let x0 ← witness_var (fun env => compute env |>.x0)
+  let x1 ← witness_var (fun env => compute env |>.x1)
+  let x2 ← witness_var (fun env => compute env |>.x2)
+  let x3 ← witness_var (fun env => compute env |>.x3)
 
   byte_lookup x0
   byte_lookup x1

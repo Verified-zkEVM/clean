@@ -50,7 +50,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
   spec := spec
   soundness := by
     -- introductions
-    rintro ctx env inputs inputs_var h_inputs as
+    rintro offset env inputs_var inputs h_inputs as
     let ⟨x, y⟩ := inputs
     let ⟨x_var, y_var⟩ := inputs_var
     intro h_holds z
@@ -65,7 +65,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- rewrite input and ouput values
     rw [hx, hy] at h_holds
-    rw [←(by rfl : z = env ctx.offset)] at h_holds
+    rw [←(by rfl : z = env.get offset)] at h_holds
 
     -- satisfy `Gadgets.Addition8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
@@ -84,14 +84,14 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
   completeness := by
     -- introductions
-    rintro ctx inputs inputs_var h_inputs
+    rintro offset env inputs_var henv inputs h_inputs
     let ⟨x, y⟩ := inputs
     let ⟨x_var, y_var⟩ := inputs_var
     rintro as
 
     -- characterize inputs
-    have hx : x_var.eval = x := by injection h_inputs
-    have hy : y_var.eval = y := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
