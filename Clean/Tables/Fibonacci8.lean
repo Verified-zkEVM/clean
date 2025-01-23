@@ -67,6 +67,13 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   induction' n using Nat.twoStepInduction
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
+-- sadly, Lean times out when doing these in the middle of the proof below
+-- TODO: we should have a better way to do this
+lemma var1 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0 := by rfl
+lemma var2 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1 := by rfl
+lemma var3 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1 := by rfl
+lemma var4 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0 := by rfl
+
 -- heavy lifting to transform constraints into specs
 -- this proof is quite heavy computationally to check for Lean, because of al the `simp` tactics,
 -- but once this is checked and cached, the complete soundness proof is faster to check
@@ -75,26 +82,13 @@ lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
     (ZMod.val (curr 0) < 256 → ZMod.val (curr 1) < 256 → ZMod.val (next 1) = (ZMod.val (curr 0) + ZMod.val (curr 1)) % 256) ∧ curr 1 = next 0
     := by
   intro h
-  simp [Circuit.formal_assertion_to_subcircuit] at h
-  simp [fib_table, ProvableType.from_values] at h
-
-  -- TODO: we should have a better way to do this
-  have var1 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
-    := by rfl
-  have var2 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
-    := by rfl
-  have var3 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1
-    := by rfl
-  have var4 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0
-    := by rfl
-  have var5 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
-    := by rfl
-  have var6 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
-    := by rfl
+  dsimp [Circuit.formal_assertion_to_subcircuit] at h
+  dsimp [fib_table, ProvableType.from_values] at h
 
   rw [var1, var2, var3] at h
 
-  simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
+  dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
+
   rw [var4] at h
   simp [Gadgets.Equality.circuit, Gadgets.Equality.spec] at h
   assumption
@@ -118,9 +112,9 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec] at boundary1 boundary2
 
-      have var1 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+      have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
         := by rfl
-      have var2 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have var2 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
         := by rfl
 
       rw [var1] at boundary1

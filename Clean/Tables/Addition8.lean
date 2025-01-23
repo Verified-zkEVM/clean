@@ -49,11 +49,11 @@ def formal_add8_table : FormalTable (F:=(F p)) := {
 
       -- now we prove a local property about the current row
       -- TODO: simp should suffice, but couldn't get it to work
-      have h_varx : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+      have h_varx : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
         := by rfl
-      have h_vary : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have h_vary : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
         := by rfl
-      have h_varz : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
+      have h_varz : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
         := by rfl
 
       simp [ProvableType.from_values] at h_curr
