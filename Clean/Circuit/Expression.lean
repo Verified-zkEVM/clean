@@ -74,6 +74,5 @@ instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
 end Expression
 
-@[reducible]
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env

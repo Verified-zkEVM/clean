@@ -257,7 +257,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
     suffices h: constraints_hold_from_list env ops.toList by
-      exact circuit.soundness n env b b_var rfl as h
+      exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
@@ -307,7 +307,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
     suffices h: constraints_hold_from_list env ops.toList by
-      exact circuit.soundness n env b b_var rfl as h
+      exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
