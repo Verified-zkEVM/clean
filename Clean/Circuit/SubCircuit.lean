@@ -108,32 +108,32 @@ Helper lemma: If an environment respects local witnesses, then it also does so i
 -/
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
   env.extends_vector (witnesses (to_flat_operations ops)) ops.initial_offset →
-  env.extends ops :=
+  env.uses_local_witnesses ops :=
   sorry
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.extends (ops.witness c) → env.extends ops
+  env.uses_local_witnesses (ops.witness c) → env.uses_local_witnesses ops
 := by
   intro h i
-  simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   specialize h i
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
   simp [List.getElem_append]
 
 lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.extends (ops.assert c) → env.extends ops := by
-  intro h i; simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
+  env.uses_local_witnesses (ops.assert c) → env.uses_local_witnesses ops := by
+  intro h i; simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
 
 lemma env_extends_lookup {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.extends (ops.lookup c) → env.extends ops := by
-  intro h i; simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
+  env.uses_local_witnesses (ops.lookup c) → env.uses_local_witnesses ops := by
+  intro h i; simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
 
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.extends (ops.subcircuit c) → env.extends ops
+  env.uses_local_witnesses (ops.subcircuit c) → env.uses_local_witnesses ops
 := by
   intro h i
-  simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   have : i < ops.local_length + c.witness_length := by linarith [i.is_lt]
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
@@ -144,10 +144,10 @@ lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.
   sorry
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.extends (ops.subcircuit c) → env.extends_vector (witnesses c.ops) n
+  env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses c.ops) n
 := by
   intro h i
-  simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   unfold SubCircuit.witness_length at h
   have : ops.local_length + i < ops.local_length + witness_length c.ops := by linarith [i.is_lt]
   specialize h ⟨ ops.local_length + i, this ⟩
@@ -158,7 +158,7 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   -- definitely true! TODO finish
   sorry
 
-theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.extends ops →
+theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses ops →
   constraints_hold_inductive.completeness env ops → constraints_hold_inductive env ops := by
   intro h_env h
   induction ops with
@@ -188,7 +188,7 @@ where constraints of subcircuits are replaced with higher-level statements
 that imply (or are implied by) those constraints.
 -/
 theorem can_replace_subcircuits.completeness {n: ℕ} :
-  ∀ {ops : Operations F n}, ∀ {env : Environment F}, env.extends ops →
+  ∀ {ops : Operations F n}, ∀ {env : Environment F}, env.uses_local_witnesses ops →
   constraints_hold_inductive.completeness env ops →
   constraints_hold env (to_flat_operations ops)
 := by
@@ -243,7 +243,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
     let b := Provable.eval env b_var
     have as : circuit.assumptions b := h_completeness
 
-    have h_env' : env.extends ops := by
+    have h_env' : env.uses_local_witnesses ops := by
       guard_hyp h_env : env.extends_vector (PreOperation.witnesses flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
@@ -295,7 +295,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     let b := Provable.eval env b_var
     have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
-    have h_env' : env.extends ops := by
+    have h_env' : env.uses_local_witnesses ops := by
       guard_hyp h_env : env.extends_vector (PreOperation.witnesses flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env

@@ -174,6 +174,13 @@ end OperationsList
 def Circuit (F : Type) [Field F] (α : Type) :=
   OperationsList F → OperationsList F × α
 
+instance : Monad (Circuit F) where
+  pure a ops := (ops, a)
+  bind f g ops :=
+    let (ops', a) := f ops
+    let (ops'', b) := g a ops'
+    (ops'', b)
+
 @[reducible]
 def Circuit.final_offset_from (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   (circuit (.from_offset offset)).1.offset
@@ -183,13 +190,6 @@ def Circuit.from (circuit: Circuit F α) (offset : ℕ) : Operations F (circuit.
   (circuit (.from_offset offset)).1.withLength
 
 namespace Circuit
-instance : Monad (Circuit F) where
-  pure a ops := (ops, a)
-  bind f g ops :=
-    let (ops', a) := f ops
-    let (ops'', b) := g a ops'
-    (ops'', b)
-
 @[reducible]
 def output (circuit: Circuit F α) (offset := 0) : α :=
   (circuit (.from_offset offset)).2
@@ -228,8 +228,7 @@ def lookup (l: Lookup F) : Circuit F Unit := fun ops =>
 end Circuit
 
 @[simp]
-def Environment.extends (env: Environment F) (ops: Operations F n) : Prop :=
-  -- same as `env.extends_vector ops.local_witnesses ops.initial_offset`
+def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) : Prop :=
   ∀ i : Fin ops.local_length, env.get (ops.initial_offset + i) = ops.local_witnesses.get i env
 
 namespace Circuit
@@ -299,7 +298,7 @@ def Completeness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Prov
   (assumptions: β.value → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : β.var,
-  env.extends (main b_var |>.from offset) →
+  env.uses_local_witnesses (main b_var |>.from offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β.value, Provable.eval env b_var = b →
   assumptions b →
@@ -360,7 +359,7 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
   completeness:
     -- for all environments which _use the default witness generators for local variables_
     ∀ offset, ∀ env, ∀ b_var : β.var,
-    Environment.extends env (main b_var |>.from offset) →
+    env.uses_local_witnesses (main b_var |>.from offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b → spec b →
