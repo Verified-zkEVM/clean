@@ -154,7 +154,7 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
   rw [←add_assoc, total_length_eq] at h
   rw [h]
-  simp [List.getElem_append, Operations.local_witnesses, SubCircuit.witness]
+  simp [List.getElem_append, Operations.local_witnesses, SubCircuit.witnesses]
   -- definitely true! TODO finish
   sorry
 

@@ -93,7 +93,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 def SubCircuit.witness_length (sc: SubCircuit F n) := PreOperation.witness_length sc.ops
 
 @[reducible]
-def SubCircuit.witness (sc: SubCircuit F n) := PreOperation.witnesses sc.ops
+def SubCircuit.witnesses (sc: SubCircuit F n) := PreOperation.witnesses sc.ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -110,7 +110,6 @@ inductive Operations (F : Type) [Field F] : ℕ → Type where
 
 -- TODO: it might make sense to make the `witness` constructor take another `length` argument
 -- and return a `Vector` of witnesses, from a single `compute` function.
-
 
 namespace Operations
 @[reducible, simp]
@@ -135,7 +134,7 @@ def local_witnesses {n: ℕ} : (ops: Operations F n) → Witness F ops.local_len
   | .witness ops c => (local_witnesses ops).push c
   | .assert ops _ => local_witnesses ops
   | .lookup ops _ => local_witnesses ops
-  | .subcircuit ops s => (local_witnesses ops).append s.witness
+  | .subcircuit ops s => (local_witnesses ops).append s.witnesses
 end Operations
 
 /--
