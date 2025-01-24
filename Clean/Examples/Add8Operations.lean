@@ -3,7 +3,7 @@ import Clean.Gadgets.Addition8.Addition8
 
 section
 
-#eval
+#eval!
   let p := 1009
   let p_prime := Fact.mk prime_1009
   let p_non_zero := Fact.mk (by norm_num : p ≠ 0)
