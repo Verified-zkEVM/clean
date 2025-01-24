@@ -80,19 +80,33 @@ theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
 /--
 The witness length from flat and nested operations is the same
 -/
-lemma flat_witness_length_eq_witness_length {n: ℕ} {ops: Operations F n} :
+lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
   witness_length (to_flat_operations ops) = ops.local_length := by
-  sorry
+  induction ops with
+  | empty => trivial
+  | witness ops c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
+    dsimp [to_flat_operations, Operations.local_length]
+    generalize to_flat_operations ops = flat_ops at *
+    generalize ops.local_length = n at *
+    induction flat_ops using witness_length.induct generalizing n with
+    | case1 => simp_all only [witness_length, List.nil_append, self_eq_add_left]
+    | case2 env ops ih' =>
+      dsimp only [witness_length] at *
+      specialize ih' (n - 1) (Eq.symm <| Nat.pred_eq_of_eq_succ (Eq.symm ih))
+      show witness_length (ops ++ _) + 1 = _
+      omega
+    | case3 env ops ih' =>
+      simp_all only [imp_false, forall_eq', witness_length, List.cons_append]
 
-lemma flat_witness_length_eq_witness_length' {n: ℕ} {ops: Operations F n} :
-  _root_.Witness F (witness_length (to_flat_operations ops)) = _root_.Witness F ops.local_length := by
-  sorry
+-- this variant is needed (I think) for the cast in the next lemma's statement
+lemma flat_witness_length_eq' {n: ℕ} {ops: Operations F n} :
+  Witness F (witness_length (to_flat_operations ops)) = Witness F ops.local_length := by rw [flat_witness_length_eq]
 
 /--
 The witnesses created from flat and nested operations are the same
 -/
 lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
-  cast flat_witness_length_eq_witness_length' (witnesses (to_flat_operations ops)) = ops.local_witnesses := by
+  cast flat_witness_length_eq' (witnesses (to_flat_operations ops)) = ops.local_witnesses := by
   sorry
 
 /--

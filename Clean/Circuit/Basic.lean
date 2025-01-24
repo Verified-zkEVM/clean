@@ -55,7 +55,7 @@ def witness_length : List (FlatOperation F) → ℕ
   | _ :: ops => witness_length ops
 
 @[simp]
-def witnesses : (l: List (FlatOperation F)) → _root_.Witness F (witness_length l)
+def witnesses : (l: List (FlatOperation F)) → Witness F (witness_length l)
   | [] => ⟨ [], rfl ⟩
   | op :: ops =>
     let ⟨ w, h ⟩ := witnesses ops
