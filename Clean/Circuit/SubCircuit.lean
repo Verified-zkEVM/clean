@@ -2,9 +2,9 @@ import Clean.Circuit.Basic
 
 variable {F: Type} [Field F]
 
-namespace PreOperation
+namespace FlatOperation
 
-def to_flat_operations {n: ℕ} : Operations F n → List (PreOperation F)
+def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
   | .empty _ => []
   | .witness ops c => to_flat_operations ops ++ [witness c]
   | .assert ops c => to_flat_operations ops ++ [assert c]
@@ -13,7 +13,7 @@ def to_flat_operations {n: ℕ} : Operations F n → List (PreOperation F)
 
 open Circuit (constraints_hold_inductive.completeness constraints_hold_inductive)
 
-lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOperation F)}, ∀ {env : Environment F},
+lemma constraints_hold_cons : ∀ {op : FlatOperation F}, ∀ {ops: List (FlatOperation F)}, ∀ {env : Environment F},
   constraints_hold env (op :: ops) ↔ constraints_hold env [op] ∧ constraints_hold env ops := by
   intro op ops env
   match ops with
@@ -25,7 +25,7 @@ lemma constraints_hold_cons : ∀ {op : PreOperation F}, ∀ {ops: List (PreOper
       split at h
       <;> simp_all only [constraints_hold, and_self])
 
-lemma constraints_hold_append : ∀ {a b: List (PreOperation F)}, ∀ {env : Environment F},
+lemma constraints_hold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Environment F},
   constraints_hold env (a ++ b) ↔ constraints_hold env a ∧ constraints_hold env b := by
   intro a b env
   induction a with
@@ -194,7 +194,7 @@ theorem can_replace_subcircuits.completeness {n: ℕ} :
 := by
   intro ops env h_env h
   exact can_replace_subcircuits.mp (can_replace_completeness h_env h)
-end PreOperation
+end FlatOperation
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -211,7 +211,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
   let a_var := res.2
 
   have s: SubCircuit F n := by
-    open PreOperation in
+    open FlatOperation in
     let flat_ops := to_flat_operations ops
     let soundness := subcircuit_soundness circuit b_var a_var
     let completeness := subcircuit_completeness circuit b_var
@@ -232,7 +232,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
       exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
-    guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
+    guard_hyp h_holds : FlatOperation.constraints_hold env flat_ops
     apply can_replace_soundness
     exact can_replace_subcircuits.mpr h_holds
 
@@ -244,7 +244,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
     have as : circuit.assumptions b := h_completeness
 
     have h_env' : env.uses_local_witnesses ops := by
-      guard_hyp h_env : env.extends_vector (PreOperation.witnesses flat_ops) n
+      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
       exact env_extends_of_flat h_env
@@ -264,7 +264,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
   let ops := res.1.withLength
 
   have s: SubCircuit F n := by
-    open PreOperation in
+    open FlatOperation in
     let flat_ops := to_flat_operations ops
     let soundness := subassertion_soundness circuit b_var
     let completeness := subassertion_completeness circuit b_var
@@ -284,7 +284,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
       exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
-    guard_hyp h_holds : PreOperation.constraints_hold env flat_ops
+    guard_hyp h_holds : FlatOperation.constraints_hold env flat_ops
     apply can_replace_soundness
     exact can_replace_subcircuits.mpr h_holds
 
@@ -296,7 +296,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
     have h_env' : env.uses_local_witnesses ops := by
-      guard_hyp h_env : env.extends_vector (PreOperation.witnesses flat_ops) n
+      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
       exact env_extends_of_flat h_env
@@ -326,10 +326,10 @@ def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit :=
 
 -- UNUSED STUFF BELOW
 
-namespace PreOperation
+namespace FlatOperation
 open Circuit (constraints_hold_from_list.soundness )
 
-def to_flat_operations_from_list (ops: List (Operation F)) : List (PreOperation F) :=
+def to_flat_operations_from_list (ops: List (Operation F)) : List (FlatOperation F) :=
   match ops with
   | [] => []
   | op :: ops => match op with
@@ -363,4 +363,4 @@ theorem can_replace_subcircuits_from_list {n: ℕ} : ∀ {ops : Operations F n},
     <;> dsimp only [constraints_hold_from_list.soundness]
     <;> use (circuit.imply_soundness env) h_subcircuit
     use ih h_rest
-end PreOperation
+end FlatOperation

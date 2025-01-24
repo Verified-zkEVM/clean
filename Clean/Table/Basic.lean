@@ -218,7 +218,7 @@ def update_context {F : Type} {M W : ℕ+} [Field F] (ctx: TableContext F M W) :
       assignment := fun x => if x = ctx.offset then offset else ctx.assignment x
     }
   | Allocate { ops, .. } => {
-      offset := ctx.offset + PreOperation.witness_length ops,
+      offset := ctx.offset + FlatOperation.witness_length ops,
       assignment := ctx.assignment
     }
   | Assign v offset => {

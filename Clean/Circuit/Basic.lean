@@ -26,20 +26,21 @@ def Witness (F: Type) (n: ℕ) := Vector (Environment F → F) n
 def Environment.extends_vector (env: Environment F) (wit: Witness F n) (offset: ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i) = wit.get i env
 
-inductive PreOperation (F : Type) where
-  | witness : (compute : Environment F → F) → PreOperation F
-  | assert : Expression F → PreOperation F
-  | lookup : Lookup F → PreOperation F
-namespace PreOperation
-def toString [Repr F] : PreOperation F → String
+inductive FlatOperation (F : Type) where
+  | witness : (compute : Environment F → F) → FlatOperation F
+  | assert : Expression F → FlatOperation F
+  | lookup : Lookup F → FlatOperation F
+
+namespace FlatOperation
+def toString [Repr F] : FlatOperation F → String
   | witness _v => "Witness"
   | assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l => reprStr l
 
-instance [Repr F] : Repr (PreOperation F) where
+instance [Repr F] : Repr (FlatOperation F) where
   reprPrec op _ := toString op
 
-def constraints_hold (eval: Environment F) : List (PreOperation F) → Prop
+def constraints_hold (eval: Environment F) : List (FlatOperation F) → Prop
   | [] => True
   | op :: [] => match op with
     | assert e => eval e = 0
@@ -53,13 +54,13 @@ def constraints_hold (eval: Environment F) : List (PreOperation F) → Prop
     | _ => constraints_hold eval ops
 
 @[simp]
-def witness_length : List (PreOperation F) → ℕ
+def witness_length : List (FlatOperation F) → ℕ
   | [] => 0
   | (witness _) :: ops => witness_length ops + 1
   | _ :: ops => witness_length ops
 
 @[simp]
-def witnesses : (l: List (PreOperation F)) → _root_.Witness F (witness_length l)
+def witnesses : (l: List (FlatOperation F)) → _root_.Witness F (witness_length l)
   | [] => ⟨ [], rfl ⟩
   | op :: ops =>
     let ⟨ w, h ⟩ := witnesses ops
@@ -68,12 +69,12 @@ def witnesses : (l: List (PreOperation F)) → _root_.Witness F (witness_length 
       ⟨ compute :: w, by simp [h] ⟩
     | assert _ | lookup _ =>
       ⟨ w, by simp_all only [witness_length]⟩
-end PreOperation
+end FlatOperation
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
 -- for all traces that satisfy the constraints
 structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
-  ops: List (PreOperation F)
+  ops: List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`
@@ -83,17 +84,17 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
-    PreOperation.constraints_hold env ops → soundness env
+    FlatOperation.constraints_hold env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using default witnesses for all _local_ variables of this circuit
-  implied_by_completeness : ∀ env, env.extends_vector (PreOperation.witnesses ops) offset →
-    completeness env → PreOperation.constraints_hold env ops
+  implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses ops) offset →
+    completeness env → FlatOperation.constraints_hold env ops
 
 @[reducible, simp]
-def SubCircuit.witness_length (sc: SubCircuit F n) := PreOperation.witness_length sc.ops
+def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
 
 @[reducible]
-def SubCircuit.witnesses (sc: SubCircuit F n) := PreOperation.witnesses sc.ops
+def SubCircuit.witnesses (sc: SubCircuit F n) := FlatOperation.witnesses sc.ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -242,7 +243,7 @@ def constraints_hold_inductive {n : ℕ} (eval : Environment F) : Operations F n
   | .lookup ops { table, entry, .. } =>
     constraints_hold_inductive eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    constraints_hold_inductive eval ops ∧ PreOperation.constraints_hold eval s.ops
+    constraints_hold_inductive eval ops ∧ FlatOperation.constraints_hold eval s.ops
 
 @[simp]
 def constraints_hold_inductive.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
