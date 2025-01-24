@@ -40,13 +40,13 @@ def toString [Repr F] : FlatOperation F → String
 instance [Repr F] : Repr (FlatOperation F) where
   reprPrec op _ := toString op
 
-def constraints_hold (eval: Environment F) : List (FlatOperation F) → Prop
+def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Prop
   | [] => True
   | op :: ops => match op with
-    | assert e => (eval e = 0) ∧ constraints_hold eval ops
+    | assert e => (eval e = 0) ∧ constraints_hold_flat eval ops
     | lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold eval ops
-    | _ => constraints_hold eval ops
+      table.contains (entry.map eval) ∧ constraints_hold_flat eval ops
+    | _ => constraints_hold_flat eval ops
 
 @[simp]
 def witness_length : List (FlatOperation F) → ℕ
@@ -79,11 +79,11 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
-    FlatOperation.constraints_hold env ops → soundness env
+    FlatOperation.constraints_hold_flat env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using default witnesses for all _local_ variables of this circuit
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses ops) offset →
-    completeness env → FlatOperation.constraints_hold env ops
+    completeness env → FlatOperation.constraints_hold_flat env ops
 
 @[reducible, simp]
 def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
@@ -231,46 +231,46 @@ namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
 
 @[simp]
-def constraints_hold_inductive {n : ℕ} (eval : Environment F) : Operations F n → Prop
+def constraints_hold {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
-  | .witness ops compute => constraints_hold_inductive eval ops
-  | .assert ops e => constraints_hold_inductive eval ops ∧ eval e = 0
+  | .witness ops compute => constraints_hold eval ops
+  | .assert ops e => constraints_hold eval ops ∧ eval e = 0
   | .lookup ops { table, entry, .. } =>
-    constraints_hold_inductive eval ops ∧ table.contains (entry.map eval)
+    constraints_hold eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    constraints_hold_inductive eval ops ∧ FlatOperation.constraints_hold eval s.ops
+    constraints_hold eval ops ∧ FlatOperation.constraints_hold_flat eval s.ops
 
 @[simp]
-def constraints_hold_inductive.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
+def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
-  | .witness ops compute => constraints_hold_inductive eval ops
+  | .witness ops compute => constraints_hold eval ops
   | .assert ops e =>
     let constraint := eval e = 0
-    if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold.soundness eval ops ∧ constraint
   | .lookup ops { table, entry, .. } =>
     let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold.soundness eval ops ∧ constraint
   | .subcircuit ops s =>
     let constraint := s.soundness eval
-    if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold.soundness eval ops ∧ constraint
 
 /--
-Version of `constraints_hold_inductive` that replaces the statement of subcircuits with their `completeness`.
+Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
 -/
 @[simp]
-def constraints_hold_inductive.completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
+def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
-  | .witness ops compute => constraints_hold_inductive.completeness eval ops
+  | .witness ops compute => constraints_hold.completeness eval ops
   | .assert ops e =>
     let constraint := eval e = 0
     -- avoid a leading `True ∧` if ops is empty
-    if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold.completeness eval ops ∧ constraint
   | .lookup ops { table, entry, index := _ } =>
     let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold.completeness eval ops ∧ constraint
   | .subcircuit ops s =>
     let constraint := s.completeness eval
-    if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
+    if let .empty m := ops then constraint else constraints_hold.completeness eval ops ∧ constraint
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -284,7 +284,7 @@ def Soundness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Provabl
     ∀ b_var : β.var, ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold_inductive.soundness env (main b_var |>.from offset) →
+    constraints_hold.soundness env (main b_var |>.from offset) →
     -- the spec holds on the input and output
     let a := Provable.eval env (output (main b_var) offset)
     spec b a
@@ -299,7 +299,7 @@ def Completeness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Prov
   ∀ b : β.value, Provable.eval env b_var = b →
   assumptions b →
   -- the constraints hold
-  constraints_hold_inductive.completeness env (main b_var |>.from offset)
+  constraints_hold.completeness env (main b_var |>.from offset)
 
 structure FormalCircuit (F: Type) (β α: TypePair)
   [Field F] [ProvableType F α] [ProvableType F β]
@@ -348,7 +348,7 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     ∀ b_var : β.var, ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold_inductive.soundness env (main b_var |>.from offset) →
+    constraints_hold.soundness env (main b_var |>.from offset) →
     -- the spec holds
     spec b
 
@@ -360,7 +360,7 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
-    constraints_hold_inductive.completeness env (main b_var |>.from offset)
+    constraints_hold.completeness env (main b_var |>.from offset)
 
 @[simp]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
