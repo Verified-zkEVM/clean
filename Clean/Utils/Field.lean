@@ -94,13 +94,11 @@ theorem byte_plus_256_do_not_wrap (x: F p) [p_large_enough: Fact (p > 512)]:
   rw [val_256_is_256, mod_256_is_256] at thm
   apply thm
 
-
-theorem val_lt_p (x: ℕ) : (x < p) -> (x : F p).val = x := by
+theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
   intro x_lt_p
-  have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt (FieldUtils.p_neq_zero)).mpr x_lt_p
-  rw [ZMod.val_natCast x]
-  assumption
-
+  have p_neq_zero : p ≠ 0 := Nat.not_eq_zero_of_lt x_lt_p
+  have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt p_neq_zero).mpr x_lt_p
+  rw [ZMod.val_natCast x, x_mod_is_x]
 
 theorem boolean_lt_2 {b : F p} (hb : b = 0 ∨ b = 1) : b.val < 2 := by
   rcases hb with h0 | h1

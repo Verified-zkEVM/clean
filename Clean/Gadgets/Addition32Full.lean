@@ -2,7 +2,7 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
 
 namespace Gadgets.Addition32Full
-variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2*2^32)]
 
 open Provable (field field2 fields)
@@ -72,10 +72,6 @@ def spec (input : (Inputs p).value) (out: (Outputs p).value) :=
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
-set_option linter.unusedVariables false
-set_option linter.constructorNameAsVariable false
-set_option diagnostics true
-
 theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
@@ -117,10 +113,14 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   rw [ByteTable.equiv z0, ByteTable.equiv z1, ByteTable.equiv z2, ByteTable.equiv z3] at h
   have ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
 
-  -- -- simplify spec
-  dsimp [spec, U32.value, U32.is_normalized]
-  rw [(by rfl: env.get (i0 + 7) = c3)]
-  rw [(by rfl: env.get (i0 + 2) = z1), (by rfl: env.get (i0 + 4) = z2), (by rfl: env.get (i0 + 6) = z3)]
+  -- simplify output and spec
+  set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
+  set output := Provable.eval env (main.output i0)
+  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
+    dsimp [output, ProvableType.from_values, ProvableType.to_vars]
+
+  rw [h_output]
+  dsimp only [spec, U32.value, U32.is_normalized]
 
   -- -- add up all the equations
   let z := z0 + z1*256 + z2*256^2 + z3*256^3
@@ -196,70 +196,103 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]
   rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›]
   rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
-  set z0 := mod_256 (x0 + y0 + carry_in)
-  set c0 := floordiv (x0 + y0 + carry_in) 256
-  set z1 := mod_256 (x1 + y1 + c0)
-  set c1 := floordiv (x1 + y1 + c0) 256
-  set z2 := mod_256 (x2 + y2 + c1)
-  set c2 := floordiv (x2 + y2 + c1) 256
-  set z3 := mod_256 (x3 + y3 + c2)
-  set c3 := floordiv (x3 + y3 + c2) 256
 
-  let wit : Vector (F p) 8 := add32_full ⟨
+  -- characterize local witnesses
+  -- TODO: this is too hard
+  let wit_gens : Vector (Environment (F p) → F p) 8 := add32_full ⟨
     ⟨ x0_var, x1_var, x2_var, x3_var ⟩,
     ⟨ y0_var, y1_var, y2_var, y3_var ⟩,
     carry_in_var
-    ⟩ |>.from i0 |>.local_witnesses |>.map (fun f => f env)
-  have : wit.val = [z0, c0, z1, c1, z2, c2, z3, c3] := by
-    dsimp only [wit, add32_full, Circuit.from, OperationsList.from_offset, Operations.locals_length,
-      Expression.eval, Circuit.formal_assertion_to_subcircuit, PreOperation.to_flat_operations,
-      SubCircuit.witness_length, PreOperation.witness_length, Operations.local_witnesses,
-      Vector.append, Vector.push, SubCircuit.witness, PreOperation.witnesses, Vector.get,
-      Vector.map, List.map
-    ]
-    rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
-    rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]
-    rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›]
-    rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
+    ⟩ |>.from i0 |>.local_witnesses
 
-  have : env.get i0 = z0 := by
-    have henv0 : env.get i0 = _ := henv (0 : Fin 8)
-    dsimp only [add32_full, Circuit.from, OperationsList.from_offset, Operations.locals_length,
+  let wit : Vector (F p) 8 := wit_gens.map (fun f => f env)
+
+  have henv : ∀ i : Fin 8, env.get (i0 + i) = wit.get i := by
+    change ∀ i : Fin 8, env.get (i0 + i) = wit_gens.get i env at henv
+    intro i; rw [henv i, Vector.get_map]
+
+  have hwit : wit.val = [
+    mod_256 (x0 + y0 + carry_in),
+    floordiv (x0 + y0 + carry_in) 256,
+    mod_256 (x1 + y1 + env.get (i0 + 1)),
+    floordiv (x1 + y1 + env.get (i0 + 1)) 256,
+    mod_256 (x2 + y2 + env.get (i0 + 3)),
+    floordiv (x2 + y2 + env.get (i0 + 3)) 256,
+    mod_256 (x3 + y3 + env.get (i0 + 5)),
+    floordiv (x3 + y3 + env.get (i0 + 5)) 256
+  ] := by
+    dsimp only [wit, wit_gens]
+    -- TODO we need a simp set
+    dsimp only [Circuit.from, OperationsList.from_offset, Operations.local_witnesses, Vector.append,
       Expression.eval, Circuit.formal_assertion_to_subcircuit, PreOperation.to_flat_operations,
-      SubCircuit.witness_length, PreOperation.witness_length, Operations.local_witnesses,
-      Vector.append, Vector.push, SubCircuit.witness, PreOperation.witnesses, Vector.get] at henv0
-    dsimp? only [List.nil_append, List.append_nil, List.singleton_append, List.cons_append] at henv0
-    dsimp only [List.get] at henv0
-    rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at henv0
-    exact henv0
+      SubCircuit.witness_length, PreOperation.witness_length, Operations.locals_length, Vector.push,
+      SubCircuit.witness, PreOperation.witnesses, Vector.map, List.map]
+    rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
+      ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
+      ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
+
+  set z0 := env.get i0
+  set c0 := env.get (i0 + 1)
+  set z1 := env.get (i0 + 2)
+  set c1 := env.get (i0 + 3)
+  set z2 := env.get (i0 + 4)
+  set c2 := env.get (i0 + 5)
+  set z3 := env.get (i0 + 6)
+  set c3 := env.get (i0 + 7)
+
+  -- note: List accesses like `[a, b, c][2] = c` can also be proved by `rfl`,
+  -- but that seems slower than simp with getElem lemmas
+  have hz0 : z0 = mod_256 (x0 + y0 + carry_in) := by
+    rw [(show z0 = wit.get 0 from henv 0), wit.get_eq_lt 0 (by norm_num)]
+    simp only [hwit, List.getElem_cons_zero]
+  have hc0 : c0 = floordiv (x0 + y0 + carry_in) 256 := by
+    rw [(show c0 = wit.get 1 from henv 1), wit.get_eq_lt 1 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+  have hz1 : z1 = mod_256 (x1 + y1 + c0) := by
+    rw [(show z1 = wit.get 2 from henv 2), wit.get_eq_lt 2 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+  have hc1 : c1 = floordiv (x1 + y1 + c0) 256 := by
+    rw [(show c1 = wit.get 3 from henv 3), wit.get_eq_lt 3 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+  have hz2 : z2 = mod_256 (x2 + y2 + c1) := by
+    rw [(show z2 = wit.get 4 from henv 4), wit.get_eq_lt 4 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+  have hc2 : c2 = floordiv (x2 + y2 + c1) 256 := by
+    rw [(show c2 = wit.get 5 from henv 5), wit.get_eq_lt 5 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+  have hz3 : z3 = mod_256 (x3 + y3 + c2) := by
+    rw [(show z3 = wit.get 6 from henv 6), wit.get_eq_lt 6 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+  have hc3 : c3 = floordiv (x3 + y3 + c2) 256 := by
+    rw [(show c3 = wit.get 7 from henv 7), wit.get_eq_lt 7 (by norm_num)]
+    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
 
   -- the add8 completeness proof, four times
-  have add8_completeness {x y c_in : F p} :
-    let z := FieldUtils.mod_256 (x + y + c_in);
-    let c_out := FieldUtils.floordiv (x + y + c_in) 256;
+  have add8_completeness {x y c_in z c_out : F p}
+    (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
     ByteTable.contains (vec [z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -1 * z + -1 * (c_out * 256) = 0
   := by
-    intro z c_out _ _ hc
-    have : z.val < 256 := FieldUtils.mod_256_lt (x + y + c_in)
+    intro _ _ hc
+    have : z.val < 256 := hz ▸ FieldUtils.mod_256_lt (x + y + c_in)
     use ByteTable.completeness z this
     have : c_in.val < 2 := FieldUtils.boolean_lt_2 hc
     have : (x + y + c_in).val < 512 := by field_to_nat_u32
-    use FieldUtils.floordiv_bool this
-    rw [FieldUtils.mod_add_div_256 (x + y + c_in)]
+    use (hc_out ▸ FieldUtils.floordiv_bool this)
+    rw [FieldUtils.mod_add_div_256 (x + y + c_in), hz, hc_out]
     ring
 
-  have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness x0_byte y0_byte carry_in_bool
-  have ⟨ z1_byte, c1_bool, h1 ⟩ := add8_completeness x1_byte y1_byte c0_bool
-  have ⟨ z2_byte, c2_bool, h2 ⟩ := add8_completeness x2_byte y2_byte c1_bool
-  have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness x3_byte y3_byte c2_bool
+  have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness hz0 hc0 x0_byte y0_byte carry_in_bool
+  have ⟨ z1_byte, c1_bool, h1 ⟩ := add8_completeness hz1 hc1 x1_byte y1_byte c0_bool
+  have ⟨ z2_byte, c2_bool, h2 ⟩ := add8_completeness hz2 hc2 x2_byte y2_byte c1_bool
+  have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness hz3 hc3 x3_byte y3_byte c2_bool
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
--- def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
---   main := add32_full
---   assumptions := assumptions
---   spec := spec
---   soundness := soundness
---   completeness := completeness
+def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
+  main := add32_full
+  assumptions := assumptions
+  spec := spec
+  soundness := soundness
+  completeness := completeness
 end Gadgets.Addition32Full

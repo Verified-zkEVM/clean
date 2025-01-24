@@ -31,8 +31,8 @@ namespace Vector
     ⟨ a :: v.val, by simp [v.prop] ⟩
 
   @[simp]
-  def map (f: α → β) : Vector α n → Vector β n
-    | ⟨ l, h ⟩ => ⟨ l.map f, by rw [List.length_map, h] ⟩
+  def map (f: α → β) (v: Vector α n) : Vector β n :=
+    ⟨ v.val.map f, by rw [List.length_map, v.prop] ⟩
 
   def zip {n} : Vector α n → Vector β n → Vector (α × β) n
     | ⟨ [], ha ⟩, ⟨ [], _ ⟩  => ⟨ [], ha ⟩
@@ -45,6 +45,18 @@ namespace Vector
   def get (v: Vector α n) (i: Fin n) : α :=
     let i' : Fin v.1.length := Fin.cast v.prop.symm i
     v.val.get i'
+
+  def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.val[i.val] := by
+    simp only [get, List.get_eq_getElem, Fin.coe_cast]
+
+  /-- this is exactly what's needed to rewrite `v.get i` into a `List.getElem` if `n` is a concrete Nat -/
+  def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n) :
+    v.get ((Fin.instOfNatOfNeZeroNat (a:=i)).ofNat : Fin n) = v.val[i]'(by rw [v.prop]; exact h) := by
+    simp only [get_eq, OfNat.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt h]
+
+  @[simp]
+  theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
+    simp only [get, map, List.get_eq_getElem, Fin.coe_cast, List.getElem_map]
 
   @[simp]
   def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
