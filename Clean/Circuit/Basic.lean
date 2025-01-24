@@ -122,15 +122,15 @@ def initial_offset {n: ℕ} : Operations F n → ℕ
   | .subcircuit ops s => initial_offset ops
 
 @[simp]
-def locals_length {n: ℕ} : Operations F n → ℕ
+def local_length {n: ℕ} : Operations F n → ℕ
   | .empty _ => 0
-  | .witness ops _ => locals_length ops + 1
-  | .assert ops _ => locals_length ops
-  | .lookup ops _ => locals_length ops
-  | .subcircuit ops s => locals_length ops + s.witness_length
+  | .witness ops _ => local_length ops + 1
+  | .assert ops _ => local_length ops
+  | .lookup ops _ => local_length ops
+  | .subcircuit ops s => local_length ops + s.witness_length
 
 @[simp]
-def local_witnesses {n: ℕ} : (ops: Operations F n) → Witness F ops.locals_length
+def local_witnesses {n: ℕ} : (ops: Operations F n) → Witness F ops.local_length
   | .empty _ => ⟨ [], rfl ⟩
   | .witness ops c => (local_witnesses ops).push c
   | .assert ops _ => local_witnesses ops
@@ -231,7 +231,7 @@ end Circuit
 @[simp]
 def Environment.extends (env: Environment F) (ops: Operations F n) : Prop :=
   -- same as `env.extends_vector ops.local_witnesses ops.initial_offset`
-  ∀ i : Fin ops.locals_length, env.get (ops.initial_offset + i) = ops.local_witnesses.get i env
+  ∀ i : Fin ops.local_length, env.get (ops.initial_offset + i) = ops.local_witnesses.get i env
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit

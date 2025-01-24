@@ -89,11 +89,11 @@ theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
 The witness length from flat and nested operations is the same
 -/
 lemma flat_witness_length_eq_witness_length {n: ℕ} {ops: Operations F n} :
-  witness_length (to_flat_operations ops) = ops.locals_length := by
+  witness_length (to_flat_operations ops) = ops.local_length := by
   sorry
 
 lemma flat_witness_length_eq_witness_length' {n: ℕ} {ops: Operations F n} :
-  _root_.Witness F (witness_length (to_flat_operations ops)) = _root_.Witness F ops.locals_length := by
+  _root_.Witness F (witness_length (to_flat_operations ops)) = _root_.Witness F ops.local_length := by
   sorry
 
 /--
@@ -115,7 +115,7 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c
   env.extends (ops.witness c) → env.extends ops
 := by
   intro h i
-  simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   specialize h i
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
@@ -123,34 +123,34 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c
 
 lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.extends (ops.assert c) → env.extends ops := by
-  intro h i; simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses]
+  intro h i; simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
 
 lemma env_extends_lookup {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.extends (ops.lookup c) → env.extends ops := by
-  intro h i; simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses]
+  intro h i; simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
 
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.extends (ops.subcircuit c) → env.extends ops
 := by
   intro h i
-  simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
-  have : i < ops.locals_length + c.witness_length := by linarith [i.is_lt]
+  simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  have : i < ops.local_length + c.witness_length := by linarith [i.is_lt]
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
   simp [List.getElem_append]
 
-lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.locals_length = n := by
+lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.local_length = n := by
   sorry
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.extends (ops.subcircuit c) → env.extends_vector (witnesses c.ops) n
 := by
   intro h i
-  simp_all only [Environment.extends, Operations.locals_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [Environment.extends, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   unfold SubCircuit.witness_length at h
-  have : ops.locals_length + i < ops.locals_length + witness_length c.ops := by linarith [i.is_lt]
-  specialize h ⟨ ops.locals_length + i, this ⟩
+  have : ops.local_length + i < ops.local_length + witness_length c.ops := by linarith [i.is_lt]
+  specialize h ⟨ ops.local_length + i, this ⟩
   simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
   rw [←add_assoc, total_length_eq] at h
   rw [h]

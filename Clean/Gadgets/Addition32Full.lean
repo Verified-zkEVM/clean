@@ -225,7 +225,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
     -- TODO we need a simp set
     dsimp only [Circuit.from, OperationsList.from_offset, Operations.local_witnesses, Vector.append,
       Expression.eval, Circuit.formal_assertion_to_subcircuit, PreOperation.to_flat_operations,
-      SubCircuit.witness_length, PreOperation.witness_length, Operations.locals_length, Vector.push,
+      SubCircuit.witness_length, PreOperation.witness_length, Operations.local_length, Vector.push,
       SubCircuit.witness, PreOperation.witnesses, Vector.map, List.map]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
