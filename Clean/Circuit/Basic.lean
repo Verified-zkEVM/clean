@@ -111,37 +111,8 @@ inductive Operations (F : Type) [Field F] : ℕ → Type where
 -- TODO: it might make sense to make the `witness` constructor take another `length` argument
 -- and return a `Vector` of witnesses, from a single `compute` function.
 
-/--
-Singleton `Operations`, that can be collected in a plain list, for easier processing.
--/
-inductive Operation (F : Type) [Field F] where
-  | witness : (compute : Environment F → F) → Operation F
-  | assert : Expression F → Operation F
-  | lookup : Lookup F → Operation F
-  | subcircuit : {n : ℕ} → SubCircuit F n → Operation F
-
-namespace Operation
-def added_witness : Operation F → ℕ
-  | witness _ => 1
-  | subcircuit s => s.witness_length
-  | _ => 0
-
-instance [Repr F] : ToString (Operation F) where
-  toString
-    | witness _v => "Witness"
-    | assert e => "(Assert " ++ reprStr e ++ " == 0)"
-    | lookup l => reprStr l
-    | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
-end Operation
 
 namespace Operations
-def toList {n: ℕ} : Operations F n → List (Operation F)
-  | .empty _ => []
-  | .witness ops c => toList ops ++ [.witness c]
-  | .assert ops e => toList ops ++ [.assert e]
-  | .lookup ops l => toList ops ++ [.lookup l]
-  | .subcircuit ops s => toList ops ++ [.subcircuit s]
-
 @[reducible, simp]
 def initial_offset {n: ℕ} : Operations F n → ℕ
   | .empty n => n
@@ -193,9 +164,6 @@ def lookup (ops: OperationsList F) (l: Lookup F) : OperationsList F :=
 def subcircuit (ops: OperationsList F) (s: SubCircuit F ops.offset) : OperationsList F :=
   ⟨ ops.offset + s.witness_length, .subcircuit ops.withLength s ⟩
 
-def toList : OperationsList F → List (Operation F)
-  | ⟨ _, ops ⟩ => ops.toList
-
 instance : CoeOut (Operations F n) (OperationsList F) where
   coe ops := ⟨ n, ops ⟩
 
@@ -222,10 +190,6 @@ instance : Monad (Circuit F) where
     let (ops', a) := f ops
     let (ops'', b) := g a ops'
     (ops'', b)
-
-@[reducible]
-def operations (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
-  (circuit.from offset).toList
 
 @[reducible]
 def output (circuit: Circuit F α) (offset := 0) : α :=
@@ -271,37 +235,6 @@ def Environment.extends (env: Environment F) (ops: Operations F n) : Prop :=
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
-
-@[simp]
-def constraints_hold_from_list.soundness (eval: Environment F) : List (Operation F) → Prop
-  | [] => True
-  | op :: [] => match op with
-    | .assert e => eval e = 0
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval)
-    | .subcircuit { soundness, .. } => soundness eval
-    | _ => True
-  | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.soundness eval ops
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list.soundness eval ops
-    | .subcircuit { soundness, .. } => soundness eval ∧ constraints_hold_from_list.soundness eval ops
-    | _ => constraints_hold_from_list.soundness eval ops
-
-def constraints_hold_from_list.completeness (eval: Environment F) : List (Operation F) → Prop
-  | [] => True
-  | op :: [] => match op with
-    | .assert e => eval e = 0
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval)
-    | .subcircuit { completeness, .. } => completeness eval
-    | _ => True
-  | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.completeness eval ops
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list.completeness eval ops
-    | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list.completeness eval ops
-    | _ => constraints_hold_from_list.completeness eval ops
 
 @[simp]
 def constraints_hold_inductive {n : ℕ} (eval : Environment F) : Operations F n → Prop
@@ -447,3 +380,61 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (
 end Circuit
 
 export Circuit (witness_var witness assert_zero lookup Soundness Completeness FormalCircuit FormalAssertion)
+
+/--
+Singleton `Operations`, that can be collected in a plain list, for easier processing.
+-/
+inductive Operation (F : Type) [Field F] where
+  | witness : (compute : Environment F → F) → Operation F
+  | assert : Expression F → Operation F
+  | lookup : Lookup F → Operation F
+  | subcircuit : {n : ℕ} → SubCircuit F n → Operation F
+
+namespace Operation
+def added_witness : Operation F → ℕ
+  | witness _ => 1
+  | subcircuit s => s.witness_length
+  | _ => 0
+
+instance [Repr F] : ToString (Operation F) where
+  toString
+    | witness _v => "Witness"
+    | assert e => "(Assert " ++ reprStr e ++ " == 0)"
+    | lookup l => reprStr l
+    | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
+end Operation
+
+def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
+  | .empty _ => []
+  | .witness ops c => toList ops ++ [.witness c]
+  | .assert ops e => toList ops ++ [.assert e]
+  | .lookup ops l => toList ops ++ [.lookup l]
+  | .subcircuit ops s => toList ops ++ [.subcircuit s]
+
+def OperationsList.toList : OperationsList F → List (Operation F)
+  | ⟨ _, ops ⟩ => ops.toList
+
+namespace Circuit
+def operations (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
+  (circuit.from offset).toList
+
+-- TODO can probably delete these
+
+def constraints_hold_from_list.soundness (eval: Environment F) : List (Operation F) → Prop
+  | [] => True
+  | op :: ops => match op with
+    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.soundness eval ops
+    | .lookup { table, entry, index := _ } =>
+      table.contains (entry.map eval) ∧ constraints_hold_from_list.soundness eval ops
+    | .subcircuit { soundness, .. } => soundness eval ∧ constraints_hold_from_list.soundness eval ops
+    | _ => constraints_hold_from_list.soundness eval ops
+
+def constraints_hold_from_list.completeness (eval: Environment F) : List (Operation F) → Prop
+  | [] => True
+  | op :: ops => match op with
+    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.completeness eval ops
+    | .lookup { table, entry, index := _ } =>
+      table.contains (entry.map eval) ∧ constraints_hold_from_list.completeness eval ops
+    | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list.completeness eval ops
+    | _ => constraints_hold_from_list.completeness eval ops
+end Circuit
