@@ -42,11 +42,6 @@ instance [Repr F] : Repr (FlatOperation F) where
 
 def constraints_hold (eval: Environment F) : List (FlatOperation F) → Prop
   | [] => True
-  | op :: [] => match op with
-    | assert e => eval e = 0
-    | lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval)
-    | _ => True
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ constraints_hold eval ops
     | lookup { table, entry, index := _ } =>
