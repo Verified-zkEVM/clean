@@ -327,11 +327,6 @@ def constraints_hold_inductive.soundness {n : ℕ} (eval : Environment F) : Oper
     let constraint := s.soundness eval
     if let .empty m := ops then constraint else constraints_hold_inductive.soundness eval ops ∧ constraint
 
--- TODO should this use the inductive or the list version?
-@[reducible, simp]
-def constraints_hold (env: Environment F) (circuit: Circuit F α) (offset: ℕ) : Prop :=
-  constraints_hold_from_list.soundness env (circuit.operations offset)
-
 /--
 Version of `constraints_hold_inductive` that replaces the statement of subcircuits with their `completeness`.
 -/
@@ -349,13 +344,6 @@ def constraints_hold_inductive.completeness {n : ℕ} (eval : Environment F) : O
   | .subcircuit ops s =>
     let constraint := s.completeness eval
     if let .empty m := ops then constraint else constraints_hold_inductive.completeness eval ops ∧ constraint
-
-/--
-Version of `constraints_hold` suitable for contexts where we prove completeness
--/
-@[reducible, simp]
-def constraints_hold_completeness (env: Environment F) (circuit: Circuit F α) (offset: ℕ) : Prop :=
-  constraints_hold_inductive.completeness env (circuit.from offset)
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
@@ -428,24 +416,24 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
 
   soundness:
     -- for all environments that determine witness generation
-    ∀ offset, ∀ env: Environment F,
+    ∀ offset, ∀ env,
     -- for all inputs that satisfy the assumptions
     ∀ b_var : β.var, ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold env (main b_var) offset →
+    constraints_hold_inductive.soundness env (main b_var |>.from offset) →
     -- the spec holds
     spec b
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
-    ∀ offset : ℕ, ∀ env, ∀ b_var : β.var,
+    ∀ offset, ∀ env, ∀ b_var : β.var,
     Environment.extends env (main b_var |>.from offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
-    constraints_hold_completeness env (main b_var) offset
+    constraints_hold_inductive.completeness env (main b_var |>.from offset)
 
 @[simp]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=

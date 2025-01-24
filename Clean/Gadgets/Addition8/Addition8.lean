@@ -61,7 +61,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    dsimp at h_holds
+    dsimp [ProvableType.from_values, ProvableType.to_vars] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy] at h_holds
@@ -71,7 +71,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     let ⟨ asx, asy ⟩ := as
     have as': Gadgets.Addition8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
     specialize h_holds as'
-    dsimp [ProvableType.from_values] at h_holds
 
     guard_hyp h_holds : Gadgets.Addition8Full.circuit.spec { x, y, carry_in := 0 } z
 
@@ -95,7 +94,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp
+    dsimp [ProvableType.from_values, ProvableType.to_vars]
     rw [hx, hy]
 
     -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold
