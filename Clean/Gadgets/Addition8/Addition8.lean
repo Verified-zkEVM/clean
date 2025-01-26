@@ -1,7 +1,7 @@
 import Clean.Gadgets.Addition8.Addition8Full
 
 namespace Gadgets.Addition8
-variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)

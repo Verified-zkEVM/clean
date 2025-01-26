@@ -140,7 +140,7 @@ theorem soundness (x y out carry_in carry_out: F p):
 /--
   Given the default witness generation, we show that the addition constraint is satisfied
 -/
-theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
+theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
@@ -165,7 +165,7 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
     set T := ZMod.val x + ZMod.val y + ZMod.val carry_in
     have T_not_wrap : T % p = T := by
       dsimp [T]
-      rw [Nat.mod_eq_iff_lt p_neq_zero.elim]
+      rw [Nat.mod_eq_iff_lt p_neq_zero.out]
       have sum_bound := FieldUtils.byte_sum_le_bound x y as_x as_y
       have sum_lt_512 : (x + y).val + carry_in.val ≤ 511 := by
         apply Nat.le_sub_one_of_lt at sum_bound
@@ -183,7 +183,7 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
     have obv : (256 : F p).val = 256 % p := ZMod.val_natCast _
     have h : T / 256 * (ZMod.val (256 : F p)) + T % 256 = T := by
       rw [mul_comm, obv]
-      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.elim).mpr
+      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.out).mpr
         (Nat.lt_trans (by norm_num) p_large_enough.elim), Nat.div_add_mod]
 
     rw [h, T_not_wrap]
@@ -193,7 +193,7 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
   Given the default witness generation, we show that the output carry
   is either 0 or 1
 -/
-theorem completeness_bool [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
+theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
@@ -213,7 +213,7 @@ theorem completeness_bool [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
       have h : (x + y + carry_in).val = x.val + y.val + carry_in.val := by
         rw [ZMod.val_add, ZMod.val_add x]
         simp
-        rw [(Nat.mod_eq_iff_lt p_neq_zero.elim).mpr
+        rw [(Nat.mod_eq_iff_lt p_neq_zero.out).mpr
           (Nat.lt_trans sum_lt_256 (by linarith [p_large_enough.elim]))]
       rw [h]
       rw [Nat.div_eq_of_lt sum_lt_256]

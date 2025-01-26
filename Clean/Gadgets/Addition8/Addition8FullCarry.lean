@@ -4,7 +4,7 @@ import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
 
 namespace Gadgets.Addition8FullCarry
-variable {p : ℕ} [p_neq_zero: Fact (p ≠ 0)] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)
