@@ -118,12 +118,17 @@ lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
     try simp only [witness_length, Nat.reduceAdd, witnesses, List.append_nil]
 
 /--
-Helper lemma: If an environment respects local witnesses, then it also does so in the flattened variant.
+Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
 -/
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
   env.extends_vector (witnesses (to_flat_operations ops)) ops.initial_offset →
   env.uses_local_witnesses ops := by
-  sorry
+  unfold Environment.uses_local_witnesses Environment.extends_vector
+  intro h i
+  specialize h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
+  simp only [Fin.cast_mk] at h
+  rw [h]
+  simp only [Vector.get, Fin.cast_mk, List.get_eq_getElem, flat_witness_eq_witness, Fin.coe_cast]
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses (ops.witness c) → env.uses_local_witnesses ops
@@ -175,9 +180,12 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
   rw [←add_assoc, total_length_eq] at h
   rw [h]
-  simp [List.getElem_append, Operations.local_witnesses, SubCircuit.witnesses]
-  -- definitely true! TODO finish
-  sorry
+  have : ∀ f g : Environment F → F, f = g → f env = g env := by intro f g h; rw [h]
+  apply this
+  simp only [SubCircuit.witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast]
+  have lt1 : i < (witnesses c.ops).val.length := by rw [(witnesses c.ops).prop]; exact i.is_lt
+  rw [List.getElem_append_right'' ops.local_witnesses.val lt1]
+  simp [Nat.add_comm]
 
 /--
 Completeness theorem which proves that we can replace constraints in subcircuits
