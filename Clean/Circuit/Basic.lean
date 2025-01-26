@@ -126,7 +126,7 @@ def local_length {n: ℕ} : Operations F n → ℕ
 
 @[simp]
 def local_witnesses {n: ℕ} : (ops: Operations F n) → Witness F ops.local_length
-  | .empty _ => ⟨ [], rfl ⟩
+  | .empty _ => .nil
   | .witness ops c => (local_witnesses ops).push c
   | .assert ops _ => local_witnesses ops
   | .lookup ops _ => local_witnesses ops
@@ -444,4 +444,13 @@ def constraints_hold_from_list.completeness (eval: Environment F) : List (Operat
       table.contains (entry.map eval) ∧ constraints_hold_from_list.completeness eval ops
     | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list.completeness eval ops
     | _ => constraints_hold_from_list.completeness eval ops
+
+-- witness generation
+-- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
+def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
+  let generators := (circuit offset).local_witnesses.val
+  generators.foldl (fun acc compute =>
+    let env i := acc.getD i 0
+    acc.push (compute ⟨ env ⟩))
+  #[]
 end Circuit
