@@ -79,7 +79,7 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  have : x0_var.eval env = x0 := by injections
+  have : x0_var.eval env = x0 := by injections h_inputs
   have : x1_var.eval env = x1 := by injections h_inputs
   have : x2_var.eval env = x2 := by injections h_inputs
   have : x3_var.eval env = x3 := by injections h_inputs
@@ -203,7 +203,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
     ⟨ x0_var, x1_var, x2_var, x3_var ⟩,
     ⟨ y0_var, y1_var, y2_var, y3_var ⟩,
     carry_in_var
-    ⟩ |>.from i0 |>.local_witnesses
+    ⟩ i0 |>.local_witnesses
 
   let wit : Vector (F p) 8 := wit_gens.map (fun f => f env)
 
@@ -223,7 +223,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
   ] := by
     dsimp only [wit, wit_gens]
     -- TODO we need a simp set
-    dsimp only [Circuit.from, OperationsList.from_offset, Operations.local_witnesses, Vector.append,
+    dsimp only [OperationsList.from_offset, Operations.local_witnesses, Vector.append,
       Expression.eval, Circuit.formal_assertion_to_subcircuit, FlatOperation.to_flat_operations,
       SubCircuit.witness_length, FlatOperation.witness_length, Operations.local_length, Vector.push,
       SubCircuit.witnesses, FlatOperation.witnesses, Vector.map, List.map]

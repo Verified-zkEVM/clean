@@ -164,6 +164,13 @@ instance : CoeOut (Operations F n) (OperationsList F) where
 
 instance (ops) : CoeDep (OperationsList F) ops (Operations F ops.offset) where
   coe := ops.withLength
+
+/--
+The canonical way to create an empty operations list is to just pass in the offset
+-/
+@[reducible]
+instance : Coe ℕ (OperationsList F) where
+  coe offset := .from_offset offset
 end OperationsList
 
 structure Circuit (F : Type) [Field F] (α : Type) where
@@ -186,30 +193,17 @@ instance : Monad (Circuit F) where
       rw [h1, h2]
   }
 
-instance : CoeFun (Circuit F α) (fun _ => OperationsList F → OperationsList F × α) where
-  coe c := c.run
-
 @[reducible]
-def Circuit.final_offset_from (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  (circuit (.from_offset offset)).1.offset
+def Circuit.final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
+  (circuit.run offset).1.offset
 
-@[reducible, simp]
-def Circuit.from (circuit: Circuit F α) (offset : ℕ) : Operations F (circuit.final_offset_from offset) :=
-  (circuit (.from_offset offset)).1.withLength
+instance : CoeFun (Circuit F α) (fun circuit => (offset: ℕ) → Operations F (circuit.final_offset offset)) where
+  coe c offset := c.run offset |>.fst.withLength
 
 namespace Circuit
 @[reducible]
 def output (circuit: Circuit F α) (offset := 0) : α :=
-  (circuit (.from_offset offset)).2
-
-/--
-It makes sense to view a circuit as a function from initial offset to `Operations × α`.
-`CoeFun` doesn't seem to work, probably because `Circuit` is already a function type.
-So instead we at least coerce a Nat to the initial OperationsList
--/
-@[reducible]
-instance : Coe ℕ (OperationsList F) where
-  coe offset := .from_offset offset
+  (circuit.run offset).2
 
 -- core operations we can do in a circuit
 
@@ -303,7 +297,7 @@ def Soundness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Provabl
     ∀ b_var : β.var, ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var |>.from offset) →
+    constraints_hold.soundness env (main b_var offset) →
     -- the spec holds on the input and output
     let a := Provable.eval env (output (main b_var) offset)
     spec b a
@@ -313,12 +307,12 @@ def Completeness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Prov
   (assumptions: β.value → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : β.var,
-  env.uses_local_witnesses (main b_var |>.from offset) →
+  env.uses_local_witnesses (main b_var offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β.value, Provable.eval env b_var = b →
   assumptions b →
   -- the constraints hold
-  constraints_hold.completeness env (main b_var |>.from offset)
+  constraints_hold.completeness env (main b_var offset)
 
 structure FormalCircuit (F: Type) (β α: TypePair)
   [Field F] [ProvableType F α] [ProvableType F β]
@@ -367,19 +361,19 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     ∀ b_var : β.var, ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var |>.from offset) →
+    constraints_hold.soundness env (main b_var offset) →
     -- the spec holds
     spec b
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
     ∀ offset, ∀ env, ∀ b_var : β.var,
-    env.uses_local_witnesses (main b_var |>.from offset) →
+    env.uses_local_witnesses (main b_var offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β.value, Provable.eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
-    constraints_hold.completeness env (main b_var |>.from offset)
+    constraints_hold.completeness env (main b_var offset)
 
 @[simp]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
@@ -429,7 +423,7 @@ def OperationsList.toList : OperationsList F → List (Operation F)
 
 namespace Circuit
 def operations (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
-  (circuit.from offset).toList
+  (circuit offset).toList
 
 -- TODO can probably delete these
 

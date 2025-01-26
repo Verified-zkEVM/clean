@@ -221,11 +221,11 @@ variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
 namespace Circuit
 lemma initial_offset_eq {α} {n: ℕ} {circuit: Circuit F α} :
-  (circuit.from n).initial_offset = n := circuit.prop (.from_offset n)
+  (circuit n).initial_offset = n := circuit.prop (.from_offset n)
 
 def formal_circuit_to_subcircuit (n: ℕ)
   (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F n :=
-  let res := circuit.main b_var n
+  let res := circuit.main b_var |>.run n
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
   let ops := res.1.withLength
   let a_var := res.2
@@ -281,7 +281,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
 @[simp]
 def formal_assertion_to_subcircuit (n: ℕ)
   (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F n :=
-  let res := circuit.main b_var n
+  let res := circuit.main b_var |>.run n
   let ops := res.1.withLength
 
   have s: SubCircuit F n := by
