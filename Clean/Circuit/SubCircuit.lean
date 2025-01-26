@@ -98,15 +98,11 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
     | case3 env ops ih' =>
       simp_all only [imp_false, forall_eq', witness_length, List.cons_append]
 
--- this variant is needed (I think) for the cast in the next lemma's statement
-lemma flat_witness_length_eq' {n: ℕ} {ops: Operations F n} :
-  Witness F (witness_length (to_flat_operations ops)) = Witness F ops.local_length := by rw [flat_witness_length_eq]
-
 /--
 The witnesses created from flat and nested operations are the same
 -/
 lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
-  cast flat_witness_length_eq' (witnesses (to_flat_operations ops)) = ops.local_witnesses := by
+  (witnesses (to_flat_operations ops)).val = ops.local_witnesses.val := by
   sorry
 
 /--
@@ -147,7 +143,14 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   simp [List.getElem_append]
 
 lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.local_length = n := by
-  sorry
+  open Operations (initial_offset local_length) in
+  induction ops with
+  | empty n => simp only [initial_offset, local_length, add_zero]
+  | witness ops _ ih | subcircuit ops s ih =>
+    dsimp only [initial_offset, local_length]
+    rw [←add_assoc, ih]
+  | assert ops _ ih | lookup op _ ih =>
+    simp only [initial_offset, local_length, ih]
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses c.ops) n
