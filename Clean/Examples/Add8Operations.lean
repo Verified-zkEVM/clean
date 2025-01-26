@@ -2,16 +2,17 @@ import Clean.Utils.Primes
 import Clean.Gadgets.Addition8.Addition8
 
 section
+def p := p_babybear
+instance : Fact (p.Prime) := prime_babybear
+instance : Fact (p > 512) := .mk (by native_decide)
 
-#eval
-  let p := 1009
-  let p_prime := Fact.mk prime_1009
-  let p_non_zero := Fact.mk (by norm_num : p ≠ 0)
-  let p_large_enough := Fact.mk (by norm_num : p > 512)
-  let main := do
-    let x ← witness (fun _ => 10)
-    let y ← witness (fun _ => 20)
-    let z ← Gadgets.Addition8.add8 (p:=p) { x, y }
-    Gadgets.Addition8.add8 (p:=p) { x, y := z }
-  main.operations
+def circuit := do
+  let x ← witness (F := F p) (fun _ => 10)
+  let y ← witness (fun _ => 20)
+  let z ← Gadgets.Addition8.add8 { x, y }
+  Gadgets.Addition8.add8 { x, y := z }
+
+#eval circuit.operations
+
+#eval circuit.witnesses
 end
