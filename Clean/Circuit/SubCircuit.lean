@@ -220,9 +220,8 @@ end FlatOperation
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
 namespace Circuit
--- helper lemma: `Operations.initial_offset` is well-defined
 lemma initial_offset_eq {α} {n: ℕ} {circuit: Circuit F α} :
-  (circuit.from n).initial_offset = n := by sorry
+  (circuit.from n).initial_offset = n := circuit.prop (.from_offset n)
 
 def formal_circuit_to_subcircuit (n: ℕ)
   (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F n :=
