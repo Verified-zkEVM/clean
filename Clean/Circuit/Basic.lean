@@ -166,16 +166,28 @@ instance (ops) : CoeDep (OperationsList F) ops (Operations F ops.offset) where
   coe := ops.withLength
 end OperationsList
 
-@[simp]
-def Circuit (F : Type) [Field F] (α : Type) :=
-  OperationsList F → OperationsList F × α
+structure Circuit (F : Type) [Field F] (α : Type) where
+  run: OperationsList F → OperationsList F × α
+  prop: ∀ ops, (run ops).1.withLength.initial_offset = ops.withLength.initial_offset
 
 instance : Monad (Circuit F) where
-  pure a ops := (ops, a)
-  bind f g ops :=
-    let (ops', a) := f ops
-    let (ops'', b) := g a ops'
-    (ops'', b)
+  pure a := {
+    run := fun ops => (ops, a),
+    prop := fun ops => rfl
+  }
+  bind f g := {
+    run := fun ops =>
+      let (ops', a) := f.run ops
+      let (ops'', b) := (g a).run ops'
+      (ops'', b),
+    prop := fun ops => by
+      have h1 := (g (f.run ops).2).prop (f.run ops).1
+      have h2 := f.prop ops
+      rw [h1, h2]
+  }
+
+instance : CoeFun (Circuit F α) (fun _ => OperationsList F → OperationsList F × α) where
+  coe c := c.run
 
 @[reducible]
 def Circuit.final_offset_from (circuit: Circuit F α) (offset: ℕ) : ℕ :=
@@ -203,9 +215,12 @@ instance : Coe ℕ (OperationsList F) where
 
 -- create a new variable
 @[simp]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) := fun ops =>
-  let var: Variable F := ⟨ ops.offset ⟩
-  (.witness ops compute, var)
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) := {
+  run := fun ops =>
+    let var: Variable F := ⟨ ops.offset ⟩
+    (.witness ops compute, var)
+  prop := fun _ => rfl
+}
 
 @[simp]
 def witness (compute : Environment F → F) := do
