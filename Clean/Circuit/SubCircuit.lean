@@ -335,17 +335,20 @@ end Circuit
 
 -- run a sub-circuit
 @[simp]
-def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :=
+def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var := ⟨
   fun ops =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
-    (.subcircuit ops subcircuit, a)
+    (.subcircuit ops subcircuit, a),
+  fun _ => rfl
+⟩
 
 @[simp]
-def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit :=
+def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit := ⟨
   fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
-    (.subcircuit ops subcircuit, ())
-
+    (.subcircuit ops subcircuit, ()),
+  fun _ => rfl
+⟩
 
 -- UNUSED STUFF BELOW
 

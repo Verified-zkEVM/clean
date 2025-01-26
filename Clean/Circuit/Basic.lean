@@ -215,12 +215,12 @@ instance : Coe ℕ (OperationsList F) where
 
 -- create a new variable
 @[simp]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) := {
-  run := fun ops =>
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) := ⟨
+  fun ops =>
     let var: Variable F := ⟨ ops.offset ⟩
-    (.witness ops compute, var)
-  prop := fun _ => rfl
-}
+    (.witness ops compute, var),
+  fun _ => rfl
+⟩
 
 @[simp]
 def witness (compute : Environment F → F) := do
@@ -229,13 +229,17 @@ def witness (compute : Environment F → F) := do
 
 -- add a constraint
 @[simp]
-def assert_zero (e: Expression F) : Circuit F Unit := fun ops =>
-  (.assert ops e, ())
+def assert_zero (e: Expression F) : Circuit F Unit := ⟨
+  fun ops => (.assert ops e, ()),
+  fun _ => rfl
+⟩
 
 -- add a lookup
 @[simp]
-def lookup (l: Lookup F) : Circuit F Unit := fun ops =>
-  (.lookup ops l, ())
+def lookup (l: Lookup F) : Circuit F Unit := ⟨
+  fun ops => (.lookup ops l, ()),
+  fun _ => rfl
+⟩
 end Circuit
 
 @[simp]
