@@ -98,19 +98,31 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
     | case3 env ops ih' =>
       simp_all only [imp_false, forall_eq', witness_length, List.cons_append]
 
+lemma witnesses_append {F} {a b: List (FlatOperation F)} :
+  (witnesses (a ++ b)).val = (witnesses a).val ++ (witnesses b).val := by
+  induction a using witnesses.induct with
+  | case1 => simp only [List.nil_append, witnesses]
+  | case2 _ _ ih | case3 _ _ ih | case4 _ _ ih =>
+    simp only [List.cons_append, witness_length, witnesses, List.append_eq, ih]
+
 /--
 The witnesses created from flat and nested operations are the same
 -/
 lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
   (witnesses (to_flat_operations ops)).val = ops.local_witnesses.val := by
-  sorry
+  induction ops with
+  | empty => trivial
+  | witness ops c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
+    dsimp [to_flat_operations, Operations.local_length]
+    rw [←ih, witnesses_append]
+    try simp only [witness_length, Nat.reduceAdd, witnesses, List.append_nil]
 
 /--
 Helper lemma: If an environment respects local witnesses, then it also does so in the flattened variant.
 -/
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
   env.extends_vector (witnesses (to_flat_operations ops)) ops.initial_offset →
-  env.uses_local_witnesses ops :=
+  env.uses_local_witnesses ops := by
   sorry
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :

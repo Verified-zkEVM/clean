@@ -58,12 +58,12 @@ def witness_length : List (FlatOperation F) → ℕ
 def witnesses : (l: List (FlatOperation F)) → Witness F (witness_length l)
   | [] => ⟨ [], rfl ⟩
   | op :: ops =>
-    let ⟨ w, h ⟩ := witnesses ops
+    let ws := witnesses ops
     match op with
     | witness compute =>
-      ⟨ compute :: w, by simp [h] ⟩
+      ⟨ compute :: ws.val, by simp [ws.prop] ⟩
     | assert _ | lookup _ =>
-      ⟨ w, by simp_all only [witness_length]⟩
+      ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
 end FlatOperation
 
 -- this type models a subcircuit: a list of operations that imply a certain spec,
