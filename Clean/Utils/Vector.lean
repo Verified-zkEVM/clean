@@ -126,4 +126,10 @@ namespace Vector
       have ih' : motive as' := induct_push h0 h1 as'
       have h' := h1 a' ih'
       rwa [ih]
+
+    def init {n} (create: Fin n → α) : Vector α n :=
+      match n with
+      | 0 => nil
+      | k + 1 =>
+        (init (fun i : Fin k => create i)).push (create k)
 end Vector
