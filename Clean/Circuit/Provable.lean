@@ -24,14 +24,12 @@ variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableT
 
 @[simp]
 def eval (env: Environment F) (x: α.var) : α.value :=
-  let n := size F α
-  let vars : Vector (Expression F) n := to_vars x
+  let vars := to_vars x
   let values := vars.map env
   from_values values
 
 def const (F: Type) [ProvableType F α] (x: α.value) : α.var :=
-  let n := size F α
-  let values : Vector F n := to_values x
+  let values : Vector F _ := to_values x
   from_vars (values.map .const)
 
 @[reducible]
