@@ -224,7 +224,7 @@ lemma initial_offset_eq {α} {n: ℕ} {circuit: Circuit F α} :
   (circuit n).initial_offset = n := circuit.prop (.from_offset n)
 
 def formal_circuit_to_subcircuit (n: ℕ)
-  (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F n :=
+  (circuit: FormalCircuit F β α) (b_var : β.var F) : α.var F × SubCircuit F n :=
   let res := circuit.main b_var |>.run n
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
   let ops := res.1.withLength
@@ -242,8 +242,8 @@ def formal_circuit_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value := Provable.eval env b_var
-    let a : α.value := Provable.eval env a_var
+    let b : β.value F := Provable.eval env b_var
+    let a : α.value F := Provable.eval env a_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b a
 
@@ -280,7 +280,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
 
 @[simp]
 def formal_assertion_to_subcircuit (n: ℕ)
-  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F n :=
+  (circuit: FormalAssertion F β) (b_var : β.var F) : SubCircuit F n :=
   let res := circuit.main b_var |>.run n
   let ops := res.1.withLength
 
@@ -296,7 +296,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value := Provable.eval env b_var
+    let b : β.value F := Provable.eval env b_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b
 
@@ -334,7 +334,7 @@ end Circuit
 
 -- run a sub-circuit
 @[simp]
-def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var := ⟨
+def subcircuit (circuit: FormalCircuit F β α) (b: β.var F) : Circuit F (α.var F) := ⟨
   fun ops =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
     (.subcircuit ops subcircuit, a),
@@ -342,7 +342,7 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :
 ⟩
 
 @[simp]
-def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit := ⟨
+def assertion (circuit: FormalAssertion F β) (b: β.var F) : Circuit F Unit := ⟨
   fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
     (.subcircuit ops subcircuit, ()),

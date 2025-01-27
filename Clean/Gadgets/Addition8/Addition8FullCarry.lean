@@ -10,18 +10,13 @@ variable [p_large_enough: Fact (p > 512)]
 open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: F
   y: F
   carry_in: F
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
 @[simp]
-instance : ProvableType (F p) (Inputs p) where
+instance : ProvableType (F p) Inputs where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
   from_vars v :=
@@ -33,17 +28,12 @@ instance : ProvableType (F p) (Inputs p) where
     ⟨ x, y, carry_in ⟩
 
 
-structure OutputStruct (F : Type) where
+structure Outputs (F : Type) where
   z: F
   carry_out: F
 
-def Outputs (p : ℕ) : TypePair := ⟨
-  OutputStruct (Expression (F p)),
-  OutputStruct (F p)
-⟩
-
 @[simp]
-instance : ProvableType (F p) (Outputs p) where
+instance : ProvableType (F p) Outputs where
   size := 2
   to_vars s := vec [s.z, s.carry_out]
   from_vars v :=
@@ -54,7 +44,7 @@ instance : ProvableType (F p) (Outputs p) where
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
-def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
+def add8_full_carry (input : Inputs.var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
