@@ -115,9 +115,9 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
 
   -- simplify output and spec
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
-  set output := Provable.eval env (main.output i0)
+  set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp [output, ProvableType.from_values, ProvableType.to_vars]
+    dsimp [output, from_values, to_vars]
 
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]

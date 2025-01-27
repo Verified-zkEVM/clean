@@ -17,33 +17,22 @@ class ProvableType (F: Type) (α: TypePair) where
   to_values : α.value → Vector F size
   from_values : Vector F size → α.value
 
--- or is it better as a structure?
-structure ProvableType' (F : Type) where
-  var: Type
-  value: Type
-  size : ℕ
-  to_vars : var → Vector (Expression F) size
-  from_vars : Vector (Expression F) size → var
-  to_values : value → Vector F size
-  from_values : Vector F size → value
-
--- or like this?
-def Provable' (F: Type) := { α : TypePair // ∃ p : Type, p = ProvableType F α }
+export ProvableType (size to_vars from_vars to_values from_values)
 
 namespace Provable
 variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
 
 @[simp]
 def eval (env: Environment F) (x: α.var) : α.value :=
-  let n := ProvableType.size F α
-  let vars : Vector (Expression F) n := ProvableType.to_vars x
+  let n := size F α
+  let vars : Vector (Expression F) n := to_vars x
   let values := vars.map env
-  ProvableType.from_values values
+  from_values values
 
 def const (F: Type) [ProvableType F α] (x: α.value) : α.var :=
-  let n := ProvableType.size F α
-  let values : Vector F n := ProvableType.to_values x
-  ProvableType.from_vars (values.map (fun v => Expression.const v))
+  let n := size F α
+  let values : Vector F n := to_values x
+  from_vars (values.map .const)
 
 @[reducible]
 def unit : TypePair := ⟨ Unit, Unit ⟩
@@ -94,3 +83,5 @@ instance : ProvableType F (fields F n) where
   to_values x := x
   from_values v := v
 end Provable
+
+export Provable (eval)
