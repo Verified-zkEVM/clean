@@ -465,6 +465,14 @@ end Circuit
 
 export Circuit (witness_var witness assert_zero lookup Soundness Completeness FormalCircuit FormalAssertion)
 
+/-- move from inductive (nested) operations back to flat operations -/
+def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
+  | .empty _ => []
+  | .witness ops c => to_flat_operations ops ++ [.witness c]
+  | .assert ops c => to_flat_operations ops ++ [.assert c]
+  | .lookup ops l => to_flat_operations ops ++ [.lookup l]
+  | .subcircuit ops circuit => to_flat_operations ops ++ circuit.ops
+
 /--
 Singleton `Operations`, that can be collected in a plain list, for easier processing.
 -/
