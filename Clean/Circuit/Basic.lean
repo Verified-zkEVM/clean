@@ -68,8 +68,12 @@ end FlatOperation
 
 export FlatOperation (constraints_hold_flat)
 
--- this type models a subcircuit: a list of operations that imply a certain spec,
--- for all traces that satisfy the constraints
+/--
+This is a low-level way to model a subcircuit: A list of operations, instantiated a certain offset.
+
+To enable composition of formal proofs, subcircuits come with custom `soundness` and `completeness`
+statements, which have to be compatible with the subcircuit's actual constraints.
+-/
 structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   ops: List (FlatOperation F)
 
@@ -83,7 +87,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   imply_soundness : ∀ env,
     FlatOperation.constraints_hold_flat env ops → soundness env
 
-  -- `completeness` needs to imply the constraints, when using default witnesses for all _local_ variables of this circuit
+  -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses ops) offset →
     completeness env → FlatOperation.constraints_hold_flat env ops
 
