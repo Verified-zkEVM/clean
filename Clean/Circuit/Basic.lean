@@ -66,6 +66,8 @@ def witnesses : (l: List (FlatOperation F)) → Witness F (witness_length l)
       ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
 end FlatOperation
 
+export FlatOperation (constraints_hold_flat)
+
 -- this type models a subcircuit: a list of operations that imply a certain spec,
 -- for all traces that satisfy the constraints
 structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
@@ -173,37 +175,51 @@ instance : Coe ℕ (OperationsList F) where
   coe offset := .from_offset offset
 end OperationsList
 
-structure Circuit (F : Type) [Field F] (α : Type) where
-  run: OperationsList F → OperationsList F × α
-  prop: ∀ ops, (run ops).1.withLength.initial_offset = ops.withLength.initial_offset
+/--
+The monad to write circuits. Let's you use `do` notation while in the background
+it builds up `Operations` that represent the circuit at a low level.
+
+Intuitively, a `Circuit` is a function `Operations F n → Operations F n' × α` for some
+return type `α`, and the monad is a state monad that keeps the `Operations` around.
+
+For technical reasons, we wrap `Operations F n` in `OperationsList` to get rid of the
+dependent type argument, and apart from the function we require a consistency
+property to make foundational proofs work.
+-/
+def Circuit (F : Type) [Field F] (α : Type) :=
+  { run: OperationsList F → OperationsList F × α //
+    -- the initial offset is preserved when applying the circuit
+    ∀ ops, (run ops).1.withLength.initial_offset = ops.withLength.initial_offset }
+
+@[reducible]
+def Circuit.run (circuit: Circuit F α) := circuit.val
 
 instance : Monad (Circuit F) where
   pure a := {
-    run := fun ops => (ops, a),
-    prop := fun ops => rfl
+    val := fun ops => (ops, a),
+    property := fun _ => rfl
   }
   bind f g := {
-    run := fun ops =>
+    val := fun ops =>
       let (ops', a) := f.run ops
       let (ops'', b) := (g a).run ops'
       (ops'', b),
-    prop := fun ops => by
-      have h1 := (g (f.run ops).2).prop (f.run ops).1
-      have h2 := f.prop ops
-      rw [h1, h2]
+    property := fun ops =>
+      let res := f.run ops
+      f.property ops ▸ (g res.2).property res.1
   }
-
-@[reducible]
-def Circuit.final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  (circuit.run offset).1.offset
-
-instance : CoeFun (Circuit F α) (fun circuit => (offset: ℕ) → Operations F (circuit.final_offset offset)) where
-  coe c offset := c.run offset |>.fst.withLength
 
 namespace Circuit
 @[reducible]
+def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
+  circuit.run offset |>.fst.offset
+
+instance : CoeFun (Circuit F α) (fun circuit => (offset: ℕ) → Operations F (circuit.final_offset offset)) where
+  coe circuit offset := circuit.run offset |>.fst.withLength
+
+@[reducible]
 def output (circuit: Circuit F α) (offset := 0) : α :=
-  (circuit.run offset).2
+  circuit.run offset |>.snd
 
 -- core operations we can do in a circuit
 
@@ -237,7 +253,7 @@ def lookup (l: Lookup F) : Circuit F Unit := ⟨
 end Circuit
 
 @[simp]
-def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) : Prop :=
+def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) :=
   ∀ i : Fin ops.local_length, env.get (ops.initial_offset + i) = ops.local_witnesses.get i env
 
 namespace Circuit
@@ -251,21 +267,24 @@ def constraints_hold {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .lookup ops { table, entry, .. } =>
     constraints_hold eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    constraints_hold eval ops ∧ FlatOperation.constraints_hold_flat eval s.ops
+    constraints_hold eval ops ∧ constraints_hold_flat eval s.ops
 
+/--
+Version of `constraints_hold` that replaces the statement of subcircuits with their `soundness`.
+-/
 @[simp]
 def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops compute => constraints_hold eval ops
   | .assert ops e =>
     let constraint := eval e = 0
-    if let .empty m := ops then constraint else constraints_hold.soundness eval ops ∧ constraint
+    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
   | .lookup ops { table, entry, .. } =>
     let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else constraints_hold.soundness eval ops ∧ constraint
+    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
   | .subcircuit ops s =>
     let constraint := s.soundness eval
-    if let .empty m := ops then constraint else constraints_hold.soundness eval ops ∧ constraint
+    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
 
 /--
 Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
@@ -277,13 +296,13 @@ def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations 
   | .assert ops e =>
     let constraint := eval e = 0
     -- avoid a leading `True ∧` if ops is empty
-    if let .empty m := ops then constraint else constraints_hold.completeness eval ops ∧ constraint
-  | .lookup ops { table, entry, index := _ } =>
+    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+  | .lookup ops { table, entry, .. } =>
     let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else constraints_hold.completeness eval ops ∧ constraint
+    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
   | .subcircuit ops s =>
     let constraint := s.completeness eval
-    if let .empty m := ops then constraint else constraints_hold.completeness eval ops ∧ constraint
+    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
 
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
