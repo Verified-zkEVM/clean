@@ -151,15 +151,22 @@ def from_offset (offset: ℕ) : OperationsList F := ⟨ offset, .empty offset �
 @[reducible]
 def witness (ops: OperationsList F) (compute : Environment F → F) : OperationsList F :=
   ⟨ ops.offset + 1, .witness ops.withLength compute ⟩
+
 @[reducible]
 def assert (ops: OperationsList F) (e: Expression F) : OperationsList F :=
   ⟨ ops.offset, .assert ops.withLength e ⟩
+
 @[reducible]
 def lookup (ops: OperationsList F) (l: Lookup F) : OperationsList F :=
   ⟨ ops.offset, .lookup ops.withLength l ⟩
+
 @[reducible]
 def subcircuit (ops: OperationsList F) (s: SubCircuit F ops.offset) : OperationsList F :=
   ⟨ ops.offset + s.witness_length, .subcircuit ops.withLength s ⟩
+
+/--
+`Operations` and `OperationsList` are basically the same so we want easy coercions between them.
+-/
 
 instance : CoeOut (Operations F n) (OperationsList F) where
   coe ops := ⟨ n, ops ⟩
@@ -168,23 +175,36 @@ instance (ops) : CoeDep (OperationsList F) ops (Operations F ops.offset) where
   coe := ops.withLength
 
 /--
-The canonical way to create an empty operations list is to just pass in the offset
+The canonical way to create an empty `OperationsList` is to just pass in the offset
 -/
 @[reducible]
 instance : Coe ℕ (OperationsList F) where
   coe offset := .from_offset offset
+
 end OperationsList
 
 /--
-The monad to write circuits. Let's you use `do` notation while in the background
+The monad to write circuits. Lets you use `do` notation while in the background
 it builds up `Operations` that represent the circuit at a low level.
 
 Intuitively, a `Circuit` is a function `Operations F n → Operations F n' × α` for some
 return type `α`, and the monad is a state monad that keeps the `Operations` around.
 
-For technical reasons, we wrap `Operations F n` in `OperationsList` to get rid of the
-dependent type argument, and apart from the function we require a consistency
+For technical reasons, we wrap `Operations F n` in `OperationsList F` to get rid of the
+dependent type argument; and apart from the function, we require a consistency
 property to make foundational proofs work.
+
+```
+def circuit : Circuit F Unit := do
+  -- witness a new variable
+  let x ← witness (fun _ => 1)
+
+  -- add a constraint
+  assert_zero (x - 1) * x
+
+  -- or add a lookup
+  lookup { table := MyTable, entry := [x], ... }
+```
 -/
 def Circuit (F : Type) [Field F] (α : Type) :=
   { run: OperationsList F → OperationsList F × α //
@@ -214,6 +234,13 @@ namespace Circuit
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   circuit.run offset |>.fst.offset
 
+/--
+This function coercion means that we can just use `circuit n` to get the `Operations` that result
+from instantiating the circuit with an initial offset `n`.
+
+Apart from using them as a monad in actual gadgets, this is the main way to interact with circuits in
+more generic, foundational theorems.
+-/
 instance : CoeFun (Circuit F α) (fun circuit => (offset: ℕ) → Operations F (circuit.final_offset offset)) where
   coe circuit offset := circuit.run offset |>.fst.withLength
 
