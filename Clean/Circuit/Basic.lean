@@ -26,8 +26,15 @@ def Witness (F: Type) (n: ℕ) := Vector (Environment F → F) n
 def Environment.extends_vector (env: Environment F) (wit: Witness F n) (offset: ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i) = wit.get i env
 
+/--
+`FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
+
+This is an intermediary type on the way to defining the full inductive `Operations` type.
+It is needed because we already need to talk about operations in the `SubCircuit` definition,
+which in turn is needed to define `Operations`.
+-/
 inductive FlatOperation (F : Type) where
-  | witness : (compute : Environment F → F) → FlatOperation F
+  | witness : (Environment F → F) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
 
@@ -40,11 +47,16 @@ def toString [Repr F] : FlatOperation F → String
 instance [Repr F] : Repr (FlatOperation F) where
   reprPrec op _ := toString op
 
+/--
+What it means that "constraints hold" on a list of flat operations:
+- For assertions, the expression must evaluate to 0
+- For lookups, the evaluated entry must be in the table
+-/
 def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Prop
   | [] => True
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ constraints_hold_flat eval ops
-    | lookup { table, entry, index := _ } =>
+    | lookup { table, entry, .. } =>
       table.contains (entry.map eval) ∧ constraints_hold_flat eval ops
     | _ => constraints_hold_flat eval ops
 
@@ -69,7 +81,8 @@ end FlatOperation
 export FlatOperation (constraints_hold_flat)
 
 /--
-This is a low-level way to model a subcircuit: A list of operations, instantiated a certain offset.
+This is a low-level way to model a subcircuit:
+A flat list of circuit operations, instantiated at a certain offset.
 
 To enable composition of formal proofs, subcircuits come with custom `soundness` and `completeness`
 statements, which have to be compatible with the subcircuit's actual constraints.
@@ -254,7 +267,7 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 
 -- core operations we can do in a circuit
 
--- create a new variable
+/-- Create a new variable -/
 @[simp]
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) := ⟨
   fun ops =>
@@ -263,19 +276,20 @@ def witness_var (compute : Environment F → F) : Circuit F (Variable F) := ⟨
   fun _ => rfl
 ⟩
 
+/-- Create a new variable, as an `Expression`. -/
 @[simp]
 def witness (compute : Environment F → F) := do
   let var ← witness_var compute
   return Expression.var var
 
--- add a constraint
+/-- Add a constraint. -/
 @[simp]
 def assert_zero (e: Expression F) : Circuit F Unit := ⟨
   fun ops => (.assert ops e, ()),
   fun _ => rfl
 ⟩
 
--- add a lookup
+/-- Add a lookup. -/
 @[simp]
 def lookup (l: Lookup F) : Circuit F Unit := ⟨
   fun ops => (.lookup ops l, ()),
@@ -283,6 +297,13 @@ def lookup (l: Lookup F) : Circuit F Unit := ⟨
 ⟩
 end Circuit
 
+/--
+If an environment "uses local witnesses" it means that the environment's evaluation
+matches the output of the witness generator passed along with a `witness` declaration,
+for all variables declared locally within the circuit.
+
+This is the condition needed to prove completeness of a circuit.
+-/
 @[simp]
 def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) :=
   ∀ i : Fin ops.local_length, env.get (ops.initial_offset + i) = ops.local_witnesses.get i env
@@ -290,6 +311,12 @@ def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
 
+/--
+What it means that "constraints hold" on a sequence of operations.
+- For assertions, the expression must evaluate to 0
+- For lookups, the evaluated entry must be in the table
+- For subcircuits, the constraints must hold on the subcircuit's flat operations
+-/
 @[simp]
 def constraints_hold {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
