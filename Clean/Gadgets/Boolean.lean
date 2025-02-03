@@ -13,7 +13,7 @@ inductive Boolean (F: Type) where
 namespace Boolean
 def var (b: Boolean (F p)) := Expression.var b.1
 
-def witness (compute : Unit → F p) := do
+def witness (compute : Environment (F p) → F p) := do
   let x ← witness_var compute
   assert_bool x
   return Boolean.mk x
@@ -23,7 +23,7 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
 
 def spec (x: F p) := x = 0 ∨ x = 1
 
-theorem equiv : ∀ x: F p,
+theorem equiv : ∀ {x: F p},
   x * (x + -1 * 1) = 0 ↔ x = 0 ∨ x = 1 :=
 by
   intro x
@@ -51,16 +51,16 @@ def circuit : FormalAssertion (F p) (field (F p)) where
   spec := spec
 
   soundness := by
-    intro ctx env x x_var hx _ h_holds
-    change x_var.eval_env env = x at hx
+    intro _ env x_var x hx _ h_holds
+    change x_var.eval env = x at hx
     dsimp at h_holds
     rw [hx] at h_holds
-    apply (equiv x).mp h_holds
+    apply equiv.mp h_holds
 
   completeness := by
-    intro ctx x x_var hx _ spec
-    change x_var.eval = x at hx
+    intro n env x_var _ x hx _ spec
+    change x_var.eval env = x at hx
     dsimp
     rw [hx]
-    apply (equiv x).mpr spec
+    apply equiv.mpr spec
 end Boolean

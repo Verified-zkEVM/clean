@@ -48,13 +48,13 @@ def circuit : FormalAssertion (F p) (Inputs p) where
   spec := spec
 
   soundness := by
-    intro ctx env input vars h_inputs _ h_holds
+    intro ctx env vars input h_inputs _ h_holds
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := vars
 
     dsimp at h_holds
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
     rw [hx, hy] at h_holds
 
     dsimp [spec]
@@ -64,16 +64,15 @@ def circuit : FormalAssertion (F p) (Inputs p) where
 
   completeness := by
     -- introductions
-    rintro ctx inputs inputs_var h_inputs _
+    intro n env inputs_var henv inputs h_inputs _ spec
     let ⟨x, y⟩ := inputs
     let ⟨x_var, y_var⟩ := inputs_var
 
     -- characterize inputs
-    have hx : x_var.eval = x := by injection h_inputs
-    have hy : y_var.eval = y := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
 
     simp [spec]
-    intro spec
     rw [hx, hy, spec]
     ring
 end Gadgets.Equality

@@ -17,40 +17,20 @@ class ProvableType (F: Type) (α: TypePair) where
   to_values : α.value → Vector F size
   from_values : Vector F size → α.value
 
--- or is it better as a structure?
-structure ProvableType' (F : Type) where
-  var: Type
-  value: Type
-  size : ℕ
-  to_vars : var → Vector (Expression F) size
-  from_vars : Vector (Expression F) size → var
-  to_values : value → Vector F size
-  from_values : Vector F size → value
-
--- or like this?
-def Provable' (F: Type) := { α : TypePair // ∃ p : Type, p = ProvableType F α }
+export ProvableType (size to_vars from_vars to_values from_values)
 
 namespace Provable
 variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
 
 @[simp]
-def eval (F: Type) [Field F] [ProvableType F α] (x: α.var) : α.value :=
-  let n := ProvableType.size F α
-  let vars : Vector (Expression F) n := ProvableType.to_vars x
-  let values := vars.map (fun v => v.eval)
-  ProvableType.from_values values
-
-@[simp]
-def eval_env (env: ℕ → F) (x: α.var) : α.value :=
-  let n := ProvableType.size F α
-  let vars : Vector (Expression F) n := ProvableType.to_vars x
-  let values := vars.map (fun v => v.eval_env env)
-  ProvableType.from_values values
+def eval (env: Environment F) (x: α.var) : α.value :=
+  let vars := to_vars x
+  let values := vars.map env
+  from_values values
 
 def const (F: Type) [ProvableType F α] (x: α.value) : α.var :=
-  let n := ProvableType.size F α
-  let values : Vector F n := ProvableType.to_values x
-  ProvableType.from_vars (values.map (fun v => Expression.const v))
+  let values : Vector F _ := to_values x
+  from_vars (values.map .const)
 
 @[reducible]
 def unit : TypePair := ⟨ Unit, Unit ⟩
@@ -101,3 +81,5 @@ instance : ProvableType F (fields F n) where
   to_values x := x
   from_values v := v
 end Provable
+
+export Provable (eval)

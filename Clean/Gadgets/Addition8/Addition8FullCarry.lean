@@ -4,10 +4,11 @@ import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
 
 namespace Gadgets.Addition8FullCarry
-variable {p : ℕ} [p_neq_zero: Fact (p ≠ 0)] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)
+open FieldUtils (mod_256 floordiv)
 
 structure InputStruct (F : Type) where
   x: F
@@ -57,11 +58,11 @@ def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := 
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (fun () => FieldUtils.mod_256 (x + y + carry_in))
+  let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
   byte_lookup z
 
   -- witness the output carry
-  let carry_out ← witness (fun () => FieldUtils.floordiv (x + y + carry_in) 256)
+  let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
   assertion Boolean.circuit carry_out
 
   assert_zero (x + y + carry_in - z - carry_out * (const 256))
@@ -87,24 +88,21 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
   spec := spec
   soundness := by
     -- introductions
-    rintro ctx env inputs inputs_var h_inputs as
+    rintro i0 env inputs_var inputs h_inputs as
     let ⟨x, y, carry_in⟩ := inputs
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro h_holds outputs
     -- characterize inputs
-    have hx : x_var.eval_env env = x := by injection h_inputs
-    have hy : y_var.eval_env env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval_env env = carry_in := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
+    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
-    let i0 := ctx.offset
-    let i1 := ctx.offset + 1
     -- simplify constraints hypothesis
     dsimp at h_holds
-    let z := env i0
-    set carry_out := env i1
-    rw [←(by rfl : z = env i0)] at h_holds
+    set z := env.get i0
+    set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
-    let ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
+    obtain ⟨ ⟨ ⟨ _, h_byte⟩, h_bool_carry⟩, h_add ⟩ := h_holds
 
     rw [(by rfl : outputs = ⟨z, carry_out⟩)]
 
@@ -130,26 +128,37 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
 
   completeness := by
    -- introductions
-    rintro ctx inputs inputs_var h_inputs
+    rintro i0 env inputs_var henv inputs h_inputs
     let ⟨x, y, carry_in⟩ := inputs
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro as
 
     -- characterize inputs
-    have hx : x_var.eval = x := by injection h_inputs
-    have hy : y_var.eval = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval = carry_in := by injection h_inputs
+    have hx : x_var.eval env = x := by injection h_inputs
+    have hy : y_var.eval env = y := by injection h_inputs
+    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify assumptions
     dsimp [assumptions] at as
 
     -- unfold goal, (re)introduce names for some of unfolded variables
-    dsimp
+    dsimp [Boolean.circuit, assert_bool]
     rw [hx, hy, hcarry_in]
-    let z := FieldUtils.mod_256 (x + y + carry_in)
-    let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
-    rw [←(by rfl : z = FieldUtils.mod_256 (x + y + carry_in))]
-    rw [←(by rfl : carry_out = FieldUtils.floordiv (x + y + carry_in) 256)]
+    set z := env.get i0
+    set carry_out := env.get (i0 + 1)
+    let hz' : env.get i0 = z := rfl
+    let hcout' : env.get (i0 + 1) = carry_out := rfl
+
+    -- simplify local witnesses
+    have hz : z = mod_256 (x + y + carry_in) := by
+      have henv0 := henv (0 : Fin 2)
+      dsimp at henv0
+      rwa [hx, hy, hcarry_in, hz'] at henv0
+
+    have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
+      have henv1 := henv (1 : Fin 2)
+      dsimp at henv1
+      rwa [hx, hy, hcarry_in, hcout'] at henv1
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
@@ -157,14 +166,14 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     let goal_byte := ByteTable.contains (vec [z])
     let goal_bool := carry_out = 0 ∨ carry_out = 1
     let goal_add := x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
-    show goal_byte ∧ (True ∧ goal_bool) ∧ goal_add
+    show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
     -- proving that z is contained in the Byte table is simple,
     -- so we just do it inline applying the fact that every byte is contained in
     -- the Byte table
     have completeness1 : goal_byte := ByteTable.completeness z (by
-      dsimp [z]
+      rw [hz]
       simp only [FieldUtils.mod_256, FieldUtils.mod]
       rw [FieldUtils.val_of_nat_to_field_eq]
       apply Nat.mod_lt
@@ -173,11 +182,13 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have ⟨as_x, as_y, as_carry_in⟩ := as
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
-    have completeness2 : goal_bool := by
+    have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
+      rw [hcarry_out]
       apply Gadgets.Addition8.Theorems.completeness_bool
       repeat assumption
 
-    have completeness3 : goal_add := by
+    have completeness3 : x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0 := by
+      rw [hz, hcarry_out]
       apply Gadgets.Addition8.Theorems.completeness_add
       repeat assumption
 
