@@ -80,4 +80,29 @@ class Constraint (N : ℕ+) (M : ℕ) (p : ℕ) [Fact p.Prime] :=
         )
       ))
 
+/--
+  Compute an equivalent representation of the conjunction of all the constraints propositions,
+  which is more convenient for sub-gadget rewriting.
+  Suppose we have two sub-gadgets x and y, and they have as constraints respectively [cx0, cx1] and [cy0, cy1].
+  Then the full constraint set of the gadget that combines x and y is cx0 ∧ cx1 ∧ cy0 ∧ cy1.
+  What this function does is computing the conjunction but with the grouping (cx0 ∧ cx1) ∧ (cy0 ∧ cy1).
+  But only at top level, so it doesn't recurse and apply the grouping into sub-gadgets.
+-/
+@[simp]
+def fullConstraintSetGrouped {N: ℕ+} {M : ℕ} {p : ℕ} [Fact p.Prime]
+    (x : ConstraintGadget p N M) (f : Expression N M (F p) -> Prop) : Prop :=
+  match x with
+    | ⟨polys, _, subConstraints⟩ => (forallList polys f) ∧ (foldl subConstraints)
+where
+  foldl : List (ConstraintGadget p N M) → Prop
+    | [] => true
+    | (t :: ts) => (forallList (fullConstraintSet t) f) ∧ (foldl ts)
+
+-- the equivalence theorem for the grouped constraint set
+theorem fullConstraintSetGroupedEquivalence {N: ℕ+} {M : ℕ} {p : ℕ} [Fact p.Prime]
+    (x : ConstraintGadget p N M) (f : Expression N M (F p) -> Prop) :
+  (forallList (fullConstraintSet x) f) ↔ fullConstraintSetGrouped x f :=
+  match x with
+    | ⟨polys, _, subConstraints⟩ => sorry
+
 end
