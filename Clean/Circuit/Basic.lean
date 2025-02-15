@@ -285,6 +285,14 @@ def witness (compute : Environment F → F) := do
   let var ← witness_var compute
   return Expression.var var
 
+@[simp]
+def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) := ⟨
+  fun ops =>
+    let vars: Vector (Variable F) n := .init (fun i => ⟨ ops.offset + i ⟩)
+    (.witness ops n compute, vars),
+  fun _ => rfl
+⟩
+
 /-- Add a constraint. -/
 @[simp]
 def assert_zero (e: Expression F) : Circuit F Unit := ⟨
@@ -466,7 +474,7 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
 
-export Circuit (witness_var witness assert_zero lookup Soundness Completeness FormalCircuit FormalAssertion)
+export Circuit (witness_var witness witness_vars assert_zero lookup Soundness Completeness FormalCircuit FormalAssertion)
 
 /-- move from inductive (nested) operations back to flat operations -/
 def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
