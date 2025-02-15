@@ -100,7 +100,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
     have as : circuit.assumptions b := h_completeness
 
     have h_env' : env.uses_local_witnesses ops := by
-      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses flat_ops) n
+      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
       exact env_extends_of_flat h_env
@@ -156,7 +156,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
     have h_env' : env.uses_local_witnesses ops := by
-      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses flat_ops) n
+      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
       have hn : ops.initial_offset = n := by apply initial_offset_eq
       rw [←hn] at h_env
       exact env_extends_of_flat h_env

@@ -199,17 +199,13 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
 
   -- characterize local witnesses
   -- TODO: this is too hard
-  let wit_gens : Vector (Environment (F p) → F p) 8 := add32_full ⟨
+  let wit : Vector (F p) 8 := add32_full ⟨
     ⟨ x0_var, x1_var, x2_var, x3_var ⟩,
     ⟨ y0_var, y1_var, y2_var, y3_var ⟩,
     carry_in_var
-    ⟩ i0 |>.local_witnesses
+    ⟩ i0 |>.local_witnesses env
 
-  let wit : Vector (F p) 8 := wit_gens.map (fun f => f env)
-
-  have henv : ∀ i : Fin 8, env.get (i0 + i) = wit.get i := by
-    change ∀ i : Fin 8, env.get (i0 + i) = wit_gens.get i env at henv
-    intro i; rw [henv i, Vector.get_map]
+  change ∀ i : Fin 8, env.get (i0 + i) = wit.get i at henv
 
   have hwit : wit.val = [
     mod_256 (x0 + y0 + carry_in),
@@ -221,16 +217,16 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
     mod_256 (x3 + y3 + env.get (i0 + 5)),
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
-    dsimp only [wit, wit_gens]
+    dsimp only [wit]
     -- TODO we need a simp set
     dsimp only [OperationsList.from_offset, Operations.local_witnesses, Vector.append,
       Expression.eval, Circuit.formal_assertion_to_subcircuit, to_flat_operations,
       SubCircuit.witness_length, FlatOperation.witness_length, Operations.local_length, Vector.push,
-      SubCircuit.witnesses, FlatOperation.witnesses, Vector.map, List.map]
+      SubCircuit.witnesses, FlatOperation.witnesses, Vector.map, List.map, Vector.nil]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
-    norm_cast
+    simp only [List.nil_append, List.cons_append]
 
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
