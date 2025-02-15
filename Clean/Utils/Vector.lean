@@ -127,9 +127,10 @@ namespace Vector
       have h' := h1 a' ih'
       rwa [ih]
 
-    def init {n} (create: Fin n → α) : Vector α n :=
-      match n with
-      | 0 => nil
-      | k + 1 =>
-        (init (fun i : Fin k => create i)).push (create k)
+  @[simp]
+  def init {n} (create: Fin n → α) : Vector α n :=
+    match n with
+    | 0 => nil
+    | k + 1 =>
+      (init (fun i : Fin k => create i)).push (create k)
 end Vector

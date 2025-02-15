@@ -198,7 +198,7 @@ def to_flat_operations_from_list (ops: List (Operation F)) : List (FlatOperation
   match ops with
   | [] => []
   | op :: ops => match op with
-    | .witness compute => witness compute :: to_flat_operations_from_list ops
+    | .witness m compute => witness m compute :: to_flat_operations_from_list ops
     | .assert e => assert e :: to_flat_operations_from_list ops
     | .lookup l => lookup l :: to_flat_operations_from_list ops
     | .subcircuit circuit => circuit.ops ++ to_flat_operations_from_list ops

@@ -230,6 +230,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
+    norm_cast
 
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
