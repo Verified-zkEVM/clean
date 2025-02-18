@@ -83,7 +83,7 @@ lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
     := by
   intro h
   dsimp [Circuit.formal_assertion_to_subcircuit] at h
-  dsimp [fib_table, ProvableType.from_values, ProvableType.to_vars] at h
+  dsimp [fib_table, from_values, to_vars] at h
 
   rw [var1, var2, var3] at h
 
@@ -111,7 +111,7 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       simp [fib_table]
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec,
-        ProvableType.from_values, ProvableType.to_vars
+        from_values, to_vars
       ] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0

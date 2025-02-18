@@ -17,20 +17,20 @@ class ProvableType (F: Type) (α: TypePair) where
   to_values : α.value F → Vector F size
   from_values : Vector F size → α.value F
 
+export ProvableType (size to_vars from_vars to_values from_values)
+
 namespace Provable
 variable {α β γ: TypePair} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
 
 @[simp]
 def eval (env: Environment F) (x: α.var F) : α.value F :=
-  let n := ProvableType.size F α
-  let vars : Vector (Expression F) n := ProvableType.to_vars x
+  let vars := to_vars x
   let values := vars.map env
-  ProvableType.from_values values
+  from_values values
 
 def const [ProvableType F α] (x: α.value F) : α.var F :=
-  let n := ProvableType.size F α
-  let values : Vector F n := ProvableType.to_values x
-  ProvableType.from_vars (values.map (fun v => Expression.const v))
+  let values : Vector F _ := to_values x
+  from_vars (values.map .const)
 
 @[reducible]
 def unit : TypePair := fun _ => Unit
@@ -81,3 +81,5 @@ instance : ProvableType F (fields n) where
   to_values x := x
   from_values v := v
 end Provable
+
+export Provable (eval)

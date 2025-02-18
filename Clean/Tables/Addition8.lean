@@ -56,7 +56,7 @@ def formal_add8_table : FormalTable (F:=(F p)) := {
       have h_varz : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
         := by rfl
 
-      simp [ProvableType.from_values, ProvableType.to_vars] at h_curr
+      simp [from_values, to_vars] at h_curr
       rw [h_varx, h_vary, h_varz] at h_curr
 
       -- and now it is easy!
