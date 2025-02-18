@@ -15,6 +15,10 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
+-- TODO this is annoying and should be easier
+def Inputs.var (p: ℕ) := Inputs (Expression (F p))
+def Inputs.value (p: ℕ) := Inputs (F p)
+
 @[simp]
 instance : ProvableType (F p) Inputs where
   size := 3
@@ -32,6 +36,9 @@ structure Outputs (F : Type) where
   z: F
   carry_out: F
 
+def Outputs.var (p: ℕ) := Outputs (Expression (F p))
+def Outputs.value (p: ℕ) := Outputs (F p)
+
 @[simp]
 instance : ProvableType (F p) Outputs where
   size := 2
@@ -44,7 +51,7 @@ instance : ProvableType (F p) Outputs where
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
-def add8_full_carry (input : Inputs.var) : Circuit (F p) (Outputs p).var := do
+def add8_full_carry (input : Inputs.var p) : Circuit (F p) (Outputs.var p) := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
@@ -59,11 +66,11 @@ def add8_full_carry (input : Inputs.var) : Circuit (F p) (Outputs p).var := do
 
   return { z, carry_out }
 
-def assumptions (input : (Inputs p).value) :=
+def assumptions (input : Inputs.value p) :=
   let ⟨x, y, carry_in⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : (Inputs p).value) (out : (Outputs p).value) :=
+def spec (input : Inputs.value p) (out : Outputs.value p) :=
   let ⟨x, y, carry_in⟩ := input
   out.z.val = (x.val + y.val + carry_in.val) % 256 ∧
   out.carry_out.val = (x.val + y.val + carry_in.val) / 256
@@ -72,7 +79,7 @@ def spec (input : (Inputs p).value) (out : (Outputs p).value) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
+def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
   assumptions := assumptions
   spec := spec

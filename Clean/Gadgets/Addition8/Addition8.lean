@@ -10,12 +10,9 @@ structure InputStruct (F : Type) where
   x: F
   y: F
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
+def Inputs (p : ℕ) : TypePair (F p) := InputStruct
 
-instance : ProvableType (F p) (Inputs p) where
+instance : ProvableType (F p) InputStruct where
   size := 2
   to_vars s := vec [s.x, s.y]
   from_vars v :=
@@ -44,7 +41,7 @@ def assumptions (input : (Inputs p).value) :=
   Compute the 8-bit addition of two numbers.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
+def circuit : FormalCircuit (F p) InputStruct field where
   main := add8
   assumptions := assumptions
   spec := spec

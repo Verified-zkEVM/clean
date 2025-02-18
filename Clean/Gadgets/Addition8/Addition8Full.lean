@@ -11,10 +11,7 @@ structure InputStruct (F : Type) where
   y: F
   carry_in: F
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
+def Inputs (p : ℕ) : TypePair (F p) := InputStruct
 
 instance : ProvableType (F p) (Inputs p) where
   size := 3
@@ -46,7 +43,7 @@ def spec (input : (Inputs p).value) (z: F p) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
+def circuit : FormalCircuit (F p) (Inputs p) field where
   main := add8_full
   assumptions := assumptions
   spec := spec

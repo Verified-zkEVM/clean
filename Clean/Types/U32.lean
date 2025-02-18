@@ -19,9 +19,8 @@ structure U32 (T: Type) where
   x3 : T
 
 namespace U32
-def u32 {p: ℕ} : TypePair := ⟨ U32 (Expression (F p)), U32 (F p) ⟩
 
-instance : ProvableType (F p) (u32 (p:=p)) where
+instance : ProvableType (F p) U32 where
   size := 4
   to_vars x := vec [x.x0, x.x1, x.x2, x.x3]
   to_values x := vec [x.x0, x.x1, x.x2, x.x3]
@@ -36,7 +35,7 @@ instance : ProvableType (F p) (u32 (p:=p)) where
   Witness a 32-bit unsigned integer.
 -/
 def witness (compute : Environment (F p) → U32 (F p)) := do
-  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness u32 compute
+  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness U32 compute
 
   byte_lookup x0
   byte_lookup x1
