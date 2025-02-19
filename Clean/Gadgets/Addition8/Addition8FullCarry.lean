@@ -146,19 +146,17 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     rw [hx, hy, hcarry_in]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
-    let hz' : env.get i0 = z := rfl
-    let hcout' : env.get (i0 + 1) = carry_out := rfl
 
     -- simplify local witnesses
     have hz : z = mod_256 (x + y + carry_in) := by
       have henv0 := henv (0 : Fin 2)
       dsimp at henv0
-      rwa [hx, hy, hcarry_in, hz'] at henv0
+      rwa [hx, hy, hcarry_in] at henv0
 
     have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
       have henv1 := henv (1 : Fin 2)
       dsimp at henv1
-      rwa [hx, hy, hcarry_in, hcout'] at henv1
+      rwa [hx, hy, hcarry_in] at henv1
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
@@ -169,15 +167,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
-    -- proving that z is contained in the Byte table is simple,
-    -- so we just do it inline applying the fact that every byte is contained in
-    -- the Byte table
-    have completeness1 : goal_byte := ByteTable.completeness z (by
-      rw [hz]
-      simp only [FieldUtils.mod_256, FieldUtils.mod]
-      rw [FieldUtils.val_of_nat_to_field_eq]
-      apply Nat.mod_lt
-      linarith)
+    have completeness1 : goal_byte := ByteTable.completeness z (hz ▸ FieldUtils.mod_256_lt _)
 
     have ⟨as_x, as_y, as_carry_in⟩ := as
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in

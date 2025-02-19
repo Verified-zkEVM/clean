@@ -38,7 +38,7 @@ lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.
   open Operations (initial_offset local_length) in
   induction ops with
   | empty n => simp only [initial_offset, local_length, add_zero]
-  | witness ops _ ih | subcircuit ops s ih =>
+  | witness ops _ _ ih | subcircuit ops s ih =>
     dsimp only [initial_offset, local_length]
     rw [←add_assoc, ih]
   | assert ops _ ih | lookup op _ ih =>
@@ -68,44 +68,47 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
   witness_length (to_flat_operations ops) = ops.local_length := by
   induction ops with
   | empty => trivial
-  | witness ops c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
+  | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
     dsimp [to_flat_operations, Operations.local_length]
     generalize to_flat_operations ops = flat_ops at *
     generalize ops.local_length = n at *
     induction flat_ops using FlatOperation.witness_length.induct generalizing n with
     | case1 => simp_all only [witness_length, List.nil_append, self_eq_add_left]
-    | case2 env ops ih' =>
+    | case2 ops m' _ ih' =>
       dsimp only [witness_length] at *
-      specialize ih' (n - 1) (Eq.symm <| Nat.pred_eq_of_eq_succ (Eq.symm ih))
-      show witness_length (ops ++ _) + 1 = _
+      specialize ih' (n - m') (by rw [←ih]; omega)
+      show witness_length (ops ++ _) + m' = _
       omega
-    | case3 env ops ih' =>
-      simp_all only [imp_false, forall_eq', witness_length, List.cons_append]
+    | case3 ops _ ih' | case4 ops _ ih' =>
+      simp_all only [imp_false, forall_eq', witness_length, List.append_eq]
 
-lemma witnesses_append {F} {a b: List (FlatOperation F)} :
-  (witnesses (a ++ b)).val = (witnesses a).val ++ (witnesses b).val := by
-  induction a using FlatOperation.witnesses.induct with
-  | case1 => simp only [List.nil_append, witnesses]
-  | case2 _ _ ih | case3 _ _ ih | case4 _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, List.append_eq, ih]
+lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
+  (witnesses env (a ++ b)).val = (witnesses env a).val ++ (witnesses env b).val := by
+  induction a using FlatOperation.witness_length.induct with
+  | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.nil]
+  | case2 _ _ _ ih =>
+    simp [List.cons_append, witness_length, witnesses, List.append_eq, ih]
+  | case3 _ _ ih | case4 _ _ ih =>
+    simp [List.cons_append, witness_length, witnesses, List.append_eq, ih]
 
 /--
 The witnesses created from flat and nested operations are the same
 -/
-lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} :
-  (witnesses (to_flat_operations ops)).val = ops.local_witnesses.val := by
+lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} {env} :
+  (witnesses env (to_flat_operations ops)).val = (ops.local_witnesses env).val := by
   induction ops with
   | empty => trivial
-  | witness ops c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
+  | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
     dsimp [to_flat_operations, Operations.local_length]
     rw [←ih, witnesses_append]
-    try simp only [witness_length, Nat.reduceAdd, witnesses, List.append_nil]
+    try simp only [witness_length, witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast,
+      Vector.nil, List.append_nil, zero_add, subset_refl, Set.coe_inclusion]
 
 /--
 Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
 -/
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
-  env.extends_vector (witnesses (to_flat_operations ops)) ops.initial_offset →
+  env.extends_vector (witnesses env (to_flat_operations ops)) ops.initial_offset →
   env.uses_local_witnesses ops := by
   unfold Environment.uses_local_witnesses Environment.extends_vector
   intro h i
@@ -114,13 +117,13 @@ lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
   rw [h]
   simp only [Vector.get, Fin.cast_mk, List.get_eq_getElem, flat_witness_eq_witness, Fin.coe_cast]
 
-lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses (ops.witness c) → env.uses_local_witnesses ops
+lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m c} :
+  env.uses_local_witnesses (ops.witness m c) → env.uses_local_witnesses ops
 := by
   intro h i
   simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
-  specialize h i
-  simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
+  specialize h ⟨ i, by omega ⟩
+  simp only [Fin.coe_cast, Fin.cast_mk] at h
   rw [h]
   simp [List.getElem_append]
 
@@ -144,7 +147,7 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   simp [List.getElem_append]
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses c.ops) n
+  env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses env c.ops) n
 := by
   intro h i
   simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
@@ -154,11 +157,9 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
   rw [←add_assoc, Circuit.total_length_eq] at h
   rw [h]
-  have : ∀ f g : Environment F → F, f = g → f env = g env := by intro f g h; rw [h]
-  apply this
   simp only [SubCircuit.witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast]
-  have lt1 : i < (witnesses c.ops).val.length := by rw [(witnesses c.ops).prop]; exact i.is_lt
-  rw [List.getElem_append_right'' ops.local_witnesses.val lt1]
+  have lt1 : i < (witnesses env c.ops).val.length := by rw [(witnesses env c.ops).prop]; exact i.is_lt
+  rw [List.getElem_append_right'' (ops.local_witnesses env).val lt1]
   simp [Nat.add_comm]
 
 end Environment
@@ -179,7 +180,7 @@ theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.us
   intro h_env h
   induction ops with
   | empty => trivial
-  | witness ops c ih | assert ops c ih | lookup ops c ih =>
+  | witness ops m c ih | assert ops c ih | lookup ops c ih =>
     try replace h_env := env_extends_witness h_env
     try replace h_env := env_extends_assert h_env
     try replace h_env := env_extends_lookup h_env
