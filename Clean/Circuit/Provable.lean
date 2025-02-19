@@ -2,7 +2,7 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
 
-class TypePair where
+structure TypePair where
   var (F: Type) : Type
   value (F: Type) : Type
 
@@ -11,11 +11,9 @@ def Value (α : TypePair) (F : Type) := α.value F
 
 variable {F: Type} [Field F] {M: Type → Type}
 
-instance TypePair.from (M: Type → Type) : TypePair where
+def TypePair.from (M: Type → Type) : TypePair where
   var F := M (Expression F)
   value F := M F
-
-instance (M: Type → Type) : TypePair := TypePair.from M
 
 instance : Coe (Type → Type) TypePair where
   coe M := TypePair.from M
