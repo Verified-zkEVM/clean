@@ -6,13 +6,11 @@ variable [p_large_enough: Fact (p > 512)]
 
 open Provable (field field2 fields)
 
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: F
   y: F
 
-def Inputs (p : ℕ) : TypePair (F p) := InputStruct
-
-instance : ProvableType (F p) InputStruct where
+instance : ProvableType Inputs where
   size := 2
   to_vars s := vec [s.x, s.y]
   from_vars v :=
@@ -24,16 +22,16 @@ instance : ProvableType (F p) InputStruct where
     ⟨ x, y ⟩
 
 
-def add8 (input : (Inputs p).var) := do
+def add8 (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
   let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := const 0 }
   return z
 
-def spec (input : (Inputs p).value) (z: F p) :=
+def spec (input : Inputs (F p)) (z: F p) :=
   let ⟨x, y⟩ := input
   z.val = (x.val + y.val) % 256
 
-def assumptions (input : (Inputs p).value) :=
+def assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
@@ -41,7 +39,7 @@ def assumptions (input : (Inputs p).value) :=
   Compute the 8-bit addition of two numbers.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) InputStruct field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := add8
   assumptions := assumptions
   spec := spec

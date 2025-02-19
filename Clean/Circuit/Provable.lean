@@ -2,48 +2,52 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
 
+class TypePair where
+  var (F: Type) : Type
+  value (F: Type) : Type
 
-class TypePair (F: Type) where
-  map: Type → Type
-  var: Type := map (Expression F)
-  value: Type := map F
+def Var (α : TypePair) (F : Type) := α.var F
+def Value (α : TypePair) (F : Type) := α.value F
 
-variable {F: Type} [Field F]
+variable {F: Type} [Field F] {M: Type → Type}
 
-instance : Coe (Type → Type) (TypePair F) where
-  coe map := { map }
+instance TypePair.from (M: Type → Type) : TypePair where
+  var F := M (Expression F)
+  value F := M F
 
-instance TypePair.from (map: Type → Type) : TypePair F where
-  map := map
+instance (M: Type → Type) : TypePair := TypePair.from M
+
+instance : Coe (Type → Type) TypePair where
+  coe M := TypePair.from M
 
 -- class of types that are composed of variables,
 -- and can be evaluated into something that is composed of field elements
-class ProvableType (F: Type) (α: TypePair F) where
+class ProvableType (α: TypePair) where
   size : ℕ
-  to_vars : α.var → Vector (Expression F) size
-  from_vars : Vector (Expression F) size → α.var
-  to_values : α.value → Vector F size
-  from_values : Vector F size → α.value
+  to_vars {F: Type} : α.var F → Vector (Expression F) size
+  from_vars {F: Type} : Vector (Expression F) size → α.var F
+  to_values {F: Type} : α.value F → Vector F size
+  from_values {F: Type} : Vector F size → α.value F
 
 export ProvableType (size to_vars from_vars to_values from_values)
 
 namespace Provable
-variable {α β γ: TypePair F} [ProvableType F α] [ProvableType F β] [ProvableType F γ]
+variable {α β γ: TypePair} [ProvableType α] [ProvableType β] [ProvableType γ]
 
 @[simp]
-def eval (env: Environment F) (x: α.var) : α.value :=
+def eval (env: Environment F) (x: Var α F) : Value α F :=
   let vars := to_vars x
   let values := vars.map env
   from_values values
 
-def const [ProvableType F α] (x: α.value) : α.var :=
+def const (x: Value α F) : Var α F :=
   let values : Vector F _ := to_values x
   from_vars (values.map .const)
 
 @[reducible]
-def unit : TypePair F := TypePair.from (fun _ => Unit)
+def unit (_: Type) := Unit
 
-instance : ProvableType F unit where
+instance : ProvableType unit where
   size := 0
   to_vars _ := vec []
   from_vars _ := ()
@@ -51,10 +55,10 @@ instance : ProvableType F unit where
   from_values _ := ()
 
 @[reducible]
-def field : TypePair F := (id: Type → Type)
+def field : Type → Type := id
 
 @[simp]
-instance : ProvableType F field where
+instance : ProvableType field where
   size := 1
   to_vars x := vec [x]
   from_vars v := v.get ⟨ 0, by norm_num ⟩
@@ -62,13 +66,13 @@ instance : ProvableType F field where
   from_values v := v.get ⟨ 0, by norm_num ⟩
 
 @[reducible]
-def pair (α β : TypePair F) : TypePair F := fun f => α.map f × β.map f
+def pair (α β : Type → Type) := fun F => α F × β F
 
 @[reducible]
-def field2 : TypePair F := pair field field
+def field2 := pair field field
 
 @[simp]
-instance : ProvableType F field2 where
+instance : ProvableType field2 where
   size := 2
   to_vars pair := vec [pair.1, pair.2]
   from_vars v := (v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩)
@@ -76,13 +80,13 @@ instance : ProvableType F field2 where
   from_values v := (v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩)
 
 variable {n: ℕ}
-def vec (α: TypePair F) (n: ℕ) : TypePair F := fun f => Vector (α.map f) n
+def vec (α: Type → Type) (n: ℕ) := fun f => Vector (α f) n
 
 @[reducible]
-def fields (n: ℕ) : TypePair F := vec field n
+def fields (n: ℕ) := vec field n
 
 @[simp]
-instance : ProvableType F (fields n) where
+instance : ProvableType (fields n) where
   size := n
   to_vars x := x
   from_vars v := v

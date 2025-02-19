@@ -4,16 +4,14 @@ namespace Gadgets.Addition8Full
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Provable (field field2 fields)
-
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: F
   y: F
   carry_in: F
 
-def Inputs (p : ℕ) : TypePair (F p) := InputStruct
+open Provable (field)
 
-instance : ProvableType (F p) (Inputs p) where
+instance : ProvableType Inputs where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
   from_vars v :=
@@ -24,18 +22,17 @@ instance : ProvableType (F p) (Inputs p) where
     let ⟨ [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
 
-def add8_full (input : (Inputs p).var) := do
+def add8_full (input : Var Inputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
   let res ← subcircuit Gadgets.Addition8FullCarry.circuit { x, y, carry_in }
-
   return res.z
 
-def assumptions (input : (Inputs p).value) :=
+def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : (Inputs p).value) (z: F p) :=
+def spec (input : Inputs (F p)) (z: F p) :=
   let ⟨x, y, carry_in⟩ := input
   z.val = (x.val + y.val + carry_in.val) % 256
 
@@ -43,7 +40,7 @@ def spec (input : (Inputs p).value) (z: F p) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) (Inputs p) field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := add8_full
   assumptions := assumptions
   spec := spec

@@ -20,7 +20,7 @@ structure U32 (T: Type) where
 
 namespace U32
 
-instance : ProvableType (F p) U32 where
+instance : ProvableType U32 where
   size := 4
   to_vars x := vec [x.x0, x.x1, x.x2, x.x3]
   to_values x := vec [x.x0, x.x1, x.x2, x.x3]

@@ -7,7 +7,6 @@ namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 
 structure Inputs (F : Type) where
@@ -15,12 +14,8 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
--- TODO this is annoying and should be easier
-def Inputs.var (p: ℕ) := Inputs (Expression (F p))
-def Inputs.value (p: ℕ) := Inputs (F p)
-
 @[simp]
-instance : ProvableType (F p) Inputs where
+instance : ProvableType Inputs where
   size := 3
   to_vars s := vec [s.x, s.y, s.carry_in]
   from_vars v :=
@@ -36,11 +31,8 @@ structure Outputs (F : Type) where
   z: F
   carry_out: F
 
-def Outputs.var (p: ℕ) := Outputs (Expression (F p))
-def Outputs.value (p: ℕ) := Outputs (F p)
-
 @[simp]
-instance : ProvableType (F p) Outputs where
+instance : ProvableType Outputs where
   size := 2
   to_vars s := vec [s.z, s.carry_out]
   from_vars v :=
@@ -51,7 +43,7 @@ instance : ProvableType (F p) Outputs where
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
-def add8_full_carry (input : Inputs.var p) : Circuit (F p) (Outputs.var p) := do
+def add8_full_carry (input : Var Inputs (F p)): Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
@@ -66,11 +58,11 @@ def add8_full_carry (input : Inputs.var p) : Circuit (F p) (Outputs.var p) := do
 
   return { z, carry_out }
 
-def assumptions (input : Inputs.value p) :=
+def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : Inputs.value p) (out : Outputs.value p) :=
+def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   out.z.val = (x.val + y.val + carry_in.val) % 256 ∧
   out.carry_out.val = (x.val + y.val + carry_in.val) / 256

@@ -310,8 +310,8 @@ def get_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W): TableCons
 @[simp]
 def subcircuit
     {F : Type} {M W : ℕ+} [Field F]
-    {α β : TypePair} [ProvableType F β] [ProvableType F α]
-    (circuit: FormalCircuit F β α) (b: β.var) : TableConstraint F M W α.var :=
+    {α β : TypePair} [ProvableType β] [ProvableType α]
+    (circuit: FormalCircuit F β α) (b: β.var F) : TableConstraint F M W (α.var F) :=
   as_table_operation fun ctx =>
   let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
   (TableConstraintOperation.Allocate subcircuit, a)
@@ -319,8 +319,8 @@ def subcircuit
 @[simp]
 def assertion
     {F : Type} {M W : ℕ+} [Field F]
-    {β : TypePair} [ProvableType F β]
-    (circuit: FormalAssertion F β) (b: β.var) : TableConstraint F M W Unit :=
+    {β : TypePair} [ProvableType β]
+    (circuit: FormalAssertion F β) (b: β.var F) : TableConstraint F M W Unit :=
   as_table_operation fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
     (TableConstraintOperation.Allocate subcircuit, ())
