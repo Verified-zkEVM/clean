@@ -138,9 +138,6 @@ inductive Operations (F : Type) [Field F] : ℕ → Type where
   | lookup : {n : ℕ} → Operations F n → Lookup F → Operations F n
   | subcircuit : {n : ℕ} → Operations F n → (s : SubCircuit F n) → Operations F (n + s.witness_length)
 
--- TODO: it might make sense to make the `witness` constructor take another `length` argument
--- and return a `Vector` of witnesses, from a single `compute` function.
-
 namespace Operations
 @[reducible, simp]
 def initial_offset {n: ℕ} : Operations F n → ℕ
