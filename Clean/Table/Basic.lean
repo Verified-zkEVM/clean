@@ -7,6 +7,7 @@ import Clean.Circuit.SubCircuit
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Utils.Field
+import Clean.Table.SimpTable
 
 -- TODO: this should be something so that we can give names to the columns
 def Row (M : ℕ+) (F : Type) := Fin M -> F
@@ -28,7 +29,7 @@ namespace Trace
 /--
   The length of a trace is the number of rows it contains.
 -/
-@[simp]
+@[table_norm]
 def len {M : ℕ+} {F : Type} : Trace M F -> ℕ
   | <+> => 0
   | rest +> _ => Nat.succ rest.len
@@ -88,7 +89,7 @@ def everyRowTwoRowsInduction' {M : ℕ+} {F : Type} {P : (t : Trace M F) → t.l
         (by sorry)
         (by sorry)
 
-@[simp]
+@[table_norm]
 def getLeFromBottom {M :ℕ+} {F : Type}:
     (trace : Trace M F) -> (row : Fin trace.len) -> (col : Fin M) -> F
   | _ +> currRow, ⟨0, _⟩, j => currRow j
@@ -100,11 +101,12 @@ end Trace
 /--
   A trace of length M is a trace with exactly M rows.
 -/
+@[table_norm]
 def TraceOfLength (F : Type) (M : ℕ+) (N : ℕ) : Type := { env : Trace M F // env.len = N }
 
 namespace TraceOfLength
 
-@[simp]
+@[table_norm]
 def get {N: ℕ+} {M : ℕ} {F : Type} : (env : TraceOfLength F N M) -> (i : Fin M) -> (j : Fin N) -> F
   | ⟨env, h⟩, i, j => env.getLeFromBottom ⟨
       M - 1 - i,
@@ -114,11 +116,11 @@ def get {N: ℕ+} {M : ℕ} {F : Type} : (env : TraceOfLength F N M) -> (i : Fin
 /--
   Apply a proposition to every row in the trace
 -/
-@[simp]
+@[table_norm]
 def forAllRowsOfTrace {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N M) (prop : Row N F -> Prop) : Prop :=
   inner trace.val prop
   where
-  @[simp]
+  @[table_norm]
   inner : Trace N F -> (Row N F -> Prop) -> Prop
     | <+>, _ => true
     | rest +> row, prop => prop row ∧ inner rest prop
@@ -126,10 +128,11 @@ def forAllRowsOfTrace {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N 
 /--
   Apply a proposition to every row in the trace except the last one
 -/
-@[simp]
+@[table_norm]
 def forAllRowsOfTraceExceptLast {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N M) (prop : Row N F -> Prop) : Prop :=
   inner trace.val prop
   where
+  @[table_norm]
   inner : Trace N F -> (Row N F -> Prop) -> Prop
     | <+>, _ => true
     | <+> +> _, _ => true
@@ -139,11 +142,11 @@ def forAllRowsOfTraceExceptLast {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfL
 /--
   Apply a proposition, which could be dependent on the row index, to every row of the trace
 -/
-@[simp]
+@[table_norm]
 def forAllRowsOfTraceWithIndex {N: ℕ+} {M : ℕ} {F : Type} (trace : TraceOfLength F N M) (prop : Row N F -> ℕ -> Prop) : Prop :=
   inner trace.val prop
   where
-  @[simp]
+  @[table_norm]
   inner : Trace N F -> (Row N F -> ℕ -> Prop) -> Prop
     | <+>, _ => true
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
@@ -203,7 +206,7 @@ structure TableContext (F : Type) (M W : ℕ+) where
   offset: ℕ
   assignment : CellAssignment M W
 
-@[simp]
+@[table_norm]
 def TableContext.empty {F : Type} {M W : ℕ+} : TableContext F M W := ⟨
   0,
   -- TODO: is there a better way?
@@ -212,7 +215,7 @@ def TableContext.empty {F : Type} {M W : ℕ+} : TableContext F M W := ⟨
 
 namespace TableConstraintOperation
 
-@[simp]
+@[table_norm]
 def update_context {F : Type} {M W : ℕ+} [Field F] (ctx: TableContext F M W) : TableConstraintOperation F M W → TableContext F M W
   | Witness offset _ => {
       offset := ctx.offset + 1,
@@ -236,7 +239,7 @@ instance {F : Type} {M W : ℕ+} [Field F] [Repr F] : ToString (TableConstraintO
 end TableConstraintOperation
 
 
-@[simp]
+@[table_norm]
 def TableConstraint (F : Type) [Field F] (M W : ℕ+) (α : Type) :=
   TableContext F M W → (TableContext F M W × List (TableConstraintOperation F M W)) × α
 
@@ -271,6 +274,7 @@ def assignment {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConst
   In particular, we construct the environment by taking directly the result of the assignment function
   so that every variable evaluate to the trace cell value which is assigned to
 -/
+@[table_norm]
 def constraints_hold_on_window {F : Type} {M W : ℕ+} [Field F]
     (table : TableConstraint F M W Unit) (window: TraceOfLength F M W) : Prop :=
   let ((ctx, ops), ()) := table TableContext.empty
@@ -285,6 +289,7 @@ def constraints_hold_on_window {F : Type} {M W : ℕ+} [Field F]
   -- lifting directly to the soundness of the sub-circuit
   foldl ops env
   where
+  @[table_norm]
   foldl : List (TableConstraintOperation F M W) -> (env: Environment F) -> Prop
   | [], _ => true
   | op :: ops, env =>
@@ -357,7 +362,7 @@ inductive TableOperation (F : Type) [Field F] (M : ℕ+) where
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
-@[simp]
+@[table_norm]
 def table_constraints_hold
     {F : Type} [Field F] {M : ℕ+} {N : ℕ}
     (constraints : List (TableOperation F M)) (trace: TraceOfLength F M N) : Prop :=
@@ -380,7 +385,7 @@ def table_constraints_hold
     `cs_iterator` is walked inductively for every row.
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
-  @[simp]
+  @[table_norm]
   foldl (cs : List (TableOperation F M)) : Trace M F -> (cs_iterator: List (TableOperation F M)) -> Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
     | trace +> curr +> next, (TableOperation.EveryRowExceptLast constraint)::rest =>
