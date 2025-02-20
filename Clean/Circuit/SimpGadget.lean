@@ -4,4 +4,4 @@ import Lean.Meta.Tactic.Simp.RegisterCommand
 import Lean.LabelAttribute
 
 
-register_simp_attr gadget_norm
+register_simp_attr circuit_norm

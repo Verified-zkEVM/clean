@@ -98,7 +98,7 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   -- have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, gadget_norm, Circuit.formal_assertion_to_subcircuit] at h
+  dsimp [add32_full, Boolean.circuit, circuit_norm, Circuit.formal_assertion_to_subcircuit] at h
   simp only [true_implies, true_and, and_assoc] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -193,7 +193,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit, gadget_norm]
+  dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit, circuit_norm]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]

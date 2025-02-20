@@ -82,7 +82,7 @@ lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
     (ZMod.val (curr 0) < 256 → ZMod.val (curr 1) < 256 → ZMod.val (next 1) = (ZMod.val (curr 0) + ZMod.val (curr 1)) % 256) ∧ curr 1 = next 0
     := by
   intros h
-  dsimp [fib_table, from_values, to_vars, gadget_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
+  dsimp [fib_table, from_values, to_vars, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
   rw [var1, var2, var3, var4] at h
   simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
   simp only [Fin.isValue, Gadgets.Equality.circuit, Gadgets.Equality.spec, true_implies] at h
@@ -105,7 +105,7 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       simp [table_norm, fib_table]
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec,
-        from_values, to_vars, gadget_norm
+        from_values, to_vars, circuit_norm
       ] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0

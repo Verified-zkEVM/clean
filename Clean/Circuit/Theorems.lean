@@ -23,7 +23,7 @@ theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
   induction ops with
   | empty => trivial
   | witness ops c ih | assert ops c ih | lookup ops c ih =>
-    cases ops <;> simp_all [constraints_hold.completeness, constraints_hold, gadget_norm]
+    cases ops <;> simp_all [constraints_hold.completeness, constraints_hold, circuit_norm]
   | subcircuit ops circuit ih =>
     dsimp only [constraints_hold.soundness]
     dsimp only [constraints_hold] at h
@@ -99,7 +99,7 @@ lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} {env} :
   induction ops with
   | empty => trivial
   | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
-    dsimp only [to_flat_operations, Operations.local_length, gadget_norm, Operations.local_witnesses, Vector.append]
+    dsimp only [to_flat_operations, Operations.local_length, circuit_norm, Operations.local_witnesses, Vector.append]
     rw [←ih, witnesses_append]
     try simp only [witness_length, witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast,
       Vector.nil, List.append_nil, zero_add, subset_refl, Set.coe_inclusion]

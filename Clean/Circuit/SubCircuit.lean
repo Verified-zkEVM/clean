@@ -170,7 +170,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
 end Circuit
 
 /-- Include a subcircuit. -/
-@[gadget_norm]
+@[circuit_norm]
 def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var := ⟨
   fun ops =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
@@ -179,7 +179,7 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :
 ⟩
 
 /-- Include an assertion subcircuit. -/
-@[gadget_norm]
+@[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit := ⟨
   fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
