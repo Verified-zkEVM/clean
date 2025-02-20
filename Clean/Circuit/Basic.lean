@@ -120,7 +120,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
     completeness env → FlatOperation.constraints_hold_flat env ops
 
-@[reducible, simp, gadget_norm]
+@[reducible, gadget_norm]
 def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
 
 @[reducible]
@@ -142,7 +142,7 @@ inductive Operations (F : Type) [Field F] : ℕ → Type where
   | subcircuit : {n : ℕ} → Operations F n → (s : SubCircuit F n) → Operations F (n + s.witness_length)
 
 namespace Operations
-@[reducible, simp]
+@[reducible, gadget_norm]
 def initial_offset {n: ℕ} : Operations F n → ℕ
   | .empty n => n
   | .witness ops _ _ => initial_offset ops

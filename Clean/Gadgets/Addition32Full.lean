@@ -120,7 +120,7 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
     dsimp [output, from_values, to_vars]
-    simp only [FlatOperation.witness_length, add_zero]
+    simp only [SubCircuit.witness_length, FlatOperation.witness_length, add_zero]
 
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
