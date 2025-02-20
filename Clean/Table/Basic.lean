@@ -52,8 +52,7 @@ def everyRowTwoRowsInduction {M : ℕ+} {F : Type} {P : Trace M F → Sort*}
 lemma len_le_succ {M : ℕ+} {F : Type} (trace : Trace M F) (row : Row M F) : trace.len ≤ (trace +> row).len :=
   match trace with
   | <+> => by simp only [len, Nat.succ_eq_add_one, zero_add, zero_le]
-  | (rest +> row) =>
-    let ih := len_le_succ rest row
+  | (rest +> _) =>
     by simp only [len, Nat.succ_eq_add_one, le_add_iff_nonneg_right, zero_le]
 
 lemma len_ge_succ_of_ge {M : ℕ+} {N : ℕ} {F : Type} (trace : Trace M F) (row : Row M F) (_h : trace.len ≥ N) : (trace +> row).len ≥ N :=
