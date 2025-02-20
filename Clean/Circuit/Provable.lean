@@ -2,6 +2,9 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
 
+/-- A type that has both an in-circuit representation `var`,
+ and an out-of-circuit/constant representation `value`.
+ -/
 structure TypePair where
   var (F: Type) : Type
   value (F: Type) : Type
@@ -9,8 +12,14 @@ structure TypePair where
 def Var (α : TypePair) (F : Type) := α.var F
 def Value (α : TypePair) (F : Type) := α.value F
 
-variable {F: Type} [Field F] {M: Type → Type}
+variable {F: Type} [Field F]
 
+/--
+Typical 'provable types' are fixed-size compositions of field elements / structs.
+
+ We represent them as types generic over a single type argument (the field element),
+ i.e. `Type → Type`.
+-/
 def TypePair.from (M: Type → Type) : TypePair where
   var F := M (Expression F)
   value F := M F
@@ -18,8 +27,10 @@ def TypePair.from (M: Type → Type) : TypePair where
 instance : Coe (Type → Type) TypePair where
   coe M := TypePair.from M
 
--- class of types that are composed of variables,
--- and can be evaluated into something that is composed of field elements
+/- Class of types that can be used inside a circuit:
+ they are composed of variables, and can be evaluated into something
+ that is composed of field elements.
+-/
 class ProvableType (α: TypePair) where
   size : ℕ
   to_vars {F: Type} : α.var F → Vector (Expression F) size
