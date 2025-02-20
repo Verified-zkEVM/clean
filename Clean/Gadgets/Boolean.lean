@@ -35,10 +35,10 @@ by
     show x = 1
     calc x
     _ = (x + -1) + 1 := by ring
-    _ = 1 := by simp [h]
+    _ = 1 := by simp only [h, zero_add]
   · intro (h : x = 1)
     show x + -1 = 0
-    simp [h]
+    simp only [h, add_neg_cancel]
 
 open Provable (field)
 
@@ -53,14 +53,14 @@ def circuit : FormalAssertion (F p) (field (F p)) where
   soundness := by
     intro _ env x_var x hx _ h_holds
     change x_var.eval env = x at hx
-    dsimp [gadget_norm] at h_holds
+    dsimp only [Circuit.constraints_hold.soundness, Expression.eval, Expression.eval.eq_2] at h_holds
     rw [hx] at h_holds
     apply equiv.mp h_holds
 
   completeness := by
     intro n env x_var _ x hx _ spec
     change x_var.eval env = x at hx
-    dsimp [gadget_norm]
+    dsimp only [Circuit.constraints_hold.completeness, Expression.eval, Expression.eval.eq_2]
     rw [hx]
     apply equiv.mpr spec
 end Boolean

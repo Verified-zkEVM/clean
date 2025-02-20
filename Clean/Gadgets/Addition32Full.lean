@@ -90,7 +90,7 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   have : carry_in_var.eval env = carry_in := by injection h_inputs
 
   -- -- simplify assumptions
-  dsimp [assumptions, U32.is_normalized] at as
+  dsimp only [assumptions, U32.is_normalized] at as
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm

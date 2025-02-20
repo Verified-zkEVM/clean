@@ -61,7 +61,6 @@ what follows are relationships between different ways of deriving local witness 
 and between different versions of `Environment.uses_local_witnesses`
 -/
 
-set_option trace.Meta.Tactic.simp.rewrite true
 /--
 The witness length from flat and nested operations is the same
 -/
@@ -88,9 +87,9 @@ lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
   induction a using FlatOperation.witness_length.induct with
   | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.nil]
   | case2 _ _ _ ih =>
-    simp [List.cons_append, witness_length, witnesses, List.append_eq, ih]
+    simp only [List.cons_append, witness_length, witnesses, List.append_eq, ih, List.append_assoc]
   | case3 _ _ ih | case4 _ _ ih =>
-    simp [List.cons_append, witness_length, witnesses, List.append_eq, ih]
+    simp only [List.cons_append, witness_length, witnesses, List.append_eq, ih, Subtype.coe_eta]
 
 /--
 The witnesses created from flat and nested operations are the same
@@ -126,7 +125,9 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m
   specialize h ⟨ i, by omega ⟩
   simp only [Fin.coe_cast, Fin.cast_mk] at h
   rw [h]
-  simp [List.getElem_append]
+  simp only [Vector.get, Vector.append.eq_1, Fin.cast_mk, List.get_eq_getElem, Mathlib.Vector.length_val,
+  Fin.is_lt, List.getElem_append, Fin.coe_cast]
+
 
 lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses (ops.assert c) → env.uses_local_witnesses ops := by
@@ -145,7 +146,9 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
-  simp [List.getElem_append]
+  simp only [Vector.get, SubCircuit.witness_length, Vector.append.eq_1, Fin.cast_mk, List.get_eq_getElem,
+  Mathlib.Vector.length_val, Fin.is_lt, List.getElem_append, Fin.coe_cast]
+
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses env c.ops) n

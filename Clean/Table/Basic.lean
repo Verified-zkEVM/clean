@@ -51,15 +51,17 @@ def everyRowTwoRowsInduction {M : ℕ+} {F : Type} {P : Trace M F → Sort*}
 
 lemma len_le_succ {M : ℕ+} {F : Type} (trace : Trace M F) (row : Row M F) : trace.len ≤ (trace +> row).len :=
   match trace with
-  | <+> => by simp [Trace.len]
+  | <+> => by simp only [len, Nat.succ_eq_add_one, zero_add, zero_le]
   | (rest +> row) =>
     let ih := len_le_succ rest row
-    by simp [Trace.len, ih, Nat.le_succ]
+    by simp only [len, Nat.succ_eq_add_one, le_add_iff_nonneg_right, zero_le]
 
 lemma len_ge_succ_of_ge {M : ℕ+} {N : ℕ} {F : Type} (trace : Trace M F) (row : Row M F) (_h : trace.len ≥ N) : (trace +> row).len ≥ N :=
   match trace with
-  | <+> => by simp [Trace.len] at *; simp [_h]
-  | (rest +> row) => by simp [Trace.len] at *; linarith
+  | <+> => by
+      simp only [len, ge_iff_le, nonpos_iff_eq_zero, Nat.succ_eq_add_one, zero_add] at *
+      simp only [_h, zero_le]
+  | (rest +> row) => by simp only [len, Nat.succ_eq_add_one, ge_iff_le] at *; linarith
 
 /--
   This induction principle states that if a trace length is at leas two, then to prove a property
