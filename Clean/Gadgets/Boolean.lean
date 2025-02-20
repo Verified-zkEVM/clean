@@ -53,14 +53,14 @@ def circuit : FormalAssertion (F p) (field (F p)) where
   soundness := by
     intro _ env x_var x hx _ h_holds
     change x_var.eval env = x at hx
-    dsimp at h_holds
+    dsimp [gadget_norm] at h_holds
     rw [hx] at h_holds
     apply equiv.mp h_holds
 
   completeness := by
     intro n env x_var _ x hx _ spec
     change x_var.eval env = x at hx
-    dsimp
+    dsimp [gadget_norm]
     rw [hx]
     apply equiv.mpr spec
 end Boolean

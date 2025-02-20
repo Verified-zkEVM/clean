@@ -64,7 +64,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    dsimp at h_holds
+    dsimp [gadget_norm] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in] at h_holds
@@ -100,7 +100,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp
+    dsimp [gadget_norm]
     rw [hx, hy, hcarry_in]
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold

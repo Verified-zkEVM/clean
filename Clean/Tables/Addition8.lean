@@ -42,7 +42,8 @@ def formal_add8_table : FormalTable (F:=(F p)) := {
     }
     | cons rest row ih => {
       -- simplify induction
-      simp
+      simp [gadget_norm, TraceOfLength.forAllRowsOfTrace.inner, TableConstraint.constraints_hold_on_window,
+        TableConstraint.constraints_hold_on_window.foldl]
       intros lookup_x lookup_y lookup_rest h_curr h_rest
       specialize ih lookup_rest h_rest
       simp [ih]

@@ -1,5 +1,6 @@
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
+import Clean.Circuit.SimpGadget
 
 variable {F: Type} [Field F]
 
@@ -60,7 +61,7 @@ def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Pro
       table.contains (entry.map eval) ∧ constraints_hold_flat eval ops
     | _ => constraints_hold_flat eval ops
 
-@[simp]
+@[gadget_norm]
 def witness_length : List (FlatOperation F) → ℕ
   | [] => 0
   | op :: ops =>
@@ -68,25 +69,25 @@ def witness_length : List (FlatOperation F) → ℕ
     | witness m _ => witness_length ops + m
     | assert _ | lookup _ => witness_length ops
 
-@[simp]
+@[gadget_norm]
 def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (witness_length l)
   | [] => .nil
   | op :: ops =>
     let ws := witnesses env ops
     match op with
     | witness m compute =>
-      ⟨ (compute env).val ++ ws.val, by simp [ws.prop]; ac_rfl ⟩
+      ⟨ (compute env).val ++ ws.val, by simp [ws.prop, gadget_norm]; ac_rfl ⟩
     | assert _ | lookup _ =>
       ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
 
-@[simp]
+@[gadget_norm]
 def witness_generators : (l: List (FlatOperation F)) → Witness F (witness_length l)
   | [] => .nil
   | op :: ops =>
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.init (fun i env => (compute env).get i)).val ++ ws.val, by simp [ws.prop]; ac_rfl ⟩
+      ⟨ (Vector.init (fun i env => (compute env).get i)).val ++ ws.val, by simp [ws.prop, gadget_norm]; ac_rfl ⟩
     | assert _ | lookup _ =>
       ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
 end FlatOperation
@@ -147,7 +148,7 @@ def initial_offset {n: ℕ} : Operations F n → ℕ
   | .lookup ops _ => initial_offset ops
   | .subcircuit ops s => initial_offset ops
 
-@[simp]
+@[gadget_norm]
 def local_length {n: ℕ} : Operations F n → ℕ
   | .empty _ => 0
   | .witness ops m _ => local_length ops + m
@@ -155,7 +156,7 @@ def local_length {n: ℕ} : Operations F n → ℕ
   | .lookup ops _ => local_length ops
   | .subcircuit ops s => local_length ops + s.witness_length
 
-@[simp]
+@[gadget_norm]
 def local_witnesses {n: ℕ} (env: Environment F) : (ops: Operations F n) → Vector F ops.local_length
   | .empty _ => .nil
   | .witness ops _ c => (local_witnesses env ops).append (c env)
@@ -163,7 +164,7 @@ def local_witnesses {n: ℕ} (env: Environment F) : (ops: Operations F n) → Ve
   | .lookup ops _ => local_witnesses env ops
   | .subcircuit ops s => (local_witnesses env ops).append (s.witnesses env)
 
-@[simp]
+@[gadget_norm]
 def witness_generators {n: ℕ} : (ops: Operations F n) → Witness F ops.local_length
   | .empty _ => .nil
   | .witness ops _ c => (witness_generators ops).append
@@ -289,7 +290,7 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 -- core operations we can do in a circuit
 
 /-- Create a new variable -/
-@[simp]
+@[gadget_norm]
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) := ⟨
   fun ops =>
     let var: Variable F := ⟨ ops.offset ⟩
@@ -298,12 +299,12 @@ def witness_var (compute : Environment F → F) : Circuit F (Variable F) := ⟨
 ⟩
 
 /-- Create a new variable, as an `Expression`. -/
-@[simp]
+@[gadget_norm]
 def witness (compute : Environment F → F) := do
   let var ← witness_var compute
   return Expression.var var
 
-@[simp]
+@[gadget_norm]
 def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) := ⟨
   fun ops =>
     let vars: Vector (Variable F) n := .init (fun i => ⟨ ops.offset + i ⟩)
@@ -312,14 +313,14 @@ def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (
 ⟩
 
 /-- Add a constraint. -/
-@[simp]
+@[gadget_norm]
 def assert_zero (e: Expression F) : Circuit F Unit := ⟨
   fun ops => (.assert ops e, ()),
   fun _ => rfl
 ⟩
 
 /-- Add a lookup. -/
-@[simp]
+@[gadget_norm]
 def lookup (l: Lookup F) : Circuit F Unit := ⟨
   fun ops => (.lookup ops l, ()),
   fun _ => rfl
@@ -333,7 +334,7 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-@[simp]
+@[gadget_norm]
 def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) :=
   ∀ i : Fin ops.local_length, env.get (ops.initial_offset + i) = (ops.local_witnesses env).get i
 
@@ -346,7 +347,7 @@ What it means that "constraints hold" on a sequence of operations.
 - For lookups, the evaluated entry must be in the table
 - For subcircuits, the constraints must hold on the subcircuit's flat operations
 -/
-@[simp]
+@[gadget_norm]
 def constraints_hold {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold eval ops
@@ -359,7 +360,7 @@ def constraints_hold {n : ℕ} (eval : Environment F) : Operations F n → Prop
 /--
 Version of `constraints_hold` that replaces the statement of subcircuits with their `soundness`.
 -/
-@[simp]
+@[gadget_norm]
 def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold eval ops
@@ -376,7 +377,7 @@ def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n
 /--
 Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
 -/
-@[simp]
+@[gadget_norm]
 def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold.completeness eval ops
@@ -430,13 +431,13 @@ where
   soundness: Soundness F β α main assumptions spec
   completeness: Completeness F β α main assumptions
 
-@[simp]
+@[gadget_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_var : α.var) (env : Environment F) :=
   let b := eval env b_var
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
-@[simp]
+@[gadget_norm]
 def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (env : Environment F) :=
   let b := eval env b_var
   circuit.assumptions b
@@ -481,12 +482,12 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     -- the constraints hold
     constraints_hold.completeness env (main b_var offset)
 
-@[simp]
+@[gadget_norm]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
   let b := eval env b_var
   circuit.assumptions b → circuit.spec b
 
-@[simp]
+@[gadget_norm]
 def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
   let b := eval env b_var
   circuit.assumptions b ∧ circuit.spec b

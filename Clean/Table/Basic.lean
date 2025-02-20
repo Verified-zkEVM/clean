@@ -270,7 +270,6 @@ def assignment {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConst
   In particular, we construct the environment by taking directly the result of the assignment function
   so that every variable evaluate to the trace cell value which is assigned to
 -/
-@[simp]
 def constraints_hold_on_window {F : Type} {M W : ℕ+} [Field F]
     (table : TableConstraint F M W Unit) (window: TraceOfLength F M W) : Prop :=
   let ((ctx, ops), ()) := table TableContext.empty
@@ -285,7 +284,6 @@ def constraints_hold_on_window {F : Type} {M W : ℕ+} [Field F]
   -- lifting directly to the soundness of the sub-circuit
   foldl ops env
   where
-  @[simp]
   foldl : List (TableConstraintOperation F M W) -> (env: Environment F) -> Prop
   | [], _ => true
   | op :: ops, env =>
@@ -297,17 +295,14 @@ def output {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConstrain
   let ((_, _), a) := table TableContext.empty
   a
 
-@[simp]
 def witness_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W) (compute : Unit → F): TableConstraint F M W (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
 
-@[simp]
 def get_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W): TableConstraint F M W (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
 
-@[simp]
 def subcircuit
     {F : Type} {M W : ℕ+} [Field F]
     {α β : TypePair} [ProvableType F β] [ProvableType F α]
@@ -316,7 +311,6 @@ def subcircuit
   let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
   (TableConstraintOperation.Allocate subcircuit, a)
 
-@[simp]
 def assertion
     {F : Type} {M W : ℕ+} [Field F]
     {β : TypePair} [ProvableType F β]

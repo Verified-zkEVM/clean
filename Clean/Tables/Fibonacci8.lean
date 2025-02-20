@@ -82,8 +82,9 @@ lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
     (ZMod.val (curr 0) < 256 → ZMod.val (curr 1) < 256 → ZMod.val (next 1) = (ZMod.val (curr 0) + ZMod.val (curr 1)) % 256) ∧ curr 1 = next 0
     := by
   intro h
-  dsimp [Circuit.formal_assertion_to_subcircuit] at h
-  dsimp [fib_table, from_values, to_vars] at h
+  simp only [TableConstraint.constraints_hold_on_window] at h
+  dsimp only [TableConstraint.constraints_hold_on_window.foldl, TableConstraintOperation.update_context, Circuit.formal_assertion_to_subcircuit] at h
+  dsimp [fib_table, from_values, to_vars, gadget_norm] at h
 
   rw [var1, var2, var3] at h
 
@@ -108,10 +109,10 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
     · simp
     · intro _
-      simp [fib_table]
+      simp [TableConstraint.constraints_hold_on_window, TableConstraint.constraints_hold_on_window.foldl, fib_table]
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec,
-        from_values, to_vars
+        from_values, to_vars, gadget_norm
       ] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
