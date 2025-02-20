@@ -76,7 +76,8 @@ def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (w
     let ws := witnesses env ops
     match op with
     | witness m compute =>
-      ⟨ (compute env).val ++ ws.val, by simp [ws.prop, gadget_norm]; ac_rfl ⟩
+      ⟨ (compute env).val ++ ws.val, by simp only [ws.prop, gadget_norm,
+        List.length_append, Mathlib.Vector.length_val]; ac_rfl ⟩
     | assert _ | lookup _ =>
       ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
 
@@ -87,7 +88,8 @@ def witness_generators : (l: List (FlatOperation F)) → Witness F (witness_leng
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.init (fun i env => (compute env).get i)).val ++ ws.val, by simp [ws.prop, gadget_norm]; ac_rfl ⟩
+      ⟨ (Vector.init (fun i env => (compute env).get i)).val ++ ws.val, by
+        simp only [ws.prop, gadget_norm, List.length_append, Mathlib.Vector.length_val]; ac_rfl⟩
     | assert _ | lookup _ =>
       ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
 end FlatOperation
@@ -118,7 +120,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
     completeness env → FlatOperation.constraints_hold_flat env ops
 
-@[reducible, simp]
+@[reducible, simp, gadget_norm]
 def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
 
 @[reducible]

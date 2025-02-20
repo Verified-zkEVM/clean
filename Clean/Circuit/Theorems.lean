@@ -61,6 +61,7 @@ what follows are relationships between different ways of deriving local witness 
 and between different versions of `Environment.uses_local_witnesses`
 -/
 
+set_option trace.Meta.Tactic.simp.rewrite true
 /--
 The witness length from flat and nested operations is the same
 -/
@@ -69,7 +70,7 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
   induction ops with
   | empty => trivial
   | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
-    dsimp [to_flat_operations, Operations.local_length]
+    dsimp only [to_flat_operations, Operations.local_length, SubCircuit.witness_length]
     generalize to_flat_operations ops = flat_ops at *
     generalize ops.local_length = n at *
     induction flat_ops using FlatOperation.witness_length.induct generalizing n with
@@ -99,7 +100,7 @@ lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} {env} :
   induction ops with
   | empty => trivial
   | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
-    dsimp [to_flat_operations, Operations.local_length, gadget_norm]
+    dsimp only [to_flat_operations, Operations.local_length, gadget_norm, Operations.local_witnesses, Vector.append]
     rw [←ih, witnesses_append]
     try simp only [witness_length, witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast,
       Vector.nil, List.append_nil, zero_add, subset_refl, Set.coe_inclusion]
@@ -160,7 +161,7 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   simp only [SubCircuit.witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast]
   have lt1 : i < (witnesses env c.ops).val.length := by rw [(witnesses env c.ops).prop]; exact i.is_lt
   rw [List.getElem_append_right'' (ops.local_witnesses env).val lt1]
-  simp [Nat.add_comm]
+  simp only [Nat.add_comm, Mathlib.Vector.length_val]
 
 end Environment
 
