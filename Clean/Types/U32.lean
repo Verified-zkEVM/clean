@@ -1,8 +1,9 @@
 import Clean.Gadgets.ByteLookup
-import Clean.Circuit.Provable
+import Clean.Circuit.Extensions
 
 section
 variable {p : ℕ} [Fact p.Prime]
+-- TODO: this assumption is false in practice, need to change some proofs to not need it
 variable [p_large_enough: Fact (p > 2*2^32)]
 
 instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
@@ -23,16 +24,24 @@ instance {F : Type} : StructuredElements U32 F where
   from_elements v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩
 
 namespace U32
+def u32 {p: ℕ} : TypePair := ⟨ U32 (Expression (F p)), U32 (F p) ⟩
+
+instance : ProvableType (F p) (u32 (p:=p)) where
+  size := 4
+  to_vars x := vec [x.x0, x.x1, x.x2, x.x3]
+  to_values x := vec [x.x0, x.x1, x.x2, x.x3]
+  from_vars v :=
+    let ⟨ [x0, x1, x2, x3], _ ⟩ := v
+    ⟨ x0, x1, x2, x3 ⟩
+  from_values v :=
+    let ⟨ [x0, x1, x2, x3], _ ⟩ := v
+    ⟨ x0, x1, x2, x3 ⟩
 
 /--
   Witness a 32-bit unsigned integer.
 -/
-def witness (compute : Unit → U32 (F p)) := do
-  let val := compute ()
-  let x0 ←  witness_var (fun _ => val.x0)
-  let x1 ←  witness_var (fun _ => val.x1)
-  let x2 ←  witness_var (fun _ => val.x2)
-  let x3 ←  witness_var (fun _ => val.x3)
+def witness (compute : Environment (F p) → U32 (F p)) := do
+  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness u32 compute
 
   byte_lookup x0
   byte_lookup x1
@@ -102,6 +111,16 @@ lemma val_eq_256p2 : (256^2 : F p).val = 256^2 := by ring_nf; exact FieldUtils.v
 lemma val_eq_256p3 : (256^3 : F p).val = 256^3 := by ring_nf; exact FieldUtils.val_lt_p (256^3) (by linarith [p_large_enough.elim])
 lemma val_eq_256p4 : (256^4 : F p).val = 256^4 := by ring_nf; exact FieldUtils.val_lt_p (256^4) (by linarith [p_large_enough.elim])
 lemma val_eq_2p32 : (2^32 : F p).val = 2^32 := by have := val_eq_256p4 (p:=p); ring_nf at *; assumption
+
+
+lemma const_to_field (x: ℕ) (asd : x < p) : const (FieldUtils.nat_to_field x asd) = (x : (F p))  := by
+  sorry
+
+lemma zero_u32 : ((decompose_nat_expr 0) : U32 (Expression (F p)))  = ⟨0, 0, 0, 0⟩ := by sorry
+lemma one_u32 : ((decompose_nat_expr 1) : U32 (Expression (F p)))  = ⟨1, 0, 0, 0⟩ := by sorry
+
+
+
 
 /--
 tactic script to fully rewrite a ZMod expression to its Nat version, given that

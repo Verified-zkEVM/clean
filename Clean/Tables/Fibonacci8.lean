@@ -17,7 +17,7 @@ import Clean.Gadgets.Equality.Field
 
 -/
 namespace Tables.Fibonacci8Table
-variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 /--
@@ -67,36 +67,25 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   induction' n using Nat.twoStepInduction
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
+-- sadly, Lean times out when doing these in the middle of the proof below
+-- TODO: we should have a better way to do this
+lemma var1 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0 := by rfl
+lemma var2 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1 := by rfl
+lemma var3 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1 := by rfl
+lemma var4 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0 := by rfl
+
 -- heavy lifting to transform constraints into specs
 -- this proof is quite heavy computationally to check for Lean, because of al the `simp` tactics,
 -- but once this is checked and cached, the complete soundness proof is faster to check
 lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
-    TableConstraint.constraints_hold_on_window fib_relation ⟨<+> +> curr +> next, by simp⟩ →
+    TableConstraint.constraints_hold_on_window fib_relation ⟨<+> +> curr +> next, by simp [table_norm]⟩ →
     (ZMod.val (curr 0) < 256 → ZMod.val (curr 1) < 256 → ZMod.val (next 1) = (ZMod.val (curr 0) + ZMod.val (curr 1)) % 256) ∧ curr 1 = next 0
     := by
-  intro h
-  simp [Circuit.formal_assertion_to_subcircuit] at h
-  simp [fib_table, ProvableType.from_values] at h
-
-  -- TODO: we should have a better way to do this
-  have var1 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
-    := by rfl
-  have var2 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
-    := by rfl
-  have var3 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1
-    := by rfl
-  have var4 : ((fib_relation (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0
-    := by rfl
-  have var5 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
-    := by rfl
-  have var6 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
-    := by rfl
-
-  rw [var1, var2, var3] at h
-
+  intros h
+  dsimp [fib_table, from_values, to_vars, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
+  rw [var1, var2, var3, var4] at h
   simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
-  rw [var4] at h
-  simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec] at h
+  simp only [Fin.isValue, Gadgets.Equality.circuit, Gadgets.Equality.spec, true_implies] at h
   assumption
 
 def formal_fib_table : FormalTable (F:=(F p)) := {
@@ -106,30 +95,31 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
   spec := spec_fib,
   soundness := by
     intro N trace
-    simp [assumptions_fib]
-    simp [fib_table, spec_fib]
+    simp only [assumptions_fib, gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib_table, spec_fib, table_norm]
 
     intro _N_assumption
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
-    · simp
+    · simp [table_norm]
     · intro _
-      simp [fib_table]
+      simp [table_norm, fib_table]
       intros boundary1 boundary2
-      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec] at boundary1 boundary2
+      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec,
+        from_values, to_vars, circuit_norm
+      ] at boundary1 boundary2
 
-      have var1 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+      have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
         := by rfl
-      have var2 : ((boundary_fib (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have var2 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
         := by rfl
 
       rw [var1] at boundary1
       rw [var2] at boundary2
-      simp [fib8]
-      simp [boundary1, boundary2]
+      simp only [Fin.isValue, fib8, ZMod.val_eq_zero]
+      simp only [Fin.isValue, boundary1, boundary2, true_and]
       apply ZMod.val_one
     · intro lookup_h
-      simp at lookup_h
+      simp only [TraceOfLength.forAllRowsOfTrace.inner, Fin.isValue] at lookup_h
 
       -- first of all, we prove the inductive part of the spec
       unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
@@ -144,7 +134,7 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       specialize ih2 constraints_hold.right
       simp only [ih2]
 
-      simp at ih2
+      simp only [Fin.isValue] at ih2
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
       -- lift the constraints to specs
@@ -168,11 +158,11 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
         exact eq_holds.symm
 
       have spec2 : (next 1).val = fib8 (rest.len + 2) := by
-        simp [fib8]
+        simp only [Fin.isValue, fib8]
         rw [curr_fib0, curr_fib1] at add_holds
         assumption
 
-      simp [spec1, spec2]
+      simp only [Fin.isValue, spec1, Trace.len, Nat.succ_eq_add_one, spec2, and_self]
 }
 
 end Tables.Fibonacci8Table

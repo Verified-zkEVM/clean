@@ -94,18 +94,16 @@ theorem byte_plus_256_do_not_wrap (x: F p) [p_large_enough: Fact (p > 512)]:
   rw [val_256_is_256, mod_256_is_256] at thm
   apply thm
 
-
-theorem val_lt_p (x: ℕ) : (x < p) -> (x : F p).val = x := by
+theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
   intro x_lt_p
-  have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt (FieldUtils.p_neq_zero)).mpr x_lt_p
-  rw [ZMod.val_natCast x]
-  assumption
-
+  have p_neq_zero : p ≠ 0 := Nat.not_eq_zero_of_lt x_lt_p
+  have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt p_neq_zero).mpr x_lt_p
+  rw [ZMod.val_natCast x, x_mod_is_x]
 
 theorem boolean_lt_2 {b : F p} (hb : b = 0 ∨ b = 1) : b.val < 2 := by
   rcases hb with h0 | h1
   · rw [h0]; simp
-  · rw [h1]; simp [ZMod.val_one]
+  · rw [h1]; simp only [ZMod.val_one, Nat.one_lt_ofNat]
 
 def nat_to_field (n: ℕ) (lt: n < p) : F p :=
   match p with
@@ -120,7 +118,7 @@ theorem nat_to_field_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = nat_to_field n l
 theorem nat_to_field_of_val_eq_iff {x : F p} {lt: x.val < p} : nat_to_field (x.val) lt = x := by
   cases p
   · exact False.elim (Nat.not_lt_zero x.val lt)
-  · dsimp [nat_to_field]; aesop
+  · dsimp only [nat_to_field]; aesop
 
 theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = n := by
   cases p

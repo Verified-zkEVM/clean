@@ -49,15 +49,15 @@ def formal_add8_table : FormalTable (F:=(F p)) (S:=RowType) := {
   soundness := by
     intro N trace
     simp [assumptions_add8]
-    simp [add8Table, spec_add8]
+    simp [add8Table, spec_add8, table_norm]
 
     induction trace.val with
     | empty => {
-      simp
+      simp [table_norm]
     }
     | cons rest row ih => {
       -- simplify induction
-      simp
+      simp [circuit_norm, table_norm]
       intros lookup_x lookup_y lookup_rest h_curr h_rest
       specialize ih lookup_rest h_rest
       simp [ih]
@@ -66,14 +66,14 @@ def formal_add8_table : FormalTable (F:=(F p)) (S:=RowType) := {
       -- TODO: simp should suffice, but couldn't get it to work
 
       have h_x : (fun x => ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 x).column) = (fun x => CellOffset.curr x) := by sorry
-      have h_varx : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 x).column = 0
+      have h_varx : ((add8_inline (p:=p) { offset := 0, assignment := fun x ↦ { rowOffset := 0, column := 0 } }).1.1.2 x).column = 0
         := by rfl
-      have h_vary : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have h_vary : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
         := by rfl
-      have h_varz : ((add8_inline (p:=p) { subContext := { offset := 0 }, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
+      have h_varz : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
         := by rfl
 
-      simp [ProvableType.from_values] at h_curr
+      simp [from_values, to_vars] at h_curr
       rw [h_varx, h_vary, h_varz] at h_curr
 
       -- and now it is easy!

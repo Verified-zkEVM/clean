@@ -96,7 +96,7 @@ theorem soundness (x y out carry_in carry_out: F p):
   rcases carry_out_bool with zero_carry | one_carry
   -- case with zero carry
   · rw [zero_carry] at h
-    simp [ZMod.val_add] at h
+    simp only [neg_mul, one_mul, zero_mul, mul_zero, add_zero] at h
     rw [←sub_eq_add_neg] at h
     have h_spec : carry_in + x + y - out = 0 := by
       rw [add_comm (x + y), ←add_assoc] at h
@@ -117,7 +117,7 @@ theorem soundness (x y out carry_in carry_out: F p):
 
   -- case with one carry
   · rw [one_carry] at h
-    simp [ZMod.val_add] at h
+    simp only [neg_mul, one_mul] at h
     -- rw [←sub_eq_add_neg, ←sub_eq_add_neg (carry_in + x + y)] at h
     have h_spec : carry_in + x + y - out - 256 = 0 := by
       rw [add_comm (x + y), ←add_assoc] at h
@@ -140,7 +140,7 @@ theorem soundness (x y out carry_in carry_out: F p):
 /--
   Given the default witness generation, we show that the addition constraint is satisfied
 -/
-theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
+theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
@@ -151,12 +151,12 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
   simp
   rw [←sub_eq_add_neg, sub_eq_zero, add_eq_of_eq_sub]
   ring_nf
-  dsimp [FieldUtils.mod_256, FieldUtils.mod]
+  dsimp only [FieldUtils.mod_256, FieldUtils.mod, PNat.val_ofNat]
 
   -- lift everything to the naturals
   apply_fun ZMod.val
-  · simp [ZMod.val_add (FieldUtils.floordiv (x + y + carry_in) 256 * 256)]
-    dsimp [FieldUtils.floordiv]
+  · simp only [ZMod.val_add (FieldUtils.floordiv (x + y + carry_in) 256 * 256)]
+    dsimp only [FieldUtils.floordiv, PNat.val_ofNat]
     rw [ZMod.val_mul, FieldUtils.val_of_nat_to_field_eq, FieldUtils.val_of_nat_to_field_eq]
     repeat rw [ZMod.val_add]
     simp
@@ -164,8 +164,8 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
     -- we need to show that the sum does not wrap around
     set T := ZMod.val x + ZMod.val y + ZMod.val carry_in
     have T_not_wrap : T % p = T := by
-      dsimp [T]
-      rw [Nat.mod_eq_iff_lt p_neq_zero.elim]
+      dsimp only
+      rw [Nat.mod_eq_iff_lt p_neq_zero.out]
       have sum_bound := FieldUtils.byte_sum_le_bound x y as_x as_y
       have sum_lt_512 : (x + y).val + carry_in.val ≤ 511 := by
         apply Nat.le_sub_one_of_lt at sum_bound
@@ -183,7 +183,7 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
     have obv : (256 : F p).val = 256 % p := ZMod.val_natCast _
     have h : T / 256 * (ZMod.val (256 : F p)) + T % 256 = T := by
       rw [mul_comm, obv]
-      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.elim).mpr
+      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.out).mpr
         (Nat.lt_trans (by norm_num) p_large_enough.elim), Nat.div_add_mod]
 
     rw [h, T_not_wrap]
@@ -193,14 +193,14 @@ theorem completeness_add [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
   Given the default witness generation, we show that the output carry
   is either 0 or 1
 -/
-theorem completeness_bool [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
+theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
     carry_out = 0 ∨ carry_out = 1 := by
   intro as_x as_y carry_in_bound
-  dsimp [FieldUtils.floordiv]
+  dsimp only [FieldUtils.floordiv, PNat.val_ofNat]
 
   -- we show that the carry_out is either 0 or 1 by explicitly
   -- constructing the two cases
@@ -213,7 +213,7 @@ theorem completeness_bool [p_neq_zero : Fact (p ≠ 0)] (x y carry_in: F p) :
       have h : (x + y + carry_in).val = x.val + y.val + carry_in.val := by
         rw [ZMod.val_add, ZMod.val_add x]
         simp
-        rw [(Nat.mod_eq_iff_lt p_neq_zero.elim).mpr
+        rw [(Nat.mod_eq_iff_lt p_neq_zero.out).mpr
           (Nat.lt_trans sum_lt_256 (by linarith [p_large_enough.elim]))]
       rw [h]
       rw [Nat.div_eq_of_lt sum_lt_256]

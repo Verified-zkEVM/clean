@@ -38,8 +38,8 @@ namespace Trace
 /--
   The length of a trace is the number of rows it contains.
 -/
-@[simp]
-def len {M : ℕ+} {F : Type} {S : Type -> Type} [StructuredElements S F] : Trace M F S -> ℕ
+@[table_norm]
+def len {M : ℕ+} {F : Type} : Trace M F -> ℕ
   | <+> => 0
   | rest +> _ => Nat.succ rest.len
 
@@ -64,17 +64,18 @@ lemma len_le_succ {M : ℕ+} {F : Type}
     {S : Type -> Type} [StructuredElements S F]
     (trace : Trace M F S) (row : Row M F S) : trace.len ≤ (trace +> row).len :=
   match trace with
-  | <+> => by simp [Trace.len]
-  | (rest +> row) =>
-    let ih := len_le_succ rest row
-    by simp [Trace.len, ih, Nat.le_succ]
+  | <+> => by simp only [len, Nat.succ_eq_add_one, zero_add, zero_le]
+  | (rest +> _) =>
+    by simp only [len, Nat.succ_eq_add_one, le_add_iff_nonneg_right, zero_le]
 
 lemma len_ge_succ_of_ge {M : ℕ+} {N : ℕ} {F : Type}
     {S : Type -> Type} [StructuredElements S F]
     (trace : Trace M F S) (row : Row M F S) (_h : trace.len ≥ N) : (trace +> row).len ≥ N :=
   match trace with
-  | <+> => by simp [Trace.len] at *; simp [_h]
-  | (rest +> row) => by simp [Trace.len] at *; linarith
+  | <+> => by
+      simp only [len, ge_iff_le, nonpos_iff_eq_zero, Nat.succ_eq_add_one, zero_add] at *
+      simp only [_h, zero_le]
+  | (rest +> row) => by simp only [len, Nat.succ_eq_add_one, ge_iff_le] at *; linarith
 
 /--
   This induction principle states that if a trace length is at leas two, then to prove a property
@@ -214,7 +215,7 @@ inductive TableConstraintOperation (F : Type) [Field F] (M W : ℕ+) where
   /--
     Allocate a subcircuit in the trace
   -/
-  | Allocate: SubCircuit F -> TableConstraintOperation F M W
+  | Allocate: {n: ℕ} → SubCircuit F n -> TableConstraintOperation F M W
 
   /--
     Assign a variable to a cell in the trace
@@ -226,30 +227,30 @@ inductive TableConstraintOperation (F : Type) [Field F] (M W : ℕ+) where
   context of the gadgets, and the current assignment of the variables to the cells in the trace.
 -/
 structure TableContext (F : Type) (M W : ℕ+) where
-  subContext: Context F
+  offset: ℕ
   assignment : CellAssignment M W
 
-@[simp]
+@[table_norm]
 def TableContext.empty {F : Type} {M W : ℕ+} : TableContext F M W := ⟨
-  Context.empty,
+  0,
   -- TODO: is there a better way?
   fun _ => ⟨0, 0⟩
 ⟩
 
 namespace TableConstraintOperation
 
-@[simp]
+@[table_norm]
 def update_context {F : Type} {M W : ℕ+} [Field F] (ctx: TableContext F M W) : TableConstraintOperation F M W → TableContext F M W
   | Witness offset _ => {
-      subContext := ⟨ ctx.subContext.offset + 1 ⟩,
-      assignment := fun x => if x = ctx.subContext.offset then offset else ctx.assignment x
+      offset := ctx.offset + 1,
+      assignment := fun x => if x = ctx.offset then offset else ctx.assignment x
     }
   | Allocate { ops, .. } => {
-      subContext := ⟨ ctx.subContext.offset + PreOperation.witness_length ops ⟩,
+      offset := ctx.offset + FlatOperation.witness_length ops,
       assignment := ctx.assignment
     }
   | Assign v offset => {
-      subContext := ctx.subContext,
+      offset := ctx.offset,
       assignment := fun x => if x = v.index then offset else ctx.assignment x
     }
 
@@ -262,7 +263,7 @@ instance {F : Type} {M W : ℕ+} [Field F] [Repr F] : ToString (TableConstraintO
 end TableConstraintOperation
 
 
-@[simp]
+@[table_norm]
 def TableConstraint (F : Type) [Field F] (M W : ℕ+) (α : Type) :=
   TableContext F M W → (TableContext F M W × List (TableConstraintOperation F M W)) × α
 
@@ -297,23 +298,24 @@ def assignment {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConst
   In particular, we construct the environment by taking directly the result of the assignment function
   so that every variable evaluate to the trace cell value which is assigned to
 -/
-@[simp]
+@[table_norm]
 def constraints_hold_on_window {F : Type} {M W : ℕ+} [Field F]
     {S : Type -> Type} [StructuredElements S F]
     (table : TableConstraint F M W Unit) (window: TraceOfLength F S M W) : Prop :=
   let ((ctx, ops), ()) := table TableContext.empty
 
   -- construct an env by simply taking the result of the assignment function
-  let env : ℕ -> F := fun x =>
+  let env : Environment F := ⟨ fun x =>
     match ctx.assignment x with
     | ⟨i, j⟩ => window.get i j
+  ⟩
 
   -- then we fold over allocated sub-circuits
   -- lifting directly to the soundness of the sub-circuit
   foldl ops env
   where
-  @[simp]
-  foldl : List (TableConstraintOperation F M W) -> (env: ℕ -> F) -> Prop
+  @[table_norm]
+  foldl : List (TableConstraintOperation F M W) -> (env: Environment F) -> Prop
   | [], _ => true
   | op :: ops, env =>
     match op with
@@ -324,12 +326,10 @@ def output {α : Type} {F : Type} {M W : ℕ+} [Field F] (table : TableConstrain
   let ((_, _), a) := table TableContext.empty
   a
 
-@[simp]
 def witness_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W) (compute : Unit → F): TableConstraint F M W (Variable F) :=
   as_table_operation fun ctx =>
-  (TableConstraintOperation.Witness off compute, ⟨ ctx.subContext.offset, compute ⟩)
+  (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
 
-@[simp]
 def get_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W): TableConstraint F M W (Variable F) :=
   as_table_operation fun ctx =>
   -- TODO: how to handle multiple withenss functions?
@@ -353,22 +353,20 @@ def get_curr_row {F : Type} {M W : ℕ+} [Field F]
     rw [←h_size] at exprs
     exact StructuredElements.from_elements exprs)
 
-@[simp]
 def subcircuit
     {F : Type} {M W : ℕ+} [Field F]
     {α β : TypePair} [ProvableType F β] [ProvableType F α]
     (circuit: FormalCircuit F β α) (b: β.var) : TableConstraint F M W α.var :=
   as_table_operation fun ctx =>
-  let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.subContext circuit b
+  let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
   (TableConstraintOperation.Allocate subcircuit, a)
 
-@[simp]
 def assertion
     {F : Type} {M W : ℕ+} [Field F]
     {β : TypePair} [ProvableType F β]
     (circuit: FormalAssertion F β) (b: β.var) : TableConstraint F M W Unit :=
   as_table_operation fun ctx =>
-    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.subContext circuit b
+    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
     (TableConstraintOperation.Allocate subcircuit, ())
 
 def assign {F : Type} {M W : ℕ+} [Field F] (v: Variable F) (off : CellOffset M W) : TableConstraint F M W Unit :=
@@ -408,7 +406,7 @@ inductive TableOperation (F : Type) [Field F] (M : ℕ+) where
   environment is derived from the `CellAssignment` functions. Intuitively, if a variable `x`
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
-@[simp]
+@[table_norm]
 def table_constraints_hold
     {F : Type} [Field F] {M : ℕ+} {N : ℕ}
     {S : Type -> Type} [StructuredElements S F]

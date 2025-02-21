@@ -4,7 +4,6 @@ variable {F: Type}
 
 structure Variable (F : Type) where
   index: ℕ
-  witness: Unit → F
 
 instance : Repr (Variable F) where
   reprPrec v _ := "x" ++ repr v.index
@@ -17,15 +16,11 @@ inductive Expression (F : Type) where
 
 export Expression (var const)
 
+structure Environment (F: Type) where
+  get: ℕ → F
+
 namespace Expression
 variable [Field F]
-
-@[simp]
-def eval : Expression F → F
-  | var v => v.witness ()
-  | const c => c
-  | add x y => eval x + eval y
-  | mul x y => eval x * eval y
 
 /--
 Evaluate expression given an external `environment` that determines the assignment
@@ -35,11 +30,11 @@ This is needed when we want to make statements about a circuit in the adversaria
 situation where the prover can assign anything to variables.
 -/
 @[simp]
-def eval_env (env: ℕ → F) : Expression F → F
-  | var v => env v.index
+def eval (env: Environment F) : Expression F → F
+  | var v => env.get v.index
   | const c => c
-  | add x y => eval_env env x + eval_env env y
-  | mul x y => eval_env env x * eval_env env y
+  | add x y => eval env x + eval env y
+  | mul x y => eval env x * eval env y
 
 def toString [Repr F] : Expression F → String
   | var v => "x" ++ reprStr v.index
@@ -75,9 +70,9 @@ instance : Coe F (Expression F) where
 instance : Coe (Variable F) (Expression F) where
   coe x := var x
 
-instance : Coe (Expression F) F where
-  coe x := x.eval
-
 instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
 end Expression
+
+instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+  coe env x := x.eval env

@@ -6,20 +6,15 @@ variable {F :Type} [Field F]
 namespace Provable
 variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
 
-@[simp]
-def witness {F: Type} [Field F] [ProvableType F α] (compute : Unit → α.value) :=
-  let n := ProvableType.size F α
-  let values : Vector F n := ProvableType.to_values (compute ())
-  let varsM : Vector (Circuit F (Expression F)) n := values.map (fun v => Circuit.witness (fun () => v))
-  do
-    let vars ← varsM.mapM
-    return ProvableType.from_vars vars
+@[circuit_norm]
+def witness (α: TypePair) {F: Type} [Field F] [inst: ProvableType F α] (compute : Environment F → α.value) := do
+  let vars ← Circuit.witness_vars inst.size (fun env => compute env |> to_values)
+  return from_vars <| Vector.map Expression.var vars
 
-@[simp]
+@[circuit_norm]
 def assert_equal {F: Type} [Field F] [ProvableType F α] (a a': α.var) : Circuit F Unit :=
-  let n := ProvableType.size F α
-  let vars: Vector (Expression F) n := ProvableType.to_vars a
-  let vars': Vector (Expression F) n := ProvableType.to_vars a'
+  let vars := to_vars a
+  let vars' := to_vars a'
   let eqs := (vars.zip vars').map (fun ⟨ x, x' ⟩ => Circuit.assert_zero (x - x'))
   do let _ ← eqs.mapM
 end Provable
@@ -29,9 +24,8 @@ def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
   match x with
   | var v => pure v
   | x => do
-    let x' ← witness_var (fun _ => x.eval)
+    let x' ← witness_var (fun eval => eval x)
     assert_zero (x - (var x'))
     return x'
-
 
 end Circuit
