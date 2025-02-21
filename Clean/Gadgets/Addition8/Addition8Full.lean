@@ -64,7 +64,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    dsimp [circuit_norm] at h_holds
+    dsimp [circuit_norm, from_values, to_vars] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in] at h_holds
@@ -74,8 +74,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     let ⟨ asx, asy, as_carry_in ⟩ := as
     have as': Gadgets.Addition8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
     specialize h_holds (by assumption)
-    simp [ProvableType.from_values, ProvableType.to_values] at h_holds
-    simp [StructuredElements.from_elements, StructuredElements.to_elements] at h_holds
 
     guard_hyp h_holds : Gadgets.Addition8FullCarry.circuit.spec
       { x, y, carry_in }

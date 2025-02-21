@@ -1,6 +1,7 @@
 import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
+import Clean.Circuit.SimpGadget
 
 variable {F: Type} [Field F]
 
@@ -12,6 +13,10 @@ class StructuredElements (S : Type -> Type) (E : Type) where
   size : ℕ
   to_elements : S E -> Vector E size
   from_elements : Vector E size -> S E
+
+attribute [circuit_norm] StructuredElements.size
+attribute [circuit_norm] StructuredElements.to_elements
+attribute [circuit_norm] StructuredElements.from_elements
 
 structure TypePair where
   var: Type
@@ -25,6 +30,13 @@ class ProvableType (F: Type) (α: TypePair) where
   from_vars : Vector (Expression F) size → α.var
   to_values : α.value → Vector F size
   from_values : Vector F size → α.value
+
+
+attribute [circuit_norm] ProvableType.size
+attribute [circuit_norm] ProvableType.to_vars
+attribute [circuit_norm] ProvableType.from_vars
+attribute [circuit_norm] ProvableType.to_values
+attribute [circuit_norm] ProvableType.from_values
 
 export ProvableType (size to_vars from_vars to_values from_values)
 
