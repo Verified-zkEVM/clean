@@ -7,6 +7,7 @@ import Clean.Circuit.SubCircuit
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Utils.Field
+import Clean.Table.SimpTable
 
 /--
   A row is an instance of a structured elements structure, which has exactly size M.
@@ -39,7 +40,7 @@ namespace Trace
   The length of a trace is the number of rows it contains.
 -/
 @[table_norm]
-def len {M : ℕ+} {F : Type} : Trace M F -> ℕ
+def len {M : ℕ+} {F : Type} {S : Type -> Type} [StructuredElements S F] : Trace M F S -> ℕ
   | <+> => 0
   | rest +> _ => Nat.succ rest.len
 
@@ -332,12 +333,11 @@ def witness_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W) (compu
 
 def get_cell {F : Type} {M W : ℕ+} [Field F] (off : CellOffset M W): TableConstraint F M W (Variable F) :=
   as_table_operation fun ctx =>
-  -- TODO: how to handle multiple withenss functions?
-  (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.subContext.offset, (fun _ => 0) ⟩)
+  (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
 
 /--
   Get a fresh variable for each cell in the current row, then cast the variables to the
-  relevanto RowType structure, and return the row.
+  relevant RowType structure, and return the row.
 -/
 @[simp]
 def get_curr_row {F : Type} {M W : ℕ+} [Field F]
