@@ -75,6 +75,17 @@ def decompose_nat (x: ℕ) : U32 (F p) :=
   ⟨ x0, x1, x2, x3 ⟩
 
 /--
+  Return a 32-bit unsigned integer from a natural number, by decomposing
+  it into four limbs of 8 bits each.
+-/
+def decompose_nat_expr (x: ℕ) : U32 (Expression (F p)) :=
+  let x0 := FieldUtils.mod x 256 (by linarith [p_large_enough.elim])
+  let x1 := FieldUtils.mod (FieldUtils.floordiv x 256) 256 (by linarith [p_large_enough.elim])
+  let x2 := FieldUtils.mod (FieldUtils.floordiv x 256^2) 256 (by linarith [p_large_enough.elim])
+  let x3 := FieldUtils.mod (FieldUtils.floordiv x 256^3) 256 (by linarith [p_large_enough.elim])
+  ⟨ x0, x1, x2, x3 ⟩
+
+/--
   Add two 32-bit unsigned integers, wrapping around on overflow over 2^32.
 -/
 def wrapping_add (x y: U32 (F p)) : U32 (F p) :=
@@ -95,6 +106,16 @@ lemma val_eq_256p2 : (256^2 : F p).val = 256^2 := by ring_nf; exact FieldUtils.v
 lemma val_eq_256p3 : (256^3 : F p).val = 256^3 := by ring_nf; exact FieldUtils.val_lt_p (256^3) (by linarith [p_large_enough.elim])
 lemma val_eq_256p4 : (256^4 : F p).val = 256^4 := by ring_nf; exact FieldUtils.val_lt_p (256^4) (by linarith [p_large_enough.elim])
 lemma val_eq_2p32 : (2^32 : F p).val = 2^32 := by have := val_eq_256p4 (p:=p); ring_nf at *; assumption
+
+
+lemma const_to_field (x: ℕ) (asd : x < p) : const (FieldUtils.nat_to_field x asd) = (x : (F p))  := by
+  sorry
+
+lemma zero_u32 : ((decompose_nat_expr 0) : U32 (Expression (F p)))  = ⟨0, 0, 0, 0⟩ := by sorry
+lemma one_u32 : ((decompose_nat_expr 1) : U32 (Expression (F p)))  = ⟨1, 0, 0, 0⟩ := by sorry
+
+
+
 
 /--
 tactic script to fully rewrite a ZMod expression to its Nat version, given that

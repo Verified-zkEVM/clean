@@ -58,7 +58,6 @@ theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env 
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
-@[simp]
 def formal_circuit_to_subcircuit (n: ℕ)
   (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F n :=
   let res := circuit.main b_var |>.run n
@@ -117,7 +116,6 @@ def formal_circuit_to_subcircuit (n: ℕ)
 /--
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
-@[simp]
 def formal_assertion_to_subcircuit (n: ℕ)
   (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F n :=
   let res := circuit.main b_var |>.run n
@@ -172,7 +170,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
 end Circuit
 
 /-- Include a subcircuit. -/
-@[simp]
+@[circuit_norm]
 def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var := ⟨
   fun ops =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
@@ -181,7 +179,7 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var :
 ⟩
 
 /-- Include an assertion subcircuit. -/
-@[simp]
+@[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit := ⟨
   fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b

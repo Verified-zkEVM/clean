@@ -15,7 +15,7 @@ def ByteTable : Table (F p) where
   row i := vec [from_byte i]
 
 def ByteTable.soundness (x: F p) : ByteTable.contains (vec [x]) → x.val < 256 := by
-  dsimp [Table.contains, ByteTable]
+  dsimp only [ByteTable, Table.contains]
   rintro ⟨ i, h: vec [x] = vec [from_byte i] ⟩
   have h' : x = from_byte i := by repeat injection h with h
   have h'' : x.val = i.val := FieldUtils.nat_to_field_eq x h'
@@ -24,13 +24,13 @@ def ByteTable.soundness (x: F p) : ByteTable.contains (vec [x]) → x.val < 256 
 
 def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x]) := by
   intro h
-  dsimp [Table.contains, ByteTable]
+  dsimp only [ByteTable, Table.contains]
   use x.val
-  simp [from_byte]
+  simp only [from_byte, Fin.val_natCast]
   ext1
   have h' : (x.val) % 256 = x.val := by
     rw [Nat.mod_eq_iff_lt]; assumption; norm_num
-  simp [h']
+  simp only [h', List.cons.injEq, and_true]
   rw [FieldUtils.nat_to_field_of_val_eq_iff]
 
 def ByteTable.equiv (x: F p) : ByteTable.contains (vec [x]) ↔ x.val < 256 :=

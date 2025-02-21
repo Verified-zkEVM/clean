@@ -90,13 +90,15 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   have : carry_in_var.eval env = carry_in := by injection h_inputs
 
   -- -- simplify assumptions
-  dsimp [assumptions, U32.is_normalized] at as
-  have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
-  have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
-  have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
+  dsimp only [assumptions, U32.is_normalized] at as
+
+  -- TODO: those are not used because we are assuming right now p > 2^32
+  have ⟨ _x_norm, _y_norm, carry_in_bool ⟩ := as
+  -- have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
+  -- have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- -- simplify circuit
-  dsimp [add32_full, Boolean.circuit] at h
+  dsimp [add32_full, Boolean.circuit, circuit_norm, Circuit.formal_assertion_to_subcircuit] at h
   simp only [true_implies, true_and, and_assoc] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -111,13 +113,14 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
   rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
   rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at h
   rw [ByteTable.equiv z0, ByteTable.equiv z1, ByteTable.equiv z2, ByteTable.equiv z3] at h
-  have ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
+  have ⟨ z0_byte, _c0_bool, h0, z1_byte, _c1_bool, h1, z2_byte, _c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
 
   -- simplify output and spec
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
     dsimp [output, from_values, to_vars]
+    simp only [SubCircuit.witness_length, FlatOperation.witness_length, add_zero]
 
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
@@ -190,7 +193,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit]
+  dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit, circuit_norm]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]

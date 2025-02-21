@@ -34,15 +34,15 @@ def formal_add8_table : FormalTable (F:=(F p)) := {
   soundness := by
     intro N trace
     simp [assumptions_add8]
-    simp [add8Table, spec_add8]
+    simp [add8Table, spec_add8, table_norm]
 
     induction trace.val with
     | empty => {
-      simp
+      simp [table_norm]
     }
     | cons rest row ih => {
       -- simplify induction
-      simp
+      simp [circuit_norm, table_norm]
       intros lookup_x lookup_y lookup_rest h_curr h_rest
       specialize ih lookup_rest h_rest
       simp [ih]

@@ -98,7 +98,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify constraints hypothesis
-    dsimp at h_holds
+    dsimp [circuit_norm] at h_holds
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
@@ -142,7 +142,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     dsimp [assumptions] at as
 
     -- unfold goal, (re)introduce names for some of unfolded variables
-    dsimp [Boolean.circuit, assert_bool]
+    dsimp [Boolean.circuit, assert_bool, circuit_norm]
     rw [hx, hy, hcarry_in]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -150,12 +150,12 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
     -- simplify local witnesses
     have hz : z = mod_256 (x + y + carry_in) := by
       have henv0 := henv (0 : Fin 2)
-      dsimp at henv0
+      dsimp [circuit_norm] at henv0
       rwa [hx, hy, hcarry_in] at henv0
 
     have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
       have henv1 := henv (1 : Fin 2)
-      dsimp at henv1
+      dsimp [circuit_norm] at henv1
       rwa [hx, hy, hcarry_in] at henv1
 
     -- now it's just mathematics!
