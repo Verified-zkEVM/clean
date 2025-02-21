@@ -2,7 +2,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Basic
 import Clean.Gadgets.Addition8.Addition8
-import Clean.Gadgets.Equality
+import Clean.Gadgets.Equality.Field
 
 
 /-
@@ -32,7 +32,7 @@ def fib_relation : TwoRowsConstraint (F p) 2 := do
     TableConstraint.assign z (CellOffset.next 1)
 
   let x_next <- TableConstraint.get_cell (CellOffset.next 0)
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨y, x_next⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨y, x_next⟩
 
 /--
   boundary constraints that are applied at the beginning of the trace.
@@ -41,8 +41,8 @@ def fib_relation : TwoRowsConstraint (F p) 2 := do
 def boundary_fib : SingleRowConstraint (F p) 2 := do
   let x <- TableConstraint.get_cell (CellOffset.curr 0)
   let y <- TableConstraint.get_cell (CellOffset.curr 1)
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨x, 0⟩
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨y, 1⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨x, 0⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨y, 1⟩
 
 def fib_table : List (TableOperation (F p) 2) := [
   TableOperation.Boundary 0 boundary_fib,

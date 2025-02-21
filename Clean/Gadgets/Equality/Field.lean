@@ -11,7 +11,7 @@ section
 variable {p : ℕ} [Fact p.Prime]
 
 
-namespace Gadgets.Equality
+namespace Gadgets.Equality.Field
 structure InputStruct (F : Type) where
   x: F
   y: F
@@ -53,6 +53,7 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     let ⟨x_var, y_var⟩ := vars
 
     dsimp only [Circuit.constraints_hold.soundness, Expression.eval, Expression.eval.eq_2] at h_holds
+
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
     rw [hx, hy] at h_holds
@@ -75,4 +76,4 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     simp only [Circuit.constraints_hold.completeness, Expression.eval, neg_mul, one_mul]
     rw [hx, hy, spec]
     ring
-end Gadgets.Equality
+end Gadgets.Equality.Field

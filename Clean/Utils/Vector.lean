@@ -62,6 +62,9 @@ theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i
 def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
   ⟨ v.val ++ w.val, by simp only [List.length_append, v.prop, w.prop] ⟩
 
+instance {α : Type} {n : ℕ} {m : ℕ} : HAppend (Vector α n) (Vector α m) (Vector α (n + m)) where
+  hAppend xs ys := append xs ys
+
 @[simp]
 def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
   ⟨ v.val ++ [a], by simp only [List.length_append, v.prop, List.length_singleton] ⟩
@@ -133,4 +136,8 @@ def init {n} (create: Fin n → α) : Vector α n :=
   | 0 => nil
   | k + 1 =>
     (init (fun i : Fin k => create i)).push (create k)
+
+def finRange (n : ℕ) : Vector (Fin n) n :=
+  ⟨ List.finRange n, List.length_finRange n ⟩
+
 end Vector
