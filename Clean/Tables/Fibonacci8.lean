@@ -120,7 +120,8 @@ def formal_fib_table : FormalTable (F p) RowType := {
   spec := spec_fib,
   soundness := by
     intro N trace
-    simp only [assumptions_fib, gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib_table, spec_fib, table_norm]
+    simp only [assumptions_fib, gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
+      fib_table, spec_fib, TraceOfLength.forAllRowsOfTraceWithIndex, and_imp]
 
     intro _N_assumption
 
