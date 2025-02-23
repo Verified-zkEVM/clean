@@ -47,7 +47,7 @@ def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
 
-def formal_add8_table : FormalTable (F:=(F p)) (S:=RowType) := {
+def formal_add8_table : FormalTable (F p) RowType := {
   constraints := add8Table,
   assumptions := assumptions_add8,
   spec := spec_add8,

@@ -480,7 +480,7 @@ def table_constraints_hold {N : ℕ}
     | <+>, _ => True
 
 
-structure FormalTable {F : Type} [Field F] {S : Type -> Type} [struct: StructuredElements S F] where
+structure FormalTable (F : Type) [Field F] (S : Type -> Type) [struct: StructuredElements S F] where
   -- list of constraints that are applied over the table
   constraints : List (TableOperation S F)
 
