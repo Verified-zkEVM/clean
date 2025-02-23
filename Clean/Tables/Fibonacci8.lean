@@ -25,17 +25,12 @@ structure RowType (F : Type) where
   x: F
   y: F
 
-instance row_structured (F : Type) : StructuredElements RowType F where
+instance (F : Type) : StructuredElements RowType F where
   size := 2
   to_elements x := vec [x.x, x.y]
   from_elements v :=
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
-
-@[reducible]
-def to_row (v : Vector (Expression (F p)) 2) : RowType (Expression (F p)) :=
-  let ⟨ [x, y], _ ⟩ := v
-  ⟨ x, y ⟩
 
 @[reducible]
 def curr_row_off {W : ℕ+} : RowType (CellOffset W RowType (F p)) :=
@@ -55,8 +50,8 @@ def next_row_off {W : ℕ+} : RowType (CellOffset W RowType (F p)) :=
   inductive contraints that are applied every two rows of the trace.
 -/
 def fib_relation : TwoRowsConstraint RowType (F p) := do
-  let curr := to_row (<-TableConstraint.get_curr_row)
-  let next := to_row (<-TableConstraint.get_next_row)
+  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
+  let next : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_next_row)
 
   let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
     x := curr.x,
@@ -73,7 +68,7 @@ def fib_relation : TwoRowsConstraint RowType (F p) := do
   This is our "base case" for the Fibonacci sequence.
 -/
 def boundary_fib : SingleRowConstraint RowType (F p) := do
-  let curr := to_row (<-TableConstraint.get_curr_row)
+  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.x, 0⟩
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.y, 1⟩
 

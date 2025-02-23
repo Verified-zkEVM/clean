@@ -12,21 +12,15 @@ structure RowType (F : Type) where
   y: F
   z: F
 
-instance row_structured (F : Type) : StructuredElements RowType F where
+instance (F : Type) : StructuredElements RowType F where
   size := 3
   to_elements x := vec [x.x, x.y, x.z]
   from_elements v :=
     let ⟨ [x, y, z], _ ⟩ := v
     ⟨ x, y, z ⟩
 
-@[reducible]
-def to_row (v : Vector (Expression (F p)) 3) : RowType (Expression (F p)) :=
-  let ⟨ [x, y, z], _ ⟩ := v
-  ⟨ x, y, z ⟩
-
-
 def add8_inline : SingleRowConstraint RowType (F p) := do
-  let row := to_row (<-TableConstraint.get_curr_row)
+  let row : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
   let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
     x := row.x,
     y := row.y
