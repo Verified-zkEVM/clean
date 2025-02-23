@@ -10,7 +10,7 @@ variable {F: Type} [Field F]
    Those structures can be flattened into a vector of elements.
 -/
 class StructuredElements (S : Type -> Type) (E : Type) where
-  size : ℕ
+  size : ℕ+
   to_elements : S E -> Vector E size
   from_elements : Vector E size -> S E
 
