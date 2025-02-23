@@ -12,12 +12,12 @@ import Clean.Table.SimpTable
 /--
   A row is an instance of a structured elements structure, which has exactly size M.
 -/
-structure Row (F : Type) (S : Type -> Type) [StructuredElements S F] where
-  elems : S F
+@[reducible]
+def Row (F : Type) (S : Type -> Type) [StructuredElements S F] := S F
 
 @[table_norm]
 def Row.get {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (row : Row F S) (i : Fin struct.size) : F :=
-  let elems :=StructuredElements.to_elements row.elems
+  let elems := StructuredElements.to_elements row
   elems.get i
 
 /--
@@ -347,16 +347,27 @@ def get_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredEleme
   (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
 
 /--
-  Get a fresh variable for each cell in the current row, then cast the variables to the
-  relevant RowType structure, and return the row.
+  Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
-def get_curr_row {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [struct: StructuredElements S F] :
+def get_curr_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: StructuredElements S F] :
     TableConstraint W S F (Vector (Expression F) struct.size) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
   let exprs := vars.map (fun v => Expression.var v)
   (TableConstraintOperation.GetRow 0, exprs)
+
+/--
+  Get a fresh variable for each cell in the next row
+-/
+@[table_norm]
+def get_next_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: StructuredElements S F] :
+    TableConstraint W S F (Vector (Expression F) struct.size) :=
+  as_table_operation fun ctx =>
+  let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
+  let exprs := vars.map (fun v => Expression.var v)
+  (TableConstraintOperation.GetRow 1, exprs)
+
 
 def subcircuit
     {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]

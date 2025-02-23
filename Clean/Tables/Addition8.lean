@@ -40,11 +40,11 @@ def add8Table : List (TableOperation RowType (F p)) := [
 ]
 
 def assumptions_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => row.elems.x.val < 256 ∧ row.elems.y.val < 256)
+  trace.forAllRowsOfTrace (fun row => row.x.val < 256 ∧ row.y.val < 256)
 
 
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => (row.elems.z.val = (row.elems.x.val + row.elems.y.val) % 256))
+  trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
 
 def formal_add8_table : FormalTable (F:=(F p)) (S:=RowType) := {
@@ -53,8 +53,8 @@ def formal_add8_table : FormalTable (F:=(F p)) (S:=RowType) := {
   spec := spec_add8,
   soundness := by
     intro N trace
-    simp [assumptions_add8]
-    simp [add8Table, spec_add8, table_norm]
+    simp only [assumptions_add8]
+    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8Table, spec_add8]
 
     induction trace.val with
     | empty => {
