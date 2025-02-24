@@ -119,7 +119,12 @@ def rec_var7 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ �
 
 def rec_var8 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 8) = CellOffset.next 8
   := by simp [recursive_relation, bind, table_norm]; rfl
-
+def rec_var9 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 9) = CellOffset.next 1
+  := by simp [recursive_relation, bind, table_norm, StructuredElements.size]; rfl
+def rec_var10 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 10) = CellOffset.next 2
+  := by simp [recursive_relation, bind, table_norm, StructuredElements.size]; rfl
+def rec_var11 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 11) = CellOffset.next 3
+  := by simp [recursive_relation, bind, table_norm, StructuredElements.size]; rfl
 
 def rec_var16 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 16) = CellOffset.next 4
   := by simp [recursive_relation, bind, table_norm]; rfl
@@ -176,8 +181,6 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   simp [table_norm, StructuredElements.size, StructuredElements.from_elements]
   intros _ h_eq
 
-  -- TODO: ok this is very annoying
-  -- why can't simp figure out those relations?
   rw [
     show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
     show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
@@ -187,7 +190,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   ] at h_eq
 
   simp [Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness, from_values, Gadgets.Equality.U32.circuit, to_vars] at h_eq
-  simp only [rec_var5, rec_var6, rec_var7, rec_var8] at h_eq
+  simp only [rec_var4, rec_var5, rec_var6, rec_var7, rec_var8, rec_var9, rec_var10, rec_var11] at h_eq
   simp [CellOffset.curr, Gadgets.Addition32Full.circuit, Gadgets.Addition32Full.spec,
     table_norm, StructuredElements.to_elements, from_values, Gadgets.Equality.U32.spec] at h_eq
 
@@ -197,9 +200,12 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (5 : Fin 8).val = 5 by rfl,
     show (6 : Fin 8).val = 6 by rfl,
     show (7 : Fin 8).val = 7 by rfl,
+    show (8 : Fin 8).val = 0 by rfl,
   ] at h_eq
 
-  sorry
+  have ⟨h0, h1, h2, h3⟩ := h_eq
+  ext
+  repeat simp only [h0, h1, h2, h3]
 
 
 def formal_fib32_table : FormalTable (F p) RowType := {
@@ -265,9 +271,11 @@ def formal_fib32_table : FormalTable (F p) RowType := {
 
       simp only [and_true]
 
+      -- lift the constraints to spec
       have add_spec := lift_rec_add curr next constraints_hold.left
       have eq_spec := lift_rec_eq curr next constraints_hold.left
 
+      -- and now we can reason at high level with U32s
       have h_lookup_first : curr.x.is_normalized := by
         -- TODO: should be easy
         sorry
