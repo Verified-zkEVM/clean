@@ -178,7 +178,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
       have lookup_first_col : (curr.x).val < 256 := by
         -- This is true also by induction, because we proved that
-        -- curr 0 is exactly fib8 index, and fib8 is always less than 256
+        -- curr.x is exactly fib8 index, and fib8 is always less than 256
         rw [ih2.left.left]
         apply fib8_less_than_256
 

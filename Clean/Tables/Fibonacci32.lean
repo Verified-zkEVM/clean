@@ -74,7 +74,7 @@ def fib32 : ℕ -> ℕ
 
 def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTraceWithIndex (λ row index =>
-    (row.x.value = fib32 index) ∧ (row.y.value = fib32 (index + 1))
+    (row.x.value = fib32 index) ∧ (row.y.value = fib32 (index + 1)) ∧ row.x.is_normalized
     )
 
 
@@ -137,7 +137,7 @@ def rec_var22 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ �
 
 lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
-  (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32) := by
+  (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
 
   simp [table_norm, StructuredElements.size, StructuredElements.from_elements]
   intros h_add h_eq
@@ -171,7 +171,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
-  simp only [h_add]
+  simp only [h_add, and_self]
 
 
 lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
@@ -206,7 +206,6 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   have ⟨h0, h1, h2, h3⟩ := h_eq
   ext
   repeat simp only [h0, h1, h2, h3]
-
 
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
@@ -249,6 +248,8 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       simp only [U32.value, fib32]
       rw [b0, b1, b2, b3, b4, b5, b6, b7]
       simp [ZMod.val_one]
+      simp only [U32.is_normalized, b0, b1, b2, b3]
+      simp only [ZMod.val_zero, Nat.ofNat_pos, and_self]
 
     · intro lookup_h
       simp only [TraceOfLength.forAllRowsOfTrace.inner, Fin.isValue] at lookup_h
@@ -267,7 +268,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       simp only [ih2, and_self]
 
       simp only [Fin.isValue, and_true] at ih2
-      let ⟨curr_fib0, curr_fib1⟩ := ih2.left
+      let ⟨curr_fib0, curr_fib1, curr_normalized_x⟩ := ih2.left
 
       simp only [and_true]
 
@@ -276,14 +277,10 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       have eq_spec := lift_rec_eq curr next constraints_hold.left
 
       -- and now we can reason at high level with U32s
-      have h_lookup_first : curr.x.is_normalized := by
-        -- TODO: should be easy
-        sorry
-
-      specialize add_spec h_lookup_first lookup_h.right.left
+      specialize add_spec curr_normalized_x lookup_h.right.left
       simp [fib32]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
-      simp [add_spec, curr_fib1, Trace.len]
+      simp [add_spec, curr_fib1, Trace.len, lookup_h]
 }
 
 end Tables.Fibonacci32
