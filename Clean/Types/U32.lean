@@ -113,14 +113,18 @@ lemma val_eq_256p4 : (256^4 : F p).val = 256^4 := by ring_nf; exact FieldUtils.v
 lemma val_eq_2p32 : (2^32 : F p).val = 2^32 := by have := val_eq_256p4 (p:=p); ring_nf at *; assumption
 
 
-lemma const_to_field (x: ℕ) (asd : x < p) : const (FieldUtils.nat_to_field x asd) = (x : (F p))  := by
-  sorry
-
-lemma zero_u32 : ((decompose_nat_expr 0) : U32 (Expression (F p)))  = ⟨0, 0, 0, 0⟩ := by sorry
-lemma one_u32 : ((decompose_nat_expr 1) : U32 (Expression (F p)))  = ⟨1, 0, 0, 0⟩ := by sorry
-
-
-
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[ext]
+lemma ext {x y : U32 (F p)}
+    (h0 : x.x0 = y.x0)
+    (h1 : x.x1 = y.x1)
+    (h2 : x.x2 = y.x2)
+    (h3 : x.x3 = y.x3)
+    : x = y :=
+  by match x, y with
+  | ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ =>
+    simp only [h0, h1, h2, h3] at *
+    simp only [h0, h1, h2, h3]
 
 /--
 tactic script to fully rewrite a ZMod expression to its Nat version, given that
