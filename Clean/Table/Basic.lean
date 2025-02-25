@@ -10,7 +10,7 @@ import Clean.Utils.Field
 import Clean.Table.SimpTable
 
 /--
-  A row is an instance of a structured elements structure, which has exactly size M.
+  A row is StructuredElement that contains field elements.
 -/
 @[reducible]
 def Row (F : Type) (S : Type -> Type) [StructuredElements S F] := S F
@@ -104,6 +104,9 @@ def everyRowTwoRowsInduction' {F : Type}
         (by sorry)
         (by sorry)
 
+/--
+  Get the row at a specific index in the trace, starting from the bottom of the trace
+-/
 @[table_norm]
 def getLeFromBottom {F : Type}
     {S : Type -> Type} [struct: StructuredElements S F]:
@@ -122,6 +125,9 @@ def TraceOfLength (F : Type) (S : Type -> Type) [StructuredElements S F] (N : �
 
 namespace TraceOfLength
 
+/--
+  Get the row at a specific index in the trace, starting from the top
+-/
 @[table_norm]
 def get {N: ℕ+} {M : ℕ} {F : Type}
     {S : Type -> Type} [StructuredElements S F]:
@@ -190,8 +196,15 @@ deriving Repr
 
 namespace CellOffset
 
+/--
+  Current row offset
+-/
 @[table_norm]
 def curr {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (j : Fin (struct.size)) :  CellOffset W S F := ⟨0, j⟩
+
+/--
+  Next row offset
+-/
 @[table_norm]
 def next {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (j : Fin (struct.size)) :  CellOffset W S F := ⟨1, j⟩
 
@@ -227,12 +240,15 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Fi
 
 /--
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
-  context of the gadgets, and the current assignment of the variables to the cells in the trace.
+  offset, and the current assignment of the variables to the cells in the trace.
 -/
 structure TableContext (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S F] where
   offset: ℕ
   assignment : CellAssignment W S F
 
+/--
+  An empty context has offset zero, and all variables are assigned by default to the first cell
+-/
 @[reducible]
 def TableContext.empty {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] : TableContext W S F := ⟨
   0,
@@ -242,21 +258,40 @@ def TableContext.empty {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [Struc
 
 namespace TableConstraintOperation
 
+/--
+  Returns the updated table context after applying the table operation
+-/
 @[table_norm]
 def update_context {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [struct: StructuredElements S F] (ctx: TableContext W S F) :
     TableConstraintOperation W S F → TableContext W S F
+  /-
+    Witnessing a fresh variable for a table offets just increments the offset and add the mapping
+    from the variable index to the cell offset in the assignment mapping
+  -/
   | Witness offset _ => {
       offset := ctx.offset + 1,
       assignment := fun x => if x = ctx.offset then offset else ctx.assignment x
     }
+
+  /-
+    Getting a row is equivalent to witnessing a fresh variable for each cell in the row
+  -/
   | GetRow off => {
       offset := ctx.offset + struct.size,
       assignment := fun x => if x >= ctx.offset && x < ctx.offset+struct.size then ⟨off, x-ctx.offset⟩ else ctx.assignment x
     }
+
+  /-
+    Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
+  -/
   | Allocate { ops, .. } => {
       offset := ctx.offset + FlatOperation.witness_length ops,
       assignment := ctx.assignment
     }
+
+  /-
+    Assigning a variable to a cell in the trace just updates the assignment mapping
+  -/
   | Assign v offset => {
       offset := ctx.offset,
       assignment := fun x => if x = v.index then offset else ctx.assignment x

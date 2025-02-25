@@ -77,7 +77,7 @@ def fib_table : List (TableOperation RowType (F p)) := [
   TableOperation.EveryRowExceptLast fib_relation,
 ]
 
-def assumptions_fib {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def assumptions {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   N > 2 ∧
   trace.forAllRowsOfTrace (fun row => (row.y).val < 256)
 
@@ -86,42 +86,36 @@ def fib8 : ℕ -> ℕ
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
-def spec_fib {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTraceWithIndex (λ row index =>
-    ((row.x).val = fib8 index) ∧ ((row.y).val = fib8 (index + 1)))
+    ((row.x).val = fib8 index) ∧
+    ((row.y).val = fib8 (index + 1))
+  )
 
 
 lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   induction' n using Nat.twoStepInduction
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
--- sadly, Lean times out when doing these in the middle of the proof below
--- TODO: we should have a better way to do this
-lemma var1 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0) = CellOffset.curr 0
-  := by simp [fib_relation, bind, table_norm]; rfl
-
-lemma var2 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1) = CellOffset.curr 1
-  := by simp [fib_relation, bind, table_norm]; rfl
-
-lemma var3' : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2) = CellOffset.next 2
-  := by simp [fib_relation, bind, table_norm]; rfl
-
-lemma var3 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2) = CellOffset.next 0
-  := by rw [var3']; simp only [CellOffset.next, Fin.isValue, CellOffset.mk.injEq, PNat.val_ofNat,
-    Fin.reduceEq, and_self]
-
-lemma var4 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4) = CellOffset.next 1
-  := by simp [fib_relation, bind, table_norm]; rfl
+lemma vars :
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 0) = CellOffset.curr 0 ∧
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 1) = CellOffset.curr 1 ∧
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 2) = CellOffset.next 0 ∧
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 4) = CellOffset.next 1
+  := by
+  rw [show CellOffset.next 0 = CellOffset.next 2 by simp [CellOffset.next]]
+  simp [fib_relation, bind, table_norm ]
+  repeat constructor
 
 
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table,
-  assumptions := assumptions_fib,
-  spec := spec_fib,
+  assumptions := assumptions,
+  spec := spec,
   soundness := by
     intro N trace
-    simp only [assumptions_fib, gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
-      fib_table, spec_fib, TraceOfLength.forAllRowsOfTraceWithIndex, and_imp]
+    simp only [assumptions, gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
+      fib_table, spec, TraceOfLength.forAllRowsOfTraceWithIndex, and_imp]
 
     intro _N_assumption
 
@@ -167,7 +161,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
       have constraints_hold := by
         have h := constraints_hold.left
         dsimp [fib_table, from_values, to_vars, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
-        simp [var1, var2, var3, var4, CellOffset.column, table_norm] at h
+        simp [vars, CellOffset.column, table_norm] at h
         simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
         simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec, Fin.val] at h
         exact h
