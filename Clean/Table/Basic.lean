@@ -226,6 +226,9 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Fi
   -/
   | Witness : CellOffset W S F -> (compute : Unit → F) -> TableConstraintOperation W S F
 
+  /--
+    Witness a fresh variable for each cell in the row at some offset `off` in the trace
+  -/
   | GetRow : (off : Fin W) -> TableConstraintOperation W S F
 
   /--
