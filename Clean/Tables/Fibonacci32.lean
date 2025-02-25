@@ -27,6 +27,21 @@ instance (F : Type) : StructuredElements RowType F where
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ ⟩
 
+
+@[reducible]
+def next_row_off : RowType (CellOffset 2 RowType (F p)) := {
+  x := ⟨CellOffset.next 0, CellOffset.next 1, CellOffset.next 2, CellOffset.next 3⟩,
+  y := ⟨CellOffset.next 4, CellOffset.next 5, CellOffset.next 6, CellOffset.next 7⟩
+}
+
+@[reducible]
+def assign_U32 (x : U32 (Variable (F p))) (offs : U32 (CellOffset 2 RowType (F p))) : TwoRowsConstraint RowType (F p) :=
+  do
+  TableConstraint.assign x.x0 offs.x0
+  TableConstraint.assign x.x1 offs.x1
+  TableConstraint.assign x.x2 offs.x2
+  TableConstraint.assign x.x3 offs.x3
+
 /--
   inductive contraints that are applied every two rows of the trace.
 -/
@@ -41,10 +56,7 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   }
 
   if let ⟨⟨var z0, var z1, var z2, var z3⟩, _⟩ := z then
-    TableConstraint.assign z0 (CellOffset.next 4)
-    TableConstraint.assign z1 (CellOffset.next 5)
-    TableConstraint.assign z2 (CellOffset.next 6)
-    TableConstraint.assign z3 (CellOffset.next 7)
+    assign_U32 ⟨z0, z1, z2, z3⟩ next_row_off.y
 
   TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨curr.y, next.x⟩
 
@@ -74,76 +86,85 @@ def fib32 : ℕ -> ℕ
 
 def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTraceWithIndex (λ row index =>
-    (row.x.value = fib32 index) ∧ (row.y.value = fib32 (index + 1)) ∧ row.x.is_normalized
-    )
+    (row.x.value = fib32 index) ∧ (row.y.value = fib32 (index + 1)) ∧ row.x.is_normalized)
 
 
 lemma fib32_less_than_2_32 (n : ℕ) : fib32 n < 2^32 := by
   induction' n using Nat.twoStepInduction
   repeat {simp [fib32]}; apply Nat.mod_lt; simp
 
+omit p_large_enough in
+lemma boundary_vars :
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 0) = CellOffset.curr 0 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 1) = CellOffset.curr 1 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 2) = CellOffset.curr 2 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 3) = CellOffset.curr 3 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 4) = CellOffset.curr 4 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 5) = CellOffset.curr 5 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 6) = CellOffset.curr 6 ∧
+    ((boundary (p:=p) TableContext.empty).1.1.assignment 7) = CellOffset.curr 7
+  := by
+    simp only [boundary, bind, TableConstraint.get_curr_row, TableConstraint.as_table_operation,
+      TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
+      Bool.true_and, decide_eq_true_eq, Fin.isValue, Nat.cast_zero, sub_zero, Vector.map,
+      Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Fin.coe_fin_one, Fin.val_zero, add_zero,
+      List.nil_append, Nat.cast_one, Fin.val_one, List.singleton_append, Nat.cast_ofNat,
+      Fin.val_two, List.cons_append, Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast,
+      List.map_cons, List.map_nil, CellOffset.curr]
+    repeat constructor
 
-def boundary_var1 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0) = CellOffset.curr 0
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var2 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1) = CellOffset.curr 1
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var3 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2) = CellOffset.curr 2
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var4 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 3) = CellOffset.curr 3
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var5 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4) = CellOffset.curr 4
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var6 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 5) = CellOffset.curr 5
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var7 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 6) = CellOffset.curr 6
-  := by simp [boundary, bind, table_norm]; rfl
-def boundary_var8 : ((boundary (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 7) = CellOffset.curr 7
-  := by simp [boundary, bind, table_norm]; rfl
+lemma rec_vars :
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 0) = CellOffset.curr 0 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 1) = CellOffset.curr 1 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 2) = CellOffset.curr 2 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 3) = CellOffset.curr 3 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 4) = CellOffset.curr 4 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 5) = CellOffset.curr 5 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 6) = CellOffset.curr 6 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 7) = CellOffset.curr 7 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 8) = CellOffset.next 8 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 9) = CellOffset.next 1 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 10) = CellOffset.next 2 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 11) = CellOffset.next 3 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 16) = CellOffset.next 4 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 18) = CellOffset.next 5 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 20) = CellOffset.next 6 ∧
+    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 22) = CellOffset.next 7
+  := by
+    simp only [recursive_relation, bind, Gadgets.Addition32Full.instProvableTypeFInputs.eq_1,
+      List.length_cons, List.length_singleton, Nat.reduceAdd, StructuredElements.size,
+      PNat.val_ofNat, TableConstraint.get_curr_row, TableConstraint.as_table_operation,
+      TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
+      Bool.true_and, decide_eq_true_eq, Fin.isValue, Nat.cast_zero, sub_zero, Vector.map,
+      Vector.init, Vector.push, Vector.nil, Fin.coe_fin_one, Fin.val_zero, add_zero,
+      List.nil_append, Nat.cast_one, Fin.val_one, List.singleton_append, Nat.cast_ofNat,
+      Fin.val_two, List.cons_append, Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast,
+      List.map_cons, List.map_nil, TableConstraint.get_next_row, Bool.and_eq_true,
+      TableConstraint.eq_1, CellOffset.next, List.append_assoc, Prod.mk.eta, CellOffset.curr]
+    repeat constructor
 
-def rec_var0 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0) = CellOffset.curr 0
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var1 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1) = CellOffset.curr 1
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var2 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2) = CellOffset.curr 2
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var3 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 3) = CellOffset.curr 3
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var4 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4) = CellOffset.curr 4
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var5 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 5) = CellOffset.curr 5
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var6 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 6) = CellOffset.curr 6
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var7 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 7) = CellOffset.curr 7
-  := by simp [recursive_relation, bind, table_norm]; rfl
-
-def rec_var8 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 8) = CellOffset.next 8
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var9 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 9) = CellOffset.next 1
-  := by simp [recursive_relation, bind, table_norm, StructuredElements.size]; rfl
-def rec_var10 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 10) = CellOffset.next 2
-  := by simp [recursive_relation, bind, table_norm, StructuredElements.size]; rfl
-def rec_var11 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 11) = CellOffset.next 3
-  := by simp [recursive_relation, bind, table_norm, StructuredElements.size]; rfl
-
-def rec_var16 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 16) = CellOffset.next 4
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var18 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 18) = CellOffset.next 5
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var20 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 20) = CellOffset.next 6
-  := by simp [recursive_relation, bind, table_norm]; rfl
-def rec_var22 : ((recursive_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 22) = CellOffset.next 7
-  := by simp [recursive_relation, bind, table_norm]; rfl
 
 lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
 
-  simp [table_norm, StructuredElements.size, StructuredElements.from_elements]
+  simp only [TableConstraint.constraints_hold_on_window,
+    TableConstraint.constraints_hold_on_window.foldl,
+    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    Nat.reduceAdd, StructuredElements.from_elements, Vector.map, StructuredElements.size,
+    PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
+    Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
+    List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append, Fin.coe_eq_castSucc,
+    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
+    TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
+    decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
+    Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
+    Expression.eval, Expression.eval.eq_1, Fin.zero_eta, Provable.instProvableTypeField.eq_1,
+    Vector.get.eq_1, Fin.cast_zero, List.get_eq_getElem, CellOffset.next, and_true, Nat.reducePow,
+    and_imp]
   intros h_add h_eq
 
-  -- TODO: ok this is very annoying
-  -- why can't simp figure out those relations?
+  -- TODO: why can't simp figure out those relations?
   rw [
     show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
     show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
@@ -152,14 +173,16 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_add
 
-  simp [Circuit.subcircuit_soundness] at h_add
-  simp only [rec_var0, rec_var1, rec_var2, rec_var3, rec_var4, rec_var5, rec_var6, rec_var7] at h_add
-  simp [CellOffset.curr, Gadgets.Addition32Full.circuit, Gadgets.Addition32Full.spec,
-    table_norm, StructuredElements.to_elements, from_values] at h_add
-  simp [to_vars, circuit_norm, table_norm] at h_add
+  simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit,
+    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    Nat.reduceAdd, eval, from_values, Vector.map, size, to_vars, List.map_cons, Expression.eval,
+    Trace.getLeFromBottom, Row.get, Vector.get, StructuredElements.size, PNat.val_ofNat,
+    StructuredElements.to_elements, rec_vars, CellOffset.curr, Fin.isValue, Fin.cast_eq_self,
+    List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ,
+    Fin.val_two, List.map_nil, CellOffset.next, SubCircuit.witness_length,
+    FlatOperation.witness_length, add_zero, Gadgets.Addition32Full.spec, ZMod.val_zero,
+    Nat.reducePow] at h_add
 
-  simp [rec_var16, rec_var18, rec_var20, rec_var22] at h_add
-  simp [CellOffset.next] at h_add
   simp [
     show (3 : Fin 8).val = 3 by rfl,
     show (4 : Fin 8).val = 4 by rfl,
@@ -167,7 +190,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (6 : Fin 8).val = 6 by rfl,
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_add
-  simp [Gadgets.Addition32Full.assumptions] at h_add
+  simp only [Gadgets.Addition32Full.assumptions, zero_ne_one, or_false, and_true, and_imp] at h_add
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
@@ -178,7 +201,19 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   curr.y = next.x := by
 
-  simp [table_norm, StructuredElements.size, StructuredElements.from_elements]
+  simp only [TableConstraint.constraints_hold_on_window,
+    TableConstraint.constraints_hold_on_window.foldl,
+    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    Nat.reduceAdd, StructuredElements.from_elements, Vector.map, StructuredElements.size,
+    PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
+    Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
+    List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append, Fin.coe_eq_castSucc,
+    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
+    TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
+    decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
+    Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
+    Expression.eval, Fin.zero_eta, Provable.instProvableTypeField.eq_1, Vector.get, Fin.cast_zero,
+    List.get_eq_getElem, CellOffset.next, and_true, and_imp]
   intros _ h_eq
 
   rw [
@@ -189,10 +224,14 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_eq
 
-  simp [Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness, from_values, Gadgets.Equality.U32.circuit, to_vars] at h_eq
-  simp only [rec_var4, rec_var5, rec_var6, rec_var7, rec_var8, rec_var9, rec_var10, rec_var11] at h_eq
-  simp [CellOffset.curr, Gadgets.Addition32Full.circuit, Gadgets.Addition32Full.spec,
-    table_norm, StructuredElements.to_elements, from_values, Gadgets.Equality.U32.spec] at h_eq
+  simp only [List.length_nil, Nat.reduceAdd, Gadgets.Addition32Full.circuit,
+    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    Fin.isValue, Nat.reduceMod, Circuit.formal_assertion_to_subcircuit,
+    Gadgets.Equality.U32.circuit, Circuit.subassertion_soundness, Gadgets.Equality.U32.spec, eval,
+    from_values, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
+    Row.get, Vector.get, StructuredElements.to_elements, rec_vars, CellOffset.curr,
+    Fin.cast_eq_self, List.get_eq_getElem, CellOffset.next, Fin.val_one, List.getElem_cons_succ,
+    List.getElem_cons_zero, Fin.val_two, List.map_nil, U32.mk.injEq, true_implies] at h_eq
 
   simp [
     show (3 : Fin 8).val = 3 by rfl,
@@ -233,7 +272,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
         show (7 : Fin 8).val = 7 by rfl,
       ]
 
-      simp only [boundary_var1, boundary_var2, boundary_var3, boundary_var4, boundary_var5, boundary_var6, boundary_var7, boundary_var8]
+      simp only [boundary_vars]
       simp [CellOffset.curr, Gadgets.Equality.U32.circuit, Gadgets.Equality.U32.spec]
 
       simp [
@@ -278,9 +317,10 @@ def formal_fib32_table : FormalTable (F p) RowType := {
 
       -- and now we can reason at high level with U32s
       specialize add_spec curr_normalized_x lookup_h.right.left
-      simp [fib32]
+      simp only [fib32, Nat.reducePow]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
-      simp [add_spec, curr_fib1, Trace.len, lookup_h]
+      simp only [curr_fib1, Trace.len, Nat.succ_eq_add_one, add_spec,
+        Nat.reducePow, lookup_h, and_self]
 }
 
 end Tables.Fibonacci32

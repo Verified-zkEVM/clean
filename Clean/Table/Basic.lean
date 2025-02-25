@@ -233,7 +233,7 @@ structure TableContext (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struc
   offset: ℕ
   assignment : CellAssignment W S F
 
-@[table_norm]
+@[reducible]
 def TableContext.empty {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] : TableContext W S F := ⟨
   0,
   -- TODO: is there a better way?
@@ -286,19 +286,19 @@ instance (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements 
     ((ctx'', ops ++ ops'), b)
 
 @[table_norm]
-def as_table_operation {α: Type} {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F]
+def as_table_operation {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]
   (f : TableContext W S F -> TableConstraintOperation W S F × α) : TableConstraint W S F α :=
   fun ctx =>
   let (op, a) := f ctx
   let ctx' := TableConstraintOperation.update_context ctx op
   ((ctx', [op]), a)
 
-def operations {α: Type} {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α):
+def operations {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α):
     List (TableConstraintOperation W S F) :=
   let ((_, ops), _) := table TableContext.empty
   ops
 
-def assignment {α: Type} {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α):
+def assignment {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α):
     CellAssignment W S F :=
   let ((ctx, _), _) := table TableContext.empty
   ctx.assignment
@@ -367,7 +367,6 @@ def get_next_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: Stru
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
   let exprs := vars.map (fun v => Expression.var v)
   (TableConstraintOperation.GetRow 1, exprs)
-
 
 def subcircuit
     {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]
