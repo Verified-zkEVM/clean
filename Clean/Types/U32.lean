@@ -39,7 +39,7 @@ instance : ProvableType (F p) (u32 (p:=p)) where
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
-  Extensionality pronciple for U32
+  Extensionality principle for U32
 -/
 @[ext]
 lemma ext {x y : U32 (F p)}
@@ -154,8 +154,5 @@ macro_rules
       rw [Nat.mod_eq_of_lt _]
       repeat linarith [‹Fact (_ > 512)›.elim]))
 
--- lemma value_eq {x0 x1 x2 x3: F p} (h0 : x0.val < 256) (h1 : x1.val < 256) (h2 : x2.val < 256) (h3 : x3.val < 256) :
---   (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3).val = x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3 := by
---   field_to_nat_u32
 end U32
 end
