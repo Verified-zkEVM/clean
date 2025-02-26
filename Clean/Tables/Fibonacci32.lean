@@ -1,17 +1,15 @@
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Basic
-import Clean.Gadgets.Addition32Full
+import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Gadgets.Equality.U32
 import Clean.Types.U32
 
 
 namespace Tables.Fibonacci32
 variable {p : ℕ}
-variable [p_large_enough: Fact (p > 2*2^32)]
+variable [p_large_enough: Fact (p > 512)]
 
-lemma p_large_enough' : Fact (p > 512) := by
-  apply Fact.mk; linarith [p_large_enough.elim]
 
 variable [Fact p.Prime]
 
