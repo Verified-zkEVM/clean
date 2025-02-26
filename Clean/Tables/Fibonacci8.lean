@@ -2,14 +2,14 @@ import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Basic
 import Clean.Gadgets.Addition8.Addition8
-import Clean.Gadgets.Equality
+import Clean.Gadgets.Equality.Field
 
 
 /-
   8-bit Fibonacci inductive table definition. The i-th row of the table
   contains the values of the Fibonacci sequence at i and i+1, modulo 256.
 
-  0        | 1
+  x        | y
   ...
   fib(i)   | fib(i+1)
   fib(i+1) | fib(i+2)
@@ -20,82 +20,102 @@ namespace Tables.Fibonacci8Table
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
+
+structure RowType (F : Type) where
+  x: F
+  y: F
+
+instance (F : Type) : StructuredElements RowType F where
+  size := 2
+  to_elements x := vec [x.x, x.y]
+  from_elements v :=
+    let ⟨ [x, y], _ ⟩ := v
+    ⟨ x, y ⟩
+
+@[reducible]
+def curr_row_off {W : ℕ+} : RowType (CellOffset W RowType (F p)) :=
+  {
+    x := CellOffset.curr 0,
+    y := CellOffset.curr 1
+  }
+
+@[reducible]
+def next_row_off {W : ℕ+} : RowType (CellOffset W RowType (F p)) :=
+  {
+    x := CellOffset.next 0,
+    y := CellOffset.next 1
+  }
+
 /--
   inductive contraints that are applied every two rows of the trace.
 -/
-def fib_relation : TwoRowsConstraint (F p) 2 := do
-  let x <- TableConstraint.get_cell (CellOffset.curr 0)
-  let y <- TableConstraint.get_cell (CellOffset.curr 1)
-  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {x, y}
+def fib_relation : TwoRowsConstraint RowType (F p) := do
+  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
+  let next : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_next_row)
+
+  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
+    x := curr.x,
+    y := curr.y
+  }
 
   if let var z := z then
     TableConstraint.assign z (CellOffset.next 1)
 
-  let x_next <- TableConstraint.get_cell (CellOffset.next 0)
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨y, x_next⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.y, next.x⟩
 
 /--
   boundary constraints that are applied at the beginning of the trace.
   This is our "base case" for the Fibonacci sequence.
 -/
-def boundary_fib : SingleRowConstraint (F p) 2 := do
-  let x <- TableConstraint.get_cell (CellOffset.curr 0)
-  let y <- TableConstraint.get_cell (CellOffset.curr 1)
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨x, 0⟩
-  TableConstraint.assertion Gadgets.Equality.circuit ⟨y, 1⟩
+def boundary_fib : SingleRowConstraint RowType (F p) := do
+  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.x, 0⟩
+  TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.y, 1⟩
 
-def fib_table : List (TableOperation (F p) 2) := [
+def fib_table : List (TableOperation RowType (F p)) := [
   TableOperation.Boundary 0 boundary_fib,
   TableOperation.EveryRowExceptLast fib_relation,
 ]
 
-def assumptions_fib {N : ℕ} (trace : TraceOfLength (F p) 2 N) : Prop :=
+def assumptions {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   N > 2 ∧
-  trace.forAllRowsOfTrace (fun row => (row 1).val < 256)
+  trace.forAllRowsOfTrace (fun row => (row.y).val < 256)
 
 def fib8 : ℕ -> ℕ
   | 0 => 0
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
-def spec_fib {N : ℕ} (trace : TraceOfLength (F p) 2 N) : Prop :=
+def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTraceWithIndex (λ row index =>
-    ((row 0).val = fib8 index) ∧ ((row 1).val = fib8 (index + 1)))
+    ((row.x).val = fib8 index) ∧
+    ((row.y).val = fib8 (index + 1))
+  )
 
 
 lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   induction' n using Nat.twoStepInduction
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
--- sadly, Lean times out when doing these in the middle of the proof below
--- TODO: we should have a better way to do this
-lemma var1 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0 := by rfl
-lemma var2 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1 := by rfl
-lemma var3 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 1 := by rfl
-lemma var4 : ((fib_relation (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 4).column = 0 := by rfl
+lemma vars :
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 0) = CellOffset.curr 0 ∧
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 1) = CellOffset.curr 1 ∧
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 2) = CellOffset.next 0 ∧
+    ((fib_relation (p:=p) TableContext.empty).1.1.2 4) = CellOffset.next 1
+  := by
+  rw [show CellOffset.next 0 = CellOffset.next 2 by simp [CellOffset.next]]
+  simp [fib_relation, bind, table_norm ]
+  repeat constructor
 
--- heavy lifting to transform constraints into specs
--- this proof is quite heavy computationally to check for Lean, because of al the `simp` tactics,
--- but once this is checked and cached, the complete soundness proof is faster to check
-lemma constraints_hold_lift (curr : Row 2 (F p)) (next : Row 2 (F p)) :
-    TableConstraint.constraints_hold_on_window fib_relation ⟨<+> +> curr +> next, by simp [table_norm]⟩ →
-    (ZMod.val (curr 0) < 256 → ZMod.val (curr 1) < 256 → ZMod.val (next 1) = (ZMod.val (curr 0) + ZMod.val (curr 1)) % 256) ∧ curr 1 = next 0
-    := by
-  intros h
-  dsimp [fib_table, from_values, to_vars, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
-  rw [var1, var2, var3, var4] at h
-  simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
-  simp only [Fin.isValue, Gadgets.Equality.circuit, Gadgets.Equality.spec, true_implies] at h
-  assumption
 
-def formal_fib_table : FormalTable (F:=(F p)) := {
-  M := 2,
+def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table,
-  assumptions := assumptions_fib,
-  spec := spec_fib,
+  assumptions := assumptions,
+  spec := spec,
   soundness := by
     intro N trace
-    simp only [assumptions_fib, gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib_table, spec_fib, table_norm]
+    simp only [assumptions, gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
+      fib_table, spec, TraceOfLength.forAllRowsOfTraceWithIndex, and_imp]
 
     intro _N_assumption
 
@@ -104,20 +124,20 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
     · intro _
       simp [table_norm, fib_table]
       intros boundary1 boundary2
-      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.circuit, Gadgets.Equality.spec,
+      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec,
         from_values, to_vars, circuit_norm
       ] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
-        := by rfl
+        := by simp [boundary_fib, bind, table_norm]; rfl
       have var2 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
-        := by rfl
+        := by simp [boundary_fib, bind, table_norm]; rfl
 
-      rw [var1] at boundary1
-      rw [var2] at boundary2
-      simp only [Fin.isValue, fib8, ZMod.val_eq_zero]
-      simp only [Fin.isValue, boundary1, boundary2, true_and]
-      apply ZMod.val_one
+      simp only [Fin.isValue, var1, Fin.val_zero, List.getElem_cons_zero, var2, Fin.val_one,
+        List.getElem_cons_succ] at boundary1 boundary2
+      rw [boundary1, boundary2]
+      simp only [fib8, ZMod.val_zero, ZMod.val_one, and_self]
+
     · intro lookup_h
       simp only [TraceOfLength.forAllRowsOfTrace.inner, Fin.isValue] at lookup_h
 
@@ -132,32 +152,38 @@ def formal_fib_table : FormalTable (F:=(F p)) := {
       unfold table_constraints_hold.foldl at constraints_hold
       simp only at constraints_hold
       specialize ih2 constraints_hold.right
-      simp only [ih2]
+      simp only [ih2, and_self]
 
       simp only [Fin.isValue] at ih2
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
       -- lift the constraints to specs
-      let constraints_hold := constraints_hold_lift curr next constraints_hold.left
+      have constraints_hold := by
+        have h := constraints_hold.left
+        dsimp [fib_table, from_values, to_vars, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
+        simp [vars, CellOffset.column, table_norm] at h
+        simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
+        simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec, Fin.val] at h
+        exact h
       have ⟨add_holds, eq_holds⟩ := constraints_hold
 
       -- and finally now we prove the actual relations, this is fortunately very easy
-      -- now that we have the specs
+      -- now that we have lifted the constraints to specs
 
-      have lookup_first_col : (curr 0).val < 256 := by
+      have lookup_first_col : (curr.x).val < 256 := by
         -- This is true also by induction, because we proved that
-        -- curr 0 is exactly fib8 index, and fib8 is always less than 256
+        -- curr.x is exactly fib8 index, and fib8 is always less than 256
         rw [ih2.left.left]
         apply fib8_less_than_256
 
-      specialize add_holds lookup_first_col lookup_h.right.left
+      specialize add_holds lookup_first_col (by simp only [lookup_h])
 
-      have spec1 : (next 0).val = fib8 (rest.len + 1) := by
+      have spec1 : (next.x).val = fib8 (rest.len + 1) := by
         apply_fun ZMod.val at eq_holds
         rw [curr_fib1] at eq_holds
         exact eq_holds.symm
 
-      have spec2 : (next 1).val = fib8 (rest.len + 2) := by
+      have spec2 : (next.y).val = fib8 (rest.len + 2) := by
         simp only [Fin.isValue, fib8]
         rw [curr_fib0, curr_fib1] at add_holds
         assumption

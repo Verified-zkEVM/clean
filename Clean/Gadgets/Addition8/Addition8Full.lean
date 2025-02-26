@@ -64,7 +64,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    dsimp [circuit_norm] at h_holds
+    dsimp [circuit_norm, from_values, to_vars] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in] at h_holds

@@ -13,6 +13,13 @@ structure InputStruct (F : Type) where
   y: U32 F
   carry_in: F
 
+instance (F : Type) : StructuredElements InputStruct F where
+  size := StructuredElements.size U32 F + StructuredElements.size U32 F + 1
+  to_elements x := (StructuredElements.to_elements x.x) ++ (StructuredElements.to_elements x.y) ++ vec [x.carry_in]
+  from_elements v :=
+    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
+    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
+
 def Inputs (p : ℕ) : TypePair := ⟨
   InputStruct (Expression (F p)),
   InputStruct (F p)
@@ -34,6 +41,13 @@ instance : ProvableType (F p) (Inputs p) where
 structure OutputStruct (F : Type) where
   z: U32 F
   carry_out: F
+
+instance (F : Type) : StructuredElements OutputStruct F where
+  size := StructuredElements.size U32 F + 1
+  to_elements x := (StructuredElements.to_elements x.z) ++ vec [x.carry_out]
+  from_elements v :=
+    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
+    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
 def Outputs (p : ℕ) : TypePair := ⟨
   OutputStruct (Expression (F p)),

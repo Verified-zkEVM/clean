@@ -4,37 +4,51 @@ import Clean.Table.Basic
 import Clean.Gadgets.Addition8.Addition8
 
 namespace Tables.Addition8
-variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-def add8_inline : SingleRowConstraint (F p) 3 := do
-  let x <- TableConstraint.get_cell (CellOffset.curr 0)
-  let y <- TableConstraint.get_cell (CellOffset.curr 1)
-  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {x, y}
+structure RowType (F : Type) where
+  x: F
+  y: F
+  z: F
+
+instance (F : Type) : StructuredElements RowType F where
+  size := 3
+  to_elements x := vec [x.x, x.y, x.z]
+  from_elements v :=
+    let ⟨ [x, y, z], _ ⟩ := v
+    ⟨ x, y, z ⟩
+
+def add8_inline : SingleRowConstraint RowType (F p) := do
+  let row : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
+  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
+    x := row.x,
+    y := row.y
+  }
 
   if let var z := z then
     TableConstraint.assign z (CellOffset.curr 2)
 
-def add8Table : List (TableOperation (F p) 3) := [
+def add8Table : List (TableOperation RowType (F p)) := [
   TableOperation.EveryRow add8_inline
 ]
 
-def assumptions_add8 {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => (row 0).val < 256 ∧ (row 1).val < 256)
+def assumptions_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+  trace.forAllRowsOfTrace (fun row => row.x.val < 256 ∧ row.y.val < 256)
 
 
-def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) 3 N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => (row 2).val = ((row 0).val + (row 1).val) % 256)
+def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+  trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
-def formal_add8_table : FormalTable (F:=(F p)) := {
-  M := 3,
+
+def formal_add8_table : FormalTable (F p) RowType := {
   constraints := add8Table,
   assumptions := assumptions_add8,
   spec := spec_add8,
   soundness := by
     intro N trace
-    simp [assumptions_add8]
-    simp [add8Table, spec_add8, table_norm]
+    simp only [assumptions_add8]
+    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8Table, spec_add8]
 
     induction trace.val with
     | empty => {
@@ -49,18 +63,27 @@ def formal_add8_table : FormalTable (F:=(F p)) := {
 
       -- now we prove a local property about the current row
       -- TODO: simp should suffice, but couldn't get it to work
-      have h_varx : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
-        := by rfl
-      have h_vary : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
-        := by rfl
-      have h_varz : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2).column = 2
-        := by rfl
 
-      simp [from_values, to_vars] at h_curr
-      rw [h_varx, h_vary, h_varz] at h_curr
+      have h_x : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.assignment 0) = CellOffset.curr 0
+        := by
+        simp [add8_inline, bind, table_norm]
+        rfl
+      have h_y : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1) = CellOffset.curr 1
+        := by
+        simp [add8_inline, bind, table_norm]
+        rfl
+      have h_z : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 2) = CellOffset.curr 2
+        := by
+        simp [add8_inline, bind, table_norm]
+        rfl
+      have h_z' : ((add8_inline (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 3) = CellOffset.curr 2
+        := by
+        simp [add8_inline, bind, table_norm]
+        rfl
 
       -- and now it is easy!
-      dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions] at h_curr
+      simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr
+      dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
       simp [lookup_x, lookup_y] at h_curr
       assumption
     }

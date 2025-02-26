@@ -15,44 +15,38 @@ structure InputStruct (F : Type) where
   y: F
   carry_in: F
 
+instance (F : Type) : StructuredElements InputStruct F where
+  size := 3
+  to_elements x := vec [x.x, x.y, x.carry_in]
+  from_elements v :=
+    let ⟨ [x, y, carry_in], _ ⟩ := v
+    ⟨ x, y, carry_in ⟩
+
 def Inputs (p : ℕ) : TypePair := ⟨
   InputStruct (Expression (F p)),
   InputStruct (F p)
 ⟩
 
-@[simp]
-instance : ProvableType (F p) (Inputs p) where
-  size := 3
-  to_vars s := vec [s.x, s.y, s.carry_in]
-  from_vars v :=
-    let ⟨ [x, y, carry_in], _ ⟩ := v
-    ⟨ x, y, carry_in ⟩
-  to_values s := vec [s.x, s.y, s.carry_in]
-  from_values v :=
-    let ⟨ [x, y, carry_in], _ ⟩ := v
-    ⟨ x, y, carry_in ⟩
-
+instance : ProvableType (F p) (Inputs p) := Provable.ofStructured (F p) InputStruct (by dsimp [StructuredElements.size])
 
 structure OutputStruct (F : Type) where
   z: F
   carry_out: F
+
+instance (F : Type) : StructuredElements OutputStruct F where
+  size := 2
+  to_elements x := vec [x.z, x.carry_out]
+  from_elements v :=
+    let ⟨ [z, carry_out], _ ⟩ := v
+    ⟨ z, carry_out ⟩
 
 def Outputs (p : ℕ) : TypePair := ⟨
   OutputStruct (Expression (F p)),
   OutputStruct (F p)
 ⟩
 
-@[simp]
-instance : ProvableType (F p) (Outputs p) where
-  size := 2
-  to_vars s := vec [s.z, s.carry_out]
-  from_vars v :=
-    let ⟨ [z, carry_out], _ ⟩ := v
-    ⟨ z, carry_out ⟩
-  to_values s := vec [s.z, s.carry_out]
-  from_values v :=
-    let ⟨ [z, carry_out], _ ⟩ := v
-    ⟨ z, carry_out ⟩
+instance : ProvableType (F p) (Outputs p) := Provable.ofStructured (F p) OutputStruct (by dsimp [StructuredElements.size])
+
 
 def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let ⟨x, y, carry_in⟩ := input
