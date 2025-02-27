@@ -25,7 +25,7 @@ instance {F : Type} : StructuredElements U64 F where
     let ⟨[v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
     ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩
 
-namespace U32
+namespace U64
 def u64 {p: ℕ} : TypePair := ⟨ U64 (Expression (F p)), U64 (F p) ⟩
 
 instance : ProvableType (F p) (u64 (p:=p)) where
@@ -115,5 +115,5 @@ def decompose_nat_expr (x: ℕ) : U64 (Expression (F p)) :=
   ⟨ x0, x1, x2, x3 , x4, x5, x6, x7 ⟩
 
 
-end U32
+end U64
 end
