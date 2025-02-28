@@ -2,12 +2,7 @@ import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
 
 section
-variable {p : ℕ} [Fact p.Prime]
--- TODO: this assumption is false in practice, need to change some proofs to not need it
-variable [p_large_enough: Fact (p > 512)]
-
-instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
-instance : Fact (p > 512) := by apply Fact.mk; linarith [p_large_enough.elim]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
