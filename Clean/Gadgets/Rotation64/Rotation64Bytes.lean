@@ -1,9 +1,8 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U64
 import Clean.Gadgets.Rotation64.Theorems
-import Clean.Gadgets.Rotation64.Rotation64Bytes
 
-namespace Gadgets.Rotation64
+namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -67,43 +66,37 @@ instance : ProvableType (F p) (Outputs p) where
   Rotate the 64-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def rot64_circuit (offset : Fin 64) (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
-  let byte_offset := offset / 8
-  let bit_offset : ℕ := (offset % 8).val
+def rot64_bytes (offset : Fin 8) (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
+  let ⟨x0, x1, x2, x3 , x4, x5, x6, x7⟩ := input
+  let offset := offset.val
 
-  let x := input.x
-
-  -- apply the byte rotation
-  let ⟨out⟩ ← subcircuit (Gadgets.Rotation64Bytes.circuit byte_offset) { x }
-
-  -- apply the bit rotation
-  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
-  let ⟨z0, z1, z2, z3, z4, z5, z6, z7⟩ ← U64.witness (fun env => U64.mk 0 0 0 0 0 0 0 0)
-
-  -- z0 = x0 / 2^offset + x1 * 2^(8 - offset)
-  let bit_offset_fp : F p := 2 ^ bit_offset
-  let bit_offset_fp' : F p := 2 ^ (8 - bit_offset)
-  assert_zero ((z0 - x1 * bit_offset_fp) * bit_offset_fp' - x0)
-  assert_zero ((z1 - x2 * bit_offset_fp) * bit_offset_fp' - x1)
-  assert_zero ((z2 - x3 * bit_offset_fp) * bit_offset_fp' - x2)
-  assert_zero ((z3 - x4 * bit_offset_fp) * bit_offset_fp' - x3)
-  assert_zero ((z4 - x5 * bit_offset_fp) * bit_offset_fp' - x4)
-  assert_zero ((z5 - x6 * bit_offset_fp) * bit_offset_fp' - x5)
-  assert_zero ((z6 - x7 * bit_offset_fp) * bit_offset_fp' - x6)
-  assert_zero ((z7 - x0 * bit_offset_fp) * bit_offset_fp' - x7)
-
-  return { z := ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ }
+  if offset = 0 then
+    return ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
+  else if offset = 1 then
+    return ⟨ x1, x2, x3, x4, x5, x6, x7, x0 ⟩
+  else if offset = 2 then
+    return ⟨ x2, x3, x4, x5, x6, x7, x0, x1 ⟩
+  else if offset = 3 then
+    return ⟨ x3, x4, x5, x6, x7, x0, x1, x2 ⟩
+  else if offset = 4 then
+    return ⟨ x4, x5, x6, x7, x0, x1, x2, x3 ⟩
+  else if offset = 5 then
+    return ⟨ x5, x6, x7, x0, x1, x2, x3, x4 ⟩
+  else if offset = 6 then
+    return ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
+  else
+    return ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
 
 def assumptions (input : (Inputs p).value) := input.x.is_normalized
 
 
 
-def spec (offset : Fin 64) (input : (Inputs p).value) (out: (Outputs p).value) :=
+def spec (offset : Fin 8) (input : (Inputs p).value) (out: (Outputs p).value) :=
   let ⟨x⟩ := input
   let ⟨y⟩ := out
-  y.value = rot64 x.value offset.val
+  y.value = rot64 x.value (offset.val * 8)
 
-theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_circuit off) assumptions (spec off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_bytes off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -117,12 +110,26 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
   clear h_inputs
 
   dsimp only [assumptions, U64.is_normalized] at as
-  sorry
+  fin_cases off
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
+    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
+    simp [U64.value, rot64, Nat.mod_one]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
+    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
+    simp only [U64.value, rot64]
+    rw [
+      show (8%64) = 8 by norm_num,
+      show (64 - 8) = 56 by norm_num,
+    ]
+    sorry
+
+
+  repeat sorry
 
 def circuit (off : Fin 8) : FormalCircuit (F p) (Inputs p) (Outputs p) where
-  main := rot64_circuit off
+  main := rot64_bytes off
   assumptions := assumptions
   spec := spec off
   soundness := soundness off
   completeness := by sorry
-end Gadgets.Rotation64
+end Gadgets.Rotation64Bytes
