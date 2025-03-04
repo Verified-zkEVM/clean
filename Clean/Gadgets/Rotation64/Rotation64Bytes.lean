@@ -6,7 +6,7 @@ namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Gadgets.Rotation64.Theorems (rot64)
+open Gadgets.Rotation64.Theorems (rot_right64)
 
 structure InputStruct (F : Type) where
   x: U64 F
@@ -94,7 +94,7 @@ def assumptions (input : (Inputs p).value) := input.x.is_normalized
 def spec (offset : Fin 8) (input : (Inputs p).value) (out: (Outputs p).value) :=
   let ⟨x⟩ := input
   let ⟨y⟩ := out
-  y.value = rot64 x.value (offset.val * 8)
+  y.value = rot_right64 x.value (offset.val * 8)
 
 theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_bytes off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
@@ -113,10 +113,10 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
   fin_cases off
   · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    simp [U64.value, rot64, Nat.mod_one]
+    simp [U64.value, rot_right64, Nat.mod_one]
   · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    simp only [U64.value, rot64]
+    simp only [U64.value, rot_right64]
     rw [
       show (8%64) = 8 by norm_num,
       show (64 - 8) = 56 by norm_num,

@@ -66,14 +66,14 @@ lemma ext {x y : U64 (F p)}
 def witness (compute : Environment (F p) → U64 (F p)) := do
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness u64 compute
 
-  byte_lookup x0
-  byte_lookup x1
-  byte_lookup x2
-  byte_lookup x3
-  byte_lookup x4
-  byte_lookup x5
-  byte_lookup x6
-  byte_lookup x7
+  Gadgets.byte_lookup x0
+  Gadgets.byte_lookup x1
+  Gadgets.byte_lookup x2
+  Gadgets.byte_lookup x3
+  Gadgets.byte_lookup x4
+  Gadgets.byte_lookup x5
+  Gadgets.byte_lookup x6
+  Gadgets.byte_lookup x7
 
   return U64.mk x0 x1 x2 x3 x4 x5 x6 x7
 

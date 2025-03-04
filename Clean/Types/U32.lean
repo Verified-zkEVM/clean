@@ -1,5 +1,6 @@
 import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
+import Clean.Gadgets.ByteLookup
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -55,10 +56,10 @@ lemma ext {x y : U32 (F p)}
 def witness (compute : Environment (F p) → U32 (F p)) := do
   let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness u32 compute
 
-  byte_lookup x0
-  byte_lookup x1
-  byte_lookup x2
-  byte_lookup x3
+  Gadgets.byte_lookup x0
+  Gadgets.byte_lookup x1
+  Gadgets.byte_lookup x2
+  Gadgets.byte_lookup x3
 
   return U32.mk x0 x1 x2 x3
 
