@@ -1,12 +1,14 @@
 import Clean.Types.U64
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Gadgets.Rotation64.Rotation64Bytes
+import Clean.Gadgets.Rotation64.ByteRotationTable
 
 namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 open Gadgets.Rotation64.Theorems (rot_right64 rot_right8)
+open Gadgets.Rotation64 (byte_rotation_lookup)
 
 structure InputStruct (F : Type) where
   x: U64 F
@@ -77,15 +79,18 @@ def rot64_circuit (offset : Fin 64) (input : (Inputs p).var) : Circuit (F p) (Ou
 
   -- apply the bit rotation
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
-  let ⟨z0, z1, z2, z3, z4, z5, z6, z7⟩ ← U64.witness (fun env => U64.mk 0 0 0 0 0 0 0 0)
+  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun env => U64.mk 0 0 0 0 0 0 0 0)
 
-  let bit_offset_fp : F p := 2 ^ bit_offset
-  let bit_offset_fp' : F p := 2 ^ (8 - bit_offset)
+  byte_rotation_lookup bit_offset x0 y0
+  byte_rotation_lookup bit_offset x1 y1
+  byte_rotation_lookup bit_offset x2 y2
+  byte_rotation_lookup bit_offset x3 y3
+  byte_rotation_lookup bit_offset x4 y4
+  byte_rotation_lookup bit_offset x5 y5
+  byte_rotation_lookup bit_offset x6 y6
+  byte_rotation_lookup bit_offset x7 y7
 
-
-
-
-  return { z := ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ }
+  return { z := ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ }
 
 def assumptions (input : (Inputs p).value) := input.x.is_normalized
 
