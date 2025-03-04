@@ -140,7 +140,19 @@ theorem nat_to_field_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = nat_to_field n l
 theorem nat_to_field_of_val_eq_iff {x : F p} {lt: x.val < p} : nat_to_field (x.val) lt = x := by
   cases p
   · exact False.elim (Nat.not_lt_zero x.val lt)
-  · dsimp only [nat_to_field]; aesop
+  · dsimp only [nat_to_field]; rfl
+
+theorem nat_to_field_eq_natcast {n: ℕ} {lt: n < p} : ↑n = FieldUtils.nat_to_field n lt := by
+  cases p with
+  | zero => exact False.elim (Nat.not_lt_zero n lt)
+  | succ n' => {
+    simp only [FieldUtils.nat_to_field]
+    rw [Fin.natCast_def]
+    apply_fun Fin.val
+    · simp only [Nat.mod_succ_eq_iff_lt, Nat.succ_eq_add_one]
+      exact lt
+    · apply Fin.val_injective
+  }
 
 theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = n := by
   cases p
