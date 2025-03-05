@@ -89,8 +89,6 @@ def rot64_bytes (offset : Fin 8) (input : (Inputs p).var) : Circuit (F p) (Outpu
 
 def assumptions (input : (Inputs p).value) := input.x.is_normalized
 
-
-
 def spec (offset : Fin 8) (input : (Inputs p).value) (out: (Outputs p).value) :=
   let ⟨x⟩ := input
   let ⟨y⟩ := out
@@ -108,12 +106,14 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
   have h_x6 : x6_var.eval env = x6 := by injections h_inputs
   have h_x7 : x7_var.eval env = x7 := by injections h_inputs
   clear h_inputs
+  clear h
 
   dsimp only [assumptions, U64.is_normalized] at as
   fin_cases off
   · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     simp [U64.value, rot_right64, Nat.mod_one]
+
   · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     simp only [U64.value, rot_right64]
@@ -121,7 +121,53 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
       show (8%64) = 8 by norm_num,
       show (64 - 8) = 56 by norm_num,
     ]
-    sorry
+    have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
+    zify at *
+    set x0 : ℤ := x0.val.cast
+    set x1 : ℤ := x1.val.cast
+    set x2 : ℤ := x2.val.cast
+    set x3 : ℤ := x3.val.cast
+    set x4 : ℤ := x4.val.cast
+    set x5 : ℤ := x5.val.cast
+    set x6 : ℤ := x6.val.cast
+    set x7 : ℤ := x7.val.cast
+
+
+    have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 8 = x0 := by
+      repeat
+        norm_num
+        rw [Int.add_emod, Int.mul_emod]
+        try rw [show ((72057594037927936 : ℤ) % 256) = 0 by rfl]
+        try rw [show ((281474976710656 : ℤ) % 256) = 0 by rfl]
+        try rw [show ((1099511627776 : ℤ) % 256) = 0 by rfl]
+        try rw [show ((4294967296 : ℤ) % 256) = 0 by rfl]
+        try rw [show ((16777216 : ℤ) % 256) = 0 by rfl]
+        try rw [show ((65536 : ℤ) % 256) = 0 by rfl]
+        norm_num
+      rw [←Int.mod_eq_emod x0_pos (by norm_num), Int.mod_eq_of_lt x0_pos (by simp only [as])]
+
+
+    have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 8 =
+        x1 + x2 * 256 + x3 * 256 ^ 2 + x4 * 256 ^ 3 + x5 * 256 ^ 4 + x6 * 256 ^ 5 + x7 * 256 ^ 6 := by
+
+      repeat
+        norm_num
+        rw [Int.add_ediv_of_dvd_right (by
+          rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
+          try rw [show ((72057594037927936 : ℤ) % 256) = 0 by rfl]
+          try rw [show ((281474976710656 : ℤ) % 256) = 0 by rfl]
+          try rw [show ((1099511627776 : ℤ) % 256) = 0 by rfl]
+          try rw [show ((4294967296 : ℤ) % 256) = 0 by rfl]
+          try rw [show ((16777216 : ℤ) % 256) = 0 by rfl]
+          try rw [show ((65536 : ℤ) % 256) = 0 by rfl]
+          try rw [show ((256 : ℤ) % 256) = 0 by rfl]
+          rfl)]
+        rw [Int.mul_ediv_assoc _ (by norm_num)]
+        norm_num
+      rw [Int.ediv_eq_zero_of_lt (by simp only [x0_pos]) (by simp only [as])]
+
+    rw [h, h']
+    ring
 
 
   repeat sorry
