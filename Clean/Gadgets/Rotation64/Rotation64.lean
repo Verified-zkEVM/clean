@@ -79,22 +79,50 @@ def rot64_circuit (offset : Fin 64) (input : (Inputs p).var) : Circuit (F p) (Ou
 
   -- apply the bit rotation
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
+
+
+
+  let x0_l ← witness (fun env => 0)
+  let x0_h ← witness (fun env => 0)
+  let x1_l ← witness (fun env => 0)
+  let x1_h ← witness (fun env => 0)
+  let x2_l ← witness (fun env => 0)
+  let x2_h ← witness (fun env => 0)
+  let x3_l ← witness (fun env => 0)
+  let x3_h ← witness (fun env => 0)
+  let x4_l ← witness (fun env => 0)
+  let x4_h ← witness (fun env => 0)
+  let x5_l ← witness (fun env => 0)
+  let x5_h ← witness (fun env => 0)
+  let x6_l ← witness (fun env => 0)
+  let x6_h ← witness (fun env => 0)
+  let x7_l ← witness (fun env => 0)
+  let x7_h ← witness (fun env => 0)
+
+  assert_zero (x0_l + ((2 : ℕ)^bit_offset : F p) * x0_h - x0)
+  assert_zero (x1_l + ((2 : ℕ)^bit_offset : F p) * x1_h - x1)
+  assert_zero (x2_l + ((2 : ℕ)^bit_offset : F p) * x2_h - x2)
+  assert_zero (x3_l + ((2 : ℕ)^bit_offset : F p) * x3_h - x3)
+  assert_zero (x4_l + ((2 : ℕ)^bit_offset : F p) * x4_h - x4)
+  assert_zero (x5_l + ((2 : ℕ)^bit_offset : F p) * x5_h - x5)
+  assert_zero (x6_l + ((2 : ℕ)^bit_offset : F p) * x6_h - x6)
+  assert_zero (x7_l + ((2 : ℕ)^bit_offset : F p) * x7_h - x7)
+
   let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun env => U64.mk 0 0 0 0 0 0 0 0)
 
-  byte_rotation_lookup bit_offset x0 y0
-  byte_rotation_lookup bit_offset x1 y1
-  byte_rotation_lookup bit_offset x2 y2
-  byte_rotation_lookup bit_offset x3 y3
-  byte_rotation_lookup bit_offset x4 y4
-  byte_rotation_lookup bit_offset x5 y5
-  byte_rotation_lookup bit_offset x6 y6
-  byte_rotation_lookup bit_offset x7 y7
-
+  assert_zero (x1_l * ((2 : ℕ)^bit_offset : F p) + x0_h - y0)
+  assert_zero (x2_l * ((2 : ℕ)^bit_offset : F p) + x1_h - y1)
+  assert_zero (x3_l * ((2 : ℕ)^bit_offset : F p) + x2_h - y2)
+  assert_zero (x4_l * ((2 : ℕ)^bit_offset : F p) + x3_h - y3)
+  assert_zero (x5_l * ((2 : ℕ)^bit_offset : F p) + x4_h - y4)
+  assert_zero (x6_l * ((2 : ℕ)^bit_offset : F p) + x5_h - y5)
+  assert_zero (x7_l * ((2 : ℕ)^bit_offset : F p) + x6_h - y6)
+  assert_zero (x0_l * ((2 : ℕ)^bit_offset : F p) + x7_h - y7)
   return { z := ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ }
 
+
+
 def assumptions (input : (Inputs p).value) := input.x.is_normalized
-
-
 
 def spec (offset : Fin 64) (input : (Inputs p).value) (out: (Outputs p).value) :=
   let ⟨x⟩ := input
