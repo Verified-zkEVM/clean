@@ -196,7 +196,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
     ⟨ x0_var, x1_var, x2_var, x3_var ⟩,
     ⟨ y0_var, y1_var, y2_var, y3_var ⟩,
     carry_in_var
-    ⟩ i0 |>.local_witnesses env
+    ⟩ |>.operations i0 |>.local_witnesses env
 
   change ∀ i : Fin 8, env.get (i0 + i) = wit.get i at henv
 
@@ -286,4 +286,5 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
   spec := spec
   soundness := soundness
   completeness := completeness
+  initial_offset_eq var n := by rfl
 end Gadgets.Addition32Full

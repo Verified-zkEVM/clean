@@ -76,4 +76,6 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     simp only [Circuit.constraints_hold.completeness, Expression.eval, neg_mul, one_mul]
     rw [hx, hy, spec]
     ring
+
+  initial_offset_eq var n := by rfl
 end Gadgets.Equality.Field

@@ -177,5 +177,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
       repeat assumption
 
     exact ⟨completeness1, completeness2, completeness3⟩
+  initial_offset_eq var n := by rfl
 
 end Gadgets.Addition8FullCarry
