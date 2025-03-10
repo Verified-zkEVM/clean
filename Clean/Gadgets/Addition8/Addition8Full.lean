@@ -108,5 +108,6 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
     dsimp [Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.assumptions]
     have ⟨ asx, asy, as_cin ⟩ := as
     simp [asx, asy, as_cin]
+  initial_offset_eq var n := by rfl
 
 end Gadgets.Addition8Full

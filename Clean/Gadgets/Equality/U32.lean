@@ -100,5 +100,6 @@ def circuit : FormalAssertion (F p) (Inputs p) where
     rw [hx0, hx1, hx2, hx3, hy0, hy1, hy2, hy3]
     rw [spec0, spec1, spec2, spec3]
     simp only [add_neg_cancel, and_self]
+  initial_offset_eq var n := by rfl
 
 end Gadgets.Equality.U32
