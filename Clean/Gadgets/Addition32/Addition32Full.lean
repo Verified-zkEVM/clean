@@ -9,66 +9,33 @@ variable [p_large_enough: Fact (p > 512)]
 open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
   carry_in: F
 
-instance (F : Type) : StructuredElements InputStruct F where
-  size := StructuredElements.size U32 F + StructuredElements.size U32 F + 1
-  to_elements x := (StructuredElements.to_elements x.x) ++ (StructuredElements.to_elements x.y) ++ vec [x.carry_in]
+instance instProvableTypeInputs : ProvableType Inputs where
+  size := ProvableType.size U32 + ProvableType.size U32 + 1
+  to_elements x :=
+    vec [x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
   from_elements v :=
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
-@[simp]
-instance : ProvableType (F p) (Inputs p) where
-  size := 9 -- 4 + 4 + 1
-  to_vars s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.carry_in]
-  from_vars v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
-  to_values s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.carry_in]
-  from_values v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
-
-
-structure OutputStruct (F : Type) where
+structure Outputs (F : Type) where
   z: U32 F
   carry_out: F
 
-instance (F : Type) : StructuredElements OutputStruct F where
-  size := StructuredElements.size U32 F + 1
-  to_elements x := (StructuredElements.to_elements x.z) ++ vec [x.carry_out]
+instance instProvableTypeOutputs : ProvableType Outputs where
+  size := ProvableType.size U32 + 1
+  to_elements x := (ProvableType.to_elements x.z) ++ vec [x.carry_out]
   from_elements v :=
-    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
-
-def Outputs (p : ℕ) : TypePair := ⟨
-  OutputStruct (Expression (F p)),
-  OutputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Outputs p) where
-  size := 5 -- 4 + 1
-  to_vars s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.carry_out]
-  from_vars v :=
-    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
-  to_values s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.carry_out]
-  from_values v :=
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
 open Gadgets.Addition8FullCarry (add8_full_carry)
 
-def add32_full (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
+def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
   let { z := z0, carry_out := c0 } ← add8_full_carry ⟨ x.x0, y.x0, carry_in ⟩
   let { z := z1, carry_out := c1 } ← add8_full_carry ⟨ x.x1, y.x1, c0 ⟩
@@ -76,19 +43,18 @@ def add32_full (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
   let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
 
-def assumptions (input : (Inputs p).value) :=
+def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.is_normalized ∧ y.is_normalized ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : (Inputs p).value) (out: (Outputs p).value) :=
+def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   let ⟨z, carry_out⟩ := out
   z.value = (x.value + y.value + carry_in.val) % 2^32
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
-
-theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumptions spec := by
+theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -160,7 +126,7 @@ theorem soundness : Soundness (F p) (Inputs p) (Outputs p) add32_full assumption
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assumptions := by
+theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
@@ -280,7 +246,7 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
+def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add32_full
   assumptions := assumptions
   spec := spec

@@ -10,39 +10,28 @@ import Clean.Utils.Field
 section
 variable {p : ℕ} [Fact p.Prime]
 
-
 namespace Gadgets.Equality.Field
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: F
   y: F
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Inputs p) where
+instance : ProvableType Inputs where
   size := 2
-  to_vars s := vec [s.x, s.y]
-  from_vars v :=
-    let ⟨ [x, y], _ ⟩ := v
-    ⟨ x, y ⟩
-  to_values s := vec [s.x, s.y]
-  from_values v :=
+  to_elements s := vec [s.x, s.y]
+  from_elements v :=
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 
-
-def assert_eq (input : (Inputs p).var) := do
+def assert_eq (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
   assert_zero (x - y)
 
-def spec (input: (Inputs p).value) :=
+def spec (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x = y
 
 
-def circuit : FormalAssertion (F p) (Inputs p) where
+def circuit : FormalAssertion (F p) Inputs where
   main := assert_eq
   assumptions _ := true
   spec := spec

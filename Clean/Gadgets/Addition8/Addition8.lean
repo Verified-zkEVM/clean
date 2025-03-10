@@ -4,39 +4,27 @@ namespace Gadgets.Addition8
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Provable (field field2 fields)
-
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: F
   y: F
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Inputs p) where
+instance : ProvableType Inputs where
   size := 2
-  to_vars s := vec [s.x, s.y]
-  from_vars v :=
-    let ⟨ [x, y], _ ⟩ := v
-    ⟨ x, y ⟩
-  to_values s := vec [s.x, s.y]
-  from_values v :=
+  to_elements s := vec [s.x, s.y]
+  from_elements v :=
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 
-
-def add8 (input : (Inputs p).var) := do
+def add8 (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
   let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := const 0 }
   return z
 
-def spec (input : (Inputs p).value) (z: F p) :=
+def spec (input : Inputs (F p)) (z: F p) :=
   let ⟨x, y⟩ := input
   z.val = (x.val + y.val) % 256
 
-def assumptions (input : (Inputs p).value) :=
+def assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
@@ -44,7 +32,7 @@ def assumptions (input : (Inputs p).value) :=
   Compute the 8-bit addition of two numbers.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
+def circuit : FormalCircuit (F p) Inputs Provable.field where
   main := add8
   assumptions := assumptions
   spec := spec
@@ -61,7 +49,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    dsimp [circuit_norm, from_values, to_vars] at h_holds
+    dsimp [circuit_norm] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy] at h_holds
@@ -94,7 +82,7 @@ def circuit : FormalCircuit (F p) (Inputs p) (field (F p)) where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp [from_values, to_vars, circuit_norm]
+    dsimp [circuit_norm]
     rw [hx, hy]
 
     -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold

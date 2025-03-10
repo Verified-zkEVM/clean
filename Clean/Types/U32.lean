@@ -3,11 +3,9 @@ import Clean.Circuit.Extensions
 
 section
 variable {p : ℕ} [Fact p.Prime]
--- TODO: this assumption is false in practice, need to change some proofs to not need it
 variable [p_large_enough: Fact (p > 512)]
 
 instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
-instance : Fact (p > 512) := by apply Fact.mk; linarith [p_large_enough.elim]
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
@@ -18,22 +16,12 @@ structure U32 (T: Type) where
   x2 : T
   x3 : T
 
-instance {F : Type} : StructuredElements U32 F where
+namespace U32
+
+instance : ProvableType U32 where
   size := 4
   to_elements x := vec [x.x0, x.x1, x.x2, x.x3]
-  from_elements v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩
-
-namespace U32
-def u32 {p: ℕ} : TypePair := ⟨ U32 (Expression (F p)), U32 (F p) ⟩
-
-instance : ProvableType (F p) (u32 (p:=p)) where
-  size := 4
-  to_vars x := vec [x.x0, x.x1, x.x2, x.x3]
-  to_values x := vec [x.x0, x.x1, x.x2, x.x3]
-  from_vars v :=
-    let ⟨ [x0, x1, x2, x3], _ ⟩ := v
-    ⟨ x0, x1, x2, x3 ⟩
-  from_values v :=
+  from_elements v :=
     let ⟨ [x0, x1, x2, x3], _ ⟩ := v
     ⟨ x0, x1, x2, x3 ⟩
 
@@ -58,7 +46,7 @@ lemma ext {x y : U32 (F p)}
   Witness a 32-bit unsigned integer.
 -/
 def witness (compute : Environment (F p) → U32 (F p)) := do
-  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness u32 compute
+  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness compute
 
   byte_lookup x0
   byte_lookup x1
@@ -129,8 +117,8 @@ tactic script to fully rewrite a ZMod expression to its Nat version, given that
 the expression is smaller than the modulus.
 
 ```
-example (x y : F p) (hx: x.val < 256) (hy: y.val < 256) :
-  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat_u32
+example (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
+  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 ```
 
 expected context:
@@ -154,5 +142,7 @@ macro_rules
       rw [Nat.mod_eq_of_lt _]
       repeat linarith [‹Fact (_ > 512)›.elim]))
 
+example (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
+  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 end U32
 end
