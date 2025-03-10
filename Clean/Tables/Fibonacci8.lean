@@ -25,7 +25,7 @@ structure RowType (F : Type) where
   x: F
   y: F
 
-instance (F : Type) : StructuredElements RowType F where
+instance : StructuredElements RowType where
   size := 2
   to_elements x := vec [x.x, x.y]
   from_elements v :=

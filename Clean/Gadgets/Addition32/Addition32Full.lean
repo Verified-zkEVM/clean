@@ -14,31 +14,22 @@ structure Inputs (F : Type) where
   y: U32 F
   carry_in: F
 
-@[simp]
-instance : ProvableType Inputs where
-  size := 9 -- 4 + 4 + 1
-  to_vars s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.carry_in]
-  from_vars v :=
+instance instProvableTypeInputs : StructuredElements Inputs where
+  size := StructuredElements.size U32 + StructuredElements.size U32 + 1
+  to_elements x :=
+    vec [x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
+  from_elements v :=
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
-  to_values s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.carry_in]
-  from_values v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
-
 
 structure Outputs (F : Type) where
   z: U32 F
   carry_out: F
 
-instance : ProvableType Outputs where
-  size := 5 -- 4 + 1
-  to_vars s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.carry_out]
-  from_vars v :=
-    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
-  to_values s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.carry_out]
-  from_values v :=
+instance instProvableTypeOutputs : StructuredElements Outputs where
+  size := StructuredElements.size U32 + 1
+  to_elements x := (StructuredElements.to_elements x.z) ++ vec [x.carry_out]
+  from_elements v :=
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
@@ -117,7 +108,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp [output, circuit_norm]
+    dsimp [output, circuit_norm, HAppend.hAppend]
 
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]

@@ -14,28 +14,23 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
-instance (F : Type) : StructuredElements InputStruct F where
+instance : StructuredElements Inputs where
   size := 3
   to_elements x := vec [x.x, x.y, x.carry_in]
   from_elements v :=
     let ⟨ [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
 
-instance : ProvableType Inputs := Provable.ofStructured (F p) InputStruct (by dsimp [StructuredElements.size])
-
 structure Outputs (F : Type) where
   z: F
   carry_out: F
 
-instance (F : Type) : StructuredElements OutputStruct F where
+instance : StructuredElements Outputs where
   size := 2
   to_elements x := vec [x.z, x.carry_out]
   from_elements v :=
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
-
-instance : ProvableType Outputs := Provable.ofStructured (F p) OutputStruct (by dsimp [StructuredElements.size])
-
 
 def add8_full_carry (input : Var Inputs (F p)): Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input

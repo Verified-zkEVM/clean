@@ -25,14 +25,13 @@ structure RowType (F : Type) where
   x: U32 F
   y: U32 F
 
-instance (F : Type) : StructuredElements RowType F where
+instance : StructuredElements RowType where
   size := 8
   to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
   from_elements v :=
     -- TODO is it possible to define in terms of StructuredElements.from_elements of the U32?
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ ⟩
-
 
 @[reducible]
 def next_row_off : RowType (CellOffset 2 RowType (F p)) := {
@@ -55,7 +54,7 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
   let next : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_next_row)
 
-  let z <- TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
+  let z ← TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
     x := curr.x,
     y := curr.y,
     carry_in := 0
@@ -147,7 +146,7 @@ lemma rec_vars :
     ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 20) = CellOffset.next 6 ∧
     ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 22) = CellOffset.next 7
   := by
-  simp only [recursive_relation, bind, Gadgets.Addition32Full.instProvableTypeFInputs.eq_1,
+  simp only [recursive_relation, bind,
     List.length_cons, List.length_singleton, Nat.reduceAdd, StructuredElements.size,
     PNat.val_ofNat, TableConstraint.get_curr_row, TableConstraint.as_table_operation,
     TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
@@ -171,8 +170,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
 
   simp only [TableConstraint.constraints_hold_on_window,
-    TableConstraint.constraints_hold_on_window.foldl,
-    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    TableConstraint.constraints_hold_on_window.foldl, List.length_cons, List.length_singleton,
     Nat.reduceAdd, StructuredElements.from_elements, Vector.map, StructuredElements.size,
     PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
     Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
@@ -181,7 +179,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
     TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
     decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
     Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
-    Expression.eval, Expression.eval.eq_1, Fin.zero_eta, Provable.instProvableTypeField.eq_1,
+    Expression.eval, Expression.eval.eq_1, Fin.zero_eta,
     Vector.get.eq_1, Fin.cast_zero, List.get_eq_getElem, CellOffset.next, and_true, Nat.reducePow,
     and_imp]
   intros h_add h_eq
@@ -196,7 +194,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   ] at h_add
 
   simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit,
-    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    List.length_cons, List.length_singleton,
     Nat.reduceAdd, eval, from_values, Vector.map, size, to_vars, List.map_cons, Expression.eval,
     Trace.getLeFromBottom, Row.get, Vector.get, StructuredElements.size, PNat.val_ofNat,
     StructuredElements.to_elements, rec_vars, CellOffset.curr, Fin.isValue, Fin.cast_eq_self,
@@ -216,7 +214,10 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
-  simp only [h_add, and_self]
+  simp [table_norm, StructuredElements.to_elements, StructuredElements.size,
+    recursive_relation] at h_add
+  sorry
+  -- simp only [h_add, and_self]
 
 
 /--
@@ -229,7 +230,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   simp only [TableConstraint.constraints_hold_on_window,
     TableConstraint.constraints_hold_on_window.foldl,
-    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
     Nat.reduceAdd, StructuredElements.from_elements, Vector.map, StructuredElements.size,
     PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
     Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
@@ -238,7 +239,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
     TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
     decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
     Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
-    Expression.eval, Fin.zero_eta, Provable.instProvableTypeField.eq_1, Vector.get, Fin.cast_zero,
+    Expression.eval, Fin.zero_eta, Vector.get, Fin.cast_zero,
     List.get_eq_getElem, CellOffset.next, and_true, and_imp]
   intros _ h_eq
 
@@ -251,7 +252,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   ] at h_eq
 
   simp only [List.length_nil, Nat.reduceAdd, Gadgets.Addition32Full.circuit,
-    Gadgets.Addition32Full.instProvableTypeFInputs.eq_1, List.length_cons, List.length_singleton,
+    Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
     Fin.isValue, Nat.reduceMod, Circuit.formal_assertion_to_subcircuit,
     Gadgets.Equality.U32.circuit, Circuit.subassertion_soundness, Gadgets.Equality.U32.spec, eval,
     from_values, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,

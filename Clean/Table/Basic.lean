@@ -13,10 +13,10 @@ import Clean.Table.SimpTable
   A row is StructuredElement that contains field elements.
 -/
 @[reducible]
-def Row (F : Type) (S : Type -> Type) [StructuredElements S F] := S F
+def Row (F : Type) (S : Type -> Type) [StructuredElements S] := S F
 
 @[table_norm]
-def Row.get {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (row : Row F S) (i : Fin struct.size) : F :=
+def Row.get {F : Type} {S : Type -> Type} [struct: StructuredElements S] (row : Row F S) (i : Fin struct.size) : F :=
   let elems := StructuredElements.to_elements row
   elems.get i
 
@@ -24,7 +24,7 @@ def Row.get {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (row 
   A trace is an inductive list of rows. It can be viewed as a structured
   environment that maps cells to field elements.
 -/
-inductive Trace (F : Type) (S : Type -> Type) [StructuredElements S F] :=
+inductive Trace (F : Type) (S : Type -> Type) [StructuredElements S] :=
   /-- An empty trace -/
   | empty : Trace F S
   /-- Add a row to the end of the trace -/
@@ -38,16 +38,16 @@ namespace Trace
   The length of a trace is the number of rows it contains.
 -/
 @[table_norm]
-def len {F : Type} {S : Type -> Type} [StructuredElements S F] : Trace F S -> ℕ
+def len {F : Type} {S : Type -> Type} [StructuredElements S] : Trace F S -> ℕ
   | <+> => 0
   | rest +> _ => Nat.succ rest.len
 
 /--
   Induction principle that applies for every row in the trace, where the inductive step takes into
-  acount the previous two rows.
+  account the previous two rows.
 -/
 def everyRowTwoRowsInduction {F : Type}
-    {S : Type -> Type} [StructuredElements S F] {P : Trace F S → Sort*}
+    {S : Type -> Type} [StructuredElements S] {P : Trace F S → Sort*}
     (zero : P (<+>))
     (one : ∀ row : Row F S, P (empty +> row))
     (more : ∀ curr next : Row F S,
@@ -60,7 +60,7 @@ def everyRowTwoRowsInduction {F : Type}
     (everyRowTwoRowsInduction zero one more (rest +> curr))
 
 lemma len_le_succ {F : Type}
-    {S : Type -> Type} [StructuredElements S F]
+    {S : Type -> Type} [StructuredElements S]
     (trace : Trace F S) (row : Row F S) : trace.len ≤ (trace +> row).len :=
   match trace with
   | <+> => by simp only [len, Nat.succ_eq_add_one, zero_add, zero_le]
@@ -68,7 +68,7 @@ lemma len_le_succ {F : Type}
     by simp only [len, Nat.succ_eq_add_one, le_add_iff_nonneg_right, zero_le]
 
 lemma len_ge_succ_of_ge {N : ℕ} {F : Type}
-    {S : Type -> Type} [StructuredElements S F]
+    {S : Type -> Type} [StructuredElements S]
     (trace : Trace F S) (row : Row F S) (_h : trace.len ≥ N) : (trace +> row).len ≥ N :=
   match trace with
   | <+> => by
@@ -82,7 +82,7 @@ lemma len_ge_succ_of_ge {N : ℕ} {F : Type}
   for the inductive step.
 -/
 def everyRowTwoRowsInduction' {F : Type}
-      {S : Type -> Type} [StructuredElements S F]
+      {S : Type -> Type} [StructuredElements S]
       {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
     (base : ∀ first second (h : (<+> +> first +> second).len ≥ 2), P (<+> +> first +> second) h)
     (more : ∀ curr next : Row F S,
@@ -109,7 +109,7 @@ def everyRowTwoRowsInduction' {F : Type}
 -/
 @[table_norm]
 def getLeFromBottom {F : Type}
-    {S : Type -> Type} [struct: StructuredElements S F]:
+    {S : Type -> Type} [struct: StructuredElements S]:
     (trace : Trace F S) -> (row : Fin trace.len) -> (col : Fin struct.size) -> F
   | _ +> currRow, ⟨0, _⟩, j => currRow.get j
   | rest +> _, ⟨i + 1, h⟩, j => getLeFromBottom rest ⟨i, Nat.le_of_succ_le_succ h⟩ j
@@ -120,7 +120,7 @@ end Trace
 /--
   A trace of length N is a trace with exactly N rows.
 -/
-def TraceOfLength (F : Type) (S : Type -> Type) [StructuredElements S F] (N : ℕ) : Type :=
+def TraceOfLength (F : Type) (S : Type -> Type) [StructuredElements S] (N : ℕ) : Type :=
   { env : Trace F S // env.len = N }
 
 namespace TraceOfLength
@@ -130,7 +130,7 @@ namespace TraceOfLength
 -/
 @[table_norm]
 def get {N: ℕ+} {M : ℕ} {F : Type}
-    {S : Type -> Type} [StructuredElements S F]:
+    {S : Type -> Type} [StructuredElements S]:
     (env : TraceOfLength F S M) -> (i : Fin M) -> (j : Fin N) -> F
   | ⟨env, h⟩, i, j => env.getLeFromBottom ⟨
       M - 1 - i,
@@ -142,7 +142,7 @@ def get {N: ℕ+} {M : ℕ} {F : Type}
 -/
 @[table_norm]
 def forAllRowsOfTrace {N : ℕ} {F : Type}
-    {S : Type -> Type} [StructuredElements S F]
+    {S : Type -> Type} [StructuredElements S]
     (trace : TraceOfLength F S N) (prop : Row F S -> Prop) : Prop :=
   inner trace.val prop
   where
@@ -156,7 +156,7 @@ def forAllRowsOfTrace {N : ℕ} {F : Type}
 -/
 @[table_norm]
 def forAllRowsOfTraceExceptLast {N : ℕ} {F : Type}
-    {S : Type -> Type} [StructuredElements S F]
+    {S : Type -> Type} [StructuredElements S]
     (trace : TraceOfLength F S N) (prop : Row F S -> Prop) : Prop :=
   inner trace.val prop
   where
@@ -171,7 +171,7 @@ def forAllRowsOfTraceExceptLast {N : ℕ} {F : Type}
 -/
 @[table_norm]
 def forAllRowsOfTraceWithIndex {N : ℕ} {F : Type}
-    {S : Type -> Type} [StructuredElements S F]
+    {S : Type -> Type} [StructuredElements S]
     (trace : TraceOfLength F S N) (prop : Row F S -> ℕ -> Prop) : Prop :=
   inner trace.val prop
   where
@@ -189,7 +189,7 @@ end TraceOfLength
   `W` rows above the current row.
   To make sure that the vertical offset is bounded, it is represented as a `Fin W`.
 -/
-structure CellOffset (W: ℕ+) (S : Type -> Type) (F : Type) [struct: StructuredElements S F]  where
+structure CellOffset (W: ℕ+) (S : Type -> Type) (F : Type) [struct: StructuredElements S]  where
   rowOffset: Fin W
   column: Fin (struct.size)
 deriving Repr
@@ -200,13 +200,13 @@ namespace CellOffset
   Current row offset
 -/
 @[table_norm]
-def curr {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (j : Fin (struct.size)) :  CellOffset W S F := ⟨0, j⟩
+def curr {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S] (j : Fin (struct.size)) :  CellOffset W S F := ⟨0, j⟩
 
 /--
   Next row offset
 -/
 @[table_norm]
-def next {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S F] (j : Fin (struct.size)) :  CellOffset W S F := ⟨1, j⟩
+def next {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S] (j : Fin (struct.size)) :  CellOffset W S F := ⟨1, j⟩
 
 end CellOffset
 
@@ -214,13 +214,13 @@ end CellOffset
   Mapping from the index of a variable to a cell offset in the table.
 -/
 @[reducible]
-def CellAssignment (W: ℕ+) (S : Type -> Type) (F : Type) [StructuredElements S F] := ℕ -> CellOffset W S F
+def CellAssignment (W: ℕ+) (S : Type -> Type) (F : Type) [StructuredElements S] := ℕ -> CellOffset W S F
 
 /--
   Atomic operations for constructing a table constraint, which is a constraint applied to a window
   of rows in a table.
 -/
-inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S F] where
+inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S] where
   /--
     Add some witnessed variable to the context
   -/
@@ -245,7 +245,7 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Fi
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
 -/
-structure TableContext (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S F] where
+structure TableContext (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S] where
   offset: ℕ
   assignment : CellAssignment W S F
 
@@ -253,7 +253,7 @@ structure TableContext (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struc
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
 @[reducible]
-def TableContext.empty {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] : TableContext W S F := ⟨
+def TableContext.empty {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S] : TableContext W S F := ⟨
   0,
   -- TODO: is there a better way?
   fun _ => ⟨0, 0⟩
@@ -265,7 +265,7 @@ namespace TableConstraintOperation
   Returns the updated table context after applying the table operation
 -/
 @[table_norm]
-def update_context {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [struct: StructuredElements S F] (ctx: TableContext W S F) :
+def update_context {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [struct: StructuredElements S] (ctx: TableContext W S F) :
     TableConstraintOperation W S F → TableContext W S F
   /-
     Witnessing a fresh variable for a table offets just increments the offset and add the mapping
@@ -300,7 +300,7 @@ def update_context {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [struct: S
       assignment := fun x => if x = v.index then offset else ctx.assignment x
     }
 
-instance {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] [Repr F] :
+instance {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S] [Repr F] :
     ToString (TableConstraintOperation W S F) where
   toString
     | Witness offset _ => "(Witness " ++ reprStr offset ++ ")"
@@ -312,11 +312,11 @@ end TableConstraintOperation
 
 
 @[table_norm]
-def TableConstraint (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements S F] (α : Type) :=
+def TableConstraint (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements S] (α : Type) :=
   TableContext W S F → (TableContext W S F × List (TableConstraintOperation W S F)) × α
 
 namespace TableConstraint
-instance (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements S F] : Monad (TableConstraint W S F) where
+instance (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements S] : Monad (TableConstraint W S F) where
   pure a ctx := ((ctx, []), a)
   bind f g ctx :=
     let ((ctx', ops), a) := f ctx
@@ -324,19 +324,19 @@ instance (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements 
     ((ctx'', ops ++ ops'), b)
 
 @[table_norm]
-def as_table_operation {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]
+def as_table_operation {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S]
   (f : TableContext W S F -> TableConstraintOperation W S F × α) : TableConstraint W S F α :=
   fun ctx =>
   let (op, a) := f ctx
   let ctx' := TableConstraintOperation.update_context ctx op
   ((ctx', [op]), a)
 
-def operations {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α):
+def operations {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S] (table : TableConstraint W S F α):
     List (TableConstraintOperation W S F) :=
   let ((_, ops), _) := table TableContext.empty
   ops
 
-def assignment {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α):
+def assignment {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S] (table : TableConstraint W S F α):
     CellAssignment W S F :=
   let ((ctx, _), _) := table TableContext.empty
   ctx.assignment
@@ -348,7 +348,7 @@ def assignment {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [Str
 -/
 @[table_norm]
 def constraints_hold_on_window {F : Type} {W : ℕ+} [Field F]
-    {S : Type -> Type} [StructuredElements S F]
+    {S : Type -> Type} [StructuredElements S]
     (table : TableConstraint W S F Unit) (window: TraceOfLength F S W) : Prop :=
   let ((ctx, ops), ()) := table TableContext.empty
 
@@ -370,16 +370,16 @@ def constraints_hold_on_window {F : Type} {W : ℕ+} [Field F]
     | TableConstraintOperation.Allocate {soundness ..} => soundness env ∧ foldl ops env
     | _ => foldl ops env
 
-def output {α: Type} {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F] (table : TableConstraint W S F α) : α :=
+def output {α: Type} {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S] (table : TableConstraint W S F α) : α :=
   let ((_, _), a) := table TableContext.empty
   a
 
-def witness_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F]
+def witness_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S]
     (off : CellOffset W S F) (compute : Unit → F): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
 
-def get_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F]
+def get_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S]
     (off : CellOffset W S F): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
@@ -388,7 +388,7 @@ def get_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredEleme
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
-def get_curr_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: StructuredElements S F] :
+def get_curr_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: StructuredElements S] :
     TableConstraint W S F (Vector (Expression F) struct.size) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -399,7 +399,7 @@ def get_curr_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: Stru
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm]
-def get_next_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: StructuredElements S F] :
+def get_next_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: StructuredElements S] :
     TableConstraint W S F (Vector (Expression F) struct.size) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -407,7 +407,7 @@ def get_next_row {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [struct: Stru
   (TableConstraintOperation.GetRow 1, exprs)
 
 def subcircuit
-    {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]
+    {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S]
     {α β : TypePair} [ProvableType β] [ProvableType α]
     (circuit: FormalCircuit F β α) (b: β.var F) : TableConstraint W S F (α.var F) :=
   as_table_operation fun ctx =>
@@ -415,14 +415,14 @@ def subcircuit
   (TableConstraintOperation.Allocate subcircuit, a)
 
 def assertion
-    {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]
+    {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S]
     {β : TypePair} [ProvableType β]
     (circuit: FormalAssertion F β) (b: β.var F) : TableConstraint W S F Unit :=
   as_table_operation fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
     (TableConstraintOperation.Allocate subcircuit, ())
 
-def assign {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S F]
+def assign {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S]
     (v: Variable F) (off : CellOffset W S F) : TableConstraint W S F Unit :=
   as_table_operation fun _ =>
   (TableConstraintOperation.Assign v off, ())
@@ -431,12 +431,12 @@ end TableConstraint
 
 
 @[reducible]
-def SingleRowConstraint (S : Type -> Type) (F : Type) [Field F] [StructuredElements S F] := TableConstraint 1 S F Unit
+def SingleRowConstraint (S : Type -> Type) (F : Type) [Field F] [StructuredElements S] := TableConstraint 1 S F Unit
 
 @[reducible]
-def TwoRowsConstraint (S : Type -> Type) (F : Type) [Field F] [StructuredElements S F] := TableConstraint 2 S F Unit
+def TwoRowsConstraint (S : Type -> Type) (F : Type) [Field F] [StructuredElements S] := TableConstraint 2 S F Unit
 
-inductive TableOperation (S : Type -> Type) (F : Type) [Field F] [StructuredElements S F] where
+inductive TableOperation (S : Type -> Type) (F : Type) [Field F] [StructuredElements S] where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
@@ -462,7 +462,7 @@ inductive TableOperation (S : Type -> Type) (F : Type) [Field F] [StructuredElem
 -/
 @[table_norm]
 def table_constraints_hold {N : ℕ}
-    {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S F]
+    {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S]
     (constraints : List (TableOperation S F)) (trace: TraceOfLength F S N) : Prop :=
   foldl constraints trace.val constraints
   where
@@ -517,7 +517,7 @@ def table_constraints_hold {N : ℕ}
     | <+>, _ => True
 
 
-structure FormalTable (F : Type) [Field F] (S : Type -> Type) [struct: StructuredElements S F] where
+structure FormalTable (F : Type) [Field F] (S : Type -> Type) [struct: StructuredElements S] where
   -- list of constraints that are applied over the table
   constraints : List (TableOperation S F)
 

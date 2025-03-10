@@ -12,7 +12,7 @@ structure RowType (F : Type) where
   y: F
   z: F
 
-instance (F : Type) : StructuredElements RowType F where
+instance : StructuredElements RowType where
   size := 3
   to_elements x := vec [x.x, x.y, x.z]
   from_elements v :=
@@ -27,7 +27,7 @@ def add8_inline : SingleRowConstraint RowType (F p) := do
   }
 
   if let var z := z then
-    TableConstraint.assign z (CellOffset.curr 2)
+    TableConstraint.assign z (.curr 2)
 
 def add8Table : List (TableOperation RowType (F p)) := [
   TableOperation.EveryRow add8_inline
