@@ -3,11 +3,9 @@ import Clean.Circuit.Extensions
 
 section
 variable {p : ℕ} [Fact p.Prime]
--- TODO: this assumption is false in practice, need to change some proofs to not need it
 variable [p_large_enough: Fact (p > 512)]
 
 instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
-instance : Fact (p > 512) := by apply Fact.mk; linarith [p_large_enough.elim]
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
@@ -124,7 +122,7 @@ tactic script to fully rewrite a ZMod expression to its Nat version, given that
 the expression is smaller than the modulus.
 
 ```
-example (x y : F p) (hx: x.val < 256) (hy: y.val < 256) :
+example (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
   (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 ```
 
@@ -148,5 +146,8 @@ macro_rules
       simp only [Nat.reducePow, Nat.add_mod_mod, Nat.mod_add_mod, Nat.mul_mod_mod, Nat.mod_mul_mod]
       rw [Nat.mod_eq_of_lt _]
       repeat linarith [‹Fact (_ > 512)›.elim]))
+
+example (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
+  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 end U32
 end
