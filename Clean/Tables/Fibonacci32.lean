@@ -34,13 +34,13 @@ instance : StructuredElements RowType where
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ ⟩
 
 @[reducible]
-def next_row_off : RowType (CellOffset 2 RowType (F p)) := {
+def next_row_off : RowType (CellOffset 2 RowType) := {
   x := ⟨CellOffset.next 0, CellOffset.next 1, CellOffset.next 2, CellOffset.next 3⟩,
   y := ⟨CellOffset.next 4, CellOffset.next 5, CellOffset.next 6, CellOffset.next 7⟩
 }
 
 @[reducible]
-def assign_U32 (x : U32 (Variable (F p))) (offs : U32 (CellOffset 2 RowType (F p))) : TwoRowsConstraint RowType (F p) :=
+def assign_U32 (x : U32 (Variable (F p))) (offs : U32 (CellOffset 2 RowType)) : TwoRowsConstraint RowType (F p) :=
   do
   TableConstraint.assign x.x0 offs.x0
   TableConstraint.assign x.x1 offs.x1
@@ -54,13 +54,13 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
   let next : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_next_row)
 
-  let z ← TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
+  let { z, ..} ← TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
     x := curr.x,
     y := curr.y,
     carry_in := 0
   }
 
-  if let ⟨⟨var z0, var z1, var z2, var z3⟩, _⟩ := z then
+  if let ⟨var z0, var z1, var z2, var z3⟩ := z then
     assign_U32 ⟨z0, z1, z2, z3⟩ next_row_off.y
 
   TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨curr.y, next.x⟩
@@ -214,8 +214,8 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
-  simp [table_norm, StructuredElements.to_elements, StructuredElements.size,
-    recursive_relation] at h_add
+  -- simp [table_norm, StructuredElements.to_elements, StructuredElements.size,
+  --   recursive_relation] at h_add
   sorry
   -- simp only [h_add, and_self]
 

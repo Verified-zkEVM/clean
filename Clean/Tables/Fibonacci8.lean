@@ -33,14 +33,14 @@ instance : StructuredElements RowType where
     ⟨ x, y ⟩
 
 @[reducible]
-def curr_row_off {W : ℕ+} : RowType (CellOffset W RowType (F p)) :=
+def curr_row_off {W : ℕ+} : RowType (CellOffset W RowType) :=
   {
     x := CellOffset.curr 0,
     y := CellOffset.curr 1
   }
 
 @[reducible]
-def next_row_off {W : ℕ+} : RowType (CellOffset W RowType (F p)) :=
+def next_row_off {W : ℕ+} : RowType (CellOffset W RowType) :=
   {
     x := CellOffset.next 0,
     y := CellOffset.next 1

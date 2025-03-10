@@ -189,7 +189,7 @@ end TraceOfLength
   `W` rows above the current row.
   To make sure that the vertical offset is bounded, it is represented as a `Fin W`.
 -/
-structure CellOffset (W: ℕ+) (S : Type -> Type) (F : Type) [struct: StructuredElements S]  where
+structure CellOffset (W: ℕ+) (S : Type -> Type) [struct: StructuredElements S]  where
   rowOffset: Fin W
   column: Fin (struct.size)
 deriving Repr
@@ -200,13 +200,13 @@ namespace CellOffset
   Current row offset
 -/
 @[table_norm]
-def curr {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S] (j : Fin (struct.size)) :  CellOffset W S F := ⟨0, j⟩
+def curr {W : ℕ+} {S : Type -> Type} [struct: StructuredElements S] (j : Fin (struct.size)) :  CellOffset W S := ⟨0, j⟩
 
 /--
   Next row offset
 -/
 @[table_norm]
-def next {W : ℕ+} {F : Type} {S : Type -> Type} [struct: StructuredElements S] (j : Fin (struct.size)) :  CellOffset W S F := ⟨1, j⟩
+def next {W : ℕ+} {S : Type -> Type} [struct: StructuredElements S] (j : Fin (struct.size)) :  CellOffset W S := ⟨1, j⟩
 
 end CellOffset
 
@@ -214,17 +214,17 @@ end CellOffset
   Mapping from the index of a variable to a cell offset in the table.
 -/
 @[reducible]
-def CellAssignment (W: ℕ+) (S : Type -> Type) (F : Type) [StructuredElements S] := ℕ -> CellOffset W S F
+def CellAssignment (W: ℕ+) (S : Type -> Type) [StructuredElements S] := ℕ -> CellOffset W S
 
 /--
   Atomic operations for constructing a table constraint, which is a constraint applied to a window
   of rows in a table.
 -/
-inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S] where
+inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type) (F : Type) [Field F] [struct: StructuredElements S] where
   /--
     Add some witnessed variable to the context
   -/
-  | Witness : CellOffset W S F -> (compute : Unit → F) -> TableConstraintOperation W S F
+  | Witness : CellOffset W S -> (compute : Unit → F) -> TableConstraintOperation W S F
 
   /--
     Witness a fresh variable for each cell in the row at some offset `off` in the trace
@@ -239,7 +239,7 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Fi
   /--
     Assign a variable to a cell in the trace
   -/
-  | Assign : Variable F -> CellOffset W S F -> TableConstraintOperation W S F
+  | Assign : Variable F -> CellOffset W S -> TableConstraintOperation W S F
 
 /--
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
@@ -247,7 +247,7 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type -> Type)  (F : Type) [Fi
 -/
 structure TableContext (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [struct: StructuredElements S] where
   offset: ℕ
-  assignment : CellAssignment W S F
+  assignment : CellAssignment W S
 
 /--
   An empty context has offset zero, and all variables are assigned by default to the first cell
@@ -337,7 +337,7 @@ def operations {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [Str
   ops
 
 def assignment {α: Type} {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S] (table : TableConstraint W S F α):
-    CellAssignment W S F :=
+    CellAssignment W S :=
   let ((ctx, _), _) := table TableContext.empty
   ctx.assignment
 
@@ -375,12 +375,12 @@ def output {α: Type} {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [Struct
   a
 
 def witness_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S]
-    (off : CellOffset W S F) (compute : Unit → F): TableConstraint W S F (Variable F) :=
+    (off : CellOffset W S) (compute : Unit → F): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
 
 def get_cell {W: ℕ+} {S : Type -> Type}  {F : Type} [Field F] [StructuredElements S]
-    (off : CellOffset W S F): TableConstraint W S F (Variable F) :=
+    (off : CellOffset W S): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
 
@@ -423,7 +423,7 @@ def assertion
     (TableConstraintOperation.Allocate subcircuit, ())
 
 def assign {W: ℕ+} {S : Type -> Type} {F : Type} [Field F] [StructuredElements S]
-    (v: Variable F) (off : CellOffset W S F) : TableConstraint W S F Unit :=
+    (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
   as_table_operation fun _ =>
   (TableConstraintOperation.Assign v off, ())
 
