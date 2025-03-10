@@ -6,12 +6,12 @@ variable {F :Type} [Field F]
 namespace Provable
 variable {α β: TypePair} [ProvableType α] [ProvableType β]
 
-@[simp]
+@[circuit_norm]
 def witness (α: TypePair) [inst: ProvableType α] (compute : Environment F → α.value F) := do
   let vars ← Circuit.witness_vars inst.size (fun env => compute env |> to_values)
   return from_vars <| Vector.map Expression.var vars
 
-@[simp]
+@[circuit_norm]
 def assert_equal (a a': α.var F) : Circuit F Unit :=
   let vars := to_vars a
   let vars' := to_vars a'

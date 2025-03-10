@@ -28,7 +28,7 @@ def nil : Vector α 0 := ⟨ [], rfl ⟩
 
 @[simp]
 def cons (a: α) (v: Vector α n)  : Vector α (n + 1) :=
-  ⟨ a :: v.val, by simp [v.prop] ⟩
+  ⟨ a :: v.val, by simp only [List.length_cons, v.prop] ⟩
 
 @[simp]
 def map (f: α → β) (v: Vector α n) : Vector β n :=
@@ -60,11 +60,14 @@ theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i
 
 @[simp]
 def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
-  ⟨ v.val ++ w.val, by simp [v.prop, w.prop] ⟩
+  ⟨ v.val ++ w.val, by simp only [List.length_append, v.prop, w.prop] ⟩
+
+instance {α : Type} {n : ℕ} {m : ℕ} : HAppend (Vector α n) (Vector α m) (Vector α (n + m)) where
+  hAppend xs ys := append xs ys
 
 @[simp]
 def push (v: Vector α n) (a: α) : Vector α (n + 1) :=
-  ⟨ v.val ++ [a], by simp [v.prop] ⟩
+  ⟨ v.val ++ [a], by simp only [List.length_append, v.prop, List.length_singleton] ⟩
 
 theorem push_of_len_succ {n: ℕ} (v: Vector α (n + 1)) : ∃ as: Vector α n, ∃ a: α, v = push as a := by
   match v with
@@ -133,4 +136,8 @@ def init {n} (create: Fin n → α) : Vector α n :=
   | 0 => nil
   | k + 1 =>
     (init (fun i : Fin k => create i)).push (create k)
+
+def finRange (n : ℕ) : Vector (Fin n) n :=
+  ⟨ List.finRange n, List.length_finRange n ⟩
+
 end Vector

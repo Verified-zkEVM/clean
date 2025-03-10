@@ -81,6 +81,28 @@ theorem byte_sum_and_bit_do_not_wrap' (x y b: F p) [p_large_enough: Fact (p > 51
   rw [sum_do_not_wrap_around (x + y) b sum_lt_p,
     byte_sum_do_not_wrap x y hx hy]
 
+
+theorem byte_sum_and_bit_lt_512 (x y b: F p) [p_large_enough: Fact (p > 512)]:
+    x.val < 256 -> y.val < 256 -> b.val < 2 -> (x + y + b).val < 512 := by
+  intros hx hy hb
+  have sum_bound := byte_sum_le_bound x y hx hy
+  have sum_lt_512 : b.val + (x + y).val < 512 := by
+    apply Nat.le_sub_one_of_lt at sum_bound
+    apply Nat.le_sub_one_of_lt at hb
+    simp at sum_bound
+    simp at hb
+    apply Nat.lt_add_one_of_le
+    apply Nat.add_le_add hb sum_bound
+  have asd : b.val + (x + y).val = (b + x + y).val := by
+    rw [byte_sum_do_not_wrap x y hx hy]
+    rw [show b + x + y = x + y + b by ring]
+    rw [byte_sum_and_bit_do_not_wrap' x y b hx hy hb]
+    rw [show x.val + y.val + b.val = b.val + (x.val + y.val) by ring]
+  rw [asd] at sum_lt_512
+  rw [show b + x + y = x + y + b by ring] at sum_lt_512
+  exact sum_lt_512
+
+
 theorem byte_plus_256_do_not_wrap (x: F p) [p_large_enough: Fact (p > 512)]:
     x.val < 256 -> (x + 256).val = x.val + 256 := by
   intro hx
@@ -103,7 +125,7 @@ theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
 theorem boolean_lt_2 {b : F p} (hb : b = 0 ∨ b = 1) : b.val < 2 := by
   rcases hb with h0 | h1
   · rw [h0]; simp
-  · rw [h1]; simp [ZMod.val_one]
+  · rw [h1]; simp only [ZMod.val_one, Nat.one_lt_ofNat]
 
 def nat_to_field (n: ℕ) (lt: n < p) : F p :=
   match p with
@@ -118,7 +140,7 @@ theorem nat_to_field_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = nat_to_field n l
 theorem nat_to_field_of_val_eq_iff {x : F p} {lt: x.val < p} : nat_to_field (x.val) lt = x := by
   cases p
   · exact False.elim (Nat.not_lt_zero x.val lt)
-  · dsimp [nat_to_field]; aesop
+  · dsimp only [nat_to_field]; aesop
 
 theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = n := by
   cases p
