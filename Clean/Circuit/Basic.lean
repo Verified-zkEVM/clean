@@ -416,6 +416,7 @@ where
   spec: β.value → α.value → Prop
   soundness: Soundness F β α main assumptions spec
   completeness: Completeness F β α main assumptions
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n
 
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_var : α.var) (env : Environment F) :=
@@ -467,6 +468,7 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
     assumptions b → spec b →
     -- the constraints hold
     constraints_hold.completeness env (main b_var |>.operations offset)
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n
 
 @[circuit_norm]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
