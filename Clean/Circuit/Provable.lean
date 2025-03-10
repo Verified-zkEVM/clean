@@ -1,6 +1,7 @@
 import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
+import Clean.Circuit.SimpGadget
 
 /-- A type that has both an in-circuit representation `var`,
  and an out-of-circuit/constant representation `value`.
@@ -11,7 +12,6 @@ structure TypePair where
 
 def Var (α : TypePair) (F : Type) := α.var F
 def Value (α : TypePair) (F : Type) := α.value F
-import Clean.Circuit.SimpGadget
 
 variable {F: Type} [Field F]
 
