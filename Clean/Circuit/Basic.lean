@@ -123,7 +123,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 @[reducible, circuit_norm]
 def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
 
-@[reducible]
+@[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) env := FlatOperation.witnesses env sc.ops
 
 def SubCircuit.witness_generators (sc: SubCircuit F n) := FlatOperation.witness_generators sc.ops
@@ -232,8 +232,7 @@ Intuitively, a `Circuit` is a function `Operations F n → Operations F n' × α
 return type `α`, and the monad is a state monad that keeps the `Operations` around.
 
 For technical reasons, we wrap `Operations F n` in `OperationsList F` to get rid of the
-dependent type argument; and apart from the function, we require a consistency
-property to make foundational proofs work.
+dependent type argument.
 
 ```
 def circuit : Circuit F Unit := do
@@ -248,13 +247,12 @@ def circuit : Circuit F Unit := do
 ```
 -/
 @[reducible]
-def Circuit (F : Type) [Field F] :=
-  StateM (OperationsList F)
+def Circuit (F : Type) [Field F] := StateM (OperationsList F)
 
 namespace Circuit
 @[reducible]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  circuit.run offset |>.snd.offset
+  circuit offset |>.snd.offset
 
 @[reducible]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.final_offset offset) :=
@@ -262,7 +260,7 @@ def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.fin
 
 @[reducible]
 def output (circuit: Circuit F α) (offset := 0) : α :=
-  circuit.run (offset : OperationsList F) |>.fst
+  circuit offset |>.fst
 
 -- core operations we can do in a circuit
 

@@ -210,16 +210,10 @@ theorem completeness : Completeness (F p) (Inputs p) (Outputs p) add32_full assu
     mod_256 (x3 + y3 + env.get (i0 + 5)),
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
-    dsimp only [wit]
-    -- TODO we need a simp set
-    dsimp only [OperationsList.from_offset, Operations.local_witnesses, Vector.append,
-      Expression.eval, Circuit.formal_assertion_to_subcircuit, to_flat_operations,
-      SubCircuit.witness_length, FlatOperation.witness_length, Operations.local_length, Vector.push,
-      SubCircuit.witnesses, FlatOperation.witnesses, Vector.map, List.map, Vector.nil]
+    dsimp [wit, circuit_norm]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
-    simp only [List.nil_append, List.cons_append]
 
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
