@@ -16,11 +16,6 @@ structure U32 (T: Type) where
   x2 : T
   x3 : T
 
-instance : ProvableType U32 where
-  size := 4
-  to_elements x := vec [x.x0, x.x1, x.x2, x.x3]
-  from_elements v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩
-
 namespace U32
 
 instance : ProvableType U32 where
