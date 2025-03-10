@@ -170,18 +170,16 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
 
   simp only [TableConstraint.constraints_hold_on_window,
-    TableConstraint.constraints_hold_on_window.foldl, List.length_cons, List.length_singleton,
-    Nat.reduceAdd, StructuredElements.from_elements, Vector.map, StructuredElements.size,
-    PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
-    Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
-    List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append, Fin.coe_eq_castSucc,
-    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
+    TableConstraint.constraints_hold_on_window.foldl, StructuredElements.from_elements, Vector.map,
+    StructuredElements.size, PNat.val_ofNat, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
+    Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
+    Nat.cast_one, Fin.val_one, zero_add, List.cons_append, Nat.cast_ofNat, Fin.val_two,
+    Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
     TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
     decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
     Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
-    Expression.eval, Expression.eval.eq_1, Fin.zero_eta,
-    Vector.get.eq_1, Fin.cast_zero, List.get_eq_getElem, CellOffset.next, and_true, Nat.reducePow,
-    and_imp]
+    Expression.eval, Fin.zero_eta, Provable.instProvableTypeFromField.eq_1, Vector.get.eq_1,
+    Fin.cast_zero, List.get_eq_getElem, CellOffset.next, and_true, Nat.reducePow, and_imp]
   intros h_add h_eq
 
   -- TODO: why can't simp figure out those relations?
@@ -193,13 +191,13 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_add
 
-  simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit,
-    List.length_cons, List.length_singleton,
-    Nat.reduceAdd, eval, from_values, Vector.map, size, to_vars, List.map_cons, Expression.eval,
-    Trace.getLeFromBottom, Row.get, Vector.get, StructuredElements.size, PNat.val_ofNat,
-    StructuredElements.to_elements, rec_vars, CellOffset.curr, Fin.isValue, Fin.cast_eq_self,
-    List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ,
-    Fin.val_two, List.map_nil, CellOffset.next, SubCircuit.witness_length,
+  simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit, eval, from_values,
+    Vector.map, size, StructuredElements.size, PNat.add_coe, PNat.val_ofNat, Nat.reduceAdd, to_vars,
+    StructuredElements.to_elements, List.map_cons, Expression.eval, Trace.getLeFromBottom, Row.get,
+    Vector.get, List.length_cons, List.length_nil, rec_vars, CellOffset.curr, Fin.isValue,
+    Fin.cast_eq_self, List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one,
+    List.getElem_cons_succ, Fin.val_two, List.map_nil, Vector.instAppend, Vector.append,
+    List.cons_append, List.singleton_append, CellOffset.next, SubCircuit.witness_length,
     FlatOperation.witness_length, add_zero, Gadgets.Addition32Full.spec, ZMod.val_zero,
     Nat.reducePow] at h_add
 
@@ -214,11 +212,9 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
-  -- simp [table_norm, StructuredElements.to_elements, StructuredElements.size,
-  --   recursive_relation] at h_add
-  sorry
-  -- simp only [h_add, and_self]
-
+  simp only [rec_vars, Fin.isValue, SubCircuit.witness_length, FlatOperation.witness_length,
+    add_zero, Nat.reduceAdd] at h_add
+  simp only [h_add, and_self]
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window, then the spec of

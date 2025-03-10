@@ -312,7 +312,7 @@ end TableConstraintOperation
 
 
 @[table_norm]
-def TableConstraint (W: ℕ+) (S : Type -> Type)  (F : Type) [Field F] [StructuredElements S] (α : Type) :=
+def TableConstraint (W: ℕ+) (S : Type -> Type) (F : Type) [Field F] [StructuredElements S] (α : Type) :=
   TableContext W S F → (TableContext W S F × List (TableConstraintOperation W S F)) × α
 
 namespace TableConstraint
