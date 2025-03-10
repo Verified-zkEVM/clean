@@ -59,7 +59,7 @@ def unit (_: Type) := Unit
 
 instance : ProvableType unit where
   size := 0
-  to_elements _ := vec []
+  to_elements _ := .nil
   from_elements _ := ()
 
 @[reducible]
@@ -69,7 +69,7 @@ def field : Type → Type := id
 instance : ProvableType field where
   size := 1
   to_elements x := vec [x]
-  from_elements v := v.get ⟨ 0, by norm_num ⟩
+  from_elements v := v.get 0
 
 @[reducible]
 def pair (α β : Type → Type) := fun F => α F × β F
@@ -81,10 +81,10 @@ def field2 := pair field field
 instance : ProvableType field2 where
   size := 2
   to_elements pair := vec [pair.1, pair.2]
-  from_elements v := (v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩)
+  from_elements v := (v.get 0, v.get 1)
 
 variable {n: ℕ}
-def vec (α: Type → Type) (n: ℕ) := fun f => Vector (α f) n
+def vec (α: Type → Type) (n: ℕ) := fun F => Vector (α F) n
 
 @[reducible]
 def fields (n: ℕ) := vec field n

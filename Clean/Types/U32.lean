@@ -53,7 +53,7 @@ lemma ext {x y : U32 (F p)}
   Witness a 32-bit unsigned integer.
 -/
 def witness (compute : Environment (F p) → U32 (F p)) := do
-  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness U32 compute
+  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness compute
 
   byte_lookup x0
   byte_lookup x1

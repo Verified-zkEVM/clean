@@ -7,9 +7,9 @@ namespace Provable
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 @[circuit_norm]
-def witness (α: TypeMap) [inst: ProvableType α] (compute : Environment F → α F) := do
-  let vars ← Circuit.witness_vars inst.size (fun env => compute env |> to_elements)
-  return from_vars <| Vector.map Expression.var vars
+def witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) := do
+  let vars ← Circuit.witness_vars (size α) (fun env => compute env |> to_elements)
+  return from_vars <| vars.map Expression.var
 
 @[circuit_norm]
 def assert_equal (a a': Var α F) : Circuit F Unit :=
