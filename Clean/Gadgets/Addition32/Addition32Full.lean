@@ -108,7 +108,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp [output, circuit_norm, HAppend.hAppend]
+    dsimp [output, circuit_norm]
 
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
