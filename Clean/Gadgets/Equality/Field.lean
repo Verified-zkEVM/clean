@@ -17,12 +17,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 2
-  to_vars s := vec [s.x, s.y]
-  from_vars v :=
-    let ⟨ [x, y], _ ⟩ := v
-    ⟨ x, y ⟩
-  to_values s := vec [s.x, s.y]
-  from_values v :=
+  to_elements s := vec [s.x, s.y]
+  from_elements v :=
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 

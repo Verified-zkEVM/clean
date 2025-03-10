@@ -19,15 +19,10 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 8
-  to_vars s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
-  from_vars v :=
+  to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
+  from_elements v :=
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩ ⟩
-  to_values s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
-  from_values v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
-    ⟨ ⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩ ⟩
-
 
 def assert_eq (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input

@@ -4,23 +4,16 @@ namespace Gadgets.Addition8
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Provable (field field2 fields)
-
 structure Inputs (F : Type) where
   x: F
   y: F
 
 instance : ProvableType Inputs where
   size := 2
-  to_vars s := vec [s.x, s.y]
-  from_vars v :=
+  to_elements s := vec [s.x, s.y]
+  from_elements v :=
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
-  to_values s := vec [s.x, s.y]
-  from_values v :=
-    let ⟨ [x, y], _ ⟩ := v
-    ⟨ x, y ⟩
-
 
 def add8 (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
@@ -39,7 +32,7 @@ def assumptions (input : Inputs (F p)) :=
   Compute the 8-bit addition of two numbers.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit : FormalCircuit (F p) Inputs Provable.field where
   main := add8
   assumptions := assumptions
   spec := spec

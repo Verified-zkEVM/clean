@@ -9,16 +9,10 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
-open Provable (field)
-
 instance : ProvableType Inputs where
   size := 3
-  to_vars s := vec [s.x, s.y, s.carry_in]
-  from_vars v :=
-    let ⟨ [x, y, carry_in], _ ⟩ := v
-    ⟨ x, y, carry_in ⟩
-  to_values s := vec [s.x, s.y, s.carry_in]
-  from_values v :=
+  to_elements s := vec [s.x, s.y, s.carry_in]
+  from_elements v :=
     let ⟨ [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
 
@@ -40,7 +34,7 @@ def spec (input : Inputs (F p)) (z: F p) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit : FormalCircuit (F p) Inputs Provable.field where
   main := add8_full
   assumptions := assumptions
   spec := spec
@@ -97,10 +91,8 @@ def circuit : FormalCircuit (F p) Inputs field where
     dsimp [circuit_norm]
     rw [hx, hy, hcarry_in]
 
-    -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold
-    -- simplify `Add8Full.assumptions` and prove them easily by using our own assumptions
-    dsimp [Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.assumptions]
-    have ⟨ asx, asy, as_cin ⟩ := as
-    simp [asx, asy, as_cin]
+    -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold.
+    -- this is equivalent to our own assumptions
+    exact as
 
 end Gadgets.Addition8Full

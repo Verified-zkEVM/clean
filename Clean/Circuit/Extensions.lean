@@ -4,15 +4,15 @@ import Clean.Circuit.Basic
 variable {F :Type} [Field F]
 
 namespace Provable
-variable {α β: TypePair} [ProvableType α] [ProvableType β]
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 @[circuit_norm]
-def witness (α: TypePair) [inst: ProvableType α] (compute : Environment F → α.value F) := do
+def witness (α: TypeMap) [inst: ProvableType α] (compute : Environment F → α F) := do
   let vars ← Circuit.witness_vars inst.size (fun env => compute env |> to_values)
   return from_vars <| Vector.map Expression.var vars
 
 @[circuit_norm]
-def assert_equal (a a': α.var F) : Circuit F Unit :=
+def assert_equal (a a': Var α F) : Circuit F Unit :=
   let vars := to_vars a
   let vars' := to_vars a'
   let eqs := (vars.zip vars').map (fun ⟨ x, x' ⟩ => assert_zero (x - x'))

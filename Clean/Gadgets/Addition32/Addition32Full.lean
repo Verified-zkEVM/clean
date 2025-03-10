@@ -14,8 +14,8 @@ structure Inputs (F : Type) where
   y: U32 F
   carry_in: F
 
-instance instProvableTypeInputs : StructuredElements Inputs where
-  size := StructuredElements.size U32 + StructuredElements.size U32 + 1
+instance instProvableTypeInputs : ProvableType Inputs where
+  size := ProvableType.size U32 + ProvableType.size U32 + 1
   to_elements x :=
     vec [x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
   from_elements v :=
@@ -26,9 +26,9 @@ structure Outputs (F : Type) where
   z: U32 F
   carry_out: F
 
-instance instProvableTypeOutputs : StructuredElements Outputs where
-  size := StructuredElements.size U32 + 1
-  to_elements x := (StructuredElements.to_elements x.z) ++ vec [x.carry_out]
+instance instProvableTypeOutputs : ProvableType Outputs where
+  size := ProvableType.size U32 + 1
+  to_elements x := (ProvableType.to_elements x.z) ++ vec [x.carry_out]
   from_elements v :=
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩

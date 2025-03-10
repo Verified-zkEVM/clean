@@ -33,7 +33,7 @@ lemma constraints_hold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : En
       exact constraints_hold_cons.mpr ⟨ h_op, h_rest ⟩
 end FlatOperation
 
-variable {α β: TypePair} [ProvableType α] [ProvableType β]
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 namespace Circuit
 open FlatOperation (constraints_hold_append)
@@ -59,7 +59,7 @@ theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env 
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
 def formal_circuit_to_subcircuit (n: ℕ)
-  (circuit: FormalCircuit F β α) (b_var : β.var F) : α.var F × SubCircuit F n :=
+  (circuit: FormalCircuit F β α) (b_var : Var β F) : Var α F × SubCircuit F n :=
   let res := circuit.main b_var |>.run n
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
   let ops := res.1.withLength
@@ -77,8 +77,8 @@ def formal_circuit_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value F := eval env b_var
-    let a : α.value F := eval env a_var
+    let b : β F := eval env b_var
+    let a : α F := eval env a_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b a
 
@@ -117,7 +117,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
 def formal_assertion_to_subcircuit (n: ℕ)
-  (circuit: FormalAssertion F β) (b_var : β.var F) : SubCircuit F n :=
+  (circuit: FormalAssertion F β) (b_var : Var β F) : SubCircuit F n :=
   let res := circuit.main b_var |>.run n
   let ops := res.1.withLength
 
@@ -133,7 +133,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value F := eval env b_var
+    let b : β F := eval env b_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b
 
@@ -171,7 +171,7 @@ end Circuit
 
 /-- Include a subcircuit. -/
 @[circuit_norm]
-def subcircuit (circuit: FormalCircuit F β α) (b: β.var F) : Circuit F (α.var F) := ⟨
+def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var α F) := ⟨
   fun ops =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
     (.subcircuit ops subcircuit, a),
@@ -180,7 +180,7 @@ def subcircuit (circuit: FormalCircuit F β α) (b: β.var F) : Circuit F (α.va
 
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
-def assertion (circuit: FormalAssertion F β) (b: β.var F) : Circuit F Unit := ⟨
+def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit := ⟨
   fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
     (.subcircuit ops subcircuit, ()),

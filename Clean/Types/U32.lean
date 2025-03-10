@@ -18,7 +18,7 @@ structure U32 (T: Type) where
   x2 : T
   x3 : T
 
-instance : StructuredElements U32 where
+instance : ProvableType U32 where
   size := 4
   to_elements x := vec [x.x0, x.x1, x.x2, x.x3]
   from_elements v := ⟨ v.get ⟨ 0, by norm_num ⟩, v.get ⟨ 1, by norm_num ⟩, v.get ⟨ 2, by norm_num ⟩, v.get ⟨ 3, by norm_num ⟩ ⟩
@@ -27,12 +27,8 @@ namespace U32
 
 instance : ProvableType U32 where
   size := 4
-  to_vars x := vec [x.x0, x.x1, x.x2, x.x3]
-  to_values x := vec [x.x0, x.x1, x.x2, x.x3]
-  from_vars v :=
-    let ⟨ [x0, x1, x2, x3], _ ⟩ := v
-    ⟨ x0, x1, x2, x3 ⟩
-  from_values v :=
+  to_elements x := vec [x.x0, x.x1, x.x2, x.x3]
+  from_elements v :=
     let ⟨ [x0, x1, x2, x3], _ ⟩ := v
     ⟨ x0, x1, x2, x3 ⟩
 
@@ -129,7 +125,7 @@ the expression is smaller than the modulus.
 
 ```
 example (x y : F p) (hx: x.val < 256) (hy: y.val < 256) :
-  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat_u32
+  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 ```
 
 expected context:
@@ -152,6 +148,5 @@ macro_rules
       simp only [Nat.reducePow, Nat.add_mod_mod, Nat.mod_add_mod, Nat.mul_mod_mod, Nat.mod_mul_mod]
       rw [Nat.mod_eq_of_lt _]
       repeat linarith [‹Fact (_ > 512)›.elim]))
-
 end U32
 end
