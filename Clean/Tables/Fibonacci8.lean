@@ -125,7 +125,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
       simp [table_norm, fib_table]
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec,
-        from_values, to_vars, circuit_norm
+        circuit_norm
       ] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) .empty).1.1.2 0).column = 0
@@ -161,7 +161,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
       -- lift the constraints to specs
       have constraints_hold := by
         have h := constraints_hold.left
-        dsimp [fib_table, from_values, to_vars, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
+        dsimp [fib_table, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
         simp [vars, CellOffset.column, table_norm] at h
         simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
         simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec, Fin.val] at h

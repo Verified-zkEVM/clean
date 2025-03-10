@@ -8,7 +8,7 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 @[circuit_norm]
 def witness (α: TypeMap) [inst: ProvableType α] (compute : Environment F → α F) := do
-  let vars ← Circuit.witness_vars inst.size (fun env => compute env |> to_values)
+  let vars ← Circuit.witness_vars inst.size (fun env => compute env |> to_elements)
   return from_vars <| Vector.map Expression.var vars
 
 @[circuit_norm]

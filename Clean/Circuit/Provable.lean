@@ -41,11 +41,6 @@ def to_vars (var: M (Expression F)) := to_elements var
 @[circuit_norm]
 def from_vars (vars: Vector (Expression F) (ProvableType.size M)) := from_elements vars
 
-@[circuit_norm]
-alias to_values := to_elements
-@[circuit_norm]
-alias from_values := from_elements
-
 namespace Provable
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
 
@@ -53,10 +48,10 @@ variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType �
 def eval (env: Environment F) (x: Var α F) : α F :=
   let vars := to_vars x
   let values := vars.map env
-  from_values values
+  from_elements values
 
 def const (x: α F) : Var α F :=
-  let values : Vector F _ := to_values x
+  let values : Vector F _ := to_elements x
   from_vars (values.map .const)
 
 @[reducible]

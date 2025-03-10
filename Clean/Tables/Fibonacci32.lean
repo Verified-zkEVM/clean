@@ -191,7 +191,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_add
 
-  simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit, eval, from_values,
+  simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit, eval,
     Vector.map, size, ProvableType.size, PNat.add_coe, PNat.val_ofNat, Nat.reduceAdd, to_vars,
     ProvableType.to_elements, List.map_cons, Expression.eval, Trace.getLeFromBottom, Row.get,
     Vector.get, List.length_cons, List.length_nil, rec_vars, CellOffset.curr, Fin.isValue,
@@ -251,7 +251,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
     Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
     Fin.isValue, Nat.reduceMod, Circuit.formal_assertion_to_subcircuit,
     Gadgets.Equality.U32.circuit, Circuit.subassertion_soundness, Gadgets.Equality.U32.spec, eval,
-    from_values, from_elements, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
+    from_elements, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
     Row.get, Vector.get, ProvableType.to_elements, rec_vars, CellOffset.curr,
     Fin.cast_eq_self, List.get_eq_getElem, CellOffset.next, Fin.val_one, List.getElem_cons_succ,
     List.getElem_cons_zero, Fin.val_two, List.map_nil, U32.mk.injEq, true_implies] at h_eq

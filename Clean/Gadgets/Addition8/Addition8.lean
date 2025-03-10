@@ -49,7 +49,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    dsimp [circuit_norm, from_values, to_vars] at h_holds
+    dsimp [circuit_norm] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy] at h_holds
@@ -82,7 +82,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp [from_values, to_vars, circuit_norm]
+    dsimp [circuit_norm]
     rw [hx, hy]
 
     -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold
