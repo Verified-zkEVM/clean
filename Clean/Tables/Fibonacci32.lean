@@ -25,11 +25,11 @@ structure RowType (F : Type) where
   x: U32 F
   y: U32 F
 
-instance : StructuredElements RowType where
+instance : NonEmptyProvableType RowType where
   size := 8
   to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
   from_elements v :=
-    -- TODO is it possible to define in terms of StructuredElements.from_elements of the U32?
+    -- TODO is it possible to define in terms of ProvableType.from_elements of the U32?
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ ⟩
 
@@ -51,8 +51,8 @@ def assign_U32 (x : U32 (Variable (F p))) (offs : U32 (CellOffset 2 RowType)) : 
   inductive contraints that are applied every two rows of the trace.
 -/
 def recursive_relation : TwoRowsConstraint RowType (F p) := do
-  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
-  let next : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_next_row)
+  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
+  let next : RowType _ := ProvableType.from_elements (<-TableConstraint.get_next_row)
 
   let { z, ..} ← TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
     x := curr.x,
@@ -69,7 +69,7 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
-  let row : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
+  let row : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
   TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨row.x, ⟨0, 0, 0, 0⟩⟩
   TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨row.y, ⟨1, 0, 0, 0⟩⟩
 
@@ -147,7 +147,7 @@ lemma rec_vars :
     ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 22) = CellOffset.next 7
   := by
   simp only [recursive_relation, bind,
-    List.length_cons, List.length_singleton, Nat.reduceAdd, StructuredElements.size,
+    List.length_cons, List.length_singleton, Nat.reduceAdd, ProvableType.size,
     PNat.val_ofNat, TableConstraint.get_curr_row, TableConstraint.as_table_operation,
     TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
     Bool.true_and, decide_eq_true_eq, Fin.isValue, Nat.cast_zero, sub_zero, Vector.map,
@@ -170,15 +170,15 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
 
   simp only [TableConstraint.constraints_hold_on_window,
-    TableConstraint.constraints_hold_on_window.foldl, StructuredElements.from_elements, Vector.map,
-    StructuredElements.size, PNat.val_ofNat, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
+    TableConstraint.constraints_hold_on_window.foldl, ProvableType.from_elements, Vector.map,
+    ProvableType.size, PNat.val_ofNat, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
     Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
     Nat.cast_one, Fin.val_one, zero_add, List.cons_append, Nat.cast_ofNat, Fin.val_two,
     Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
     TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
     decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
     Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
-    Expression.eval, Fin.zero_eta, Provable.instProvableTypeFromField.eq_1, Vector.get.eq_1,
+    Expression.eval, Fin.zero_eta, Vector.get.eq_1,
     Fin.cast_zero, List.get_eq_getElem, CellOffset.next, and_true, Nat.reducePow, and_imp]
   intros h_add h_eq
 
@@ -192,8 +192,8 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   ] at h_add
 
   simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit, eval, from_values,
-    Vector.map, size, StructuredElements.size, PNat.add_coe, PNat.val_ofNat, Nat.reduceAdd, to_vars,
-    StructuredElements.to_elements, List.map_cons, Expression.eval, Trace.getLeFromBottom, Row.get,
+    Vector.map, size, ProvableType.size, PNat.add_coe, PNat.val_ofNat, Nat.reduceAdd, to_vars,
+    ProvableType.to_elements, List.map_cons, Expression.eval, Trace.getLeFromBottom, Row.get,
     Vector.get, List.length_cons, List.length_nil, rec_vars, CellOffset.curr, Fin.isValue,
     Fin.cast_eq_self, List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one,
     List.getElem_cons_succ, Fin.val_two, List.map_nil, Vector.instAppend, Vector.append,
@@ -227,7 +227,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   simp only [TableConstraint.constraints_hold_on_window,
     TableConstraint.constraints_hold_on_window.foldl,
     Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
-    Nat.reduceAdd, StructuredElements.from_elements, Vector.map, StructuredElements.size,
+    Nat.reduceAdd, ProvableType.from_elements, Vector.map, ProvableType.size,
     PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
     Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
     List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append, Fin.coe_eq_castSucc,
@@ -251,8 +251,8 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
     Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
     Fin.isValue, Nat.reduceMod, Circuit.formal_assertion_to_subcircuit,
     Gadgets.Equality.U32.circuit, Circuit.subassertion_soundness, Gadgets.Equality.U32.spec, eval,
-    from_values, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
-    Row.get, Vector.get, StructuredElements.to_elements, rec_vars, CellOffset.curr,
+    from_values, from_elements, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
+    Row.get, Vector.get, ProvableType.to_elements, rec_vars, CellOffset.curr,
     Fin.cast_eq_self, List.get_eq_getElem, CellOffset.next, Fin.val_one, List.getElem_cons_succ,
     List.getElem_cons_zero, Fin.val_two, List.map_nil, U32.mk.injEq, true_implies] at h_eq
 

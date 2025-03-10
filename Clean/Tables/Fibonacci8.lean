@@ -25,7 +25,7 @@ structure RowType (F : Type) where
   x: F
   y: F
 
-instance : StructuredElements RowType where
+instance : NonEmptyProvableType RowType where
   size := 2
   to_elements x := vec [x.x, x.y]
   from_elements v :=
@@ -50,8 +50,8 @@ def next_row_off {W : ℕ+} : RowType (CellOffset W RowType) :=
   inductive contraints that are applied every two rows of the trace.
 -/
 def fib_relation : TwoRowsConstraint RowType (F p) := do
-  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
-  let next : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_next_row)
+  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
+  let next : RowType _ := ProvableType.from_elements (<-TableConstraint.get_next_row)
 
   let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
     x := curr.x,
@@ -68,7 +68,7 @@ def fib_relation : TwoRowsConstraint RowType (F p) := do
   This is our "base case" for the Fibonacci sequence.
 -/
 def boundary_fib : SingleRowConstraint RowType (F p) := do
-  let curr : RowType _ := StructuredElements.from_elements (<-TableConstraint.get_curr_row)
+  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.x, 0⟩
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.y, 1⟩
 
@@ -98,10 +98,10 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
 lemma vars :
-    ((fib_relation (p:=p) TableContext.empty).1.1.2 0) = CellOffset.curr 0 ∧
-    ((fib_relation (p:=p) TableContext.empty).1.1.2 1) = CellOffset.curr 1 ∧
-    ((fib_relation (p:=p) TableContext.empty).1.1.2 2) = CellOffset.next 0 ∧
-    ((fib_relation (p:=p) TableContext.empty).1.1.2 4) = CellOffset.next 1
+    ((fib_relation (p:=p) .empty).1.1.2 0) = CellOffset.curr 0 ∧
+    ((fib_relation (p:=p) .empty).1.1.2 1) = CellOffset.curr 1 ∧
+    ((fib_relation (p:=p) .empty).1.1.2 2) = CellOffset.next 0 ∧
+    ((fib_relation (p:=p) .empty).1.1.2 4) = CellOffset.next 1
   := by
   rw [show CellOffset.next 0 = CellOffset.next 2 by simp [CellOffset.next]]
   simp [fib_relation, bind, table_norm ]
@@ -128,9 +128,9 @@ def formal_fib_table : FormalTable (F p) RowType := {
         from_values, to_vars, circuit_norm
       ] at boundary1 boundary2
 
-      have var1 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 0).column = 0
+      have var1 : ((boundary_fib (p:=p) .empty).1.1.2 0).column = 0
         := by simp [boundary_fib, bind, table_norm]; rfl
-      have var2 : ((boundary_fib (p:=p) { offset := 0, assignment := fun _ ↦ { rowOffset := 0, column := 0 } }).1.1.2 1).column = 1
+      have var2 : ((boundary_fib (p:=p) .empty).1.1.2 1).column = 1
         := by simp [boundary_fib, bind, table_norm]; rfl
 
       simp only [Fin.isValue, var1, Fin.val_zero, List.getElem_cons_zero, var2, Fin.val_one,
@@ -147,7 +147,8 @@ def formal_fib_table : FormalTable (F p) RowType := {
       specialize ih2 lookup_h.right
 
       unfold table_constraints_hold.foldl at constraints_hold
-      simp only [Trace.len, Nat.succ_ne_zero, ite_false] at constraints_hold
+      simp only [Trace.len, Nat.succ_eq_add_one, AddLeftCancelMonoid.add_eq_zero, one_ne_zero,
+        and_false, reduceIte] at constraints_hold
       unfold table_constraints_hold.foldl at constraints_hold
       unfold table_constraints_hold.foldl at constraints_hold
       simp only at constraints_hold
