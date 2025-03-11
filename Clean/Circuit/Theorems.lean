@@ -44,14 +44,6 @@ lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.
   | assert ops _ ih | lookup op _ ih =>
     simp only [initial_offset, local_length, ih]
 
-/--
-When instantiating a circuit with initial offset `n`, it outputs operations with the same initial offset.
-
-This property is essential for subcircuit proofs.
-It's only true because we require it in the `Circuit` definition.
--/
-lemma initial_offset_eq {α} {n: ℕ} {circuit: Circuit F α} : (circuit n).initial_offset = n :=
-  circuit.property n
 end Circuit
 
 namespace Environment
