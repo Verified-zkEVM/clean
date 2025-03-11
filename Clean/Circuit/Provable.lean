@@ -9,29 +9,30 @@ import Clean.Circuit.SimpGadget
  We represent them as types generic over a single type argument (the field element),
  i.e. `Type → Type`.
 -/
+@[reducible]
 def TypeMap := Type → Type
 
-def Var (M: Type → Type) (F : Type) := M (Expression F)
+def Var (M : TypeMap) (F : Type) := M (Expression F)
 
-variable {F: Type} [Field F]
+variable {F : Type} [Field F]
 
 /--
   Class of types that can be used inside a circuit,
   because they can be flattened into a vector of (field) elements.
 -/
-class ProvableType (M : Type -> Type) where
+class ProvableType (M : TypeMap) where
   size : ℕ
   to_elements {F: Type} : M F -> Vector F size
   from_elements {F: Type} : Vector F size -> M F
 
-class NonEmptyProvableType (M : Type -> Type) extends ProvableType M where
+class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
   nonempty : size > 0 := by norm_num
 
 attribute [circuit_norm] ProvableType.size
 attribute [circuit_norm] ProvableType.to_elements
 attribute [circuit_norm] ProvableType.from_elements
 
-variable {M: Type → Type} [ProvableType M]
+variable {M : TypeMap} [ProvableType M]
 
 export ProvableType (size to_elements from_elements)
 
@@ -63,7 +64,7 @@ instance : ProvableType unit where
   from_elements _ := ()
 
 @[reducible]
-def field : Type → Type := id
+def field : TypeMap := id
 
 @[circuit_norm]
 instance : ProvableType field where
@@ -72,7 +73,7 @@ instance : ProvableType field where
   from_elements v := v.get 0
 
 @[reducible]
-def pair (α β : Type → Type) := fun F => α F × β F
+def pair (α β : TypeMap) := fun F => α F × β F
 
 @[reducible]
 def field2 := pair field field
@@ -84,7 +85,7 @@ instance : ProvableType field2 where
   from_elements v := (v.get 0, v.get 1)
 
 variable {n: ℕ}
-def vec (α: Type → Type) (n: ℕ) := fun F => Vector (α F) n
+def vec (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
 
 @[reducible]
 def fields (n: ℕ) := vec field n
