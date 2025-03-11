@@ -228,7 +228,7 @@ end OperationsList
 The monad to write circuits. Lets you use `do` notation while in the background
 it builds up `Operations` that represent the circuit at a low level.
 
-Intuitively, a `Circuit` is a function `Operations F n → Operations F n' × α` for some
+Intuitively, a `Circuit` is a function `Operations F n → α × Operations F n'` for some
 return type `α`, and the monad is a state monad that keeps the `Operations` around.
 
 For technical reasons, we wrap `Operations F n` in `OperationsList F` to get rid of the
