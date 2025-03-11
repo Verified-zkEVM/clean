@@ -414,7 +414,8 @@ where
   spec: β F → α F → Prop
   soundness: Soundness F β α main assumptions spec
   completeness: Completeness F β α main assumptions
-  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n
+  /-- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`. -/
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
 
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (a_var : Var α F) (env : Environment F) :=
@@ -466,7 +467,9 @@ structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] wh
     assumptions b → spec b →
     -- the constraints hold
     constraints_hold.completeness env (main b_var |>.operations offset)
-  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n
+
+  /-- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`. -/
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
 
 @[circuit_norm]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=

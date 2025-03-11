@@ -91,6 +91,5 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
     show x.val < 256 ∧ y.val < 256 ∧ (0 = 0 ∨ 0 = 1)
     have ⟨ asx, asy ⟩ := as
     exact ⟨ asx, asy, by tauto ⟩
-  initial_offset_eq var n := by rfl
 
 end Gadgets.Addition8

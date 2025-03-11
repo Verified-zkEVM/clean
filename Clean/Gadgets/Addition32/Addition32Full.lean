@@ -246,5 +246,4 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   spec := spec
   soundness := soundness
   completeness := completeness
-  initial_offset_eq var n := by rfl
 end Gadgets.Addition32Full

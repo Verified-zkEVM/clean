@@ -95,6 +95,4 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
     -- this is equivalent to our own assumptions
     exact as
 
-  initial_offset_eq var n := by rfl
-
 end Gadgets.Addition8Full

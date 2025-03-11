@@ -66,5 +66,4 @@ def circuit : FormalAssertion (F p) Inputs where
     rw [hx, hy, spec]
     ring
 
-  initial_offset_eq var n := by rfl
 end Gadgets.Equality.Field

@@ -63,5 +63,4 @@ def circuit : FormalAssertion (F p) field where
     dsimp only [Circuit.constraints_hold.completeness, Expression.eval, Expression.eval.eq_2]
     rw [hx]
     apply equiv.mpr spec
-  initial_offset_eq var n := by rfl
 end Boolean
