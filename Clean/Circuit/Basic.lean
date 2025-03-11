@@ -394,16 +394,16 @@ def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations 
     let constraint := s.completeness eval
     if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
 
-variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
-def Soundness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [ProvableType F β]
-  (main: β.var → Circuit F α.var)
-  (assumptions: β.value → Prop)
-  (spec: β.value → α.value → Prop) :=
+def Soundness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
+  (main: Var β F → Circuit F (Var α F))
+  (assumptions: β F → Prop)
+  (spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
     ∀ offset, ∀ env,
     -- for all inputs that satisfy the assumptions
-    ∀ b_var : β.var, ∀ b : β.value, eval env b_var = b →
+    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
     constraints_hold.soundness env (main b_var offset) →
@@ -411,36 +411,36 @@ def Soundness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [Provabl
     let a := eval env (output (main b_var) offset)
     spec b a
 
-def Completeness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [ProvableType F β]
-  (main: β.var → Circuit F α.var)
-  (assumptions: β.value → Prop) :=
+def Completeness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
+  (main: Var β F → Circuit F (Var α F))
+  (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ b_var : β.var,
+  ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
   env.uses_local_witnesses (main b_var offset) →
   -- for all inputs that satisfy the assumptions
-  ∀ b : β.value, eval env b_var = b →
+  ∀ b : β F, eval env b_var = b →
   assumptions b →
   -- the constraints hold
   constraints_hold.completeness env (main b_var offset)
 
-structure FormalCircuit (F: Type) (β α: TypePair)
-  [Field F] [ProvableType F α] [ProvableType F β]
+structure FormalCircuit (F: Type) (β α: TypeMap)
+  [Field F] [ProvableType α] [ProvableType β]
 where
   -- β = inputs, α = outputs
-  main: β.var → Circuit F α.var
-  assumptions: β.value → Prop
-  spec: β.value → α.value → Prop
+  main: Var β F → Circuit F (Var α F)
+  assumptions: β F → Prop
+  spec: β F → α F → Prop
   soundness: Soundness F β α main assumptions spec
   completeness: Completeness F β α main assumptions
 
 @[circuit_norm]
-def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_var : α.var) (env : Environment F) :=
+def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (a_var : Var α F) (env : Environment F) :=
   let b := eval env b_var
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
 @[circuit_norm]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (env : Environment F) :=
+def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : Var β F) (env : Environment F) :=
   let b := eval env b_var
   circuit.assumptions b
 
@@ -457,17 +457,17 @@ If both the assumptions AND the spec are true, then the constraints hold.
 In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β] where
-  main: β.var → Circuit F Unit
+structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] where
+  main: Var β F → Circuit F Unit
 
-  assumptions: β.value → Prop
-  spec: β.value → Prop
+  assumptions: β F → Prop
+  spec: β F → Prop
 
   soundness:
     -- for all environments that determine witness generation
     ∀ offset, ∀ env,
     -- for all inputs that satisfy the assumptions
-    ∀ b_var : β.var, ∀ b : β.value, eval env b_var = b →
+    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
     constraints_hold.soundness env (main b_var offset) →
@@ -476,21 +476,21 @@ structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β]
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
-    ∀ offset, ∀ env, ∀ b_var : β.var,
+    ∀ offset, ∀ env, ∀ b_var : Var β F,
     env.uses_local_witnesses (main b_var offset) →
     -- for all inputs that satisfy the assumptions AND the spec
-    ∀ b : β.value, eval env b_var = b →
+    ∀ b : β F, eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
     constraints_hold.completeness env (main b_var offset)
 
 @[circuit_norm]
-def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
+def subassertion_soundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
   circuit.assumptions b → circuit.spec b
 
 @[circuit_norm]
-def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
+def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
