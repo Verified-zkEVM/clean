@@ -183,6 +183,7 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type → Type) (F : Type) [Fi
 structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   offset: ℕ
   assignment : CellAssignment W S
+  operations: List (TableConstraintOperation W S F)
 
 variable [Field F]
 
@@ -190,11 +191,12 @@ variable [Field F]
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
 @[reducible]
-def TableContext.empty {W: ℕ+} : TableContext W S F := ⟨
-  0,
+def TableContext.empty {W: ℕ+} : TableContext W S F := {
+  offset := 0,
   -- TODO: is there a better way?
-  fun _ => ⟨0, ⟨0, NonEmptyProvableType.nonempty⟩⟩
-⟩
+  assignment := fun _ => ⟨0, ⟨0, NonEmptyProvableType.nonempty⟩⟩,
+  operations := []
+}
 
 namespace TableConstraintOperation
 
@@ -205,12 +207,13 @@ namespace TableConstraintOperation
 def update_context {W: ℕ+} (ctx: TableContext W S F) :
     TableConstraintOperation W S F → TableContext W S F
   /-
-    Witnessing a fresh variable for a table offets just increments the offset and add the mapping
+    Witnessing a fresh variable for a table offsets just increments the offset and add the mapping
     from the variable index to the cell offset in the assignment mapping
   -/
-  | Witness offset _ => {
+  | Witness offset c => {
       offset := ctx.offset + 1,
-      assignment := fun x => if x = ctx.offset then offset else ctx.assignment x
+      assignment := fun x => if x = ctx.offset then offset else ctx.assignment x,
+      operations := ctx.operations ++ [Witness offset c]
     }
 
   /-
@@ -221,15 +224,17 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
       assignment := fun x => if h : x >= ctx.offset && x < ctx.offset + size S then ⟨off, ⟨x-ctx.offset, by
         simp only [ge_iff_le, Bool.and_eq_true, decide_eq_true_eq] at h
         omega
-      ⟩⟩ else ctx.assignment x
+      ⟩⟩ else ctx.assignment x,
+      operations := ctx.operations ++ [GetRow off]
     }
 
   /-
     Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
   -/
-  | Allocate { ops, .. } => {
-      offset := ctx.offset + FlatOperation.witness_length ops,
-      assignment := ctx.assignment
+  | Allocate subcircuit => {
+      offset := ctx.offset + FlatOperation.witness_length subcircuit.ops,
+      assignment := ctx.assignment,
+      operations := ctx.operations ++ [Allocate subcircuit]
     }
 
   /-
@@ -237,7 +242,8 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
   -/
   | Assign v offset => {
       offset := ctx.offset,
-      assignment := fun x => if x = v.index then offset else ctx.assignment x
+      assignment := fun x => if x = v.index then offset else ctx.assignment x,
+      operations := ctx.operations ++ [Assign v offset]
     }
 
 instance {W: ℕ+} [Repr F] :
@@ -250,36 +256,18 @@ instance {W: ℕ+} [Repr F] :
 
 end TableConstraintOperation
 
-
-@[table_norm]
-def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] (α : Type) :=
-  TableContext W S F → (TableContext W S F × List (TableConstraintOperation W S F)) × α
+@[reducible, table_norm]
+def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] :=
+  StateM (TableContext W S F)
 
 namespace TableConstraint
-instance (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] : Monad (TableConstraint W S F) where
-  pure a ctx := ((ctx, []), a)
-  bind f g ctx :=
-    let ((ctx', ops), a) := f ctx
-    let ((ctx'', ops'), b) := g a ctx'
-    ((ctx'', ops ++ ops'), b)
-
-@[table_norm]
-def as_table_operation {α: Type} {W: ℕ+}
-  (f : TableContext W S F → TableConstraintOperation W S F × α) : TableConstraint W S F α :=
-  fun ctx =>
-  let (op, a) := f ctx
-  let ctx' := TableConstraintOperation.update_context ctx op
-  ((ctx', [op]), a)
-
 def operations {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
     List (TableConstraintOperation W S F) :=
-  let ((_, ops), _) := table TableContext.empty
-  ops
+  table .empty |>.snd.operations
 
 def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
     CellAssignment W S :=
-  let ((ctx, _), _) := table TableContext.empty
-  ctx.assignment
+  table .empty |>.snd.assignment
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -289,7 +277,7 @@ def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
 @[table_norm]
 def constraints_hold_on_window {W : ℕ+}
     (table : TableConstraint W S F Unit) (window: TraceOfLength F S W) : Prop :=
-  let ((ctx, ops), ()) := table TableContext.empty
+  let ctx := table .empty |>.snd
 
   -- construct an env by simply taking the result of the assignment function
   let env : Environment F := ⟨ fun x =>
@@ -299,67 +287,66 @@ def constraints_hold_on_window {W : ℕ+}
 
   -- then we fold over allocated sub-circuits
   -- lifting directly to the soundness of the sub-circuit
-  foldl ops env
+  foldl ctx.operations env
   where
   @[table_norm]
   foldl : List (TableConstraintOperation W S F) → (env: Environment F) → Prop
   | [], _ => true
   | op :: ops, env =>
     match op with
-    | TableConstraintOperation.Allocate {soundness ..} => soundness env ∧ foldl ops env
+    | .Allocate {soundness ..} => soundness env ∧ foldl ops env
     | _ => foldl ops env
 
 def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
-  let ((_, _), a) := table TableContext.empty
-  a
+  table .empty |>.fst
+
+open TableConstraintOperation (update_context)
 
 def witness_cell {W: ℕ+}
-    (off : CellOffset W S) (compute : Unit → F): TableConstraint W S F (Variable F) :=
-  as_table_operation fun ctx =>
-  (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
+    (off : CellOffset W S) (compute : Unit → F) : TableConstraint W S F (Variable F) :=
+  modifyGet fun ctx =>
+    (⟨ ctx.offset ⟩, update_context ctx (.Witness off compute))
 
 def get_cell {W: ℕ+}
     (off : CellOffset W S): TableConstraint W S F (Variable F) :=
-  as_table_operation fun ctx =>
-  (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
+  modifyGet fun ctx =>
+    (⟨ ctx.offset ⟩, update_context ctx (.Witness off (fun _ => 0)))
 
 /--
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
 def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
-  as_table_operation fun ctx =>
-  let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-  let exprs := vars.map Expression.var
-  (TableConstraintOperation.GetRow 0, from_vars exprs)
+  modifyGet fun ctx =>
+    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
+    let exprs := vars.map Expression.var
+    (from_vars exprs, update_context ctx (.GetRow 0))
 
 /--
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm]
 def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
-  as_table_operation fun ctx =>
-  let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-  let exprs := vars.map Expression.var
-  (TableConstraintOperation.GetRow 1, from_vars exprs)
+  modifyGet fun ctx =>
+    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
+    let exprs := vars.map Expression.var
+    (from_vars exprs, update_context ctx (.GetRow 1))
 
-def subcircuit
-    {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
+def subcircuit {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
     (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
-  as_table_operation fun ctx =>
-  let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
-  (TableConstraintOperation.Allocate subcircuit, a)
+  modifyGet fun ctx =>
+    let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
+    (a, update_context ctx (.Allocate subcircuit))
 
-def assertion
-    {W: ℕ+} {β : TypeMap} [ProvableType β]
+def assertion {W: ℕ+} {β : TypeMap} [ProvableType β]
     (circuit: FormalAssertion F β) (b: Var β F) : TableConstraint W S F Unit :=
-  as_table_operation fun ctx =>
+  modify fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
-    (TableConstraintOperation.Allocate subcircuit, ())
+    update_context ctx (.Allocate subcircuit)
 
 def assign {W: ℕ+} (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
-  as_table_operation fun _ =>
-  (TableConstraintOperation.Assign v off, ())
+  modify fun ctx =>
+    update_context ctx (.Assign v off)
 
 attribute [table_norm] size
 attribute [table_norm] to_elements
