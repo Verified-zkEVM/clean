@@ -212,8 +212,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
-  simp only [rec_vars, Fin.isValue, SubCircuit.witness_length, FlatOperation.witness_length,
-    add_zero, Nat.reduceAdd] at h_add
+  simp only [circuit_norm, rec_vars, Fin.isValue, Nat.reduceAdd] at h_add
   simp only [h_add, and_self]
 
 /--
