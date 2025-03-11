@@ -20,8 +20,8 @@ instance : NonEmptyProvableType RowType where
     ⟨ x, y, z ⟩
 
 def add8_inline : SingleRowConstraint RowType (F p) := do
-  let row : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
-  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
+  let row ← TableConstraint.get_curr_row
+  let z ← TableConstraint.subcircuit Gadgets.Addition8.circuit {
     x := row.x,
     y := row.y
   }
