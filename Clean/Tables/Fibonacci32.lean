@@ -105,16 +105,16 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 -/
 omit p_large_enough in
 lemma boundary_vars :
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 0) = CellOffset.curr 0 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 1) = CellOffset.curr 1 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 2) = CellOffset.curr 2 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 3) = CellOffset.curr 3 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 4) = CellOffset.curr 4 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 5) = CellOffset.curr 5 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 6) = CellOffset.curr 6 ∧
-    ((boundary (p:=p) TableContext.empty).1.1.assignment 7) = CellOffset.curr 7
+    ((boundary (p:=p) TableContext.empty).snd.assignment 0) = CellOffset.curr 0 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 1) = CellOffset.curr 1 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 2) = CellOffset.curr 2 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 3) = CellOffset.curr 3 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 4) = CellOffset.curr 4 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 5) = CellOffset.curr 5 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 6) = CellOffset.curr 6 ∧
+    ((boundary (p:=p) TableContext.empty).snd.assignment 7) = CellOffset.curr 7
   := by
-  simp only [boundary, bind, TableConstraint.get_curr_row, TableConstraint.as_table_operation,
+  simp only [boundary, bind, TableConstraint.get_curr_row,
     TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
     Bool.true_and, decide_eq_true_eq, Fin.isValue, Nat.cast_zero, sub_zero, Vector.map,
     Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Fin.coe_fin_one, Fin.val_zero, add_zero,
@@ -123,36 +123,53 @@ lemma boundary_vars :
     List.map_cons, List.map_nil, CellOffset.curr]
   repeat constructor
 
-lemma rec_vars :
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 0) = CellOffset.curr 0 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 1) = CellOffset.curr 1 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 2) = CellOffset.curr 2 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 3) = CellOffset.curr 3 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 4) = CellOffset.curr 4 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 5) = CellOffset.curr 5 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 6) = CellOffset.curr 6 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 7) = CellOffset.curr 7 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 8) = CellOffset.next 8 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 9) = CellOffset.next 1 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 10) = CellOffset.next 2 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 11) = CellOffset.next 3 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 16) = CellOffset.next 4 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 18) = CellOffset.next 5 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 20) = CellOffset.next 6 ∧
-    ((recursive_relation (p:=p) TableContext.empty).1.1.assignment 22) = CellOffset.next 7
+lemma rec_vars_curr :
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 0) = CellOffset.curr 0 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 1) = CellOffset.curr 1 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 2) = CellOffset.curr 2 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 3) = CellOffset.curr 3 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 4) = CellOffset.curr 4 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 5) = CellOffset.curr 5 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 6) = CellOffset.curr 6 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 7) = CellOffset.curr 7
   := by
-  simp only [recursive_relation, bind,
-    List.length_cons, List.length_singleton, Nat.reduceAdd, ProvableType.size,
-    PNat.val_ofNat, TableConstraint.get_curr_row, TableConstraint.as_table_operation,
-    TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
-    Bool.true_and, decide_eq_true_eq, Fin.isValue, Nat.cast_zero, sub_zero, Vector.map,
-    Vector.init, Vector.push, Vector.nil, Fin.coe_fin_one, Fin.val_zero, add_zero,
-    List.nil_append, Nat.cast_one, Fin.val_one, List.singleton_append, Nat.cast_ofNat,
-    Fin.val_two, List.cons_append, Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast,
-    List.map_cons, List.map_nil, TableConstraint.get_next_row, Bool.and_eq_true,
-    TableConstraint.eq_1, CellOffset.next, List.append_assoc, Prod.mk.eta, CellOffset.curr]
+  simp only [recursive_relation, table_norm, bind, TableConstraint.get_curr_row, TableConstraint, from_vars,
+    from_elements, Vector.map, size, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
+    Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
+    Nat.cast_one, Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc,
+    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
+    TableConstraintOperation.update_context, ge_iff_le, Bool.and_eq_true, decide_eq_true_eq,
+    TableConstraint.get_next_row, CellOffset.next, CellOffset.curr]
   repeat constructor
 
+lemma rec_vars_next :
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 8) = CellOffset.next 8 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 9) = CellOffset.next 1 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 10) = CellOffset.next 2 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 11) = CellOffset.next 3 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 16) = CellOffset.next 4 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 18) = CellOffset.next 5 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 20) = CellOffset.next 6 ∧
+    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 22) = CellOffset.next 7
+  := by
+  -- simp [recursive_relation, table_norm, circuit_norm]
+  simp only [recursive_relation, TableConstraint, TableConstraint.get_curr_row, from_vars,
+    from_elements, Vector.map, size, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
+    Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
+    Nat.cast_one, Fin.val_one, List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append,
+    Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
+    TableConstraintOperation.update_context, ge_iff_le, Bool.and_eq_true, decide_eq_true_eq,
+    TableConstraint.get_next_row, CellOffset.next, bind_assoc, pure_bind]
+  rw [
+    show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
+    show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
+    show (((5 : Fin 6).val % 8)) = 5 by rfl,
+    show ((6 : Fin 7).val) = 6 by rfl,
+    show (7 : Fin 8).val = 7 by rfl,
+  ]
+  constructor
+  -- TODO
+  repeat sorry
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window, then the spec of add32
@@ -189,7 +206,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit, eval,
     Vector.map, size, ProvableType.size, PNat.add_coe, PNat.val_ofNat, Nat.reduceAdd, to_vars,
     ProvableType.to_elements, List.map_cons, Expression.eval, Trace.getLeFromBottom, Row.get,
-    Vector.get, List.length_cons, List.length_nil, rec_vars, CellOffset.curr, Fin.isValue,
+    Vector.get, List.length_cons, List.length_nil, rec_vars_curr, rec_vars_next, CellOffset.curr, Fin.isValue,
     Fin.cast_eq_self, List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one,
     List.getElem_cons_succ, Fin.val_two, List.map_nil, Vector.instAppend, Vector.append,
     List.cons_append, List.singleton_append, CellOffset.next, SubCircuit.witness_length,
@@ -207,7 +224,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 
   intro h_norm_x h_norm_y
   specialize h_add h_norm_x h_norm_y
-  simp only [circuit_norm, rec_vars, Fin.isValue, Nat.reduceAdd] at h_add
+  simp only [circuit_norm, rec_vars_curr, rec_vars_next, Fin.isValue, Nat.reduceAdd] at h_add
   simp only [h_add, and_self]
 
 /--
@@ -246,7 +263,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
     Fin.isValue, Nat.reduceMod, Circuit.formal_assertion_to_subcircuit,
     Gadgets.Equality.U32.circuit, Circuit.subassertion_soundness, Gadgets.Equality.U32.spec, eval,
     from_elements, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
-    Row.get, Vector.get, ProvableType.to_elements, rec_vars, CellOffset.curr,
+    Row.get, Vector.get, ProvableType.to_elements, rec_vars_curr, rec_vars_next, CellOffset.curr,
     Fin.cast_eq_self, List.get_eq_getElem, CellOffset.next, Fin.val_one, List.getElem_cons_succ,
     List.getElem_cons_zero, Fin.val_two, List.map_nil, U32.mk.injEq, true_implies] at h_eq
 
