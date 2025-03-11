@@ -516,26 +516,6 @@ namespace Circuit
 def operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
   (circuit |>.operations offset).toList
 
--- TODO can probably delete these
-
-def constraints_hold_from_list.soundness (eval: Environment F) : List (Operation F) → Prop
-  | [] => True
-  | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.soundness eval ops
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list.soundness eval ops
-    | .subcircuit { soundness, .. } => soundness eval ∧ constraints_hold_from_list.soundness eval ops
-    | _ => constraints_hold_from_list.soundness eval ops
-
-def constraints_hold_from_list.completeness (eval: Environment F) : List (Operation F) → Prop
-  | [] => True
-  | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.completeness eval ops
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list.completeness eval ops
-    | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list.completeness eval ops
-    | _ => constraints_hold_from_list.completeness eval ops
-
 -- witness generation
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
