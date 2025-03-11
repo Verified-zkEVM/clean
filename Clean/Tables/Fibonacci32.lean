@@ -1,17 +1,12 @@
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
-import Clean.Table.Basic
+import Clean.Table.Theorems
 import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Gadgets.Equality.U32
 import Clean.Types.U32
 
-
 namespace Tables.Fibonacci32
-variable {p : ℕ}
-variable [p_large_enough: Fact (p > 512)]
-
-
-variable [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 def fib32 : ℕ -> ℕ
   | 0 => 0

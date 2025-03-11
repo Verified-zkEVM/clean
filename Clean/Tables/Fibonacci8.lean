@@ -1,6 +1,6 @@
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
-import Clean.Table.Basic
+import Clean.Table.Theorems
 import Clean.Gadgets.Addition8.Addition8
 import Clean.Gadgets.Equality.Field
 
