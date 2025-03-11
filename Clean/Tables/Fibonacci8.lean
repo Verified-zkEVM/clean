@@ -17,9 +17,7 @@ import Clean.Gadgets.Equality.Field
 
 -/
 namespace Tables.Fibonacci8Table
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 structure RowType (F : Type) where
   x: F
@@ -50,10 +48,10 @@ def next_row_off {W : ℕ+} : RowType (CellOffset W RowType) :=
   inductive contraints that are applied every two rows of the trace.
 -/
 def fib_relation : TwoRowsConstraint RowType (F p) := do
-  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
-  let next : RowType _ := ProvableType.from_elements (<-TableConstraint.get_next_row)
+  let curr ← TableConstraint.get_curr_row
+  let next ← TableConstraint.get_next_row
 
-  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
+  let z : Expression (F p) ← TableConstraint.subcircuit Gadgets.Addition8.circuit {
     x := curr.x,
     y := curr.y
   }
@@ -68,7 +66,7 @@ def fib_relation : TwoRowsConstraint RowType (F p) := do
   This is our "base case" for the Fibonacci sequence.
 -/
 def boundary_fib : SingleRowConstraint RowType (F p) := do
-  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
+  let curr ← TableConstraint.get_curr_row
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.x, 0⟩
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.y, 1⟩
 

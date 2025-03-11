@@ -46,8 +46,8 @@ def assign_U32 (x : U32 (Variable (F p))) (offs : U32 (CellOffset 2 RowType)) : 
   inductive contraints that are applied every two rows of the trace.
 -/
 def recursive_relation : TwoRowsConstraint RowType (F p) := do
-  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
-  let next : RowType _ := ProvableType.from_elements (<-TableConstraint.get_next_row)
+  let curr ← TableConstraint.get_curr_row
+  let next ← TableConstraint.get_next_row
 
   let { z, ..} ← TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
     x := curr.x,
@@ -64,7 +64,7 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
-  let row : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
+  let row ← TableConstraint.get_curr_row
   TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨row.x, ⟨0, 0, 0, 0⟩⟩
   TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨row.y, ⟨1, 0, 0, 0⟩⟩
 
@@ -164,7 +164,7 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
 
-  simp only [TableConstraint.constraints_hold_on_window,
+  simp only [table_norm, TableConstraint.constraints_hold_on_window,
     TableConstraint.constraints_hold_on_window.foldl, ProvableType.from_elements, Vector.map,
     ProvableType.size, PNat.val_ofNat, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
     Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
@@ -218,7 +218,7 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   curr.y = next.x := by
 
-  simp only [TableConstraint.constraints_hold_on_window,
+  simp only [table_norm, TableConstraint.constraints_hold_on_window,
     TableConstraint.constraints_hold_on_window.foldl,
     Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
     Nat.reduceAdd, ProvableType.from_elements, Vector.map, ProvableType.size,

@@ -327,23 +327,21 @@ def get_cell {W: ℕ+}
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
-def get_curr_row {W: ℕ+} :
-    TableConstraint W S F (Vector (Expression F) (size S)) :=
+def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-  let exprs := vars.map (fun v => Expression.var v)
-  (TableConstraintOperation.GetRow 0, exprs)
+  let exprs := vars.map Expression.var
+  (TableConstraintOperation.GetRow 0, from_vars exprs)
 
 /--
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm]
-def get_next_row {W: ℕ+} :
-    TableConstraint W S F (Vector (Expression F) (size S)) :=
+def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-  let exprs := vars.map (fun v => Expression.var v)
-  (TableConstraintOperation.GetRow 1, exprs)
+  let exprs := vars.map Expression.var
+  (TableConstraintOperation.GetRow 1, from_vars exprs)
 
 def subcircuit
     {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
@@ -363,6 +361,11 @@ def assign {W: ℕ+} (v: Variable F) (off : CellOffset W S) : TableConstraint W 
   as_table_operation fun _ =>
   (TableConstraintOperation.Assign v off, ())
 
+attribute [table_norm] size
+attribute [table_norm] to_elements
+attribute [table_norm] from_elements
+attribute [table_norm] to_vars
+attribute [table_norm] from_vars
 end TableConstraint
 
 
