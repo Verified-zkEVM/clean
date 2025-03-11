@@ -15,8 +15,10 @@ import Clean.Table.SimpTable
 @[reducible]
 def Row (F : Type) (S : Type → Type) [ProvableType S] := S F
 
+variable {F : Type} {S : Type → Type} [NonEmptyProvableType S]
+
 @[table_norm]
-def Row.get {F : Type} {S : Type → Type} [ProvableType S] (row : Row F S) (i : Fin (size S)) : F :=
+def Row.get (row : Row F S) (i : Fin (size S)) : F :=
   let elems := to_elements row
   elems.get i
 
@@ -38,7 +40,7 @@ namespace Trace
   The length of a trace is the number of rows it contains.
 -/
 @[table_norm]
-def len {F : Type} {S : Type → Type} [ProvableType S] : Trace F S → ℕ
+def len : Trace F S → ℕ
   | <+> => 0
   | rest +> _ => rest.len + 1
 
@@ -46,8 +48,7 @@ def len {F : Type} {S : Type → Type} [ProvableType S] : Trace F S → ℕ
   Induction principle that applies for every row in the trace, where the inductive step takes into
   account the previous two rows.
 -/
-def everyRowTwoRowsInduction {F : Type}
-    {S : Type → Type} [ProvableType S] {P : Trace F S → Sort*}
+def everyRowTwoRowsInduction {P : Trace F S → Sort*}
     (zero : P (<+>))
     (one : ∀ row : Row F S, P (empty +> row))
     (more : ∀ curr next : Row F S,
@@ -59,17 +60,15 @@ def everyRowTwoRowsInduction {F : Type}
     (everyRowTwoRowsInduction zero one more (rest))
     (everyRowTwoRowsInduction zero one more (rest +> curr))
 
-lemma len_le_succ {F : Type}
-    {S : Type → Type} [ProvableType S]
-    (trace : Trace F S) (row : Row F S) : trace.len ≤ (trace +> row).len :=
+lemma len_le_succ (trace : Trace F S) (row : Row F S) :
+    trace.len ≤ (trace +> row).len :=
   match trace with
   | <+> => by simp only [len, Nat.succ_eq_add_one, zero_add, zero_le]
   | (rest +> _) =>
     by simp only [len, Nat.succ_eq_add_one, le_add_iff_nonneg_right, zero_le]
 
-lemma len_ge_succ_of_ge {N : ℕ} {F : Type}
-    {S : Type → Type} [ProvableType S]
-    (trace : Trace F S) (row : Row F S) (_h : trace.len ≥ N) : (trace +> row).len ≥ N :=
+lemma len_ge_succ_of_ge {N : ℕ} (trace : Trace F S) (row : Row F S) (_h : trace.len ≥ N) :
+    (trace +> row).len ≥ N :=
   match trace with
   | <+> => by
       simp only [len, ge_iff_le, nonpos_iff_eq_zero, Nat.succ_eq_add_one, zero_add] at *
@@ -81,9 +80,7 @@ lemma len_ge_succ_of_ge {N : ℕ} {F : Type}
   about the whole trace, we can provide just a proof for the first two rows, and then a proof
   for the inductive step.
 -/
-def everyRowTwoRowsInduction' {F : Type}
-      {S : Type → Type} [ProvableType S]
-      {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
+def everyRowTwoRowsInduction' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
     (base : ∀ first second (h : (<+> +> first +> second).len ≥ 2), P (<+> +> first +> second) h)
     (more : ∀ curr next : Row F S,
       ∀ (rest : Trace F S) (h : rest.len ≥ 2),
@@ -108,8 +105,7 @@ def everyRowTwoRowsInduction' {F : Type}
   Get the row at a specific index in the trace, starting from the bottom of the trace
 -/
 @[table_norm]
-def getLeFromBottom {F : Type}
-    {S : Type → Type} [NonEmptyProvableType S]:
+def getLeFromBottom :
     (trace : Trace F S) → (row : Fin trace.len) → (col : Fin (size S)) → F
   | _ +> currRow, ⟨0, _⟩, j => currRow.get j
   | rest +> _, ⟨i + 1, h⟩, j => getLeFromBottom rest ⟨i, Nat.le_of_succ_le_succ h⟩ j
@@ -129,8 +125,7 @@ namespace TraceOfLength
   Get the row at a specific index in the trace, starting from the top
 -/
 @[table_norm]
-def get {M : ℕ} {F : Type}
-    {S : Type → Type} [NonEmptyProvableType S]:
+def get {M : ℕ} :
     (env : TraceOfLength F S M) → (i : Fin M) → (j : Fin (size S)) → F
   | ⟨env, h⟩, i, j => env.getLeFromBottom ⟨
       M - 1 - i,
@@ -141,8 +136,7 @@ def get {M : ℕ} {F : Type}
   Apply a proposition to every row in the trace
 -/
 @[table_norm]
-def forAllRowsOfTrace {N : ℕ} {F : Type}
-    {S : Type → Type} [NonEmptyProvableType S]
+def forAllRowsOfTrace {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → Prop) : Prop :=
   inner trace.val prop
   where
@@ -155,8 +149,7 @@ def forAllRowsOfTrace {N : ℕ} {F : Type}
   Apply a proposition to every row in the trace except the last one
 -/
 @[table_norm]
-def forAllRowsOfTraceExceptLast {N : ℕ} {F : Type}
-    {S : Type → Type} [NonEmptyProvableType S]
+def forAllRowsOfTraceExceptLast {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → Prop) : Prop :=
   inner trace.val prop
   where
@@ -170,8 +163,7 @@ def forAllRowsOfTraceExceptLast {N : ℕ} {F : Type}
   Apply a proposition, which could be dependent on the row index, to every row of the trace
 -/
 @[table_norm]
-def forAllRowsOfTraceWithIndex {N : ℕ} {F : Type}
-    {S : Type → Type} [NonEmptyProvableType S]
+def forAllRowsOfTraceWithIndex {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → ℕ → Prop) : Prop :=
   inner trace.val prop
   where
@@ -200,13 +192,13 @@ namespace CellOffset
   Current row offset
 -/
 @[table_norm]
-def curr {W : ℕ+} {S : Type → Type} [ProvableType S] (j : Fin (size S)) :  CellOffset W S := ⟨0, j⟩
+def curr {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨0, j⟩
 
 /--
   Next row offset
 -/
 @[table_norm]
-def next {W : ℕ+} {S : Type → Type} [ProvableType S] (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
+def next {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
 
 end CellOffset
 
@@ -245,7 +237,7 @@ inductive TableConstraintOperation (W : ℕ+) (S : Type → Type) (F : Type) [Fi
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
 -/
-structure TableContext (W: ℕ+) (S : Type → Type)  (F : Type) [Field F] [ProvableType S] where
+structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   offset: ℕ
   assignment : CellAssignment W S
 
@@ -253,10 +245,10 @@ structure TableContext (W: ℕ+) (S : Type → Type)  (F : Type) [Field F] [Prov
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
 @[reducible]
-def TableContext.empty {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [inst: NonEmptyProvableType S] : TableContext W S F := ⟨
+def TableContext.empty {W: ℕ+} [Field F] : TableContext W S F := ⟨
   0,
   -- TODO: is there a better way?
-  fun _ => ⟨0, ⟨0, inst.nonempty⟩⟩
+  fun _ => ⟨0, ⟨0, NonEmptyProvableType.nonempty⟩⟩
 ⟩
 
 namespace TableConstraintOperation
@@ -265,7 +257,7 @@ namespace TableConstraintOperation
   Returns the updated table context after applying the table operation
 -/
 @[table_norm]
-def update_context {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [ProvableType S] (ctx: TableContext W S F) :
+def update_context {W: ℕ+} [Field F] (ctx: TableContext W S F) :
     TableConstraintOperation W S F → TableContext W S F
   /-
     Witnessing a fresh variable for a table offets just increments the offset and add the mapping
@@ -303,7 +295,7 @@ def update_context {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [Provable
       assignment := fun x => if x = v.index then offset else ctx.assignment x
     }
 
-instance {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [ProvableType S] [Repr F] :
+instance {W: ℕ+} [Field F] [Repr F] :
     ToString (TableConstraintOperation W S F) where
   toString
     | Witness offset _ => "(Witness " ++ reprStr offset ++ ")"
@@ -327,19 +319,19 @@ instance (W: ℕ+) (S : Type → Type)  (F : Type) [Field F] [NonEmptyProvableTy
     ((ctx'', ops ++ ops'), b)
 
 @[table_norm]
-def as_table_operation {α: Type} {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S]
+def as_table_operation {α: Type} {W: ℕ+} [Field F]
   (f : TableContext W S F → TableConstraintOperation W S F × α) : TableConstraint W S F α :=
   fun ctx =>
   let (op, a) := f ctx
   let ctx' := TableConstraintOperation.update_context ctx op
   ((ctx', [op]), a)
 
-def operations {α: Type} {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S] (table : TableConstraint W S F α):
+def operations {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α):
     List (TableConstraintOperation W S F) :=
   let ((_, ops), _) := table TableContext.empty
   ops
 
-def assignment {α: Type} {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S] (table : TableConstraint W S F α):
+def assignment {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α):
     CellAssignment W S :=
   let ((ctx, _), _) := table TableContext.empty
   ctx.assignment
@@ -350,8 +342,7 @@ def assignment {α: Type} {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [No
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def constraints_hold_on_window {F : Type} {W : ℕ+} [Field F]
-    {S : Type → Type} [NonEmptyProvableType S]
+def constraints_hold_on_window {W : ℕ+} [Field F]
     (table : TableConstraint W S F Unit) (window: TraceOfLength F S W) : Prop :=
   let ((ctx, ops), ()) := table TableContext.empty
 
@@ -373,16 +364,16 @@ def constraints_hold_on_window {F : Type} {W : ℕ+} [Field F]
     | TableConstraintOperation.Allocate {soundness ..} => soundness env ∧ foldl ops env
     | _ => foldl ops env
 
-def output {α: Type} {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [NonEmptyProvableType S] (table : TableConstraint W S F α) : α :=
+def output {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α) : α :=
   let ((_, _), a) := table TableContext.empty
   a
 
-def witness_cell {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [NonEmptyProvableType S]
+def witness_cell {W: ℕ+} [Field F]
     (off : CellOffset W S) (compute : Unit → F): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
 
-def get_cell {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [NonEmptyProvableType S]
+def get_cell {W: ℕ+} [Field F]
     (off : CellOffset W S): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
@@ -391,7 +382,7 @@ def get_cell {W: ℕ+} {S : Type → Type}  {F : Type} [Field F] [NonEmptyProvab
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
-def get_curr_row {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S] :
+def get_curr_row {W: ℕ+} [Field F] :
     TableConstraint W S F (Vector (Expression F) (size S)) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -402,7 +393,7 @@ def get_curr_row {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyPro
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm]
-def get_next_row {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S] :
+def get_next_row {W: ℕ+} [Field F] :
     TableConstraint W S F (Vector (Expression F) (size S)) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -410,23 +401,20 @@ def get_next_row {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyPro
   (TableConstraintOperation.GetRow 1, exprs)
 
 def subcircuit
-    {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S]
-    {α β : TypeMap} [ProvableType β] [ProvableType α]
+    {W: ℕ+} [Field F] {α β : TypeMap} [ProvableType β] [ProvableType α]
     (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
   as_table_operation fun ctx =>
   let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
   (TableConstraintOperation.Allocate subcircuit, a)
 
 def assertion
-    {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S]
-    {β : TypeMap} [ProvableType β]
+    {W: ℕ+} [Field F] {β : TypeMap} [ProvableType β]
     (circuit: FormalAssertion F β) (b: Var β F) : TableConstraint W S F Unit :=
   as_table_operation fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
     (TableConstraintOperation.Allocate subcircuit, ())
 
-def assign {W: ℕ+} {S : Type → Type} {F : Type} [Field F] [NonEmptyProvableType S]
-    (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
+def assign {W: ℕ+} [Field F] (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
   as_table_operation fun _ =>
   (TableConstraintOperation.Assign v off, ())
 
@@ -464,8 +452,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProva
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 @[table_norm]
-def table_constraints_hold {N : ℕ}
-    {S : Type → Type}  {F : Type} [Field F] [NonEmptyProvableType S]
+def table_constraints_hold {N : ℕ} [Field F]
     (constraints : List (TableOperation S F)) (trace: TraceOfLength F S N) : Prop :=
   foldl constraints trace.val constraints
   where
