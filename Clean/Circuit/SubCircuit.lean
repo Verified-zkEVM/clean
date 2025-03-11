@@ -182,7 +182,7 @@ def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var �
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit := do
-  modifyGet (fun ops =>
+  modify (fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
-    ((), .subcircuit ops subcircuit)
+    .subcircuit ops subcircuit
   )
