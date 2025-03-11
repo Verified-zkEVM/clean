@@ -241,11 +241,13 @@ structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Prova
   offset: ℕ
   assignment : CellAssignment W S
 
+variable [Field F]
+
 /--
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
 @[reducible]
-def TableContext.empty {W: ℕ+} [Field F] : TableContext W S F := ⟨
+def TableContext.empty {W: ℕ+} : TableContext W S F := ⟨
   0,
   -- TODO: is there a better way?
   fun _ => ⟨0, ⟨0, NonEmptyProvableType.nonempty⟩⟩
@@ -257,7 +259,7 @@ namespace TableConstraintOperation
   Returns the updated table context after applying the table operation
 -/
 @[table_norm]
-def update_context {W: ℕ+} [Field F] (ctx: TableContext W S F) :
+def update_context {W: ℕ+} (ctx: TableContext W S F) :
     TableConstraintOperation W S F → TableContext W S F
   /-
     Witnessing a fresh variable for a table offets just increments the offset and add the mapping
@@ -295,7 +297,7 @@ def update_context {W: ℕ+} [Field F] (ctx: TableContext W S F) :
       assignment := fun x => if x = v.index then offset else ctx.assignment x
     }
 
-instance {W: ℕ+} [Field F] [Repr F] :
+instance {W: ℕ+} [Repr F] :
     ToString (TableConstraintOperation W S F) where
   toString
     | Witness offset _ => "(Witness " ++ reprStr offset ++ ")"
@@ -311,7 +313,7 @@ def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmpty
   TableContext W S F → (TableContext W S F × List (TableConstraintOperation W S F)) × α
 
 namespace TableConstraint
-instance (W: ℕ+) (S : Type → Type)  (F : Type) [Field F] [NonEmptyProvableType S] : Monad (TableConstraint W S F) where
+instance (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] : Monad (TableConstraint W S F) where
   pure a ctx := ((ctx, []), a)
   bind f g ctx :=
     let ((ctx', ops), a) := f ctx
@@ -319,19 +321,19 @@ instance (W: ℕ+) (S : Type → Type)  (F : Type) [Field F] [NonEmptyProvableTy
     ((ctx'', ops ++ ops'), b)
 
 @[table_norm]
-def as_table_operation {α: Type} {W: ℕ+} [Field F]
+def as_table_operation {α: Type} {W: ℕ+}
   (f : TableContext W S F → TableConstraintOperation W S F × α) : TableConstraint W S F α :=
   fun ctx =>
   let (op, a) := f ctx
   let ctx' := TableConstraintOperation.update_context ctx op
   ((ctx', [op]), a)
 
-def operations {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α):
+def operations {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
     List (TableConstraintOperation W S F) :=
   let ((_, ops), _) := table TableContext.empty
   ops
 
-def assignment {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α):
+def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
     CellAssignment W S :=
   let ((ctx, _), _) := table TableContext.empty
   ctx.assignment
@@ -342,7 +344,7 @@ def assignment {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α)
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def constraints_hold_on_window {W : ℕ+} [Field F]
+def constraints_hold_on_window {W : ℕ+}
     (table : TableConstraint W S F Unit) (window: TraceOfLength F S W) : Prop :=
   let ((ctx, ops), ()) := table TableContext.empty
 
@@ -364,16 +366,16 @@ def constraints_hold_on_window {W : ℕ+} [Field F]
     | TableConstraintOperation.Allocate {soundness ..} => soundness env ∧ foldl ops env
     | _ => foldl ops env
 
-def output {α: Type} {W: ℕ+} [Field F] (table : TableConstraint W S F α) : α :=
+def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
   let ((_, _), a) := table TableContext.empty
   a
 
-def witness_cell {W: ℕ+} [Field F]
+def witness_cell {W: ℕ+}
     (off : CellOffset W S) (compute : Unit → F): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off compute, ⟨ ctx.offset ⟩)
 
-def get_cell {W: ℕ+} [Field F]
+def get_cell {W: ℕ+}
     (off : CellOffset W S): TableConstraint W S F (Variable F) :=
   as_table_operation fun ctx =>
   (TableConstraintOperation.Witness off (fun _ => 0), ⟨ ctx.offset ⟩)
@@ -382,7 +384,7 @@ def get_cell {W: ℕ+} [Field F]
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
-def get_curr_row {W: ℕ+} [Field F] :
+def get_curr_row {W: ℕ+} :
     TableConstraint W S F (Vector (Expression F) (size S)) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -393,7 +395,7 @@ def get_curr_row {W: ℕ+} [Field F] :
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm]
-def get_next_row {W: ℕ+} [Field F] :
+def get_next_row {W: ℕ+} :
     TableConstraint W S F (Vector (Expression F) (size S)) :=
   as_table_operation fun ctx =>
   let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -401,20 +403,20 @@ def get_next_row {W: ℕ+} [Field F] :
   (TableConstraintOperation.GetRow 1, exprs)
 
 def subcircuit
-    {W: ℕ+} [Field F] {α β : TypeMap} [ProvableType β] [ProvableType α]
+    {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
     (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
   as_table_operation fun ctx =>
   let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
   (TableConstraintOperation.Allocate subcircuit, a)
 
 def assertion
-    {W: ℕ+} [Field F] {β : TypeMap} [ProvableType β]
+    {W: ℕ+} {β : TypeMap} [ProvableType β]
     (circuit: FormalAssertion F β) (b: Var β F) : TableConstraint W S F Unit :=
   as_table_operation fun ctx =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
     (TableConstraintOperation.Allocate subcircuit, ())
 
-def assign {W: ℕ+} [Field F] (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
+def assign {W: ℕ+} (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
   as_table_operation fun _ =>
   (TableConstraintOperation.Assign v off, ())
 
@@ -452,7 +454,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProva
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 @[table_norm]
-def table_constraints_hold {N : ℕ} [Field F]
+def table_constraints_hold {N : ℕ}
     (constraints : List (TableOperation S F)) (trace: TraceOfLength F S N) : Prop :=
   foldl constraints trace.val constraints
   where
