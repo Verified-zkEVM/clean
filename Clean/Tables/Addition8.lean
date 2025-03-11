@@ -64,19 +64,19 @@ def formal_add8_table : FormalTable (F p) RowType := {
       -- now we prove a local property about the current row
       -- TODO: simp should suffice, but couldn't get it to work
 
-      have h_x : ((add8_inline (p:=p) .empty).1.1.assignment 0) = CellOffset.curr 0
+      have h_x : ((add8_inline (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0
         := by
         simp [add8_inline, bind, table_norm]
         rfl
-      have h_y : ((add8_inline (p:=p) .empty).1.1.2 1) = CellOffset.curr 1
+      have h_y : ((add8_inline (p:=p) .empty).snd.assignment 1) = CellOffset.curr 1
         := by
         simp [add8_inline, bind, table_norm]
         rfl
-      have h_z : ((add8_inline (p:=p) .empty).1.1.2 2) = CellOffset.curr 2
+      have h_z : ((add8_inline (p:=p) .empty).snd.assignment 2) = CellOffset.curr 2
         := by
         simp [add8_inline, bind, table_norm]
         rfl
-      have h_z' : ((add8_inline (p:=p) .empty).1.1.2 3) = CellOffset.curr 2
+      have h_z' : ((add8_inline (p:=p) .empty).snd.assignment 3) = CellOffset.curr 2
         := by
         simp [add8_inline, bind, table_norm]
         rfl
