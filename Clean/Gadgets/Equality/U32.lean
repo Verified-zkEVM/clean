@@ -13,40 +13,30 @@ variable {p : ℕ} [Fact p.Prime]
 
 
 namespace Gadgets.Equality.U32
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Inputs p) where
+instance : ProvableType Inputs where
   size := 8
-  to_vars s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
-  from_vars v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
-    ⟨ ⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩ ⟩
-  to_values s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
-  from_values v :=
+  to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
+  from_elements v :=
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩ ⟩
 
-
-def assert_eq (input : (Inputs p).var) := do
+def assert_eq (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
   assert_zero (x.x0 - y.x0)
   assert_zero (x.x1 - y.x1)
   assert_zero (x.x2 - y.x2)
   assert_zero (x.x3 - y.x3)
 
-def spec (input: (Inputs p).value) :=
+def spec (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x = y
 
 
-def circuit : FormalAssertion (F p) (Inputs p) where
+def circuit : FormalAssertion (F p) Inputs where
   main := assert_eq
   assumptions _ := true
   spec := spec
