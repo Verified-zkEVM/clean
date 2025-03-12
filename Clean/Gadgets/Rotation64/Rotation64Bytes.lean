@@ -533,10 +533,17 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase7 x0 x1 x2 x3 x4 x5 x6 x7 as
 
+theorem completeness (off : Fin 8) : Completeness (F p) (Inputs p) (Outputs p) (rot64_bytes off) assumptions := by
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ as
+  dsimp [assumptions, U64.is_normalized] at as
+  fin_cases off
+  repeat
+    · simp [circuit_norm]
+
 def circuit (off : Fin 8) : FormalCircuit (F p) (Inputs p) (Outputs p) where
   main := rot64_bytes off
   assumptions := assumptions
   spec := spec off
   soundness := soundness off
-  completeness := by sorry
+  completeness := completeness off
 end Gadgets.Rotation64Bytes
