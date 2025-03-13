@@ -7,52 +7,36 @@ namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: F
   y: F
   carry_in: F
 
-instance (F : Type) : StructuredElements InputStruct F where
+instance : ProvableType Inputs where
   size := 3
   to_elements x := vec [x.x, x.y, x.carry_in]
   from_elements v :=
     let ⟨ [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Inputs p) := Provable.ofStructured (F p) InputStruct (by dsimp [StructuredElements.size])
-
-structure OutputStruct (F : Type) where
+structure Outputs (F : Type) where
   z: F
   carry_out: F
 
-instance (F : Type) : StructuredElements OutputStruct F where
+instance : ProvableType Outputs where
   size := 2
   to_elements x := vec [x.z, x.carry_out]
   from_elements v :=
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
-def Outputs (p : ℕ) : TypePair := ⟨
-  OutputStruct (Expression (F p)),
-  OutputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Outputs p) := Provable.ofStructured (F p) OutputStruct (by dsimp [StructuredElements.size])
-
-
-def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
+def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
+  let z ← witness (F:=F p) (fun eval => mod_256 (eval (x + y + carry_in)))
   byte_lookup z
 
   -- witness the output carry
@@ -63,11 +47,11 @@ def add8_full_carry (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := 
 
   return { z, carry_out }
 
-def assumptions (input : (Inputs p).value) :=
+def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : (Inputs p).value) (out : (Outputs p).value) :=
+def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   out.z.val = (x.val + y.val + carry_in.val) % 256 ∧
   out.carry_out.val = (x.val + y.val + carry_in.val) / 256
@@ -76,7 +60,7 @@ def spec (input : (Inputs p).value) (out : (Outputs p).value) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) (Inputs p) (Outputs p) where
+def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
   assumptions := assumptions
   spec := spec

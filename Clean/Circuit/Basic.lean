@@ -123,7 +123,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 @[reducible, circuit_norm]
 def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
 
-@[reducible]
+@[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) env := FlatOperation.witnesses env sc.ops
 
 def SubCircuit.witness_generators (sc: SubCircuit F n) := FlatOperation.witness_generators sc.ops
@@ -228,12 +228,11 @@ end OperationsList
 The monad to write circuits. Lets you use `do` notation while in the background
 it builds up `Operations` that represent the circuit at a low level.
 
-Intuitively, a `Circuit` is a function `Operations F n → Operations F n' × α` for some
+Intuitively, a `Circuit` is a function `Operations F n → α × Operations F n'` for some
 return type `α`, and the monad is a state monad that keeps the `Operations` around.
 
 For technical reasons, we wrap `Operations F n` in `OperationsList F` to get rid of the
-dependent type argument; and apart from the function, we require a consistency
-property to make foundational proofs work.
+dependent type argument.
 
 ```
 def circuit : Circuit F Unit := do
@@ -247,58 +246,31 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-def Circuit (F : Type) [Field F] (α : Type) :=
-  { run: OperationsList F → OperationsList F × α //
-    -- the initial offset is preserved when applying the circuit
-    ∀ ops, (run ops).1.withLength.initial_offset = ops.withLength.initial_offset }
-
 @[reducible]
-def Circuit.run (circuit: Circuit F α) := circuit.val
-
-instance : Monad (Circuit F) where
-  pure a := {
-    val := fun ops => (ops, a),
-    property := fun _ => rfl
-  }
-  bind f g := {
-    val := fun ops =>
-      let (ops', a) := f.run ops
-      let (ops'', b) := (g a).run ops'
-      (ops'', b),
-    property := fun ops =>
-      let res := f.run ops
-      f.property ops ▸ (g res.2).property res.1
-  }
+def Circuit (F : Type) [Field F] := StateM (OperationsList F)
 
 namespace Circuit
 @[reducible]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  circuit.run offset |>.fst.offset
+  circuit offset |>.snd.offset
 
-/--
-This function coercion means that we can just use `circuit n` to get the `Operations` that result
-from instantiating the circuit with an initial offset `n`.
-
-Apart from using them as a monad in actual gadgets, this is the main way to interact with circuits in
-more generic, foundational theorems.
--/
-instance : CoeFun (Circuit F α) (fun circuit => (offset: ℕ) → Operations F (circuit.final_offset offset)) where
-  coe circuit offset := circuit.run offset |>.fst.withLength
+@[reducible]
+def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.final_offset offset) :=
+  circuit offset |>.snd.withLength
 
 @[reducible]
 def output (circuit: Circuit F α) (offset := 0) : α :=
-  circuit.run offset |>.snd
+  circuit offset |>.fst
 
 -- core operations we can do in a circuit
 
 /-- Create a new variable -/
 @[circuit_norm]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) := ⟨
-  fun ops =>
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
+  modifyGet (fun ops =>
     let var: Variable F := ⟨ ops.offset ⟩
-    (.witness ops 1 (fun env => vec [compute env]), var),
-  fun _ => rfl
-⟩
+    ⟨var, .witness ops 1 (fun env => vec [compute env])⟩
+  )
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
@@ -307,26 +279,22 @@ def witness (compute : Environment F → F) := do
   return Expression.var var
 
 @[circuit_norm]
-def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) := ⟨
-  fun ops =>
+def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) := do
+  modifyGet (fun ops =>
     let vars: Vector (Variable F) n := .init (fun i => ⟨ ops.offset + i ⟩)
-    (.witness ops n compute, vars),
-  fun _ => rfl
-⟩
+    ⟨vars, .witness ops n compute⟩
+  )
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assert_zero (e: Expression F) : Circuit F Unit := ⟨
-  fun ops => (.assert ops e, ()),
-  fun _ => rfl
-⟩
+def assert_zero (e: Expression F) : Circuit F Unit :=
+  modifyGet (fun ops => ⟨(), .assert ops e⟩)
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup (l: Lookup F) : Circuit F Unit := ⟨
-  fun ops => (.lookup ops l, ()),
-  fun _ => rfl
-⟩
+def lookup (l: Lookup F) : Circuit F Unit :=
+  modifyGet (fun ops => ⟨(), .lookup ops l⟩)
+
 end Circuit
 
 /--
@@ -394,53 +362,55 @@ def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations 
     let constraint := s.completeness eval
     if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
 
-variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
-def Soundness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [ProvableType F β]
-  (main: β.var → Circuit F α.var)
-  (assumptions: β.value → Prop)
-  (spec: β.value → α.value → Prop) :=
+def Soundness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
+  (main: Var β F → Circuit F (Var α F))
+  (assumptions: β F → Prop)
+  (spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
-    ∀ offset, ∀ env,
+    ∀ offset : ℕ, ∀ env,
     -- for all inputs that satisfy the assumptions
-    ∀ b_var : β.var, ∀ b : β.value, eval env b_var = b →
+    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var offset) →
+    constraints_hold.soundness env (main b_var |>.operations offset) →
     -- the spec holds on the input and output
     let a := eval env (output (main b_var) offset)
     spec b a
 
-def Completeness (F: Type) (β α: TypePair) [Field F] [ProvableType F α] [ProvableType F β]
-  (main: β.var → Circuit F α.var)
-  (assumptions: β.value → Prop) :=
+def Completeness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
+  (main: Var β F → Circuit F (Var α F))
+  (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ b_var : β.var,
-  env.uses_local_witnesses (main b_var offset) →
+  ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
+  env.uses_local_witnesses (main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
-  ∀ b : β.value, eval env b_var = b →
+  ∀ b : β F, eval env b_var = b →
   assumptions b →
   -- the constraints hold
-  constraints_hold.completeness env (main b_var offset)
+  constraints_hold.completeness env (main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypePair)
-  [Field F] [ProvableType F α] [ProvableType F β]
+structure FormalCircuit (F: Type) (β α: TypeMap)
+  [Field F] [ProvableType α] [ProvableType β]
 where
   -- β = inputs, α = outputs
-  main: β.var → Circuit F α.var
-  assumptions: β.value → Prop
-  spec: β.value → α.value → Prop
+  main: Var β F → Circuit F (Var α F)
+  assumptions: β F → Prop
+  spec: β F → α F → Prop
   soundness: Soundness F β α main assumptions spec
   completeness: Completeness F β α main assumptions
+  /-- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`. -/
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
 
 @[circuit_norm]
-def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : β.var) (a_var : α.var) (env : Environment F) :=
+def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (a_var : Var α F) (env : Environment F) :=
   let b := eval env b_var
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
 @[circuit_norm]
-def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : β.var) (env : Environment F) :=
+def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : Var β F) (env : Environment F) :=
   let b := eval env b_var
   circuit.assumptions b
 
@@ -457,40 +427,43 @@ If both the assumptions AND the spec are true, then the constraints hold.
 In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F: Type) (β: TypePair) [Field F] [ProvableType F β] where
-  main: β.var → Circuit F Unit
+structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] where
+  main: Var β F → Circuit F Unit
 
-  assumptions: β.value → Prop
-  spec: β.value → Prop
+  assumptions: β F → Prop
+  spec: β F → Prop
 
   soundness:
     -- for all environments that determine witness generation
     ∀ offset, ∀ env,
     -- for all inputs that satisfy the assumptions
-    ∀ b_var : β.var, ∀ b : β.value, eval env b_var = b →
+    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var offset) →
+    constraints_hold.soundness env (main b_var |>.operations offset) →
     -- the spec holds
     spec b
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
-    ∀ offset, ∀ env, ∀ b_var : β.var,
-    env.uses_local_witnesses (main b_var offset) →
+    ∀ offset, ∀ env, ∀ b_var : Var β F,
+    env.uses_local_witnesses (main b_var |>.operations offset) →
     -- for all inputs that satisfy the assumptions AND the spec
-    ∀ b : β.value, eval env b_var = b →
+    ∀ b : β F, eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
-    constraints_hold.completeness env (main b_var offset)
+    constraints_hold.completeness env (main b_var |>.operations offset)
+
+  /-- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`. -/
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
 
 @[circuit_norm]
-def subassertion_soundness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
+def subassertion_soundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
   circuit.assumptions b → circuit.spec b
 
 @[circuit_norm]
-def subassertion_completeness (circuit: FormalAssertion F β) (b_var : β.var) (env: Environment F) :=
+def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
@@ -539,8 +512,9 @@ def OperationsList.toList : OperationsList F → List (Operation F)
   | ⟨ _, ops ⟩ => ops.toList
 
 namespace Circuit
-def operations (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
-  (circuit offset).toList
+
+def operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
+  (circuit |>.operations offset).toList
 
 -- TODO can probably delete these
 
@@ -565,9 +539,10 @@ def constraints_hold_from_list.completeness (eval: Environment F) : List (Operat
 -- witness generation
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := (circuit offset).witness_generators.val
+  let generators := (circuit |>.operations offset).witness_generators.val
   generators.foldl (fun acc compute =>
     let env i := acc.getD i 0
     acc.push (compute ⟨ env ⟩))
   #[]
+
 end Circuit

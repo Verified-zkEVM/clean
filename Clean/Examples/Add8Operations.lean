@@ -12,7 +12,7 @@ def circuit := do
   let z ← Gadgets.Addition8.add8 { x, y }
   Gadgets.Addition8.add8 { x, y := z }
 
-#eval circuit.operations
+#eval circuit.operation_list
 
 #eval circuit.witnesses
 end

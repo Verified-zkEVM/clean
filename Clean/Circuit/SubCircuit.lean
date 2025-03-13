@@ -33,7 +33,7 @@ lemma constraints_hold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : En
       exact constraints_hold_cons.mpr ⟨ h_op, h_rest ⟩
 end FlatOperation
 
-variable {α β: TypePair} [ProvableType F α] [ProvableType F β]
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 namespace Circuit
 open FlatOperation (constraints_hold_append)
@@ -59,17 +59,18 @@ theorem can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env 
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
 def formal_circuit_to_subcircuit (n: ℕ)
-  (circuit: FormalCircuit F β α) (b_var : β.var) : α.var × SubCircuit F n :=
+  (circuit: FormalCircuit F β α) (b_var : Var β F) : Var α F × SubCircuit F n :=
   let res := circuit.main b_var |>.run n
   -- TODO: weirdly, when we destructure we can't deduce origin of the results anymore
-  let ops := res.1.withLength
-  let a_var := res.2
+  let ops := res.snd.withLength
+  let a_var := res.fst
 
   have s: SubCircuit F n := by
     open FlatOperation in
     let flat_ops := to_flat_operations ops
     let soundness := subcircuit_soundness circuit b_var a_var
     let completeness := subcircuit_completeness circuit b_var
+    let initial_offset_eq := circuit.initial_offset_eq
     use flat_ops, soundness, completeness
 
     -- `imply_soundness`
@@ -77,8 +78,8 @@ def formal_circuit_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value := eval env b_var
-    let a : α.value := eval env a_var
+    let b : β F := eval env b_var
+    let a : α F := eval env a_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b a
 
@@ -117,15 +118,16 @@ def formal_circuit_to_subcircuit (n: ℕ)
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
 def formal_assertion_to_subcircuit (n: ℕ)
-  (circuit: FormalAssertion F β) (b_var : β.var) : SubCircuit F n :=
+  (circuit: FormalAssertion F β) (b_var : Var β F) : SubCircuit F n :=
   let res := circuit.main b_var |>.run n
-  let ops := res.1.withLength
+  let ops := res.snd.withLength
 
   have s: SubCircuit F n := by
     open FlatOperation in
     let flat_ops := to_flat_operations ops
     let soundness := subassertion_soundness circuit b_var
     let completeness := subassertion_completeness circuit b_var
+    let initial_offset_eq := circuit.initial_offset_eq
     use flat_ops, soundness, completeness
 
     -- `imply_soundness`
@@ -133,7 +135,7 @@ def formal_assertion_to_subcircuit (n: ℕ)
     intro env h_holds
     show soundness env
 
-    let b : β.value := eval env b_var
+    let b : β F := eval env b_var
     rintro (as : circuit.assumptions b)
     show circuit.spec b
 
@@ -171,21 +173,19 @@ end Circuit
 
 /-- Include a subcircuit. -/
 @[circuit_norm]
-def subcircuit (circuit: FormalCircuit F β α) (b: β.var) : Circuit F α.var := ⟨
-  fun ops =>
+def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var α F) := do
+  modifyGet (fun ops =>
     let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ops.offset circuit b
-    (.subcircuit ops subcircuit, a),
-  fun _ => rfl
-⟩
+    (a, .subcircuit ops subcircuit)
+  )
 
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
-def assertion (circuit: FormalAssertion F β) (b: β.var) : Circuit F Unit := ⟨
-  fun ops =>
+def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit := do
+  modifyGet (fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
-    (.subcircuit ops subcircuit, ()),
-  fun _ => rfl
-⟩
+    ((), .subcircuit ops subcircuit)
+  )
 
 -- UNUSED STUFF BELOW
 
