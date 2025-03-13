@@ -43,24 +43,20 @@ def add8_inline : SingleRowConstraint RowType (F p) := do
   if let var z := z then
     TableConstraint.assign z (.curr 2)
 
-def add8Table : List (TableOperation RowType (F p)) := [
+def add8_table : List (TableOperation RowType (F p)) := [
   TableOperation.EveryRow add8_inline
 ]
-
-def assumptions_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => row.x.val < 256 ∧ row.y.val < 256)
-
 
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
 
 def formal_add8_table : FormalTable (F p) RowType := {
-  constraints := add8Table,
+  constraints := add8_table,
   spec := spec_add8,
   soundness := by
     intro N trace _
-    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8Table, spec_add8]
+    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8_table, spec_add8]
 
     induction trace.val with
     | empty => {
