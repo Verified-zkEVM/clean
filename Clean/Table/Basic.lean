@@ -450,8 +450,8 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [NonEmptyProvable
   -- list of constraints that are applied over the table
   constraints : List (TableOperation S F)
 
-  -- assumptions for the table
-  assumptions {N : ℕ} : TraceOfLength F S N → Prop
+  -- optional assumption on the table length
+  assumption : ℕ → Prop := fun _ => True
 
   -- specification for the table
   spec {N : ℕ} : TraceOfLength F S N → Prop
@@ -460,6 +460,6 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [NonEmptyProvable
   -- the constraints hold implies that the spec holds
   soundness :
     ∀ (N : ℕ) (trace: TraceOfLength F S N),
-    assumptions trace →
+    assumption N →
     table_constraints_hold constraints trace →
     spec trace
