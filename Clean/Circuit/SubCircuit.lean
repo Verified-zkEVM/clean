@@ -182,46 +182,24 @@ def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var �
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit := do
-  modifyGet (fun ops =>
+  modify (fun ops =>
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
-    ((), .subcircuit ops subcircuit)
+    .subcircuit ops subcircuit
   )
 
--- UNUSED STUFF BELOW
+namespace Circuit
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
-namespace FlatOperation
-open Circuit (constraints_hold_from_list.soundness )
+/--
+Local witness length of a circuit. In a well-behaved circuit, this does not depend on the input and offset.
+The concrete number should be easy to verify using `rfl`.
+-/
+def FormalCircuit.local_length (circuit: FormalCircuit F β α) (input: Var β F := default) (offset: ℕ := 0) :=
+  (circuit.main input |>.operations offset).local_length
 
-def to_flat_operations_from_list (ops: List (Operation F)) : List (FlatOperation F) :=
-  match ops with
-  | [] => []
-  | op :: ops => match op with
-    | .witness m compute => witness m compute :: to_flat_operations_from_list ops
-    | .assert e => assert e :: to_flat_operations_from_list ops
-    | .lookup l => lookup l :: to_flat_operations_from_list ops
-    | .subcircuit circuit => circuit.ops ++ to_flat_operations_from_list ops
-
-@[deprecated "Use `can_replace_subcircuits` instead"]
-theorem can_replace_subcircuits_from_list {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : Environment F},
-  constraints_hold_flat env (to_flat_operations_from_list ops.toList) → constraints_hold_from_list.soundness env ops.toList
-:= by
-  intro ops env h
-  generalize ops.toList = ops at *
-  -- `to_flat_operations.induct` (functional induction for `to_flat_operations`) is matching on
-  -- empty vs non-empty lists, and different cases for the head in the non-empty case, at the same time.
-  induction ops using to_flat_operations_from_list.induct with
-  | case1 => tauto
-  -- we can handle all non-empty cases except `SubCircuit` at once
-  | case2 ops _ ih | case3 ops _ ih | case4 ops _ ih =>
-    dsimp only [to_flat_operations_from_list] at h
-    cases ops
-    <;> try dsimp only [constraints_hold_flat, constraints_hold_from_list.soundness] at h; tauto
-  | case5 ops _ circuit ih =>
-    dsimp only [to_flat_operations_from_list] at h
-    have h_subcircuit : constraints_hold_flat env circuit.ops := (constraints_hold_append.mp h).left
-    have h_rest : constraints_hold_flat env (to_flat_operations_from_list ops) := (constraints_hold_append.mp h).right
-    cases ops
-    <;> dsimp only [constraints_hold_from_list.soundness]
-    <;> use (circuit.imply_soundness env) h_subcircuit
-    use ih h_rest
-end FlatOperation
+/-- The local length of a subcircuit is derived from the original formal circuit -/
+lemma FormalCircuit.local_length_eq (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
+    (formal_circuit_to_subcircuit offset circuit input).snd.witness_length
+    = circuit.local_length input offset := by
+  apply Environment.flat_witness_length_eq
+end Circuit

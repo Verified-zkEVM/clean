@@ -193,28 +193,28 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
   -- note: List accesses like `[a, b, c][2] = c` can also be proved by `rfl`,
   -- but that seems slower than simp with getElem lemmas
   have hz0 : z0 = mod_256 (x0 + y0 + carry_in) := by
-    rw [(show z0 = wit.get 0 from henv 0), wit.get_eq_lt 0 (by norm_num)]
+    rw [(show z0 = wit.get 0 from henv 0), wit.get_eq_lt 0]
     simp only [hwit, List.getElem_cons_zero]
   have hc0 : c0 = floordiv (x0 + y0 + carry_in) 256 := by
-    rw [(show c0 = wit.get 1 from henv 1), wit.get_eq_lt 1 (by norm_num)]
+    rw [(show c0 = wit.get 1 from henv 1), wit.get_eq_lt 1]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz1 : z1 = mod_256 (x1 + y1 + c0) := by
-    rw [(show z1 = wit.get 2 from henv 2), wit.get_eq_lt 2 (by norm_num)]
+    rw [(show z1 = wit.get 2 from henv 2), wit.get_eq_lt 2]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc1 : c1 = floordiv (x1 + y1 + c0) 256 := by
-    rw [(show c1 = wit.get 3 from henv 3), wit.get_eq_lt 3 (by norm_num)]
+    rw [(show c1 = wit.get 3 from henv 3), wit.get_eq_lt 3]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz2 : z2 = mod_256 (x2 + y2 + c1) := by
-    rw [(show z2 = wit.get 4 from henv 4), wit.get_eq_lt 4 (by norm_num)]
+    rw [(show z2 = wit.get 4 from henv 4), wit.get_eq_lt 4]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc2 : c2 = floordiv (x2 + y2 + c1) 256 := by
-    rw [(show c2 = wit.get 5 from henv 5), wit.get_eq_lt 5 (by norm_num)]
+    rw [(show c2 = wit.get 5 from henv 5), wit.get_eq_lt 5]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz3 : z3 = mod_256 (x3 + y3 + c2) := by
-    rw [(show z3 = wit.get 6 from henv 6), wit.get_eq_lt 6 (by norm_num)]
+    rw [(show z3 = wit.get 6 from henv 6), wit.get_eq_lt 6]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc3 : c3 = floordiv (x3 + y3 + c2) 256 := by
-    rw [(show c3 = wit.get 7 from henv 7), wit.get_eq_lt 7 (by norm_num)]
+    rw [(show c3 = wit.get 7 from henv 7), wit.get_eq_lt 7]
     simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
 
   -- the add8 completeness proof, four times
@@ -246,4 +246,15 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   spec := spec
   soundness := soundness
   completeness := completeness
+
+-- lemmas like these can be helpful when using as subcircuit
+lemma local_length : ∀ offset input,
+  (circuit (p := p)).local_length input offset = 8 := by
+  intros; rfl
+
+lemma witness_length : ∀ offset input,
+  (Circuit.formal_circuit_to_subcircuit offset
+    (circuit (p := p)) input).snd.witness_length = 8 := by
+  intros
+  apply circuit.local_length_eq
 end Gadgets.Addition32Full

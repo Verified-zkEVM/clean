@@ -1,5 +1,6 @@
 import Clean.Utils.Primes
 import Clean.Gadgets.Addition8.Addition8
+import Clean.Gadgets.Addition32.Addition32Full
 
 section
 def p := p_babybear
@@ -15,4 +16,9 @@ def circuit := do
 #eval circuit.operation_list
 
 #eval circuit.witnesses
+
+#eval Gadgets.Addition32Full.circuit (p:=p) |>.local_length
+
+def circuit32 := do Gadgets.Addition32Full.add32_full (p:=p) (← default)
+#eval circuit32.operation_list
 end

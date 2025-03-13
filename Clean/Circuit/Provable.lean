@@ -96,6 +96,19 @@ instance : ProvableType (fields n) where
   to_elements x := x
   from_elements v := v
 
+def synthesize_value : α F :=
+  let zeros := Vector.fill (size α) 0
+  from_elements zeros
+
+instance [Field F] : Inhabited (α F) where
+  default := synthesize_value
+
+def synthesize_const_var : Var α F :=
+  let zeros := Vector.fill (size α) 0
+  from_vars (zeros.map .const)
+
+instance [Field F] : Inhabited (Var α F) where
+  default := synthesize_const_var
 end Provable
 
 export Provable (eval)

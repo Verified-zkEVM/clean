@@ -279,7 +279,7 @@ def witness (compute : Environment F → F) := do
   return Expression.var var
 
 @[circuit_norm]
-def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) := do
+def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) :=
   modifyGet (fun ops =>
     let vars: Vector (Variable F) n := .init (fun i => ⟨ ops.offset + i ⟩)
     ⟨vars, .witness ops n compute⟩
@@ -288,12 +288,12 @@ def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (
 /-- Add a constraint. -/
 @[circuit_norm]
 def assert_zero (e: Expression F) : Circuit F Unit :=
-  modifyGet (fun ops => ⟨(), .assert ops e⟩)
+  modify (fun ops => .assert ops e)
 
 /-- Add a lookup. -/
 @[circuit_norm]
 def lookup (l: Lookup F) : Circuit F Unit :=
-  modifyGet (fun ops => ⟨(), .lookup ops l⟩)
+  modify (fun ops => .lookup ops l)
 
 end Circuit
 
@@ -515,26 +515,6 @@ namespace Circuit
 
 def operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
   (circuit |>.operations offset).toList
-
--- TODO can probably delete these
-
-def constraints_hold_from_list.soundness (eval: Environment F) : List (Operation F) → Prop
-  | [] => True
-  | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.soundness eval ops
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list.soundness eval ops
-    | .subcircuit { soundness, .. } => soundness eval ∧ constraints_hold_from_list.soundness eval ops
-    | _ => constraints_hold_from_list.soundness eval ops
-
-def constraints_hold_from_list.completeness (eval: Environment F) : List (Operation F) → Prop
-  | [] => True
-  | op :: ops => match op with
-    | .assert e => (eval e = 0) ∧ constraints_hold_from_list.completeness eval ops
-    | .lookup { table, entry, index := _ } =>
-      table.contains (entry.map eval) ∧ constraints_hold_from_list.completeness eval ops
-    | .subcircuit { completeness, .. } => completeness eval ∧ constraints_hold_from_list.completeness eval ops
-    | _ => constraints_hold_from_list.completeness eval ops
 
 -- witness generation
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
