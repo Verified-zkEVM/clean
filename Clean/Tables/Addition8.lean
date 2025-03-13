@@ -19,12 +19,26 @@ instance : NonEmptyProvableType RowType where
     let ⟨ [x, y, z], _ ⟩ := v
     ⟨ x, y, z ⟩
 
+def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
+  main x := byte_lookup x
+  assumptions _ := true
+  spec x := x.val < 256
+  soundness := by
+    intro _ env x_var x hx _ h_holds
+    dsimp [circuit_norm] at h_holds
+    exact hx ▸ ByteTable.soundness (eval env x_var) h_holds
+  completeness := by
+    intro _ env x_var _ x hx _ spec
+    dsimp [circuit_norm]
+    exact ByteTable.completeness (eval env x_var) (hx ▸ spec)
+
+
 def add8_inline : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  let z ← TableConstraint.subcircuit Gadgets.Addition8.circuit {
-    x := row.x,
-    y := row.y
-  }
+  TableConstraint.assertion byte_lookup_circuit row.x
+  TableConstraint.assertion byte_lookup_circuit row.y
+
+  let z ← TableConstraint.subcircuit Gadgets.Addition8.circuit { x := row.x, y := row.y }
 
   if let var z := z then
     TableConstraint.assign z (.curr 2)
@@ -43,11 +57,9 @@ def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 
 def formal_add8_table : FormalTable (F p) RowType := {
   constraints := add8Table,
-  assumptions := assumptions_add8,
   spec := spec_add8,
   soundness := by
-    intro N trace
-    simp only [assumptions_add8]
+    intro N trace _
     simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8Table, spec_add8]
 
     induction trace.val with
@@ -57,8 +69,8 @@ def formal_add8_table : FormalTable (F p) RowType := {
     | cons rest row ih => {
       -- simplify induction
       simp [circuit_norm, table_norm]
-      intros lookup_x lookup_y lookup_rest h_curr h_rest
-      specialize ih lookup_rest h_rest
+      intros lookup_x lookup_y h_curr h_rest
+      specialize ih h_rest
       simp [ih]
 
       -- now we prove a local property about the current row
@@ -81,8 +93,14 @@ def formal_add8_table : FormalTable (F p) RowType := {
         simp [add8_inline, bind, table_norm]
         rfl
 
-      -- and now it is easy!
-      simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr
+      dsimp [Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness,
+        byte_lookup_circuit, circuit_norm] at lookup_x lookup_y
+
+      simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr lookup_x lookup_y
+      specialize lookup_x trivial
+      specialize lookup_y trivial
+      simp at lookup_x lookup_y
+
       dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
       simp [lookup_x, lookup_y] at h_curr
       assumption
