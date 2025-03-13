@@ -380,7 +380,9 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProva
 
   /--
     An `EveryRowExceptLast` constraint is a constraint that is applied to every row except the last.
-    It can reference cells from the current row, or the next row
+    It can reference cells from the current row, or the next row.
+
+    Note that this will not apply any constraints to a trace of length one.
   -/
   | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
 
@@ -434,7 +436,6 @@ def table_constraints_hold {N : ℕ}
         constraint.constraints_hold_on_window window ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
-    -- TODO: this is fine if the trace length M is >= 2, but we should check this somehow
     | trace, (TableOperation.EveryRowExceptLast _)::rest =>
         foldl cs trace rest
 
