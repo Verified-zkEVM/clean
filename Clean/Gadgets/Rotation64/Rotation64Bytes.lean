@@ -4,7 +4,6 @@ import Clean.Gadgets.Rotation64.Theorems
 
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
 
 open Gadgets.Rotation64.Theorems (rot_right64)
 
@@ -60,6 +59,7 @@ def spec (offset : Fin 8) (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨y⟩ := out
   y.value = rot_right64 x.value (offset.val * 8)
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x4, x4 := x5, x5 := x6, x6 := x7, x7 := x0 : U64 _}.value =
   rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 8 := by
   simp only [U64.value, rot_right64]
@@ -114,6 +114,7 @@ lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase2 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x2, x1 := x3, x2 := x4, x3 := x5, x4 := x6, x5 := x7, x6 := x0, x7 := x1 : U64 _}.value =
   rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 16 := by
   simp only [U64.value, rot_right64]
@@ -169,6 +170,7 @@ lemma soundnessCase2 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase3 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x3, x1 := x4, x2 := x5, x3 := x6, x4 := x7, x5 := x0, x6 := x1, x7 := x2 : U64 _}.value =
   rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 24 := by
   simp only [U64.value, rot_right64]
@@ -224,6 +226,7 @@ lemma soundnessCase3 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase4 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x4, x1 := x5, x2 := x6, x3 := x7, x4 := x0, x5 := x1, x6 := x2, x7 := x3 : U64 _}.value = rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 32 := by
   simp only [U64.value, rot_right64]
   rw [
@@ -279,6 +282,7 @@ lemma soundnessCase4 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase5 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x5, x1 := x6, x2 := x7, x3 := x0, x4 := x1, x5 := x2, x6 := x3, x7 := x4 : U64 _}.value = rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 40 := by
   simp only [U64.value, rot_right64]
   rw [
@@ -335,6 +339,7 @@ lemma soundnessCase5 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase6 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x6, x1 := x7, x2 := x0, x3 := x1, x4 := x2, x5 := x3, x6 := x4, x7 := x5 : U64 _}.value = rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 48 := by
   simp only [U64.value, rot_right64]
   rw [
@@ -393,6 +398,7 @@ lemma soundnessCase6 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
+omit [Fact (Nat.Prime p)] in
 lemma soundnessCase7 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x7, x1 := x0, x2 := x1, x3 := x2, x4 := x3, x5 := x4, x6 := x5, x7 := x6 : U64 _}.value = rot_right64 { x0 := x0, x1 := x1, x2 := x2, x3 := x3, x4 := x4, x5 := x5, x6 := x6, x7 := x7 : U64 _}.value 56 := by
   simp only [U64.value, rot_right64]
   rw [
@@ -432,7 +438,6 @@ lemma soundnessCase7 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
     repeat
       norm_num
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 72057594037927936) = 0 by rfl]
       norm_num
     have x6_lt : x6 < 72057594037927936 := by linarith
     rw [← Int.mod_eq_emod x6_pos (by norm_num), Int.mod_eq_of_lt x6_pos x6_lt]
@@ -451,7 +456,7 @@ lemma soundnessCase7 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   rw [h, h']
   ring
 
-theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_bytes off) assumptions (spec off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) Inputs  Outputs (rot64_bytes off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -467,49 +472,54 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
 
   dsimp only [assumptions, U64.is_normalized] at as
   fin_cases off
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     simp [U64.value, rot_right64, Nat.mod_one]
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase1 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase2 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure, show (3 : Fin 8).val = 3 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (3 : Fin 8).val = 3 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase3 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure, show (4 : Fin 8).val = 4 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (4 : Fin 8).val = 4 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase4 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure, show (5 : Fin 8).val = 5 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (5 : Fin 8).val = 5 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase5 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure, show (6 : Fin 8).val = 6 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (6 : Fin 8).val = 6 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase6 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, pure, show (7 : Fin 8).val = 7 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (7 : Fin 8).val = 7 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase7 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-theorem completeness (off : Fin 8) : Completeness (F p) (Inputs p) (Outputs p) (rot64_bytes off) assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ as
-  dsimp [assumptions, U64.is_normalized] at as
+theorem completeness (off : Fin 8) : Completeness (F p) Inputs Outputs (rot64_bytes off) assumptions := by
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _
   fin_cases off
   repeat
     · simp [circuit_norm]
 
-def circuit (off : Fin 8) : FormalCircuit (F p) (Inputs p) (Outputs p) where
+def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
   main := rot64_bytes off
   assumptions := assumptions
   spec := spec off
   soundness := soundness off
   completeness := completeness off
+  -- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`.
+  initial_offset_eq: ∀ var, ∀ n, ((rot64_bytes off) var |>.operations n).initial_offset = n := by
+    intros
+    fin_cases off
+    repeat
+      rfl
 end Gadgets.Rotation64Bytes
