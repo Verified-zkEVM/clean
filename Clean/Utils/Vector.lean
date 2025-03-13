@@ -144,4 +144,11 @@ def init {n} (create: Fin n → α) : Vector α n :=
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ List.finRange n, List.length_finRange n ⟩
 
+def fill (n : ℕ) (a: α) : Vector α n :=
+  match n with
+  | 0 => nil
+  | k + 1 => (fill k a).push a
+
+instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
+  default := fill n default
 end Vector
