@@ -105,14 +105,14 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 -/
 omit p_large_enough in
 lemma boundary_vars :
-    ((boundary (p:=p) TableContext.empty).snd.assignment 0) = CellOffset.curr 0 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 1) = CellOffset.curr 1 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 2) = CellOffset.curr 2 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 3) = CellOffset.curr 3 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 4) = CellOffset.curr 4 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 5) = CellOffset.curr 5 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 6) = CellOffset.curr 6 ∧
-    ((boundary (p:=p) TableContext.empty).snd.assignment 7) = CellOffset.curr 7
+    ((boundary (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0 ∧
+    ((boundary (p:=p) .empty).snd.assignment 1) = CellOffset.curr 1 ∧
+    ((boundary (p:=p) .empty).snd.assignment 2) = CellOffset.curr 2 ∧
+    ((boundary (p:=p) .empty).snd.assignment 3) = CellOffset.curr 3 ∧
+    ((boundary (p:=p) .empty).snd.assignment 4) = CellOffset.curr 4 ∧
+    ((boundary (p:=p) .empty).snd.assignment 5) = CellOffset.curr 5 ∧
+    ((boundary (p:=p) .empty).snd.assignment 6) = CellOffset.curr 6 ∧
+    ((boundary (p:=p) .empty).snd.assignment 7) = CellOffset.curr 7
   := by
   simp only [boundary, bind, TableConstraint.get_curr_row,
     TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
@@ -198,8 +198,10 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   change _ ∧ _ ∧ _ → (Gadgets.Addition32Full.circuit.spec _ _) at h_add
   rw [and_imp, and_imp] at h_add
   intro h_norm_x h_norm_y
+  -- TODO this unification is slow
   specialize h_add h_norm_x h_norm_y
 
+  -- TODO this simp is slow
   simp only [Expression.eval, zero_ne_one, or_false, eval, Vector.map, size, Nat.reduceAdd, to_vars,
     to_elements, List.map_cons, Trace.getLeFromBottom, Row.get, Vector.get, List.length_cons,
     List.length_singleton, rec_vars_curr, CellOffset.curr, Fin.isValue, Fin.cast_eq_self,
