@@ -18,7 +18,7 @@ structure U64 (T: Type) where
   x7 : T
 
 
-instance {F : Type} : StructuredElements U64 F where
+instance : ProvableType U64 where
   size := 8
   to_elements x := vec [x.x0, x.x1, x.x2, x.x3, x.x4, x.x5, x.x6, x.x7]
   from_elements v :=
@@ -26,18 +26,6 @@ instance {F : Type} : StructuredElements U64 F where
     ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩
 
 namespace U64
-def u64 {p: ℕ} : TypePair := ⟨ U64 (Expression (F p)), U64 (F p) ⟩
-
-instance : ProvableType (F p) (u64 (p:=p)) where
-  size := 8
-  to_vars x := vec [x.x0, x.x1, x.x2, x.x3, x.x4, x.x5, x.x6, x.x7]
-  to_values x := vec [x.x0, x.x1, x.x2, x.x3, x.x4, x.x5, x.x6, x.x7]
-  from_vars v :=
-    let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
-    ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
-  from_values v :=
-    let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
-    ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
@@ -64,7 +52,7 @@ lemma ext {x y : U64 (F p)}
   Witness a 64-bit unsigned integer.
 -/
 def witness (compute : Environment (F p) → U64 (F p)) := do
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness u64 compute
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness compute
 
   Gadgets.byte_lookup x0
   Gadgets.byte_lookup x1
