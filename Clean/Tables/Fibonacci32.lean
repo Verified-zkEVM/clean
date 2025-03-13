@@ -77,12 +77,6 @@ def fib32_table : List (TableOperation RowType (F p)) := [
 ]
 
 /--
-  We assume that the trace length is at least 2.
--/
-def assumptions {N : ℕ} (_ : TraceOfLength (F p) RowType N) : Prop :=
-  N ≥ 2
-
-/--
   Specification for fibonacci32: for each row with index i
   - the first U32 value is the i-th fibonacci number
   - the second U32 value is the (i+1)-th fibonacci number
@@ -278,11 +272,10 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
 -/
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
-  assumptions := assumptions,
   spec := spec,
   soundness := by
     intro N trace
-    simp only [assumptions, gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib32_table, spec]
+    simp only [gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib32_table, spec]
     rw [TraceOfLength.forAllRowsOfTraceWithIndex, table_constraints_hold]
     intro _N_assumption
 
