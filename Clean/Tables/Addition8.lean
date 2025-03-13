@@ -21,7 +21,7 @@ instance : NonEmptyProvableType RowType where
 
 def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
   main x := byte_lookup x
-  assumptions _ := true
+  assumptions _ := True
   spec x := x.val < 256
   soundness := by
     intro _ env x_var x hx _ h_holds
@@ -97,8 +97,6 @@ def formal_add8_table : FormalTable (F p) RowType := {
         byte_lookup_circuit, circuit_norm] at lookup_x lookup_y
 
       simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr lookup_x lookup_y
-      specialize lookup_x trivial
-      specialize lookup_y trivial
       simp at lookup_x lookup_y
 
       dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
