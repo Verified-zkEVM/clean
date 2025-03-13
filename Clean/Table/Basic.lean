@@ -232,7 +232,7 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
     Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
   -/
   | Allocate subcircuit => {
-      offset := ctx.offset + FlatOperation.witness_length subcircuit.ops,
+      offset := ctx.offset + subcircuit.witness_length,
       assignment := ctx.assignment,
       operations := ctx.operations ++ [Allocate subcircuit]
     }
@@ -297,16 +297,19 @@ def constraints_hold_on_window {W : ℕ+}
     | .Allocate {soundness ..} => soundness env ∧ foldl ops env
     | _ => foldl ops env
 
+@[table_norm]
 def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
 
 open TableConstraintOperation (update_context)
 
+@[table_norm]
 def witness_cell {W: ℕ+}
     (off : CellOffset W S) (compute : Unit → F) : TableConstraint W S F (Variable F) :=
   modifyGet fun ctx =>
     (⟨ ctx.offset ⟩, update_context ctx (.Witness off compute))
 
+@[table_norm]
 def get_cell {W: ℕ+}
     (off : CellOffset W S): TableConstraint W S F (Variable F) :=
   modifyGet fun ctx =>
@@ -344,6 +347,7 @@ def assertion {W: ℕ+} {β : TypeMap} [ProvableType β]
     let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
     update_context ctx (.Allocate subcircuit)
 
+@[table_norm]
 def assign {W: ℕ+} (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
   modify fun ctx =>
     update_context ctx (.Assign v off)

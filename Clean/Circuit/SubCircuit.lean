@@ -186,3 +186,20 @@ def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit := 
     let subcircuit := Circuit.formal_assertion_to_subcircuit ops.offset circuit b
     .subcircuit ops subcircuit
   )
+
+namespace Circuit
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
+
+/--
+Local witness length of a circuit. In a well-behaved circuit, this does not depend on the input and offset.
+The concrete number should be easy to verify using `rfl`.
+-/
+def FormalCircuit.local_length (circuit: FormalCircuit F β α) (input: Var β F := default) (offset: ℕ := 0) :=
+  (circuit.main input |>.operations offset).local_length
+
+/-- The local length of a subcircuit is derived from the original formal circuit -/
+lemma FormalCircuit.local_length_eq (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
+    (formal_circuit_to_subcircuit offset circuit input).snd.witness_length
+    = circuit.local_length input offset := by
+  apply Environment.flat_witness_length_eq
+end Circuit

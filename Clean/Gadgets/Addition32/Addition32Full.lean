@@ -246,4 +246,15 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   spec := spec
   soundness := soundness
   completeness := completeness
+
+-- lemmas like these can be helpful when using as subcircuit
+lemma local_length : ∀ offset input,
+  (circuit (p := p)).local_length input offset = 8 := by
+  intros; rfl
+
+lemma witness_length : ∀ offset input,
+  (Circuit.formal_circuit_to_subcircuit offset
+    (circuit (p := p)) input).snd.witness_length = 8 := by
+  intros
+  apply circuit.local_length_eq
 end Gadgets.Addition32Full
