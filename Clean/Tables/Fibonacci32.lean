@@ -124,42 +124,39 @@ lemma boundary_vars :
   repeat constructor
 
 lemma rec_vars_curr :
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 0) = CellOffset.curr 0 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 1) = CellOffset.curr 1 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 2) = CellOffset.curr 2 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 3) = CellOffset.curr 3 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 4) = CellOffset.curr 4 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 5) = CellOffset.curr 5 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 6) = CellOffset.curr 6 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 7) = CellOffset.curr 7
+    ((recursive_relation (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 1) = CellOffset.curr 1 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 2) = CellOffset.curr 2 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 3) = CellOffset.curr 3 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 4) = CellOffset.curr 4 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 5) = CellOffset.curr 5 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 6) = CellOffset.curr 6 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 7) = CellOffset.curr 7
   := by
-  simp only [recursive_relation, table_norm, bind, TableConstraint.get_curr_row, TableConstraint, from_vars,
-    from_elements, Vector.map, size, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
-    Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
-    Nat.cast_one, Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc,
-    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
-    TableConstraintOperation.update_context, ge_iff_le, Bool.and_eq_true, decide_eq_true_eq,
-    TableConstraint.get_next_row, CellOffset.next, CellOffset.curr]
+  dsimp only [table_norm, recursive_relation]
+  simp only [Vector.map, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Nat.cast_zero,
+    Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
+    Fin.val_one, List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append,
+    Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil, ge_iff_le,
+    Bool.and_eq_true, decide_eq_true_eq, bind_assoc, pure_bind]
   repeat constructor
 
 lemma rec_vars_next :
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 8) = CellOffset.next 8 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 9) = CellOffset.next 1 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 10) = CellOffset.next 2 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 11) = CellOffset.next 3 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 16) = CellOffset.next 4 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 18) = CellOffset.next 5 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 20) = CellOffset.next 6 ∧
-    ((recursive_relation (p:=p) TableContext.empty).snd.assignment 22) = CellOffset.next 7
+    ((recursive_relation (p:=p) .empty).snd.assignment 8) = CellOffset.next 0 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 9) = CellOffset.next 1 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 10) = CellOffset.next 2 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 11) = CellOffset.next 3 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 16) = CellOffset.next 4 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 18) = CellOffset.next 5 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 20) = CellOffset.next 6 ∧
+    ((recursive_relation (p:=p) .empty).snd.assignment 22) = CellOffset.next 7
   := by
-  -- simp [recursive_relation, table_norm, circuit_norm]
-  simp only [recursive_relation, TableConstraint, TableConstraint.get_curr_row, from_vars,
-    from_elements, Vector.map, size, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
-    Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
-    Nat.cast_one, Fin.val_one, List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append,
-    Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
-    TableConstraintOperation.update_context, ge_iff_le, Bool.and_eq_true, decide_eq_true_eq,
-    TableConstraint.get_next_row, CellOffset.next, bind_assoc, pure_bind]
+  dsimp only [table_norm, recursive_relation]
+  simp only [Vector.map, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Nat.cast_zero,
+    Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
+    Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc,
+    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil, ge_iff_le, Bool.and_eq_true,
+    decide_eq_true_eq, bind_assoc, pure_bind]
   rw [
     show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
     show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
@@ -167,9 +164,7 @@ lemma rec_vars_next :
     show ((6 : Fin 7).val) = 6 by rfl,
     show (7 : Fin 8).val = 7 by rfl,
   ]
-  constructor
-  -- TODO
-  repeat sorry
+  repeat constructor
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window, then the spec of add32
@@ -180,19 +175,15 @@ lemma rec_vars_next :
 lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
-
-  simp only [table_norm, TableConstraint.constraints_hold_on_window,
-    TableConstraint.constraints_hold_on_window.foldl, ProvableType.from_elements, Vector.map,
-    ProvableType.size, PNat.val_ofNat, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil,
-    Nat.cast_zero, Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append,
-    Nat.cast_one, Fin.val_one, zero_add, List.cons_append, Nat.cast_ofNat, Fin.val_two,
+  dsimp only [table_norm]
+  simp only [Vector.map, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Nat.cast_zero,
+    Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
+    Fin.val_one, zero_add, List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append,
     Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
-    TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
-    decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
-    Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
-    Expression.eval, Fin.zero_eta, Vector.get.eq_1,
-    Fin.cast_zero, List.get_eq_getElem, CellOffset.next, and_true, Nat.reducePow, and_imp]
+    PNat.val_ofNat, Nat.add_one_sub_one, Nat.reduceMod, Nat.add_zero, List.length_cons,
+    List.length_singleton, and_true, Nat.reducePow, and_imp]
   intros h_add h_eq
+  clear h_eq
 
   -- TODO: why can't simp figure out those relations?
   rw [
@@ -203,29 +194,31 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_add
 
-  simp only [Circuit.subcircuit_soundness, Gadgets.Addition32Full.circuit, eval,
-    Vector.map, size, ProvableType.size, PNat.add_coe, PNat.val_ofNat, Nat.reduceAdd, to_vars,
-    ProvableType.to_elements, List.map_cons, Expression.eval, Trace.getLeFromBottom, Row.get,
-    Vector.get, List.length_cons, List.length_nil, rec_vars_curr, rec_vars_next, CellOffset.curr, Fin.isValue,
-    Fin.cast_eq_self, List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one,
-    List.getElem_cons_succ, Fin.val_two, List.map_nil, Vector.instAppend, Vector.append,
-    List.cons_append, List.singleton_append, CellOffset.next, SubCircuit.witness_length,
-    FlatOperation.witness_length, add_zero, Gadgets.Addition32Full.spec, ZMod.val_zero,
-    Nat.reducePow] at h_add
+  dsimp only [Circuit.subcircuit_soundness] at h_add
+  change _ ∧ _ ∧ _ → (Gadgets.Addition32Full.circuit.spec _ _) at h_add
+  rw [and_imp, and_imp] at h_add
+  intro h_norm_x h_norm_y
+  specialize h_add h_norm_x h_norm_y
 
-  simp [
+  simp only [Expression.eval, zero_ne_one, or_false, eval, Vector.map, size, Nat.reduceAdd, to_vars,
+    to_elements, List.map_cons, Trace.getLeFromBottom, Row.get, Vector.get, List.length_cons,
+    List.length_singleton, rec_vars_curr, CellOffset.curr, Fin.isValue, Fin.cast_eq_self,
+    List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ,
+    Fin.val_two, List.map_nil, Vector.instAppend, Vector.append, List.cons_append, List.nil_append,
+    rec_vars_next, CellOffset.next, SubCircuit.witness_length, FlatOperation.witness_length,
+    add_zero, true_implies, from_elements] at h_add
+  simp only [
     show (3 : Fin 8).val = 3 by rfl,
     show (4 : Fin 8).val = 4 by rfl,
     show (5 : Fin 8).val = 5 by rfl,
     show (6 : Fin 8).val = 6 by rfl,
     show (7 : Fin 8).val = 7 by rfl,
   ] at h_add
-  simp only [Gadgets.Addition32Full.assumptions, zero_ne_one, or_false, and_true, and_imp] at h_add
-
-  intro h_norm_x h_norm_y
-  specialize h_add h_norm_x h_norm_y
-  simp only [circuit_norm, rec_vars_curr, rec_vars_next, Fin.isValue, Nat.reduceAdd] at h_add
-  simp only [h_add, and_self]
+  simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_add
+  dsimp only [Gadgets.Addition32Full.circuit, Gadgets.Addition32Full.spec] at h_add
+  simp only [ZMod.val_zero, add_zero] at h_add
+  change (next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ _ ∧ next.y.is_normalized ∧ _) at h_add
+  exact ⟨h_add.left, h_add.right.right.left⟩
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window, then the spec of
