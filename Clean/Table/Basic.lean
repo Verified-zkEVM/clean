@@ -22,6 +22,11 @@ def Row.get (row : Row F S) (i : Fin (size S)) : F :=
   let elems := to_elements row
   elems.get i
 
+@[table_norm]
+def Row.findIdx? (row : Row F S) (prop: F → Bool) : Option (Fin (size S)) :=
+  let elems := to_elements row
+  elems.findIdx? prop
+
 /--
   A trace is an inductive list of rows. It can be viewed as a structured
   environment that maps cells to field elements.
@@ -115,6 +120,22 @@ def forAllRowsOfTraceWithIndex {N : ℕ}
     | <+>, _ => true
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
 
+variable {W: ℕ} {α: Type}
+
+-- @[table_norm]
+def findIdx? {W: ℕ} (trace : TraceOfLength α S W) (prop : α → Bool) : Option (Fin W × Fin (size S)) :=
+  match trace with
+  | ⟨ <+>, _ ⟩ => none
+  | ⟨ rest +> row, (hrest : rest.len + 1 = W) ⟩ =>
+    let w : Fin W := ⟨ rest.len, by rw [←hrest]; simp⟩
+    match row.findIdx? prop with
+    | some j => some (w, j)
+    | none => findIdx? (W:=w) ⟨ rest, by simp [w] ⟩ prop
+  -- loop trace.len trace.val
+  -- where
+  -- @[table_norm]
+  -- loop : (Fin W) → Trace α S → Option (Fin W × Fin (size S))
+
 end TraceOfLength
 
 /--
@@ -146,10 +167,23 @@ def next {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
 end CellOffset
 
 /--
-  Mapping from the index of a variable to a cell offset in the table.
+Mapping from cell offsets in the table to variable indices (or nothing, for empty cells).
+
+The mapping must maintain the invariant that each variable is assigned to at most one cell.
 -/
-@[reducible]
-def CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] := ℕ → CellOffset W S
+structure CellAssignment (W: ℕ+) (S : Type → Type) [NonEmptyProvableType S] where
+  map : TraceOfLength (WithBot ℕ) S W
+  unique : ∀ i j (k l : ℕ), map.get i j = some k → map.get l j = some l → i = l
+
+
+
+@[table_norm]
+def CellAssignment.set {W: ℕ+} (assignment: CellAssignment W S) (o: CellOffset W S) (value: ℕ) : CellAssignment W S :=
+  Vector.set assignment o.rowOffset ((assignment.get o.rowOffset).set o.column value)
+
+@[table_norm]
+def CellAssignment.setRow {W: ℕ+} (assignment: CellAssignment W S) (row: Fin W) (values: Vector ℕ (size S)) : CellAssignment W S :=
+  Vector.set assignment row (values.map WithBot.some)
 
 /--
   Atomic operations for constructing a table constraint, which is a constraint applied to a window
@@ -193,8 +227,7 @@ variable [Field F]
 @[reducible]
 def TableContext.empty {W: ℕ+} : TableContext W S F := {
   offset := 0,
-  -- TODO: is there a better way?
-  assignment := fun _ => ⟨0, ⟨0, NonEmptyProvableType.nonempty⟩⟩,
+  assignment := Vector.fill W (Vector.fill (size S) ⊥),
   operations := []
 }
 
@@ -212,7 +245,7 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
   -/
   | Witness offset c => {
       offset := ctx.offset + 1,
-      assignment := fun x => if x = ctx.offset then offset else ctx.assignment x,
+      assignment := ctx.assignment.set offset ctx.offset,
       operations := ctx.operations ++ [Witness offset c]
     }
 
@@ -221,10 +254,7 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
   -/
   | GetRow off => {
       offset := ctx.offset + size S,
-      assignment := fun x => if h : x >= ctx.offset && x < ctx.offset + size S then ⟨off, ⟨x-ctx.offset, by
-        simp only [ge_iff_le, Bool.and_eq_true, decide_eq_true_eq] at h
-        omega
-      ⟩⟩ else ctx.assignment x,
+      assignment := ctx.assignment.setRow off (.init (ctx.offset + ·)),
       operations := ctx.operations ++ [GetRow off]
     }
 
@@ -242,7 +272,7 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
   -/
   | Assign v offset => {
       offset := ctx.offset,
-      assignment := fun x => if x = v.index then offset else ctx.assignment x,
+      assignment := ctx.assignment.set offset v.index,
       operations := ctx.operations ++ [Assign v offset]
     }
 
