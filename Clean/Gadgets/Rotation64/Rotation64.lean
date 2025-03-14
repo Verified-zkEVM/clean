@@ -76,14 +76,14 @@ def rot64_circuit (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (
 
   let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun env => U64.mk 0 0 0 0 0 0 0 0)
 
-  assert_zero (x1_l * ((2 : ℕ)^bit_offset : F p) + x0_h - y0)
-  assert_zero (x2_l * ((2 : ℕ)^bit_offset : F p) + x1_h - y1)
-  assert_zero (x3_l * ((2 : ℕ)^bit_offset : F p) + x2_h - y2)
-  assert_zero (x4_l * ((2 : ℕ)^bit_offset : F p) + x3_h - y3)
-  assert_zero (x5_l * ((2 : ℕ)^bit_offset : F p) + x4_h - y4)
-  assert_zero (x6_l * ((2 : ℕ)^bit_offset : F p) + x5_h - y5)
-  assert_zero (x7_l * ((2 : ℕ)^bit_offset : F p) + x6_h - y6)
-  assert_zero (x0_l * ((2 : ℕ)^bit_offset : F p) + x7_h - y7)
+  assert_zero (x1_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x0_h - y0)
+  assert_zero (x2_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x1_h - y1)
+  assert_zero (x3_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x2_h - y2)
+  assert_zero (x4_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x3_h - y3)
+  assert_zero (x5_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x4_h - y4)
+  assert_zero (x6_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x5_h - y5)
+  assert_zero (x7_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x6_h - y6)
+  assert_zero (x0_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x7_h - y7)
   return { z := ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ }
 
 
