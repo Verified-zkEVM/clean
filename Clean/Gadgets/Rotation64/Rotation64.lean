@@ -10,57 +10,23 @@ variable [p_large_enough: Fact (p > 512)]
 open Gadgets.Rotation64.Theorems (rot_right64 rot_right8)
 open Gadgets.Rotation64 (byte_rotation_lookup)
 
-structure InputStruct (F : Type) where
+structure Inputs (F : Type) where
   x: U64 F
 
-instance (F : Type) : StructuredElements InputStruct F where
-  size := StructuredElements.size U64 F
-  to_elements x := (StructuredElements.to_elements x.x)
+instance instProvableTypeInputs : ProvableType Inputs where
+  size := ProvableType.size U64
+  to_elements x := (ProvableType.to_elements x.x)
   from_elements v :=
     let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ⟩
 
-def Inputs (p : ℕ) : TypePair := ⟨
-  InputStruct (Expression (F p)),
-  InputStruct (F p)
-⟩
-
-@[simp]
-instance : ProvableType (F p) (Inputs p) where
-  size := 8
-  to_vars s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.x.x4, s.x.x5, s.x.x6, s.x.x7]
-  from_vars v :=
-    let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ⟩
-  to_values s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.x.x4, s.x.x5, s.x.x6, s.x.x7]
-  from_values v :=
-    let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ⟩
-
-
-structure OutputStruct (F : Type) where
+structure Outputs (F : Type) where
   z: U64 F
 
-instance (F : Type) : StructuredElements OutputStruct F where
-  size := StructuredElements.size U64 F
-  to_elements x := (StructuredElements.to_elements x.z)
+instance instProvableTypeOutputs : ProvableType Outputs where
+  size := ProvableType.size U64
+  to_elements x := (ProvableType.to_elements x.z)
   from_elements v :=
-    let ⟨ [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ ⟩
-
-def Outputs (p : ℕ) : TypePair := ⟨
-  OutputStruct (Expression (F p)),
-  OutputStruct (F p)
-⟩
-
-instance : ProvableType (F p) (Outputs p) where
-  size := 8
-  to_vars s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
-  from_vars v :=
-    let ⟨ [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ ⟩
-  to_values s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
-  from_values v :=
     let ⟨ [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ ⟩
 
@@ -68,7 +34,7 @@ instance : ProvableType (F p) (Outputs p) where
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def rot64_circuit (offset : Fin 64) (input : (Inputs p).var) : Circuit (F p) (Outputs p).var := do
+def rot64_circuit (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let byte_offset := offset / 8
   let bit_offset : ℕ := (offset % 8).val
 
@@ -122,14 +88,14 @@ def rot64_circuit (offset : Fin 64) (input : (Inputs p).var) : Circuit (F p) (Ou
 
 
 
-def assumptions (input : (Inputs p).value) := input.x.is_normalized
+def assumptions (input : Inputs (F p)) := input.x.is_normalized
 
-def spec (offset : Fin 64) (input : (Inputs p).value) (out: (Outputs p).value) :=
+def spec (offset : Fin 64) (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨x⟩ := input
   let ⟨y⟩ := out
   y.value = rot_right64 x.value offset.val
 
-theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_circuit off) assumptions (spec off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) Inputs Outputs (rot64_circuit off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -145,7 +111,7 @@ theorem soundness (off : Fin 8) : Soundness (F p) (Inputs p) (Outputs p) (rot64_
   dsimp only [assumptions, U64.is_normalized] at as
   sorry
 
-def circuit (off : Fin 8) : FormalCircuit (F p) (Inputs p) (Outputs p) where
+def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
   main := rot64_circuit off
   assumptions := assumptions
   spec := spec off
