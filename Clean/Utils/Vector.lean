@@ -43,14 +43,14 @@ def zip {n} : Vector α n → Vector β n → Vector (α × β) n
 
 @[simp]
 def get (v: Vector α n) (i: Fin n) : α :=
-  let i' : Fin v.1.length := Fin.cast v.prop.symm i
+  let i' : Fin v.val.length := Fin.cast v.prop.symm i
   v.val.get i'
 
 def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.val[i.val] := by
   simp only [get, List.get_eq_getElem, Fin.coe_cast]
 
 /-- this is exactly what's needed to rewrite `v.get i` into a `List.getElem` if `n` is a concrete Nat -/
-def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n) :
+def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num) :
   v.get ((Fin.instOfNatOfNeZeroNat (a:=i)).ofNat : Fin n) = v.val[i]'(by rw [v.prop]; exact h) := by
   simp only [get_eq, OfNat.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt h]
 
@@ -144,4 +144,11 @@ def init {n} (create: Fin n → α) : Vector α n :=
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ List.finRange n, List.length_finRange n ⟩
 
+def fill (n : ℕ) (a: α) : Vector α n :=
+  match n with
+  | 0 => nil
+  | k + 1 => (fill k a).push a
+
+instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
+  default := fill n default
 end Vector

@@ -1,6 +1,6 @@
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
-import Clean.Table.Basic
+import Clean.Table.Theorems
 import Clean.Gadgets.Addition8.Addition8
 import Clean.Gadgets.Equality.Field
 
@@ -17,9 +17,7 @@ import Clean.Gadgets.Equality.Field
 
 -/
 namespace Tables.Fibonacci8Table
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 structure RowType (F : Type) where
   x: F
@@ -32,28 +30,14 @@ instance : NonEmptyProvableType RowType where
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 
-@[reducible]
-def curr_row_off {W : ℕ+} : RowType (CellOffset W RowType) :=
-  {
-    x := CellOffset.curr 0,
-    y := CellOffset.curr 1
-  }
-
-@[reducible]
-def next_row_off {W : ℕ+} : RowType (CellOffset W RowType) :=
-  {
-    x := CellOffset.next 0,
-    y := CellOffset.next 1
-  }
-
 /--
   inductive contraints that are applied every two rows of the trace.
 -/
 def fib_relation : TwoRowsConstraint RowType (F p) := do
-  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
-  let next : RowType _ := ProvableType.from_elements (<-TableConstraint.get_next_row)
+  let curr ← TableConstraint.get_curr_row
+  let next ← TableConstraint.get_next_row
 
-  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
+  let z ← TableConstraint.subcircuit Gadgets.Addition8.circuit {
     x := curr.x,
     y := curr.y
   }
@@ -68,7 +52,7 @@ def fib_relation : TwoRowsConstraint RowType (F p) := do
   This is our "base case" for the Fibonacci sequence.
 -/
 def boundary_fib : SingleRowConstraint RowType (F p) := do
-  let curr : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
+  let curr ← TableConstraint.get_curr_row
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.x, 0⟩
   TableConstraint.assertion Gadgets.Equality.Field.circuit ⟨curr.y, 1⟩
 
@@ -98,15 +82,13 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
 lemma vars :
-    ((fib_relation (p:=p) .empty).1.1.2 0) = CellOffset.curr 0 ∧
-    ((fib_relation (p:=p) .empty).1.1.2 1) = CellOffset.curr 1 ∧
-    ((fib_relation (p:=p) .empty).1.1.2 2) = CellOffset.next 0 ∧
-    ((fib_relation (p:=p) .empty).1.1.2 4) = CellOffset.next 1
+    ((fib_relation (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0 ∧
+    ((fib_relation (p:=p) .empty).snd.assignment 1) = CellOffset.curr 1 ∧
+    ((fib_relation (p:=p) .empty).snd.assignment 2) = CellOffset.next 0 ∧
+    ((fib_relation (p:=p) .empty).snd.assignment 4) = CellOffset.next 1
   := by
-  rw [show CellOffset.next 0 = CellOffset.next 2 by simp [CellOffset.next]]
-  simp [fib_relation, bind, table_norm ]
+  simp [fib_relation, table_norm]
   repeat constructor
-
 
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table,
@@ -128,9 +110,9 @@ def formal_fib_table : FormalTable (F p) RowType := {
         circuit_norm
       ] at boundary1 boundary2
 
-      have var1 : ((boundary_fib (p:=p) .empty).1.1.2 0).column = 0
+      have var1 : ((boundary_fib (p:=p) .empty).snd.assignment 0).column = 0
         := by simp [boundary_fib, bind, table_norm]; rfl
-      have var2 : ((boundary_fib (p:=p) .empty).1.1.2 1).column = 1
+      have var2 : ((boundary_fib (p:=p) .empty).snd.assignment 1).column = 1
         := by simp [boundary_fib, bind, table_norm]; rfl
 
       simp only [Fin.isValue, var1, Fin.val_zero, List.getElem_cons_zero, var2, Fin.val_one,
