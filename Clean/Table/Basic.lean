@@ -122,7 +122,6 @@ def forAllRowsOfTraceWithIndex {N : ℕ}
 
 variable {W: ℕ} {α: Type}
 
--- @[table_norm]
 def findIdx? {W: ℕ} (trace : TraceOfLength α S W) (prop : α → Bool) : Option (Fin W × Fin (size S)) :=
   match trace with
   | ⟨ <+>, _ ⟩ => none
@@ -130,11 +129,9 @@ def findIdx? {W: ℕ} (trace : TraceOfLength α S W) (prop : α → Bool) : Opti
     let w : Fin W := ⟨ rest.len, by rw [←hrest]; simp⟩
     match row.findIdx? prop with
     | some j => some (w, j)
-    | none => findIdx? (W:=w) ⟨ rest, by simp [w] ⟩ prop
-  -- loop trace.len trace.val
-  -- where
-  -- @[table_norm]
-  -- loop : (Fin W) → Trace α S → Option (Fin W × Fin (size S))
+    | none =>
+      (findIdx? (W:=w) ⟨ rest, by simp [w] ⟩ prop).map
+        (fun ⟨i, j⟩ => (Fin.castLT i (by linarith [i.is_lt]), j))
 
 end TraceOfLength
 
