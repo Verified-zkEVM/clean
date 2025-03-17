@@ -15,12 +15,17 @@ import Clean.Table.SimpTable
 @[reducible]
 def Row (F : Type) (S : Type → Type) [ProvableType S] := S F
 
-variable {F : Type} {S : Type → Type} [NonEmptyProvableType S]
+variable {F : Type} {S : Type → Type} [ProvableType S]
 
 @[table_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
   let elems := to_elements row
   elems.get i
+
+@[table_norm]
+def Row.fill (element: F) : Row F S :=
+  let elems := .fill (size S) element
+  from_elements elems
 
 @[table_norm]
 def Row.findIdx? (row : Row F S) (prop: F → Bool) : Option (Fin (size S)) :=
@@ -64,7 +69,7 @@ end Trace
 /--
   A trace of length N is a trace with exactly N rows.
 -/
-def TraceOfLength (F : Type) (S : Type → Type) [NonEmptyProvableType S] (N : ℕ) : Type :=
+def TraceOfLength (F : Type) (S : Type → Type) [ProvableType S] (N : ℕ) : Type :=
   { env : Trace F S // env.len = N }
 
 namespace TraceOfLength
@@ -122,6 +127,14 @@ def forAllRowsOfTraceWithIndex {N : ℕ}
 
 variable {W: ℕ} {α: Type}
 
+@[table_norm]
+def fill (n: ℕ) (row: Row α S) : TraceOfLength α S n :=
+  match n with
+  | 0 => ⟨ <+>, rfl ⟩
+  | n + 1 =>
+    let t := fill n row
+    ⟨ t.val +> row, by simp [t.prop, Trace.len] ⟩
+
 def findIdx? {W: ℕ} (trace : TraceOfLength α S W) (prop : α → Bool) : Option (Fin W × Fin (size S)) :=
   match trace with
   | ⟨ <+>, _ ⟩ => none
@@ -162,137 +175,144 @@ def next {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
 
 end CellOffset
 
+inductive Cell (W: ℕ+) (S : Type → Type) [ProvableType S] (N : ℕ) :=
+  | input : CellOffset W S → Cell W S N
+  | aux : Fin N → Cell W S N
+
 /--
 Mapping from cell offsets in the table to variable indices (or nothing, for empty cells).
 
 The mapping must maintain the invariant that each variable is assigned to at most one cell.
 -/
-structure CellAssignment (W: ℕ+) (S : Type → Type) [NonEmptyProvableType S] where
-  map : TraceOfLength (WithBot ℕ) S W
-  unique : ∀ i j (k l : ℕ), map.get i j = some k → map.get l j = some l → i = l
+structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
+  offset : ℕ -- number of variables
+  aux_length : ℕ -- number of auxiliary cells (i.e. those not part of the input/output layout)
 
+  -- every variable is assigned to exactly one cell in the trace
+  vars_to_cell : Vector (Cell W S aux_length) offset
 
+  -- a cell (input / aux) is assigned a list of variables (that could be empty)
+  input_to_vars : TraceOfLength (List (Fin offset)) S W
+  aux_to_vars : Vector (List (Fin offset)) aux_length
 
-@[table_norm]
-def CellAssignment.set {W: ℕ+} (assignment: CellAssignment W S) (o: CellOffset W S) (value: ℕ) : CellAssignment W S :=
-  Vector.set assignment o.rowOffset ((assignment.get o.rowOffset).set o.column value)
+  -- the mappings vars -> cells and cells -> vars are inverses of each other
+  var_cell_var : ∀ var : Fin offset,
+    match vars_to_cell.get var with
+    | .input ⟨ i, j ⟩ => var ∈ input_to_vars.get i j
+    | .aux i => var ∈ aux_to_vars.get i
 
-@[table_norm]
-def CellAssignment.setRow {W: ℕ+} (assignment: CellAssignment W S) (row: Fin W) (values: Vector ℕ (size S)) : CellAssignment W S :=
-  Vector.set assignment row (values.map WithBot.some)
+  input_cell_var_cell : ∀ (i : Fin W) (j : Fin (size S)),
+    ∀ var ∈ input_to_vars.get i j, vars_to_cell.get var = .input ⟨ i, j ⟩
 
-/--
-  Atomic operations for constructing a table constraint, which is a constraint applied to a window
-  of rows in a table.
--/
-inductive TableConstraintOperation (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
-  /--
-    Add some witnessed variable to the context
-  -/
-  | Witness : CellOffset W S → (compute : Unit → F) → TableConstraintOperation W S F
+  aux_cell_var_cell : ∀ (i : Fin aux_length),
+    ∀ a ∈ aux_to_vars.get i, vars_to_cell.get a = .aux i
 
-  /--
-    Witness a fresh variable for each cell in the row at some offset `off` in the trace
-  -/
-  | GetRow : (off : Fin W) → TableConstraintOperation W S F
+namespace CellAssignment
+def empty (W: ℕ+) : CellAssignment W S where
+  offset := 0
+  aux_length := 0
+  vars_to_cell := .nil
+  input_to_vars := .fill W (.fill [])
+  aux_to_vars := .nil
+  var_cell_var := fun var => absurd var.is_lt var.val.not_lt_zero
+  input_cell_var_cell := fun _ _ var _ => absurd var.is_lt var.val.not_lt_zero
+  aux_cell_var_cell := fun _ var _ => absurd var.is_lt var.val.not_lt_zero
 
-  /--
-    Allocate a subcircuit in the trace
-  -/
-  | Allocate: {n: ℕ} → SubCircuit F n → TableConstraintOperation W S F
-
-  /--
-    Assign a variable to a cell in the trace
-  -/
-  | Assign : Variable F → CellOffset W S → TableConstraintOperation W S F
+-- TODO: operations that modify a cell assignment while maintaining the invariants:
+-- - add a new variable
+-- - add a row of variables
+-- - assign a variable from an aux cell to an input cell
+-- - assign a variable from an input cell to a different input cell
+end CellAssignment
 
 /--
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
 -/
 structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
-  offset: ℕ
+  circuit : OperationsList F
   assignment : CellAssignment W S
-  operations: List (TableConstraintOperation W S F)
+  /-- invariant: the `circuit` and the `assignment` have the same number of variables -/
+  offset_consistent : circuit.offset = assignment.offset
 
-variable [Field F]
+variable [Field F] {W: ℕ+} {α : Type}
 
 /--
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
 @[reducible]
-def TableContext.empty {W: ℕ+} : TableContext W S F := {
-  offset := 0,
-  assignment := Vector.fill W (Vector.fill (size S) ⊥),
-  operations := []
-}
+def TableContext.empty : TableContext W S F where
+  circuit := .from_offset 0
+  assignment := .empty W
+  offset_consistent := rfl
+
+namespace TableContext
+@[reducible]
+def offset (table : TableContext W S F) : ℕ := table.assignment.offset
+
+@[reducible]
+def aux_length (table : TableContext W S F) : ℕ := table.assignment.aux_length
+
+end TableContext
 
 namespace TableConstraintOperation
+-- /--
+--   Returns the updated table context after applying the table operation
+-- -/
+-- @[table_norm]
+-- def update_context {W: ℕ+} (ctx: TableContext W S F) :
+--     TableConstraintOperation W S F → TableContext W S F
+--   /-
+--     Witnessing a fresh variable for a table offsets just increments the offset and add the mapping
+--     from the variable index to the cell offset in the assignment mapping
+--   -/
+--   | Witness offset c => {
+--       offset := ctx.offset + 1,
+--       assignment := ctx.assignment.set offset ctx.offset,
+--       operations := ctx.operations ++ [Witness offset c]
+--     }
 
-/--
-  Returns the updated table context after applying the table operation
--/
-@[table_norm]
-def update_context {W: ℕ+} (ctx: TableContext W S F) :
-    TableConstraintOperation W S F → TableContext W S F
-  /-
-    Witnessing a fresh variable for a table offsets just increments the offset and add the mapping
-    from the variable index to the cell offset in the assignment mapping
-  -/
-  | Witness offset c => {
-      offset := ctx.offset + 1,
-      assignment := ctx.assignment.set offset ctx.offset,
-      operations := ctx.operations ++ [Witness offset c]
-    }
+--   /-
+--     Getting a row is equivalent to witnessing a fresh variable for each cell in the row
+--   -/
+--   | GetRow off => {
+--       offset := ctx.offset + size S,
+--       assignment := ctx.assignment.setRow off (.init (ctx.offset + ·)),
+--       operations := ctx.operations ++ [GetRow off]
+--     }
 
-  /-
-    Getting a row is equivalent to witnessing a fresh variable for each cell in the row
-  -/
-  | GetRow off => {
-      offset := ctx.offset + size S,
-      assignment := ctx.assignment.setRow off (.init (ctx.offset + ·)),
-      operations := ctx.operations ++ [GetRow off]
-    }
+--   /-
+--     Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
+--   -/
+--   | Allocate subcircuit => {
+--       offset := ctx.offset + subcircuit.witness_length,
+--       assignment := ctx.assignment,
+--       operations := ctx.operations ++ [Allocate subcircuit]
+--     }
 
-  /-
-    Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
-  -/
-  | Allocate subcircuit => {
-      offset := ctx.offset + subcircuit.witness_length,
-      assignment := ctx.assignment,
-      operations := ctx.operations ++ [Allocate subcircuit]
-    }
-
-  /-
-    Assigning a variable to a cell in the trace just updates the assignment mapping
-  -/
-  | Assign v offset => {
-      offset := ctx.offset,
-      assignment := ctx.assignment.set offset v.index,
-      operations := ctx.operations ++ [Assign v offset]
-    }
-
-instance {W: ℕ+} [Repr F] :
-    ToString (TableConstraintOperation W S F) where
-  toString
-    | Witness offset _ => "(Witness " ++ reprStr offset ++ ")"
-    | GetRow off => "(GetRow " ++ reprStr off ++ ")"
-    | Allocate {ops, ..} => "(Allocate " ++ reprStr ops ++ ")"
-    | Assign v offset => "(Assign " ++ reprStr v ++ " " ++ reprStr offset ++ ")"
-
+--   /-
+--     Assigning a variable to a cell in the trace just updates the assignment mapping
+--   -/
+--   | Assign v offset => {
+--       offset := ctx.offset,
+--       assignment := ctx.assignment.set offset v.index,
+--       operations := ctx.operations ++ [Assign v offset]
+--     }
 end TableConstraintOperation
 
 @[reducible, table_norm]
-def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] :=
+def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
 
 namespace TableConstraint
-def operations {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
-    List (TableConstraintOperation W S F) :=
-  table .empty |>.snd.operations
+@[reducible]
+def final_offset (table : TableConstraint W S F α) : ℕ :=
+  table .empty |>.snd.circuit.offset
 
-def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
-    CellAssignment W S :=
+def operations (table : TableConstraint W S F α) : Operations F table.final_offset :=
+  table .empty |>.snd.circuit.withLength
+
+def assignment (table : TableConstraint W S F α) : CellAssignment W S :=
   table .empty |>.snd.assignment
 
 /--
@@ -301,33 +321,28 @@ def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def constraints_hold_on_window {W : ℕ+}
-    (table : TableConstraint W S F Unit) (window: TraceOfLength F S W) : Prop :=
+def constraints_hold_on_window (table : TableConstraint W S F Unit)
+  (window: TraceOfLength F S W) (aux_env: Environment F) : Prop :=
   let ctx := table .empty |>.snd
 
   -- construct an env by simply taking the result of the assignment function
-  let env : Environment F := ⟨ fun x =>
-    match ctx.assignment x with
-    | ⟨i, j⟩ => window.get i j
+  let env : Environment F := ⟨ fun i =>
+    if hi : i < ctx.offset then
+      let x : Fin ctx.offset := ⟨i, hi⟩
+      match ctx.assignment.vars_to_cell.get x with
+      | .input ⟨i, j⟩ => window.get i j
+      | .aux k =>  aux_env.get k
+    else 0
   ⟩
 
   -- then we fold over allocated sub-circuits
   -- lifting directly to the soundness of the sub-circuit
-  foldl ctx.operations env
-  where
-  @[table_norm]
-  foldl : List (TableConstraintOperation W S F) → (env: Environment F) → Prop
-  | [], _ => true
-  | op :: ops, env =>
-    match op with
-    | .Allocate {soundness ..} => soundness env ∧ foldl ops env
-    | _ => foldl ops env
+  let operations := ctx.circuit.withLength
+  Circuit.constraints_hold.soundness env operations
 
 @[table_norm]
 def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
-
-open TableConstraintOperation (update_context)
 
 @[table_norm]
 def witness_cell {W: ℕ+}
