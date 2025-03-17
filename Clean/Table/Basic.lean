@@ -111,7 +111,6 @@ def forAllRowsOfTraceExceptLast {N : ℕ}
     | <+> +> _, _ => true
     | rest +> curr +> _, prop => prop curr ∧ inner (rest +> curr) prop
 
-
 /--
   Apply a proposition, which could be dependent on the row index, to every row of the trace
 -/
@@ -125,27 +124,8 @@ def forAllRowsOfTraceWithIndex {N : ℕ}
     | <+>, _ => true
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
 
-variable {W: ℕ} {α: Type}
-
-@[table_norm]
-def fill (n: ℕ) (row: Row α S) : TraceOfLength α S n :=
-  match n with
-  | 0 => ⟨ <+>, rfl ⟩
-  | n + 1 =>
-    let t := fill n row
-    ⟨ t.val +> row, by simp [t.prop, Trace.len] ⟩
-
-def findIdx? {W: ℕ} (trace : TraceOfLength α S W) (prop : α → Bool) : Option (Fin W × Fin (size S)) :=
-  match trace with
-  | ⟨ <+>, _ ⟩ => none
-  | ⟨ rest +> row, (h_rest : rest.len + 1 = W) ⟩ =>
-    match row.findIdx? prop with
-    | some j => some (⟨ rest.len, h_rest ▸ lt_add_one rest.len⟩, j)
-    | none =>
-      (findIdx? ⟨ rest, rfl ⟩ prop).map
-        (fun ⟨i, j⟩ => (h_rest ▸ i.castSucc, j))
-
 end TraceOfLength
+variable {W: ℕ} {α: Type}
 
 /--
   A cell offset is an offset in a table that points to a specific cell in a row.
@@ -192,7 +172,7 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   vars_to_cell : Vector (Cell W S aux_length) offset
 
   -- a cell (input / aux) is assigned a list of variables (that could be empty)
-  input_to_vars : TraceOfLength (List (Fin offset)) S W
+  input_to_vars : Matrix (List (Fin offset)) W (size S)
   aux_to_vars : Vector (List (Fin offset)) aux_length
 
   -- the mappings vars -> cells and cells -> vars are inverses of each other
@@ -207,16 +187,101 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   aux_cell_var_cell : ∀ (i : Fin aux_length),
     ∀ a ∈ aux_to_vars.get i, vars_to_cell.get a = .aux i
 
+variable {W: ℕ+}
+
 namespace CellAssignment
 def empty (W: ℕ+) : CellAssignment W S where
   offset := 0
   aux_length := 0
   vars_to_cell := .nil
-  input_to_vars := .fill W (.fill [])
+  input_to_vars := .fill W (size S) []
   aux_to_vars := .nil
   var_cell_var := fun var => absurd var.is_lt var.val.not_lt_zero
   input_cell_var_cell := fun _ _ var _ => absurd var.is_lt var.val.not_lt_zero
   aux_cell_var_cell := fun _ var _ => absurd var.is_lt var.val.not_lt_zero
+
+def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
+  let index := assignment.offset
+  let cell := Cell.input ⟨ row, col ⟩
+  let fin_index : Fin (assignment.offset + 1) := ⟨ index, by linarith ⟩
+  let input_to_vars' := assignment.input_to_vars.map (fun l => l.map Fin.castSucc)
+  let input_to_vars := input_to_vars'.set row col <| input_to_vars'.get row col ++ [fin_index]
+  let aux_to_vars := assignment.aux_to_vars.map (fun l => l.map Fin.castSucc)
+  {
+    offset := assignment.offset + 1
+    aux_length := assignment.aux_length
+    vars_to_cell := assignment.vars_to_cell.push cell
+    input_to_vars := input_to_vars
+    aux_to_vars := aux_to_vars
+    var_cell_var := by
+      intro var
+      have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
+      by_cases h : var.val < assignment.offset
+      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h ⟩ := by
+        simp [Vector.push]
+        exact List.getElem_append var.val (by linarith)
+      rw [this]
+      clear this
+      have ih := assignment.var_cell_var ⟨ var, h ⟩
+      split
+      next x i j heq =>
+        rw [heq] at ih
+        simp only at ih
+        clear heq
+        suffices h : var ∈ input_to_vars'.get i j by
+          simp [input_to_vars]
+          sorry -- TODO
+        simp [input_to_vars']
+        use ⟨ var, h ⟩
+        use ih
+        simp
+      next x i j heq =>
+        rw [heq] at ih
+        simp at ih
+        clear heq
+        simp [aux_to_vars]
+        use ⟨ var, h ⟩
+        use ih
+        simp
+      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
+      have : (assignment.vars_to_cell.push cell).get var = cell := by
+        simp [Vector.push, var_eq]
+      rw [this]; simp only
+      simp [input_to_vars]
+      right
+      ext
+      simp [fin_index, index, var_eq]
+
+    input_cell_var_cell := by sorry
+    aux_cell_var_cell := by
+      intro aux var h_var
+      by_cases h : var.val < assignment.offset
+      have ih := assignment.aux_cell_var_cell aux ⟨ var, h ⟩
+      sorry
+      sorry
+  }
+
+def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offset < W * (size S)) : CellAssignment W S :=
+  let index := assignment.offset
+  have nonempty : size S > 0 := by
+      by_contra h'
+      have eq_zero : size S = 0 := by linarith
+      simp [eq_zero] at lt
+  let row : Fin W := ⟨ index / size S, (Nat.div_lt_iff_lt_mul nonempty).mpr lt⟩
+  let col : Fin (size S) := ⟨ index % size S, Nat.mod_lt index nonempty ⟩
+  push_var_input assignment row col
+
+def push_var_default_aux (assignment: CellAssignment W S) (lt: assignment.offset ≥ W * (size S)) : CellAssignment W S :=
+  sorry
+
+def push_var_default_cell (assignment: CellAssignment W S) : CellAssignment W S :=
+  if h: assignment.offset < W * (size S) then
+    push_var_default_input assignment h
+  else
+    push_var_default_aux assignment (Nat.ge_of_not_lt h)
+
+def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S :=
+  (Vector.finRange offset).val.foldl (fun acc _ => push_var_default_cell acc) (.empty W)
 
 -- TODO: operations that modify a cell assignment while maintaining the invariants:
 -- - add a new variable
@@ -234,28 +299,66 @@ structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Prova
   assignment : CellAssignment W S
   /-- invariant: the `circuit` and the `assignment` have the same number of variables -/
   offset_consistent : circuit.offset = assignment.offset
+  /-- also, circuit has to start from a zero offset -/
+  offset_zero : circuit.withLength.initial_offset = 0
 
-variable [Field F] {W: ℕ+} {α : Type}
+variable [Field F]  {α : Type}
 
+namespace TableContext
 /--
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
 @[reducible]
-def TableContext.empty : TableContext W S F where
+def empty : TableContext W S F where
   circuit := .from_offset 0
   assignment := .empty W
   offset_consistent := rfl
+  offset_zero := rfl
 
-namespace TableContext
 @[reducible]
 def offset (table : TableContext W S F) : ℕ := table.assignment.offset
 
 @[reducible]
 def aux_length (table : TableContext W S F) : ℕ := table.assignment.aux_length
 
+@[table_norm]
+def from_circuit (ops: OperationsList F) (h_initial : ops.withLength.initial_offset = 0) :
+  ∃ ctx: TableContext W S F, ctx.circuit = ops :=
+  match ops with
+  | ⟨_, .empty 0⟩ => ⟨.empty, rfl⟩
+  | ⟨_, .witness ops m c⟩ =>
+    let ⟨prev, h⟩ := from_circuit ops h_initial
+    let assignment := sorry
+    ⟨{ prev with
+      circuit := prev.circuit.witness m c
+      assignment
+      offset_consistent := by sorry
+    }, by simp [h]⟩
+  | ⟨_, .assert ops e⟩ =>
+    let ⟨prev, h⟩ := from_circuit ops h_initial
+    ⟨{ prev with circuit := prev.circuit.assert e }, by simp [h]⟩
+  | ⟨_, .lookup ops l⟩ =>
+    let ⟨prev, h⟩ := from_circuit ops h_initial
+    ⟨{ prev with circuit := prev.circuit.lookup l }, by simp [h]⟩
+  | ⟨_, .subcircuit ops s⟩ =>
+    let ⟨prev, h⟩ := from_circuit ops h_initial
+    let subcircuit : SubCircuit F prev.circuit.offset := cast (by rw [h]) s
+    let assignment := sorry
+    ⟨{ prev with
+      circuit := prev.circuit.subcircuit subcircuit
+      assignment
+      offset_consistent := by sorry
+    }, by
+      simp [h, subcircuit]
+      constructor <;> {
+        congr
+        repeat rw [h]
+        apply cast_heq
+      }
+    ⟩
 end TableContext
 
-namespace TableConstraintOperation
+-- namespace TableConstraintOperation
 -- /--
 --   Returns the updated table context after applying the table operation
 -- -/
@@ -298,11 +401,19 @@ namespace TableConstraintOperation
 --       assignment := ctx.assignment.set offset v.index,
 --       operations := ctx.operations ++ [Assign v offset]
 --     }
-end TableConstraintOperation
+-- end TableConstraintOperation
 
 @[reducible, table_norm]
 def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
+
+instance : MonadLift (Circuit F) (TableConstraint W S F) where
+  monadLift circuit ctx :=
+    let result := circuit ctx.circuit
+    let ⟨table_ctx, h⟩ := TableContext.from_circuit result.snd (by
+      sorry
+    )
+    (result.fst, .from_circuit ctx')
 
 namespace TableConstraint
 @[reducible]

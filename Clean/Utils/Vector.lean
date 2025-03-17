@@ -195,3 +195,37 @@ def findIdx? {n: ℕ} (p : α → Bool) (v: Vector α n) : Option (Fin n) :=
     ⟩
   else none
 end Vector
+
+def Matrix (α : Type) (n m: ℕ) := Vector (Vector α m) n
+
+namespace Matrix
+variable {α β : Type} {n m : ℕ}
+
+@[simp]
+def get (A: Matrix α n m) (i: Fin n) (j: Fin m) : α := Vector.get A i |>.get j
+
+def getRow (A: Matrix α n m) (i: Fin n) : Vector α m := .get A i
+
+@[simp]
+def set (A: Matrix α n m) (i: Fin n) (j: Fin m) (value : α) : Matrix α n m :=
+  Vector.set A i (Vector.get A i |>.set j value)
+
+def setRow (A: Matrix α n m) (i: Fin n) (row: Vector α m) : Matrix α n m :=
+  Vector.set A i row
+
+@[simp]
+def fill (n: ℕ) (m : ℕ) (a: α) : Matrix α n m := .fill n (.fill m a)
+
+@[simp]
+def map {α β: Type} (f: α → β) : Matrix α n m → Matrix β n m := Vector.map (Vector.map f)
+
+def findIdx? {n m: ℕ} (matrix : Matrix α n m) (prop : α → Bool) : Option (Fin n × Fin m) :=
+  match matrix with
+  | ⟨ [], _ ⟩ => none
+  | ⟨ row :: rest, (h_rest : rest.length + 1 = n) ⟩ =>
+    match row.findIdx? prop with
+    | some j => some (⟨ rest.length, h_rest ▸ lt_add_one _⟩, j)
+    | none =>
+      (findIdx? ⟨ rest, rfl ⟩ prop).map
+        (fun ⟨i, j⟩ => (h_rest ▸ i.castSucc, j))
+end Matrix

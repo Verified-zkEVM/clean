@@ -39,7 +39,7 @@ inductive FlatOperation (F : Type) where
 
 namespace FlatOperation
 def toString [Repr F] : FlatOperation F → String
-  | witness _ _ => "Witness"
+  | witness m _ => "Witness " ++ reprStr m
   | assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l => reprStr l
 
