@@ -125,13 +125,12 @@ variable {W: ℕ} {α: Type}
 def findIdx? {W: ℕ} (trace : TraceOfLength α S W) (prop : α → Bool) : Option (Fin W × Fin (size S)) :=
   match trace with
   | ⟨ <+>, _ ⟩ => none
-  | ⟨ rest +> row, (hrest : rest.len + 1 = W) ⟩ =>
-    let w : Fin W := ⟨ rest.len, by rw [←hrest]; simp⟩
+  | ⟨ rest +> row, (h_rest : rest.len + 1 = W) ⟩ =>
     match row.findIdx? prop with
-    | some j => some (w, j)
+    | some j => some (⟨ rest.len, h_rest ▸ lt_add_one rest.len⟩, j)
     | none =>
-      (findIdx? (W:=w) ⟨ rest, by simp [w] ⟩ prop).map
-        (fun ⟨i, j⟩ => (Fin.castLT i (by linarith [i.is_lt]), j))
+      (findIdx? ⟨ rest, rfl ⟩ prop).map
+        (fun ⟨i, j⟩ => (h_rest ▸ i.castSucc, j))
 
 end TraceOfLength
 
