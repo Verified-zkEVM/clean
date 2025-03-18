@@ -274,6 +274,124 @@ def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size
       linarith
   }
 
+def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S where
+  offset := assignment.offset
+  aux_length := assignment.aux_length + 1
+  vars_to_cell := assignment.vars_to_cell.map fun
+    | .input off => .input off
+    | .aux i => .aux i.castSucc
+  input_to_vars := assignment.input_to_vars
+  aux_to_vars := assignment.aux_to_vars.push []
+  input_cell_consistent := by
+    intro var i j
+    rw [Vector.get_map, ← assignment.input_cell_consistent var i j]
+    split <;> simp_all
+  aux_cell_consistent := by
+    intro var i
+    rw [Vector.get_map]
+    by_cases hi : i.val < assignment.aux_length
+    -- induction hypothesis case
+    have ih := assignment.aux_cell_consistent var ⟨ i, hi ⟩
+    have : (assignment.aux_to_vars.push []).get i = assignment.aux_to_vars.get ⟨ i, hi ⟩ := by
+      simp [Vector.push, hi, List.getElem_append]
+    rw [this, ← ih]; clear this
+    split
+    · simp_all
+    next _ i' heq => rw [heq]; simp [Fin.ext_iff]
+    -- contradictory case
+    have i_eq : i.val = assignment.aux_length := by linarith [i.is_lt]
+    simp [i_eq]
+    split; simp
+    next _ i' _ =>
+      rw [Cell.aux.injEq, Fin.ext_iff, i_eq]
+      have : ↑i'.castSucc < assignment.aux_length := i'.is_lt
+      linarith
+
+def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
+  let assignment' := increase_aux_capacity assignment
+  -- the new variable index
+  let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
+  let fin_aux_length : Fin (assignment.aux_length + 1) := Fin.last assignment.aux_length
+  let input_to_vars := assignment.input_to_vars.map (fun l => l.map Fin.castSucc)
+  let aux_to_vars := assignment'.aux_to_vars.map (fun l => l.map Fin.castSucc)
+  {
+    offset := assignment.offset + 1
+    aux_length := assignment.aux_length + 1
+    vars_to_cell := assignment'.vars_to_cell.push (.aux fin_aux_length)
+    input_to_vars := input_to_vars
+    aux_to_vars := aux_to_vars.set fin_aux_length [fin_offset]
+
+    input_cell_consistent := by
+      intro var i j
+      by_cases h_var : var.val < assignment'.offset
+      -- induction hypothesis case
+      have ih := assignment'.input_cell_consistent ⟨ var, h_var ⟩ i j
+      have h_len : assignment'.vars_to_cell.val.length = assignment'.offset := by simp
+      have : (assignment'.vars_to_cell.push (.aux fin_aux_length)).get var = assignment'.vars_to_cell.get ⟨ var, h_var ⟩ := by
+        simp [Vector.push]
+        exact List.getElem_append var.val (by linarith)
+      rw [this, ih]; clear this
+      simp [input_to_vars]
+      constructor
+      · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
+      · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
+        have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
+        rw [←this]
+        exact h_mem
+      -- new variable case
+      have : var.val < assignment'.offset + 1 := var.is_lt
+      have var_eq : var.val = assignment'.offset := by linarith
+      have : (assignment'.vars_to_cell.push (.aux fin_aux_length)).get var = .aux fin_aux_length := by
+        simp [var_eq]
+      rw [this]; clear this
+      simp [input_to_vars]
+      rintro var' h_mem h_cast
+      rw [Fin.ext_iff, var_eq] at h_cast
+      have : ↑var'.castSucc < assignment'.offset := var'.is_lt
+      linarith
+
+    aux_cell_consistent := by
+      intro var i
+      by_cases h_var : var.val < assignment'.offset
+      -- induction hypothesis case
+      have ih := assignment'.aux_cell_consistent ⟨ var, h_var ⟩ i
+      have : (assignment'.vars_to_cell.push (.aux fin_aux_length)).get var = assignment'.vars_to_cell.get ⟨ var, h_var ⟩ := by
+        simp [Vector.push]
+        have h_len : assignment'.vars_to_cell.val.length = assignment'.offset := by simp
+        exact List.getElem_append var.val (by linarith)
+      rw [this, ih]; clear this
+      suffices h : var ∈ aux_to_vars.get i ↔ var ∈ (aux_to_vars.set fin_aux_length [fin_offset]).get i by
+        rw [←h]
+        simp [aux_to_vars]
+        constructor
+        · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
+        · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
+          have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
+          rw [←this]
+          exact h_mem
+      sorry
+      -- new variable case
+      have : var.val < assignment'.offset + 1 := var.is_lt
+      have var_eq : var.val = assignment'.offset := by linarith
+      have : (assignment'.vars_to_cell.push (.aux fin_aux_length)).get var = .aux fin_aux_length := by
+        simp [var_eq]
+      rw [this]; clear this
+      rw [Cell.aux.injEq]
+      constructor
+      · rintro rfl; simp; ext; simp [var_eq]; rfl
+      intro h_mem
+      by_contra h_ne
+      rw [Fin.ext_iff] at h_ne
+      replace h_ne : ¬ i.val = assignment.aux_length := by
+        rintro h_eq; rw [h_eq] at h_ne; simp [fin_aux_length] at h_ne
+      have : i.val < assignment.aux_length + 1 := i.is_lt
+      have : i.val ≤ assignment.aux_length := Nat.le_of_lt_succ this
+      have : i.val < assignment.aux_to_vars.val.length := by rw [assignment.aux_to_vars.prop]; exact Nat.lt_of_le_of_ne this h_ne
+      simp [fin_aux_length, Vector.set, aux_to_vars, assignment', increase_aux_capacity] at h_mem
+      -- TODO need more lemmas
+      sorry
+  }
+
 def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offset < W * (size S)) : CellAssignment W S :=
   let index := assignment.offset
   have nonempty : size S > 0 := by
@@ -284,17 +402,14 @@ def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offs
   let col : Fin (size S) := ⟨ index % size S, Nat.mod_lt index nonempty ⟩
   push_var_input assignment row col
 
-def push_var_default_aux (assignment: CellAssignment W S) (lt: assignment.offset ≥ W * (size S)) : CellAssignment W S :=
-  sorry
-
-def push_var_default_cell (assignment: CellAssignment W S) : CellAssignment W S :=
+def push_var_default (assignment: CellAssignment W S) : CellAssignment W S :=
   if h: assignment.offset < W * (size S) then
     push_var_default_input assignment h
   else
-    push_var_default_aux assignment (Nat.ge_of_not_lt h)
+    push_var_aux assignment
 
 def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S :=
-  (Vector.finRange offset).val.foldl (fun acc _ => push_var_default_cell acc) (.empty W)
+  (Vector.finRange offset).val.foldl (fun acc _ => push_var_aux acc) (.empty W)
 
 -- TODO: operations that modify a cell assignment while maintaining the invariants:
 -- - add a new variable
