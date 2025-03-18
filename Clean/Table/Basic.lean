@@ -392,6 +392,18 @@ def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
       sorry
   }
 
+def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
+  | 0 => assignment
+  | n + 1 => (assignment.push_vars_aux n).push_var_aux
+
+lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
+  (assignment.push_vars_aux n).offset = assignment.offset + n := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [push_vars_aux]
+    simp_arith [push_var_aux, ih]
+
 def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offset < W * (size S)) : CellAssignment W S :=
   let index := assignment.offset
   have nonempty : size S > 0 := by
@@ -408,22 +420,10 @@ def push_var_default (assignment: CellAssignment W S) : CellAssignment W S :=
   else
     push_var_aux assignment
 
-def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S :=
-  (Vector.finRange offset).val.foldl (fun acc _ => push_var_aux acc) (.empty W)
-
-lemma default_from_offset_zero (W: ℕ+) : default_from_offset (S:=S) W 0 = .empty W := rfl
-
-lemma default_from_offset_succ (W: ℕ+) (n : ℕ) : default_from_offset (S:=S) W (n + 1) = push_var_aux (default_from_offset W n) := by
-  simp [default_from_offset, Vector.finRange, List.finRange_succ]
-  apply congrArg push_var_aux
-  apply List.foldl_map
+def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S := push_vars_aux (.empty W) offset
 
 lemma default_from_offset_offset (n : ℕ) : (default_from_offset (S:=S) W n).offset = n := by
-  induction n with
-  | zero => rfl
-  | succ n ih =>
-    rw [default_from_offset_succ]
-    simp [push_var_aux, ih]
+  simp [default_from_offset, push_vars_aux_offset]; rfl
 
 -- TODO: operations that modify a cell assignment while maintaining the invariants:
 -- - add a new variable
@@ -472,11 +472,13 @@ def from_circuit (ops: OperationsList F) :
   | ⟨_, .empty n⟩ => ⟨.from_offset n, rfl⟩
   | ⟨_, .witness ops m c⟩ =>
     let ⟨prev, h⟩ := from_circuit ops
-    let assignment := sorry
+    let assignment := prev.assignment.push_vars_aux m
     ⟨{ prev with
       circuit := prev.circuit.witness m c
       assignment
-      offset_consistent := by sorry
+      offset_consistent := by
+        simp only [assignment]
+        rw [prev.assignment.push_vars_aux_offset m, prev.offset_consistent]
     }, by simp [h]⟩
   | ⟨_, .assert ops e⟩ =>
     let ⟨prev, h⟩ := from_circuit ops
@@ -487,11 +489,13 @@ def from_circuit (ops: OperationsList F) :
   | ⟨_, .subcircuit ops s⟩ =>
     let ⟨prev, h⟩ := from_circuit ops
     let subcircuit : SubCircuit F prev.circuit.offset := cast (by rw [h]) s
-    let assignment := sorry
+    let assignment := prev.assignment.push_vars_aux subcircuit.witness_length
     ⟨{ prev with
       circuit := prev.circuit.subcircuit subcircuit
       assignment
-      offset_consistent := by sorry
+      offset_consistent := by
+        simp only [assignment]
+        rw [prev.assignment.push_vars_aux_offset _, ← prev.offset_consistent]
     }, by
       simp [h, subcircuit]
       constructor <;> {
