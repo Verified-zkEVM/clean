@@ -465,9 +465,12 @@ def from_offset (n : ℕ) : TableContext W S F where
   assignment := .default_from_offset W n
   offset_consistent := by rw [CellAssignment.default_from_offset_offset]
 
+structure TableContextOfCircuit (W: ℕ+) (S : Type → Type) (F : Type) [ProvableType S] [Field F] (ops: OperationsList F) where
+  ctx: TableContext W S F
+  circuit_consistent : ctx.circuit = ops
+
 @[table_norm]
-def from_circuit (ops: OperationsList F) :
-  ∃ ctx: TableContext W S F, ctx.circuit = ops :=
+def from_circuit (ops: OperationsList F) : TableContextOfCircuit W S F ops :=
   match ops with
   | ⟨_, .empty n⟩ => ⟨.from_offset n, rfl⟩
   | ⟨_, .witness ops m c⟩ =>
@@ -558,10 +561,8 @@ def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Provable
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
     let result := circuit ctx.circuit
-    let ⟨table_ctx, h⟩ := TableContext.from_circuit result.snd (by
-      sorry
-    )
-    (result.fst, .from_circuit ctx')
+    let table_ctx_of_circuit := TableContext.from_circuit (S:=S) result.snd
+    (result.fst, table_ctx_of_circuit.ctx)
 
 namespace TableConstraint
 @[reducible]
