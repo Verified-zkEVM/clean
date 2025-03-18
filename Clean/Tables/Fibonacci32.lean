@@ -321,7 +321,6 @@ def formal_fib32_table : FormalTable (F p) RowType := {
     · -- first of all, we prove the inductive part of the spec
       unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
       intros constraints_hold
-      -- specialize ih2 lookup_h.right
 
       unfold table_constraints_hold.foldl at constraints_hold
       simp only [Trace.len, Nat.succ_ne_zero, ite_false] at constraints_hold
