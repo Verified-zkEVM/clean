@@ -411,6 +411,20 @@ def push_var_default (assignment: CellAssignment W S) : CellAssignment W S :=
 def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S :=
   (Vector.finRange offset).val.foldl (fun acc _ => push_var_aux acc) (.empty W)
 
+lemma default_from_offset_zero (W: ℕ+) : default_from_offset (S:=S) W 0 = .empty W := rfl
+
+lemma default_from_offset_succ (W: ℕ+) (n : ℕ) : default_from_offset (S:=S) W (n + 1) = push_var_aux (default_from_offset W n) := by
+  simp [default_from_offset, Vector.finRange, List.finRange_succ]
+  apply congrArg push_var_aux
+  apply List.foldl_map
+
+lemma default_from_offset_offset (n : ℕ) : (default_from_offset (S:=S) W n).offset = n := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [default_from_offset_succ]
+    simp [push_var_aux, ih]
+
 -- TODO: operations that modify a cell assignment while maintaining the invariants:
 -- - add a new variable
 -- - add a row of variables
@@ -427,8 +441,6 @@ structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Prova
   assignment : CellAssignment W S
   /-- invariant: the `circuit` and the `assignment` have the same number of variables -/
   offset_consistent : circuit.offset = assignment.offset
-  /-- also, circuit has to start from a zero offset -/
-  offset_zero : circuit.withLength.initial_offset = 0
 
 variable [Field F]  {α : Type}
 
@@ -441,7 +453,6 @@ def empty : TableContext W S F where
   circuit := .from_offset 0
   assignment := .empty W
   offset_consistent := rfl
-  offset_zero := rfl
 
 @[reducible]
 def offset (table : TableContext W S F) : ℕ := table.assignment.offset
@@ -449,13 +460,18 @@ def offset (table : TableContext W S F) : ℕ := table.assignment.offset
 @[reducible]
 def aux_length (table : TableContext W S F) : ℕ := table.assignment.aux_length
 
+def from_offset (n : ℕ) : TableContext W S F where
+  circuit := .from_offset n
+  assignment := .default_from_offset W n
+  offset_consistent := by rw [CellAssignment.default_from_offset_offset]
+
 @[table_norm]
-def from_circuit (ops: OperationsList F) (h_initial : ops.withLength.initial_offset = 0) :
+def from_circuit (ops: OperationsList F) :
   ∃ ctx: TableContext W S F, ctx.circuit = ops :=
   match ops with
-  | ⟨_, .empty 0⟩ => ⟨.empty, rfl⟩
+  | ⟨_, .empty n⟩ => ⟨.from_offset n, rfl⟩
   | ⟨_, .witness ops m c⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops h_initial
+    let ⟨prev, h⟩ := from_circuit ops
     let assignment := sorry
     ⟨{ prev with
       circuit := prev.circuit.witness m c
@@ -463,13 +479,13 @@ def from_circuit (ops: OperationsList F) (h_initial : ops.withLength.initial_off
       offset_consistent := by sorry
     }, by simp [h]⟩
   | ⟨_, .assert ops e⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops h_initial
+    let ⟨prev, h⟩ := from_circuit ops
     ⟨{ prev with circuit := prev.circuit.assert e }, by simp [h]⟩
   | ⟨_, .lookup ops l⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops h_initial
+    let ⟨prev, h⟩ := from_circuit ops
     ⟨{ prev with circuit := prev.circuit.lookup l }, by simp [h]⟩
   | ⟨_, .subcircuit ops s⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops h_initial
+    let ⟨prev, h⟩ := from_circuit ops
     let subcircuit : SubCircuit F prev.circuit.offset := cast (by rw [h]) s
     let assignment := sorry
     ⟨{ prev with
