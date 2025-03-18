@@ -160,32 +160,30 @@ inductive Cell (W: ℕ+) (S : Type → Type) [ProvableType S] (N : ℕ) :=
   | aux : Fin N → Cell W S N
 
 /--
-Mapping from cell offsets in the table to variable indices (or nothing, for empty cells).
+Mapping between cell offsets in the table and variable indices.
 
 The mapping must maintain the invariant that each variable is assigned to at most one cell.
+On the other hand, a cell can be assigned zero, one or more variables.
+
+`CellAssignment` keeps track of the mapping in both directions, and requires that these remain consistent.
 -/
 structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   offset : ℕ -- number of variables
   aux_length : ℕ -- number of auxiliary cells (i.e. those not part of the input/output layout)
 
-  -- every variable is assigned to exactly one cell in the trace
+  /-- every variable is assigned to exactly one cell in the trace -/
   vars_to_cell : Vector (Cell W S aux_length) offset
 
-  -- a cell (input / aux) is assigned a list of variables (that could be empty)
+  /-- every cell (input / aux) is assigned a _list_ of variables (that could be empty) -/
   input_to_vars : Matrix (List (Fin offset)) W (size S)
   aux_to_vars : Vector (List (Fin offset)) aux_length
 
   -- the mappings vars -> cells and cells -> vars are inverses of each other
-  var_cell_var : ∀ var : Fin offset,
-    match vars_to_cell.get var with
-    | .input ⟨ i, j ⟩ => var ∈ input_to_vars.get i j
-    | .aux i => var ∈ aux_to_vars.get i
+  input_cell_consistent : ∀ (var : Fin offset) (i : Fin W) (j : Fin (size S)),
+    vars_to_cell.get var = .input ⟨ i, j ⟩ ↔ var ∈ input_to_vars.get i j
 
-  input_cell_var_cell : ∀ (i : Fin W) (j : Fin (size S)),
-    ∀ var ∈ input_to_vars.get i j, vars_to_cell.get var = .input ⟨ i, j ⟩
-
-  aux_cell_var_cell : ∀ (i : Fin aux_length),
-    ∀ a ∈ aux_to_vars.get i, vars_to_cell.get a = .aux i
+  aux_cell_consistent : ∀ (var : Fin offset) (i : Fin aux_length),
+    vars_to_cell.get var = .aux i ↔ var ∈ aux_to_vars.get i
 
 variable {W: ℕ+}
 
@@ -196,16 +194,14 @@ def empty (W: ℕ+) : CellAssignment W S where
   vars_to_cell := .nil
   input_to_vars := .fill W (size S) []
   aux_to_vars := .nil
-  var_cell_var := fun var => absurd var.is_lt var.val.not_lt_zero
-  input_cell_var_cell := fun _ _ var _ => absurd var.is_lt var.val.not_lt_zero
-  aux_cell_var_cell := fun _ var _ => absurd var.is_lt var.val.not_lt_zero
+  input_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
+  aux_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
 
 def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
-  let index := assignment.offset
   let cell := Cell.input ⟨ row, col ⟩
-  let fin_index : Fin (assignment.offset + 1) := ⟨ index, by linarith ⟩
+  let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
   let input_to_vars' := assignment.input_to_vars.map (fun l => l.map Fin.castSucc)
-  let input_to_vars := input_to_vars'.set row col <| input_to_vars'.get row col ++ [fin_index]
+  let input_to_vars := input_to_vars'.set row col <| input_to_vars'.get row col ++ [fin_offset]
   let aux_to_vars := assignment.aux_to_vars.map (fun l => l.map Fin.castSucc)
   {
     offset := assignment.offset + 1
@@ -213,52 +209,69 @@ def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size
     vars_to_cell := assignment.vars_to_cell.push cell
     input_to_vars := input_to_vars
     aux_to_vars := aux_to_vars
-    var_cell_var := by
-      intro var
+
+    input_cell_consistent := by
+      intro var i j
+      by_cases h_var : var.val < assignment.offset
+      -- induction hypothesis case
+      have ih := assignment.input_cell_consistent ⟨ var, h_var ⟩ i j
       have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
-      by_cases h : var.val < assignment.offset
-      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h ⟩ := by
+      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h_var ⟩ := by
         simp [Vector.push]
         exact List.getElem_append var.val (by linarith)
-      rw [this]
-      clear this
-      have ih := assignment.var_cell_var ⟨ var, h ⟩
-      split
-      next x i j heq =>
-        rw [heq] at ih
-        simp only at ih
-        clear heq
-        suffices h : var ∈ input_to_vars'.get i j by
-          simp [input_to_vars]
-          sorry -- TODO
-        simp [input_to_vars']
-        use ⟨ var, h ⟩
-        use ih
-        simp
-      next x i j heq =>
-        rw [heq] at ih
-        simp at ih
-        clear heq
-        simp [aux_to_vars]
-        use ⟨ var, h ⟩
-        use ih
-        simp
-      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
-      have : (assignment.vars_to_cell.push cell).get var = cell := by
-        simp [Vector.push, var_eq]
-      rw [this]; simp only
-      simp [input_to_vars]
-      right
-      ext
-      simp [fin_index, index, var_eq]
+      rw [this, ih]; clear this
 
-    input_cell_var_cell := by sorry
-    aux_cell_var_cell := by
-      intro aux var h_var
-      by_cases h : var.val < assignment.offset
-      have ih := assignment.aux_cell_var_cell aux ⟨ var, h ⟩
+      suffices h : var ∈ input_to_vars'.get i j ↔ var ∈ input_to_vars.get i j by
+        rw [←h]
+        simp [input_to_vars']
+        constructor
+        · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
+        · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
+          have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
+          rw [←this]
+          exact h_mem
+      simp only [input_to_vars]
+      -- TODO
       sorry
+      -- new variable case
+      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
+      have : (assignment.vars_to_cell.push cell).get var = .input ⟨ row, col ⟩ := by
+        simp [var_eq]
+      rw [this]; clear this
+      simp [input_to_vars]
+      constructor
+      · rintro ⟨ rfl, rfl ⟩
+        simp; right; ext; simp [var_eq]
       sorry
+
+    aux_cell_consistent := by
+      intro var i
+      by_cases h_var : var.val < assignment.offset
+      -- induction hypothesis case
+      have ih := assignment.aux_cell_consistent ⟨ var, h_var ⟩ i
+      have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
+      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h_var ⟩ := by
+        simp [Vector.push]
+        exact List.getElem_append var.val (by linarith)
+      rw [this, ih]; clear this
+      simp [aux_to_vars]
+      constructor
+      · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
+      · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
+        have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
+        rw [←this]
+        exact h_mem
+      -- new variable case
+      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
+      have : (assignment.vars_to_cell.push cell).get var = .input ⟨ row, col ⟩ := by
+        simp [var_eq]
+      rw [this]; clear this
+      simp [aux_to_vars]
+      intro var' h_mem
+      by_contra h_cast
+      have : var'.val = var.val := by simp [←h_cast]
+      have : var.val < assignment.offset := this ▸ var'.is_lt
+      linarith
   }
 
 def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offset < W * (size S)) : CellAssignment W S :=
