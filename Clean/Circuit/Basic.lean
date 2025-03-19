@@ -308,7 +308,7 @@ Version of `constraints_hold` that replaces the statement of subcircuits with th
 @[circuit_norm]
 def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
-  | .witness ops _ _ => constraints_hold eval ops
+  | .witness ops _ _ => constraints_hold.soundness eval ops
   | .assert ops e =>
     let constraint := eval e = 0
     if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
