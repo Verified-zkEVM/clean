@@ -188,6 +188,7 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
 variable {W: ℕ+}
 
 namespace CellAssignment
+-- @[table_norm]
 def empty (W: ℕ+) : CellAssignment W S where
   offset := 0
   aux_length := 0
@@ -197,6 +198,7 @@ def empty (W: ℕ+) : CellAssignment W S where
   input_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
   aux_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
 
+-- @[table_norm]
 def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S where
   offset := assignment.offset
   aux_length := assignment.aux_length + 1
@@ -230,6 +232,7 @@ def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S 
       have : ↑i'.castSucc < assignment.aux_length := i'.is_lt
       linarith
 
+-- @[table_norm]
 def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
   let assignment' := increase_aux_capacity assignment
   -- the new variable index
@@ -315,6 +318,7 @@ def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
       sorry
   }
 
+-- @[table_norm]
 def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
   | 0 => assignment
   | n + 1 => (assignment.push_vars_aux n).push_var_aux
@@ -327,6 +331,7 @@ lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
     rw [push_vars_aux]
     simp_arith [push_var_aux, ih]
 
+-- @[table_norm]
 def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
   let cell := Cell.input ⟨ row, col ⟩
   let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
@@ -415,6 +420,7 @@ def foldRange_succ (n : ℕ) (f : α → Fin (n + 1) → α) (init : α) :
   foldRange (n + 1) f init = f (foldRange n (fun acc i => f acc i.castSucc) init) (.last n) := by
   simp [foldRange, List.finRange_succ, List.foldl_concat, List.foldl_map]
 
+-- @[table_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
   (List.finRange (size S)).foldl (fun assignment col => push_var_input assignment row col) assignment
 
@@ -450,6 +456,7 @@ def get_vars (assignment: CellAssignment W S) (cell: Cell W S assignment.aux_len
   | .input ⟨ row, col ⟩ => assignment.input_to_vars.get row col
   | .aux i => assignment.aux_to_vars.get i
 
+-- @[table_norm]
 def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) (var: Fin assignment.offset) : CellAssignment W S :=
   let current_cell := assignment.vars_to_cell.get var
   -- change assignment of variable
@@ -473,12 +480,7 @@ def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size 
     aux_cell_consistent := by sorry
   }
 
-def push_var_default (assignment: CellAssignment W S) : CellAssignment W S :=
-  if h: assignment.offset < W * (size S) then
-    push_var_default_input assignment h
-  else
-    push_var_aux assignment
-
+-- @[table_norm]
 def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S := push_vars_aux (.empty W) offset
 
 lemma default_from_offset_offset (n : ℕ) : (default_from_offset (S:=S) W n).offset = n := by
@@ -519,6 +521,7 @@ def offset (table : TableContext W S F) : ℕ := table.assignment.offset
 @[reducible]
 def aux_length (table : TableContext W S F) : ℕ := table.assignment.aux_length
 
+-- @[table_norm]
 def from_offset (n : ℕ) : TableContext W S F where
   circuit := .from_offset n
   assignment := .default_from_offset W n
@@ -579,6 +582,7 @@ end TableContext
 def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
 
+@[table_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
     let (a, ops) := circuit ctx.circuit
@@ -734,7 +738,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
 def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
   (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F) : Prop :=
   let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
-  foldl 0 constraints_and_envs trace.val constraints_and_envs
+  foldl constraints_and_envs trace.val constraints_and_envs
   where
   /--
     The foldl function applies the constraints to the trace inductively on the trace
@@ -754,34 +758,34 @@ def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (n: ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+  foldl (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator: List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
     | trace +> curr +> next, (⟨.EveryRowExceptLast constraint, env⟩)::rest =>
-        let others := foldl n cs (trace +> curr +> next) rest
+        let others := foldl cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.constraints_hold_on_window window (env n) ∧ others
+        constraint.constraints_hold_on_window window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
     | trace +> row, (⟨.Boundary idx constraint, env⟩)::rest =>
-        let others := foldl n cs (trace +> row) rest
+        let others := foldl cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        if trace.len = idx then constraint.constraints_hold_on_window window (env n) ∧ others else others
+        if trace.len = idx then constraint.constraints_hold_on_window window (env trace.len) ∧ others else others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
     | trace +> row, (⟨.EveryRow constraint, env⟩)::rest =>
-        let others := foldl n cs (trace +> row) rest
+        let others := foldl cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.constraints_hold_on_window window (env n) ∧ others
+        constraint.constraints_hold_on_window window (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
     | trace, (⟨.EveryRowExceptLast _, _⟩)::rest =>
-        foldl n cs trace rest
+        foldl cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
     | trace +> _, [] =>
-        foldl (n+1) cs trace cs
+        foldl cs trace cs
 
     -- if the trace is empty, we are done
     | <+>, _ => True
