@@ -575,51 +575,6 @@ from_circuit_with_consistency : (ops : OperationsList F) → TableContextOfCircu
     ⟩
 end TableContext
 
--- namespace TableConstraintOperation
--- /--
---   Returns the updated table context after applying the table operation
--- -/
--- @[table_norm]
--- def update_context {W: ℕ+} (ctx: TableContext W S F) :
---     TableConstraintOperation W S F → TableContext W S F
---   /-
---     Witnessing a fresh variable for a table offsets just increments the offset and add the mapping
---     from the variable index to the cell offset in the assignment mapping
---   -/
---   | Witness offset c => {
---       offset := ctx.offset + 1,
---       assignment := ctx.assignment.set offset ctx.offset,
---       operations := ctx.operations ++ [Witness offset c]
---     }
-
---   /-
---     Getting a row is equivalent to witnessing a fresh variable for each cell in the row
---   -/
---   | GetRow off => {
---       offset := ctx.offset + size S,
---       assignment := ctx.assignment.setRow off (.init (ctx.offset + ·)),
---       operations := ctx.operations ++ [GetRow off]
---     }
-
---   /-
---     Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
---   -/
---   | Allocate subcircuit => {
---       offset := ctx.offset + subcircuit.witness_length,
---       assignment := ctx.assignment,
---       operations := ctx.operations ++ [Allocate subcircuit]
---     }
-
---   /-
---     Assigning a variable to a cell in the trace just updates the assignment mapping
---   -/
---   | Assign v offset => {
---       offset := ctx.offset,
---       assignment := ctx.assignment.set offset v.index,
---       operations := ctx.operations ++ [Assign v offset]
---     }
--- end TableConstraintOperation
-
 @[reducible, table_norm]
 def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
