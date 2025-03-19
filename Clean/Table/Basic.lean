@@ -592,6 +592,7 @@ def final_offset (table : TableConstraint W S F α) : ℕ :=
 def operations (table : TableConstraint W S F α) : Operations F table.final_offset :=
   table .empty |>.snd.circuit.withLength
 
+@[table_norm]
 def assignment (table : TableConstraint W S F α) : CellAssignment W S :=
   table .empty |>.snd.assignment
 
@@ -602,24 +603,23 @@ def assignment (table : TableConstraint W S F α) : CellAssignment W S :=
 -/
 @[table_norm]
 def constraints_hold_on_window (table : TableConstraint W S F Unit)
-  (window: TraceOfLength F S W) : Prop :=
+  (window: TraceOfLength F S W) (aux_env : Environment F) : Prop :=
   let ctx := table .empty |>.snd
 
   -- construct an env by taking the result of the assignment function for input/output cells,
   -- and allowing arbitrary values for aux cells and invalid variables
-  let env (aux_row : Vector F ctx.aux_length) (aux_env : Environment F) : Environment F := ⟨ fun i =>
+  let env : Environment F := ⟨ fun i =>
     if hi : i < ctx.offset then
       match ctx.assignment.vars_to_cell.get ⟨i, hi⟩ with
       | .input ⟨i, j⟩ => window.get i j
-      | .aux k => aux_row.get k
-    -- this ensures that `env` on invalid variables is arbitrary, because i + ctx.aux_length doesn't overlap with aux cells
-    else aux_env.get i
+      | .aux k => aux_env.get k
+    else aux_env.get (i + ctx.assignment.aux_length)
   ⟩
 
   -- then we fold over allocated sub-circuits
   -- lifting directly to the soundness of the sub-circuit
   let operations := ctx.circuit.withLength
-  ∀ aux_row aux_env, Circuit.constraints_hold.soundness (env aux_row aux_env) operations
+  Circuit.constraints_hold.soundness env operations
 
 @[table_norm]
 def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
@@ -696,6 +696,7 @@ attribute [table_norm] to_vars
 attribute [table_norm] from_vars
 end TableConstraint
 
+export TableConstraint (get_curr_row get_next_row assign assign_next_row)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
@@ -730,9 +731,10 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 @[table_norm]
-def table_constraints_hold {N : ℕ}
-    (constraints : List (TableOperation S F)) (trace: TraceOfLength F S N) : Prop :=
-  foldl constraints trace.val constraints
+def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
+  (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F) : Prop :=
+  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
+  foldl 0 constraints_and_envs trace.val constraints_and_envs
   where
   /--
     The foldl function applies the constraints to the trace inductively on the trace
@@ -752,33 +754,34 @@ def table_constraints_hold {N : ℕ}
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (cs : List (TableOperation S F)) : Trace F S → (cs_iterator: List (TableOperation S F)) → Prop
+  foldl (n: ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+    Trace F S → (cs_iterator: List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
-    | trace +> curr +> next, (TableOperation.EveryRowExceptLast constraint)::rest =>
-        let others := foldl cs (trace +> curr +> next) rest
+    | trace +> curr +> next, (⟨.EveryRowExceptLast constraint, env⟩)::rest =>
+        let others := foldl n cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.constraints_hold_on_window window ∧ others
+        constraint.constraints_hold_on_window window (env n) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
-    | trace +> row, (TableOperation.Boundary idx constraint)::rest =>
-        let others := foldl cs (trace +> row) rest
+    | trace +> row, (⟨.Boundary idx constraint, env⟩)::rest =>
+        let others := foldl n cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        if trace.len = idx then constraint.constraints_hold_on_window window ∧ others else others
+        if trace.len = idx then constraint.constraints_hold_on_window window (env n) ∧ others else others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
-    | trace +> row, (TableOperation.EveryRow constraint)::rest =>
-        let others := foldl cs (trace +> row) rest
+    | trace +> row, (⟨.EveryRow constraint, env⟩)::rest =>
+        let others := foldl n cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.constraints_hold_on_window window ∧ others
+        constraint.constraints_hold_on_window window (env n) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
-    | trace, (TableOperation.EveryRowExceptLast _)::rest =>
-        foldl cs trace rest
+    | trace, (⟨.EveryRowExceptLast _, _⟩)::rest =>
+        foldl n cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
     | trace +> _, [] =>
-        foldl cs trace cs
+        foldl (n+1) cs trace cs
 
     -- if the trace is empty, we are done
     | <+>, _ => True
@@ -797,7 +800,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   -- the soundness states that if the assumptions hold, then
   -- the constraints hold implies that the spec holds
   soundness :
-    ∀ (N : ℕ) (trace: TraceOfLength F S N),
+    ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
     assumption N →
-    table_constraints_hold constraints trace →
+    table_constraints_hold constraints trace env →
     spec trace
