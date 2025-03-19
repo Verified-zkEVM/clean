@@ -95,6 +95,10 @@ theorem push_of_len_succ {n: ℕ} (v: Vector α (n + 1)) : ∃ as: Vector α n, 
 def set (v: Vector α n) (i: Fin n) (a: α) : Vector α n :=
   ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
 
+@[simp]
+def update (v: Vector α n) (i: Fin n) (f: α → α) : Vector α n :=
+  v.set i (f (v.get i))
+
 -- map over monad
 def mapM {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
   match (v : Vector (M α) n) with
@@ -212,6 +216,10 @@ def set (A: Matrix α n m) (i: Fin n) (j: Fin m) (value : α) : Matrix α n m :=
 
 def setRow (A: Matrix α n m) (i: Fin n) (row: Vector α m) : Matrix α n m :=
   Vector.set A i row
+
+@[simp]
+def update (A: Matrix α n m) (i: Fin n) (j: Fin m) (f: α → α) : Matrix α n m :=
+  A.set i j (f (A.get i j))
 
 @[simp]
 def fill (n: ℕ) (m : ℕ) (a: α) : Matrix α n m := .fill n (.fill m a)
