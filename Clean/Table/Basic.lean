@@ -647,23 +647,24 @@ def assignment (table : TableConstraint W S F α) : CellAssignment W S :=
 -/
 @[table_norm]
 def constraints_hold_on_window (table : TableConstraint W S F Unit)
-  (window: TraceOfLength F S W) (aux_env: Environment F) : Prop :=
+  (window: TraceOfLength F S W) : Prop :=
   let ctx := table .empty |>.snd
 
-  -- construct an env by simply taking the result of the assignment function
-  let env : Environment F := ⟨ fun i =>
+  -- construct an env by taking the result of the assignment function for input/output cells,
+  -- and allowing arbitrary values for aux cells and invalid variables
+  let env (aux_row : Vector F ctx.aux_length) (aux_env : Environment F) : Environment F := ⟨ fun i =>
     if hi : i < ctx.offset then
       match ctx.assignment.vars_to_cell.get ⟨i, hi⟩ with
       | .input ⟨i, j⟩ => window.get i j
-      | .aux k => aux_env.get k
+      | .aux k => aux_row.get k
     -- this ensures that `env` on invalid variables is arbitrary, because i + ctx.aux_length doesn't overlap with aux cells
-    else aux_env.get (i + ctx.aux_length)
+    else aux_env.get i
   ⟩
 
   -- then we fold over allocated sub-circuits
   -- lifting directly to the soundness of the sub-circuit
   let operations := ctx.circuit.withLength
-  Circuit.constraints_hold.soundness env operations
+  ∀ aux_row aux_env, Circuit.constraints_hold.soundness (env aux_row aux_env) operations
 
 @[table_norm]
 def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
@@ -742,12 +743,12 @@ end TableConstraint
 
 
 @[reducible]
-def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] := TableConstraint 1 S F Unit
+def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
 
 @[reducible]
-def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] := TableConstraint 2 S F Unit
+def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
 
-inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] where
+inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
@@ -828,7 +829,7 @@ def table_constraints_hold {N : ℕ}
     | <+>, _ => True
 
 
-structure FormalTable (F : Type) [Field F] (S : Type → Type) [NonEmptyProvableType S] where
+structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
   -- list of constraints that are applied over the table
   constraints : List (TableOperation S F)
 
