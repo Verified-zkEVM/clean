@@ -197,83 +197,6 @@ def empty (W: ℕ+) : CellAssignment W S where
   input_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
   aux_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
 
-def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
-  let cell := Cell.input ⟨ row, col ⟩
-  let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
-  let input_to_vars' := assignment.input_to_vars.map (fun l => l.map Fin.castSucc)
-  let input_to_vars := input_to_vars'.set row col <| input_to_vars'.get row col ++ [fin_offset]
-  let aux_to_vars := assignment.aux_to_vars.map (fun l => l.map Fin.castSucc)
-  {
-    offset := assignment.offset + 1
-    aux_length := assignment.aux_length
-    vars_to_cell := assignment.vars_to_cell.push cell
-    input_to_vars := input_to_vars
-    aux_to_vars := aux_to_vars
-
-    input_cell_consistent := by
-      intro var i j
-      by_cases h_var : var.val < assignment.offset
-      -- induction hypothesis case
-      have ih := assignment.input_cell_consistent ⟨ var, h_var ⟩ i j
-      have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
-      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h_var ⟩ := by
-        simp [Vector.push]
-        exact List.getElem_append var.val (by linarith)
-      rw [this, ih]; clear this
-
-      suffices h : var ∈ input_to_vars'.get i j ↔ var ∈ input_to_vars.get i j by
-        rw [←h]
-        simp [input_to_vars']
-        constructor
-        · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
-        · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
-          have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
-          rw [←this]
-          exact h_mem
-      simp only [input_to_vars]
-      -- TODO
-      sorry
-      -- new variable case
-      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
-      have : (assignment.vars_to_cell.push cell).get var = .input ⟨ row, col ⟩ := by
-        simp [var_eq]
-      rw [this]; clear this
-      simp [input_to_vars]
-      constructor
-      · rintro ⟨ rfl, rfl ⟩
-        simp; right; ext; simp [var_eq]
-      sorry
-
-    aux_cell_consistent := by
-      intro var i
-      by_cases h_var : var.val < assignment.offset
-      -- induction hypothesis case
-      have ih := assignment.aux_cell_consistent ⟨ var, h_var ⟩ i
-      have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
-      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h_var ⟩ := by
-        simp [Vector.push]
-        exact List.getElem_append var.val (by linarith)
-      rw [this, ih]; clear this
-      simp [aux_to_vars]
-      constructor
-      · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
-      · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
-        have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
-        rw [←this]
-        exact h_mem
-      -- new variable case
-      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
-      have : (assignment.vars_to_cell.push cell).get var = .input ⟨ row, col ⟩ := by
-        simp [var_eq]
-      rw [this]; clear this
-      simp [aux_to_vars]
-      intro var' h_mem
-      by_contra h_cast
-      have : var'.val = var.val := by simp [←h_cast]
-      have : var.val < assignment.offset := this ▸ var'.is_lt
-      linarith
-  }
-
 def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S where
   offset := assignment.offset
   aux_length := assignment.aux_length + 1
@@ -404,6 +327,114 @@ lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
     rw [push_vars_aux]
     simp_arith [push_var_aux, ih]
 
+def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
+  let cell := Cell.input ⟨ row, col ⟩
+  let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
+  let input_to_vars' := assignment.input_to_vars.map (fun l => l.map Fin.castSucc)
+  let input_to_vars := input_to_vars'.set row col <| input_to_vars'.get row col ++ [fin_offset]
+  let aux_to_vars := assignment.aux_to_vars.map (fun l => l.map Fin.castSucc)
+  {
+    offset := assignment.offset + 1
+    aux_length := assignment.aux_length
+    vars_to_cell := assignment.vars_to_cell.push cell
+    input_to_vars := input_to_vars
+    aux_to_vars := aux_to_vars
+
+    input_cell_consistent := by
+      intro var i j
+      by_cases h_var : var.val < assignment.offset
+      -- induction hypothesis case
+      have ih := assignment.input_cell_consistent ⟨ var, h_var ⟩ i j
+      have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
+      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h_var ⟩ := by
+        simp [Vector.push]
+        exact List.getElem_append var.val (by linarith)
+      rw [this, ih]; clear this
+
+      suffices h : var ∈ input_to_vars'.get i j ↔ var ∈ input_to_vars.get i j by
+        rw [←h]
+        simp [input_to_vars']
+        constructor
+        · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
+        · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
+          have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
+          rw [←this]
+          exact h_mem
+      simp only [input_to_vars]
+      -- TODO
+      sorry
+      -- new variable case
+      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
+      have : (assignment.vars_to_cell.push cell).get var = .input ⟨ row, col ⟩ := by
+        simp [var_eq]
+      rw [this]; clear this
+      simp [input_to_vars]
+      constructor
+      · rintro ⟨ rfl, rfl ⟩
+        simp; right; ext; simp [var_eq]
+      sorry
+
+    aux_cell_consistent := by
+      intro var i
+      by_cases h_var : var.val < assignment.offset
+      -- induction hypothesis case
+      have ih := assignment.aux_cell_consistent ⟨ var, h_var ⟩ i
+      have h_len : assignment.vars_to_cell.val.length = assignment.offset := by simp
+      have : (assignment.vars_to_cell.push cell).get var = assignment.vars_to_cell.get ⟨ var, h_var ⟩ := by
+        simp [Vector.push]
+        exact List.getElem_append var.val (by linarith)
+      rw [this, ih]; clear this
+      simp [aux_to_vars]
+      constructor
+      · intro h_mem; use ⟨ var, h_var ⟩; use h_mem; simp
+      · rintro ⟨ var', ⟨ h_mem, h_cast ⟩ ⟩
+        have : var' = ⟨var, h_var⟩ := by simp [←h_cast]
+        rw [←this]
+        exact h_mem
+      -- new variable case
+      have var_eq : var.val = assignment.offset := by linarith [var.is_lt]
+      have : (assignment.vars_to_cell.push cell).get var = .input ⟨ row, col ⟩ := by
+        simp [var_eq]
+      rw [this]; clear this
+      simp [aux_to_vars]
+      intro var' h_mem
+      by_contra h_cast
+      have : var'.val = var.val := by simp [←h_cast]
+      have : var.val < assignment.offset := this ▸ var'.is_lt
+      linarith
+  }
+
+def push_var_input_offset (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) :
+  (assignment.push_var_input row col).offset = assignment.offset + 1 := by
+  simp [push_var_input, Vector.push]
+
+def foldRange (n : ℕ) (f : α → Fin n → α) (init : α) : α :=
+  List.finRange n |>.foldl f init
+
+def foldRange_succ (n : ℕ) (f : α → Fin (n + 1) → α) (init : α) :
+  foldRange (n + 1) f init = f (foldRange n (fun acc i => f acc i.castSucc) init) (.last n) := by
+  simp [foldRange, List.finRange_succ, List.foldl_concat, List.foldl_map]
+
+def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
+  (List.finRange (size S)).foldl (fun assignment col => push_var_input assignment row col) assignment
+
+lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
+  (assignment.push_row row).offset = assignment.offset + size S := by
+  -- generalize goal to enable induction
+  suffices ∀ n : ℕ, (hs : n ≤ size S) →
+    (foldRange n (fun assignment col ↦ assignment.push_var_input row ⟨col, by linarith [col.is_lt]⟩) assignment).offset = assignment.offset + n
+    by apply this; rfl
+  intro n
+  induction n with
+  | zero => simp [foldRange]
+  | succ n ih =>
+    intro hs
+    specialize ih (by linarith)
+    rw [foldRange_succ, push_var_input_offset]
+    simp only [Fin.coe_castSucc]
+    rw [ih]
+    ac_rfl
+
 def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offset < W * (size S)) : CellAssignment W S :=
   let index := assignment.offset
   have nonempty : size S > 0 := by
@@ -413,6 +444,34 @@ def push_var_default_input (assignment: CellAssignment W S) (lt: assignment.offs
   let row : Fin W := ⟨ index / size S, (Nat.div_lt_iff_lt_mul nonempty).mpr lt⟩
   let col : Fin (size S) := ⟨ index % size S, Nat.mod_lt index nonempty ⟩
   push_var_input assignment row col
+
+def get_vars (assignment: CellAssignment W S) (cell: Cell W S assignment.aux_length) : List (Fin assignment.offset) :=
+  match cell with
+  | .input ⟨ row, col ⟩ => assignment.input_to_vars.get row col
+  | .aux i => assignment.aux_to_vars.get i
+
+def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) (var: Fin assignment.offset) : CellAssignment W S :=
+  let current_cell := assignment.vars_to_cell.get var
+  -- change assignment of variable
+  let vars_to_cell := assignment.vars_to_cell.set var (.input ⟨ row, col ⟩)
+  -- remove variable from existing cell
+  let input_to_vars := match current_cell with
+    | .input ⟨ i, j ⟩ => assignment.input_to_vars.update i j (.filter (· = var))
+    | .aux _ => assignment.input_to_vars
+  let aux_to_vars := match current_cell with
+    | .input _ => assignment.aux_to_vars
+    | .aux i => assignment.aux_to_vars.update i (.filter (· = var))
+  -- add variable to new cell
+  let input_to_vars := input_to_vars.update row col (fun l => l ++ [var])
+  {
+    offset := assignment.offset
+    aux_length := assignment.aux_length
+    vars_to_cell := vars_to_cell
+    input_to_vars := input_to_vars
+    aux_to_vars := aux_to_vars
+    input_cell_consistent := by sorry
+    aux_cell_consistent := by sorry
+  }
 
 def push_var_default (assignment: CellAssignment W S) : CellAssignment W S :=
   if h: assignment.offset < W * (size S) then
@@ -470,11 +529,18 @@ structure TableContextOfCircuit (W: ℕ+) (S : Type → Type) (F : Type) [Provab
   circuit_consistent : ctx.circuit = ops
 
 @[table_norm]
-def from_circuit (ops: OperationsList F) : TableContextOfCircuit W S F ops :=
-  match ops with
-  | ⟨_, .empty n⟩ => ⟨.from_offset n, rfl⟩
-  | ⟨_, .witness ops m c⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops
+def from_circuit (ops: OperationsList F) : TableContext W S F :=
+  (from_circuit_with_consistency ops).ctx
+where
+/--
+`circuit_consistent` is needed within the function definition itself,
+for adding subcircuits to the result of a recursive call
+-/
+@[table_norm]
+from_circuit_with_consistency : (ops : OperationsList F) → TableContextOfCircuit W S F ops
+  | ⟨.(n), .empty n⟩ => ⟨.from_offset n, rfl⟩
+  | ⟨n + .(m), .witness ops m c⟩ =>
+    let ⟨prev, h⟩ := from_circuit_with_consistency ops
     let assignment := prev.assignment.push_vars_aux m
     ⟨{ prev with
       circuit := prev.circuit.witness m c
@@ -483,14 +549,14 @@ def from_circuit (ops: OperationsList F) : TableContextOfCircuit W S F ops :=
         simp only [assignment]
         rw [prev.assignment.push_vars_aux_offset m, prev.offset_consistent]
     }, by simp [h]⟩
-  | ⟨_, .assert ops e⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops
+  | ⟨n, .assert ops e⟩ =>
+    let ⟨prev, h⟩ := from_circuit_with_consistency ops
     ⟨{ prev with circuit := prev.circuit.assert e }, by simp [h]⟩
-  | ⟨_, .lookup ops l⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops
+  | ⟨n, .lookup ops l⟩ =>
+    let ⟨prev, h⟩ := from_circuit_with_consistency ops
     ⟨{ prev with circuit := prev.circuit.lookup l }, by simp [h]⟩
-  | ⟨_, .subcircuit ops s⟩ =>
-    let ⟨prev, h⟩ := from_circuit ops
+  | ⟨n + .(s.witness_length), .subcircuit ops s⟩ =>
+    let ⟨prev, h⟩ := from_circuit_with_consistency ops
     let subcircuit : SubCircuit F prev.circuit.offset := cast (by rw [h]) s
     let assignment := prev.assignment.push_vars_aux subcircuit.witness_length
     ⟨{ prev with
@@ -560,9 +626,8 @@ def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Provable
 
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
-    let result := circuit ctx.circuit
-    let table_ctx_of_circuit := TableContext.from_circuit (S:=S) result.snd
-    (result.fst, table_ctx_of_circuit.ctx)
+    let (a, ops) := circuit ctx.circuit
+    (a, .from_circuit ops)
 
 namespace TableConstraint
 @[reducible]
@@ -588,11 +653,11 @@ def constraints_hold_on_window (table : TableConstraint W S F Unit)
   -- construct an env by simply taking the result of the assignment function
   let env : Environment F := ⟨ fun i =>
     if hi : i < ctx.offset then
-      let x : Fin ctx.offset := ⟨i, hi⟩
-      match ctx.assignment.vars_to_cell.get x with
+      match ctx.assignment.vars_to_cell.get ⟨i, hi⟩ with
       | .input ⟨i, j⟩ => window.get i j
-      | .aux k =>  aux_env.get k
-    else 0
+      | .aux k => aux_env.get k
+    -- this ensures that `env` on invalid variables is arbitrary, because i + ctx.aux_length doesn't overlap with aux cells
+    else aux_env.get (i + ctx.aux_length)
   ⟩
 
   -- then we fold over allocated sub-circuits
@@ -604,54 +669,69 @@ def constraints_hold_on_window (table : TableConstraint W S F Unit)
 def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
 
+/--
+  Get a fresh variable for each cell in a given row
+-/
 @[table_norm]
-def witness_cell {W: ℕ+}
-    (off : CellOffset W S) (compute : Unit → F) : TableConstraint W S F (Variable F) :=
+def get_row {W: ℕ+} (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
-    (⟨ ctx.offset ⟩, update_context ctx (.Witness off compute))
-
-@[table_norm]
-def get_cell {W: ℕ+}
-    (off : CellOffset W S): TableConstraint W S F (Variable F) :=
-  modifyGet fun ctx =>
-    (⟨ ctx.offset ⟩, update_context ctx (.Witness off (fun _ => 0)))
+    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
+    let exprs := vars.map Expression.var
+    let ctx' : TableContext W S F := {
+      circuit := ctx.circuit.witness (size S) (fun eval => exprs.map eval),
+      assignment := ctx.assignment.push_row row,
+      offset_consistent := by
+        show ctx.circuit.offset + size S = _
+        rw [CellAssignment.push_row_offset, ctx.offset_consistent]
+    }
+    (from_vars exprs, ctx')
 
 /--
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm]
-def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
-  modifyGet fun ctx =>
-    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-    let exprs := vars.map Expression.var
-    (from_vars exprs, update_context ctx (.GetRow 0))
+def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 0
 
 /--
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm]
-def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
-  modifyGet fun ctx =>
-    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-    let exprs := vars.map Expression.var
-    (from_vars exprs, update_context ctx (.GetRow 1))
-
-def subcircuit {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
-    (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
-  modifyGet fun ctx =>
-    let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
-    (a, update_context ctx (.Allocate subcircuit))
-
-def assertion {W: ℕ+} {β : TypeMap} [ProvableType β]
-    (circuit: FormalAssertion F β) (b: Var β F) : TableConstraint W S F Unit :=
-  modify fun ctx =>
-    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
-    update_context ctx (.Allocate subcircuit)
+def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 1
 
 @[table_norm]
-def assign {W: ℕ+} (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
+def assign_var {W: ℕ+} (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
-    update_context ctx (.Assign v off)
+    -- a valid variable is assigned directly
+    if h : v.index < ctx.offset then
+      let assignment := ctx.assignment.set_var_input off.rowOffset off.column ⟨ v.index, h ⟩
+      { ctx with assignment }
+    -- for invalid variables, we create a new valid variable and add a constraint that they are equal
+    -- (this branch should in practice never be taken)
+    else
+      let new_var : Variable F := ⟨ ctx.offset ⟩
+      let circuit := ctx.circuit
+        |>.witness 1 (fun eval => vec [eval v])
+        |>.assert (v - new_var)
+      let assignment := ctx.assignment.push_var_input off.rowOffset off.column
+      { circuit, assignment,
+        offset_consistent := by
+          show ctx.circuit.offset + 1 = _
+          rw [CellAssignment.push_var_input_offset, ctx.offset_consistent]
+      }
+
+@[table_norm]
+def assign {W: ℕ+} (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
+  | .var v => assign_var off v
+  | x => do
+    let new_var ← witness_var x.eval
+    assert_zero (x - var new_var)
+    assign_var off new_var
+
+@[table_norm]
+def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
+  let vars := to_vars next
+  for i in List.finRange (size S) do
+    assign (CellOffset.next i) (vars.get i)
 
 attribute [table_norm] size
 attribute [table_norm] to_elements
