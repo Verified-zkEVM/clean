@@ -155,9 +155,9 @@ def next {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
 
 end CellOffset
 
-inductive Cell (W: ℕ+) (S : Type → Type) [ProvableType S] (N : ℕ) :=
-  | input : CellOffset W S → Cell W S N
-  | aux : Fin N → Cell W S N
+inductive Cell (W: ℕ+) (S : Type → Type) [ProvableType S] :=
+  | input : CellOffset W S → Cell W S
+  | aux : ℕ → Cell W S
 
 /--
 Mapping between cell offsets in the table and variable indices.
@@ -172,7 +172,7 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   aux_length : ℕ -- number of auxiliary cells (i.e. those not part of the input/output layout)
 
   /-- every variable is assigned to exactly one cell in the trace -/
-  vars_to_cell : List (Cell W S aux_length)
+  vars_to_cell : List (Cell W S)
 
   -- /-- every cell (input / aux) is assigned a _list_ of variables (that could be empty) -/
   -- input_to_vars : Matrix (List (Fin offset)) W (size S)
@@ -188,7 +188,7 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
 variable {W: ℕ+}
 
 namespace CellAssignment
-@[table_norm, reducible]
+@[table_assignment_norm, reducible]
 def empty (W: ℕ+) : CellAssignment W S where
   -- offset := 0
   aux_length := 0
@@ -198,13 +198,14 @@ def empty (W: ℕ+) : CellAssignment W S where
   -- input_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
   -- aux_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
 
-@[table_norm]
-def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S where
+-- @[table_norm]
+-- def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S where
   -- offset := assignment.offset
-  aux_length := assignment.aux_length + 1
-  vars_to_cell := assignment.vars_to_cell.map fun
-    | .input off => .input off
-    | .aux i => .aux i.castSucc
+  -- aux_length := assignment.aux_length + 1
+  -- vars_to_cell := assignment.vars_to_cell
+  -- .map fun
+  --   | .input off => .input off
+  --   | .aux i => .aux i.castSucc
   -- input_to_vars := assignment.input_to_vars
   -- aux_to_vars := assignment.aux_to_vars.push []
   -- input_cell_consistent := by
@@ -232,18 +233,18 @@ def increase_aux_capacity (assignment: CellAssignment W S) : CellAssignment W S 
   --     have : ↑i'.castSucc < assignment.aux_length := i'.is_lt
   --     linarith
 
-@[table_norm]
+@[table_assignment_norm]
 def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
-  let assignment' := increase_aux_capacity assignment
+  -- let assignment' := increase_aux_capacity assignment
   -- the new variable index
   -- let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
-  let fin_aux_length : Fin (assignment.aux_length + 1) := Fin.last assignment.aux_length
+  -- let fin_aux_length : Fin (assignment.aux_length + 1) := Fin.last assignment.aux_length
   -- let input_to_vars := assignment.input_to_vars.map (fun l => l.map Fin.castSucc)
   -- let aux_to_vars := assignment'.aux_to_vars.map (fun l => l.map Fin.castSucc)
   {
     -- offset := assignment.offset + 1
     aux_length := assignment.aux_length + 1
-    vars_to_cell := assignment'.vars_to_cell.concat (.aux fin_aux_length)
+    vars_to_cell := assignment.vars_to_cell.concat (.aux assignment.aux_length)
     -- input_to_vars := input_to_vars
     -- aux_to_vars := aux_to_vars.set fin_aux_length [fin_offset]
 
@@ -318,7 +319,7 @@ def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
     --   sorry
   }
 
--- @[table_norm]
+@[table_assignment_norm]
 def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
   | 0 => assignment
   | n + 1 => (assignment.push_vars_aux n).push_var_aux
@@ -332,7 +333,7 @@ def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
 --     rw [push_vars_aux]
 --     simp_arith [push_var_aux, ih]
 
--- @[table_norm]
+@[table_assignment_norm]
 def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
   let cell := Cell.input ⟨ row, col ⟩
   -- let fin_offset : Fin (assignment.offset + 1) := ⟨ assignment.offset, by linarith ⟩
@@ -422,7 +423,7 @@ def foldRange_succ (n : ℕ) (f : α → Fin (n + 1) → α) (init : α) :
   foldRange (n + 1) f init = f (foldRange n (fun acc i => f acc i.castSucc) init) (.last n) := by
   simp [foldRange, List.finRange_succ, List.foldl_concat, List.foldl_map]
 
--- @[table_norm]
+@[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
   (List.finRange (size S)).foldl (fun assignment col => push_var_input assignment row col) assignment
 
@@ -459,7 +460,7 @@ def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S 
 --   | .input ⟨ row, col ⟩ => assignment.input_to_vars.get row col
 --   | .aux i => assignment.aux_to_vars.get i
 
-@[table_norm]
+@[table_assignment_norm]
 def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) (var: ℕ) : CellAssignment W S :=
   -- let current_cell := assignment.vars_to_cell.get var
   -- change assignment of variable
@@ -483,7 +484,7 @@ def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size 
     -- aux_cell_consistent := by sorry
   }
 
-@[table_norm]
+@[table_assignment_norm]
 def default_from_offset (W: ℕ+) (offset : ℕ) : CellAssignment W S := push_vars_aux (.empty W) offset
 
 -- lemma default_from_offset_offset (n : ℕ) : (default_from_offset (S:=S) W n).offset = n := by
@@ -512,7 +513,7 @@ namespace TableContext
 /--
   An empty context has offset zero, and all variables are assigned by default to the first cell
 -/
-@[table_norm, table_norm]
+@[reducible, table_norm, table_assignment_norm]
 def empty : TableContext W S F where
   circuit := .from_offset 0
   assignment := .empty W
@@ -521,10 +522,10 @@ def empty : TableContext W S F where
 @[reducible, table_norm]
 def offset (table : TableContext W S F) : ℕ := table.circuit.offset
 
-@[reducible, table_norm]
+@[reducible, table_assignment_norm]
 def aux_length (table : TableContext W S F) : ℕ := table.assignment.aux_length
 
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def from_offset (n : ℕ) : TableContext W S F where
   circuit := .from_offset n
   assignment := .default_from_offset W n
@@ -543,7 +544,7 @@ where
 `circuit_consistent` is needed within the function definition itself,
 for adding subcircuits to the result of a recursive call
 -/
-@[table_norm]
+@[table_norm, table_assignment_norm]
 from_circuit_with_consistency : (ops : OperationsList F) → TableContextOfCircuit W S F ops
   | ⟨_, .empty n⟩ => ⟨.from_offset n, rfl⟩
   | ⟨n + _, .witness ops m c⟩ =>
@@ -590,11 +591,11 @@ theorem from_circuit_circuit : ∀ ops, (TableContext.from_circuit W S F ops).ci
   simp only [TableContext.from_circuit]
   rw [TableContext.TableContextOfCircuit.circuit_consistent]
 
-@[reducible, table_norm]
+@[reducible, table_norm, table_assignment_norm]
 def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
 
-@[table_norm]
+@[table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
     let res := circuit ctx.circuit
@@ -609,7 +610,7 @@ def final_offset (table : TableConstraint W S F α) : ℕ :=
 def operations (table : TableConstraint W S F α) : Operations F table.final_offset :=
   table .empty |>.snd.circuit.withLength
 
-@[table_norm]
+@[table_assignment_norm]
 def assignment (table : TableConstraint W S F α) : CellAssignment W S :=
   table .empty |>.snd.assignment
 
@@ -646,7 +647,7 @@ def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
 /--
   Get a fresh variable for each cell in a given row
 -/
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def get_row {W: ℕ+} (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
@@ -663,16 +664,16 @@ def get_row {W: ℕ+} (row : Fin W) : TableConstraint W S F (Var S F) :=
 /--
   Get a fresh variable for each cell in the current row
 -/
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 0
 
 /--
   Get a fresh variable for each cell in the next row
 -/
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 1
 
--- @[table_norm]
+@[table_assignment_norm]
 def assign_var {W: ℕ+} (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
     -- a valid variable is assigned directly
@@ -693,29 +694,42 @@ def assign_var {W: ℕ+} (off : CellOffset W S) (v : Variable F) : TableConstrai
     --       rw [CellAssignment.push_var_input_offset, ctx.offset_consistent]
     --   }
 
-@[table_norm]
+@[table_norm, table_assignment_norm]
 theorem assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
   (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
-@[table_norm]
-def assign {W: ℕ+} (off : CellOffset W S) (x : Expression F) : TableConstraint W S F Unit := do
-  -- | .var v => assign_var off v
-  -- | x => do
+@[table_norm, table_assignment_norm]
+def assign {W: ℕ+} (off : CellOffset W S) (x : Expression F): TableConstraint W S F Unit := do
+  -- TODO we would like to match on var vs other expressions here.
+  -- `| .var v => assign_var off v`
+  -- however, that makes the circuit almost impossible to resolve in proofs, since the expression kind
+  -- can be buried deep within subcircuits that created the expression.
   let new_var ← witness_var x.eval
-  assert_zero (x - var new_var)
+  assert_zero (x - var new_var) -- there could be an optimization pass that reduces redundant vars
   assign_var off new_var
 
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
   let vars := to_vars next
   for i in List.finRange (size S) do
-    assign (CellOffset.next i) (vars.get i)
+    assign (.next i) (vars.get i)
 
 attribute [table_norm] size
 attribute [table_norm] to_elements
 attribute [table_norm] from_elements
 attribute [table_norm] to_vars
 attribute [table_norm] from_vars
+
+attribute [table_norm] Circuit.constraints_hold.soundness
+
+attribute [table_norm, table_assignment_norm] liftM
+attribute [table_norm, table_assignment_norm] monadLift
+attribute [table_norm, table_assignment_norm] bind
+attribute [table_norm, table_assignment_norm] StateT.bind
+attribute [table_norm, table_assignment_norm] modify
+attribute [table_norm, table_assignment_norm] modifyGet
+attribute [table_norm, table_assignment_norm] MonadStateOf.modifyGet
+attribute [table_norm, table_assignment_norm] StateT.modifyGet
 end TableConstraint
 
 export TableConstraint (get_curr_row get_next_row assign assign_next_row)

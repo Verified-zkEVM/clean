@@ -20,7 +20,7 @@ instance : NonEmptyProvableType RowType where
     ⟨ x, y, z ⟩
 
 -- def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
---   main x := byte_lookup x
+--   main x := lookup (ByteLookup x)
 --   assumptions _ := True
 --   spec x := x.val < 256
 --   soundness := by
@@ -34,8 +34,8 @@ instance : NonEmptyProvableType RowType where
 
 def add8_inline : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  byte_lookup row.x
-  byte_lookup row.y
+  lookup (ByteLookup row.x)
+  lookup (ByteLookup row.y)
 
   let z ← subcircuit Gadgets.Addition8.circuit { x := row.x, y := row.y }
   assign (.curr 2) z
@@ -69,35 +69,18 @@ def formal_add8_table : FormalTable (F p) RowType := {
       clear ih h_rest
       let env' := TableConstraint.window_env add8_inline ⟨<+> +> row, rfl⟩ (env 0 rest.len)
       change Circuit.constraints_hold.soundness env' _ at h_holds
-      simp [table_norm, add8_inline, byte_lookup,
-         circuit_norm, Circuit.formal_circuit_to_subcircuit,
-        liftM, monadLift,
-        bind, StateT.bind,
-        modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet,
+      simp [table_norm, circuit_norm, add8_inline,
+        --  Circuit.formal_circuit_to_subcircuit,
       ] at h_holds
       repeat rw [from_circuit_circuit] at h_holds
+
       simp at h_holds
 
-      simp [circuit_norm] at h_holds
-
-      -- have modify1 : ∀ ops f, ((modify f : Circuit (F p) PUnit) ops).1 = () := by simp
-      -- conv in ((modify _ : Circuit (F p) PUnit) _).1 =>
-      -- rw [modify1]
-
-      -- simp [TableConstraint.window_env, table_norm, circuit_norm, add8_inline, byte_lookup] at env'
+      simp [Circuit.formal_circuit_to_subcircuit, circuit_norm] at h_holds
       change _ ∧ (_ + _ = 0) at h_holds
-      -- simp [TableContext.from_circuit.from_circuit_with_consistency] at h_holds
-      -- simp only [modifyGet, MonadStateOf.modifyGet, StateT.modifyGet] at h_holds
 
-      -- simp at h_holds
-
-
-      -- intros lookup_x lookup_y h_curr h_rest
-      -- specialize ih h_rest
-      -- simp [ih]
-
-      -- -- now we prove a local property about the current row
-      -- -- TODO: simp should suffice, but couldn't get it to work
+      -- now we prove a local property about the current row
+      -- TODO: simp should suffice, but couldn't get it to work
 
       -- have h_x : ((add8_inline (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0
       --   := by
