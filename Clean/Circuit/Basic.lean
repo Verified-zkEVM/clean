@@ -404,8 +404,9 @@ where
   initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
 
 @[circuit_norm]
-def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (a_var : Var α F) (env : Environment F) :=
+def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (offset: ℕ) (env : Environment F) :=
   let b := eval env b_var
+  let a_var := circuit.main b_var offset |>.fst
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
