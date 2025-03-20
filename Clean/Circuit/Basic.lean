@@ -185,23 +185,23 @@ structure OperationsList (F : Type) [Field F] where
   withLength: Operations F offset
 
 namespace OperationsList
-@[reducible]
+@[reducible, circuit_norm]
 def from_offset (offset: ℕ) : OperationsList F := ⟨ offset, .empty offset ⟩
 
 -- constructors matching `Operations`
-@[reducible]
+@[reducible, circuit_norm]
 def witness (ops: OperationsList F) (m: ℕ) (compute : Environment F → Vector F m) : OperationsList F :=
   ⟨ ops.offset + m, .witness ops.withLength m compute ⟩
 
-@[reducible]
+@[reducible, circuit_norm]
 def assert (ops: OperationsList F) (e: Expression F) : OperationsList F :=
   ⟨ ops.offset, .assert ops.withLength e ⟩
 
-@[reducible]
+@[reducible, circuit_norm]
 def lookup (ops: OperationsList F) (l: Lookup F) : OperationsList F :=
   ⟨ ops.offset, .lookup ops.withLength l ⟩
 
-@[reducible]
+@[reducible, circuit_norm]
 def subcircuit (ops: OperationsList F) (s: SubCircuit F ops.offset) : OperationsList F :=
   ⟨ ops.offset + s.witness_length, .subcircuit ops.withLength s ⟩
 
@@ -218,7 +218,7 @@ instance (ops) : CoeDep (OperationsList F) ops (Operations F ops.offset) where
 /--
 The canonical way to create an empty `OperationsList` is to just pass in the offset
 -/
-@[reducible]
+@[reducible, circuit_norm]
 instance : Coe ℕ (OperationsList F) where
   coe offset := .from_offset offset
 
@@ -535,3 +535,5 @@ attribute [circuit_norm] modify
 attribute [circuit_norm] modifyGet
 attribute [circuit_norm] MonadStateOf.modifyGet
 attribute [circuit_norm] StateT.modifyGet
+attribute [circuit_norm] pure
+attribute [circuit_norm] StateT.pure

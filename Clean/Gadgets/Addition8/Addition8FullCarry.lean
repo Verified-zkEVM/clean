@@ -76,7 +76,11 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify constraints hypothesis
-    dsimp [circuit_norm] at h_holds
+    dsimp [circuit_norm, add8_full_carry, byte_lookup,
+      Circuit.formal_assertion_to_subcircuit,
+      -- Boolean.circuit, assert_bool
+    ] at h_holds
+    simp only [List.map_toArray, List.map_cons, List.map_nil] at h_holds
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
