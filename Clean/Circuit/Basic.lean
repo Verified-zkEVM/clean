@@ -250,11 +250,11 @@ def circuit : Circuit F Unit := do
 def Circuit (F : Type) [Field F] := StateM (OperationsList F)
 
 namespace Circuit
-@[reducible]
+@[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   circuit offset |>.snd.offset
 
-@[reducible]
+@[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.final_offset offset) :=
   circuit offset |>.snd.withLength
 
@@ -526,3 +526,11 @@ def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
   #[]
 
 end Circuit
+
+-- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
+attribute [circuit_norm] bind
+attribute [circuit_norm] StateT.bind
+attribute [circuit_norm] modify
+attribute [circuit_norm] modifyGet
+attribute [circuit_norm] MonadStateOf.modifyGet
+attribute [circuit_norm] StateT.modifyGet
