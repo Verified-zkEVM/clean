@@ -47,10 +47,15 @@ def add8_table : List (TableOperation RowType (F p)) := [
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
-def formal_add8_table : FormalTable (F p) RowType := {
-  constraints := add8_table,
-  spec := spec_add8,
-  soundness := by
+lemma add8_inline_offset : (add8_inline (p:=p) .empty).snd.assignment.offset = 6 := by
+  dsimp only [add8_inline]
+  -- simp only [table_assignment_norm]
+  -- rw [from_circuit_circuit, from_circuit_circuit]
+  -- simp [table_assignment_norm]
+  sorry
+
+lemma soundness : ∀ (N : ℕ) (trace : TraceOfLength (F p) RowType N) (env : ℕ → ℕ → Environment (F p)),
+  (fun _ ↦ True) N → table_constraints_hold add8_table trace env → spec_add8 trace := by
     intro N trace env _
     simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8_table, spec_add8]
     simp [List.mapIdx, List.mapIdx.go]
@@ -59,7 +64,7 @@ def formal_add8_table : FormalTable (F p) RowType := {
     | empty => {
       simp [table_norm]
     }
-    | cons rest row ih => {
+    | cons rest row ih =>
       -- simplify induction
       simp only [table_norm, Vector.nil]
       show _ ∧ _ → _
@@ -81,35 +86,70 @@ def formal_add8_table : FormalTable (F p) RowType := {
 
       -- now we prove a local property about the current row
       -- TODO: simp should suffice, but couldn't get it to work
+      have h_offset : (add8_inline (p:=p) .empty).snd.assignment.offset = 6 := by
+        -- TODO simplifying this proof seems important
+        -- simp? [add8_inline, table_assignment_norm, circuit_norm]
+        simp only [add8_inline, bind, StateT.bind, get_curr_row, TableConstraint.get_row, modifyGet,
+          MonadStateOf.modifyGet, StateT.modifyGet, from_vars, from_elements, Vector.map, size,
+          Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, TableContext.offset, Nat.cast_zero,
+          Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
+          Fin.val_one, zero_add, List.singleton_append, Nat.cast_ofNat, Fin.val_two,
+          List.cons_append, List.map_cons, List.map_nil, Expression.eval, CellAssignment.push_row,
+          CellAssignment.push_var_input, CellAssignment.empty, Id.pure_eq, assign,
+          TableConstraint.assign_var, modify, monadLift, assert_zero, witness_var, subcircuit,
+          Circuit.lookup.eq_1, modify.eq_1, TableContext.empty, Vector.init.eq_2, Fin.val_natCast,
+          Vector.init.eq_1, Nat.reduceMod, Nat.add_zero, Vector.push.eq_1, Vector.map.eq_1,
+          Expression.eval.eq_1, CellAssignment.push_row.eq_1, CellAssignment.push_var_input.eq_1,
+          id_eq, monadLift_self, StateT.modifyGet.eq_1, Provable.instProvableTypeField.eq_1,
+          Vector.get.eq_1, Fin.cast_zero, List.get_eq_getElem, from_circuit_circuit,
+          SubCircuit.witness_length, FlatOperation.witness_length, subcircuit.eq_1,
+          CellAssignment.set_var_input, Circuit.witness_var.eq_1, Circuit.assert_zero.eq_1,
+          Vector.set?, from_circuit_offset]
 
-      -- have h_x : ((add8_inline (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0
-      --   := by
-      --   simp [add8_inline, bind, table_norm]
-      --   rfl
-      -- have h_y : ((add8_inline (p:=p) .empty).snd.assignment 1) = CellOffset.curr 1
-      --   := by
-      --   simp [add8_inline, bind, table_norm]
-      --   rfl
-      -- have h_z : ((add8_inline (p:=p) .empty).snd.assignment 2) = CellOffset.curr 2
-      --   := by
-      --   simp [add8_inline, bind, table_norm]
-      --   rfl
-      -- have h_z' : ((add8_inline (p:=p) .empty).snd.assignment 3) = CellOffset.curr 2
-      --   := by
-      --   simp [add8_inline, bind, table_norm]
-      --   rfl
+      -- resolve assignment
+      have h_x : ((add8_inline (p:=p) .empty).snd.assignment.vars.get ⟨ 0, by simp [h_offset]⟩) = .input (.curr 0) := by sorry
+      have h_y : ((add8_inline (p:=p) .empty).snd.assignment.vars.get ⟨ 1, by simp [h_offset]⟩) = .input (.curr 1) := by sorry
+      have h_z : ((add8_inline (p:=p) .empty).snd.assignment.vars.get ⟨ 5, by simp [h_offset]⟩) = .input (.curr 2) := by sorry
 
-      -- dsimp [Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness,
-      --   byte_lookup_circuit, circuit_norm] at lookup_x lookup_y
+      -- resolve env
+      have h_x_env : env'.get 0 = row.x := by
+        simp only [env', TableConstraint.window_env, h_offset, h_x]
+        simp only [Nat.reduceLT, reduceDIte]
+        simp [TraceOfLength.get, Trace.getLeFromBottom, Row.get, to_elements, CellOffset.curr]
+      have h_y_env : env'.get 1 = row.y := by
+        simp only [env', TableConstraint.window_env, h_offset, h_y]
+        simp only [Nat.reduceLT, reduceDIte]
+        simp [TraceOfLength.get, Trace.getLeFromBottom, Row.get, to_elements, CellOffset.curr]
+      have h_z_env : env'.get 5 = row.z := by
+        simp only [env', TableConstraint.window_env, h_offset, h_z]
+        simp only [Nat.reduceLT, reduceDIte]
+        simp [TraceOfLength.get, Trace.getLeFromBottom, Row.get, to_elements, CellOffset.curr]
+      clear h_x h_y h_z
 
-      -- simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr lookup_x lookup_y
-      -- simp at lookup_x lookup_y
+      simp only [h_x_env, h_y_env, h_z_env] at h_holds
+      have lookup_x := h_holds.left.left.left
+      have lookup_y := h_holds.left.left.right
+      have h_curr := h_holds.left.right
+      have h_assign := h_holds.right
+      clear h_holds
+      have h_z'_env : env'.get 3 = row.z := calc
+        _ = env'.get 3 - 0 := by ring
+        _ = env'.get 3 - (env'.get 3 + -row.z) := by rw [h_assign]
+        _ = row.z := by ring
+      simp only [h_z'_env] at h_curr
+      clear h_z'_env h_z_env h_assign
 
-      -- dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
-      -- simp [lookup_x, lookup_y] at h_curr
-      -- assumption
-      -- sorry
-    }
+      replace lookup_x := ByteTable.soundness row.x lookup_x
+      replace lookup_y := ByteTable.soundness row.y lookup_y
+      dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
+      specialize h_curr ⟨ lookup_x, lookup_y ⟩
+      -- TODO commenting this in crashes the lean compiler
+      -- exact h_curr
+
+def formal_add8_table : FormalTable (F p) RowType := {
+  constraints := add8_table,
+  spec := spec_add8,
+  soundness := soundness
 }
 
 end Tables.Addition8
