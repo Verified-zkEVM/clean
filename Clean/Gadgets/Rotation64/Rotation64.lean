@@ -97,18 +97,6 @@ def spec (offset : Fin 64) (input : Inputs (F p)) (out: Outputs (F p)) :=
 
 theorem soundness (off : Fin 8) : Soundness (F p) Inputs Outputs (rot64_circuit off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
-
-  have h_x0 : x0_var.eval env = x0 := by injections h_inputs
-  have h_x1 : x1_var.eval env = x1 := by injections h_inputs
-  have h_x2 : x2_var.eval env = x2 := by injections h_inputs
-  have h_x3 : x3_var.eval env = x3 := by injections h_inputs
-  have h_x4 : x4_var.eval env = x4 := by injections h_inputs
-  have h_x5 : x5_var.eval env = x5 := by injections h_inputs
-  have h_x6 : x6_var.eval env = x6 := by injections h_inputs
-  have h_x7 : x7_var.eval env = x7 := by injections h_inputs
-  clear h_inputs
-
-  dsimp only [assumptions, U64.is_normalized] at as
   sorry
 
 def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
