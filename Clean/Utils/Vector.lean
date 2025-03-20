@@ -31,16 +31,18 @@ def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.toArray[i.val] := by
 theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
   simp only [get, map, Fin.coe_cast, Array.getElem_map, getElem_toArray]
 
--- @[simp]
--- def append {m} (v: Vector α n) (w: Vector α m) : Vector α (n + m) :=
---   ⟨ v.val ++ w.val, by simp only [List.length_append, v.prop, w.prop] ⟩
-
--- @[simp]
--- instance instAppend {α : Type} {n : ℕ} {m : ℕ} : HAppend (Vector α n) (Vector α m) (Vector α (n + m)) where
---   hAppend xs ys := append xs ys
-
 @[simp]
 theorem append_vec (v w: Array α) : v.toVector ++ w.toVector = ⟨ v ++ w, by simp ⟩ := rfl
+
+-- map over monad
+def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
+  match (v : Vector (M α) n) with
+  | ⟨ .mk [], h ⟩ => pure ⟨ #[], h ⟩
+  | ⟨ .mk (a :: as), (h : as.length + 1 = n) ⟩ => do
+    let hd ← a
+    let tl ← mapMonad ⟨ .mk as, rfl ⟩
+    pure ⟨ .mk <| hd :: tl.toList, by simp only [Array.size_toArray, List.length_cons,
+      Array.length_toList, size_toArray]; exact h⟩
 
 /- induction principle for Vector.cons -/
 def induct {motive : {n: ℕ} → Vector α n → Prop}

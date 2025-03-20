@@ -71,27 +71,27 @@ def witness_length : List (FlatOperation F) → ℕ
 
 @[circuit_norm]
 def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (witness_length l)
-  | [] => .nil
+  | [] => #v[]
   | op :: ops =>
     let ws := witnesses env ops
     match op with
     | witness m compute =>
-      ⟨ (compute env).val ++ ws.val, by simp only [ws.prop, circuit_norm,
-        List.length_append, Mathlib.Vector.length_val]; ac_rfl ⟩
+      ⟨ (compute env).toArray ++ ws.toArray, by
+        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl ⟩
     | assert _ | lookup _ =>
-      ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
+      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 
 @[circuit_norm]
 def witness_generators : (l: List (FlatOperation F)) → Witness F (witness_length l)
-  | [] => .nil
+  | [] => #v[]
   | op :: ops =>
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.init (fun i env => (compute env).get i)).val ++ ws.val, by
-        simp only [ws.prop, circuit_norm, List.length_append, Mathlib.Vector.length_val]; ac_rfl⟩
+      ⟨ (Vector.init (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
+        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
     | assert _ | lookup _ =>
-      ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
+      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 end FlatOperation
 
 export FlatOperation (constraints_hold_flat)
@@ -269,7 +269,7 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
   modifyGet (fun ops =>
     let var: Variable F := ⟨ ops.offset ⟩
-    ⟨var, .witness ops 1 (fun env => vec [compute env])⟩
+    ⟨var, .witness ops 1 (fun env => #v[compute env])⟩
   )
 
 /-- Create a new variable, as an `Expression`. -/
@@ -519,7 +519,7 @@ def operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
 -- witness generation
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := (circuit |>.operations offset).witness_generators.val
+  let generators := (circuit |>.operations offset).witness_generators
   generators.foldl (fun acc compute =>
     let env i := acc.getD i 0
     acc.push (compute ⟨ env ⟩))

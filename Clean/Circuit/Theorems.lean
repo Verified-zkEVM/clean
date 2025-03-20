@@ -72,29 +72,29 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
       show witness_length (ops ++ _) + m' = _
       omega
     | case3 ops _ ih' | case4 ops _ ih' =>
-      simp_all only [imp_false, forall_eq', witness_length, List.append_eq]
+      simp_all only [forall_eq', witness_length, List.cons_append]
 
 lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
-  (witnesses env (a ++ b)).val = (witnesses env a).val ++ (witnesses env b).val := by
+  (witnesses env (a ++ b)).toArray = (witnesses env a).toArray ++ (witnesses env b).toArray := by
   induction a using FlatOperation.witness_length.induct with
-  | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.nil]
+  | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.toArray_empty,
+    Array.empty_append]
   | case2 _ _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, List.append_eq, ih, List.append_assoc]
+    simp only [List.cons_append, witness_length, witnesses, ih, Array.append_assoc]
   | case3 _ _ ih | case4 _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, List.append_eq, ih, Subtype.coe_eta]
+    simp only [List.cons_append, witness_length, witnesses, ih, Vector.mk_toArray]
 
 /--
 The witnesses created from flat and nested operations are the same
 -/
 lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} {env} :
-  (witnesses env (to_flat_operations ops)).val = (ops.local_witnesses env).val := by
+  (witnesses env (to_flat_operations ops)).toArray = (ops.local_witnesses env).toArray := by
   induction ops with
   | empty => trivial
   | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
-    dsimp only [to_flat_operations, Operations.local_length, circuit_norm, Operations.local_witnesses, Vector.append]
+    dsimp only [to_flat_operations, Operations.local_length, Operations.local_witnesses, Vector.append]
     rw [←ih, witnesses_append]
-    try simp only [witness_length, witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast,
-      Vector.nil, List.append_nil, zero_add, subset_refl, Set.coe_inclusion]
+    try simp only [witness_length, witnesses, Vector.toArray_empty, Array.append_empty]
 
 /--
 Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
@@ -117,9 +117,7 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m
   specialize h ⟨ i, by omega ⟩
   simp only [Fin.coe_cast, Fin.cast_mk] at h
   rw [h]
-  simp only [Vector.get, Vector.append.eq_1, Fin.cast_mk, List.get_eq_getElem, Mathlib.Vector.length_val,
-  Fin.is_lt, List.getElem_append, Fin.coe_cast]
-
+  simp [Vector.get, Vector.append, Array.getElem_append]
 
 lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses (ops.assert c) → env.uses_local_witnesses ops := by
@@ -138,8 +136,7 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
-  simp only [Vector.get, SubCircuit.witness_length, Vector.append.eq_1, Fin.cast_mk, List.get_eq_getElem,
-  Mathlib.Vector.length_val, Fin.is_lt, List.getElem_append, Fin.coe_cast]
+  simp [Vector.get, Vector.append, Array.getElem_append]
 
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
@@ -154,9 +151,9 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   rw [←add_assoc, Circuit.total_length_eq] at h
   rw [h]
   simp only [SubCircuit.witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast]
-  have lt1 : i < (witnesses env c.ops).val.length := by rw [(witnesses env c.ops).prop]; exact i.is_lt
-  rw [List.getElem_append_right'' (ops.local_witnesses env).val lt1]
-  simp only [Nat.add_comm, Mathlib.Vector.length_val]
+  have lt1 : i < (witnesses env c.ops).toArray.size := by rw [(witnesses env c.ops).size_toArray]; exact i.is_lt
+  rw [Array.getElem_append_right' (ops.local_witnesses env).toArray lt1]
+  simp [Nat.add_comm]
 
 end Environment
 
