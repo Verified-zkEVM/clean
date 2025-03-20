@@ -96,6 +96,10 @@ def set (v: Vector α n) (i: Fin n) (a: α) : Vector α n :=
   ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
 
 @[simp]
+def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
+  ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
+
+@[simp]
 def update (v: Vector α n) (i: Fin n) (f: α → α) : Vector α n :=
   v.set i (f (v.get i))
 
