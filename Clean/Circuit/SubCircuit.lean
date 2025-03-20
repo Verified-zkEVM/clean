@@ -68,7 +68,7 @@ def formal_circuit_to_subcircuit (n: ℕ)
   have s: SubCircuit F n := by
     open FlatOperation in
     let flat_ops := to_flat_operations ops
-    let soundness := subcircuit_soundness circuit b_var a_var
+    let soundness := subcircuit_soundness circuit b_var n
     let completeness := subcircuit_completeness circuit b_var
     let initial_offset_eq := circuit.initial_offset_eq
     use flat_ops, soundness, completeness

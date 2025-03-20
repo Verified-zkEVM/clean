@@ -61,19 +61,15 @@ def fib_table : List (TableOperation RowType (F p)) := [
   TableOperation.EveryRowExceptLast fib_relation,
 ]
 
-def assumptions {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  N > 2 ∧
-  trace.forAllRowsOfTrace (fun row => (row.y).val < 256)
-
 def fib8 : ℕ -> ℕ
   | 0 => 0
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
 def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTraceWithIndex (λ row index =>
-    ((row.x).val = fib8 index) ∧
-    ((row.y).val = fib8 (index + 1))
+  trace.forAllRowsOfTraceWithIndex (fun row index =>
+    (row.x.val = fib8 index) ∧
+    (row.y.val = fib8 (index + 1))
   )
 
 
@@ -92,19 +88,17 @@ lemma vars :
 
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table,
-  assumptions := assumptions,
   spec := spec,
   soundness := by
     intro N trace
-    simp only [assumptions, gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
+    simp only [gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
       fib_table, spec, TraceOfLength.forAllRowsOfTraceWithIndex, and_imp]
 
     intro _N_assumption
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
     · simp [table_norm]
-    · intro _
-      simp [table_norm, fib_table]
+    · simp [table_norm, fib_table]
       intros boundary1 boundary2
       simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec,
         circuit_norm
@@ -120,13 +114,9 @@ def formal_fib_table : FormalTable (F p) RowType := {
       rw [boundary1, boundary2]
       simp only [fib8, ZMod.val_zero, ZMod.val_one, and_self]
 
-    · intro lookup_h
-      simp only [TraceOfLength.forAllRowsOfTrace.inner, Fin.isValue] at lookup_h
-
-      -- first of all, we prove the inductive part of the spec
+    · -- first of all, we prove the inductive part of the spec
       unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
       intros constraints_hold
-      specialize ih2 lookup_h.right
 
       unfold table_constraints_hold.foldl at constraints_hold
       simp only [Trace.len, Nat.succ_eq_add_one, AddLeftCancelMonoid.add_eq_zero, one_ne_zero,
@@ -153,13 +143,19 @@ def formal_fib_table : FormalTable (F p) RowType := {
       -- and finally now we prove the actual relations, this is fortunately very easy
       -- now that we have lifted the constraints to specs
 
-      have lookup_first_col : (curr.x).val < 256 := by
+      have lookup_first_col : curr.x.val < 256 := by
         -- This is true also by induction, because we proved that
         -- curr.x is exactly fib8 index, and fib8 is always less than 256
         rw [ih2.left.left]
         apply fib8_less_than_256
 
-      specialize add_holds lookup_first_col (by simp only [lookup_h])
+      have lookup_second_col : curr.y.val < 256 := by
+        -- This is true also by induction, because we proved that
+        -- curr.y is exactly fib8 (index + 1), and fib8 is always less than 256
+        rw [ih2.left.right]
+        apply fib8_less_than_256
+
+      specialize add_holds lookup_first_col lookup_second_col
 
       have spec1 : (next.x).val = fib8 (rest.len + 1) := by
         apply_fun ZMod.val at eq_holds

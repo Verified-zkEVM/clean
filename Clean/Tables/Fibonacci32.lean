@@ -77,24 +77,16 @@ def fib32_table : List (TableOperation RowType (F p)) := [
 ]
 
 /--
-  We assume that the trace length is at least 2 and that,
-  using lookups, the second U32 value is normalized.
--/
-def assumptions {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  N ≥ 2 ∧
-  trace.forAllRowsOfTrace (fun row => (row.y).is_normalized)
-
-/--
   Specification for fibonacci32: for each row with index i
   - the first U32 value is the i-th fibonacci number
   - the second U32 value is the (i+1)-th fibonacci number
-  - the first U32 value is normalized
+  - both U32 values are normalized
 -/
 def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTraceWithIndex (λ row index =>
+  trace.forAllRowsOfTraceWithIndex (fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
-    row.x.is_normalized
+    row.x.is_normalized ∧ row.y.is_normalized
   )
 
 
@@ -280,12 +272,11 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
 -/
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
-  assumptions := assumptions,
   spec := spec,
   soundness := by
     intro N trace
-    simp only [assumptions, gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib32_table, spec]
-    rw [TraceOfLength.forAllRowsOfTraceWithIndex, TraceOfLength.forAllRowsOfTrace, table_constraints_hold]
+    simp only [gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib32_table, spec]
+    rw [TraceOfLength.forAllRowsOfTraceWithIndex, table_constraints_hold]
     intro _N_assumption
 
     /-
@@ -296,8 +287,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
     · simp [table_norm]
 
     -- base case 2
-    · intro _
-      simp only [table_norm]
+    · simp only [table_norm]
       simp [table_norm, Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness, circuit_norm]
 
       rw [
@@ -323,17 +313,14 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       simp only [U32.value, fib32]
       rw [b0, b1, b2, b3, b4, b5, b6, b7]
       simp [ZMod.val_one]
-      simp only [U32.is_normalized, b0, b1, b2, b3]
-      simp only [ZMod.val_zero, Nat.ofNat_pos, and_self]
+      simp only [U32.is_normalized, b0, b1, b2, b3, b4, b5, b6, b7]
+      simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self]
+      trivial
 
     -- inductive step
-    · intro lookup_h
-      simp only [TraceOfLength.forAllRowsOfTrace.inner, Fin.isValue] at lookup_h
-
-      -- first of all, we prove the inductive part of the spec
+    · -- first of all, we prove the inductive part of the spec
       unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
       intros constraints_hold
-      specialize ih2 lookup_h.right
 
       unfold table_constraints_hold.foldl at constraints_hold
       simp only [Trace.len, Nat.succ_ne_zero, ite_false] at constraints_hold
@@ -344,7 +331,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       simp only [ih2, and_self]
 
       simp only [Fin.isValue, and_true] at ih2
-      let ⟨curr_fib0, curr_fib1, curr_normalized_x⟩ := ih2.left
+      let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
 
       simp only [and_true]
 
@@ -353,11 +340,11 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       have eq_spec := lift_rec_eq curr next constraints_hold.left
 
       -- and now we can reason at high level with U32s
-      specialize add_spec curr_normalized_x lookup_h.right.left
+      specialize add_spec curr_normalized_x curr_normalized_y
       simp only [fib32, Nat.reducePow]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
       simp only [curr_fib1, Trace.len, Nat.succ_eq_add_one, add_spec,
-        Nat.reducePow, lookup_h, and_self]
+        Nat.reducePow, and_self, curr_normalized_y]
 }
 
 end Tables.Fibonacci32
