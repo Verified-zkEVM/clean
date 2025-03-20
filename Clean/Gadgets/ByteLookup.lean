@@ -31,7 +31,7 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (#v[x])
   have h' : (x.val) % 256 = x.val := by
     rw [Nat.mod_eq_iff_lt]; assumption; norm_num
   simp only [h', List.cons.injEq, and_true]
-  rw [FieldUtils.nat_to_field_of_val_eq_iff]
+  simp [FieldUtils.nat_to_field_of_val_eq_iff]
 
 def ByteTable.equiv (x: F p) : ByteTable.contains (#v[x]) ↔ x.val < 256 :=
   ⟨ByteTable.soundness x, ByteTable.completeness x⟩

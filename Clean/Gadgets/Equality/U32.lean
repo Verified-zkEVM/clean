@@ -21,7 +21,7 @@ instance : ProvableType Inputs where
   size := 8
   to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
   from_elements v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩ ⟩
 
 def assert_eq (input : Var Inputs (F p)) := do
@@ -46,7 +46,7 @@ def circuit : FormalAssertion (F p) Inputs where
     let ⟨⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩⟩ := input
     let ⟨⟨x0_var, x1_var, x2_var, x3_var⟩, ⟨y0_var, y1_var, y2_var, y3_var⟩⟩ := vars
 
-    dsimp [circuit_norm] at h_holds
+    dsimp only [circuit_norm, assert_eq] at h_holds
 
     have hx0 : x0_var.eval env = x0 := by injections
     have hx1 : x1_var.eval env = x1 := by injections
@@ -86,7 +86,7 @@ def circuit : FormalAssertion (F p) Inputs where
     have spec2 : x2 = y2 := by injection spec
     have spec3 : x3 = y3 := by injection spec
 
-    simp only [Circuit.constraints_hold.completeness, Expression.eval, neg_mul, one_mul]
+    simp only [circuit_norm, assert_eq, neg_mul, one_mul]
     rw [hx0, hx1, hx2, hx3, hy0, hy1, hy2, hy3]
     rw [spec0, spec1, spec2, spec3]
     simp only [add_neg_cancel, and_self]
