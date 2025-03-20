@@ -12,7 +12,7 @@ instance : ProvableType Inputs where
   size := 2
   to_elements s := #v[s.x, s.y]
   from_elements v :=
-    let ⟨ [x, y], _ ⟩ := v
+    let ⟨ .mk [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 
 def add8 (input : Var Inputs (F p)) := do

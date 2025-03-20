@@ -18,7 +18,7 @@ instance : ProvableType Inputs where
   size := 3
   to_elements x := #v[x.x, x.y, x.carry_in]
   from_elements v :=
-    let ⟨ [x, y, carry_in], _ ⟩ := v
+    let ⟨ .mk [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
 
 structure Outputs (F : Type) where
@@ -29,7 +29,7 @@ instance : ProvableType Outputs where
   size := 2
   to_elements x := #v[x.z, x.carry_out]
   from_elements v :=
-    let ⟨ [z, carry_out], _ ⟩ := v
+    let ⟨ .mk [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
 def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do

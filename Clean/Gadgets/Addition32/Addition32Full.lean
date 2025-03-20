@@ -19,7 +19,7 @@ instance instProvableTypeInputs : ProvableType Inputs where
   to_elements x :=
     #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
   from_elements v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
 
 structure Outputs (F : Type) where
@@ -30,7 +30,7 @@ instance instProvableTypeOutputs : ProvableType Outputs where
   size := ProvableType.size U32 + 1
   to_elements x := (ProvableType.to_elements x.z) ++ #v[x.carry_out]
   from_elements v :=
-    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
+    let ⟨ .mk [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
 open Gadgets.Addition8FullCarry (add8_full_carry)
