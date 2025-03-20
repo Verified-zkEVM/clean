@@ -37,7 +37,7 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
 
   -- witness the result
   let z ← witness (F:=F p) (fun eval => mod_256 (eval (x + y + carry_in)))
-  byte_lookup z
+  lookup (ByteLookup z)
 
   -- witness the output carry
   let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
