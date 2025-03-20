@@ -16,7 +16,7 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 3
-  to_elements x := vec [x.x, x.y, x.carry_in]
+  to_elements x := #v[x.x, x.y, x.carry_in]
   from_elements v :=
     let ⟨ [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
@@ -27,7 +27,7 @@ structure Outputs (F : Type) where
 
 instance : ProvableType Outputs where
   size := 2
-  to_elements x := vec [x.z, x.carry_out]
+  to_elements x := #v[x.z, x.carry_out]
   from_elements v :=
     let ⟨ [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
@@ -90,7 +90,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
-    guard_hyp h_byte: ByteTable.contains (vec [z])
+    guard_hyp h_byte: ByteTable.contains (#v[z])
     guard_hyp h_add: x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
     change True → (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
     specialize h_bool_carry trivial
@@ -139,7 +139,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-    let goal_byte := ByteTable.contains (vec [z])
+    let goal_byte := ByteTable.contains (#v[z])
     let goal_bool := carry_out = 0 ∨ carry_out = 1
     let goal_add := x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
     show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add

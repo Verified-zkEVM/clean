@@ -11,7 +11,7 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 3
-  to_elements s := vec [s.x, s.y, s.carry_in]
+  to_elements s := #v[s.x, s.y, s.carry_in]
   from_elements v :=
     let ⟨ [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩

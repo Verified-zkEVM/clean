@@ -17,7 +17,7 @@ structure Inputs (F : Type) where
 instance instProvableTypeInputs : ProvableType Inputs where
   size := ProvableType.size U32 + ProvableType.size U32 + 1
   to_elements x :=
-    vec [x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
+    #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
   from_elements v :=
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
@@ -28,7 +28,7 @@ structure Outputs (F : Type) where
 
 instance instProvableTypeOutputs : ProvableType Outputs where
   size := ProvableType.size U32 + 1
-  to_elements x := (ProvableType.to_elements x.z) ++ vec [x.carry_out]
+  to_elements x := (ProvableType.to_elements x.z) ++ #v[x.carry_out]
   from_elements v :=
     let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
@@ -221,7 +221,7 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
   have add8_completeness {x y c_in z c_out : F p}
     (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
-    ByteTable.contains (vec [z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -1 * z + -1 * (c_out * 256) = 0
+    ByteTable.contains (#v[z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -1 * z + -1 * (c_out * 256) = 0
   := by
     intro x_byte y_byte hc
     have : z.val < 256 := hz ▸ FieldUtils.mod_256_lt (x + y + c_in)

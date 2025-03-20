@@ -4,9 +4,6 @@ import Mathlib.Data.ZMod.Basic
 
 variable {α β : Type} {n : ℕ}
 
-@[reducible, deprecated "use native Vector creation"]
-def vec (l: List α) : Vector α l.length := ⟨ l.toArray, rfl ⟩
-
 def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 namespace Vector

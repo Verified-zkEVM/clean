@@ -12,17 +12,17 @@ def ByteTable : Table (F p) where
   name := "Bytes"
   length := 256
   arity := 1
-  row i := vec [from_byte i]
+  row i := #v[from_byte i]
 
-def ByteTable.soundness (x: F p) : ByteTable.contains (vec [x]) → x.val < 256 := by
+def ByteTable.soundness (x: F p) : ByteTable.contains (#v[x]) → x.val < 256 := by
   dsimp only [ByteTable, Table.contains]
-  rintro ⟨ i, h: vec [x] = vec [from_byte i] ⟩
+  rintro ⟨ i, h: #v[x] = #v[from_byte i] ⟩
   have h' : x = from_byte i := by repeat injection h with h
   have h'' : x.val = i.val := FieldUtils.nat_to_field_eq x h'
   rw [h'']
   exact i.is_lt
 
-def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x]) := by
+def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (#v[x]) := by
   intro h
   dsimp only [ByteTable, Table.contains]
   use x.val
@@ -33,12 +33,12 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x
   simp only [h', List.cons.injEq, and_true]
   rw [FieldUtils.nat_to_field_of_val_eq_iff]
 
-def ByteTable.equiv (x: F p) : ByteTable.contains (vec [x]) ↔ x.val < 256 :=
+def ByteTable.equiv (x: F p) : ByteTable.contains (#v[x]) ↔ x.val < 256 :=
   ⟨ByteTable.soundness x, ByteTable.completeness x⟩
 
 def byte_lookup (x: Expression (F p)) := lookup {
   table := ByteTable
-  entry := vec [x]
+  entry := #v[x]
   -- to make this work, we need to pass an `eval` function to the callback!!
   index := fun env =>
     let x := x.eval env |>.val

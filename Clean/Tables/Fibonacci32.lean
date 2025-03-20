@@ -22,7 +22,7 @@ structure RowType (F : Type) where
 
 instance : NonEmptyProvableType RowType where
   size := 8
-  to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
+  to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
   from_elements v :=
     -- TODO is it possible to define in terms of ProvableType.from_elements of the U32?
     let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v

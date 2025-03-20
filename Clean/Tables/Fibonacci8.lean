@@ -25,7 +25,7 @@ structure RowType (F : Type) where
 
 instance : NonEmptyProvableType RowType where
   size := 2
-  to_elements x := vec [x.x, x.y]
+  to_elements x := #v[x.x, x.y]
   from_elements v :=
     let ⟨ [x, y], _ ⟩ := v
     ⟨ x, y ⟩
