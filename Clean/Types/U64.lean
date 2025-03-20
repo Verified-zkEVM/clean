@@ -25,6 +25,9 @@ instance : ProvableType U64 where
     let ⟨[v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
     ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩
 
+instance (T: Type) [Repr T] : Repr (U64 T) where
+  reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
+
 namespace U64
 
 omit [Fact (Nat.Prime p)] p_large_enough in
@@ -79,6 +82,11 @@ def value (x: U64 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3 +
   x.x4.val * 256^4 + x.x5.val * 256^5 + x.x6.val * 256^6 + x.x7.val * 256^7
 
+
+def value_nat (x: U64 ℕ) :=
+  x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
+  x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
+
 /--
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
@@ -92,6 +100,21 @@ def decompose_nat (x: ℕ) : U64 (F p) :=
   let x5 := FieldUtils.mod (FieldUtils.floordiv x 256^5) 256 (by linarith [p_large_enough.elim])
   let x6 := FieldUtils.mod (FieldUtils.floordiv x 256^6) 256 (by linarith [p_large_enough.elim])
   let x7 := FieldUtils.mod (FieldUtils.floordiv x 256^7) 256 (by linarith [p_large_enough.elim])
+  ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
+
+/--
+  Return a 64-bit unsigned integer from a natural number, by decomposing
+  it into four limbs of 8 bits each.
+-/
+def decompose_nat_nat (x: ℕ) : U64 ℕ :=
+  let x0 := x % 256
+  let x1 := (x / 256) % 256
+  let x2 := (x / 256^2) % 256
+  let x3 := (x / 256^3) % 256
+  let x4 := (x / 256^4) % 256
+  let x5 := (x / 256^5) % 256
+  let x6 := (x / 256^6) % 256
+  let x7 := (x / 256^7) % 256
   ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
 
 /--
