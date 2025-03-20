@@ -81,7 +81,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
 
   -- simplify circuit
   -- 1. quick pass without subcircuits to reduce offsets
-  simp only [circuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit] at h
+  simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
   -- 2. subcircuit constraints
   dsimp only [subcircuit_norm, Boolean.circuit, Boolean.spec] at h
   simp only [true_and, true_implies, and_assoc] at h
@@ -107,7 +107,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp only [output, main, circuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit]
+    dsimp only [output, main, circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
     rfl
 
   rw [h_output]
@@ -151,7 +151,7 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool
+    add32_full, add8_full_carry, Boolean.circuit, assert_bool
   ]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
@@ -180,7 +180,7 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
     -- this has to unfold all subcircuits :/
-    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool]
+    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, assert_bool]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]

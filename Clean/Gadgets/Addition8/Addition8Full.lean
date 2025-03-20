@@ -61,7 +61,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- TODO it's unfortunate, but we have to unfold the _inner circuit_
     -- to know the index of its output variable
-    simp only [Addition8FullCarry.circuit, Addition8FullCarry.add8_full_carry, byte_lookup, circuit_norm] at h_holds
+    simp only [Addition8FullCarry.circuit, Addition8FullCarry.add8_full_carry, circuit_norm] at h_holds
     rw [←(by rfl : z = env.get offset)] at h_holds
 
     -- satisfy `Add8FullCarry.assumptions` by using our own assumptions

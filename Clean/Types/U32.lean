@@ -48,10 +48,10 @@ lemma ext {x y : U32 (F p)}
 def witness (compute : Environment (F p) → U32 (F p)) := do
   let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness compute
 
-  byte_lookup x0
-  byte_lookup x1
-  byte_lookup x2
-  byte_lookup x3
+  lookup (ByteLookup x0)
+  lookup (ByteLookup x1)
+  lookup (ByteLookup x2)
+  lookup (ByteLookup x3)
 
   return U32.mk x0 x1 x2 x3
 

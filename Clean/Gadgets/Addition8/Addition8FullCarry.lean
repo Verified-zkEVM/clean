@@ -37,7 +37,7 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
 
   -- witness the result
   let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
-  byte_lookup z
+  lookup (ByteLookup z)
 
   -- witness the output carry
   let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
@@ -78,7 +78,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify constraints hypothesis
-    simp only [circuit_norm, add8_full_carry, byte_lookup] at h_holds
+    simp only [circuit_norm, add8_full_carry, ByteLookup] at h_holds
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
@@ -122,7 +122,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     dsimp [assumptions] at as
 
     -- unfold goal, (re)introduce names for some of unfolded variables
-    simp only [add8_full_carry, byte_lookup, circuit_norm]
+    simp only [add8_full_carry, circuit_norm]
     rw [hx, hy, hcarry_in]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -130,12 +130,12 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     -- simplify local witnesses
     have hz : z = mod_256 (x + y + carry_in) := by
       have henv0 := henv (0 : Fin 2)
-      dsimp only [add8_full_carry, byte_lookup, circuit_norm] at henv0
+      dsimp only [add8_full_carry, circuit_norm] at henv0
       rwa [hx, hy, hcarry_in] at henv0
 
     have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
       have henv1 := henv (1 : Fin 2)
-      dsimp only [add8_full_carry, byte_lookup, circuit_norm] at henv1
+      dsimp only [add8_full_carry, circuit_norm] at henv1
       rwa [hx, hy, hcarry_in] at henv1
 
     -- now it's just mathematics!

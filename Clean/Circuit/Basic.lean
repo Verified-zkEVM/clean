@@ -268,33 +268,31 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 /-- Create a new variable -/
 @[circuit_norm]
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
-  modifyGet (fun ops =>
+  modifyGet fun ops =>
     let var: Variable F := ⟨ ops.offset ⟩
     ⟨var, .witness ops 1 (fun env => #v[compute env])⟩
-  )
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
 def witness (compute : Environment F → F) := do
-  let var ← witness_var compute
-  return Expression.var var
+  let v ← witness_var compute
+  return var v
 
 @[circuit_norm]
 def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) :=
-  modifyGet (fun ops =>
+  modifyGet fun ops =>
     let vars: Vector (Variable F) n := .init (fun i => ⟨ ops.offset + i ⟩)
     ⟨vars, .witness ops n compute⟩
-  )
 
 /-- Add a constraint. -/
 @[circuit_norm]
 def assert_zero (e: Expression F) : Circuit F Unit :=
-  modify (fun ops => .assert ops e)
+  modify fun ops => .assert ops e
 
 /-- Add a lookup. -/
 @[circuit_norm]
 def lookup (l: Lookup F) : Circuit F Unit :=
-  modify (fun ops => .lookup ops l)
+  modify fun ops => .lookup ops l
 
 end Circuit
 

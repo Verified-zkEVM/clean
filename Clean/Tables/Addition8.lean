@@ -20,7 +20,7 @@ instance : NonEmptyProvableType RowType where
     ⟨ x, y, z ⟩
 
 def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
-  main x := byte_lookup x
+  main x := lookup (ByteLookup x)
   assumptions _ := True
   spec x := x.val < 256
   soundness := by
@@ -83,7 +83,6 @@ def formal_add8_table : FormalTable (F p) RowType := {
         Gadgets.Addition8.circuit, Gadgets.Addition8.add8,
         Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.add8_full,
         Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.add8_full_carry,
-        byte_lookup,
         Gadgets.Addition8.assumptions, Gadgets.Addition8.spec
       ] at h_curr
       simp at h_curr
