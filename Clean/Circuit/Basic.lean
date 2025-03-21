@@ -541,10 +541,11 @@ that we want simplified to
 `v#[x.eval env, y.eval env]`
 -/
 attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_nil
-  Vector.append_singleton Vector.push_mk List.push_toArray
 
--- simplify `witness_length` in flat operations
-attribute [circuit_norm] List.nil_append List.cons_append
+-- we often need to simplify concatenated vectors, e.g. for resolving `local_witnesses`
+attribute [circuit_norm] Vector.append_singleton Vector.append  Vector.push_mk
+  Array.append_singleton Array.append_empty List.push_toArray
+  List.nil_append List.cons_append
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)
 -- TODO handle other small indices as well

@@ -82,9 +82,8 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   clear x_norm y_norm
 
   -- -- simplify circuit
-  simp only [circuit_norm, add32_full, add8_full_carry, byte_lookup,
-    Circuit.formal_assertion_to_subcircuit,
-    Boolean.circuit, to_flat_operations, assert_bool
+  simp only [circuit_norm, subcircuit_norm,
+    add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool
   ] at h
   simp only [true_and, true_implies, and_assoc] at h
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
@@ -110,9 +109,8 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
     -- TODO unfolding everything ... this is bad
-    simp only [output, main, add32_full, circuit_norm, add8_full_carry, byte_lookup,
-      Boolean.circuit, assert_bool,
-      Circuit.formal_assertion_to_subcircuit, to_flat_operations,
+    simp only [output, main, circuit_norm, subcircuit_norm,
+      add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool,
     ]
     rfl
 
@@ -156,7 +154,9 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit, circuit_norm]
+  simp only [circuit_norm, subcircuit_norm,
+    add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool
+  ]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]
@@ -173,7 +173,7 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
 
   change ∀ i : Fin 8, env.get (i0 + i) = wit.get i at henv
 
-  have hwit : wit.val = [
+  have hwit : wit.toArray = #[
     mod_256 (x0 + y0 + carry_in),
     floordiv (x0 + y0 + carry_in) 256,
     mod_256 (x1 + y1 + env.get (i0 + 1)),
@@ -183,10 +183,11 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
     mod_256 (x3 + y3 + env.get (i0 + 5)),
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
-    dsimp [wit, circuit_norm]
+    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
+  repeat clear this
 
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -201,34 +202,34 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
   -- but that seems slower than simp with getElem lemmas
   have hz0 : z0 = mod_256 (x0 + y0 + carry_in) := by
     rw [(show z0 = wit.get 0 from henv 0), wit.get_eq_lt 0]
-    simp only [hwit, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_zero]
   have hc0 : c0 = floordiv (x0 + y0 + carry_in) 256 := by
     rw [(show c0 = wit.get 1 from henv 1), wit.get_eq_lt 1]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz1 : z1 = mod_256 (x1 + y1 + c0) := by
     rw [(show z1 = wit.get 2 from henv 2), wit.get_eq_lt 2]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc1 : c1 = floordiv (x1 + y1 + c0) 256 := by
     rw [(show c1 = wit.get 3 from henv 3), wit.get_eq_lt 3]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz2 : z2 = mod_256 (x2 + y2 + c1) := by
     rw [(show z2 = wit.get 4 from henv 4), wit.get_eq_lt 4]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc2 : c2 = floordiv (x2 + y2 + c1) 256 := by
     rw [(show c2 = wit.get 5 from henv 5), wit.get_eq_lt 5]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz3 : z3 = mod_256 (x3 + y3 + c2) := by
     rw [(show z3 = wit.get 6 from henv 6), wit.get_eq_lt 6]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc3 : c3 = floordiv (x3 + y3 + c2) 256 := by
     rw [(show c3 = wit.get 7 from henv 7), wit.get_eq_lt 7]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
     (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
-    ByteTable.contains (#v[z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -1 * z + -1 * (c_out * 256) = 0
+    ByteTable.contains (#v[z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
     have : z.val < 256 := hz ▸ FieldUtils.mod_256_lt (x + y + c_in)

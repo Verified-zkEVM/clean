@@ -16,9 +16,9 @@ def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.toArray[i.val] := by
   simp only [get, List.get_eq_getElem, Fin.coe_cast]
 
 /-- this is exactly what's needed to rewrite `v.get i` into a `List.getElem` if `n` is a concrete Nat -/
--- def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num) :
---   v.get ((Fin.instOfNatOfNeZeroNat (a:=i)).ofNat : Fin n) = v.val[i]'(by rw [v.prop]; exact h) := by
---   simp only [get_eq, OfNat.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt h]
+def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num) :
+  v.get ((Fin.instOfNat (i:=i)).ofNat : Fin n) = v.toArray[i]'(by rw [v.size_toArray]; exact h) := by
+  simp only [get_eq, OfNat.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt h]
 
 @[simp]
 theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
