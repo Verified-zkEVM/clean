@@ -200,10 +200,22 @@ def FormalCircuit.local_length (circuit: FormalCircuit F β α) (input: Var β F
 /-- The local length of a subcircuit is derived from the original formal circuit -/
 lemma FormalCircuit.local_length_eq (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
     (formal_circuit_to_subcircuit offset circuit input).snd.witness_length
-    = circuit.local_length input offset := by
+    = (circuit.main input |>.operations offset).local_length := by
+  apply Environment.flat_witness_length_eq
+
+def FormalAssertion.local_length (circuit: FormalAssertion F β) (input: Var β F := default) (offset: ℕ := 0) :=
+  (circuit.main input |>.operations offset).local_length
+
+lemma FormalAssertion.local_length_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
+    (formal_assertion_to_subcircuit offset circuit input).witness_length
+    = (circuit.main input |>.operations offset).local_length := by
   apply Environment.flat_witness_length_eq
 end Circuit
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
   Circuit.formal_circuit_to_subcircuit Circuit.formal_assertion_to_subcircuit to_flat_operations
+
+-- to just reduce offsets, it's much better to _not_ use `subcircuit_norm`
+-- instead, `circuit_norm` will use these theorems to unfold subcircuits
+attribute [circuit_norm] Circuit.FormalCircuit.local_length_eq Circuit.FormalAssertion.local_length_eq
