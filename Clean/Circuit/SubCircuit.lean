@@ -203,3 +203,7 @@ lemma FormalCircuit.local_length_eq (circuit: FormalCircuit F β α) (input: Var
     = circuit.local_length input offset := by
   apply Environment.flat_witness_length_eq
 end Circuit
+
+-- simp set to unfold subcircuits
+attribute [subcircuit_norm]
+  Circuit.formal_circuit_to_subcircuit Circuit.formal_assertion_to_subcircuit to_flat_operations
