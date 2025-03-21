@@ -160,7 +160,7 @@ def local_length {n: ℕ} : Operations F n → ℕ
 
 @[circuit_norm]
 def local_witnesses {n: ℕ} (env: Environment F) : (ops: Operations F n) → Vector F ops.local_length
-  | .empty _ => .nil
+  | .empty _ => #v[]
   | .witness ops _ c => (local_witnesses env ops).append (c env)
   | .assert ops _ => local_witnesses env ops
   | .lookup ops _ => local_witnesses env ops
@@ -168,7 +168,7 @@ def local_witnesses {n: ℕ} (env: Environment F) : (ops: Operations F n) → Ve
 
 @[circuit_norm]
 def witness_generators {n: ℕ} : (ops: Operations F n) → Witness F ops.local_length
-  | .empty _ => .nil
+  | .empty _ => #v[]
   | .witness ops _ c => (witness_generators ops).append
     (Vector.init (fun i env => (c env).get i))
   | .assert ops _ => witness_generators ops
@@ -258,7 +258,7 @@ def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
 def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.final_offset offset) :=
   circuit offset |>.snd.withLength
 
-@[reducible]
+@[reducible, circuit_norm]
 def output (circuit: Circuit F α) (offset := 0) : α :=
   circuit offset |>.fst
 
@@ -529,11 +529,15 @@ def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
 end Circuit
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
-attribute [circuit_norm] bind
-attribute [circuit_norm] StateT.bind
-attribute [circuit_norm] modify
-attribute [circuit_norm] modifyGet
-attribute [circuit_norm] MonadStateOf.modifyGet
-attribute [circuit_norm] StateT.modifyGet
-attribute [circuit_norm] pure
-attribute [circuit_norm] StateT.pure
+attribute [circuit_norm] bind StateT.bind
+attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
+attribute [circuit_norm] pure StateT.pure
+attribute [circuit_norm] StateT.run
+
+/-
+when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
+`(Vector.map (fun x ↦ Expression.eval env x) v#[x, y])`
+that we want simplified to
+`v#[x.eval env, y.eval env]`
+-/
+attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_nil

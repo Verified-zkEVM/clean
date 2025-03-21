@@ -60,7 +60,7 @@ def unit (_: Type) := Unit
 
 instance : ProvableType unit where
   size := 0
-  to_elements _ := .nil
+  to_elements _ := #v[]
   from_elements _ := ()
 
 @[reducible]

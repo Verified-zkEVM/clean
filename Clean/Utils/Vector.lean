@@ -9,10 +9,6 @@ def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 namespace Vector
 def len (_: Vector α n) : ℕ := n
 
-@[simp]
-def nil : Vector α 0 := #v[]
-
-@[simp]
 def cons (a: α) (v: Vector α n)  : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
@@ -28,9 +24,6 @@ def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.toArray[i.val] := by
 theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
   simp only [get, map, Fin.coe_cast, Array.getElem_map, getElem_toArray]
 
-@[simp]
-theorem append_vec (v w: Array α) : v.toVector ++ w.toVector = ⟨ v ++ w, by simp ⟩ := rfl
-
 -- map over monad
 def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
   match (v : Vector (M α) n) with
@@ -43,7 +36,7 @@ def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector
 
 /- induction principle for Vector.cons -/
 def induct {motive : {n: ℕ} → Vector α n → Prop}
-  (h0: motive nil)
+  (h0: motive #v[])
   (h1: ∀ {n: ℕ} (a: α) {as: Vector α n}, motive as → motive (cons a as))
   {n: ℕ} (v: Vector α n) : motive v :=
   match v with
@@ -60,7 +53,7 @@ def induct {motive : {n: ℕ} → Vector α n → Prop}
 
 /- induction principle for Vector.push -/
 def induct_push {motive : {n: ℕ} → Vector α n → Prop}
-  (h0: motive nil)
+  (h0: motive #v[])
   (h1: ∀ {n: ℕ} {as: Vector α n} (a: α), motive as → motive (as.push a))
   {n: ℕ} (v: Vector α n) : motive v := by
   match v with
@@ -79,7 +72,7 @@ def induct_push {motive : {n: ℕ} → Vector α n → Prop}
 @[simp]
 def init {n} (create: Fin n → α) : Vector α n :=
   match n with
-  | 0 => nil
+  | 0 => #v[]
   | k + 1 =>
     (init (fun i : Fin k => create i)).push (create k)
 
@@ -88,9 +81,13 @@ def finRange (n : ℕ) : Vector (Fin n) n :=
 
 def fill (n : ℕ) (a: α) : Vector α n :=
   match n with
-  | 0 => nil
+  | 0 => #v[]
   | k + 1 => (fill k a).push a
 
 instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
   default := fill n default
+
+
+-- some simp tagging because we use Vectors a lot
+attribute [simp] Vector.append Vector.get Array.getElem_append
 end Vector
