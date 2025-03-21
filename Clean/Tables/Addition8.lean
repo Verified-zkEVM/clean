@@ -70,21 +70,16 @@ def formal_add8_table : FormalTable (F p) RowType := {
       simp [ih]
       clear ih h_rest
 
-      -- unfold offsets, but not full subcircuits
+      -- unfold offsets
       simp only [
         table_norm, add8_inline, TableConstraint.assertion, TableConstraint.subcircuit,
-        circuit_norm, -- subcircuit_norm
-        byte_lookup_circuit, byte_lookup,
-        Boolean.circuit, assert_bool,
-        Gadgets.Addition8.circuit, Gadgets.Addition8.add8,
-        Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.add8_full,
-        Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.add8_full_carry,
+        circuit_norm,
+        byte_lookup_circuit, Boolean.circuit, Gadgets.Addition8.circuit
       ] at h_curr
       simp at h_curr
 
       -- unfold subcircuits
-      simp only [table_norm,
-        circuit_norm, subcircuit_norm,
+      simp only [table_norm, circuit_norm, subcircuit_norm,
         Gadgets.Addition8.circuit, Gadgets.Addition8.add8,
         Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.add8_full,
         Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.add8_full_carry,
