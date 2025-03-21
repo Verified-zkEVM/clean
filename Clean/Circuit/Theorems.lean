@@ -61,11 +61,11 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
   induction ops with
   | empty => trivial
   | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
-    dsimp only [to_flat_operations, Operations.local_length, SubCircuit.witness_length]
+    dsimp only [to_flat_operations, Operations.local_length]
     generalize to_flat_operations ops = flat_ops at *
     generalize ops.local_length = n at *
     induction flat_ops using FlatOperation.witness_length.induct generalizing n with
-    | case1 => simp_all only [witness_length, List.nil_append, self_eq_add_left]
+    | case1 =>  simp_all only [witness_length, List.nil_append, self_eq_add_left, SubCircuit.local_length_eq]
     | case2 ops m' _ ih' =>
       dsimp only [witness_length] at *
       specialize ih' (n - m') (by rw [←ih]; omega)
@@ -84,6 +84,13 @@ lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
   | case3 _ _ ih | case4 _ _ ih =>
     simp only [List.cons_append, witness_length, witnesses, ih, Vector.mk_toArray]
 
+lemma subcircuit_witness_eq {n: ℕ} (sc : SubCircuit F n) {env} :
+    (sc.witnesses env).toArray = (FlatOperation.witnesses env sc.ops).toArray := by
+  unfold SubCircuit.witnesses
+  congr
+  exact sc.local_length_eq
+  simp only [eqRec_heq_iff_heq, heq_eq_eq]
+
 /--
 The witnesses created from flat and nested operations are the same
 -/
@@ -92,9 +99,9 @@ lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} {env} :
   induction ops with
   | empty => trivial
   | witness ops m c ih | assert ops c ih | lookup ops c ih | subcircuit ops _ ih =>
-    dsimp only [to_flat_operations, Operations.local_length, Operations.local_witnesses, Vector.append]
+    simp only [to_flat_operations, Operations.local_length, Operations.local_witnesses, Vector.toArray_append]
     rw [←ih, witnesses_append]
-    try simp only [witness_length, witnesses, Vector.toArray_empty, Array.append_empty]
+    try simp only [witness_length, witnesses, Vector.toArray_empty, Array.append_empty, subcircuit_witness_eq]
 
 /--
 Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
@@ -132,20 +139,19 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
 := by
   intro h i
   simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
-  have : i < ops.local_length + c.witness_length := by linarith [i.is_lt]
+  have : i < ops.local_length + c.local_length := by linarith [i.is_lt]
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
   simp [Vector.get, Vector.append, Array.getElem_append]
-
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses env c.ops) n
 := by
   intro h i
   simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
-  unfold SubCircuit.witness_length at h
-  have : ops.local_length + i < ops.local_length + witness_length c.ops := by linarith [i.is_lt]
+  -- unfold SubCircuit.local_length at h
+  have : ops.local_length + i < ops.local_length + c.local_length := by rw [c.local_length_eq]; linarith [i.is_lt]
   specialize h ⟨ ops.local_length + i, this ⟩
   simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
   rw [←add_assoc, Circuit.total_length_eq] at h
@@ -153,7 +159,7 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   simp only [SubCircuit.witnesses, Vector.get, List.get_eq_getElem, Fin.coe_cast]
   have lt1 : i < (witnesses env c.ops).toArray.size := by rw [(witnesses env c.ops).size_toArray]; exact i.is_lt
   rw [Array.getElem_append_right' (ops.local_witnesses env).toArray lt1]
-  simp [Nat.add_comm]
+  simp [Nat.add_comm, subcircuit_witness_eq]
 
 end Environment
 
