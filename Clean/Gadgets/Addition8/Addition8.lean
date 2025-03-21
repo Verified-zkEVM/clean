@@ -49,11 +49,15 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    dsimp [circuit_norm] at h_holds
+    simp [circuit_norm, add8, Circuit.formal_circuit_to_subcircuit] at h_holds
+
+    -- to simplify, we have to rewrite the output in the same way
+    -- TODO how could this be made easier? i.e. "identify" the output within the constraints of a circuit
+    have hz_var : z = Expression.eval env (
+      Addition8Full.circuit.main { x := x_var, y := y_var, carry_in := const 0 } offset).fst := rfl
 
     -- rewrite input and ouput values
-    rw [hx, hy] at h_holds
-    rw [←(by rfl : z = env.get offset)] at h_holds
+    rw [hx, hy, ←hz_var] at h_holds
 
     -- satisfy `Gadgets.Addition8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
@@ -82,7 +86,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp [circuit_norm]
+    simp [circuit_norm, add8, Circuit.formal_circuit_to_subcircuit]
     rw [hx, hy]
 
     -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold

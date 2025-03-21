@@ -52,23 +52,25 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    dsimp [circuit_norm] at h_holds
+    simp only [add8_full, circuit_norm, Circuit.formal_circuit_to_subcircuit] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in] at h_holds
+
+    -- TODO it's unfortunate, but we have to unfold the _inner circuit_
+    -- to know the index of its output variable
+    simp only [Addition8FullCarry.circuit, Addition8FullCarry.add8_full_carry, byte_lookup, circuit_norm] at h_holds
     rw [←(by rfl : z = env.get offset)] at h_holds
 
     -- satisfy `Add8FullCarry.assumptions` by using our own assumptions
     let ⟨ asx, asy, as_carry_in ⟩ := as
-    have as': Gadgets.Addition8FullCarry.circuit.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
-    specialize h_holds (by assumption)
+    have as': Addition8FullCarry.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
+    specialize h_holds as'
 
-    guard_hyp h_holds : Gadgets.Addition8FullCarry.circuit.spec
-      { x, y, carry_in }
-      { z, carry_out := env.get (offset + 1) }
+    guard_hyp h_holds : Addition8FullCarry.spec { x, y, carry_in } { z, .. }
 
     -- unfold `Add8FullCarry` statements to show what the hypothesis is in our context
-    dsimp [Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.spec] at h_holds
+    dsimp [Addition8FullCarry.spec] at h_holds
     -- discard second part of the spec
     have ⟨ h_holds, _ ⟩ := h_holds
     guard_hyp h_holds : z.val = (x.val + y.val + carry_in.val) % 256
@@ -88,7 +90,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp [circuit_norm]
+    simp only [circuit_norm, add8_full, Circuit.formal_circuit_to_subcircuit]
     rw [hx, hy, hcarry_in]
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold.
