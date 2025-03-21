@@ -36,7 +36,7 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (F:=F p) (fun eval => mod_256 (eval (x + y + carry_in)))
+  let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
   byte_lookup z
 
   -- witness the output carry
@@ -64,6 +64,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
   assumptions := assumptions
   spec := spec
+  local_length _ := 2
+
   soundness := by
     -- introductions
     rintro i0 env inputs_var inputs h_inputs as

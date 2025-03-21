@@ -466,7 +466,7 @@ structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] wh
   initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
 
   /-- how many local witnesses this circuit introduces -/
-  local_length: Var β F → ℕ
+  local_length: Var β F → ℕ := fun _ ↦ 0
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
   local_length_eq : ∀ var offset, (main var |>.operations offset).local_length = local_length var := by intros; rfl
 

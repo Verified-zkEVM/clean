@@ -36,6 +36,8 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
   main := add8
   assumptions := assumptions
   spec := spec
+  local_length _ := 2
+
   soundness := by
     -- introductions
     rintro offset env inputs_var inputs h_inputs as
@@ -49,7 +51,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    simp [circuit_norm, add8, Circuit.formal_circuit_to_subcircuit] at h_holds
+    simp [circuit_norm, subcircuit_norm, add8] at h_holds
 
     -- to simplify, we have to rewrite the output in the same way
     -- TODO how could this be made easier? i.e. "identify" the output within the constraints of a circuit
@@ -86,7 +88,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    simp [circuit_norm, add8, Circuit.formal_circuit_to_subcircuit]
+    simp [circuit_norm, subcircuit_norm, add8]
     rw [hx, hy]
 
     -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold

@@ -38,6 +38,8 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
   main := add8_full
   assumptions := assumptions
   spec := spec
+  local_length _ := 2
+
   soundness := by
     -- introductions
     rintro offset env inputs_var inputs h_inputs as
@@ -52,7 +54,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    simp only [add8_full, circuit_norm, Circuit.formal_circuit_to_subcircuit] at h_holds
+    simp only [add8_full, circuit_norm, subcircuit_norm] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in] at h_holds
@@ -90,7 +92,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    simp only [circuit_norm, add8_full, Circuit.formal_circuit_to_subcircuit]
+    simp only [circuit_norm, add8_full, subcircuit_norm]
     rw [hx, hy, hcarry_in]
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold.

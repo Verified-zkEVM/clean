@@ -3,10 +3,8 @@ import Clean.Types.U32
 import Clean.Gadgets.Addition32.Theorems
 
 namespace Gadgets.Addition32Full
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 
 structure Inputs (F : Type) where
@@ -72,7 +70,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   have : carry_in_var.eval env = carry_in := by injection h_inputs
   clear h_inputs
 
-  -- -- simplify assumptions
+  -- simplify assumptions
   dsimp only [assumptions, U32.is_normalized] at as
 
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
@@ -81,17 +79,18 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
   clear x_norm y_norm
 
-  -- -- simplify circuit
-  simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool
-  ] at h
+  -- simplify circuit
+  -- 1. quick pass without subcircuits to reduce offsets
+  simp only [circuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit] at h
+  -- 2. subcircuit constraints
+  dsimp only [subcircuit_norm, Boolean.circuit, Boolean.spec] at h
   simp only [true_and, true_implies, and_assoc] at h
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›] at h
   rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
   rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at h
   repeat clear this
-  rw [ByteTable.equiv _, ByteTable.equiv _, ByteTable.equiv _, ByteTable.equiv _, Boolean.spec] at h
+  rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -108,10 +107,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    -- TODO unfolding everything ... this is bad
-    simp only [output, main, circuit_norm, subcircuit_norm,
-      add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool,
-    ]
+    dsimp only [output, main, circuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit]
     rfl
 
   rw [h_output]
@@ -183,10 +179,12 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
     mod_256 (x3 + y3 + env.get (i0 + 5)),
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
+    -- this has to unfold all subcircuits :/
     simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, byte_lookup, Boolean.circuit, assert_bool]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
+
   repeat clear this
 
   set z0 := env.get i0
@@ -252,17 +250,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add32_full
   assumptions := assumptions
   spec := spec
+  local_length _ := 8
   soundness := soundness
   completeness := completeness
-
--- lemmas like these can be helpful when using as subcircuit
-lemma local_length : ∀ offset input,
-  (circuit (p := p)).local_length input offset = 8 := by
-  intros; rfl
-
-lemma witness_length : ∀ offset input,
-  (Circuit.formal_circuit_to_subcircuit offset
-    (circuit (p := p)) input).snd.witness_length = 8 := by
-  intros
-  apply circuit.local_length_eq
 end Gadgets.Addition32Full
