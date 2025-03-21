@@ -333,7 +333,7 @@ Version of `constraints_hold` that replaces the statement of subcircuits with th
 @[circuit_norm]
 def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
-  | .witness ops _ _ => constraints_hold eval ops
+  | .witness ops _ _ => constraints_hold.soundness eval ops
   | .assert ops e =>
     let constraint := eval e = 0
     if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
@@ -541,3 +541,14 @@ that we want simplified to
 `v#[x.eval env, y.eval env]`
 -/
 attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_nil
+  Vector.append_singleton Vector.push_mk List.push_toArray
+
+-- simplify `witness_length` in flat operations
+attribute [circuit_norm] List.nil_append List.cons_append
+
+-- simplify `vector.get 0` (which occurs in ProvableType definitions)
+-- TODO handle other small indices as well
+attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray List.getElem_cons_zero
+
+-- simplify constraint expressions and +0 indices
+attribute [circuit_norm] neg_mul one_mul add_zero

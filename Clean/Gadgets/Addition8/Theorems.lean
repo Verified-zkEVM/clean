@@ -87,7 +87,7 @@ theorem soundness (x y out carry_in carry_out: F p):
     out.val < 256 ->
     (carry_in = 0 ∨ carry_in = 1) ->
     (carry_out = 0 ∨ carry_out = 1) ->
-    (x + y + carry_in + -1 * out + -1 * (carry_out * 256) = 0) ->
+    (x + y + carry_in + -out + -(carry_out * 256) = 0) ->
     (out.val = (x.val + y.val + carry_in.val) % 256
     ∧ carry_out.val = (x.val + y.val + carry_in.val) / 256):= by
   intros hx hy hout carry_in_bool carry_out_bool h
@@ -96,7 +96,7 @@ theorem soundness (x y out carry_in carry_out: F p):
   rcases carry_out_bool with zero_carry | one_carry
   -- case with zero carry
   · rw [zero_carry] at h
-    simp only [neg_mul, one_mul, zero_mul, mul_zero, add_zero] at h
+    simp only [zero_mul, neg_zero, add_zero] at h
     rw [←sub_eq_add_neg] at h
     have h_spec : carry_in + x + y - out = 0 := by
       rw [add_comm (x + y), ←add_assoc] at h
@@ -146,7 +146,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
     let z := FieldUtils.mod_256 (x + y + carry_in)
-    x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0 := by
+    x + y + carry_in + -z + -(carry_out * 256) = 0 := by
   intro as_x as_y carry_in_bound
   simp
   rw [←sub_eq_add_neg, sub_eq_zero, add_eq_of_eq_sub]

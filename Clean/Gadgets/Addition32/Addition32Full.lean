@@ -82,15 +82,16 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   clear x_norm y_norm
 
   -- -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, circuit_norm, Circuit.formal_assertion_to_subcircuit] at h
-  simp only [true_implies, true_and, and_assoc] at h
+  simp only [circuit_norm, add32_full, add8_full_carry, byte_lookup,
+    Circuit.formal_assertion_to_subcircuit,
+    Boolean.circuit, to_flat_operations, assert_bool
+  ] at h
+  simp only [true_and, true_implies, and_assoc] at h
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›] at h
   rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
   rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at h
   repeat clear this
-  simp only [constraints_hold_flat, Expression.eval, mul_one, mul_eq_zero, and_true, neg_mul,
-    one_mul] at h
   rw [ByteTable.equiv _, ByteTable.equiv _, ByteTable.equiv _, ByteTable.equiv _, Boolean.spec] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
@@ -108,12 +109,18 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
   set output := eval env (main.output i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp [output, circuit_norm]
+    -- TODO unfolding everything ... this is bad
+    simp only [output, main, add32_full, circuit_norm, add8_full_carry, byte_lookup,
+      Boolean.circuit, assert_bool,
+      Circuit.formal_assertion_to_subcircuit, to_flat_operations,
+    ]
+    rfl
 
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
 
   -- get rid of the boolean carry_out and noramlized output
+  change c3 = 0 ∨ c3 = 1 at c3_bool
   simp only [c3_bool, z0_byte, z1_byte, z2_byte, z3_byte, and_self, and_true]
   rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 

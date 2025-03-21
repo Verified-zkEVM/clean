@@ -91,7 +91,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
     guard_hyp h_byte: ByteTable.contains (#v[z])
-    guard_hyp h_add: x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
+    guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
     change True → (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
     specialize h_bool_carry trivial
 
@@ -141,7 +141,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     let goal_byte := ByteTable.contains (#v[z])
     let goal_bool := carry_out = 0 ∨ carry_out = 1
-    let goal_add := x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
+    let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
@@ -155,7 +155,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       apply Gadgets.Addition8.Theorems.completeness_bool
       repeat assumption
 
-    have completeness3 : x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0 := by
+    have completeness3 : x + y + carry_in + -z + -(carry_out * 256) = 0 := by
       rw [hz, hcarry_out]
       apply Gadgets.Addition8.Theorems.completeness_add
       repeat assumption
