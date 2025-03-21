@@ -36,7 +36,7 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (vec [x
 def ByteTable.equiv (x: F p) : ByteTable.contains (vec [x]) ↔ x.val < 256 :=
   ⟨ByteTable.soundness x, ByteTable.completeness x⟩
 
-def byte_lookup (x: Expression (F p)) := lookup {
+def ByteLookup (x: Expression (F p)) : Lookup (F p) := {
   table := ByteTable
   entry := vec [x]
   -- to make this work, we need to pass an `eval` function to the callback!!
