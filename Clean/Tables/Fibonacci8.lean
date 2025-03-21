@@ -86,6 +86,45 @@ lemma vars :
   simp [fib_relation, table_norm]
   repeat constructor
 
+lemma constraints_given_env (env)
+  (h_holds : TableConstraint.constraints_hold_on_window.foldl (F:=F p) (fib_relation .empty).snd.operations env) :
+  (Gadgets.Addition8.assumptions { x := env.get 0, y := env.get 1 } → Gadgets.Addition8.spec { x := env.get 0, y := env.get 1 } (env.get 4))
+    ∧ Gadgets.Equality.Field.spec { x := env.get 1, y := env.get 2 } := by
+  -- reduce offset
+  simp [fib_table, fib_relation, circuit_norm, table_norm, TableConstraint.subcircuit, Gadgets.Addition8.circuit] at h_holds
+
+  -- reduce circuits
+  -- TODO super slow
+  simp only [TableConstraint.subcircuit, circuit_norm, subcircuit_norm,
+    Gadgets.Addition8.circuit, Gadgets.Addition8.add8,
+    Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.add8_full,
+    Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.add8_full_carry,
+    TableConstraintOperation.update_context, Boolean.circuit, assert_bool,
+    TableConstraint.assertion, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.assert_eq
+  ] at h_holds
+
+  -- reduce most constraints
+  simp only [table_norm, circuit_norm, Gadgets.Addition8.add8] at h_holds
+  simp at h_holds
+
+  simp only [subcircuit_norm, circuit_norm,
+    Gadgets.Addition8.circuit, Gadgets.Addition8.add8,
+    Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.add8_full,
+    Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.add8_full_carry,
+  ] at h_holds
+  exact h_holds
+
+lemma constraints (curr next : Row (F p) RowType)
+  (h_holds : TableConstraint.constraints_hold_on_window fib_relation ⟨<+> +> curr +> next, rfl⟩) :
+  (Gadgets.Addition8.assumptions { x := curr.x, y := curr.y } → Gadgets.Addition8.spec { x := curr.x, y := curr.y } next.y)
+    ∧ Gadgets.Equality.Field.spec { x := curr.y, y := next.x } := by
+  sorry
+  -- have env := .mk fun i ↦
+  --   (<+> +> curr +> next).getLeFromBottom ⟨1 - ↑((fib_relation (p:=p) .empty).snd.assignment i).rowOffset, _⟩
+  --   ((fib_relation (p:=p) .empty).2.assignment i).column
+  -- have constraints_hold := constraints_given_env env h_holds
+  -- exact constraints_hold
+
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table,
   spec := spec,
@@ -98,19 +137,16 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
     · simp [table_norm]
-    · simp [table_norm, fib_table]
+    · simp [table_norm, boundary_fib, fib_table, circuit_norm, TableConstraint.assertion, subcircuit_norm]
+
       intros boundary1 boundary2
-      simp [Circuit.formal_assertion_to_subcircuit, Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec,
-        circuit_norm
-      ] at boundary1 boundary2
+      simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec] at boundary1 boundary2
 
       have var1 : ((boundary_fib (p:=p) .empty).snd.assignment 0).column = 0
-        := by simp [boundary_fib, bind, table_norm]; rfl
+        := by simp [boundary_fib, table_norm]; rfl
       have var2 : ((boundary_fib (p:=p) .empty).snd.assignment 1).column = 1
-        := by simp [boundary_fib, bind, table_norm]; rfl
+        := by simp [boundary_fib, table_norm]; rfl
 
-      simp only [Fin.isValue, var1, Fin.val_zero, List.getElem_cons_zero, var2, Fin.val_one,
-        List.getElem_cons_succ] at boundary1 boundary2
       rw [boundary1, boundary2]
       simp only [fib8, ZMod.val_zero, ZMod.val_one, and_self]
 
@@ -131,14 +167,9 @@ def formal_fib_table : FormalTable (F p) RowType := {
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
       -- lift the constraints to specs
-      have constraints_hold := by
-        have h := constraints_hold.left
-        dsimp [fib_table, circuit_norm, table_norm, Circuit.formal_assertion_to_subcircuit] at h
-        simp [vars, CellOffset.column, table_norm] at h
-        simp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h
-        simp [Gadgets.Equality.Field.circuit, Gadgets.Equality.Field.spec, Fin.val] at h
-        exact h
-      have ⟨add_holds, eq_holds⟩ := constraints_hold
+      have ⟨add_holds, eq_holds⟩ := constraints curr next constraints_hold.left
+      simp only [Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at add_holds
+      simp only [Gadgets.Equality.Field.spec] at eq_holds
 
       -- and finally now we prove the actual relations, this is fortunately very easy
       -- now that we have lifted the constraints to specs
@@ -155,7 +186,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
         rw [ih2.left.right]
         apply fib8_less_than_256
 
-      specialize add_holds lookup_first_col lookup_second_col
+      specialize add_holds ⟨ lookup_first_col, lookup_second_col ⟩
 
       have spec1 : (next.x).val = fib8 (rest.len + 1) := by
         apply_fun ZMod.val at eq_holds
