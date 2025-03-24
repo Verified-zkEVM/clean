@@ -1,6 +1,6 @@
-import Mathlib.Data.Fintype.Basic
+-- import Mathlib.Data.Fintype.Basic
 import Mathlib.Tactic
-import Mathlib.Data.ZMod.Basic
+-- import Mathlib.Data.ZMod.Basic
 import Init.Data.List.Find
 
 variable {α β : Type} {n : ℕ}
@@ -25,25 +25,11 @@ def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num
 theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
   simp only [get, map, Fin.coe_cast, Array.getElem_map, getElem_toArray]
 
-@[simp]
-def set (v: Vector α n) (i: Fin n) (a: α) : Vector α n :=
-  ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
+attribute [simp] Vector.set
 
 @[simp]
 def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
-  ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
-
-@[simp]
-def update (v: Vector α n) (i: Fin n) (f: α → α) : Vector α n :=
-  v.set i (f (v.get i))
-
-@[simp]
-def set (v: Vector α n) (i: Fin n) (a: α) : Vector α n :=
-  ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
-
-@[simp]
-def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
-  ⟨ v.val.set i a, by rw [List.length_set, v.prop] ⟩
+  ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, ← Array.size_eq_length_toList, v.size_toArray] ⟩
 
 @[simp]
 def update (v: Vector α n) (i: Fin n) (f: α → α) : Vector α n :=
@@ -73,7 +59,7 @@ def induct {motive : {n: ℕ} → Vector α n → Prop}
     have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
     subst this
     have ih := induct (n:=as.length) nil cons ⟨ .mk as, rfl ⟩
-    let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as, rfl ⟩ ih
+    let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 
 /- induction principle for Vector.push -/
@@ -113,13 +99,10 @@ def fill (n : ℕ) (a: α) : Vector α n :=
 instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
   default := fill n default
 
-@[reducible]
-def find? (v: Vector α n) (p: α → Bool) : Option α :=
-  v.val.find? p
-
+/-
 def findIdx?_base {n: ℕ} (p : α → Bool) : Vector α n → (start : ℕ := 0) → Option ℕ
-| ⟨ [], _ ⟩, _ => none
-| ⟨ a::as, _⟩, i => if p a then some i else findIdx?_base (n:=as.length) p ⟨ as, rfl ⟩ (i + 1)
+| ⟨ .mk [], _ ⟩, _ => none
+| ⟨ .mk (a::as), _⟩, i => if p a then some i else findIdx?_base (n:=as.length) p ⟨ as, rfl ⟩ (i + 1)
 
 lemma findIdx?_cons {n: ℕ} (p : α → Bool) (a: α) (as: Vector α n) (i: ℕ) :
   findIdx?_base p (cons a as) i = if p a then some i else findIdx?_base p as (i + 1) := by
@@ -149,15 +132,15 @@ def findIdx? {n: ℕ} (p : α → Bool) (v: Vector α n) : Option (Fin n) :=
       simpa using h
     ⟩
   else none
-
+-/
 
 -- some simp tagging because we use Vectors a lot
 attribute [simp] Vector.append Vector.get Array.getElem_append
 end Vector
 
-def Matrix (α : Type) (n m: ℕ) := Vector (Vector α m) n
+def Vector.Matrix (α : Type) (n m: ℕ) := Vector (Vector α m) n
 
-namespace Matrix
+namespace Vector.Matrix
 variable {α β : Type} {n m : ℕ}
 
 @[simp]
@@ -177,18 +160,20 @@ def update (A: Matrix α n m) (i: Fin n) (j: Fin m) (f: α → α) : Matrix α n
   A.set i j (f (A.get i j))
 
 @[simp]
-def fill (n: ℕ) (m : ℕ) (a: α) : Matrix α n m := .fill n (.fill m a)
+def fill (n: ℕ) (m : ℕ) (a: α) : Matrix α n m := Vector.fill n (.fill m a)
 
 @[simp]
 def map {α β: Type} (f: α → β) : Matrix α n m → Matrix β n m := Vector.map (Vector.map f)
 
+/-
 def findIdx? {n m: ℕ} (matrix : Matrix α n m) (prop : α → Bool) : Option (Fin n × Fin m) :=
   match matrix with
-  | ⟨ [], _ ⟩ => none
-  | ⟨ row :: rest, (h_rest : rest.length + 1 = n) ⟩ =>
+  | ⟨ .mk [], _ ⟩ => none
+  | ⟨ .mk (row :: rest), (h_rest : rest.length + 1 = n) ⟩ =>
     match row.findIdx? prop with
     | some j => some (⟨ rest.length, h_rest ▸ lt_add_one _⟩, j)
     | none =>
       (findIdx? ⟨ rest, rfl ⟩ prop).map
         (fun ⟨i, j⟩ => (h_rest ▸ i.castSucc, j))
-end Matrix
+-/
+end Vector.Matrix

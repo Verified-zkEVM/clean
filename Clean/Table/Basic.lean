@@ -27,10 +27,10 @@ def Row.fill (element: F) : Row F S :=
   let elems := .fill (size S) element
   from_elements elems
 
-@[table_norm]
+/- @[table_norm]
 def Row.findIdx? (row : Row F S) (prop: F → Bool) : Option (Fin (size S)) :=
   let elems := to_elements row
-  elems.findIdx? prop
+  elems.findIdx? prop -/
 
 /--
   A trace is an inductive list of rows. It can be viewed as a structured
@@ -196,7 +196,7 @@ def get (assignment: CellAssignment W S) (var: Fin assignment.offset) : Cell W S
 def empty (W: ℕ+) : CellAssignment W S where
   offset := 0
   aux_length := 0
-  vars := .nil
+  vars := #v[]
   -- input_to_vars := .fill W (size S) []
   -- aux_to_vars := .nil
   -- input_cell_consistent := fun var => absurd var.is_lt var.val.not_lt_zero
@@ -423,7 +423,7 @@ def foldRange (n : ℕ) (f : α → Fin n → α) (init : α) : α :=
 
 def foldRange_succ (n : ℕ) (f : α → Fin (n + 1) → α) (init : α) :
   foldRange (n + 1) f init = f (foldRange n (fun acc i => f acc i.castSucc) init) (.last n) := by
-  simp [foldRange, List.finRange_succ, List.foldl_concat, List.foldl_map]
+  rw [foldRange, foldRange, List.finRange_succ_last, List.foldl_concat, List.foldl_map]
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
@@ -566,7 +566,7 @@ from_circuit_with_consistency : (ops : OperationsList F) → TableContextOfCircu
   | ⟨n + _, .subcircuit ops s⟩ =>
     let ⟨prev, h⟩ := from_circuit_with_consistency ops
     let subcircuit : SubCircuit F prev.circuit.offset := cast (by rw [h]) s
-    let assignment := prev.assignment.push_vars_aux subcircuit.witness_length
+    let assignment := prev.assignment.push_vars_aux subcircuit.local_length
     ⟨{ prev with
       circuit := prev.circuit.subcircuit subcircuit
       assignment
