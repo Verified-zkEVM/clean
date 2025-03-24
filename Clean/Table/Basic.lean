@@ -338,7 +338,8 @@ def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
 def subcircuit {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
     (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
   modifyGet fun ctx =>
-    let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
+    let a := circuit.output b ctx.offset
+    let subcircuit := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
     (a, update_context ctx (.Allocate subcircuit))
 
 def assertion {W: ℕ+} {β : TypeMap} [ProvableType β]
