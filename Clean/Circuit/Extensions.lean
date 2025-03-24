@@ -21,7 +21,7 @@ def assert_equal (a a': Var α F) : Circuit F Unit :=
   let vars := to_vars a
   let vars' := to_vars a'
   let eqs := (vars.zip vars').map (fun ⟨ x, x' ⟩ => assert_zero (x - x'))
-  do let _ ← eqs.mapM
+  do let _ ← eqs.mapMonad
 end Provable
 
 namespace Circuit

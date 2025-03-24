@@ -17,9 +17,9 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 2
-  to_elements s := vec [s.x, s.y]
+  to_elements s := #v[s.x, s.y]
   from_elements v :=
-    let ⟨ [x, y], _ ⟩ := v
+    let ⟨ .mk [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 
 def assert_eq (input : Var Inputs (F p)) := do
@@ -29,7 +29,6 @@ def assert_eq (input : Var Inputs (F p)) := do
 def spec (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x = y
-
 
 def circuit : FormalAssertion (F p) Inputs where
   main := assert_eq
@@ -41,7 +40,7 @@ def circuit : FormalAssertion (F p) Inputs where
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := vars
 
-    dsimp only [Circuit.constraints_hold.soundness, Expression.eval, Expression.eval.eq_2] at h_holds
+    dsimp only [circuit_norm, assert_eq] at h_holds
 
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
@@ -49,8 +48,7 @@ def circuit : FormalAssertion (F p) Inputs where
 
     dsimp only [spec]
     ring_nf at h_holds
-    rw [sub_eq_zero] at h_holds
-    assumption
+    rwa [sub_eq_zero] at h_holds
 
   completeness := by
     -- introductions
@@ -62,7 +60,7 @@ def circuit : FormalAssertion (F p) Inputs where
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
 
-    simp only [Circuit.constraints_hold.completeness, Expression.eval, neg_mul, one_mul]
+    simp only [circuit_norm, assert_eq, neg_mul, one_mul]
     rw [hx, hy, spec]
     ring
 

@@ -36,7 +36,7 @@ def Row.findIdx? (row : Row F S) (prop: F → Bool) : Option (Fin (size S)) :=
   A trace is an inductive list of rows. It can be viewed as a structured
   environment that maps cells to field elements.
 -/
-inductive Trace (F : Type) (S : Type → Type) [ProvableType S] :=
+inductive Trace (F : Type) (S : Type → Type) [ProvableType S] where
   /-- An empty trace -/
   | empty : Trace F S
   /-- Add a row to the end of the trace -/

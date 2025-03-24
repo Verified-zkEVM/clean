@@ -7,7 +7,7 @@ structure Variable (F : Type) where
   index: ℕ
 
 instance : Repr (Variable F) where
-  reprPrec v _ := "x" ++ repr v.index
+  reprPrec v _ := "var ⟨" ++ repr v.index ++ "⟩"
 
 inductive Expression (F : Type) where
   | var : Variable F -> Expression F
@@ -38,7 +38,7 @@ def eval (env: Environment F) : Expression F → F
   | mul x y => eval env x * eval env y
 
 def toString [Repr F] : Expression F → String
-  | var v => "x" ++ reprStr v.index
+  | var v => reprStr v
   | const c => reprStr c
   | add x y => "(" ++ toString x ++ " + " ++ toString y ++ ")"
   | mul x y => "(" ++ toString x ++ " * " ++ toString y ++ ")"

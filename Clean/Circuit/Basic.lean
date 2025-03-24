@@ -69,15 +69,15 @@ def witness_length : List (FlatOperation F) → ℕ
 
 @[circuit_norm]
 def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (witness_length l)
-  | [] => .nil
+  | [] => #v[]
   | op :: ops =>
     let ws := witnesses env ops
     match op with
     | witness m compute =>
-      ⟨ (compute env).val ++ ws.val, by simp only [ws.prop, circuit_norm,
-        List.length_append, Mathlib.Vector.length_val]; ac_rfl ⟩
+      ⟨ (compute env).toArray ++ ws.toArray, by
+        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl ⟩
     | assert _ | lookup _ =>
-      ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
+      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 end FlatOperation
 
 export FlatOperation (constraints_hold_flat)
@@ -98,6 +98,10 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   soundness : Environment F → Prop
   completeness : Environment F → Prop
 
+  -- for faster simplification, the subcircuit records its local witness length separately
+  -- even though it could be derived from the operations
+  local_length : ℕ
+
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
     constraints_hold_flat env ops → soundness env
@@ -106,11 +110,11 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
     completeness env → constraints_hold_flat env ops
 
-@[reducible, circuit_norm]
-def SubCircuit.witness_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
+  -- `local_length` must be consistent with the operations
+  local_length_eq : local_length = FlatOperation.witness_length ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env := FlatOperation.witnesses env sc.ops
+def SubCircuit.witnesses (sc: SubCircuit F n) env := sc.local_length_eq ▸ FlatOperation.witnesses env sc.ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -123,7 +127,7 @@ inductive Operations (F : Type) [Field F] : ℕ → Type where
   | witness : {n : ℕ} → Operations F n → (m: ℕ) → (compute : Environment F → Vector F m) → Operations F (n + m)
   | assert : {n : ℕ} → Operations F n → Expression F → Operations F n
   | lookup : {n : ℕ} → Operations F n → Lookup F → Operations F n
-  | subcircuit : {n : ℕ} → Operations F n → (s : SubCircuit F n) → Operations F (n + s.witness_length)
+  | subcircuit : {n : ℕ} → Operations F n → (s : SubCircuit F n) → Operations F (n + s.local_length)
 
 namespace Operations
 @[reducible, circuit_norm]
@@ -140,15 +144,15 @@ def local_length {n: ℕ} : Operations F n → ℕ
   | .witness ops m _ => local_length ops + m
   | .assert ops _ => local_length ops
   | .lookup ops _ => local_length ops
-  | .subcircuit ops s => local_length ops + s.witness_length
+  | .subcircuit ops s => local_length ops + s.local_length
 
 @[circuit_norm]
 def local_witnesses {n: ℕ} (env: Environment F) : (ops: Operations F n) → Vector F ops.local_length
-  | .empty _ => .nil
-  | .witness ops _ c => (local_witnesses env ops).append (c env)
+  | .empty _ => #v[]
+  | .witness ops _ c => local_witnesses env ops ++ c env
   | .assert ops _ => local_witnesses env ops
   | .lookup ops _ => local_witnesses env ops
-  | .subcircuit ops s => (local_witnesses env ops).append (s.witnesses env)
+  | .subcircuit ops s => local_witnesses env ops ++ s.witnesses env
 end Operations
 
 /--
@@ -160,25 +164,25 @@ structure OperationsList (F : Type) [Field F] where
   withLength: Operations F offset
 
 namespace OperationsList
-@[reducible]
+@[reducible, circuit_norm]
 def from_offset (offset: ℕ) : OperationsList F := ⟨ offset, .empty offset ⟩
 
 -- constructors matching `Operations`
-@[reducible]
+@[reducible, circuit_norm]
 def witness (ops: OperationsList F) (m: ℕ) (compute : Environment F → Vector F m) : OperationsList F :=
   ⟨ ops.offset + m, .witness ops.withLength m compute ⟩
 
-@[reducible]
+@[reducible, circuit_norm]
 def assert (ops: OperationsList F) (e: Expression F) : OperationsList F :=
   ⟨ ops.offset, .assert ops.withLength e ⟩
 
-@[reducible]
+@[reducible, circuit_norm]
 def lookup (ops: OperationsList F) (l: Lookup F) : OperationsList F :=
   ⟨ ops.offset, .lookup ops.withLength l ⟩
 
-@[reducible]
+@[reducible, circuit_norm]
 def subcircuit (ops: OperationsList F) (s: SubCircuit F ops.offset) : OperationsList F :=
-  ⟨ ops.offset + s.witness_length, .subcircuit ops.withLength s ⟩
+  ⟨ ops.offset + s.local_length, .subcircuit ops.withLength s ⟩
 
 /--
 `Operations` and `OperationsList` are basically the same so we want easy coercions between them.
@@ -193,7 +197,7 @@ instance (ops) : CoeDep (OperationsList F) ops (Operations F ops.offset) where
 /--
 The canonical way to create an empty `OperationsList` is to just pass in the offset
 -/
-@[reducible]
+@[reducible, circuit_norm]
 instance : Coe ℕ (OperationsList F) where
   coe offset := .from_offset offset
 
@@ -225,15 +229,15 @@ def circuit : Circuit F Unit := do
 def Circuit (F : Type) [Field F] := StateM (OperationsList F)
 
 namespace Circuit
-@[reducible]
+@[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   circuit offset |>.snd.offset
 
-@[reducible]
+@[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.final_offset offset) :=
   circuit offset |>.snd.withLength
 
-@[reducible]
+@[reducible, circuit_norm]
 def output (circuit: Circuit F α) (offset := 0) : α :=
   circuit offset |>.fst
 
@@ -244,7 +248,7 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
   modifyGet fun ops =>
     let var: Variable F := ⟨ ops.offset ⟩
-    ⟨var, .witness ops 1 (fun env => vec [compute env])⟩
+    ⟨var, .witness ops 1 (fun env => #v[compute env])⟩
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
@@ -337,8 +341,39 @@ def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations 
 
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
-def Soundness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-  (main: Var β F → Circuit F (Var α F))
+/-
+Common base type for circuits that are to be used in formal proofs.
+
+It contains the main circuit plus some of its properties in elaborated form, to make it
+faster to reason about them in proofs.
+-/
+class ElaboratedCircuit (F: Type) [Field F] (β: TypeMap) [ProvableType β] (Output: Type) where
+  main: Var β F → Circuit F Output
+
+  /-- how many local witnesses this circuit introduces -/
+  local_length: Var β F → ℕ
+
+  /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
+  local_length_eq : ∀ var offset, (main var |>.operations offset).local_length = local_length var
+    := by intros; rfl
+
+  /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
+  output : Var β F → ℕ → Output
+
+  /-- correctness of `output` -/
+  output_eq : ∀ var offset, (main var).output offset = output var offset
+    := by intros; rfl
+
+  /--
+    technical condition needed for subcircuit consistency: the circuit must not change its initial offset.
+    usually automatically proved by `rfl`.
+  -/
+  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n
+    := by intros; rfl
+
+attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.local_length ElaboratedCircuit.output
+
+def Soundness (F: Type) [Field F] [circuit : ElaboratedCircuit F β (Var α F)]
   (assumptions: β F → Prop)
   (spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
@@ -347,39 +382,34 @@ def Soundness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableTy
     ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var |>.operations offset) →
+    constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
     -- the spec holds on the input and output
-    let a := eval env (output (main b_var) offset)
+    let a := eval env (circuit.output b_var offset)
     spec b a
 
-def Completeness (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-  (main: Var β F → Circuit F (Var α F))
+def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit F β (Var α F)]
   (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
-  env.uses_local_witnesses (main b_var |>.operations offset) →
+  env.uses_local_witnesses (circuit.main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β F, eval env b_var = b →
   assumptions b →
   -- the constraints hold
-  constraints_hold.completeness env (main b_var |>.operations offset)
+  constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypeMap)
-  [Field F] [ProvableType α] [ProvableType β]
-where
+structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
+extends ElaboratedCircuit F β (Var α F) where
   -- β = inputs, α = outputs
-  main: Var β F → Circuit F (Var α F)
   assumptions: β F → Prop
   spec: β F → α F → Prop
-  soundness: Soundness F β α main assumptions spec
-  completeness: Completeness F β α main assumptions
-  /-- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`. -/
-  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
+  soundness: Soundness F assumptions spec
+  completeness: Completeness F α assumptions
 
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (offset: ℕ) (env : Environment F) :=
   let b := eval env b_var
-  let a_var := circuit.main b_var offset |>.fst
+  let a_var := circuit.output b_var offset
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
@@ -401,9 +431,8 @@ If both the assumptions AND the spec are true, then the constraints hold.
 In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] where
-  main: Var β F → Circuit F Unit
-
+structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
+extends ElaboratedCircuit F β Unit where
   assumptions: β F → Prop
   spec: β F → Prop
 
@@ -428,8 +457,10 @@ structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] wh
     -- the constraints hold
     constraints_hold.completeness env (main b_var |>.operations offset)
 
-  /-- technical condition needed for subcircuit consistency. usually automatically proved by `rfl`. -/
-  initial_offset_eq: ∀ var, ∀ n, (main var |>.operations n).initial_offset = n := by intros; rfl
+  -- assertions commonly don't introduce internal witnesses, so this is a convenient default
+  local_length := fun _ => 0
+
+  output := fun _ _ => ()
 
 @[circuit_norm]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
@@ -442,7 +473,8 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F)
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
 
-export Circuit (witness_var witness witness_vars assert_zero lookup Soundness Completeness FormalCircuit FormalAssertion)
+export Circuit (witness_var witness witness_vars assert_zero lookup
+  ElaboratedCircuit Soundness Completeness FormalCircuit FormalAssertion)
 
 /-- move from inductive (nested) operations back to flat operations -/
 def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
@@ -464,7 +496,7 @@ inductive Operation (F : Type) [Field F] where
 namespace Operation
 def added_witness : Operation F → ℕ
   | witness m _ => m
-  | subcircuit s => s.witness_length
+  | subcircuit s => s.local_length
   | _ => 0
 
 instance [Repr F] : ToString (Operation F) where
@@ -492,29 +524,54 @@ def Circuit.operation_list (circuit: Circuit F α) (offset := 0) : List (Operati
 
 def WitnessGenerators (F: Type) (n: ℕ) := Vector (Environment F → F) n
 
-def FlatOperation.witness_generators : (l: List (FlatOperation F)) → WitnessGenerators F (witness_length l)
-  | [] => .nil
+def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
+  | [] => #v[]
   | op :: ops =>
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.init (fun i env => (compute env).get i)).val ++ ws.val, by
-        simp only [ws.prop, circuit_norm, List.length_append, Mathlib.Vector.length_val]; ac_rfl⟩
+      ⟨ (Vector.init (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
+        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
     | assert _ | lookup _ =>
-      ⟨ ws.val, by simp_all only [witness_length, ws.prop]⟩
+      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 
-def Operations.witness_generators {n: ℕ} : (ops: Operations F n) → WitnessGenerators F ops.local_length
-  | .empty _ => .nil
-  | .witness ops _ c => (witness_generators ops).append
-    (Vector.init (fun i env => (c env).get i))
+def Operations.witness_generators {n: ℕ} : (ops: Operations F n) → Vector (Environment F → F) ops.local_length
+  | .empty _ => #v[]
+  | .witness ops _ c => witness_generators ops ++ Vector.init (fun i env => (c env).get i)
   | .assert ops _ => witness_generators ops
   | .lookup ops _ => witness_generators ops
-  | .subcircuit ops s => (witness_generators ops).append (FlatOperation.witness_generators s.ops)
+  | .subcircuit ops s => witness_generators ops ++ (s.local_length_eq ▸ FlatOperation.witness_generators s.ops)
 
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := (circuit |>.operations offset).witness_generators.val
+  let generators := (circuit |>.operations offset).witness_generators
   generators.foldl (fun acc compute =>
     let env i := acc.getD i 0
     acc.push (compute ⟨ env ⟩))
   #[]
+
+-- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
+attribute [circuit_norm] bind StateT.bind
+attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
+attribute [circuit_norm] pure StateT.pure
+attribute [circuit_norm] StateT.run
+
+/-
+when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
+`(Vector.map (fun x ↦ Expression.eval env x) v#[x, y])`
+that we want simplified to
+`v#[x.eval env, y.eval env]`
+-/
+attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_nil
+
+-- we often need to simplify concatenated vectors, e.g. for resolving `local_witnesses`
+attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
+  Array.append_singleton Array.append_empty List.push_toArray
+  List.nil_append List.cons_append
+
+-- simplify `vector.get 0` (which occurs in ProvableType definitions)
+-- TODO handle other small indices as well
+attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray List.getElem_cons_zero
+
+-- simplify constraint expressions and +0 indices
+attribute [circuit_norm] neg_mul one_mul add_zero

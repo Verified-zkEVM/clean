@@ -15,14 +15,15 @@ structure U32 (T: Type) where
   x1 : T
   x2 : T
   x3 : T
+deriving Repr
 
 namespace U32
 
 instance : ProvableType U32 where
   size := 4
-  to_elements x := vec [x.x0, x.x1, x.x2, x.x3]
+  to_elements x := #v[x.x0, x.x1, x.x2, x.x3]
   from_elements v :=
-    let ⟨ [x0, x1, x2, x3], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3], _ ⟩ := v
     ⟨ x0, x1, x2, x3 ⟩
 
 omit [Fact (Nat.Prime p)] p_large_enough in
@@ -108,41 +109,5 @@ def wrapping_add (x y: U32 (F p)) : U32 (F p) :=
 lemma wrapping_add_correct (x y z: U32 (F p)) :
     x.wrapping_add y = z ↔ z.value = (x.value + y.value) % 2^32 := by
   sorry
-
--- U32-related tactic and lemmas
-lemma val_eq_256 : (256 : F p).val = 256 := FieldUtils.val_lt_p 256 (by linarith [p_large_enough.elim])
-
-/--
-tactic script to fully rewrite a ZMod expression to its Nat version, given that
-the expression is smaller than the modulus.
-
-```
-example (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
-  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
-```
-
-expected context:
-- the equation to prove as the goal
-- size assumptions on variables and a sufficient `p > ...` instance
-
-if no sufficient inequalities are in the context, then the tactic will leave an equation of the form `expr : Nat < p` unsolved.
-
-note: this version is optimized for uint32 arithmetic:
-- specifically handles field constants 256
-- expects `[Fact (p > 512)]` in the context
--/
-syntax "field_to_nat" : tactic
-macro_rules
-  | `(tactic|field_to_nat) =>
-    `(tactic|(
-      repeat rw [ZMod.val_add] -- (a + b).val = (a.val + b.val) % p
-      repeat rw [ZMod.val_mul] -- (a * b).val = (a.val * b.val) % p
-      repeat rw [U32.val_eq_256]
-      simp only [Nat.reducePow, Nat.add_mod_mod, Nat.mod_add_mod, Nat.mul_mod_mod, Nat.mod_mul_mod]
-      rw [Nat.mod_eq_of_lt _]
-      repeat linarith [‹Fact (_ > 512)›.elim]))
-
-example (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
-  (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 end U32
 end
