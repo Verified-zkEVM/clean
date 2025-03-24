@@ -37,6 +37,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
   assumptions := assumptions
   spec := spec
   local_length _ := 2
+  output _ i0 := var ⟨i0⟩
 
   soundness := by
     -- introductions
@@ -51,25 +52,20 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    simp [circuit_norm, subcircuit_norm, add8] at h_holds
-
-    -- to simplify, we have to rewrite the output in the same way
-    -- TODO how could this be made easier? i.e. "identify" the output within the constraints of a circuit
-    have hz_var : z = Expression.eval env (
-      Addition8Full.circuit.main { x := x_var, y := y_var, carry_in := const 0 } offset).fst := rfl
+    simp [circuit_norm, subcircuit_norm, add8, Addition8Full.circuit] at h_holds
 
     -- rewrite input and ouput values
-    rw [hx, hy, ←hz_var] at h_holds
+    rw [hx, hy, ←(by rfl : z = env.get offset)] at h_holds
 
     -- satisfy `Gadgets.Addition8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
     have as': Gadgets.Addition8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
     specialize h_holds as'
 
-    guard_hyp h_holds : Gadgets.Addition8Full.circuit.spec { x, y, carry_in := 0 } z
+    guard_hyp h_holds : Gadgets.Addition8Full.spec { x, y, carry_in := 0 } z
 
     -- unfold `Gadgets.Addition8Full` statements to show what the hypothesis is in our context
-    dsimp [Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.spec] at h_holds
+    dsimp [Gadgets.Addition8Full.spec] at h_holds
     guard_hyp h_holds : z.val = (x.val + y.val + (0 : F p).val) % 256
 
     simp at h_holds

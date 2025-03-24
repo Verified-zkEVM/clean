@@ -1,6 +1,7 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
 import Clean.Gadgets.Addition32.Theorems
+import Clean.Utils.Primes
 
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -23,6 +24,7 @@ instance instProvableTypeInputs : ProvableType Inputs where
 structure Outputs (F : Type) where
   z: U32 F
   carry_out: F
+deriving Repr
 
 instance instProvableTypeOutputs : ProvableType Outputs where
   size := ProvableType.size U32 + 1
@@ -52,7 +54,19 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
-theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec := by
+def circuit32 := Gadgets.Addition32Full.add32_full (p:=p_babybear) default
+#eval circuit32.operations.local_length
+#eval circuit32.output
+
+instance elaborated_circuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+  main := add32_full
+  local_length _ := 8
+  output _ i0 := {
+    z := { x0 := var ⟨i0⟩, x1 := var ⟨i0 + 2⟩, x2 := var ⟨i0 + 4⟩, x3 := var ⟨i0 + 6⟩ },
+    carry_out := var ⟨i0 + 7⟩
+  }
+
+theorem soundness : Soundness (F p) assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -80,11 +94,8 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   clear x_norm y_norm
 
   -- simplify circuit
-  -- 1. quick pass without subcircuits to reduce offsets
-  simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  -- 2. subcircuit constraints
-  dsimp only [subcircuit_norm, Boolean.circuit, Boolean.spec] at h
-  simp only [true_and, true_implies, and_assoc] at h
+  simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
+  simp only [Boolean.spec, true_and, true_implies, and_assoc, add_zero] at h
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›] at h
   rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
@@ -104,17 +115,12 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   clear h
 
   -- simplify output and spec
-  set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
-  set output := eval env (main.output i0)
-  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp only [output, main, circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
-    rfl
-
+  set output := eval env (elaborated_circuit.output _ i0)
+  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := rfl
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
 
-  -- get rid of the boolean carry_out and noramlized output
-  change c3 = 0 ∨ c3 = 1 at c3_bool
+  -- get rid of the boolean carry_out and normalized output
   simp only [c3_bool, z0_byte, z1_byte, z2_byte, z3_byte, and_self, and_true]
   rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 
@@ -127,7 +133,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions := by
+theorem completeness : Completeness (F p) Outputs assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y

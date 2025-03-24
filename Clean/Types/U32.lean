@@ -15,6 +15,7 @@ structure U32 (T: Type) where
   x1 : T
   x2 : T
   x3 : T
+deriving Repr
 
 namespace U32
 
