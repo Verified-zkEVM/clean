@@ -34,12 +34,11 @@ def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
 lemma soundness : ∀ (N : ℕ) (trace : TraceOfLength (F p) RowType N) (envs : ℕ → ℕ → Environment (F p)),
-  (fun _ ↦ True) N → table_constraints_hold add8_table trace envs → spec_add8 trace := by
+  True → table_constraints_hold add8_table trace envs → spec_add8 trace := by
     intro N trace envs _
     simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8_table, spec_add8]
     simp [List.mapIdx, List.mapIdx.go]
-    set t := trace.val
-    induction t with
+    induction trace.val with
     | empty => simp [table_norm]
     | cons rest row ih =>
         -- get rid of induction hypothesis
@@ -56,23 +55,16 @@ lemma soundness : ∀ (N : ℕ) (trace : TraceOfLength (F p) RowType N) (envs : 
 
         -- this is the slowest step, but still ok
         simp [table_norm, circuit_norm, subcircuit_norm,  add8_inline, Gadgets.Addition8.circuit, ByteLookup] at h_holds
-        change _ ∧ (_ + _ = 0) at h_holds
+        change (_ ∧ _) ∧ (_ → _) at h_holds
 
         -- resolve assignment
         have h_x_env : env.get 0 = row.x := by rfl
         have h_y_env : env.get 1 = row.y := by rfl
-        have h_z_env : env.get 5 = row.z := by rfl
+        have h_z_env : env.get 3 = row.z := by rfl
         simp only [h_x_env, h_y_env, h_z_env] at h_holds
 
         -- now we prove a local property about the current row, from the constraints
-        obtain ⟨⟨⟨ lookup_x, lookup_y ⟩, h_add⟩, h_assign ⟩ := h_holds
-
-        have h_z'_env : env.get 3 = row.z := calc
-          _ = env.get 3 - 0 := by ring
-          _ = env.get 3 - (env.get 3 + -row.z) := by rw [h_assign]
-          _ = row.z := by ring
-        simp only [h_z'_env] at h_add
-        clear h_z'_env h_z_env h_assign
+        obtain ⟨⟨ lookup_x, lookup_y ⟩, h_add⟩ := h_holds
 
         replace lookup_x := ByteTable.soundness row.x lookup_x
         replace lookup_y := ByteTable.soundness row.y lookup_y

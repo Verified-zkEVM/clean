@@ -378,14 +378,14 @@ theorem assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
   (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
 @[table_norm, table_assignment_norm]
-def assign {W: ℕ+} (off : CellOffset W S) (x : Expression F): TableConstraint W S F Unit := do
-  -- TODO we would like to match on var vs other expressions here.
-  -- `| .var v => assign_var off v`
-  -- however, that makes the circuit almost impossible to resolve in proofs, since the expression kind
-  -- can be buried deep within subcircuits that created the expression.
-  let new_var ← witness_var x.eval
-  assert_zero (x - var new_var) -- there could be an optimization pass that reduces redundant vars
-  assign_var off new_var
+def assign {W: ℕ+} (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
+  -- a variable is assigned directly
+  | .var v => assign_var off v
+  -- a composed expression or constant is first stored in a new variable, which is assigned
+  | x => do
+    let new_var ← witness_var x.eval
+    assert_zero (x - var new_var)
+    assign_var off new_var
 
 @[table_norm, table_assignment_norm]
 def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
@@ -486,23 +486,25 @@ def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
 
 
 structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
-  -- list of constraints that are applied over the table
+  /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
 
-  -- optional assumption on the table length
+  /-- optional assumption on the table length -/
   assumption : ℕ → Prop := fun _ => True
 
-  -- specification for the table
+  /-- specification for the table -/
   spec {N : ℕ} : TraceOfLength F S N → Prop
 
-  -- the soundness states that if the assumptions hold, then
-  -- the constraints hold implies that the spec holds
+  /-- the soundness states that if the assumptions hold, then
+      the constraints hold implies that the spec holds. -/
   soundness :
     ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
     assumption N →
     table_constraints_hold constraints trace env →
     spec trace
 
+  /-- this property tells us that that the number of variables contained in the `assignment` of each
+      constraint is consistent with the number of variables introduced in the circuit. -/
   offset_consistent :
     constraints.Forall fun cs =>
       match cs with
