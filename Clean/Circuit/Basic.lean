@@ -571,7 +571,8 @@ attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)
 -- TODO handle other small indices as well
-attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray List.getElem_cons_zero
+attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray
+  List.getElem_cons_zero Fin.cast_eq_self Fin.val_zero Fin.val_one List.getElem_cons_succ
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero

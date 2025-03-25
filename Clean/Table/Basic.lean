@@ -318,13 +318,13 @@ def offset_consistent (table : TableConstraint W S F α) : Prop :=
 -- and allowing arbitrary values for aux cells and invalid variables
 def window_env (table : TableConstraint W S F Unit)
   (window: TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
-  let ctx := table .empty |>.snd
+  let assignment := table.final_assignment
   .mk fun i =>
-    if hi : i < ctx.assignment.offset then
-      match ctx.assignment.vars.get ⟨i, hi⟩ with
+    if hi : i < assignment.offset then
+      match assignment.vars.get ⟨i, hi⟩ with
       | .input ⟨i, j⟩ => window.get i j
       | .aux k => aux_env.get k
-    else aux_env.get (i + ctx.assignment.aux_length)
+    else aux_env.get (i + assignment.aux_length)
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -367,7 +367,7 @@ def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 0
 @[table_norm, table_assignment_norm]
 def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 1
 
-@[table_assignment_norm]
+@[table_norm, table_assignment_norm]
 def assign_var {W: ℕ+} (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
     let assignment := ctx.assignment.set_var_input off.rowOffset off.column v.index
@@ -388,13 +388,37 @@ def assign {W: ℕ+} (off : CellOffset W S) : Expression F → TableConstraint W
     assign_var off new_var
 
 @[table_norm, table_assignment_norm]
+def assign_curr_row {W: ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
+  let vars := to_vars curr
+  forM (List.finRange (size S)) fun i =>
+    assign (.curr i) (vars.get i)
+
+@[table_norm, table_assignment_norm]
 def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
   let vars := to_vars next
-  for i in List.finRange (size S) do
+  forM (List.finRange (size S)) fun i =>
     assign (.next i) (vars.get i)
+
+/--
+Tactic script to unfold `assign_curr_row` and `assign_next_row` in a `TableConstraint`.
+
+TODO this is fairly useless without support for `at h` syntax
+-/
+syntax "simp_assign_row" : tactic
+macro_rules
+  | `(tactic|simp_assign_row) =>
+    `(tactic|(
+    simp only [assign_curr_row, assign_next_row, size]
+    rw [List.finRange, List.ofFn]
+    repeat rw [Fin.foldr_succ]
+    rw [Fin.foldr_zero]
+    repeat rw [List.forM_cons]
+    rw [List.forM_nil, bind_pure_unit]
+    simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]))
 end TableConstraint
 
-export TableConstraint (get_curr_row get_next_row assign assign_next_row)
+export TableConstraint (window_env get_curr_row get_next_row assign assign_next_row assign_curr_row)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
@@ -515,6 +539,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
 
 
 -- add some important lemmas to simp sets
+attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm] size from_elements to_elements to_vars from_vars
 attribute [table_assignment_norm] to_elements
 attribute [table_norm] Circuit.constraints_hold.soundness

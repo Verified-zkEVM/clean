@@ -1,7 +1,7 @@
 import Clean.Table.Basic
 
 namespace Trace
-variable {F : Type} {S : Type → Type} [NonEmptyProvableType S]
+variable {F : Type} {S : Type → Type} [ProvableType S]
 
 /--
   Induction principle that applies for every row in the trace, where the inductive step takes into

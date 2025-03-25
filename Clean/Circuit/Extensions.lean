@@ -24,13 +24,11 @@ def assert_equal (a a': Var α F) : Circuit F Unit :=
   do let _ ← eqs.mapMonad
 end Provable
 
-namespace Circuit
-def to_var [Field F] (x: Expression F) : Circuit F (Variable F) :=
-  match x with
-  | var v => pure v
-  | x => do
-    let x' ← witness_var (fun eval => eval x)
-    assert_zero (x - (var x'))
-    return x'
+def copy_to_var [Field F] (x: Expression F) : Circuit F (Variable F) := do
+  let x' ← witness_var x.eval
+  assert_zero (x - (var x'))
+  return x'
 
-end Circuit
+def to_var [Field F] : Expression F → Circuit F (Variable F)
+  | var v => pure v
+  | x => copy_to_var x

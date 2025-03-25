@@ -12,7 +12,7 @@ structure RowType (F : Type) where
   y: F
   z: F
 
-instance : NonEmptyProvableType RowType where
+instance : ProvableType RowType where
   size := 3
   to_elements x := #v[x.x, x.y, x.z]
   from_elements v :=
