@@ -30,17 +30,16 @@ instance : NonEmptyProvableType RowType where
 
 @[reducible]
 def next_row_off : RowType (CellOffset 2 RowType) := {
-  x := ⟨CellOffset.next 0, CellOffset.next 1, CellOffset.next 2, CellOffset.next 3⟩,
-  y := ⟨CellOffset.next 4, CellOffset.next 5, CellOffset.next 6, CellOffset.next 7⟩
+  x := ⟨.next 0, .next 1, .next 2, .next 3⟩,
+  y := ⟨.next 4, .next 5, .next 6, .next 7⟩
 }
 
 @[reducible]
-def assign_U32 (x : U32 (Variable (F p))) (offs : U32 (CellOffset 2 RowType)) : TwoRowsConstraint RowType (F p) :=
-  do
-  TableConstraint.assign x.x0 offs.x0
-  TableConstraint.assign x.x1 offs.x1
-  TableConstraint.assign x.x2 offs.x2
-  TableConstraint.assign x.x3 offs.x3
+def assign_U32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsConstraint RowType (F p) := do
+  assign offs.x0 x.x0
+  assign offs.x1 x.x1
+  assign offs.x2 x.x2
+  assign offs.x3 x.x3
 
 /--
   inductive contraints that are applied every two rows of the trace.
@@ -49,31 +48,29 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.get_curr_row
   let next ← TableConstraint.get_next_row
 
-  let { z, ..} ← TableConstraint.subcircuit Gadgets.Addition32Full.circuit {
+  let { z, ..} ← subcircuit Gadgets.Addition32Full.circuit {
     x := curr.x,
     y := curr.y,
     carry_in := 0
   }
 
-  if let ⟨var z0, var z1, var z2, var z3⟩ := z then
-    assign_U32 ⟨z0, z1, z2, z3⟩ next_row_off.y
-
-  TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨curr.y, next.x⟩
+  assign_U32 next_row_off.y z
+  assert_equal curr.y next.x
 
 /--
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨row.x, ⟨0, 0, 0, 0⟩⟩
-  TableConstraint.assertion Gadgets.Equality.U32.circuit ⟨row.y, ⟨1, 0, 0, 0⟩⟩
+  assert_equal row.x ⟨0, 0, 0, 0⟩
+  assert_equal row.y ⟨1, 0, 0, 0⟩
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
 def fib32_table : List (TableOperation RowType (F p)) := [
-  TableOperation.Boundary 0 boundary,
-  TableOperation.EveryRowExceptLast recursive_relation,
+  .Boundary 0 boundary,
+  .EveryRowExceptLast recursive_relation,
 ]
 
 /--
@@ -88,7 +85,6 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
     (row.y.value = fib32 (index + 1)) ∧
     row.x.is_normalized ∧ row.y.is_normalized
   )
-
 
 /-
   First of all, we prove some lemmas about the mapping variables -> cell offsets
@@ -218,6 +214,15 @@ lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   ext
   repeat assumption
 
+lemma reduce_vars : ((((((((
+  (#[] : Array (Variable (F p)))
+  |>.push { index := 0 }).push { index := 1 }).push { index := 2 }).push { index := 3 }).push { index := 4 })
+  |>.push { index := 5 }).push { index := 6 }).push { index := 7 })
+  = #[(⟨0⟩ : Variable (F p)), ⟨1⟩, ⟨2⟩, ⟨3⟩, ⟨4⟩, ⟨5⟩, ⟨6⟩, ⟨7⟩]
+  := by rfl
+
+-- def array : Array (Expression (F p)) := #[var ⟨0⟩, var ⟨1⟩, var ⟨2⟩, var ⟨3⟩, var ⟨4⟩, var ⟨5⟩, var ⟨6⟩, var ⟨7⟩]
+
 /--
   Definition of the formal table for fibonacci32
 -/
@@ -225,10 +230,9 @@ def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
   spec := spec,
   soundness := by
-    intro N trace
-    simp only [gt_iff_lt, Fin.isValue, and_imp, Fin.isValue, fib32_table, spec]
+    intro N trace envs _
+    simp only [fib32_table, spec]
     rw [TraceOfLength.forAllRowsOfTraceWithIndex, table_constraints_hold]
-    intro _N_assumption
 
     /-
       We prove the soundness of the table by induction on the trace.
@@ -239,12 +243,24 @@ def formal_fib32_table : FormalTable (F p) RowType := {
 
     -- base case 2
     · simp [table_norm]
-      simp only [table_norm, boundary, TableConstraint.assertion, Gadgets.Equality.U32.circuit, circuit_norm]
-      simp only [Vector.init, Nat.cast_zero, Fin.isValue, Fin.val_eq_zero,
-        Vector.push_mk, List.push_toArray, List.nil_append, Nat.cast_one,
-        List.cons_append, Nat.cast_ofNat, Fin.coe_eq_castSucc, zero_add,
-        Fin.reduceCastSucc, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-      simp only [subcircuit_norm, circuit_norm, Gadgets.Equality.U32.spec]
+      set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ (envs 0 0)
+      simp only [table_norm, boundary]
+      simp
+      rw [
+        show ((3 : Fin 4).val % 5 % 6 % 7 % 8) = 3 by rfl,
+        show ((4 : Fin 5).val % 6 % 7 % 8) = 4 by rfl,
+        show (((5 : Fin 6).val % 7 % 8)) = 5 by rfl,
+        show ((6 : Fin 7).val % 8) = 6 by rfl,
+        show (7 : Fin 8).val = 7 by rfl,
+      ]
+      simp only [seval]
+      rw [reduce_vars]
+      -- simp only [Array.push_eq_append, Array.empty_append]
+      -- simp
+      -- simp only [Vector.init, Nat.cast_zero, Fin.isValue, Fin.val_eq_zero,
+      --   Vector.push_mk, List.push_toArray, List.nil_append, Nat.cast_one,
+      --   List.cons_append, Nat.cast_ofNat, Fin.coe_eq_castSucc, zero_add,
+      --   Fin.reduceCastSucc, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
       simp [
         show (3 : Fin 8).val = 3 by rfl,
         show (4 : Fin 8).val = 4 by rfl,

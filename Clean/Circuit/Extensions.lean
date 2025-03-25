@@ -2,9 +2,9 @@
 import Clean.Circuit.Basic
 
 variable {F :Type} [Field F]
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 namespace Provable
-variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 @[circuit_norm]
 def witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) := do
@@ -15,6 +15,7 @@ def synthesize_var : Circuit F (Var α F) := witness (fun _ => synthesize_value)
 
 instance [Field F] : Inhabited (Circuit F (Var α F)) where
   default := synthesize_var
+end Provable
 
 @[circuit_norm]
 def assert_equal (a a': Var α F) : Circuit F Unit :=
@@ -22,7 +23,6 @@ def assert_equal (a a': Var α F) : Circuit F Unit :=
   let vars' := to_vars a'
   let eqs := (vars.zip vars').map (fun ⟨ x, x' ⟩ => assert_zero (x - x'))
   do let _ ← eqs.mapMonad
-end Provable
 
 def copy_to_var [Field F] (x: Expression F) : Circuit F (Variable F) := do
   let x' ← witness_var x.eval
