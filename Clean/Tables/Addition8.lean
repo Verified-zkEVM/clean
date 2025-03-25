@@ -19,19 +19,6 @@ instance : NonEmptyProvableType RowType where
     let ⟨ .mk [x, y, z], _ ⟩ := v
     ⟨ x, y, z ⟩
 
--- def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
---   main x := lookup (ByteLookup x)
---   assumptions _ := True
---   spec x := x.val < 256
---   soundness := by
---     intro _ env x_var x hx _ h_holds
---     dsimp [circuit_norm] at h_holds
---     exact hx ▸ ByteTable.soundness (eval env x_var) h_holds
---   completeness := by
---     intro _ env x_var _ x hx _ spec
---     dsimp [circuit_norm]
---     exact ByteTable.completeness (eval env x_var) (hx ▸ spec)
-
 def add8_inline : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
   lookup (ByteLookup row.x)
