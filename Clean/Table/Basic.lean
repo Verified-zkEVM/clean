@@ -347,13 +347,12 @@ def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
 @[table_norm, table_assignment_norm]
 def get_row {W: ℕ+} (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
-    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-    let exprs := vars.map Expression.var
+    let vars : Vector ℕ _ := .init (fun i => ctx.offset + i)
     let ctx' : TableContext W S F := {
-      circuit := ctx.circuit.witness (size S) (fun eval => exprs.map eval),
+      circuit := ctx.circuit.witness (size S) (fun env => vars.map fun i => env.get i),
       assignment := ctx.assignment.push_row row
     }
-    (from_vars exprs, ctx')
+    (Provable.from_offset S ctx.offset, ctx')
 
 /--
   Get a fresh variable for each cell in the current row

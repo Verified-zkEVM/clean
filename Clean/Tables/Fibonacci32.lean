@@ -20,7 +20,7 @@ structure RowType (F : Type) where
   x: U32 F
   y: U32 F
 
-instance : NonEmptyProvableType RowType where
+instance : ProvableType RowType where
   size := 8
   to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
   from_elements v :=
@@ -55,15 +55,15 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   }
 
   assign_U32 next_row_off.y z
-  assert_equal curr.y next.x
+  assertion Gadgets.Equality.U32.circuit ⟨curr.y, next.x⟩
 
 /--
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  assert_equal row.x ⟨0, 0, 0, 0⟩
-  assert_equal row.y ⟨1, 0, 0, 0⟩
+  assertion Gadgets.Equality.U32.circuit ⟨row.x, ⟨0, 0, 0, 0⟩⟩
+  assertion Gadgets.Equality.U32.circuit ⟨row.y, ⟨1, 0, 0, 0⟩⟩
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
@@ -244,30 +244,29 @@ def formal_fib32_table : FormalTable (F p) RowType := {
     -- base case 2
     · simp [table_norm]
       set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ (envs 0 0)
-      simp only [table_norm, boundary]
-      simp
-      rw [
-        show ((3 : Fin 4).val % 5 % 6 % 7 % 8) = 3 by rfl,
-        show ((4 : Fin 5).val % 6 % 7 % 8) = 4 by rfl,
-        show (((5 : Fin 6).val % 7 % 8)) = 5 by rfl,
-        show ((6 : Fin 7).val % 8) = 6 by rfl,
-        show (7 : Fin 8).val = 7 by rfl,
-      ]
-      simp only [seval]
-      rw [reduce_vars]
-      -- simp only [Array.push_eq_append, Array.empty_append]
-      -- simp
-      -- simp only [Vector.init, Nat.cast_zero, Fin.isValue, Fin.val_eq_zero,
-      --   Vector.push_mk, List.push_toArray, List.nil_append, Nat.cast_one,
-      --   List.cons_append, Nat.cast_ofNat, Fin.coe_eq_castSucc, zero_add,
-      --   Fin.reduceCastSucc, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-      simp [
+      simp only [table_norm, boundary, circuit_norm, Gadgets.Equality.U32.circuit]
+      simp only [subcircuit_norm, Gadgets.Equality.U32.spec]
+      -- TODO it's annoying how we have to reason about the individual parts of the U32
+      -- even though the gadget we used was about equality of entire U32s
+      simp [circuit_norm]
+      simp only [
         show (3 : Fin 8).val = 3 by rfl,
         show (4 : Fin 8).val = 4 by rfl,
         show (5 : Fin 8).val = 5 by rfl,
         show (6 : Fin 8).val = 6 by rfl,
         show (7 : Fin 8).val = 7 by rfl,
       ]
+      have hx0 : env.get 0 = first_row.x.x0 := rfl
+      have hx1 : env.get 1 = first_row.x.x1 := rfl
+      have hx2 : env.get 2 = first_row.x.x2 := rfl
+      have hx3 : env.get 3 = first_row.x.x3 := rfl
+      have hy0 : env.get 4 = first_row.y.x0 := rfl
+      have hy1 : env.get 5 = first_row.y.x1 := rfl
+      have hy2 : env.get 6 = first_row.y.x2 := rfl
+      have hy3 : env.get 7 = first_row.y.x3 := rfl
+      rw [hx0, hx1, hx2, hx3, hy0, hy1, hy2, hy3]
+      clear hx0 hx1 hx2 hx3 hy0 hy1 hy2 hy3
+
       intros b0 b1 b2 b3 b4 b5 b6 b7
 
       simp only [U32.value, fib32]
