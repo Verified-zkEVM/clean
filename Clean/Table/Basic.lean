@@ -520,7 +520,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       | .Boundary _ constraint => constraint.offset_consistent
       | .EveryRow constraint => constraint.offset_consistent
       | .EveryRowExceptLast constraint => constraint.offset_consistent
-    := by rfl
+    := by repeat constructor
 
 
 -- add some important lemmas to simp sets

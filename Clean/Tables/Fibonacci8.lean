@@ -103,10 +103,6 @@ def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table
   spec := spec
 
-  offset_consistent := by
-    simp only [fib_table, List.Forall]
-    repeat constructor
-
   soundness := by
     intro N trace envs _
     simp only [gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,

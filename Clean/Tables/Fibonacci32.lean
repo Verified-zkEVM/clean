@@ -91,19 +91,6 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   for both boundary and recursive relation
   Those are too expensive to prove in-line, so we prove them here and use them later
 -/
-omit p_large_enough in
-lemma boundary_vars (first_row: Row (F p) RowType) (aux_env : Environment (F p)) :
-    let env := boundary.window_env ⟨<+> +> first_row, rfl⟩ aux_env;
-    env.get 0 = first_row.x.x0 ∧
-    env.get 1 = first_row.x.x1 ∧
-    env.get 2 = first_row.x.x2 ∧
-    env.get 3 = first_row.x.x3 ∧
-    env.get 4 = first_row.y.x0 ∧
-    env.get 5 = first_row.y.x1 ∧
-    env.get 6 = first_row.y.x2 ∧
-    env.get 7 = first_row.y.x3
-  := by
-  repeat constructor
 
 variable {α : Type}
 
@@ -202,12 +189,13 @@ lemma lift_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F
   · rw [Gadgets.Equality.U32.spec, true_implies] at h_eq
     exact h_eq
   rw [Gadgets.Addition32Full.assumptions, Gadgets.Addition32Full.spec] at h_add
+  change curr.x.is_normalized ∧ curr.y.is_normalized ∧ (0 = 0 ∨ 0 = 1) → _ at h_add
   intro h_norm_x h_norm_y
-  specialize h_add ⟨ h_norm_x, h_norm_y, by simp ⟩
+  specialize h_add ⟨ h_norm_x, h_norm_y, Or.inl rfl ⟩
   rw [ZMod.val_zero, add_zero] at h_add
-  change (next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ _ ∧ next.y.is_normalized ∧ _) at h_add
-  obtain ⟨ h_add_mod, _, h_norm_nexty, _ ⟩ := h_add
-  exact ⟨h_add_mod, h_norm_nexty⟩
+  change next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ _ ∧ next.y.is_normalized ∧ _ at h_add
+  obtain ⟨ h_add_mod, _, h_norm_next_y, _ ⟩ := h_add
+  exact ⟨h_add_mod, h_norm_next_y⟩
 
 /--
   Definition of the formal table for fibonacci32
@@ -215,6 +203,7 @@ lemma lift_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
   spec := spec,
+
   soundness := by
     intro N trace envs _
     simp only [fib32_table, spec]
@@ -229,7 +218,6 @@ def formal_fib32_table : FormalTable (F p) RowType := {
 
     -- base case 2
     · simp [table_norm]
-      have h_vars := boundary_vars first_row (envs 0 0)
       set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ (envs 0 0)
       simp only [table_norm, boundary, circuit_norm, Gadgets.Equality.U32.circuit]
       simp only [subcircuit_norm, Gadgets.Equality.U32.spec]
@@ -244,7 +232,14 @@ def formal_fib32_table : FormalTable (F p) RowType := {
         show (6 : Fin 8).val = 6 by rfl,
         show (7 : Fin 8).val = 7 by rfl,
       ]
-      obtain ⟨ hx0, hx1, hx2, hx3, hy0, hy1, hy2, hy3 ⟩ := h_vars
+      have hx0 : env.get 0 = first_row.x.x0 := rfl
+      have hx1 : env.get 1 = first_row.x.x1 := rfl
+      have hx2 : env.get 2 = first_row.x.x2 := rfl
+      have hx3 : env.get 3 = first_row.x.x3 := rfl
+      have hy0 : env.get 4 = first_row.y.x0 := rfl
+      have hy1 : env.get 5 = first_row.y.x1 := rfl
+      have hy2 : env.get 6 = first_row.y.x2 := rfl
+      have hy3 : env.get 7 = first_row.y.x3 := rfl
       rw [hx0, hx1, hx2, hx3, hy0, hy1, hy2, hy3]
       clear hx0 hx1 hx2 hx3 hy0 hy1 hy2 hy3
 
