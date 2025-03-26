@@ -22,11 +22,6 @@ def Row.get (row : Row F S) (i : Fin (size S)) : F :=
   let elems := to_elements row
   elems.get i
 
-@[table_norm]
-def Row.fill (element: F) : Row F S :=
-  let elems := .fill (size S) element
-  from_elements elems
-
 /--
   A trace is an inductive list of rows. It can be viewed as a structured
   environment that maps cells to field elements.
