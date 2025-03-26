@@ -175,10 +175,6 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   vars : Vector (Cell W S) offset
 
 namespace CellAssignment
-@[table_assignment_norm]
-def get (assignment: CellAssignment W S) (var: Fin assignment.offset) : Cell W S :=
-  assignment.vars.get var
-
 @[table_assignment_norm, reducible]
 def empty (W: ℕ+) : CellAssignment W S where
   offset := 0
@@ -202,9 +198,7 @@ lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
   (assignment.push_vars_aux n).offset = assignment.offset + n := by
   induction n with
   | zero => rfl
-  | succ n ih =>
-    rw [push_vars_aux]
-    simp_arith [push_var_aux, ih]
+  | succ n ih => simp_arith [push_vars_aux, push_var_aux, ih]
 
 @[table_assignment_norm]
 def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S :=
@@ -217,7 +211,6 @@ def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : Cell
 def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
   (assignment.push_var_input off).offset = assignment.offset + 1 := by
   simp [push_var_input, Vector.push]
-
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
@@ -257,9 +250,6 @@ def empty : TableContext W S F where
 
 @[reducible, table_norm, table_assignment_norm]
 def offset (table : TableContext W S F) : ℕ := table.circuit.offset
-
-@[reducible, table_assignment_norm]
-def aux_length (table : TableContext W S F) : ℕ := table.assignment.aux_length
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
@@ -278,12 +268,12 @@ def assignment_from_circuit {n} (as: CellAssignment W S) : Operations F n → Ce
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
     let (a, ops) := circuit ctx.circuit
-
-    -- the updated assignment is computed from a fresh starting circuit, independent of the circuit so far
-    -- (if we would use `ops` instead of `circuit.operations 0`, we would be redoing previous assignments)
-    let assignment := assignment_from_circuit (F:=F) ctx.assignment (circuit.operations 0)
-
-    (a, { circuit := ops, assignment })
+    (a, {
+      circuit := ops,
+      -- the updated assignment is computed from a fresh starting circuit, independent of the circuit so far
+      -- (if we would use `ops` instead of `circuit.operations 0`, we would be redoing previous assignments)
+      assignment := assignment_from_circuit ctx.assignment (circuit.operations 0)
+    })
 
 namespace TableConstraint
 @[reducible, table_norm, table_assignment_norm]
