@@ -136,6 +136,7 @@ lemma fib_vars_curr' :
      .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩, .input ⟨0, 7⟩] := by
     dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
       Gadgets.Addition32Full.circuit, assign_U32, Gadgets.Equality.U32.circuit]
+    simp only [circuit_norm, table_norm]
     simp only [circuit_norm, table_norm, List.extract_eq_drop_take, List.take_succ_cons, List.take_zero, List.drop_zero, seval]
     rfl
 
@@ -145,10 +146,10 @@ lemma fib_vars_next (curr next : Row (F p) RowType) (aux_env : Environment (F p)
     env.get 9 = next.x.x1 ∧
     env.get 10 = next.x.x2 ∧
     env.get 11 = next.x.x3 ∧
-    env.get 12 = next.y.x0 ∧
-    env.get 13 = next.y.x1 ∧
-    env.get 14 = next.y.x2 ∧
-    env.get 15 = next.y.x3
+    env.get 16 = next.y.x0 ∧
+    env.get 18 = next.y.x1 ∧
+    env.get 20 = next.y.x2 ∧
+    env.get 22 = next.y.x3
   := by
   intro env
   dsimp only [env, window_env]
@@ -161,62 +162,33 @@ lemma fib_vars_next (curr next : Row (F p) RowType) (aux_env : Environment (F p)
   and_intros <;> rfl
 
 /--
-  Main lemma that shows that if the constraints hold over the two-row window, then the spec of add32
-  is satisfied, namely that if curr.x.is_normalized and curr.y.is_normalized, then
-  - next.y.value = (curr.x.value + curr.y.value) % 2^32
-  - next.y.is_normalized
+  Main lemma that shows that if the constraints hold over the two-row window,
+  then the spec of add32 and equality are satisfied
 -/
-lemma lift_rec_add (curr next : Row (F p) RowType) (aux_env : Environment (F p))
-  : recursive_relation.constraints_hold_on_window ⟨<+> +> curr +> next, by simp [Trace.len]⟩ aux_env →
-  (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
-  simp only [recursive_relation, assign_U32,
-    table_norm, TableConstraint.subcircuit, TableConstraint.assertion,
-    circuit_norm, Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
+lemma lift_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
+  : recursive_relation.constraints_hold_on_window ⟨<+> +> curr +> next, rfl⟩ aux_env →
+  curr.y = next.x ∧
+  (curr.x.is_normalized → curr.y.is_normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized)
+   := by
+  simp only [table_norm]
+  obtain ⟨ hcurr_x0, hcurr_x1, hcurr_x2, hcurr_x3, hcurr_y0, hcurr_y1, hcurr_y2, hcurr_y3 ⟩ := fib_vars_curr curr next aux_env
+  obtain ⟨ hnext_x0, hnext_x1, hnext_x2, hnext_x3, hnext_y0, hnext_y1, hnext_y2, hnext_y3 ⟩ := fib_vars_next curr next aux_env
+  set env := recursive_relation.window_env  ⟨<+> +> curr +> next, rfl⟩ aux_env
+  dsimp only [table_norm, circuit_norm, recursive_relation, assign_U32,
+    Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
   ]
-  rintro ⟨ h_add, h_eq ⟩
-  clear h_eq
-
-  -- simplify `get_curr_row` output
-  conv at h_add =>
-    congr
-    · simp [
-        show (3 : Fin 8).val = 3 by rfl,
-        show (4 : Fin 8).val = 4 by rfl,
-        show (5 : Fin 8).val = 5 by rfl,
-        show (6 : Fin 8).val = 6 by rfl,
-        show (7 : Fin 8).val = 7 by rfl
-      ]
-    · simp
-  simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom,
-    Gadgets.Addition32Full.assumptions
+  rintro ⟨ ⟨_, h_add⟩, h_eq ⟩
+  simp only [table_norm, circuit_norm, subcircuit_norm] at h_add h_eq
+  simp [
+    show (3 : Fin 8).val = 3 by rfl,
+    show (4 : Fin 8).val = 4 by rfl,
+    show (5 : Fin 8).val = 5 by rfl,
+    show (6 : Fin 8).val = 6 by rfl,
+    show (7 : Fin 8).val = 7 by rfl
   ] at h_add
-  intro h_norm_x h_norm_y
-  specialize h_add h_norm_x h_norm_y
-  dsimp only [Gadgets.Addition32Full.spec] at h_add
-  set curr_x := U32.mk (curr.get 0) (curr.get 1) (curr.get 2) (curr.get 3)
-  set curr_y := U32.mk (curr.get 4) (curr.get 5) (curr.get 6) (curr.get 7)
-  set next_y := U32.mk (next.get 4) (next.get 5) (next.get 6) (next.get 7)
-  simp only [ZMod.val_zero, add_zero] at h_add
-  change (next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ _ ∧ next.y.is_normalized ∧ _) at h_add
-  exact ⟨h_add.left, h_add.right.right.left⟩
-
-/--
-  Main lemma that shows that if the constraints hold over the two-row window, then the spec of
-  the equality assertion is satisfied, namely that curr.y = next.x
--/
-lemma lift_rec_eq (curr next : Row (F p) RowType) (aux_env : Environment (F p))
-  : recursive_relation.constraints_hold_on_window ⟨<+> +> curr +> next, by simp [Trace.len]⟩ aux_env →
-  curr.y = next.x := by
-  simp only [recursive_relation, assign_U32,
-    table_norm, TableConstraint.subcircuit, TableConstraint.assertion,
-    circuit_norm, Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
-  ]
-  rintro ⟨ h_add, h_eq, _ ⟩
-  clear h_add
-
-  -- simplify `get_curr_row` output
   conv at h_eq =>
     congr
+    · skip
     · simp [
         show (3 : Fin 8).val = 3 by rfl,
         show (4 : Fin 8).val = 4 by rfl,
@@ -224,22 +196,18 @@ lemma lift_rec_eq (curr next : Row (F p) RowType) (aux_env : Environment (F p))
         show (6 : Fin 8).val = 6 by rfl,
         show (7 : Fin 8).val = 7 by rfl
       ]
-    · simp
-  simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom,
-    Gadgets.Equality.U32.spec
-  ] at h_eq
-  have ⟨h0, h1, h2, h3⟩ := h_eq
-  ext
-  repeat assumption
-
-lemma reduce_vars : ((((((((
-  (#[] : Array (Variable (F p)))
-  |>.push { index := 0 }).push { index := 1 }).push { index := 2 }).push { index := 3 }).push { index := 4 })
-  |>.push { index := 5 }).push { index := 6 }).push { index := 7 })
-  = #[(⟨0⟩ : Variable (F p)), ⟨1⟩, ⟨2⟩, ⟨3⟩, ⟨4⟩, ⟨5⟩, ⟨6⟩, ⟨7⟩]
-  := by rfl
-
--- def array : Array (Expression (F p)) := #[var ⟨0⟩, var ⟨1⟩, var ⟨2⟩, var ⟨3⟩, var ⟨4⟩, var ⟨5⟩, var ⟨6⟩, var ⟨7⟩]
+  rw [hcurr_x0, hcurr_x1, hcurr_x2, hcurr_x3, hcurr_y0, hcurr_y1, hcurr_y2, hcurr_y3, hnext_y0, hnext_y1, hnext_y2, hnext_y3] at h_add
+  rw [hcurr_y0, hcurr_y1, hcurr_y2, hcurr_y3, hnext_x0, hnext_x1, hnext_x2, hnext_x3] at h_eq
+  constructor
+  · rw [Gadgets.Equality.U32.spec, true_implies] at h_eq
+    exact h_eq
+  rw [Gadgets.Addition32Full.assumptions, Gadgets.Addition32Full.spec] at h_add
+  intro h_norm_x h_norm_y
+  specialize h_add ⟨ h_norm_x, h_norm_y, by simp ⟩
+  rw [ZMod.val_zero, add_zero] at h_add
+  change (next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ _ ∧ next.y.is_normalized ∧ _) at h_add
+  obtain ⟨ h_add_mod, _, h_norm_nexty, _ ⟩ := h_add
+  exact ⟨h_add_mod, h_norm_nexty⟩
 
 /--
   Definition of the formal table for fibonacci32
@@ -305,11 +273,10 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
       simp only [and_true]
       replace constraints_hold := constraints_hold.left
-      simp [table_norm] at constraints_hold
 
-      -- lift the constraints to spec
-      have add_spec := lift_rec_add curr next constraints_hold.left
-      have eq_spec := lift_eq curr next constraints_hold.left
+      -- simplfy constraints
+      simp at constraints_hold
+      have ⟨ eq_spec, add_spec ⟩ := lift_constraints curr next (envs 1 (rest.len + 1)) constraints_hold
 
       -- and now we can reason at high level with U32s
       specialize add_spec curr_normalized_x curr_normalized_y
