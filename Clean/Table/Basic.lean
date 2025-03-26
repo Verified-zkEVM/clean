@@ -189,12 +189,6 @@ def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
   | 0 => assignment
   | n + 1 => (assignment.push_vars_aux n).push_var_aux
 
-lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
-  (assignment.push_vars_aux n).offset = assignment.offset + n := by
-  induction n with
-  | zero => rfl
-  | succ n ih => simp_arith [push_vars_aux, push_var_aux, ih]
-
 @[table_assignment_norm]
 def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S :=
   {
@@ -202,10 +196,6 @@ def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : Cell
     aux_length := assignment.aux_length
     vars := assignment.vars.push (.input off)
   }
-
-def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
-  (assignment.push_var_input off).offset = assignment.offset + 1 := by
-  simp [push_var_input, Vector.push]
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
@@ -215,9 +205,6 @@ def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S 
     aux_length := assignment.aux_length
     vars := assignment.vars ++ row_vars
   }
-
-lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
-  (assignment.push_row row).offset = assignment.offset + size S := by rfl
 
 @[table_assignment_norm]
 def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: ℕ) : CellAssignment W S :=
@@ -235,7 +222,7 @@ structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Prova
   circuit : OperationsList F
   assignment : CellAssignment W S
 
-variable [Field F]  {α : Type}
+variable [Field F] {α : Type}
 
 namespace TableContext
 @[reducible, table_norm, table_assignment_norm]
@@ -259,13 +246,17 @@ def assignment_from_circuit {n} (as: CellAssignment W S) : Operations F n → Ce
   | .lookup ops _ => assignment_from_circuit as ops
   | .subcircuit ops s => (assignment_from_circuit as ops).push_vars_aux s.local_length
 
+/--
+A `MonadLift` instance from `Circuit` to `TableConstraint` means that we can just use
+all circuit operations inside a table constraint.
+-/
 @[reducible, table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
     let (a, ops) := circuit ctx.circuit
     (a, {
       circuit := ops,
-      -- the updated assignment is computed from a fresh starting circuit, independent of the circuit so far
+      -- the updated assignment is computed from a fresh starting circuit, independent of the circuit so far.
       -- (if we would use `ops` instead of `circuit.operations 0`, we would be redoing previous assignments)
       assignment := assignment_from_circuit ctx.assignment (circuit.operations 0)
     })
@@ -344,10 +335,6 @@ def assign_var (off : CellOffset W S) (v : Variable F) : TableConstraint W S F U
   modify fun ctx =>
     let assignment := ctx.assignment.set_var_input off v.index
     { ctx with assignment }
-
-@[table_norm, table_assignment_norm]
-theorem assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
-  (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
 @[table_norm, table_assignment_norm]
 def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
@@ -504,6 +491,11 @@ attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ Lis
 attribute [table_norm, table_assignment_norm] liftM monadLift
 attribute [table_norm, table_assignment_norm] bind StateT.bind
 attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
+
+-- simp lemma to simplify updated circuit after an assignment
+@[table_norm, table_assignment_norm]
+theorem TableConstraint.assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
+  (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
 /--
 Tactic script to unfold `assign_curr_row` and `assign_next_row` in a `TableConstraint`.

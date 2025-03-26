@@ -61,3 +61,22 @@ def everyRowTwoRowsInduction' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
         (by sorry)
 
 end Trace
+variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
+
+namespace CellAssignment
+-- a few lemmas about how offsets change with assignments
+-- currently unused, because it turns out that offsets can usually be resolved with `rfl`
+
+lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
+  (assignment.push_vars_aux n).offset = assignment.offset + n := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp_arith [push_vars_aux, push_var_aux, ih]
+
+def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
+  (assignment.push_var_input off).offset = assignment.offset + 1 := by
+  simp [push_var_input, Vector.push]
+
+lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
+  (assignment.push_row row).offset = assignment.offset + size S := by rfl
+end CellAssignment
