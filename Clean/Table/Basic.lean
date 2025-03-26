@@ -27,11 +27,6 @@ def Row.fill (element: F) : Row F S :=
   let elems := .fill (size S) element
   from_elements elems
 
-/- @[table_norm]
-def Row.findIdx? (row : Row F S) (prop: F → Bool) : Option (Fin (size S)) :=
-  let elems := to_elements row
-  elems.findIdx? prop -/
-
 /--
   A trace is an inductive list of rows. It can be viewed as a structured
   environment that maps cells to field elements.
@@ -135,7 +130,7 @@ variable {W: ℕ} {α: Type}
   To make sure that the vertical offset is bounded, it is represented as a `Fin W`.
 -/
 structure CellOffset (W: ℕ+) (S : Type → Type) [ProvableType S]  where
-  rowOffset: Fin W
+  row: Fin W
   column: Fin (size S)
 deriving Repr
 
@@ -207,15 +202,15 @@ lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
     simp_arith [push_var_aux, ih]
 
 @[table_assignment_norm]
-def push_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) : CellAssignment W S :=
+def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S :=
   {
     offset := assignment.offset + 1
     aux_length := assignment.aux_length
-    vars := assignment.vars.push (.input ⟨ row, col ⟩)
+    vars := assignment.vars.push (.input off)
   }
 
-def push_var_input_offset (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) :
-  (assignment.push_var_input row col).offset = assignment.offset + 1 := by
+def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
+  (assignment.push_var_input off).offset = assignment.offset + 1 := by
   simp [push_var_input, Vector.push]
 
 
@@ -232,8 +227,10 @@ lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
   (assignment.push_row row).offset = assignment.offset + size S := by rfl
 
 @[table_assignment_norm]
-def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) (var: ℕ) : CellAssignment W S :=
-  let vars := assignment.vars.set? var (.input ⟨ row, col ⟩)
+def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: ℕ) : CellAssignment W S :=
+  let vars := assignment.vars.set? var (.input off)
+  -- note that we don't change the `aux_length` and the indices of existing aux variables.
+  -- that would unnecessarily complicate reasoning about the assignment
   { assignment with vars }
 end CellAssignment
 
@@ -355,7 +352,7 @@ def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 1
 @[table_norm, table_assignment_norm]
 def assign_var {W: ℕ+} (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
-    let assignment := ctx.assignment.set_var_input off.rowOffset off.column v.index
+    let assignment := ctx.assignment.set_var_input off v.index
     { ctx with assignment }
 
 @[table_norm, table_assignment_norm]
@@ -383,24 +380,6 @@ def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
   let vars := to_vars next
   forM (List.finRange (size S)) fun i =>
     assign (.next i) (vars.get i)
-
-/--
-Tactic script to unfold `assign_curr_row` and `assign_next_row` in a `TableConstraint`.
-
-TODO this is fairly useless without support for `at h` syntax
--/
-syntax "simp_assign_row" : tactic
-macro_rules
-  | `(tactic|simp_assign_row) =>
-    `(tactic|(
-    simp only [assign_curr_row, assign_next_row, size]
-    rw [List.finRange, List.ofFn]
-    repeat rw [Fin.foldr_succ]
-    rw [Fin.foldr_zero]
-    repeat rw [List.forM_cons]
-    rw [List.forM_nil, bind_pure_unit]
-    simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
-      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]))
 end TableConstraint
 
 export TableConstraint (window_env get_curr_row get_next_row assign assign_next_row assign_curr_row)
@@ -534,3 +513,21 @@ attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ Lis
 attribute [table_norm, table_assignment_norm] liftM monadLift
 attribute [table_norm, table_assignment_norm] bind StateT.bind
 attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
+
+/--
+Tactic script to unfold `assign_curr_row` and `assign_next_row` in a `TableConstraint`.
+
+TODO this is fairly useless without support for `at h` syntax
+-/
+syntax "simp_assign_row" : tactic
+macro_rules
+  | `(tactic|simp_assign_row) =>
+    `(tactic|(
+    simp only [assign_curr_row, assign_next_row, size]
+    rw [List.finRange, List.ofFn]
+    repeat rw [Fin.foldr_succ]
+    rw [Fin.foldr_zero]
+    repeat rw [List.forM_cons]
+    rw [List.forM_nil, bind_pure_unit]
+    simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]))
