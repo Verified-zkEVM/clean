@@ -33,8 +33,10 @@ def add8_table : List (TableOperation RowType (F p)) := [
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
-lemma soundness : ∀ (N : ℕ) (trace : TraceOfLength (F p) RowType N) (envs : ℕ → ℕ → Environment (F p)),
-  True → table_constraints_hold add8_table trace envs → spec_add8 trace := by
+def formal_add8_table : FormalTable (F p) RowType := {
+  constraints := add8_table,
+  spec := spec_add8,
+  soundness := by
     intro N trace envs _
     simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8_table, spec_add8]
     simp [List.mapIdx, List.mapIdx.go]
@@ -70,11 +72,6 @@ lemma soundness : ∀ (N : ℕ) (trace : TraceOfLength (F p) RowType N) (envs : 
         replace lookup_y := ByteTable.soundness row.y lookup_y
         rw [Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_add
         exact h_add ⟨ lookup_x, lookup_y ⟩
-
-def formal_add8_table : FormalTable (F p) RowType := {
-  constraints := add8_table,
-  spec := spec_add8,
-  soundness := soundness
 }
 
 end Tables.Addition8
