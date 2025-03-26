@@ -27,7 +27,7 @@ def add8_inline : SingleRowConstraint RowType (F p) := do
   assign (.curr 2) z
 
 def add8_table : List (TableOperation RowType (F p)) := [
-  TableOperation.EveryRow add8_inline
+  EveryRow add8_inline
 ]
 
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=

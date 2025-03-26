@@ -34,7 +34,6 @@ def next_row_off : RowType (CellOffset 2 RowType) := {
   y := ⟨.next 4, .next 5, .next 6, .next 7⟩
 }
 
-@[reducible]
 def assign_U32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsConstraint RowType (F p) := do
   assign offs.x0 x.x0
   assign offs.x1 x.x1
@@ -69,8 +68,8 @@ def boundary : SingleRowConstraint RowType (F p) := do
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
 def fib32_table : List (TableOperation RowType (F p)) := [
-  .Boundary 0 boundary,
-  .EveryRowExceptLast recursive_relation,
+  Boundary 0 boundary,
+  EveryRowExceptLast recursive_relation,
 ]
 
 /--
@@ -94,6 +93,19 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 
 variable {α : Type}
 
+#eval (recursive_relation (p:=p_babybear)).final_assignment.vars
+
+-- assignment copied from #eval above
+lemma fib_vars : (recursive_relation (p:=p)).final_assignment.vars =
+   #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
+      .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
+      .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
+      .input ⟨1, 7⟩, .aux 7] := by
+    dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
+      Gadgets.Addition32Full.circuit, assign_U32, Gadgets.Equality.U32.circuit]
+    simp only [circuit_norm, table_norm]
+    rfl
+
 lemma fib_vars_curr (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
     env.get 0 = curr.x.x0 ∧
@@ -109,23 +121,9 @@ lemma fib_vars_curr (curr next : Row (F p) RowType) (aux_env : Environment (F p)
   dsimp only [env, window_env]
   have h_offset : (recursive_relation (p:=p)).final_assignment.offset = 24 := rfl
   simp only [h_offset, reduceDIte, Nat.reduceLT]
-  dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
-    Gadgets.Addition32Full.circuit, assign_U32, Gadgets.Equality.U32.circuit]
-  simp only [circuit_norm, table_norm]
-  simp [Trace.getLeFromBottom]
+  rw [fib_vars]
+  simp
   and_intros <;> rfl
-
-/-- TODO this is much faster than `fib_vars_curr`, but need to figure out how to prove
-  statements about individual indices with it -/
-lemma fib_vars_curr' :
-   (recursive_relation (p:=p)).final_assignment.vars.toArray.extract 0 8 =
-   #[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩,
-     .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩, .input ⟨0, 7⟩] := by
-    dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
-      Gadgets.Addition32Full.circuit, assign_U32, Gadgets.Equality.U32.circuit]
-    simp only [circuit_norm, table_norm]
-    simp only [circuit_norm, table_norm, List.extract_eq_drop_take, List.take_succ_cons, List.take_zero, List.drop_zero, seval]
-    rfl
 
 lemma fib_vars_next (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -142,10 +140,8 @@ lemma fib_vars_next (curr next : Row (F p) RowType) (aux_env : Environment (F p)
   dsimp only [env, window_env]
   have h_offset : (recursive_relation (p:=p)).final_assignment.offset = 24 := rfl
   simp only [h_offset, reduceDIte, Nat.reduceLT]
-  dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
-    Gadgets.Addition32Full.circuit, assign_U32, Gadgets.Equality.U32.circuit]
-  simp only [circuit_norm, table_norm]
-  simp [Trace.getLeFromBottom]
+  rw [fib_vars]
+  simp
   and_intros <;> rfl
 
 /--

@@ -120,7 +120,7 @@ def forAllRowsOfTraceWithIndex {N : ℕ}
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
 
 end TraceOfLength
-variable {W: ℕ} {α: Type}
+variable {W: ℕ+} {α: Type}
 
 /--
   A cell offset is an offset in a table that points to a specific cell in a row.
@@ -132,7 +132,9 @@ variable {W: ℕ} {α: Type}
 structure CellOffset (W: ℕ+) (S : Type → Type) [ProvableType S]  where
   row: Fin W
   column: Fin (size S)
-deriving Repr
+
+instance : Repr (CellOffset W S) where
+  reprPrec off _ := "⟨" ++ reprStr off.row ++ ", " ++ reprStr off.column ++ "⟩"
 
 namespace CellOffset
 
@@ -154,6 +156,11 @@ inductive Cell (W: ℕ+) (S : Type → Type) [ProvableType S] where
   | input : CellOffset W S → Cell W S
   | aux : ℕ → Cell W S
 
+instance : Repr (Cell W S) where
+  reprPrec cell _ := match cell with
+    | .input off => ".input " ++ reprStr off
+    | .aux i => ".aux " ++ reprStr i
+
 /--
 Mapping between cell offsets in the table and variable indices.
 
@@ -166,8 +173,6 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
 
   /-- every variable is assigned to exactly one cell in the trace -/
   vars : Vector (Cell W S) offset
-
-variable {W: ℕ+}
 
 namespace CellAssignment
 @[table_assignment_norm]
@@ -321,14 +326,14 @@ def constraints_hold_on_window (table : TableConstraint W S F Unit)
   Circuit.constraints_hold.soundness env table.operations
 
 @[table_norm]
-def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
+def output {α: Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
 
 /--
   Get a fresh variable for each cell in a given row
 -/
 @[table_norm, table_assignment_norm]
-def get_row {W: ℕ+} (row : Fin W) : TableConstraint W S F (Var S F) :=
+def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let vars : Vector ℕ _ := .init (fun i => ctx.offset + i)
     let ctx' : TableContext W S F := {
@@ -341,16 +346,16 @@ def get_row {W: ℕ+} (row : Fin W) : TableConstraint W S F (Var S F) :=
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm, table_assignment_norm]
-def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 0
+def get_curr_row : TableConstraint W S F (Var S F) := get_row 0
 
 /--
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm, table_assignment_norm]
-def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) := get_row 1
+def get_next_row : TableConstraint W S F (Var S F) := get_row 1
 
 @[table_norm, table_assignment_norm]
-def assign_var {W: ℕ+} (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
+def assign_var (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
     let assignment := ctx.assignment.set_var_input off v.index
     { ctx with assignment }
@@ -360,7 +365,7 @@ theorem assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
   (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
 @[table_norm, table_assignment_norm]
-def assign {W: ℕ+} (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
+def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   -- a variable is assigned directly
   | .var v => assign_var off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
@@ -410,6 +415,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
   -/
   | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
 
+export TableOperation (Boundary EveryRow EveryRowExceptLast)
 
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the

@@ -48,8 +48,8 @@ def boundary_fib : SingleRowConstraint RowType (F p) :=
   assign_curr_row { x := 0, y := 1 }
 
 def fib_table : List (TableOperation RowType (F p)) := [
-  TableOperation.Boundary 0 boundary_fib,
-  TableOperation.EveryRowExceptLast fib_relation,
+  Boundary 0 boundary_fib,
+  EveryRowExceptLast fib_relation,
 ]
 
 def fib8 : ℕ -> ℕ
@@ -67,9 +67,7 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   induction' n using Nat.twoStepInduction
   repeat {simp [fib8]}; apply Nat.mod_lt; simp
 
-lemma fib_relation_offset : (fib_relation (p:=p)).final_assignment.offset = 5 := rfl
-
--- TODO kinda pointless to use `assign_curr_row` if the easiest way to unfold that is by making the steps explicit
+-- TODO kinda pointless to use `assign_curr_row` if the easiest way to unfold it is by making the steps explicit
 omit p_large_enough in
 lemma boundary_fib_eq : boundary_fib (p:=p) = (do
     assign (.curr 0) 0
@@ -82,7 +80,6 @@ lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p))
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
   set env := boundary_fib.window_env ⟨<+> +> first_row, rfl⟩ aux_env
-  change Circuit.constraints_hold.soundness env boundary_fib.operations → _
 
   -- simplify constraints
   simp only [boundary_fib]
