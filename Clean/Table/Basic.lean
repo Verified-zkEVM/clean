@@ -167,7 +167,7 @@ On the other hand, a cell can be assigned zero, one or more variables.
 -/
 structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   offset : ℕ -- number of variables
-  aux_length : ℕ -- number of auxiliary cells (i.e. those not part of the input/output layout)
+  aux_length : ℕ -- maximum number of auxiliary cells (i.e. those not part of the input/output layout)
 
   /-- every variable is assigned to exactly one cell in the trace -/
   vars : Vector (Cell W S) offset
@@ -218,32 +218,18 @@ def push_var_input_offset (assignment: CellAssignment W S) (row: Fin W) (col: Fi
   (assignment.push_var_input row col).offset = assignment.offset + 1 := by
   simp [push_var_input, Vector.push]
 
-def foldRange (n : ℕ) (f : α → Fin n → α) (init : α) : α := List.finRange n |>.foldl f init
-
-def foldRange_succ (n : ℕ) (f : α → Fin (n + 1) → α) (init : α) :
-  foldRange (n + 1) f init = f (foldRange n (fun acc i => f acc i.castSucc) init) (.last n) := by
-  rw [foldRange, foldRange, List.finRange_succ_last, List.foldl_concat, List.foldl_map]
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
-  foldRange (size S) (fun assignment col => push_var_input assignment row col) assignment
+  let row_vars : Vector (Cell W S) (size S) := .init fun col => .input ⟨ row, col ⟩
+  {
+    offset := assignment.offset + size S
+    aux_length := assignment.aux_length
+    vars := assignment.vars ++ row_vars
+  }
 
 lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
-  (assignment.push_row row).offset = assignment.offset + size S := by
-  -- generalize goal to enable induction
-  suffices ∀ n : ℕ, (hs : n ≤ size S) →
-    (foldRange n (fun assignment col ↦ assignment.push_var_input row ⟨col, by linarith [col.is_lt]⟩) assignment).offset = assignment.offset + n
-    by apply this; rfl
-  intro n
-  induction n with
-  | zero => simp [foldRange]
-  | succ n ih =>
-    intro hs
-    specialize ih (by linarith)
-    rw [foldRange_succ, push_var_input_offset]
-    simp only [Fin.coe_castSucc]
-    rw [ih]
-    ac_rfl
+  (assignment.push_row row).offset = assignment.offset + size S := by rfl
 
 @[table_assignment_norm]
 def set_var_input (assignment: CellAssignment W S) (row: Fin W) (col: Fin (size S)) (var: ℕ) : CellAssignment W S :=
@@ -542,6 +528,8 @@ attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm] size from_elements to_elements to_vars from_vars
 attribute [table_assignment_norm] to_elements
 attribute [table_norm] Circuit.constraints_hold.soundness
+
+attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
 
 attribute [table_norm, table_assignment_norm] liftM monadLift
 attribute [table_norm, table_assignment_norm] bind StateT.bind
