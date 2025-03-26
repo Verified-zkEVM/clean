@@ -567,7 +567,8 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 -- we often need to simplify concatenated vectors, e.g. for resolving `local_witnesses`
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
-  List.nil_append List.cons_append
+  List.nil_append List.cons_append List.append_toArray
+  Vector.init Vector.toArray_push Array.push_toList List.append_assoc
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)
 -- TODO handle other small indices as well
