@@ -13,8 +13,8 @@ structure Inputs (F : Type) where
   y: U32 F
   carry_in: F
 
-instance instProvableTypeInputs : ProvableType Inputs where
-  size := ProvableType.size U32 + ProvableType.size U32 + 1
+instance : ProvableType Inputs where
+  size := size U32 + size U32 + 1
   to_elements x :=
     #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
   from_elements v :=
@@ -26,9 +26,9 @@ structure Outputs (F : Type) where
   carry_out: F
 deriving Repr
 
-instance instProvableTypeOutputs : ProvableType Outputs where
-  size := ProvableType.size U32 + 1
-  to_elements x := (ProvableType.to_elements x.z) ++ #v[x.carry_out]
+instance : ProvableType Outputs where
+  size := size U32 + 1
+  to_elements x := to_elements x.z ++ #v[x.carry_out]
   from_elements v :=
     let ⟨ .mk [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
@@ -54,11 +54,15 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
-def circuit32 := Gadgets.Addition32Full.add32_full (p:=p_babybear) default
-#eval circuit32.operations.local_length
-#eval circuit32.output
-
-instance elaborated_circuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+/--
+Elaborated circuit data can be found as follows:
+```
+def c := add32_full (p:=p_babybear) default
+#eval c.operations.local_length
+#eval c.output
+```
+-/
+instance elaboratedCircuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
   main := add32_full
   local_length _ := 8
   output _ i0 := {
@@ -115,7 +119,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   clear h
 
   -- simplify output and spec
-  set output := eval env (elaborated_circuit.output _ i0)
+  set output := eval env (elaboratedCircuit.output _ i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := rfl
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
@@ -256,7 +260,6 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add32_full
   assumptions := assumptions
   spec := spec
-  local_length _ := 8
   soundness := soundness
   completeness := completeness
 end Gadgets.Addition32Full
