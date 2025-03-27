@@ -93,9 +93,9 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 
 variable {α : Type}
 
-#eval (recursive_relation (p:=p_babybear)).final_assignment.vars
 
--- assignment copied from #eval above
+-- assignment copied from eval:
+-- #eval (recursive_relation (p:=p_babybear)).final_assignment.vars
 lemma fib_vars : (recursive_relation (p:=p)).final_assignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
