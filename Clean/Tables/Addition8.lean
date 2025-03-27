@@ -14,13 +14,13 @@ structure RowType (F : Type) where
 
 instance : NonEmptyProvableType RowType where
   size := 3
-  to_elements x := vec [x.x, x.y, x.z]
+  to_elements x := #v[x.x, x.y, x.z]
   from_elements v :=
-    let ⟨ [x, y, z], _ ⟩ := v
+    let ⟨ .mk [x, y, z], _ ⟩ := v
     ⟨ x, y, z ⟩
 
 def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
-  main x := byte_lookup x
+  main x := lookup (ByteLookup x)
   assumptions _ := True
   spec x := x.val < 256
   soundness := by
@@ -63,41 +63,29 @@ def formal_add8_table : FormalTable (F p) RowType := {
       simp [table_norm]
     }
     | cons rest row ih => {
-      -- simplify induction
-      simp [circuit_norm, table_norm]
-      intros lookup_x lookup_y h_curr h_rest
+      -- simplify induction, use induction hypothesis
+      simp only [table_norm]
+      rintro ⟨ h_curr, h_rest ⟩
       specialize ih h_rest
       simp [ih]
+      clear ih h_rest
 
-      -- now we prove a local property about the current row
-      -- TODO: simp should suffice, but couldn't get it to work
+      -- unfold offsets/outputs
+      simp only [
+        table_norm, add8_inline, TableConstraint.assertion, TableConstraint.subcircuit,
+        circuit_norm,
+        byte_lookup_circuit, Boolean.circuit, Gadgets.Addition8.circuit
+      ] at h_curr
+      simp at h_curr
 
-      have h_x : ((add8_inline (p:=p) .empty).snd.assignment 0) = CellOffset.curr 0
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
-      have h_y : ((add8_inline (p:=p) .empty).snd.assignment 1) = CellOffset.curr 1
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
-      have h_z : ((add8_inline (p:=p) .empty).snd.assignment 2) = CellOffset.curr 2
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
-      have h_z' : ((add8_inline (p:=p) .empty).snd.assignment 3) = CellOffset.curr 2
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
+      -- unfold subcircuits
+      simp only [table_norm, circuit_norm, subcircuit_norm,
+        Gadgets.Addition8.assumptions, Gadgets.Addition8.spec
+      ] at h_curr
+      simp at h_curr
 
-      dsimp [Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness,
-        byte_lookup_circuit, circuit_norm] at lookup_x lookup_y
-
-      simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr lookup_x lookup_y
-      simp at lookup_x lookup_y
-
-      dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
-      simp [lookup_x, lookup_y] at h_curr
-      assumption
+      rcases h_curr with ⟨ lookup_x, lookup_y, h_holds ⟩
+      exact h_holds lookup_x lookup_y
     }
 }
 

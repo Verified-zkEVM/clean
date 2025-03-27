@@ -22,10 +22,10 @@ structure RowType (F : Type) where
 
 instance : NonEmptyProvableType RowType where
   size := 8
-  to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
+  to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
   from_elements v :=
     -- TODO is it possible to define in terms of ProvableType.from_elements of the U32?
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ ⟩
 
 @[reducible]
@@ -106,13 +106,12 @@ lemma boundary_vars :
     ((boundary (p:=p) .empty).snd.assignment 6) = CellOffset.curr 6 ∧
     ((boundary (p:=p) .empty).snd.assignment 7) = CellOffset.curr 7
   := by
-  simp only [boundary, bind, TableConstraint.get_curr_row,
-    TableConstraintOperation.update_context, zero_add, ge_iff_le, zero_le, decide_True,
-    Bool.true_and, decide_eq_true_eq, Fin.isValue, Nat.cast_zero, sub_zero, Vector.map,
-    Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Fin.coe_fin_one, Fin.val_zero, add_zero,
-    List.nil_append, Nat.cast_one, Fin.val_one, List.singleton_append, Nat.cast_ofNat,
-    Fin.val_two, List.cons_append, Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast,
-    List.map_cons, List.map_nil, CellOffset.curr]
+  simp only [boundary, bind, TableConstraint.get_curr_row, Vector.map, Vector.init, Vector.push,
+    Nat.reduceAdd, Vector.toArray_empty, Nat.cast_zero, Fin.isValue, Fin.val_eq_zero, Fin.val_zero,
+    add_zero, List.push_toArray, List.nil_append, Nat.cast_one, Fin.val_one, List.cons_append,
+    Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc, Fin.reduceCastSucc, List.map_toArray,
+    List.map_cons, List.map_nil, TableConstraintOperation.update_context, ge_iff_le,
+    Bool.and_eq_true, decide_eq_true_eq, CellOffset.curr]
   repeat constructor
 
 lemma rec_vars_curr :
@@ -125,13 +124,11 @@ lemma rec_vars_curr :
     ((recursive_relation (p:=p) .empty).snd.assignment 6) = CellOffset.curr 6 ∧
     ((recursive_relation (p:=p) .empty).snd.assignment 7) = CellOffset.curr 7
   := by
-  dsimp only [table_norm, recursive_relation]
-  simp only [Vector.map, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Nat.cast_zero,
-    Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
-    Fin.val_one, List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append,
-    Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil, ge_iff_le,
-    Bool.and_eq_true, decide_eq_true_eq, bind_assoc, pure_bind]
-  repeat constructor
+  dsimp only [recursive_relation, assign_U32,
+    table_norm, TableConstraint.subcircuit, TableConstraint.assertion,
+    circuit_norm, Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
+  ]
+  simp
 
 lemma rec_vars_next :
     ((recursive_relation (p:=p) .empty).snd.assignment 8) = CellOffset.next 0 ∧
@@ -143,20 +140,11 @@ lemma rec_vars_next :
     ((recursive_relation (p:=p) .empty).snd.assignment 20) = CellOffset.next 6 ∧
     ((recursive_relation (p:=p) .empty).snd.assignment 22) = CellOffset.next 7
   := by
-  dsimp only [table_norm, recursive_relation]
-  simp only [Vector.map, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Nat.cast_zero,
-    Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
-    Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc,
-    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil, ge_iff_le, Bool.and_eq_true,
-    decide_eq_true_eq, bind_assoc, pure_bind]
-  rw [
-    show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
-    show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
-    show (((5 : Fin 6).val % 8)) = 5 by rfl,
-    show ((6 : Fin 7).val) = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl,
+  dsimp only [recursive_relation, assign_U32,
+    table_norm, TableConstraint.subcircuit, TableConstraint.assertion,
+    circuit_norm, Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
   ]
-  repeat constructor
+  simp
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window, then the spec of add32
@@ -167,49 +155,33 @@ lemma rec_vars_next :
 lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   (curr.x.is_normalized -> curr.y.is_normalized -> next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized) := by
-  dsimp only [table_norm]
-  simp only [Vector.map, Vector.init, Vector.push, Nat.reduceAdd, Vector.nil, Nat.cast_zero,
-    Fin.isValue, Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one,
-    Fin.val_one, zero_add, List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append,
-    Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
-    PNat.val_ofNat, Nat.add_one_sub_one, Nat.reduceMod, Nat.add_zero, List.length_cons,
-    List.length_singleton, and_true, Nat.reducePow, and_imp]
-  intros h_add h_eq
+  simp only [recursive_relation, assign_U32,
+    table_norm, TableConstraint.subcircuit, TableConstraint.assertion,
+    circuit_norm, Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
+  ]
+  rintro ⟨ h_add, h_eq ⟩
   clear h_eq
 
-  -- TODO: why can't simp figure out those relations?
-  rw [
-    show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
-    show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
-    show (((5 : Fin 6).val % 8)) = 5 by rfl,
-    show ((6 : Fin 7).val) = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl,
+  -- simplify `get_curr_row` output
+  conv at h_add =>
+    congr
+    · simp [
+        show (3 : Fin 8).val = 3 by rfl,
+        show (4 : Fin 8).val = 4 by rfl,
+        show (5 : Fin 8).val = 5 by rfl,
+        show (6 : Fin 8).val = 6 by rfl,
+        show (7 : Fin 8).val = 7 by rfl
+      ]
+    · simp
+  simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom,
+    Gadgets.Addition32Full.assumptions
   ] at h_add
-
-  dsimp only [Circuit.subcircuit_soundness] at h_add
-  change _ ∧ _ ∧ _ → (Gadgets.Addition32Full.circuit.spec _ _) at h_add
-  rw [and_imp, and_imp] at h_add
   intro h_norm_x h_norm_y
-  -- TODO this unification is slow
   specialize h_add h_norm_x h_norm_y
-
-  -- TODO this simp is slow
-  simp only [Expression.eval, zero_ne_one, or_false, eval, Vector.map, size, Nat.reduceAdd, to_vars,
-    to_elements, List.map_cons, Trace.getLeFromBottom, Row.get, Vector.get, List.length_cons,
-    List.length_singleton, rec_vars_curr, CellOffset.curr, Fin.isValue, Fin.cast_eq_self,
-    List.get_eq_getElem, Fin.val_zero, List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ,
-    Fin.val_two, List.map_nil, Vector.instAppend, Vector.append, List.cons_append, List.nil_append,
-    rec_vars_next, CellOffset.next, SubCircuit.witness_length, FlatOperation.witness_length,
-    add_zero, true_implies, from_elements] at h_add
-  simp only [
-    show (3 : Fin 8).val = 3 by rfl,
-    show (4 : Fin 8).val = 4 by rfl,
-    show (5 : Fin 8).val = 5 by rfl,
-    show (6 : Fin 8).val = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl,
-  ] at h_add
-  simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_add
-  dsimp only [Gadgets.Addition32Full.circuit, Gadgets.Addition32Full.spec] at h_add
+  dsimp only [Gadgets.Addition32Full.spec] at h_add
+  set curr_x := U32.mk (curr.get 0) (curr.get 1) (curr.get 2) (curr.get 3)
+  set curr_y := U32.mk (curr.get 4) (curr.get 5) (curr.get 6) (curr.get 7)
+  set next_y := U32.mk (next.get 4) (next.get 5) (next.get 6) (next.get 7)
   simp only [ZMod.val_zero, add_zero] at h_add
   change (next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ _ ∧ next.y.is_normalized ∧ _) at h_add
   exact ⟨h_add.left, h_add.right.right.left⟩
@@ -221,51 +193,30 @@ lemma lift_rec_add (curr : Row (F p) RowType) (next : Row (F p) RowType)
 lemma lift_rec_eq (curr : Row (F p) RowType) (next : Row (F p) RowType)
   : TableConstraint.constraints_hold_on_window recursive_relation ⟨<+> +> curr +> next, by simp [Trace.len]⟩ ->
   curr.y = next.x := by
+  simp only [recursive_relation, assign_U32,
+    table_norm, TableConstraint.subcircuit, TableConstraint.assertion,
+    circuit_norm, Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
+  ]
+  rintro ⟨ h_add, h_eq, _ ⟩
+  clear h_add
 
-  simp only [table_norm, TableConstraint.constraints_hold_on_window,
-    TableConstraint.constraints_hold_on_window.foldl,
-    Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
-    Nat.reduceAdd, ProvableType.from_elements, Vector.map, ProvableType.size,
-    PNat.val_ofNat, Vector.init, Vector.push, Vector.nil, Nat.cast_zero, Fin.isValue,
-    Fin.coe_fin_one, Fin.val_zero, add_zero, List.nil_append, Nat.cast_one, Fin.val_one, zero_add,
-    List.singleton_append, Nat.cast_ofNat, Fin.val_two, List.cons_append, Fin.coe_eq_castSucc,
-    Fin.coe_castSucc, Fin.val_natCast, List.map_cons, List.map_nil,
-    TableConstraintOperation.update_context, ge_iff_le, zero_le, decide_True, Bool.true_and,
-    decide_eq_true_eq, sub_zero, Bool.and_eq_true, TraceOfLength.get, Trace.len,
-    Nat.succ_eq_add_one, Nat.add_one_sub_one, Fin.cast_val_eq_self, Nat.reduceMod, Nat.add_zero,
-    Expression.eval, Fin.zero_eta, Vector.get, Fin.cast_zero,
-    List.get_eq_getElem, CellOffset.next, and_true, and_imp]
-  intros _ h_eq
-
-  rw [
-    show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
-    show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
-    show (((5 : Fin 6).val % 8)) = 5 by rfl,
-    show ((6 : Fin 7).val) = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl,
+  -- simplify `get_curr_row` output
+  conv at h_eq =>
+    congr
+    · simp [
+        show (3 : Fin 8).val = 3 by rfl,
+        show (4 : Fin 8).val = 4 by rfl,
+        show (5 : Fin 8).val = 5 by rfl,
+        show (6 : Fin 8).val = 6 by rfl,
+        show (7 : Fin 8).val = 7 by rfl
+      ]
+    · simp
+  simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom,
+    Gadgets.Equality.U32.spec
   ] at h_eq
-
-  simp only [List.length_nil, Nat.reduceAdd, Gadgets.Addition32Full.circuit,
-    Gadgets.Addition32Full.instProvableTypeInputs.eq_1, List.length_cons, List.length_singleton,
-    Fin.isValue, Nat.reduceMod, Circuit.formal_assertion_to_subcircuit,
-    Gadgets.Equality.U32.circuit, Circuit.subassertion_soundness, Gadgets.Equality.U32.spec, eval,
-    from_elements, Vector.map, to_vars, List.map_cons, Expression.eval, Trace.getLeFromBottom,
-    Row.get, Vector.get, ProvableType.to_elements, rec_vars_curr, rec_vars_next, CellOffset.curr,
-    Fin.cast_eq_self, List.get_eq_getElem, CellOffset.next, Fin.val_one, List.getElem_cons_succ,
-    List.getElem_cons_zero, Fin.val_two, List.map_nil, U32.mk.injEq, true_implies] at h_eq
-
-  simp [
-    show (3 : Fin 8).val = 3 by rfl,
-    show (4 : Fin 8).val = 4 by rfl,
-    show (5 : Fin 8).val = 5 by rfl,
-    show (6 : Fin 8).val = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl,
-    show (8 : Fin 8).val = 0 by rfl,
-  ] at h_eq
-
   have ⟨h0, h1, h2, h3⟩ := h_eq
   ext
-  repeat simp only [h0, h1, h2, h3]
+  repeat assumption
 
 /--
   Definition of the formal table for fibonacci32
@@ -287,20 +238,13 @@ def formal_fib32_table : FormalTable (F p) RowType := {
     · simp [table_norm]
 
     -- base case 2
-    · simp only [table_norm]
-      simp [table_norm, Circuit.formal_assertion_to_subcircuit, Circuit.subassertion_soundness, circuit_norm]
-
-      rw [
-        show ((3 : Fin 4).val % 6 % 7 % 8) = 3 by rfl,
-        show ((4 : Fin 5).val % 7 % 8) = 4 by rfl,
-        show (((5 : Fin 6).val % 8)) = 5 by rfl,
-        show ((6 : Fin 7).val) = 6 by rfl,
-        show (7 : Fin 8).val = 7 by rfl,
-      ]
-
-      simp only [boundary_vars]
-      simp [CellOffset.curr, Gadgets.Equality.U32.circuit, Gadgets.Equality.U32.spec]
-
+    · simp [table_norm]
+      simp only [table_norm, boundary, TableConstraint.assertion, Gadgets.Equality.U32.circuit, circuit_norm]
+      simp only [Vector.init, Nat.cast_zero, Fin.isValue, Fin.val_eq_zero,
+        Vector.push_mk, List.push_toArray, List.nil_append, Nat.cast_one,
+        List.cons_append, Nat.cast_ofNat, Fin.coe_eq_castSucc, zero_add,
+        Fin.reduceCastSucc, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+      simp only [subcircuit_norm, circuit_norm, Gadgets.Equality.U32.spec]
       simp [
         show (3 : Fin 8).val = 3 by rfl,
         show (4 : Fin 8).val = 4 by rfl,
@@ -330,9 +274,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       specialize ih2 constraints_hold.right
       simp only [ih2, and_self]
 
-      simp only [Fin.isValue, and_true] at ih2
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
-
       simp only [and_true]
 
       -- lift the constraints to spec
@@ -341,7 +283,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
 
       -- and now we can reason at high level with U32s
       specialize add_spec curr_normalized_x curr_normalized_y
-      simp only [fib32, Nat.reducePow]
+      simp only [fib32, Trace.len]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
       simp only [curr_fib1, Trace.len, Nat.succ_eq_add_one, add_spec,
         Nat.reducePow, and_self, curr_normalized_y]

@@ -60,7 +60,7 @@ def unit (_: Type) := Unit
 
 instance : ProvableType unit where
   size := 0
-  to_elements _ := .nil
+  to_elements _ := #v[]
   from_elements _ := ()
 
 @[reducible]
@@ -69,7 +69,7 @@ def field : TypeMap := id
 @[circuit_norm]
 instance : ProvableType field where
   size := 1
-  to_elements x := vec [x]
+  to_elements x := #v[x]
   from_elements v := v.get 0
 
 @[reducible]
@@ -81,7 +81,7 @@ def field2 := pair field field
 @[circuit_norm]
 instance : ProvableType field2 where
   size := 2
-  to_elements pair := vec [pair.1, pair.2]
+  to_elements pair := #v[pair.1, pair.2]
   from_elements v := (v.get 0, v.get 1)
 
 variable {n: ℕ}

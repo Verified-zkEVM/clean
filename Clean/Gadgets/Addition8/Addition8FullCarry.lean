@@ -16,9 +16,9 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 3
-  to_elements x := vec [x.x, x.y, x.carry_in]
+  to_elements x := #v[x.x, x.y, x.carry_in]
   from_elements v :=
-    let ⟨ [x, y, carry_in], _ ⟩ := v
+    let ⟨ .mk [x, y, carry_in], _ ⟩ := v
     ⟨ x, y, carry_in ⟩
 
 structure Outputs (F : Type) where
@@ -27,17 +27,17 @@ structure Outputs (F : Type) where
 
 instance : ProvableType Outputs where
   size := 2
-  to_elements x := vec [x.z, x.carry_out]
+  to_elements x := #v[x.z, x.carry_out]
   from_elements v :=
-    let ⟨ [z, carry_out], _ ⟩ := v
+    let ⟨ .mk [z, carry_out], _ ⟩ := v
     ⟨ z, carry_out ⟩
 
 def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (F:=F p) (fun eval => mod_256 (eval (x + y + carry_in)))
-  byte_lookup z
+  let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
+  lookup (ByteLookup z)
 
   -- witness the output carry
   let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
@@ -64,6 +64,9 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
   assumptions := assumptions
   spec := spec
+  local_length _ := 2
+  output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
+
   soundness := by
     -- introductions
     rintro i0 env inputs_var inputs h_inputs as
@@ -76,7 +79,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify constraints hypothesis
-    dsimp [circuit_norm] at h_holds
+    simp only [circuit_norm, add8_full_carry, ByteLookup] at h_holds
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
@@ -90,8 +93,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
-    guard_hyp h_byte: ByteTable.contains (vec [z])
-    guard_hyp h_add: x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
+    guard_hyp h_byte: ByteTable.contains (#v[z])
+    guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
     change True → (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
     specialize h_bool_carry trivial
 
@@ -120,7 +123,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     dsimp [assumptions] at as
 
     -- unfold goal, (re)introduce names for some of unfolded variables
-    dsimp [Boolean.circuit, assert_bool, circuit_norm]
+    simp only [add8_full_carry, circuit_norm]
     rw [hx, hy, hcarry_in]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -128,20 +131,20 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     -- simplify local witnesses
     have hz : z = mod_256 (x + y + carry_in) := by
       have henv0 := henv (0 : Fin 2)
-      dsimp [circuit_norm] at henv0
+      dsimp only [add8_full_carry, circuit_norm] at henv0
       rwa [hx, hy, hcarry_in] at henv0
 
     have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
       have henv1 := henv (1 : Fin 2)
-      dsimp [circuit_norm] at henv1
+      dsimp only [add8_full_carry, circuit_norm] at henv1
       rwa [hx, hy, hcarry_in] at henv1
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-    let goal_byte := ByteTable.contains (vec [z])
+    let goal_byte := ByteTable.contains (#v[z])
     let goal_bool := carry_out = 0 ∨ carry_out = 1
-    let goal_add := x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0
+    let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
@@ -155,7 +158,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       apply Gadgets.Addition8.Theorems.completeness_bool
       repeat assumption
 
-    have completeness3 : x + y + carry_in + -1 * z + -1 * (carry_out * 256) = 0 := by
+    have completeness3 : x + y + carry_in + -z + -(carry_out * 256) = 0 := by
       rw [hz, hcarry_out]
       apply Gadgets.Addition8.Theorems.completeness_add
       repeat assumption

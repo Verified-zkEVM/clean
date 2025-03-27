@@ -26,7 +26,7 @@ def Row.get (row : Row F S) (i : Fin (size S)) : F :=
   A trace is an inductive list of rows. It can be viewed as a structured
   environment that maps cells to field elements.
 -/
-inductive Trace (F : Type) (S : Type → Type) [ProvableType S] :=
+inductive Trace (F : Type) (S : Type → Type) [ProvableType S] where
   /-- An empty trace -/
   | empty : Trace F S
   /-- Add a row to the end of the trace -/
@@ -232,7 +232,7 @@ def update_context {W: ℕ+} (ctx: TableContext W S F) :
     Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
   -/
   | Allocate subcircuit => {
-      offset := ctx.offset + subcircuit.witness_length,
+      offset := ctx.offset + subcircuit.local_length,
       assignment := ctx.assignment,
       operations := ctx.operations ++ [Allocate subcircuit]
     }
@@ -338,7 +338,8 @@ def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
 def subcircuit {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
     (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
   modifyGet fun ctx =>
-    let ⟨ a, subcircuit ⟩ := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
+    let a := circuit.output b ctx.offset
+    let subcircuit := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
     (a, update_context ctx (.Allocate subcircuit))
 
 def assertion {W: ℕ+} {β : TypeMap} [ProvableType β]

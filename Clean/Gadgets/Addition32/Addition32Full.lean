@@ -1,12 +1,11 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
 import Clean.Gadgets.Addition32.Theorems
+import Clean.Utils.Primes
 
 namespace Gadgets.Addition32Full
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 
 structure Inputs (F : Type) where
@@ -14,23 +13,24 @@ structure Inputs (F : Type) where
   y: U32 F
   carry_in: F
 
-instance instProvableTypeInputs : ProvableType Inputs where
-  size := ProvableType.size U32 + ProvableType.size U32 + 1
+instance : ProvableType Inputs where
+  size := size U32 + size U32 + 1
   to_elements x :=
-    vec [x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
+    #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
   from_elements v :=
-    let ⟨ [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
 
 structure Outputs (F : Type) where
   z: U32 F
   carry_out: F
+deriving Repr
 
-instance instProvableTypeOutputs : ProvableType Outputs where
-  size := ProvableType.size U32 + 1
-  to_elements x := (ProvableType.to_elements x.z) ++ vec [x.carry_out]
+instance : ProvableType Outputs where
+  size := size U32 + 1
+  to_elements x := to_elements x.z ++ #v[x.carry_out]
   from_elements v :=
-    let ⟨ [z0, z1, z2, z3, carry_out], _ ⟩ := v
+    let ⟨ .mk [z0, z1, z2, z3, carry_out], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
 
 open Gadgets.Addition8FullCarry (add8_full_carry)
@@ -54,7 +54,23 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
-theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec := by
+/--
+Elaborated circuit data can be found as follows:
+```
+def c := add32_full (p:=p_babybear) default
+#eval c.operations.local_length
+#eval c.output
+```
+-/
+instance elaboratedCircuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+  main := add32_full
+  local_length _ := 8
+  output _ i0 := {
+    z := { x0 := var ⟨i0⟩, x1 := var ⟨i0 + 2⟩, x2 := var ⟨i0 + 4⟩, x3 := var ⟨i0 + 6⟩ },
+    carry_out := var ⟨i0 + 7⟩
+  }
+
+theorem soundness : Soundness (F p) assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -72,7 +88,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   have : carry_in_var.eval env = carry_in := by injection h_inputs
   clear h_inputs
 
-  -- -- simplify assumptions
+  -- simplify assumptions
   dsimp only [assumptions, U32.is_normalized] at as
 
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
@@ -81,17 +97,15 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
   clear x_norm y_norm
 
-  -- -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, circuit_norm, Circuit.formal_assertion_to_subcircuit] at h
-  simp only [true_implies, true_and, and_assoc] at h
+  -- simplify circuit
+  simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
+  simp only [Boolean.spec, true_and, true_implies, and_assoc, add_zero] at h
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›] at h
   rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
   rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at h
   repeat clear this
-  simp only [constraints_hold_flat, Expression.eval, mul_one, mul_eq_zero, and_true, neg_mul,
-    one_mul] at h
-  rw [ByteTable.equiv _, ByteTable.equiv _, ByteTable.equiv _, ByteTable.equiv _, Boolean.spec] at h
+  rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -105,15 +119,12 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
   clear h
 
   -- simplify output and spec
-  set main := add32_full ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,⟨ y0_var, y1_var, y2_var, y3_var ⟩,carry_in_var⟩
-  set output := eval env (main.output i0)
-  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    dsimp [output, circuit_norm]
-
+  set output := eval env (elaboratedCircuit.output _ i0)
+  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := rfl
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
 
-  -- get rid of the boolean carry_out and noramlized output
+  -- get rid of the boolean carry_out and normalized output
   simp only [c3_bool, z0_byte, z1_byte, z2_byte, z3_byte, and_self, and_true]
   rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 
@@ -126,7 +137,7 @@ theorem soundness : Soundness (F p) Inputs Outputs add32_full assumptions spec :
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions := by
+theorem completeness : Completeness (F p) Outputs assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
@@ -149,7 +160,9 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp [add32_full, Boolean.circuit, Circuit.formal_assertion_to_subcircuit, circuit_norm]
+  simp only [circuit_norm, subcircuit_norm,
+    add32_full, add8_full_carry, Boolean.circuit, assert_bool
+  ]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]
@@ -166,7 +179,7 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
 
   change ∀ i : Fin 8, env.get (i0 + i) = wit.get i at henv
 
-  have hwit : wit.val = [
+  have hwit : wit.toArray = #[
     mod_256 (x0 + y0 + carry_in),
     floordiv (x0 + y0 + carry_in) 256,
     mod_256 (x1 + y1 + env.get (i0 + 1)),
@@ -176,10 +189,13 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
     mod_256 (x3 + y3 + env.get (i0 + 5)),
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
-    dsimp [wit, circuit_norm]
+    -- this has to unfold all subcircuits :/
+    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, assert_bool]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
+
+  repeat clear this
 
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -194,34 +210,34 @@ theorem completeness : Completeness (F p) Inputs Outputs add32_full assumptions 
   -- but that seems slower than simp with getElem lemmas
   have hz0 : z0 = mod_256 (x0 + y0 + carry_in) := by
     rw [(show z0 = wit.get 0 from henv 0), wit.get_eq_lt 0]
-    simp only [hwit, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_zero]
   have hc0 : c0 = floordiv (x0 + y0 + carry_in) 256 := by
     rw [(show c0 = wit.get 1 from henv 1), wit.get_eq_lt 1]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz1 : z1 = mod_256 (x1 + y1 + c0) := by
     rw [(show z1 = wit.get 2 from henv 2), wit.get_eq_lt 2]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc1 : c1 = floordiv (x1 + y1 + c0) 256 := by
     rw [(show c1 = wit.get 3 from henv 3), wit.get_eq_lt 3]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz2 : z2 = mod_256 (x2 + y2 + c1) := by
     rw [(show z2 = wit.get 4 from henv 4), wit.get_eq_lt 4]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc2 : c2 = floordiv (x2 + y2 + c1) 256 := by
     rw [(show c2 = wit.get 5 from henv 5), wit.get_eq_lt 5]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hz3 : z3 = mod_256 (x3 + y3 + c2) := by
     rw [(show z3 = wit.get 6 from henv 6), wit.get_eq_lt 6]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
   have hc3 : c3 = floordiv (x3 + y3 + c2) 256 := by
     rw [(show c3 = wit.get 7 from henv 7), wit.get_eq_lt 7]
-    simp only [hwit, List.getElem_cons_succ, List.getElem_cons_zero]
+    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
     (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv (x + y + c_in) 256) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
-    ByteTable.contains (vec [z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -1 * z + -1 * (c_out * 256) = 0
+    ByteTable.contains (#v[z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
     have : z.val < 256 := hz ▸ FieldUtils.mod_256_lt (x + y + c_in)
@@ -246,15 +262,4 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   spec := spec
   soundness := soundness
   completeness := completeness
-
--- lemmas like these can be helpful when using as subcircuit
-lemma local_length : ∀ offset input,
-  (circuit (p := p)).local_length input offset = 8 := by
-  intros; rfl
-
-lemma witness_length : ∀ offset input,
-  (Circuit.formal_circuit_to_subcircuit offset
-    (circuit (p := p)) input).snd.witness_length = 8 := by
-  intros
-  apply circuit.local_length_eq
 end Gadgets.Addition32Full
