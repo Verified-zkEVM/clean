@@ -260,7 +260,6 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add32_full
   assumptions := assumptions
   spec := spec
-  local_length _ := 8
   soundness := soundness
   completeness := completeness
 end Gadgets.Addition32Full
