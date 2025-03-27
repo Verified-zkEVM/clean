@@ -35,11 +35,13 @@ def spec (input : Inputs (F p)) (z: F p) :=
   Returns the sum.
 -/
 def circuit : FormalCircuit (F p) Inputs Provable.field where
-  main := add8_full
+  circuit := {
+    main := add8_full
+    local_length _ := 2
+    output _ i0 := var ⟨i0⟩
+  }
   assumptions := assumptions
   spec := spec
-  local_length _ := 2
-  output _ i0 := var ⟨i0⟩
 
   soundness := by
     -- introductions

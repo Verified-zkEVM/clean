@@ -46,7 +46,11 @@ open Provable (field)
 Asserts that x = 0 ∨ x = 1 by adding the constraint x * (x - 1) = 0
 -/
 def circuit : FormalAssertion (F p) field where
-  main := assert_bool
+  circuit := {
+    main := assert_bool,
+    local_length _ := 0
+    output _ _ := ()
+  }
   assumptions _ := True
   spec := spec
 

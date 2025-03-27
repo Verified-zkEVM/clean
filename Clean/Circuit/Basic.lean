@@ -420,9 +420,10 @@ def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit 
   -- the constraints hold
   constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-extends ElaboratedCircuit F β (Var α F) where
+structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β] where
   -- β = inputs, α = outputs
+  circuit: ElaboratedCircuit F β (Var α F)
+
   assumptions: β F → Prop
   spec: β F → α F → Prop
   soundness: Soundness F assumptions spec
@@ -431,7 +432,7 @@ extends ElaboratedCircuit F β (Var α F) where
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (offset: ℕ) (env : Environment F) :=
   let b := eval env b_var
-  let a_var := circuit.output b_var offset
+  let a_var := circuit.circuit.output b_var offset
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
@@ -453,8 +454,9 @@ If both the assumptions AND the spec are true, then the constraints hold.
 In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
-extends ElaboratedCircuit F β Unit where
+structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β] where
+  circuit: ElaboratedCircuit F β Unit
+
   assumptions: β F → Prop
   spec: β F → Prop
 
@@ -465,24 +467,19 @@ extends ElaboratedCircuit F β Unit where
     ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var |>.operations offset) →
+    constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
     -- the spec holds
     spec b
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
     ∀ offset, ∀ env, ∀ b_var : Var β F,
-    env.uses_local_witnesses (main b_var |>.operations offset) →
+    env.uses_local_witnesses (circuit.main b_var |>.operations offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β F, eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
-    constraints_hold.completeness env (main b_var |>.operations offset)
-
-  -- assertions commonly don't introduce internal witnesses, so this is a convenient default
-  local_length := fun _ => 0
-
-  output := fun _ _ => ()
+    constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
 @[circuit_norm]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=

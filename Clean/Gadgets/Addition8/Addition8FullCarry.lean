@@ -61,11 +61,13 @@ def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Returns the sum and the output carry bit.
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := add8_full_carry
+  circuit := {
+    main := add8_full_carry
+    local_length _ := 2
+    output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
+  }
   assumptions := assumptions
   spec := spec
-  local_length _ := 2
-  output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
 
   soundness := by
     -- introductions

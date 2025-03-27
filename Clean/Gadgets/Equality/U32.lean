@@ -36,7 +36,11 @@ def spec (input: Inputs (F p)) :=
   x = y
 
 def circuit : FormalAssertion (F p) Inputs where
-  main := assert_eq
+  circuit := {
+    main := assert_eq
+    local_length _ := 0
+    output _ _ := ()
+  }
   assumptions _ := true
   spec := spec
 
