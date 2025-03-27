@@ -60,12 +60,13 @@ def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) Inputs Outputs where
+def circuit : FormalCircuit (F p) Inputs Outputs {
   main := add8_full_carry
-  assumptions := assumptions
-  spec := spec
   local_length _ := 2
   output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
+} where
+  assumptions := assumptions
+  spec := spec
 
   soundness := by
     -- introductions

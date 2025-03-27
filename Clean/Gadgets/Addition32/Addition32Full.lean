@@ -62,7 +62,7 @@ def c := add32_full (p:=p_babybear) default
 #eval c.output
 ```
 -/
-instance elaboratedCircuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
   main := add32_full
   local_length _ := 8
   output _ i0 := {
@@ -70,7 +70,7 @@ instance elaboratedCircuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) 
     carry_out := var ⟨i0 + 7⟩
   }
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -119,7 +119,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   clear h
 
   -- simplify output and spec
-  set output := eval env (elaboratedCircuit.output _ i0)
+  set output := eval env (elaborated.output _ i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := rfl
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
@@ -137,7 +137,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
@@ -256,11 +256,9 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := add32_full
+def circuit : FormalCircuit (F p) Inputs Outputs elaborated where
   assumptions := assumptions
   spec := spec
-  local_length _ := 8
   soundness := soundness
   completeness := completeness
 end Gadgets.Addition32Full
