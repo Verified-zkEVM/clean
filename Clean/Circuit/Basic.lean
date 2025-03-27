@@ -39,7 +39,7 @@ inductive FlatOperation (F : Type) where
 
 namespace FlatOperation
 def toString [Repr F] : FlatOperation F → String
-  | witness _ _ => "Witness"
+  | witness m _ => "(Witness " ++ reprStr m ++ ")"
   | assert e => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l => reprStr l
 
@@ -523,7 +523,7 @@ def added_witness : Operation F → ℕ
 
 instance [Repr F] : ToString (Operation F) where
   toString
-    | witness _ _ => "Witness"
+    | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
@@ -547,7 +547,7 @@ def operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
 -- witness generation
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := (circuit |>.operations offset).witness_generators
+  let generators := (circuit.operations offset).witness_generators
   generators.foldl (fun acc compute =>
     let env i := acc.getD i 0
     acc.push (compute ⟨ env ⟩))
