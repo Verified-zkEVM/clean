@@ -1,6 +1,5 @@
-import Mathlib.Data.Fintype.Basic
 import Mathlib.Tactic
-import Mathlib.Data.ZMod.Basic
+import Init.Data.List.Find
 
 variable {α β : Type} {n : ℕ}
 
@@ -9,7 +8,7 @@ def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 namespace Vector
 def len (_: Vector α n) : ℕ := n
 
-def cons (a: α) (v: Vector α n)  : Vector α (n + 1) :=
+def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
 def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.toArray[i.val] := by
@@ -24,6 +23,13 @@ def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num
 theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
   simp only [get, map, Fin.coe_cast, Array.getElem_map, getElem_toArray]
 
+@[simp]
+def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
+  ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, ← Array.size_eq_length_toList, v.size_toArray] ⟩
+
+def update (v: Vector α n) (i: Fin n) (f: α → α) : Vector α n :=
+  v.set i (f (v.get i))
+
 -- map over monad
 def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector α n) :=
   match (v : Vector (M α) n) with
@@ -36,8 +42,8 @@ def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector
 
 /- induction principle for Vector.cons -/
 def induct {motive : {n: ℕ} → Vector α n → Prop}
-  (h0: motive #v[])
-  (h1: ∀ {n: ℕ} (a: α) {as: Vector α n}, motive as → motive (cons a as))
+  (nil: motive #v[])
+  (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
   {n: ℕ} (v: Vector α n) : motive v :=
   match v with
   | ⟨ .mk [], h ⟩ => by
@@ -47,8 +53,8 @@ def induct {motive : {n: ℕ} → Vector α n → Prop}
   | ⟨ .mk (a::as), h ⟩ => by
     have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
     subst this
-    have ih := induct (n:=as.length) h0 h1 ⟨ .mk as, rfl ⟩
-    let h' : motive ⟨ .mk (a :: as), rfl ⟩ := h1 a ih
+    have ih := induct (n:=as.length) nil cons ⟨ .mk as, rfl ⟩
+    let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 
 /- induction principle for Vector.push -/
@@ -79,6 +85,7 @@ def init {n} (create: Fin n → α) : Vector α n :=
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
 
+@[simp]
 def fill (n : ℕ) (a: α) : Vector α n :=
   match n with
   | 0 => #v[]
@@ -86,7 +93,6 @@ def fill (n : ℕ) (a: α) : Vector α n :=
 
 instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
   default := fill n default
-
 
 -- some simp tagging because we use Vectors a lot
 attribute [simp] Vector.append Vector.get Array.getElem_append
