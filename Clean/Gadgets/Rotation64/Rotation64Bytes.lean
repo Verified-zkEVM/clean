@@ -78,26 +78,29 @@ lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x6 : ℤ := x6.val.cast
   set x7 : ℤ := x7.val.cast
 
+  have powers_mod :
+    (72057594037927936 : ℤ) % 256 = 0 ∧
+    (281474976710656 : ℤ) % 256 = 0 ∧
+    (1099511627776 : ℤ) % 256 = 0 ∧
+    (4294967296 : ℤ) % 256 = 0 ∧
+    (16777216 : ℤ) % 256 = 0 ∧
+    (65536 : ℤ) % 256 = 0 := by norm_num
+
 
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 8 = x0 := by
     repeat
-      norm_num
+      ring_nf
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 256) = 0 by rfl]
-      try rw [show ((281474976710656 : ℤ) % 256) = 0 by rfl]
-      try rw [show ((1099511627776 : ℤ) % 256) = 0 by rfl]
-      try rw [show ((4294967296 : ℤ) % 256) = 0 by rfl]
-      try rw [show ((16777216 : ℤ) % 256) = 0 by rfl]
-      try rw [show ((65536 : ℤ) % 256) = 0 by rfl]
+      simp only [powers_mod]
       norm_num
-    rw [←Int.mod_eq_emod x0_pos (by norm_num), Int.mod_eq_of_lt x0_pos (by simp only [as])]
+    rw [Int.emod_eq_of_lt x0_pos (by linarith)]
 
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 8 =
       x1 + x2 * 256 + x3 * 256 ^ 2 + x4 * 256 ^ 3 + x5 * 256 ^ 4 + x6 * 256 ^ 5 + x7 * 256 ^ 6 := by
 
     repeat
-      norm_num
+      ring_nf
       rw [Int.add_ediv_of_dvd_right (by
         rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
         try rw [show ((72057594037927936 : ℤ) % 256) = 0 by rfl]
@@ -137,22 +140,25 @@ lemma soundnessCase2 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x7 : ℤ := x7.val.cast
 
 
+  have powers_mod :
+    (72057594037927936 : ℤ) % 65536 = 0 ∧
+    (281474976710656 : ℤ) % 65536 = 0 ∧
+    (1099511627776 : ℤ) % 65536 = 0 ∧
+    (4294967296 : ℤ) % 65536 = 0 ∧
+    (16777216 : ℤ) % 65536 = 0 := by norm_num
 
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 16 = x0 + x1 * 256 := by
+
+    norm_num
     repeat
-      norm_num
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 65536) = 0 by rfl]
-      try rw [show ((281474976710656 : ℤ) % 65536) = 0 by rfl]
-      try rw [show ((1099511627776 : ℤ) % 65536) = 0 by rfl]
-      try rw [show ((4294967296 : ℤ) % 65536) = 0 by rfl]
-      try rw [show ((16777216 : ℤ) % 65536) = 0 by rfl]
+      simp only [powers_mod]
       norm_num
-    rw [←Int.mod_eq_emod x1_pos (by norm_num), Int.mod_eq_of_lt x1_pos (by linarith)]
-    rw [←Int.mod_eq_emod x0_x1_pos (by norm_num), Int.mod_eq_of_lt x0_x1_pos (by linarith)]
+    rw [Int.emod_eq_of_lt x0_x1_pos (by linarith)]
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 16 =
       x2 + x3 * 256 + x4 * 256 ^ 2 + x5 * 256 ^ 3 + x6 * 256 ^ 4 + x7 * 256 ^ 5 := by
+
     repeat
       norm_num
       rw [Int.add_ediv_of_dvd_right (by
@@ -195,18 +201,19 @@ lemma soundnessCase3 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x6 : ℤ := x6.val.cast
   set x7 : ℤ := x7.val.cast
 
+  have powers_mod :
+    (72057594037927936 : ℤ) % 16777216 = 0 ∧
+    (281474976710656 : ℤ) % 16777216 = 0 ∧
+    (1099511627776 : ℤ) % 16777216 = 0 ∧
+    (4294967296 : ℤ) % 16777216 = 0 := by norm_num
+
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 24 = x0 + x1 * 256 + x2 * 256 ^ 2 := by
     repeat
       norm_num
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 16777216) = 0 by rfl]
-      try rw [show ((281474976710656 : ℤ) % 16777216) = 0 by rfl]
-      try rw [show ((1099511627776 : ℤ) % 16777216) = 0 by rfl]
-      try rw [show ((4294967296 : ℤ) % 16777216) = 0 by rfl]
+      simp only [powers_mod]
       norm_num
-    have x2_lt : x2 < 16777216 := by linarith
-    rw [← Int.mod_eq_emod x2_pos (by norm_num), Int.mod_eq_of_lt x2_pos x2_lt]
-    rw [←Int.mod_eq_emod x0_x1_x2_pos (by norm_num), Int.mod_eq_of_lt x0_x1_x2_pos (by linarith)]
+    rw [Int.emod_eq_of_lt x0_x1_x2_pos (by linarith)]
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 24 =
       x3 + x4 * 256 + x5 * 256 ^ 2 + x6 * 256 ^ 3 + x7 * 256 ^ 4 := by
@@ -253,17 +260,19 @@ lemma soundnessCase4 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x6 : ℤ := x6.val.cast
   set x7 : ℤ := x7.val.cast
 
+  have powers_mod :
+    (72057594037927936 : ℤ) % 4294967296 = 0 ∧
+    (281474976710656 : ℤ) % 4294967296 = 0 ∧
+    (1099511627776 : ℤ) % 4294967296 = 0 := by norm_num
+
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 32 = x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 := by
+    norm_num
     repeat
-      norm_num
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 4294967296) = 0 by rfl]
-      try rw [show ((281474976710656 : ℤ) % 4294967296) = 0 by rfl]
-      try rw [show ((1099511627776 : ℤ) % 4294967296) = 0 by rfl]
+      simp only [powers_mod]
       norm_num
-    have x3_lt : x3 < 4294967296 := by linarith
-    rw [← Int.mod_eq_emod x3_pos (by norm_num), Int.mod_eq_of_lt x3_pos x3_lt]
-    rw [←Int.mod_eq_emod x0_x1_x2_x3_pos (by norm_num), Int.mod_eq_of_lt x0_x1_x2_x3_pos (by linarith)]
+
+    rw [Int.emod_eq_of_lt x0_x1_x2_x3_pos (by linarith)]
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 32 =
       x4 + x5 * 256 + x6 * 256 ^ 2 + x7 * 256 ^ 3 := by
@@ -312,16 +321,18 @@ lemma soundnessCase5 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x6 : ℤ := x6.val.cast
   set x7 : ℤ := x7.val.cast
 
+  have powers_mod :
+    (72057594037927936 : ℤ) % 1099511627776 = 0 ∧
+    (281474976710656 : ℤ) % 1099511627776 = 0 := by norm_num
+
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 40 = x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 := by
     repeat
       norm_num
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 1099511627776) = 0 by rfl]
-      try rw [show ((281474976710656 : ℤ) % 1099511627776) = 0 by rfl]
+      simp only [powers_mod]
       norm_num
-    have x4_lt : x4 < 1099511627776 := by linarith
-    rw [← Int.mod_eq_emod x4_pos (by norm_num), Int.mod_eq_of_lt x4_pos x4_lt]
-    rw [←Int.mod_eq_emod x0_x1_x2_x3_x4_pos (by norm_num), Int.mod_eq_of_lt x0_x1_x2_x3_x4_pos (by linarith)]
+
+    rw [Int.emod_eq_of_lt x0_x1_x2_x3_x4_pos (by linarith)]
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 40 =
       x5 + x6 * 256 + x7 * 256 ^ 2 := by
@@ -372,16 +383,16 @@ lemma soundnessCase6 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x6 : ℤ := x6.val.cast
   set x7 : ℤ := x7.val.cast
 
+  have powers_mod :
+    (72057594037927936 : ℤ) % 281474976710656 = 0 := by norm_num
+
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 48 = x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 := by
     repeat
       norm_num
       rw [Int.add_emod, Int.mul_emod]
-      try rw [show ((72057594037927936 : ℤ) % 281474976710656) = 0 by rfl]
-      try rw [show ((281474976710656 : ℤ) % 281474976710656) = 0 by rfl]
+      rw [show ((72057594037927936 : ℤ) % 281474976710656) = 0 by rfl]
       norm_num
-    have x5_lt : x5 < 281474976710656 := by linarith
-    rw [← Int.mod_eq_emod x5_pos (by norm_num), Int.mod_eq_of_lt x5_pos x5_lt]
-    rw [←Int.mod_eq_emod x0_x1_x2_x3_x4_x5_pos (by norm_num), Int.mod_eq_of_lt x0_x1_x2_x3_x4_x5_pos (by linarith)]
+    rw [Int.emod_eq_of_lt x0_x1_x2_x3_x4_x5_pos (by linarith)]
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 48 =
       x6 + x7 * 256 := by
@@ -435,13 +446,11 @@ lemma soundnessCase7 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧
   set x7 : ℤ := x7.val.cast
 
   have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) % 2 ^ 56 = x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 := by
-    repeat
-      norm_num
-      rw [Int.add_emod, Int.mul_emod]
-      norm_num
-    have x6_lt : x6 < 72057594037927936 := by linarith
-    rw [← Int.mod_eq_emod x6_pos (by norm_num), Int.mod_eq_of_lt x6_pos x6_lt]
-    rw [←Int.mod_eq_emod x0_x1_x2_x3_x4_x5_x6_pos (by norm_num), Int.mod_eq_of_lt x0_x1_x2_x3_x4_x5_x6_pos (by linarith)]
+    norm_num
+    rw [Int.add_emod, Int.mul_emod]
+    norm_num
+    rw [Int.emod_eq_of_lt x6_pos (by linarith)]
+    rw [Int.emod_eq_of_lt x0_x1_x2_x3_x4_x5_x6_pos (by linarith)]
 
   have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ 56 = x7 := by
     repeat
