@@ -39,8 +39,7 @@ def formal_add8_table : FormalTable (F p) RowType := {
   spec := spec_add8,
   soundness := by
     intro N trace envs _
-    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8_table, spec_add8]
-    simp [List.mapIdx, List.mapIdx.go]
+    simp [table_norm, add8_table, spec_add8]
     induction trace.val with
     | empty => simp [table_norm]
     | cons rest row ih =>
