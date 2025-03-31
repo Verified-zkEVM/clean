@@ -2,6 +2,7 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U64
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Gadgets.Xor.Xor64
+import Clean.Gadgets.Keccak.KeccakState
 
 namespace Gadgets.Keccak.ThetaC
 variable {p : ℕ} [Fact p.Prime]
@@ -10,26 +11,15 @@ variable [p_large_enough: Fact (p > 512)]
 open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
+open Clean.Gadgets.Keccak256
 
-structure Inputs (F : Type) where
-  state: Vector (U64 F) 25
+@[reducible]
+def Inputs := KeccakState
 
-instance instProvableTypeInputs : ProvableType Inputs where
-  size := 25 * ProvableType.size U64
-  to_elements x := sorry
-  from_elements v := sorry
+@[reducible]
+def Outputs := vec_provable U64 5
 
-structure Outputs (F : Type) where
-  c : Vector (U64 F) 5
-
-instance instProvableTypeOutputs : ProvableType Outputs where
-  size := 5 * ProvableType.size U64
-  to_elements x := sorry
-  from_elements v := sorry
-
-def theta_c (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨state⟩ := input
-
+def theta_c (state : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨c0⟩ ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), (state.get 1)⟩
   let ⟨c0⟩ ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 2)⟩
   let ⟨c0⟩ ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 3)⟩
@@ -54,16 +44,13 @@ def theta_c (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 22)⟩
   let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 23)⟩
   let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 24)⟩
-  return { c := #v[c0, c1, c2, c3, c4] }
+  return #v[c0, c1, c2, c3, c4]
 
-def assumptions (input : Inputs (F p)) : Prop :=
-  let ⟨state⟩ := input
+def assumptions (state : Inputs (F p)) : Prop :=
   -- TODO
   true
 
-def spec (input : Inputs (F p)) (out: Outputs (F p)) : Prop :=
-  let ⟨state⟩ := input
-  -- TODO
+def spec (state : Inputs (F p)) (out: Outputs (F p)) : Prop :=
   true
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
