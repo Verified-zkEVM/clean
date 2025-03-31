@@ -10,9 +10,9 @@ structure Inputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 2
-  to_elements s := vec [s.x, s.y]
+  to_elements s := #v[s.x, s.y]
   from_elements v :=
-    let ⟨ [x, y], _ ⟩ := v
+    let ⟨ .mk [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 
 def add8 (input : Var Inputs (F p)) := do
@@ -36,6 +36,9 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
   main := add8
   assumptions := assumptions
   spec := spec
+  local_length _ := 2
+  output _ i0 := var ⟨i0⟩
+
   soundness := by
     -- introductions
     rintro offset env inputs_var inputs h_inputs as
@@ -49,21 +52,20 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Gadgets.Addition8Full.circuit`
-    dsimp [circuit_norm] at h_holds
+    simp [circuit_norm, subcircuit_norm, add8, Addition8Full.circuit] at h_holds
 
     -- rewrite input and ouput values
-    rw [hx, hy] at h_holds
-    rw [←(by rfl : z = env.get offset)] at h_holds
+    rw [hx, hy, ←(by rfl : z = env.get offset)] at h_holds
 
     -- satisfy `Gadgets.Addition8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
     have as': Gadgets.Addition8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
     specialize h_holds as'
 
-    guard_hyp h_holds : Gadgets.Addition8Full.circuit.spec { x, y, carry_in := 0 } z
+    guard_hyp h_holds : Gadgets.Addition8Full.spec { x, y, carry_in := 0 } z
 
     -- unfold `Gadgets.Addition8Full` statements to show what the hypothesis is in our context
-    dsimp [Gadgets.Addition8Full.circuit, Gadgets.Addition8Full.spec] at h_holds
+    dsimp [Gadgets.Addition8Full.spec] at h_holds
     guard_hyp h_holds : z.val = (x.val + y.val + (0 : F p).val) % 256
 
     simp at h_holds
@@ -82,7 +84,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    dsimp [circuit_norm]
+    simp [circuit_norm, subcircuit_norm, add8]
     rw [hx, hy]
 
     -- the goal is just the `subcircuit_completeness` of `Gadgets.Addition8Full.circuit`, i.e. the assumptions must hold

@@ -2,7 +2,9 @@
 
 `clean` is an embedded Lean DSL for writing zk circuits, targeting AIR arithmetization.
 
-It is developed by [zkSecurity](https://zksecurity.xyz/), currently as part of a Verified-zkEVM grant.
+**Check out our blog post for an introduction: https://blog.zksecurity.xyz/posts/clean**
+
+`clean` is developed by [zkSecurity](https://zksecurity.xyz/), currently as part of a Verified-zkEVM grant.
 
 We intend to build out `clean` into a universal zk framework that targets all arithmetizations and produces formally verified, bug-free circuits for the entire ecosystem.
 

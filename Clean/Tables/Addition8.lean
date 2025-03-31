@@ -14,78 +14,78 @@ structure RowType (F : Type) where
 
 instance : NonEmptyProvableType RowType where
   size := 3
-  to_elements x := vec [x.x, x.y, x.z]
+  to_elements x := #v[x.x, x.y, x.z]
   from_elements v :=
-    let ⟨ [x, y, z], _ ⟩ := v
+    let ⟨ .mk [x, y, z], _ ⟩ := v
     ⟨ x, y, z ⟩
 
+def byte_lookup_circuit : FormalAssertion (F p) Provable.field where
+  main x := lookup (ByteLookup x)
+  assumptions _ := True
+  spec x := x.val < 256
+  soundness := by
+    intro _ env x_var x hx _ h_holds
+    dsimp [circuit_norm] at h_holds
+    exact hx ▸ ByteTable.soundness (eval env x_var) h_holds
+  completeness := by
+    intro _ env x_var _ x hx _ spec
+    dsimp [circuit_norm]
+    exact ByteTable.completeness (eval env x_var) (hx ▸ spec)
+
+
 def add8_inline : SingleRowConstraint RowType (F p) := do
-  let row : RowType _ := ProvableType.from_elements (<-TableConstraint.get_curr_row)
-  let z : Expression (F p) <- TableConstraint.subcircuit Gadgets.Addition8.circuit {
-    x := row.x,
-    y := row.y
-  }
+  let row ← TableConstraint.get_curr_row
+  TableConstraint.assertion byte_lookup_circuit row.x
+  TableConstraint.assertion byte_lookup_circuit row.y
+
+  let z ← TableConstraint.subcircuit Gadgets.Addition8.circuit { x := row.x, y := row.y }
 
   if let var z := z then
     TableConstraint.assign z (.curr 2)
 
-def add8Table : List (TableOperation RowType (F p)) := [
+def add8_table : List (TableOperation RowType (F p)) := [
   TableOperation.EveryRow add8_inline
 ]
-
-def assumptions_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => row.x.val < 256 ∧ row.y.val < 256)
-
 
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
 
 def formal_add8_table : FormalTable (F p) RowType := {
-  constraints := add8Table,
-  assumptions := assumptions_add8,
+  constraints := add8_table,
   spec := spec_add8,
   soundness := by
-    intro N trace
-    simp only [assumptions_add8]
-    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8Table, spec_add8]
+    intro N trace _
+    simp only [TraceOfLength.forAllRowsOfTrace, table_constraints_hold, add8_table, spec_add8]
 
     induction trace.val with
     | empty => {
       simp [table_norm]
     }
     | cons rest row ih => {
-      -- simplify induction
-      simp [circuit_norm, table_norm]
-      intros lookup_x lookup_y lookup_rest h_curr h_rest
-      specialize ih lookup_rest h_rest
+      -- simplify induction, use induction hypothesis
+      simp only [table_norm]
+      rintro ⟨ h_curr, h_rest ⟩
+      specialize ih h_rest
       simp [ih]
+      clear ih h_rest
 
-      -- now we prove a local property about the current row
-      -- TODO: simp should suffice, but couldn't get it to work
+      -- unfold offsets/outputs
+      simp only [
+        table_norm, add8_inline, TableConstraint.assertion, TableConstraint.subcircuit,
+        circuit_norm,
+        byte_lookup_circuit, Boolean.circuit, Gadgets.Addition8.circuit
+      ] at h_curr
+      simp at h_curr
 
-      have h_x : ((add8_inline (p:=p) .empty).1.1.assignment 0) = CellOffset.curr 0
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
-      have h_y : ((add8_inline (p:=p) .empty).1.1.2 1) = CellOffset.curr 1
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
-      have h_z : ((add8_inline (p:=p) .empty).1.1.2 2) = CellOffset.curr 2
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
-      have h_z' : ((add8_inline (p:=p) .empty).1.1.2 3) = CellOffset.curr 2
-        := by
-        simp [add8_inline, bind, table_norm]
-        rfl
+      -- unfold subcircuits
+      simp only [table_norm, circuit_norm, subcircuit_norm,
+        Gadgets.Addition8.assumptions, Gadgets.Addition8.spec
+      ] at h_curr
+      simp at h_curr
 
-      -- and now it is easy!
-      simp only [h_x, h_y, h_z, h_z', table_norm, CellOffset.column] at h_curr
-      dsimp [Gadgets.Addition8.circuit, Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at h_curr
-      simp [lookup_x, lookup_y] at h_curr
-      assumption
+      rcases h_curr with ⟨ lookup_x, lookup_y, h_holds ⟩
+      exact h_holds lookup_x lookup_y
     }
 }
 
