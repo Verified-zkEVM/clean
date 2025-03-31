@@ -1,7 +1,7 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 
-section
+namespace Gadgets
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -46,4 +46,4 @@ def ByteLookup (x: Expression (F p)) : Lookup (F p) := {
     then ⟨x, h⟩
     else ⟨0, by show 0 < 256; norm_num⟩
 }
-end
+end Gadgets

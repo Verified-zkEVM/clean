@@ -1,11 +1,10 @@
 import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
+import Clean.Gadgets.ByteLookup
 
 section
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
-instance : NeZero p := ⟨‹Fact p.Prime›.elim.ne_zero⟩
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+open Gadgets
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
