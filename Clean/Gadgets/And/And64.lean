@@ -75,11 +75,12 @@ def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
   z.x6.val = Nat.land x.x6.val y.x6.val ∧
   z.x7.val = Nat.land x.x7.val y.x7.val
 
-
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := and_u64
   assumptions := assumptions
   spec := spec
+  local_length _ := 8
+  output _ i0 := { z := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
 
   soundness := by
     sorry

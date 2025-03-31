@@ -70,6 +70,11 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := theta_c
   assumptions := assumptions
   spec := spec
+  local_length _ := sorry
+  local_length_eq := sorry
+  output _ i0 := sorry
+  output_eq := sorry
+
   soundness := by sorry
   completeness := by sorry
 end Gadgets.Keccak.ThetaC

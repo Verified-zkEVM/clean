@@ -74,11 +74,12 @@ def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
   y.x6.val = 255 - x.x6.val ∧
   y.x7.val = 255 - x.x7.val
 
-
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := not_u64
   assumptions := assumptions
   spec := spec
+  local_length _ := 8
+  output _ i0 := { y := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
 
   soundness := by
     sorry

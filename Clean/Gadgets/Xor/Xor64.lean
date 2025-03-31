@@ -80,6 +80,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := xor_u64
   assumptions := assumptions
   spec := spec
+  local_length _ := 8
+  output _ i0 := { z := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
 
   soundness := by
     sorry
