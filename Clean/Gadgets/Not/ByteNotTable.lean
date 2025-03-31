@@ -14,27 +14,27 @@ def ByteNotTable: Table (F p) where
   name := "ByteNot"
   length := 256
   arity := 2
-  row i := vec [from_byte i, from_byte (255 - i)]
+  row i := #v[from_byte i, from_byte (255 - i)]
 
 def ByteNotTable.soundness
     (x y : F p)
     (hx : x.val < 256) :
-    ByteNotTable.contains (vec [x, y]) → y.val = 255 - x.val := by
+    ByteNotTable.contains (#v[x, y]) → y.val = 255 - x.val := by
   sorry
 
 def ByteNotTable.completeness
     (x y: F p)
     (hx : x.val < 256) :
-    y.val = 255 - x.val → ByteNotTable.contains (vec [x, y]) := by
+    y.val = 255 - x.val → ByteNotTable.contains (#v[x, y]) := by
   sorry
 
 def ByteNotTable.equiv (x y: F p) (hx : x.val < 256) :
-    ByteNotTable.contains (vec [x, y]) ↔ y.val = 255 - x.val :=
+    ByteNotTable.contains (#v[x, y]) ↔ y.val = 255 - x.val :=
   ⟨ByteNotTable.soundness x y hx, ByteNotTable.completeness x y hx⟩
 
 def byte_not_lookup (x y: Expression (F p)) := lookup {
   table := ByteNotTable
-  entry := vec [x, y]
+  entry := #v[x, y]
   index := fun env =>
     let x := x.eval env |>.val
     if h : (x < 256)

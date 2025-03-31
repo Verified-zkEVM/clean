@@ -24,16 +24,16 @@ structure Outputs (F : Type) where
 
 instance : ProvableType Inputs where
   size := 16
-  to_elements s := vec [s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.x.x4, s.x.x5, s.x.x6, s.x.x7, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.y.x4, s.y.x5, s.y.x6, s.y.x7]
+  to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.x.x4, s.x.x5, s.x.x6, s.x.x7, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.y.x4, s.y.x5, s.y.x6, s.y.x7]
   from_elements v :=
-    let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7, y0, y1, y2, y3, y4, y5, y6, y7], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7, y0, y1, y2, y3, y4, y5, y6, y7], _ ⟩ := v
     ⟨ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩, ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ⟩
 
 instance : ProvableType Outputs where
   size := 8
-  to_elements s := vec [s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
+  to_elements s := #v[s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
   from_elements v :=
-    let ⟨ [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
+    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
     ⟨ ⟨z0, z1, z2, z3, z4, z5, z6, z7⟩ ⟩
 
 def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := do

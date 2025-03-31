@@ -17,7 +17,7 @@ instance instProvableTypeInputs : ProvableType Inputs where
   size := ProvableType.size U64
   to_elements x := (ProvableType.to_elements x.x)
   from_elements v :=
-    let ⟨ [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
+    let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
     ⟨ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ⟩
 
 structure Outputs (F : Type) where
@@ -27,7 +27,7 @@ instance instProvableTypeOutputs : ProvableType Outputs where
   size := ProvableType.size U64
   to_elements x := (ProvableType.to_elements x.z)
   from_elements v :=
-    let ⟨ [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
+    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
     ⟨ ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ ⟩
 
 

@@ -16,15 +16,15 @@ def ByteRotationTable (offset : Fin 8) : Table (F p) where
   name := "ByteRotation"
   length := 256
   arity := 2
-  row i := vec [from_byte i, from_byte (rot_right8 i offset)]
+  row i := #v[from_byte i, from_byte (rot_right8 i offset)]
 
 def ByteRotationTable.soundness
     (offset : Fin 8)
     (x y: F p)
     (hx : x.val < 256) : -- TODO: is hx necessary?
-    (ByteRotationTable offset).contains (vec [x, y]) → y.val = rot_right8 ⟨x.val, hx⟩ offset := by
+    (ByteRotationTable offset).contains (#v[x, y]) → y.val = rot_right8 ⟨x.val, hx⟩ offset := by
   dsimp only [Table.contains]
-  rintro ⟨ i, h: vec [x, y] = vec [from_byte i, from_byte (rot_right8 i offset)] ⟩
+  rintro ⟨ i, h: #v[x, y] = #v[from_byte i, from_byte (rot_right8 i offset)] ⟩
   have list_eq : [x, y] = [from_byte i, from_byte (rot_right8 i offset)] := by injection h
   have h_y : y = from_byte (rot_right8 i offset) := by
     injection list_eq with list_eq tail_eq
@@ -45,7 +45,7 @@ def ByteRotationTable.completeness
     (offset : Fin 8)
     (x y: F p)
     (hx : x.val < 256):
-    y.val = rot_right8 ⟨x.val, hx⟩ offset → (ByteRotationTable offset).contains (vec [x, y]) := by
+    y.val = rot_right8 ⟨x.val, hx⟩ offset → (ByteRotationTable offset).contains (#v[x, y]) := by
   intro h
   dsimp only [ByteRotationTable, Table.contains]
   use x.val
@@ -69,12 +69,12 @@ def ByteRotationTable.completeness
     · apply ZMod.val_injective
 
 def ByteRotationTable.equiv (offset : Fin 8) (x y: F p) (hx : x.val < 256) :
-    (ByteRotationTable offset).contains (vec [x, y]) ↔ y.val = rot_right8 ⟨x.val, hx⟩ offset :=
+    (ByteRotationTable offset).contains (#v[x, y]) ↔ y.val = rot_right8 ⟨x.val, hx⟩ offset :=
   ⟨ByteRotationTable.soundness offset x y hx, ByteRotationTable.completeness offset x y hx⟩
 
 def byte_rotation_lookup (offset : Fin 8) (x y: Expression (F p)) := lookup {
   table := ByteRotationTable offset
-  entry := vec [x, y]
+  entry := #v[x, y]
   -- to make this work, we need to pass an `eval` function to the callback!!
   index := fun env =>
     let x := x.eval env |>.val

@@ -20,9 +20,9 @@ structure U64 (T: Type) where
 
 instance : ProvableType U64 where
   size := 8
-  to_elements x := vec [x.x0, x.x1, x.x2, x.x3, x.x4, x.x5, x.x6, x.x7]
+  to_elements x := #v[x.x0, x.x1, x.x2, x.x3, x.x4, x.x5, x.x6, x.x7]
   from_elements v :=
-    let ⟨[v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
+    let ⟨.mk [v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
     ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩
 
 instance (T: Type) [Repr T] : Repr (U64 T) where
@@ -57,14 +57,14 @@ lemma ext {x y : U64 (F p)}
 def witness (compute : Environment (F p) → U64 (F p)) := do
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness compute
 
-  Gadgets.byte_lookup x0
-  Gadgets.byte_lookup x1
-  Gadgets.byte_lookup x2
-  Gadgets.byte_lookup x3
-  Gadgets.byte_lookup x4
-  Gadgets.byte_lookup x5
-  Gadgets.byte_lookup x6
-  Gadgets.byte_lookup x7
+  lookup (Gadgets.ByteLookup x0)
+  lookup (Gadgets.ByteLookup x1)
+  lookup (Gadgets.ByteLookup x2)
+  lookup (Gadgets.ByteLookup x3)
+  lookup (Gadgets.ByteLookup x4)
+  lookup (Gadgets.ByteLookup x5)
+  lookup (Gadgets.ByteLookup x6)
+  lookup (Gadgets.ByteLookup x7)
 
   return U64.mk x0 x1 x2 x3 x4 x5 x6 x7
 

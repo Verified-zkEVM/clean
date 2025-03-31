@@ -54,7 +54,7 @@ def theta_c (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 22)⟩
   let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 23)⟩
   let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 24)⟩
-  return { c := vec [c0, c1, c2, c3, c4] }
+  return { c := #v[c0, c1, c2, c3, c4] }
 
 def assumptions (input : Inputs (F p)) : Prop :=
   let ⟨state⟩ := input

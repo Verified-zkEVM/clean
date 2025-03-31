@@ -17,29 +17,29 @@ def ByteXorTable: Table (F p) where
   row i :=
     let x := i / 256
     let y := i % 256
-    vec [from_byte x, from_byte y, from_byte (Nat.xor x y)]
+    #v[from_byte x, from_byte y, from_byte (Nat.xor x y)]
 
 def ByteXorTable.soundness
     (x y z: F p)
     (hx : x.val < 256)
     (hy : y.val < 256) :
-    ByteXorTable.contains (vec [x, y, z]) → z.val = Nat.xor x.val y.val := by
+    ByteXorTable.contains (#v[x, y, z]) → z.val = Nat.xor x.val y.val := by
   sorry
 
 def ByteXorTable.completeness
     (x y z: F p)
     (hx : x.val < 256)
     (hy : y.val < 256) :
-    z.val = Nat.xor x.val y.val → ByteXorTable.contains (vec [x, y, z]) := by
+    z.val = Nat.xor x.val y.val → ByteXorTable.contains (#v[x, y, z]) := by
   sorry
 
 def ByteXorTable.equiv (x y z: F p) (hx : x.val < 256) (hy : y.val < 256) :
-    ByteXorTable.contains (vec [x, y, z]) ↔ z.val = Nat.xor x.val y.val :=
+    ByteXorTable.contains (#v[x, y, z]) ↔ z.val = Nat.xor x.val y.val :=
   ⟨ByteXorTable.soundness x y z hx hy, ByteXorTable.completeness x y z hx hy⟩
 
 def byte_xor_lookup (x y z: Expression (F p)) := lookup {
   table := ByteXorTable
-  entry := vec [x, y, z]
+  entry := #v[x, y, z]
   index := fun env =>
     by
       let x := x.eval env |>.val
