@@ -4,6 +4,7 @@ import Clean.Gadgets.ByteLookup
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+open Gadgets
 
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
