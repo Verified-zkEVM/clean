@@ -109,6 +109,11 @@ def synthesize_const_var : Var α F :=
 
 instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
+
+@[circuit_norm]
+def from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
+  let vars := Vector.init fun i => ⟨offset + i⟩
+  from_vars <| vars.map Expression.var
 end Provable
 
 export Provable (eval)
