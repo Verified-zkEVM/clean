@@ -4,6 +4,7 @@ import Clean.Table.Basic
 import Clean.Gadgets.Addition8.Addition8
 
 namespace Tables.Addition8
+open Gadgets
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
