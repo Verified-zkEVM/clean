@@ -96,6 +96,29 @@ instance : ProvableType (fields n) where
   to_elements x := x
   from_elements v := v
 
+/--
+  Vector of provable types of the same size.
+-/
+def vec_provable (α: TypeMap) [ProvableType α] (n: ℕ) : TypeMap :=
+  fun F => Vector (α F) n
+
+@[circuit_norm]
+instance {α: TypeMap} [ProvableType α] : ProvableType (vec_provable α n) where
+  size := n * ProvableType.size α
+  to_elements x := x.map to_elements |> .flatten
+  from_elements {F} v := aux F n v
+    where
+    aux (F : Type) : (s : ℕ) -> Vector F (s * size α) -> Vector (α F) s
+    | 0, _ => #v[]
+    | s + 1, v =>
+      let v0 : Vector _ (ProvableType.size α) := (v.take <| ProvableType.size α).cast (by
+        simp only [Nat.add_one_mul, le_add_iff_nonneg_left, zero_le, inf_of_le_left])
+      let inner_provable : α _ := ProvableType.from_elements v0
+      let rest := aux F s ((v.drop <| ProvableType.size α).cast (by
+        simp only [Nat.add_one_mul, add_tsub_cancel_right]))
+      #v[inner_provable].append rest |> .cast (by rw [add_comm])
+
+
 def synthesize_value : α F :=
   let zeros := Vector.fill (size α) 0
   from_elements zeros
@@ -111,4 +134,4 @@ instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
 end Provable
 
-export Provable (eval)
+export Provable (eval vec_provable)
