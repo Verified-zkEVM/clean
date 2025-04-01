@@ -46,8 +46,12 @@ def from_vars (vars: Vector (Expression F) (size M)) := from_elements vars
 namespace Provable
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
 
--- tagged with low priority to prefer higher-level `ProvableStruct` decompositions
-@[circuit_norm low]
+/--
+Evaluate a variable in the given environment.
+
+Note: this is not tagged with `circuit_norm`, to enable higher-level `ProvableStruct`
+decompositions. Sometimes you will need to add `eval` to the simp set manually.
+-/
 def eval (env: Environment F) (x: Var α F) : α F :=
   let vars := to_vars x
   let values := vars.map env
@@ -118,7 +122,7 @@ def from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
   from_vars <| vars.map Expression.var
 end Provable
 
-export Provable (eval)
+export Provable (eval field)
 
 namespace ProvableStruct
 structure WithProvableType where
@@ -142,34 +146,42 @@ class ProvableStruct (α : TypeMap) where
   to_components {F} : α F → ProvableStruct.ProvableTypeList F components
   from_components {F} : ProvableStruct.ProvableTypeList F components → α F
 
+  combined_size : ℕ := components.map (fun x => x.provable_type.size) |>.sum
+  combined_size_eq : combined_size = (components.map (fun x => x.provable_type.size) |>.sum) := by rfl
+
 export ProvableStruct (components to_components from_components)
 
-attribute [circuit_norm] to_components
-attribute [circuit_norm] from_components
+attribute [circuit_norm] components to_components from_components ProvableStruct.combined_size
 
-def ProvableStruct.combined_size (cs : List WithProvableType) : ℕ :=
+def ProvableStruct.combined_size' (cs : List WithProvableType) : ℕ :=
   cs.map (fun x => x.provable_type.size) |>.sum
+
+lemma ProvableStruct.combined_size'_eq {α : TypeMap} [ProvableStruct α] :
+    combined_size' (components α) = combined_size α := by
+  symm; apply combined_size_eq
 
 open ProvableStruct in
 instance ProvableType.from_struct {α : TypeMap} [ProvableStruct α] : ProvableType α where
-  size := combined_size (ProvableStruct.components α)
+  size := combined_size α
   to_elements {F} (x : α F) :=
-    go_to_elements F (ProvableStruct.components α) (ProvableStruct.to_components x)
-  from_elements {F} (v : Vector F (combined_size (ProvableStruct.components α))) :=
-    ProvableStruct.from_components (go_from_elements F (ProvableStruct.components α) v)
+    go_to_elements F (components α) (to_components x) |>.cast combined_size'_eq
+  from_elements {F} (v : Vector F (combined_size α)) :=
+    from_components (go_from_elements F (components α) (v.cast combined_size'_eq.symm))
   where
-  go_to_elements (F : Type) : (cs: List WithProvableType) → ProvableTypeList F cs → Vector F (combined_size cs)
+  go_to_elements (F : Type) : (cs: List WithProvableType) → ProvableTypeList F cs → Vector F (combined_size' cs)
     | [], .nil => #v[]
     | c :: cs, .cons a as => (c.provable_type.to_elements a) ++ go_to_elements F cs as
-  go_from_elements (F : Type) : (cs: List WithProvableType) → Vector F (combined_size cs) → ProvableTypeList F cs
+  go_from_elements (F : Type) : (cs: List WithProvableType) → Vector F (combined_size' cs) → ProvableTypeList F cs
     | [], _ => .nil
-    | c :: cs, (v : Vector F (c.provable_type.size + combined_size cs)) =>
+    | c :: cs, (v : Vector F (c.provable_type.size + combined_size' cs)) =>
       let size := c.provable_type.size
-      have h_take : size ⊓ (size + combined_size cs) = size := Nat.min_add_right
-      have h_drop : size + combined_size cs - size = combined_size cs := Nat.add_sub_self_left size (combined_size cs)
+      have h_take : size ⊓ (size + combined_size' cs) = size := Nat.min_add_right
+      have h_drop : size + combined_size' cs - size = combined_size' cs := Nat.add_sub_self_left size (combined_size' cs)
       let head : Vector F size := (v.take size).cast h_take
-      let tail : Vector F (combined_size cs) := (v.drop size).cast h_drop
+      let tail : Vector F (combined_size' cs) := (v.drop size).cast h_drop
       .cons (c.provable_type.from_elements head) (go_from_elements F cs tail)
+
+attribute [circuit_norm] ProvableType.from_struct.go_to_elements ProvableType.from_struct.go_from_elements
 
 namespace ProvableStruct
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
@@ -194,7 +206,7 @@ lemma eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (
     simp only
     -- two equalities needed below
     have h_size : size c.type = (Array.map (fun x ↦ Expression.eval env x) (to_elements a).toArray).toList.length := by simp
-    have h_combined_size : combined_size cs = (Array.map (fun x ↦ Expression.eval env x)
+    have h_combined_size : combined_size' cs = (Array.map (fun x ↦ Expression.eval env x)
       (ProvableType.from_struct.go_to_elements (Expression F) cs as).toArray).toList.length := by simp
     congr
     simp only [Vector.map_append, Vector.take_eq_extract, Vector.extract, Nat.sub_zero,
