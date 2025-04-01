@@ -359,7 +359,7 @@ def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
     assign (.next i) (vars.get i)
 end TableConstraint
 
-export TableConstraint (window_env get_curr_row get_next_row assign assign_next_row assign_curr_row)
+export TableConstraint (window_env get_curr_row get_next_row assign_var assign assign_next_row assign_curr_row)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
@@ -513,4 +513,4 @@ macro_rules
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
     simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
-      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]))
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))
