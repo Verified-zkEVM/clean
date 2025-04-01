@@ -151,11 +151,10 @@ def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
   spec := spec off
   soundness := soundness off
   completeness := completeness off
-  initial_offset_eq: ∀ var, ∀ n, ((rot64_bytes off) var |>.operations n).initial_offset = n := by
+  initial_offset_eq := by
     intros
     fin_cases off
-    repeat
-      rfl
+    repeat rfl
   local_length_eq := by
     intros
     fin_cases off
