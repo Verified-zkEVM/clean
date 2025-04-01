@@ -12,7 +12,7 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [field, field, field]
-  to_components := fun { x, y, carry_in } => .cons x <| .cons y <| .cons carry_in .nil
+  to_components := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
   from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
 
 def add8_full (input : Var Inputs (F p)) := do
@@ -55,7 +55,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    simp only [add8_full, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit] at h_holds
+    simp only [add8_full, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit, eval] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in, ←(by rfl : z = env.get offset)] at h_holds
@@ -88,7 +88,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    simp only [circuit_norm, add8_full, subcircuit_norm]
+    simp only [circuit_norm, add8_full, subcircuit_norm, eval]
     rw [hx, hy, hcarry_in]
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold.
