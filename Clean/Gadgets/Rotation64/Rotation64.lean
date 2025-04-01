@@ -34,7 +34,7 @@ instance instProvableTypeOutputs : ProvableType Outputs where
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def rot64_circuit (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let byte_offset := offset / 8
   let bit_offset : ℕ := (offset % 8).val
 
@@ -46,24 +46,22 @@ def rot64_circuit (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (
   -- apply the bit rotation
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
 
-
-
-  let x0_l ← witness (fun env => 0)
-  let x0_h ← witness (fun env => 0)
-  let x1_l ← witness (fun env => 0)
-  let x1_h ← witness (fun env => 0)
-  let x2_l ← witness (fun env => 0)
-  let x2_h ← witness (fun env => 0)
-  let x3_l ← witness (fun env => 0)
-  let x3_h ← witness (fun env => 0)
-  let x4_l ← witness (fun env => 0)
-  let x4_h ← witness (fun env => 0)
-  let x5_l ← witness (fun env => 0)
-  let x5_h ← witness (fun env => 0)
-  let x6_l ← witness (fun env => 0)
-  let x6_h ← witness (fun env => 0)
-  let x7_l ← witness (fun env => 0)
-  let x7_h ← witness (fun env => 0)
+  let x0_l ← witness (fun _env => 0)
+  let x0_h ← witness (fun _env => 0)
+  let x1_l ← witness (fun _env => 0)
+  let x1_h ← witness (fun _env => 0)
+  let x2_l ← witness (fun _env => 0)
+  let x2_h ← witness (fun _env => 0)
+  let x3_l ← witness (fun _env => 0)
+  let x3_h ← witness (fun _env => 0)
+  let x4_l ← witness (fun _env => 0)
+  let x4_h ← witness (fun _env => 0)
+  let x5_l ← witness (fun _env => 0)
+  let x5_h ← witness (fun _env => 0)
+  let x6_l ← witness (fun _env => 0)
+  let x6_h ← witness (fun _env => 0)
+  let x7_l ← witness (fun _env => 0)
+  let x7_h ← witness (fun _env => 0)
 
   assert_zero (x0_l + ((2 : ℕ)^bit_offset : F p) * x0_h - x0)
   assert_zero (x1_l + ((2 : ℕ)^bit_offset : F p) * x1_h - x1)
@@ -74,7 +72,7 @@ def rot64_circuit (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (
   assert_zero (x6_l + ((2 : ℕ)^bit_offset : F p) * x6_h - x6)
   assert_zero (x7_l + ((2 : ℕ)^bit_offset : F p) * x7_h - x7)
 
-  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun env => U64.mk 0 0 0 0 0 0 0 0)
+  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun _env => U64.mk 0 0 0 0 0 0 0 0)
 
   assert_zero (x1_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x0_h - y0)
   assert_zero (x2_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x1_h - y1)
@@ -95,14 +93,25 @@ def spec (offset : Fin 64) (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨y⟩ := out
   y.value = rot_right64 x.value offset.val
 
-theorem soundness (off : Fin 8) : Soundness (F p) Inputs Outputs (rot64_circuit off) assumptions (spec off) := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
-  sorry
-
 def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
-  main := rot64_circuit off
+  main := rot64 off
   assumptions := assumptions
   spec := spec off
-  soundness := soundness off
+  soundness := by sorry
   completeness := by sorry
+  local_length := 16
+  output := sorry
+  initial_offset_eq := by
+    intros
+    fin_cases off
+    repeat sorry
+  local_length_eq := by
+    intros
+    fin_cases off
+    repeat sorry
+  output_eq := by
+    intros
+    fin_cases off
+    repeat sorry
+
 end Gadgets.Rotation64
