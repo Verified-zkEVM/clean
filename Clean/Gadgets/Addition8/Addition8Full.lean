@@ -3,17 +3,18 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 namespace Gadgets.Addition8Full
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
+open Provable (field)
 
 structure Inputs (F : Type) where
   x: F
   y: F
   carry_in: F
 
-instance : ProvableType Inputs where
-  size := 3
-  to_elements s := #v[s.x, s.y, s.carry_in]
-  from_elements v :=
-    let ⟨ .mk [x, y, carry_in], _ ⟩ := v
+instance : Components Inputs where
+  components := [field, field, field]
+  to_components s := .cons s.x <| .cons s.y <| .cons s.carry_in .nil
+  from_components v :=
+    let .cons x (.cons y (.cons carry_in .nil)) := v
     ⟨ x, y, carry_in ⟩
 
 def add8_full (input : Var Inputs (F p)) := do
@@ -49,6 +50,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
     intro h_holds z
 
     -- characterize inputs
+    simp only [circuit_norm] at h_inputs
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
@@ -81,6 +83,7 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
     rintro as
 
     -- characterize inputs
+    simp only [circuit_norm] at h_inputs
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs

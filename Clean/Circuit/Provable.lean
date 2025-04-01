@@ -28,13 +28,14 @@ class ProvableType (M : TypeMap) where
 class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
   nonempty : size > 0 := by norm_num
 
-attribute [circuit_norm] ProvableType.size
--- attribute [circuit_norm] ProvableType.to_elements
--- attribute [circuit_norm] ProvableType.from_elements
+export ProvableType (size to_elements from_elements)
+
+attribute [circuit_norm] size
+-- tagged with low priority to prefer higher-level `Components` decompositions
+attribute [circuit_norm low] to_elements from_elements
 
 variable {M : TypeMap} [ProvableType M]
 
-export ProvableType (size to_elements from_elements)
 
 @[circuit_norm]
 def to_vars (var: M (Expression F)) := to_elements var
@@ -45,7 +46,8 @@ def from_vars (vars: Vector (Expression F) (size M)) := from_elements vars
 namespace Provable
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
 
--- @[circuit_norm]
+-- tagged with low priority to prefer higher-level `Components` decompositions
+@[circuit_norm low]
 def eval (env: Environment F) (x: Var α F) : α F :=
   let vars := to_vars x
   let values := vars.map env
@@ -175,7 +177,7 @@ variable {α : TypeMap} [Components α] {F : Type} [Field F]
 def to_var_components (var: α (Expression F)) := to_components var
 def from_var_components (vars: ProvableTypeList (Expression F) (components α)) : α (Expression F) := from_components vars
 
-@[circuit_norm]
+@[circuit_norm ↓ high]
 def eval (env : Environment F) (var: α (Expression F)) : α F :=
   go_map (components α) (to_components var) |> from_components
   where
@@ -184,14 +186,12 @@ def eval (env : Environment F) (var: α (Expression F)) : α F :=
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (Provable.eval env a) (go_map cs as)
 
-@[circuit_norm]
-lemma eval_components {α: TypeMap} [Components α] :  ∀ (env : Environment F) (x : Var α F),
+@[circuit_norm ↓ high]
+lemma eval_components {α: TypeMap} [Components α] : ∀ (env : Environment F) (x : Var α F),
     Provable.eval env x = eval env x := by
   sorry
 end Components
 
-@[circuit_norm]
+@[circuit_norm ↓ high]
 lemma eval_field {F : Type} [Field F] (env : Environment F) (x : Var Provable.field F) :
-  eval env x = x.eval env := by
-  simp [eval, Components.eval]
-  rfl
+  eval env x = x.eval env := by rfl
