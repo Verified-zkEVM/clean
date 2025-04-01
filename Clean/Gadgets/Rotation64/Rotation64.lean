@@ -1,7 +1,9 @@
 import Clean.Types.U64
+import Clean.Circuit.SubCircuit
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Gadgets.Rotation64.Rotation64Bytes
 import Clean.Gadgets.Rotation64.ByteRotationTable
+import Clean.Gadgets.ByteDecomposition
 
 namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact p.Prime]
@@ -46,31 +48,14 @@ def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outp
   -- apply the bit rotation
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
 
-  let x0_l ← witness (fun _env => 0)
-  let x0_h ← witness (fun _env => 0)
-  let x1_l ← witness (fun _env => 0)
-  let x1_h ← witness (fun _env => 0)
-  let x2_l ← witness (fun _env => 0)
-  let x2_h ← witness (fun _env => 0)
-  let x3_l ← witness (fun _env => 0)
-  let x3_h ← witness (fun _env => 0)
-  let x4_l ← witness (fun _env => 0)
-  let x4_h ← witness (fun _env => 0)
-  let x5_l ← witness (fun _env => 0)
-  let x5_h ← witness (fun _env => 0)
-  let x6_l ← witness (fun _env => 0)
-  let x6_h ← witness (fun _env => 0)
-  let x7_l ← witness (fun _env => 0)
-  let x7_h ← witness (fun _env => 0)
-
-  assert_zero (x0_l + ((2 : ℕ)^bit_offset : F p) * x0_h - x0)
-  assert_zero (x1_l + ((2 : ℕ)^bit_offset : F p) * x1_h - x1)
-  assert_zero (x2_l + ((2 : ℕ)^bit_offset : F p) * x2_h - x2)
-  assert_zero (x3_l + ((2 : ℕ)^bit_offset : F p) * x3_h - x3)
-  assert_zero (x4_l + ((2 : ℕ)^bit_offset : F p) * x4_h - x4)
-  assert_zero (x5_l + ((2 : ℕ)^bit_offset : F p) * x5_h - x5)
-  assert_zero (x6_l + ((2 : ℕ)^bit_offset : F p) * x6_h - x6)
-  assert_zero (x7_l + ((2 : ℕ)^bit_offset : F p) * x7_h - x7)
+  let ⟨x0_l, x0_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x0⟩
+  let ⟨x1_l, x1_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x1⟩
+  let ⟨x2_l, x2_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x2⟩
+  let ⟨x3_l, x3_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x3⟩
+  let ⟨x4_l, x4_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x4⟩
+  let ⟨x5_l, x5_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x5⟩
+  let ⟨x6_l, x6_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x6⟩
+  let ⟨x7_l, x7_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x7⟩
 
   let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun _env => U64.mk 0 0 0 0 0 0 0 0)
 
@@ -83,8 +68,6 @@ def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outp
   assert_zero (x7_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x6_h - y6)
   assert_zero (x0_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x7_h - y7)
   return { z := ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ }
-
-
 
 def assumptions (input : Inputs (F p)) := input.x.is_normalized
 
