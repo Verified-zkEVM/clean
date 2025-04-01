@@ -15,7 +15,7 @@ inductive Expression (F : Type) where
   | add : Expression F -> Expression F -> Expression F
   | mul : Expression F -> Expression F -> Expression F
 
-export Expression (var const)
+export Expression (var)
 
 structure Environment (F: Type) where
   get: ℕ → F
@@ -67,6 +67,9 @@ instance : Mul (Expression F) where
 
 instance : Coe F (Expression F) where
   coe f := const f
+
+instance {n: ℕ} [OfNat F n] : OfNat (Expression F) n where
+  ofNat := const (OfNat.ofNat n)
 
 instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e

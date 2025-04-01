@@ -17,7 +17,7 @@ instance : ProvableType Inputs where
 
 def add8 (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
-  let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := const 0 }
+  let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := 0 }
   return z
 
 def spec (input : Inputs (F p)) (z: F p) :=

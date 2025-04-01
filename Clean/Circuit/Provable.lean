@@ -140,7 +140,7 @@ def from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
   from_vars <| vars.map Expression.var
 end Provable
 
-export Provable (eval field)
+export Provable (eval const field)
 
 namespace ProvableStruct
 structure WithProvableType where
@@ -269,13 +269,11 @@ lemma eval_field {F : Type} [Field F] (env : Environment F) (x : Var Provable.fi
 namespace LawfulProvableType
 @[circuit_norm]
 lemma eval_const {F : Type} [Field F] {α: TypeMap} [LawfulProvableType α] (env : Environment F) (x : α F) :
-  eval env (Provable.const x) = x := by
-  simp [circuit_norm, Provable.const, eval]
-  rw [LawfulProvableType.to_elements_from_elements, Vector.map, Vector.map]
-  simp
-  have : Expression.eval env ∘ const = id := by
+  eval env (const x) = x := by
+  simp only [circuit_norm, const, eval]
+  rw [to_elements_from_elements, Vector.map_map]
+  have : Expression.eval env ∘ Expression.const = id := by
     funext
     simp only [Function.comp_apply, Expression.eval, id_eq]
-  simp [this]
-  exact LawfulProvableType.from_elements_to_elements x
+  rw [this, Vector.map_id_fun, id_eq, from_elements_to_elements]
 end LawfulProvableType

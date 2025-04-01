@@ -59,8 +59,8 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  assertion Gadgets.Equality.U32.circuit ⟨row.x, Provable.const (U32.from_byte 0)⟩
-  assertion Gadgets.Equality.U32.circuit ⟨row.y, Provable.const (U32.from_byte 1)⟩
+  assertion Gadgets.Equality.U32.circuit ⟨row.x, const (U32.from_byte 0)⟩
+  assertion Gadgets.Equality.U32.circuit ⟨row.y, const (U32.from_byte 1)⟩
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
