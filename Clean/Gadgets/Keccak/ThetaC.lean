@@ -7,7 +7,6 @@ namespace Gadgets.Keccak.ThetaC
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Provable (field field2 fields)
 open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
 

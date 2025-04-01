@@ -3,7 +3,6 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 namespace Gadgets.Addition8Full
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
-open Provable (field)
 
 structure Inputs (F : Type) where
   x: F
