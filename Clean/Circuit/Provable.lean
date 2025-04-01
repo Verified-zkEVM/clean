@@ -36,12 +36,30 @@ attribute [circuit_norm low] to_elements from_elements
 
 variable {M : TypeMap} [ProvableType M]
 
-
 @[circuit_norm]
 def to_vars (var: M (Expression F)) := to_elements var
 
 @[circuit_norm]
 def from_vars (vars: Vector (Expression F) (size M)) := from_elements vars
+
+class LawfulProvableType (M : TypeMap) extends ProvableType M where
+  to_elements_from_elements {F: Type} : ∀ v: Vector F size, to_elements (from_elements v) = v
+    := by
+    intro _
+    try (simp; done)
+    try (
+      intro ⟨ .mk l ,  h_size⟩
+      simp [size] at h_size
+      repeat (
+        cases l
+        try simp at h_size
+        rename_i _ l h_size
+        try (simp at h_size; subst h_size; rfl)
+      )
+    )
+    done
+  from_elements_to_elements {F: Type} : ∀ x: M F, from_elements (to_elements x) = x
+    := by intros; rfl
 
 namespace Provable
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
@@ -54,7 +72,7 @@ decompositions. Sometimes you will need to add `eval` to the simp set manually.
 -/
 def eval (env: Environment F) (x: Var α F) : α F :=
   let vars := to_vars x
-  let values := vars.map env
+  let values := vars.map (Expression.eval env)
   from_elements values
 
 def const (x: α F) : Var α F :=
@@ -64,7 +82,7 @@ def const (x: α F) : Var α F :=
 @[reducible]
 def unit (_: Type) := Unit
 
-instance : ProvableType unit where
+instance : LawfulProvableType unit where
   size := 0
   to_elements _ := #v[]
   from_elements _ := ()
@@ -73,7 +91,7 @@ instance : ProvableType unit where
 def field : TypeMap := id
 
 @[circuit_norm]
-instance : ProvableType field where
+instance : LawfulProvableType field where
   size := 1
   to_elements x := #v[x]
   from_elements v := v.get 0
@@ -85,7 +103,7 @@ def pair (α β : TypeMap) := fun F => α F × β F
 def field2 := pair field field
 
 @[circuit_norm]
-instance : ProvableType field2 where
+instance : LawfulProvableType field2 where
   size := 2
   to_elements pair := #v[pair.1, pair.2]
   from_elements v := (v.get 0, v.get 1)
@@ -97,7 +115,7 @@ def vec (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
 def fields (n: ℕ) := vec field n
 
 @[circuit_norm]
-instance : ProvableType (fields n) where
+instance : LawfulProvableType (fields n) where
   size := n
   to_elements x := x
   from_elements v := v
@@ -151,10 +169,11 @@ class ProvableStruct (α : TypeMap) where
 
 export ProvableStruct (components to_components from_components)
 
-attribute [circuit_norm] components to_components from_components ProvableStruct.combined_size
-
 def ProvableStruct.combined_size' (cs : List WithProvableType) : ℕ :=
   cs.map (fun x => x.provable_type.size) |>.sum
+
+attribute [circuit_norm] components to_components from_components
+  ProvableStruct.combined_size ProvableStruct.combined_size'
 
 lemma ProvableStruct.combined_size'_eq {α : TypeMap} [ProvableStruct α] :
     combined_size' (components α) = combined_size α := by
@@ -246,3 +265,17 @@ end ProvableStruct
 @[circuit_norm ↓ high]
 lemma eval_field {F : Type} [Field F] (env : Environment F) (x : Var Provable.field F) :
   eval env x = x.eval env := by rfl
+
+namespace LawfulProvableType
+@[circuit_norm]
+lemma eval_const {F : Type} [Field F] {α: TypeMap} [LawfulProvableType α] (env : Environment F) (x : α F) :
+  eval env (Provable.const x) = x := by
+  simp [circuit_norm, Provable.const, eval]
+  rw [LawfulProvableType.to_elements_from_elements, Vector.map, Vector.map]
+  simp
+  have : Expression.eval env ∘ const = id := by
+    funext
+    simp only [Function.comp_apply, Expression.eval, id_eq]
+  simp [this]
+  exact LawfulProvableType.from_elements_to_elements x
+end LawfulProvableType
