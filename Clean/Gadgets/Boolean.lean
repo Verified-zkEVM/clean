@@ -8,14 +8,14 @@ def assert_bool (x: Expression (F p)) := do
   assert_zero (x * (x - 1))
 
 inductive Boolean (F: Type) where
-  | private mk : (Variable F) → Boolean F
+  | private mk : Variable F → Boolean F
 
 namespace Boolean
 def var (b: Boolean (F p)) := Expression.var b.1
 
 def witness (compute : Environment (F p) → F p) := do
   let x ← witness_var compute
-  assert_bool x
+  assert_bool (Expression.var x)
   return Boolean.mk x
 
 instance : Coe (Boolean (F p)) (Expression (F p)) where
