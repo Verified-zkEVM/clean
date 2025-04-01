@@ -10,12 +10,10 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
-instance : Components Inputs where
+instance : ProvableStruct Inputs where
   components := [field, field, field]
-  to_components s := .cons s.x <| .cons s.y <| .cons s.carry_in .nil
-  from_components v :=
-    let .cons x (.cons y (.cons carry_in .nil)) := v
-    ⟨ x, y, carry_in ⟩
+  to_components := fun { x, y, carry_in } => .cons x <| .cons y <| .cons carry_in .nil
+  from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
 
 def add8_full (input : Var Inputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input

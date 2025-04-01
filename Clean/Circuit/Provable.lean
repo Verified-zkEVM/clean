@@ -31,7 +31,7 @@ class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
 export ProvableType (size to_elements from_elements)
 
 attribute [circuit_norm] size
--- tagged with low priority to prefer higher-level `Components` decompositions
+-- tagged with low priority to prefer higher-level `ProvableStruct` decompositions
 attribute [circuit_norm low] to_elements from_elements
 
 variable {M : TypeMap} [ProvableType M]
@@ -46,7 +46,7 @@ def from_vars (vars: Vector (Expression F) (size M)) := from_elements vars
 namespace Provable
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
 
--- tagged with low priority to prefer higher-level `Components` decompositions
+-- tagged with low priority to prefer higher-level `ProvableStruct` decompositions
 @[circuit_norm low]
 def eval (env: Environment F) (x: Var α F) : α F :=
   let vars := to_vars x
@@ -120,7 +120,7 @@ end Provable
 
 export Provable (eval)
 
-namespace Components
+namespace ProvableStruct
 structure WithProvableType where
   type : TypeMap
   provable_type : ProvableType type := by infer_instance
@@ -134,29 +134,29 @@ instance {α: TypeMap} [ProvableType α] : CoeDep TypeMap (α) WithProvableType 
 inductive ProvableTypeList (F: Type) : List WithProvableType → Type 1 where
 | nil : ProvableTypeList F []
 | cons : ∀ {a : WithProvableType} {as : List WithProvableType}, a.type F → ProvableTypeList F as → ProvableTypeList F (a :: as)
-end Components
+end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
-class Components (α : TypeMap) where
-  components : List Components.WithProvableType
-  to_components {F} : α F → Components.ProvableTypeList F components
-  from_components {F} : Components.ProvableTypeList F components → α F
+class ProvableStruct (α : TypeMap) where
+  components : List ProvableStruct.WithProvableType
+  to_components {F} : α F → ProvableStruct.ProvableTypeList F components
+  from_components {F} : ProvableStruct.ProvableTypeList F components → α F
 
-export Components (components to_components from_components)
+export ProvableStruct (components to_components from_components)
 
 attribute [circuit_norm] to_components
 attribute [circuit_norm] from_components
 
-def Components.combined_size (cs : List WithProvableType) : ℕ :=
+def ProvableStruct.combined_size (cs : List WithProvableType) : ℕ :=
   cs.map (fun x => x.provable_type.size) |>.sum
 
-open Components in
-instance ProvableType.from_components {α : TypeMap} [Components α] : ProvableType α where
-  size := combined_size (Components.components α)
+open ProvableStruct in
+instance ProvableType.from_struct {α : TypeMap} [ProvableStruct α] : ProvableType α where
+  size := combined_size (ProvableStruct.components α)
   to_elements {F} (x : α F) :=
-    go_to_elements F (Components.components α) (Components.to_components x)
-  from_elements {F} (v : Vector F (combined_size (Components.components α))) :=
-    Components.from_components (go_from_elements F (Components.components α) v)
+    go_to_elements F (ProvableStruct.components α) (ProvableStruct.to_components x)
+  from_elements {F} (v : Vector F (combined_size (ProvableStruct.components α))) :=
+    ProvableStruct.from_components (go_from_elements F (ProvableStruct.components α) v)
   where
   go_to_elements (F : Type) : (cs: List WithProvableType) → ProvableTypeList F cs → Vector F (combined_size cs)
     | [], .nil => #v[]
@@ -171,11 +171,8 @@ instance ProvableType.from_components {α : TypeMap} [Components α] : ProvableT
       let tail : Vector F (combined_size cs) := h_drop ▸ v.drop size
       .cons (c.provable_type.from_elements head) (go_from_elements F cs tail)
 
-namespace Components
-variable {α : TypeMap} [Components α] {F : Type} [Field F]
-
-def to_var_components (var: α (Expression F)) := to_components var
-def from_var_components (vars: ProvableTypeList (Expression F) (components α)) : α (Expression F) := from_components vars
+namespace ProvableStruct
+variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
 
 @[circuit_norm ↓ high]
 def eval (env : Environment F) (var: α (Expression F)) : α F :=
@@ -187,10 +184,10 @@ def eval (env : Environment F) (var: α (Expression F)) : α F :=
     | _ :: cs, .cons a as => .cons (Provable.eval env a) (go_map cs as)
 
 @[circuit_norm ↓ high]
-lemma eval_components {α: TypeMap} [Components α] : ∀ (env : Environment F) (x : Var α F),
-    Provable.eval env x = eval env x := by
+lemma eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
+    Provable.eval env x = ProvableStruct.eval env x := by
   sorry
-end Components
+end ProvableStruct
 
 @[circuit_norm ↓ high]
 lemma eval_field {F : Type} [Field F] (env : Environment F) (x : Var Provable.field F) :
