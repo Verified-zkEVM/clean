@@ -167,8 +167,8 @@ instance ProvableType.from_struct {α : TypeMap} [ProvableStruct α] : ProvableT
       let size := c.provable_type.size
       have h_take : size ⊓ (size + combined_size cs) = size := Nat.min_add_right
       have h_drop : size + combined_size cs - size = combined_size cs := Nat.add_sub_self_left size (combined_size cs)
-      let head : Vector F size := h_take ▸ v.take size
-      let tail : Vector F (combined_size cs) := h_drop ▸ v.drop size
+      let head : Vector F size := (v.take size).cast h_take
+      let tail : Vector F (combined_size cs) := (v.drop size).cast h_drop
       .cons (c.provable_type.from_elements head) (go_from_elements F cs tail)
 
 namespace ProvableStruct
@@ -183,10 +183,52 @@ def eval (env : Environment F) (var: α (Expression F)) : α F :=
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (Provable.eval env a) (go_map cs as)
 
+-- helper lemma to prove `eval_struct`
+lemma eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (as : ProvableTypeList (Expression F) cs) →
+    eval.go_map env cs as =
+      ProvableType.from_struct.go_from_elements F cs (
+        Vector.map (Expression.eval env) (ProvableType.from_struct.go_to_elements (Expression F) cs as))
+  | [], .nil => rfl
+  | c :: cs, .cons a as => by
+    unfold ProvableType.from_struct.go_to_elements ProvableType.from_struct.go_from_elements eval.go_map Provable.eval to_vars
+    simp only
+    -- two equalities needed below
+    have h_size : size c.type = (Array.map (fun x ↦ Expression.eval env x) (to_elements a).toArray).toList.length := by simp
+    have h_combined_size : combined_size cs = (Array.map (fun x ↦ Expression.eval env x)
+      (ProvableType.from_struct.go_to_elements (Expression F) cs as).toArray).toList.length := by simp
+    congr
+    simp only [Vector.map_append, Vector.take_eq_extract, Vector.extract, Nat.sub_zero,
+      Vector.toArray_append, Vector.toArray_map, Vector.cast_mk, Vector.eq_mk]
+    -- move to List and back to use `List.take` theorems; should be abstracted
+    rw [← Array.toArray_toList (_ ++ _), List.extract_toArray, Array.toList_append,
+        List.extract_eq_drop_take, List.drop_zero, Nat.sub_zero, List.take_append_of_le_length (Nat.le_of_eq h_size),
+        List.take_of_length_le (Nat.le_of_eq h_size.symm), List.toArray_toList]
+
+    -- recursively use this lemma!
+    rw [eval_struct_aux]
+    congr
+    simp only [Vector.map_append, Vector.drop_eq_cast_extract, Vector.extract,
+      Vector.toArray_append, Vector.toArray_map, Vector.cast_mk, Vector.eq_mk]
+    -- move to List to use `List.drop` theorems; should be abstracted
+    rw [← Array.toArray_toList (_ ++ _), List.extract_toArray, Array.toList_append,
+        List.extract_eq_drop_take, Nat.add_sub_self_left, List.drop_append_of_le_length (Nat.le_of_eq h_size),
+        List.drop_of_length_le (Nat.le_of_eq h_size.symm), List.nil_append,
+        List.take_of_length_le (Nat.le_of_eq (h_combined_size.symm)), List.toArray_toList]
+
+/--
+`eval` = split into `ProvableStruct` components and `eval` them
+
+this gets high priority and is applied before simplifying arguments,
+to ensure we preserve `ProvableStruct` components instead of going all the way down to field elements.
+-/
 @[circuit_norm ↓ high]
 lemma eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
     Provable.eval env x = ProvableStruct.eval env x := by
-  sorry
+  intro env x
+  symm
+  simp only [eval, Provable.eval, from_elements, to_vars, to_elements, size]
+  congr 1
+  apply eval_struct_aux
 end ProvableStruct
 
 @[circuit_norm ↓ high]
