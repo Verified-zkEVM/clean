@@ -1,4 +1,3 @@
-import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U64
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Utils.Primes
