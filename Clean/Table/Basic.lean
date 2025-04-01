@@ -482,8 +482,8 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
-attribute [table_norm] size from_elements to_elements to_vars from_vars
-attribute [table_assignment_norm] to_elements
+attribute [table_norm low] size from_elements to_elements to_vars from_vars
+attribute [table_assignment_norm low] to_elements
 attribute [table_norm] Circuit.constraints_hold.soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
