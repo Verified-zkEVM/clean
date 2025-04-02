@@ -159,10 +159,11 @@ inductive ProvableTypeList (F: Type) : List WithProvableType → Type 1 where
 end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
+open ProvableStruct in
 class ProvableStruct (α : TypeMap) where
-  components : List ProvableStruct.WithProvableType
-  to_components {F} : α F → ProvableStruct.ProvableTypeList F components
-  from_components {F} : ProvableStruct.ProvableTypeList F components → α F
+  components : List WithProvableType
+  to_components {F} : α F → ProvableTypeList F components
+  from_components {F} : ProvableTypeList F components → α F
 
   combined_size : ℕ := components.map (fun x => x.provable_type.size) |>.sum
   combined_size_eq : combined_size = (components.map (fun x => x.provable_type.size) |>.sum) := by rfl
@@ -214,8 +215,22 @@ def eval (env : Environment F) (var: α (Expression F)) : α F :=
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (Provable.eval env a) (go_map cs as)
 
--- helper lemma to prove `eval_struct`
-lemma eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (as : ProvableTypeList (Expression F) cs) →
+/--
+`eval` === split into `ProvableStruct` components and `eval` them
+
+this gets high priority and is applied before simplifying arguments,
+to ensure we preserve `ProvableStruct` components instead of going all the way down to field elements.
+-/
+@[circuit_norm ↓ high]
+lemma eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
+    Provable.eval env x = ProvableStruct.eval env x := by
+  intro env x
+  symm
+  simp only [eval, Provable.eval, from_elements, to_vars, to_elements, size]
+  congr 1
+  apply eval_struct_aux
+where
+  eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (as : ProvableTypeList (Expression F) cs) →
     eval.go_map env cs as =
       ProvableType.from_struct.go_from_elements F cs (
         Vector.map (Expression.eval env) (ProvableType.from_struct.go_to_elements (Expression F) cs as))
@@ -245,21 +260,6 @@ lemma eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (
         List.extract_eq_drop_take, Nat.add_sub_self_left, List.drop_append_of_le_length (Nat.le_of_eq h_size),
         List.drop_of_length_le (Nat.le_of_eq h_size.symm), List.nil_append,
         List.take_of_length_le (Nat.le_of_eq (h_combined_size.symm)), List.toArray_toList]
-
-/--
-`eval` = split into `ProvableStruct` components and `eval` them
-
-this gets high priority and is applied before simplifying arguments,
-to ensure we preserve `ProvableStruct` components instead of going all the way down to field elements.
--/
-@[circuit_norm ↓ high]
-lemma eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
-    Provable.eval env x = ProvableStruct.eval env x := by
-  intro env x
-  symm
-  simp only [eval, Provable.eval, from_elements, to_vars, to_elements, size]
-  congr 1
-  apply eval_struct_aux
 end ProvableStruct
 
 @[circuit_norm ↓ high]
