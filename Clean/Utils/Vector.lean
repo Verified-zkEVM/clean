@@ -1,7 +1,7 @@
 import Mathlib.Tactic
 import Init.Data.List.Find
 
-variable {α β : Type} {n : ℕ}
+variable {α β : Type} {n m : ℕ}
 
 def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
@@ -96,4 +96,25 @@ instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
 
 -- some simp tagging because we use Vectors a lot
 attribute [simp] Vector.append Vector.get Array.getElem_append
+
+-- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
+theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :
+    (v ++ w |>.take n |>.cast Nat.min_add_right) = v := by
+  have hv_length : v.toList.length = n := by rw [Array.length_toList, size_toArray]
+  rw [cast_mk, ←toArray_inj, take_eq_extract, toArray_extract, toArray_append,
+    ← Array.toArray_toList (_ ++ _), List.extract_toArray, Array.toList_append,
+    List.extract_eq_drop_take, List.drop_zero, Nat.sub_zero,
+    List.take_append_of_le_length (Nat.le_of_eq hv_length.symm),
+    List.take_of_length_le (Nat.le_of_eq hv_length), List.toArray_toList]
+
+theorem cast_drop_append_of_eq_length {v : Vector α n} {w : Vector α m} :
+    (v ++ w |>.drop n |>.cast (Nat.add_sub_self_left n m)) = w := by
+  have hv_length : v.toList.length = n := by rw [Array.length_toList, size_toArray]
+  have hw_length : w.toList.length = m := by rw [Array.length_toList, size_toArray]
+  rw [drop_eq_cast_extract, cast_cast, cast_mk, ←toArray_inj, toArray_extract, toArray_append,
+    ← Array.toArray_toList (_ ++ _), List.extract_toArray, Array.toList_append,
+    List.extract_eq_drop_take, Nat.add_sub_self_left,
+    List.drop_append_of_le_length (Nat.le_of_eq hv_length.symm),
+    List.drop_of_length_le (Nat.le_of_eq hv_length), List.nil_append,
+    List.take_of_length_le (Nat.le_of_eq hw_length), List.toArray_toList]
 end Vector
