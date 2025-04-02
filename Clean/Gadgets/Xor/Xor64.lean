@@ -65,7 +65,15 @@ def assumptions (input: Inputs (F p)) :=
 
 def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
   let ⟨x, y⟩ := input
-  outputs.z.value = Nat.xor x.value y.value
+  let z := outputs.z
+  z.x0.val = Nat.xor x.x0.val y.x0.val ∧
+  z.x1.val = Nat.xor x.x1.val y.x1.val ∧
+  z.x2.val = Nat.xor x.x2.val y.x2.val ∧
+  z.x3.val = Nat.xor x.x3.val y.x3.val ∧
+  z.x4.val = Nat.xor x.x4.val y.x4.val ∧
+  z.x5.val = Nat.xor x.x5.val y.x5.val ∧
+  z.x6.val = Nat.xor x.x6.val y.x6.val ∧
+  z.x7.val = Nat.xor x.x7.val y.x7.val
 
 
 def circuit : FormalCircuit (F p) Inputs Outputs where

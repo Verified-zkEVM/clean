@@ -62,12 +62,17 @@ def assumptions (input: Inputs (F p)) :=
   let ⟨x⟩ := input
   x.is_normalized
 
-def bitwise_not_u64 (x : ℕ) : ℕ :=
-  Nat.xor x 0xffffffffffffffff
-
 def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
   let ⟨x⟩ := input
-  outputs.y.value = bitwise_not_u64 x.value
+  let y := outputs.y
+  y.x0.val = 255 - x.x0.val ∧
+  y.x1.val = 255 - x.x1.val ∧
+  y.x2.val = 255 - x.x2.val ∧
+  y.x3.val = 255 - x.x3.val ∧
+  y.x4.val = 255 - x.x4.val ∧
+  y.x5.val = 255 - x.x5.val ∧
+  y.x6.val = 255 - x.x6.val ∧
+  y.x7.val = 255 - x.x7.val
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := not_u64

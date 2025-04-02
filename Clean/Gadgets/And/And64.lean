@@ -65,7 +65,15 @@ def assumptions (input: Inputs (F p)) :=
 
 def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
   let ⟨x, y⟩ := input
-  outputs.z.value = Nat.land x.value y.value
+  let z := outputs.z
+  z.x0.val = Nat.land x.x0.val y.x0.val ∧
+  z.x1.val = Nat.land x.x1.val y.x1.val ∧
+  z.x2.val = Nat.land x.x2.val y.x2.val ∧
+  z.x3.val = Nat.land x.x3.val y.x3.val ∧
+  z.x4.val = Nat.land x.x4.val y.x4.val ∧
+  z.x5.val = Nat.land x.x5.val y.x5.val ∧
+  z.x6.val = Nat.land x.x6.val y.x6.val ∧
+  z.x7.val = Nat.land x.x7.val y.x7.val
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := and_u64
