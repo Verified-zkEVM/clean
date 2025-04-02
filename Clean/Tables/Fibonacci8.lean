@@ -133,7 +133,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
       simp [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
           Gadgets.Addition8.circuit, Gadgets.Equality.Field.circuit] at constraints_hold
-      simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom, eval] at constraints_hold
+      simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom, eval, var_from_offset] at constraints_hold
       dsimp only [Gadgets.Addition8.assumptions, Gadgets.Addition8.spec, Gadgets.Equality.Field.spec] at constraints_hold
 
       have hx_curr : env.get 0 = curr.x := by rfl
