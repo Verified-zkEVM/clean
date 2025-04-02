@@ -51,30 +51,42 @@ def assumptions (input: Inputs (F p)) :=
 
 def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
-  z.x0.val = Nat.xor x.x0.val y.x0.val ∧
-  z.x1.val = Nat.xor x.x1.val y.x1.val ∧
-  z.x2.val = Nat.xor x.x2.val y.x2.val ∧
-  z.x3.val = Nat.xor x.x3.val y.x3.val ∧
-  z.x4.val = Nat.xor x.x4.val y.x4.val ∧
-  z.x5.val = Nat.xor x.x5.val y.x5.val ∧
-  z.x6.val = Nat.xor x.x6.val y.x6.val ∧
-  z.x7.val = Nat.xor x.x7.val y.x7.val
+  z.value = Nat.xor x.value y.value ∧ z.is_normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
   main := xor_u64
   local_length _ := 8
   output _ i0 := var_from_offset U64 i0
 
+theorem soundness_to_u64 {x y z : U64 (F p)}
+  (x_norm : x.is_normalized) (y_norm : y.is_normalized)
+  (h_eq :
+    Nat.xor x.x0.val y.x0.val = z.x0.val ∧
+    Nat.xor x.x1.val y.x1.val = z.x1.val ∧
+    Nat.xor x.x2.val y.x2.val = z.x2.val ∧
+    Nat.xor x.x3.val y.x3.val = z.x3.val ∧
+    Nat.xor x.x4.val y.x4.val = z.x4.val ∧
+    Nat.xor x.x5.val y.x5.val = z.x5.val ∧
+    Nat.xor x.x6.val y.x6.val = z.x6.val ∧
+    Nat.xor x.x7.val y.x7.val = z.x7.val) :
+  spec { x, y } z := by
+  sorry
+
 theorem soundness : Soundness (F p) assumptions spec := by
-  intro i0 env input_var input h_input _ h_holds
+  intro i0 env input_var input h_input h_as h_holds
+
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
+
   simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
   obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
   obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
+
+  simp only [circuit_norm, assumptions] at h_as
+  obtain ⟨ x_norm, y_norm ⟩ := h_as
 
   dsimp only [circuit_norm, xor_u64, ByteXorLookup] at h_holds
   simp only [circuit_norm, add_zero, List.push_toArray, List.nil_append, List.cons_append,
@@ -82,8 +94,10 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
     h_x6, h_y6, h_x7, h_y7] at h_holds
   repeat rw [ByteXorTable.equiv] at h_holds
-  simp only [circuit_norm, spec, var_from_offset, eval, h_holds]
-  trivial
+
+  apply soundness_to_u64 x_norm y_norm
+  simp only [circuit_norm, var_from_offset, eval]
+  simp [h_holds]
 
 lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   (Nat.xor x.val y.val : F p).val = Nat.xor x.val y.val := by
