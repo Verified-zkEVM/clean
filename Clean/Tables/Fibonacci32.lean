@@ -91,7 +91,6 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 
 variable {α : Type}
 
-
 -- assignment copied from eval:
 -- #eval (recursive_relation (p:=p_babybear)).final_assignment.vars
 lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
@@ -106,9 +105,9 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
-    eval env (U32.mk (var ⟨0⟩) (var ⟨1⟩) (var ⟨2⟩) (var ⟨3⟩)) = curr.x ∧
-    eval env (U32.mk (var ⟨4⟩) (var ⟨5⟩) (var ⟨6⟩) (var ⟨7⟩)) = curr.y ∧
-    eval env (U32.mk (var ⟨8⟩) (var ⟨9⟩) (var ⟨10⟩) (var ⟨11⟩)) = next.x ∧
+    eval env (var_from_offset U32 0) = curr.x ∧
+    eval env (var_from_offset U32 4) = curr.y ∧
+    eval env (var_from_offset U32 8) = next.x ∧
     eval env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
   := by
   intro env
@@ -139,14 +138,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   rintro ⟨ ⟨_, h_add⟩, h_eq ⟩
   -- TODO make this work with simp only [circuit_norm]
   simp [circuit_norm] at h_add h_eq
-  simp only [table_norm, circuit_norm, subcircuit_norm, true_implies] at h_add h_eq
-  simp [
-    show (3 : Fin 8).val = 3 by rfl,
-    show (4 : Fin 8).val = 4 by rfl,
-    show (5 : Fin 8).val = 5 by rfl,
-    show (6 : Fin 8).val = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl
-  ] at h_add h_eq
+  simp only [table_norm, circuit_norm, subcircuit_norm, true_implies, Nat.reduceAdd] at h_add h_eq
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
@@ -169,16 +161,9 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   -- TODO make this work with simp only [circuit_norm]
   simp [circuit_norm]
   simp only [subcircuit_norm, Gadgets.Equality.U32.spec]
-  rw [
-    show (3 : Fin 8).val = 3 by rfl,
-    show (4 : Fin 8).val = 4 by rfl,
-    show (5 : Fin 8).val = 5 by rfl,
-    show (6 : Fin 8).val = 6 by rfl,
-    show (7 : Fin 8).val = 7 by rfl,
-  ]
   simp [circuit_norm]
-  have hx : eval env (U32.mk (var ⟨0⟩) (var ⟨1⟩) (var ⟨2⟩) (var ⟨3⟩)) = first_row.x := by rfl
-  have hy : eval env (U32.mk (var ⟨4⟩) (var ⟨5⟩) (var ⟨6⟩) (var ⟨7⟩)) = first_row.y := by rfl
+  have hx : eval env (var_from_offset U32 0) = first_row.x := by rfl
+  have hy : eval env (var_from_offset U32 4) = first_row.y := by rfl
   rw [hx, hy]
   clear hx hy
   intro x_zero y_one
