@@ -4,6 +4,7 @@ import Clean.Gadgets.Rotation64.Theorems
 import Clean.Gadgets.Rotation64.Rotation64Bytes
 import Clean.Gadgets.Rotation64.ByteRotationTable
 import Clean.Gadgets.ByteDecomposition
+import Clean.Circuit.Provable
 
 namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact p.Prime]
@@ -57,7 +58,7 @@ def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outp
   let ⟨x6_l, x6_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x6⟩
   let ⟨x7_l, x7_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x7⟩
 
-  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness (fun _env => U64.mk 0 0 0 0 0 0 0 0)
+  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← subcircuit (U64.witness.circuit (fun _env => U64.mk 0 0 0 0 0 0 0 0)) ⟨⟩
 
   assert_zero (x1_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x0_h - y0)
   assert_zero (x2_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x1_h - y1)

@@ -1,4 +1,3 @@
-import Clean.Types.U64
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Utils.Primes
 import Clean.Utils.Field

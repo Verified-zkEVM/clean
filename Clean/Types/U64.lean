@@ -1,5 +1,7 @@
 import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
+import Clean.Circuit.Provable
+import Clean.Utils.Primes
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -50,23 +52,6 @@ lemma ext {x y : U64 (F p)}
     simp only [h0, h1, h2, h3, h4, h5, h6, h7] at *
     simp only [h0, h1, h2, h3, h4, h5, h6, h7]
 
-
-/--
-  Witness a 64-bit unsigned integer.
--/
-def witness (compute : Environment (F p) → U64 (F p)) := do
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness compute
-
-  lookup (Gadgets.ByteLookup x0)
-  lookup (Gadgets.ByteLookup x1)
-  lookup (Gadgets.ByteLookup x2)
-  lookup (Gadgets.ByteLookup x3)
-  lookup (Gadgets.ByteLookup x4)
-  lookup (Gadgets.ByteLookup x5)
-  lookup (Gadgets.ByteLookup x6)
-  lookup (Gadgets.ByteLookup x7)
-
-  return U64.mk x0 x1 x2 x3 x4 x5 x6 x7
 
 /--
   A 64-bit unsigned integer is normalized if all its limbs are less than 256.
@@ -127,4 +112,72 @@ def decompose_nat_expr (x: ℕ) : U64 (Expression (F p)) :=
 
 
 end U64
+
+namespace U64.witness
+
+
+structure Outputs (F : Type) where
+  x: U64 F
+
+instance : ProvableType Outputs where
+  size := 8
+  to_elements x := #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.x.x4, x.x.x5, x.x.x6, x.x.x7]
+  from_elements v :=
+    let ⟨.mk [v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
+    ⟨ ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩ ⟩
+
+/--
+  Witness a 64-bit unsigned integer.
+-/
+def u64_witness (compute : Environment (F p) → U64 (F p)) (_ : Var Provable.unit (F p)) : Circuit (F p) (Var Outputs (F p))  := do
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness compute
+
+  lookup (Gadgets.ByteLookup x0)
+  lookup (Gadgets.ByteLookup x1)
+  lookup (Gadgets.ByteLookup x2)
+  lookup (Gadgets.ByteLookup x3)
+  lookup (Gadgets.ByteLookup x4)
+  lookup (Gadgets.ByteLookup x5)
+  lookup (Gadgets.ByteLookup x6)
+  lookup (Gadgets.ByteLookup x7)
+
+  return ⟨U64.mk x0 x1 x2 x3 x4 x5 x6 x7⟩
+
+def assumptions (_input : Provable.unit (F p)) := True
+def spec (_input : Provable.unit (F p)) (output: Outputs (F p)) := output.x.is_normalized
+
+instance elaboratedCircuit (compute : Environment (F p) → U64 (F p)) : ElaboratedCircuit (F p) Provable.unit (Var Outputs (F p)) where
+  main := u64_witness compute
+  local_length _ := 8
+  local_length_eq := by intros; dsimp [u64_witness, circuit_norm]
+  initial_offset_eq := by intros; dsimp [u64_witness, circuit_norm]
+  output_eq := by intros; rfl
+  output _inputs i0 := {x := {
+      x0 := var ⟨i0 + 0⟩,
+      x1 := var ⟨i0 + 1⟩,
+      x2 := var ⟨i0 + 2⟩,
+      x3 := var ⟨i0 + 3⟩,
+      x4 := var ⟨i0 + 4⟩,
+      x5 := var ⟨i0 + 5⟩,
+      x6 := var ⟨i0 + 6⟩,
+      x7 := var ⟨i0 + 7⟩
+    }}
+
+theorem completeness (compute : Environment (F p) → U64 (F p)) : Completeness (circuit:=elaboratedCircuit compute) (F p) Outputs assumptions := by
+  sorry
+
+
+def circuit (compute : Environment (F p) → U64 (F p)) : FormalCircuit (F p) Provable.unit Outputs where
+  main := u64_witness compute
+  assumptions := assumptions
+  spec := spec
+  local_length_eq := (elaboratedCircuit compute).local_length_eq
+  initial_offset_eq := (elaboratedCircuit compute).initial_offset_eq
+  output_eq := (elaboratedCircuit compute).output_eq
+  soundness := by sorry
+  completeness := completeness compute
+
+end U64.witness
+
+
 end
