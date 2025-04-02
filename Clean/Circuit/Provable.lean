@@ -134,13 +134,12 @@ def synthesize_const_var : Var α F :=
 instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
 
-@[circuit_norm]
-def from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
-  let vars := Vector.init fun i => ⟨offset + i⟩
-  from_vars <| vars.map Expression.var
+def var_from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
+  let vars := Vector.natInit (size α) fun i => var ⟨offset + i⟩
+  from_vars vars
 end Provable
 
-export Provable (eval const field)
+export Provable (eval const field var_from_offset)
 
 namespace ProvableStruct
 structure WithProvableType where
@@ -207,7 +206,10 @@ instance ProvableType.from_struct {α : TypeMap} [ProvableStruct α] : ProvableT
 namespace ProvableStruct
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
 
-@[circuit_norm ↓ high]
+/--
+Alternative `eval` which evaluates each component separately.
+-/
+@[circuit_norm]
 def eval (env : Environment F) (var: α (Expression F)) : α F :=
   to_components var |> go (components α) |> from_components
 where
@@ -217,10 +219,11 @@ where
     | _ :: cs, .cons a as => .cons (Provable.eval env a) (go cs as)
 
 /--
-`eval` === split into `ProvableStruct` components and `eval` them
+`Provable.eval` === `ProvableStruct.eval`
 
-this gets high priority and is applied before simplifying arguments,
-to ensure we preserve `ProvableStruct` components instead of going all the way down to field elements.
+This gets high priority and is applied before simplifying arguments,
+because we prefer `ProvableStruct.eval` if it's available:
+It preserves high-level components instead of unfolding everything down to field elements.
 -/
 @[circuit_norm ↓ high]
 lemma eval_eq_eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
@@ -229,9 +232,9 @@ lemma eval_eq_eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environ
   symm
   simp only [eval, Provable.eval, from_elements, to_vars, to_elements, size]
   congr 1
-  apply eval_struct_aux
+  apply eval_eq_eval_struct_aux
 where
-  eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (as : ProvableTypeList (Expression F) cs) →
+  eval_eq_eval_struct_aux (env : Environment F) : (cs : List WithProvableType) → (as : ProvableTypeList (Expression F) cs) →
     eval.go env cs as = (components_to_elements cs as |> Vector.map (Expression.eval env) |> components_from_elements cs)
   | [], .nil => rfl
   | c :: cs, .cons a as => by
@@ -239,7 +242,46 @@ where
     rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
     -- recursively use this lemma!
-    apply eval_struct_aux
+    apply eval_eq_eval_struct_aux
+
+/--
+Alternative `var_from_offset` which creates each component separately.
+-/
+@[circuit_norm]
+def var_from_offset (α : TypeMap) [ProvableStruct α] (offset : Nat) : Var α F :=
+  go (components α) offset |> from_components (F:=Expression F)
+where
+  @[circuit_norm]
+  go : (cs : List WithProvableType) → ℕ → ProvableTypeList (Expression F) cs
+    | [], _ => .nil
+    | c :: cs, offset => .cons (Provable.var_from_offset c.type offset) (go cs (offset + c.provable_type.size))
+
+omit [Field F] in
+/--
+  `var_from_offset` === `ProvableStruct.var_from_offset`
+-/
+@[circuit_norm ↓ high]
+lemma from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (offset : Nat) :
+    Provable.var_from_offset (F:=F) α offset = ProvableStruct.var_from_offset α offset := by
+  symm
+  simp only [var_from_offset, Provable.var_from_offset, from_vars, size, from_elements]
+  congr
+  rw [←Vector.cast_natInit combined_size_eq.symm]
+  apply from_offset_eq_from_offset_struct_aux (components α) offset
+where
+  from_offset_eq_from_offset_struct_aux : (cs : List WithProvableType) → (offset: ℕ) →
+    var_from_offset.go cs offset = (
+      Vector.natInit (combined_size' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> components_from_elements cs)
+    | [], _ => rfl
+    | c :: cs, offset => by
+      simp only [var_from_offset.go, components_from_elements, Provable.var_from_offset, from_vars]
+      have h_size : combined_size' (c :: cs) = size c.type + combined_size' cs := rfl
+      rw [Vector.cast_natInit h_size, Vector.natInit_add_eq_append, Vector.cast_rfl,
+        Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+      congr
+      -- recursively use this lemma
+      rw [from_offset_eq_from_offset_struct_aux]
+      ac_rfl
 end ProvableStruct
 
 @[circuit_norm ↓ high]

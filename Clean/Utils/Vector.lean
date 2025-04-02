@@ -82,6 +82,24 @@ def init {n} (create: Fin n → α) : Vector α n :=
   | k + 1 =>
     (init (fun i : Fin k => create i)).push (create k)
 
+theorem cast_init {n} {create: Fin n → α} (h : n = m) :
+    init create = (init (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
+  subst h; simp
+
+@[simp]
+def natInit (n: ℕ) (create: ℕ → α) : Vector α n :=
+  match n with
+  | 0 => #v[]
+  | k + 1 => natInit k create |>.push (create k)
+
+theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
+    natInit n create = (natInit m create).cast h.symm := by
+  subst h; simp
+
+theorem natInit_add_eq_append {n m} (create: ℕ → α) :
+    natInit (n + m) create = natInit n create ++ natInit m (fun i => create (n + i)) := by
+  sorry
+
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
 
