@@ -17,8 +17,7 @@ structure U64 (T: Type) where
   x6 : T
   x7 : T
 
-
-instance : ProvableType U64 where
+instance : LawfulProvableType U64 where
   size := 8
   to_elements x := #v[x.x0, x.x1, x.x2, x.x3, x.x4, x.x5, x.x6, x.x7]
   from_elements v :=

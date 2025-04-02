@@ -10,33 +10,19 @@ import Clean.Types.U64
 import Clean.Gadgets.Xor.ByteXorTable
 
 section
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Xor
 structure Inputs (F : Type) where
   x: U64 F
   y: U64 F
 
-structure Outputs (F : Type) where
-  z: U64 F
+instance : ProvableStruct Inputs where
+  components := [U64, U64]
+  to_components := fun { x, y } => .cons x (.cons y .nil)
+  from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
-instance : ProvableType Inputs where
-  size := 16
-  to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.x.x4, s.x.x5, s.x.x6, s.x.x7, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.y.x4, s.y.x5, s.y.x6, s.y.x7]
-  from_elements v :=
-    let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7, y0, y1, y2, y3, y4, y5, y6, y7], _ ⟩ := v
-    ⟨ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩, ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ⟩
-
-instance : ProvableType Outputs where
-  size := 8
-  to_elements s := #v[s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
-  from_elements v :=
-    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨z0, z1, z2, z3, z4, z5, z6, z7⟩ ⟩
-
-def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := do
+def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z ← Provable.witness (fun env =>
     let z0 := Nat.xor (env x.x0).val (env y.x0).val
@@ -49,23 +35,22 @@ def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := d
     let z7 := Nat.xor (env x.x7).val (env y.x7).val
     U64.mk z0 z1 z2 z3 z4 z5 z6 z7)
 
-  byte_xor_lookup x.x0 y.x0 z.x0
-  byte_xor_lookup x.x1 y.x1 z.x1
-  byte_xor_lookup x.x2 y.x2 z.x2
-  byte_xor_lookup x.x3 y.x3 z.x3
-  byte_xor_lookup x.x4 y.x4 z.x4
-  byte_xor_lookup x.x5 y.x5 z.x5
-  byte_xor_lookup x.x6 y.x6 z.x6
-  byte_xor_lookup x.x7 y.x7 z.x7
-  return { z }
+  lookup (ByteXorLookup x.x0 y.x0 z.x0)
+  lookup (ByteXorLookup x.x1 y.x1 z.x1)
+  lookup (ByteXorLookup x.x2 y.x2 z.x2)
+  lookup (ByteXorLookup x.x3 y.x3 z.x3)
+  lookup (ByteXorLookup x.x4 y.x4 z.x4)
+  lookup (ByteXorLookup x.x5 y.x5 z.x5)
+  lookup (ByteXorLookup x.x6 y.x6 z.x6)
+  lookup (ByteXorLookup x.x7 y.x7 z.x7)
+  return z
 
 def assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.is_normalized ∧ y.is_normalized
 
-def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
+def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
-  let z := outputs.z
   z.x0.val = Nat.xor x.x0.val y.x0.val ∧
   z.x1.val = Nat.xor x.x1.val y.x1.val ∧
   z.x2.val = Nat.xor x.x2.val y.x2.val ∧
@@ -75,18 +60,80 @@ def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
   z.x6.val = Nat.xor x.x6.val y.x6.val ∧
   z.x7.val = Nat.xor x.x7.val y.x7.val
 
-
-def circuit : FormalCircuit (F p) Inputs Outputs where
+instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
   main := xor_u64
-  assumptions := assumptions
-  spec := spec
   local_length _ := 8
-  output _ i0 := { z := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
+  output _ i0 := var_from_offset U64 i0
 
-  soundness := by
-    sorry
+theorem soundness : Soundness (F p) assumptions spec := by
+  intro i0 env input_var input h_input _ h_holds
+  let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
+       ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
+  let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
+       ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
+  simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
+  obtain ⟨ hx, hy ⟩ := h_input
+  obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
+  obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
 
-  completeness := by
-    sorry
+  dsimp only [circuit_norm, xor_u64, ByteXorLookup] at h_holds
+  simp only [circuit_norm, add_zero, List.push_toArray, List.nil_append, List.cons_append,
+    List.map_toArray, List.map_cons, List.map_nil] at h_holds
+  simp only [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
+    h_x6, h_y6, h_x7, h_y7] at h_holds
+  repeat rw [ByteXorTable.equiv] at h_holds
+  simp only [circuit_norm, spec, var_from_offset, eval, h_holds]
+  trivial
 
+lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
+  (Nat.xor x.val y.val : F p).val = Nat.xor x.val y.val := by
+  apply FieldUtils.val_lt_p
+  have h_byte : Nat.xor x.val y.val < 256:= Nat.xor_lt_two_pow (n:=8) hx hy
+  linarith [p_large_enough.elim]
+
+theorem completeness : Completeness (F p) U64 assumptions := by
+  intro i0 env input_var h_env input h_input as
+  let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
+       ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
+  let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
+       ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
+  simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
+  obtain ⟨ hx, hy ⟩ := h_input
+  obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
+  obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
+
+  simp only [assumptions, circuit_norm, U64.is_normalized] at as
+  obtain ⟨ x_bytes, y_bytes ⟩ := as
+  obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte, x4_byte, x5_byte, x6_byte, x7_byte ⟩ := x_bytes
+  obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_bytes
+
+  dsimp only [circuit_norm, xor_u64, ByteXorLookup] at h_env
+  simp [circuit_norm] at h_env
+  dsimp only [circuit_norm, xor_u64, ByteXorLookup]
+  simp only [circuit_norm, add_zero, List.push_toArray, List.nil_append, List.cons_append,
+    List.map_toArray, List.map_cons, List.map_nil]
+  simp only [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
+    h_x6, h_y6, h_x7, h_y7] at h_env ⊢
+  repeat rw [ByteXorTable.equiv]
+  have h_env0 := by let h := h_env 0; simp at h; exact h
+  have h_env1 := by let h := h_env 1; simp at h; exact h
+  have h_env2 := by let h := h_env 2; simp at h; exact h
+  have h_env3 := by let h := h_env 3; simp [show ↑(3: Fin 8) = 3 from rfl] at h; exact h
+  have h_env4 := by let h := h_env 4; simp [show ↑(4: Fin 8) = 4 from rfl] at h; exact h
+  have h_env5 := by let h := h_env 5; simp [show ↑(5: Fin 8) = 5 from rfl] at h; exact h
+  have h_env6 := by let h := h_env 6; simp [show ↑(6: Fin 8) = 6 from rfl] at h; exact h
+  have h_env7 := by let h := h_env 7; simp [show ↑(7: Fin 8) = 7 from rfl] at h; exact h
+  rw [h_env0, h_env1, h_env2, h_env3, h_env4, h_env5, h_env6, h_env7]
+  rw [xor_cast x0_byte y0_byte, xor_cast x1_byte y1_byte,
+      xor_cast x2_byte y2_byte, xor_cast x3_byte y3_byte,
+      xor_cast x4_byte y4_byte, xor_cast x5_byte y5_byte,
+      xor_cast x6_byte y6_byte, xor_cast x7_byte y7_byte]
+  simp only [and_true]
+
+def circuit : FormalCircuit (F p) Inputs U64 where
+  main := xor_u64
+  assumptions
+  spec
+  soundness
+  completeness
 end Gadgets.Xor
