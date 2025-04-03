@@ -143,8 +143,9 @@ theorem cast_drop_append_of_eq_length {v : Vector α n} {w : Vector α m} :
 end Vector
 
 -- helpers for `Vector.toChunks`
+
 /--
-The composition `m * n = n + ... + n` (where `n > 0`)
+The composition `n * m = m + ... + m` (where `m > 0`)
 -/
 def Composition.ofProductLength (m: ℕ+) {α : Type} {l : List α} (hl : l.length = n * m.val) : Composition l.length := {
   blocks := List.replicate n m.val
