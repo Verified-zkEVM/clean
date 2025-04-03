@@ -78,7 +78,7 @@ def spec (offset : Fin 64) (input : Inputs (F p)) (out: Outputs (F p)) :=
   y.value = rot_right64 x.value offset.val
 
 set_option maxHeartbeats 500000
-def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
+def circuit (off : Fin 64) : FormalCircuit (F p) Inputs Outputs where
   main := rot64 off
   assumptions := assumptions
   spec := spec off
@@ -87,28 +87,22 @@ def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
   local_length := 24
   output _inputs i0 := { z := ⟨var ⟨i0 + 16⟩, var ⟨i0 + 17⟩, var ⟨i0 + 18⟩, var ⟨i0 + 19⟩, var ⟨i0 + 20⟩, var ⟨i0 + 21⟩, var ⟨i0 + 22⟩, var ⟨i0 + 23⟩⟩ }
 
-  -- TODO: the following proofs are too slow
   initial_offset_eq := by
     intros
-    fin_cases off
-    repeat simp only [Fin.zero_eta, Fin.isValue, Fin.val_zero, rot64, Fin.div_val, Fin.val_natCast,
+    simp only [Fin.zero_eta, Fin.isValue, Fin.val_zero, rot64, Fin.div_val, Fin.val_natCast,
       Nat.reduceMod, Fin.mod_val, Nat.cast_ofNat]; rfl
   local_length_eq := by
     intros
-    fin_cases off
-    repeat simp only [Fin.zero_eta, Fin.isValue, Fin.val_zero, rot64, Fin.div_val, Fin.val_natCast,
-      Nat.reduceMod, Fin.mod_val, Nat.cast_ofNat, Pi.ofNat_apply]; rfl
+    simp only [rot64, Fin.isValue, Fin.div_val, Fin.mod_val, Nat.cast_ofNat, Pi.ofNat_apply]; rfl
   output_eq := by
     intros
-    fin_cases off
-    repeat simp only [Circuit.output, rot64, bind, subcircuit, modifyGet, MonadStateOf.modifyGet,
-      Nat.cast_zero, Fin.isValue, Fin.reduceDiv, Fin.val_zero, OperationsList.subcircuit,
-      Fin.zero_eta, Fin.div_val, Fin.val_natCast, Nat.reduceMod, Circuit.subcircuit_local_length_eq,
-      Fin.reduceMod, Fin.mod_val, Provable.witness, size, witness_vars, Vector.init, Nat.reduceAdd,
-      Fin.val_eq_zero, add_zero, Vector.push_mk, List.push_toArray, List.nil_append, Nat.cast_one,
-      Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc,
-      Fin.reduceCastSucc, OperationsList.witness, to_elements, pure, from_vars, from_elements,
-      assertion, modify, Circuit.assertion_local_length_eq, assert_zero, OperationsList.assert,
-      tsub_zero, OperationsList.from_offset, StateT.bind.eq_1, StateT.modifyGet, U64.witness]; rfl
+    simp only [Circuit.output, rot64, bind, subcircuit, modifyGet, MonadStateOf.modifyGet,
+      Fin.isValue, Fin.div_val, OperationsList.subcircuit, Circuit.subcircuit_local_length_eq,
+      Fin.mod_val, U64.witness, Provable.witness, size, witness_vars, Vector.init, Nat.reduceAdd,
+      Nat.cast_zero, Fin.val_eq_zero, Fin.val_zero, add_zero, Vector.push_mk, List.push_toArray,
+      List.nil_append, Nat.cast_one, Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two,
+      Fin.coe_eq_castSucc, Fin.reduceCastSucc, OperationsList.witness, to_elements, pure, from_vars,
+      from_elements, assertion, modify, Circuit.assertion_local_length_eq, assert_zero,
+      OperationsList.assert, OperationsList.from_offset, StateT.bind.eq_1, StateT.modifyGet]; rfl
 
 end Gadgets.Rotation64
