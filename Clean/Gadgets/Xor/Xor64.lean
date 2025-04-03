@@ -19,8 +19,8 @@ structure Inputs (F : Type) where
   x: U64 F
   y: U64 F
 
-structure Outputs (F : Type) where
-  z: U64 F
+@[reducible]
+def Outputs (F : Type) := U64 F
 
 instance : ProvableType Inputs where
   size := 16
@@ -28,13 +28,6 @@ instance : ProvableType Inputs where
   from_elements v :=
     let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7, y0, y1, y2, y3, y4, y5, y6, y7], _ ⟩ := v
     ⟨ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩, ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ⟩
-
-instance : ProvableType Outputs where
-  size := 8
-  to_elements s := #v[s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
-  from_elements v :=
-    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨z0, z1, z2, z3, z4, z5, z6, z7⟩ ⟩
 
 def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := do
   let ⟨x, y⟩ := input
@@ -57,15 +50,14 @@ def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := d
   byte_xor_lookup x.x5 y.x5 z.x5
   byte_xor_lookup x.x6 y.x6 z.x6
   byte_xor_lookup x.x7 y.x7 z.x7
-  return { z }
+  return z
 
 def assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.is_normalized ∧ y.is_normalized
 
-def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
+def spec (input: Inputs (F p)) (z : Outputs (F p)) :=
   let ⟨x, y⟩ := input
-  let z := outputs.z
   z.x0.val = Nat.xor x.x0.val y.x0.val ∧
   z.x1.val = Nat.xor x.x1.val y.x1.val ∧
   z.x2.val = Nat.xor x.x2.val y.x2.val ∧
@@ -81,7 +73,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   assumptions := assumptions
   spec := spec
   local_length _ := 8
-  output _ i0 := { z := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
+  output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩
 
   soundness := by
     sorry

@@ -13,38 +13,22 @@ variable [p_large_enough: Fact (p > 512)]
 open Gadgets.Rotation64.Theorems (rot_right64 rot_right8)
 open Gadgets.Rotation64 (byte_rotation_lookup)
 
-structure Inputs (F : Type) where
-  x: U64 F
+@[reducible]
+def Inputs (F : Type) :=  U64 F
 
-instance instProvableTypeInputs : ProvableType Inputs where
-  size := ProvableType.size U64
-  to_elements x := (ProvableType.to_elements x.x)
-  from_elements v :=
-    let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ⟩
-
-structure Outputs (F : Type) where
-  z: U64 F
-
-instance instProvableTypeOutputs : ProvableType Outputs where
-  size := ProvableType.size U64
-  to_elements x := (ProvableType.to_elements x.z)
-  from_elements v :=
-    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ ⟩
+@[reducible]
+def Outputs (F : Type) := U64 F
 
 
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def rot64 (offset : Fin 64) (x : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let byte_offset := offset / 8
   let bit_offset : ℕ := (offset % 8).val
 
-  let x := input.x
-
   -- apply the byte rotation
-  let ⟨out⟩ ← subcircuit (Gadgets.Rotation64Bytes.circuit byte_offset) { x }
+  let out ← subcircuit (Gadgets.Rotation64Bytes.circuit byte_offset) x
 
   -- apply the bit rotation
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
@@ -68,16 +52,13 @@ def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outp
   assert_zero (x6_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x5_h - y5)
   assert_zero (x7_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x6_h - y6)
   assert_zero (x0_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x7_h - y7)
-  return { z := ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ }
+  return ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩
 
-def assumptions (input : Inputs (F p)) := input.x.is_normalized
+def assumptions (input : Inputs (F p)) := input.is_normalized
 
-def spec (offset : Fin 64) (input : Inputs (F p)) (out: Outputs (F p)) :=
-  let ⟨x⟩ := input
-  let ⟨y⟩ := out
+def spec (offset : Fin 64) (x : Inputs (F p)) (y: Outputs (F p)) :=
   y.value = rot_right64 x.value offset.val
 
-set_option maxHeartbeats 500000
 def circuit (off : Fin 64) : FormalCircuit (F p) Inputs Outputs where
   main := rot64 off
   assumptions := assumptions
@@ -85,7 +66,7 @@ def circuit (off : Fin 64) : FormalCircuit (F p) Inputs Outputs where
   soundness := by sorry
   completeness := by sorry
   local_length := 24
-  output _inputs i0 := { z := ⟨var ⟨i0 + 16⟩, var ⟨i0 + 17⟩, var ⟨i0 + 18⟩, var ⟨i0 + 19⟩, var ⟨i0 + 20⟩, var ⟨i0 + 21⟩, var ⟨i0 + 22⟩, var ⟨i0 + 23⟩⟩ }
+  output _inputs i0 := ⟨var ⟨i0 + 16⟩, var ⟨i0 + 17⟩, var ⟨i0 + 18⟩, var ⟨i0 + 19⟩, var ⟨i0 + 20⟩, var ⟨i0 + 21⟩, var ⟨i0 + 22⟩, var ⟨i0 + 23⟩⟩
 
   initial_offset_eq := by
     intros
@@ -94,15 +75,5 @@ def circuit (off : Fin 64) : FormalCircuit (F p) Inputs Outputs where
   local_length_eq := by
     intros
     simp only [rot64, Fin.isValue, Fin.div_val, Fin.mod_val, Nat.cast_ofNat, Pi.ofNat_apply]; rfl
-  output_eq := by
-    intros
-    simp only [Circuit.output, rot64, bind, subcircuit, modifyGet, MonadStateOf.modifyGet,
-      Fin.isValue, Fin.div_val, OperationsList.subcircuit, Circuit.subcircuit_local_length_eq,
-      Fin.mod_val, U64.witness, Provable.witness, size, witness_vars, Vector.init, Nat.reduceAdd,
-      Nat.cast_zero, Fin.val_eq_zero, Fin.val_zero, add_zero, Vector.push_mk, List.push_toArray,
-      List.nil_append, Nat.cast_one, Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two,
-      Fin.coe_eq_castSucc, Fin.reduceCastSucc, OperationsList.witness, to_elements, pure, from_vars,
-      from_elements, assertion, modify, Circuit.assertion_local_length_eq, assert_zero,
-      OperationsList.assert, OperationsList.from_offset, StateT.bind.eq_1, StateT.modifyGet]; rfl
 
 end Gadgets.Rotation64

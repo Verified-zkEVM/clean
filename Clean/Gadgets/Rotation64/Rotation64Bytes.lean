@@ -8,25 +8,12 @@ variable {p : ℕ} [Fact p.Prime]
 open Gadgets.Rotation64.Theorems (rot_right64)
 open Gadgets.Rotation64.Theorems (soundnessCase1 soundnessCase2 soundnessCase3 soundnessCase4 soundnessCase5 soundnessCase6 soundnessCase7)
 
-structure Inputs (F : Type) where
-  x: U64 F
+@[reducible]
+def Inputs (F : Type) :=  U64 F
 
-instance instProvableTypeInputs : ProvableType Inputs where
-  size := ProvableType.size U64
-  to_elements x := (ProvableType.to_elements x.x)
-  from_elements v :=
-    let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ⟩
+@[reducible]
+def Outputs (F : Type) := U64 F
 
-structure Outputs (F : Type) where
-  z: U64 F
-
-instance instProvableTypeOutputs : ProvableType Outputs where
-  size := ProvableType.size U64
-  to_elements x := (ProvableType.to_elements x.z)
-  from_elements v :=
-    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3, z4, z5, z6, z7 ⟩ ⟩
 
 /--
   Rotate the 64-bit integer by increments of 8 positions
@@ -52,11 +39,9 @@ def rot64_bytes (offset : Fin 8) (input : Var Inputs (F p)) : Circuit (F p) (Var
   else
     return ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
 
-def assumptions (input : Inputs (F p)) := input.x.is_normalized
+def assumptions (input : Inputs (F p)) := input.is_normalized
 
-def spec (offset : Fin 8) (input : Inputs (F p)) (out: Outputs (F p)) :=
-  let ⟨x⟩ := input
-  let ⟨y⟩ := out
+def spec (offset : Fin 8) (x : Inputs (F p)) (y: Outputs (F p)) :=
   y.value = rot_right64 x.value (offset.val * 8)
 
 instance elaboratedCircuit (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where

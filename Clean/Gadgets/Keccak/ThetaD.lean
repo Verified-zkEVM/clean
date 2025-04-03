@@ -20,20 +20,20 @@ def Inputs := vec_provable U64 5
 def Outputs := vec_provable U64 5
 
 def theta_d (state : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨c0⟩ ← subcircuit (Gadgets.Rotation64.circuit 1) ⟨state.get 1⟩
-  let ⟨c0⟩ ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 4)⟩
+  let c0 ← subcircuit (Gadgets.Rotation64.circuit 1) (state.get 1)
+  let c0 ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 4)⟩
 
-  let ⟨c1⟩ ← subcircuit (Gadgets.Rotation64.circuit 1) ⟨state.get 2⟩
-  let ⟨c1⟩ ← subcircuit Gadgets.Xor.circuit ⟨c1, (state.get 0)⟩
+  let c1 ← subcircuit (Gadgets.Rotation64.circuit 1) (state.get 2)
+  let c1 ← subcircuit Gadgets.Xor.circuit ⟨c1, (state.get 0)⟩
 
-  let ⟨c2⟩ ← subcircuit (Gadgets.Rotation64.circuit 1) ⟨state.get 3⟩
-  let ⟨c2⟩ ← subcircuit Gadgets.Xor.circuit ⟨c2, (state.get 1)⟩
+  let c2 ← subcircuit (Gadgets.Rotation64.circuit 1) (state.get 3)
+  let c2 ← subcircuit Gadgets.Xor.circuit ⟨c2, (state.get 1)⟩
 
-  let ⟨c3⟩ ← subcircuit (Gadgets.Rotation64.circuit 1) ⟨state.get 4⟩
-  let ⟨c3⟩ ← subcircuit Gadgets.Xor.circuit ⟨c3, (state.get 2)⟩
+  let c3 ← subcircuit (Gadgets.Rotation64.circuit 1) (state.get 4)
+  let c3 ← subcircuit Gadgets.Xor.circuit ⟨c3, (state.get 2)⟩
 
-  let ⟨c4⟩ ← subcircuit (Gadgets.Rotation64.circuit 1) ⟨state.get 0⟩
-  let ⟨c4⟩ ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 3)⟩
+  let c4 ← subcircuit (Gadgets.Rotation64.circuit 1) (state.get 0)
+  let c4 ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 3)⟩
 
   return #v[c0, c1, c2, c3, c4]
 

@@ -12,6 +12,7 @@ import Clean.Circuit.SimpGadget
 @[reducible]
 def TypeMap := Type → Type
 
+@[reducible]
 def Var (M : TypeMap) (F : Type) := M (Expression F)
 
 variable {F : Type} [Field F]
