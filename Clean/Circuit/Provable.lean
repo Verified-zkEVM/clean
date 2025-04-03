@@ -118,10 +118,10 @@ instance : LawfulProvableType field where
   from_elements v := v.get 0
 
 @[reducible]
-def pair (α β : TypeMap) := fun F => α F × β F
+def ProvablePair (α β : TypeMap) := fun F => α F × β F
 
 @[reducible]
-def field2 := pair field field
+def field2 := ProvablePair field field
 
 @[circuit_norm]
 instance : LawfulProvableType field2 where
@@ -228,7 +228,7 @@ because we prefer `ProvableStruct.eval` if it's available:
 It preserves high-level components instead of unfolding everything down to field elements.
 -/
 @[circuit_norm ↓ high]
-lemma eval_eq_eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
+theorem eval_eq_eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
     ProvableType.eval env x = ProvableStruct.eval env x := by
   intro env x
   symm
@@ -263,7 +263,7 @@ omit [Field F] in
   `var_from_offset` === `ProvableStruct.var_from_offset`
 -/
 @[circuit_norm ↓ high]
-lemma from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (offset : Nat) :
+theorem from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (offset : Nat) :
     ProvableType.var_from_offset (F:=F) α offset = ProvableStruct.var_from_offset α offset := by
   symm
   simp only [var_from_offset, ProvableType.var_from_offset, from_vars, size, from_elements]
@@ -287,12 +287,12 @@ where
 end ProvableStruct
 
 @[circuit_norm ↓ high]
-lemma eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
+theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
   ProvableType.eval env x = Expression.eval env x := by rfl
 
 namespace LawfulProvableType
 @[circuit_norm]
-lemma eval_const {F : Type} [Field F] {α: TypeMap} [LawfulProvableType α] (env : Environment F) (x : α F) :
+theorem eval_const {F : Type} [Field F] {α: TypeMap} [LawfulProvableType α] (env : Environment F) (x : α F) :
   eval env (const x) = x := by
   simp only [circuit_norm, const, eval]
   rw [to_elements_from_elements, Vector.map_map]
@@ -301,3 +301,25 @@ lemma eval_const {F : Type} [Field F] {α: TypeMap} [LawfulProvableType α] (env
     simp only [Function.comp_apply, Expression.eval, id_eq]
   rw [this, Vector.map_id_fun, id_eq, from_elements_to_elements]
 end LawfulProvableType
+
+-- more concrete ProvableType instances
+
+-- `ProvableVector`
+
+@[reducible]
+def psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
+  ⟨ size α, NonEmptyProvableType.nonempty⟩
+
+instance {α: TypeMap} [NonEmptyProvableType α] : ProvableType (ProvableVector α n) where
+  size := n * size α
+  to_elements x := x.map to_elements |>.flatten
+  from_elements v := v.toChunks (psize α) |>.map from_elements
+
+@[circuit_norm ↓ high]
+theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (env : Environment F)
+  (x : Var (ProvableVector α n) F) :
+    eval env x = x.map (eval env) := by
+  simp only [eval, to_vars, to_elements, from_elements]
+  simp only [Vector.map_flatten, Vector.map_map]
+  rw [Vector.toChunks_flatten]
+  simp [from_elements, eval, to_vars]
