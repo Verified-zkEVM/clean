@@ -61,7 +61,7 @@ class LawfulProvableType (M : TypeMap) extends ProvableType M where
   from_elements_to_elements {F: Type} : ∀ x: M F, from_elements (to_elements x) = x
     := by intros; rfl
 
-namespace Provable
+namespace ProvableType
 variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType γ]
 
 /--
@@ -78,6 +78,27 @@ def eval (env: Environment F) (x: Var α F) : α F :=
 def const (x: α F) : Var α F :=
   let values : Vector F _ := to_elements x
   from_vars (values.map .const)
+
+def synthesize_value : α F :=
+  let zeros := Vector.fill (size α) 0
+  from_elements zeros
+
+instance [Field F] : Inhabited (α F) where
+  default := synthesize_value
+
+def synthesize_const_var : Var α F :=
+  let zeros := Vector.fill (size α) 0
+  from_vars (zeros.map .const)
+
+instance [Field F] : Inhabited (Var α F) where
+  default := synthesize_const_var
+
+def var_from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
+  let vars := Vector.natInit (size α) fun i => var ⟨offset + i⟩
+  from_vars vars
+end ProvableType
+
+export ProvableType (eval const var_from_offset)
 
 @[reducible]
 def unit (_: Type) := Unit
@@ -109,37 +130,17 @@ instance : LawfulProvableType field2 where
   from_elements v := (v.get 0, v.get 1)
 
 variable {n: ℕ}
-def vec (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
+@[reducible]
+def ProvableVector (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
 
 @[reducible]
-def fields (n: ℕ) := vec field n
+def fields (n: ℕ) := ProvableVector field n
 
 @[circuit_norm]
 instance : LawfulProvableType (fields n) where
   size := n
   to_elements x := x
   from_elements v := v
-
-def synthesize_value : α F :=
-  let zeros := Vector.fill (size α) 0
-  from_elements zeros
-
-instance [Field F] : Inhabited (α F) where
-  default := synthesize_value
-
-def synthesize_const_var : Var α F :=
-  let zeros := Vector.fill (size α) 0
-  from_vars (zeros.map .const)
-
-instance [Field F] : Inhabited (Var α F) where
-  default := synthesize_const_var
-
-def var_from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
-  let vars := Vector.natInit (size α) fun i => var ⟨offset + i⟩
-  from_vars vars
-end Provable
-
-export Provable (eval const field var_from_offset)
 
 namespace ProvableStruct
 structure WithProvableType where
@@ -216,10 +217,10 @@ where
   @[circuit_norm]
   go: (cs : List WithProvableType) → ProvableTypeList (Expression F) cs → ProvableTypeList F cs
     | [], .nil => .nil
-    | _ :: cs, .cons a as => .cons (Provable.eval env a) (go cs as)
+    | _ :: cs, .cons a as => .cons (ProvableType.eval env a) (go cs as)
 
 /--
-`Provable.eval` === `ProvableStruct.eval`
+`ProvableType.eval` === `ProvableStruct.eval`
 
 This gets high priority and is applied before simplifying arguments,
 because we prefer `ProvableStruct.eval` if it's available:
@@ -227,10 +228,10 @@ It preserves high-level components instead of unfolding everything down to field
 -/
 @[circuit_norm ↓ high]
 lemma eval_eq_eval_struct {α: TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : Var α F),
-    Provable.eval env x = ProvableStruct.eval env x := by
+    ProvableType.eval env x = ProvableStruct.eval env x := by
   intro env x
   symm
-  simp only [eval, Provable.eval, from_elements, to_vars, to_elements, size]
+  simp only [eval, ProvableType.eval, from_elements, to_vars, to_elements, size]
   congr 1
   apply eval_eq_eval_struct_aux
 where
@@ -238,7 +239,7 @@ where
     eval.go env cs as = (components_to_elements cs as |> Vector.map (Expression.eval env) |> components_from_elements cs)
   | [], .nil => rfl
   | c :: cs, .cons a as => by
-    simp only [components_to_elements, components_from_elements, eval.go, Provable.eval, to_vars]
+    simp only [components_to_elements, components_from_elements, eval.go, ProvableType.eval, to_vars]
     rw [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
     -- recursively use this lemma!
@@ -254,7 +255,7 @@ where
   @[circuit_norm]
   go : (cs : List WithProvableType) → ℕ → ProvableTypeList (Expression F) cs
     | [], _ => .nil
-    | c :: cs, offset => .cons (Provable.var_from_offset c.type offset) (go cs (offset + c.provable_type.size))
+    | c :: cs, offset => .cons (ProvableType.var_from_offset c.type offset) (go cs (offset + c.provable_type.size))
 
 omit [Field F] in
 /--
@@ -262,9 +263,9 @@ omit [Field F] in
 -/
 @[circuit_norm ↓ high]
 lemma from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (offset : Nat) :
-    Provable.var_from_offset (F:=F) α offset = ProvableStruct.var_from_offset α offset := by
+    ProvableType.var_from_offset (F:=F) α offset = ProvableStruct.var_from_offset α offset := by
   symm
-  simp only [var_from_offset, Provable.var_from_offset, from_vars, size, from_elements]
+  simp only [var_from_offset, ProvableType.var_from_offset, from_vars, size, from_elements]
   congr
   rw [←Vector.cast_natInit combined_size_eq.symm]
   apply from_offset_eq_from_offset_struct_aux (components α) offset
@@ -274,7 +275,7 @@ where
       Vector.natInit (combined_size' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> components_from_elements cs)
     | [], _ => rfl
     | c :: cs, offset => by
-      simp only [var_from_offset.go, components_from_elements, Provable.var_from_offset, from_vars]
+      simp only [var_from_offset.go, components_from_elements, ProvableType.var_from_offset, from_vars]
       have h_size : combined_size' (c :: cs) = size c.type + combined_size' cs := rfl
       rw [Vector.cast_natInit h_size, Vector.natInit_add_eq_append, Vector.cast_rfl,
         Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
@@ -286,7 +287,7 @@ end ProvableStruct
 
 @[circuit_norm ↓ high]
 lemma eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
-  Provable.eval env x = Expression.eval env x := by rfl
+  ProvableType.eval env x = Expression.eval env x := by rfl
 
 namespace LawfulProvableType
 @[circuit_norm]

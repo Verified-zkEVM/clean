@@ -14,7 +14,7 @@ structure Inputs (F : Type) where
   carry_in: F
 
 instance : ProvableStruct Inputs where
-  components := [U32, U32, Provable.field]
+  components := [U32, U32, field]
   to_components := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
   from_components := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
 
@@ -24,7 +24,7 @@ structure Outputs (F : Type) where
 deriving Repr
 
 instance : ProvableStruct Outputs where
-  components := [U32, Provable.field]
+  components := [U32, field]
   to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
   from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 

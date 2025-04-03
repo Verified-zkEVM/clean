@@ -24,7 +24,7 @@ instance : ProvableStruct Inputs where
 
 def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← Provable.witness (fun env =>
+  let z ← ProvableType.witness (fun env =>
     let z0 := Nat.xor (env x.x0).val (env y.x0).val
     let z1 := Nat.xor (env x.x1).val (env y.x1).val
     let z2 := Nat.xor (env x.x2).val (env y.x2).val

@@ -32,7 +32,7 @@ def spec (input : Inputs (F p)) (z: F p) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs Provable.field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := add8_full
   assumptions := assumptions
   spec := spec

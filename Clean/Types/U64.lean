@@ -54,7 +54,7 @@ lemma ext {x y : U64 (F p)}
   Witness a 64-bit unsigned integer.
 -/
 def witness (compute : Environment (F p) → U64 (F p)) := do
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness compute
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← ProvableType.witness compute
 
   lookup (Gadgets.ByteLookup x0)
   lookup (Gadgets.ByteLookup x1)
