@@ -10,25 +10,11 @@ variable [p_large_enough: Fact (p > 512)]
 open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
 
-structure Inputs (F : Type) where
-  state: Vector (U64 F) 25
+@[reducible] def State := ProvableVector U64 25
+@[reducible] def Outputs := ProvableVector U64 5
+-- note: `reducible` is needed for type class inference, i.e. `ProvableType State`
 
-instance : ProvableType Inputs where
-  size := 25 * ProvableType.size U64
-  to_elements x := sorry
-  from_elements v := sorry
-
-structure Outputs (F : Type) where
-  c : Vector (U64 F) 5
-
-instance  : ProvableType Outputs where
-  size := 5 * ProvableType.size U64
-  to_elements x := sorry
-  from_elements v := sorry
-
-def theta_c (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨state⟩ := input
-
+def theta_c (state : Var State (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), (state.get 1)⟩
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 2)⟩
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 3)⟩
@@ -53,27 +39,31 @@ def theta_c (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let c4 ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 22)⟩
   let c4 ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 23)⟩
   let c4 ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 24)⟩
-  return { c := #v[c0, c1, c2, c3, c4] }
+  return #v[c0, c1, c2, c3, c4]
 
-def assumptions (input : Inputs (F p)) : Prop :=
-  let ⟨state⟩ := input
+def assumptions (state : State (F p)) : Prop :=
   -- TODO
   true
 
-def spec (input : Inputs (F p)) (out: Outputs (F p)) : Prop :=
-  let ⟨state⟩ := input
+def spec (state : State (F p)) (out: Outputs (F p)) : Prop :=
   -- TODO
   true
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
+#eval! theta_c (p:=p_babybear) default |>.operations.local_length
+#eval! theta_c (p:=p_babybear) default |>.output
+
+def circuit : FormalCircuit (F p) State Outputs where
   main := theta_c
   assumptions := assumptions
   spec := spec
-  local_length _ := sorry
-  local_length_eq := sorry
-  output _ i0 := sorry
-  output_eq := sorry
-
+  local_length _ := 160
+  output _ i0 := #v[
+    var_from_offset U64 (i0 + 24),
+    var_from_offset U64 (i0 + 56),
+    var_from_offset U64 (i0 + 88),
+    var_from_offset U64 (i0 + 120),
+    var_from_offset U64 (i0 + 152)
+  ]
   soundness := by sorry
   completeness := by sorry
 end Gadgets.Keccak.ThetaC

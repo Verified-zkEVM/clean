@@ -24,6 +24,9 @@ instance : LawfulProvableType U64 where
     let ⟨.mk [v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
     ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩
 
+instance : NonEmptyProvableType U64 where
+  nonempty := by simp only [size, Nat.reduceGT]
+
 instance (T: Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 

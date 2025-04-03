@@ -310,7 +310,7 @@ end LawfulProvableType
 def psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
   ⟨ size α, NonEmptyProvableType.nonempty⟩
 
-instance {α: TypeMap} [NonEmptyProvableType α] : ProvableType (ProvableVector α n) where
+instance ProvableVector.instance {α: TypeMap} [NonEmptyProvableType α] : ProvableType (ProvableVector α n) where
   size := n * size α
   to_elements x := x.map to_elements |>.flatten
   from_elements v := v.toChunks (psize α) |>.map from_elements

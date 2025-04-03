@@ -24,6 +24,9 @@ instance : LawfulProvableType U32 where
     let ⟨ .mk [x0, x1, x2, x3], _ ⟩ := v
     ⟨ x0, x1, x2, x3 ⟩
 
+instance : NonEmptyProvableType U32 where
+  nonempty := by simp only [size, Nat.reduceGT]
+
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
   Extensionality principle for U32
