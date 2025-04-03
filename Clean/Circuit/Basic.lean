@@ -259,7 +259,7 @@ def witness (compute : Environment F → F) := do
 @[circuit_norm]
 def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) :=
   modifyGet fun ops =>
-    let vars: Vector (Variable F) n := .init (fun i => ⟨ ops.offset + i ⟩)
+    let vars := Vector.natInit n fun i => ⟨ ops.offset + i ⟩
     ⟨vars, .witness ops n compute⟩
 
 /-- Add a constraint. -/
@@ -568,7 +568,7 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.init Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.init Vector.natInit Vector.toArray_push Array.push_toList List.append_assoc
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)
 -- TODO handle other small indices as well

@@ -1,6 +1,5 @@
 import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
-import Clean.Gadgets.ByteLookup
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -18,12 +17,15 @@ deriving Repr
 
 namespace U32
 
-instance : ProvableType U32 where
+instance : LawfulProvableType U32 where
   size := 4
   to_elements x := #v[x.x0, x.x1, x.x2, x.x3]
   from_elements v :=
     let ⟨ .mk [x0, x1, x2, x3], _ ⟩ := v
     ⟨ x0, x1, x2, x3 ⟩
+
+instance : NonEmptyProvableType U32 where
+  nonempty := by simp only [size, Nat.reduceGT]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
@@ -46,7 +48,7 @@ lemma ext {x y : U32 (F p)}
   Witness a 32-bit unsigned integer.
 -/
 def witness (compute : Environment (F p) → U32 (F p)) := do
-  let ⟨ x0, x1, x2, x3 ⟩ ← Provable.witness compute
+  let ⟨ x0, x1, x2, x3 ⟩ ← ProvableType.witness compute
 
   lookup (ByteLookup x0)
   lookup (ByteLookup x1)
@@ -104,9 +106,17 @@ def wrapping_add (x y: U32 (F p)) : U32 (F p) :=
   let val_out := (val_x + val_y) % 2^32
   U32.decompose_nat val_out
 
+def from_byte (x: Fin 256) : U32 (F p) :=
+  ⟨ x.val, 0, 0, 0 ⟩
 
-lemma wrapping_add_correct (x y z: U32 (F p)) :
-    x.wrapping_add y = z ↔ z.value = (x.value + y.value) % 2^32 := by
-  sorry
+lemma from_byte_value {x : Fin 256} : (from_byte x).value (p:=p) = x := by
+  simp [value, from_byte]
+  apply FieldUtils.val_lt_p x
+  linarith [x.is_lt, p_large_enough.elim]
+
+lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p) := by
+  simp [is_normalized, from_byte]
+  rw [FieldUtils.val_lt_p x]
+  repeat linarith [x.is_lt, p_large_enough.elim]
 end U32
 end

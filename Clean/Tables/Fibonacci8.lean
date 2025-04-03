@@ -37,7 +37,7 @@ def fib_relation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.get_curr_row
   let next_x ← copy_to_var curr.y
   let next_y ← subcircuit Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
-  assign (.next 0) next_x
+  assign_var (.next 0) next_x
   assign (.next 1) next_y
 
 /--
@@ -133,7 +133,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
       simp [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
           Gadgets.Addition8.circuit, Gadgets.Equality.Field.circuit] at constraints_hold
-      simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom] at constraints_hold
+      simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom, eval, var_from_offset] at constraints_hold
       dsimp only [Gadgets.Addition8.assumptions, Gadgets.Addition8.spec, Gadgets.Equality.Field.spec] at constraints_hold
 
       have hx_curr : env.get 0 = curr.x := by rfl

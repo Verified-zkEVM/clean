@@ -9,12 +9,10 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
-instance : ProvableType Inputs where
-  size := 3
-  to_elements s := #v[s.x, s.y, s.carry_in]
-  from_elements v :=
-    let ⟨ .mk [x, y, carry_in], _ ⟩ := v
-    ⟨ x, y, carry_in ⟩
+instance : ProvableStruct Inputs where
+  components := [field, field, field]
+  to_components := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
+  from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
 
 def add8_full (input : Var Inputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
@@ -34,7 +32,7 @@ def spec (input : Inputs (F p)) (z: F p) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs Provable.field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := add8_full
   assumptions := assumptions
   spec := spec
@@ -49,13 +47,14 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
     intro h_holds z
 
     -- characterize inputs
+    simp only [circuit_norm] at h_inputs
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    simp only [add8_full, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit] at h_holds
+    simp only [add8_full, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit, eval] at h_holds
 
     -- rewrite input and ouput values
     rw [hx, hy, hcarry_in, ←(by rfl : z = env.get offset)] at h_holds
@@ -81,13 +80,14 @@ def circuit : FormalCircuit (F p) Inputs Provable.field where
     rintro as
 
     -- characterize inputs
+    simp only [circuit_norm] at h_inputs
     have hx : x_var.eval env = x := by injection h_inputs
     have hy : y_var.eval env = y := by injection h_inputs
     have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
 
     -- simplify assumptions and goal
     dsimp [assumptions] at as
-    simp only [circuit_norm, add8_full, subcircuit_norm]
+    simp only [circuit_norm, add8_full, subcircuit_norm, eval]
     rw [hx, hy, hcarry_in]
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold.
