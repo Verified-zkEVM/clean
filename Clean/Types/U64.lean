@@ -113,13 +113,13 @@ def decompose_nat_expr (x: ℕ) : U64 (Expression (F p)) :=
 
 end U64
 
-namespace U64.witness
+namespace U64.AssertNormalized
 
 
-structure Outputs (F : Type) where
+structure Inputs (F : Type) where
   x: U64 F
 
-instance : ProvableType Outputs where
+instance : ProvableType Inputs where
   size := 8
   to_elements x := #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.x.x4, x.x.x5, x.x.x6, x.x.x7]
   from_elements v :=
@@ -127,11 +127,11 @@ instance : ProvableType Outputs where
     ⟨ ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩ ⟩
 
 /--
-  Witness a 64-bit unsigned integer.
+  Assert that a 64-bit unsigned integer is normalized.
+  This means that all its limbs are less than 256.
 -/
-def u64_witness (compute : Environment (F p) → U64 (F p)) (_ : Var Provable.unit (F p)) : Circuit (F p) (Var Outputs (F p))  := do
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← Provable.witness compute
-
+def u64_assert_normalized (inputs : Var Inputs (F p)) : Circuit (F p) Unit  := do
+  let ⟨⟨x0, x1, x2, x3, x4, x5, x6, x7⟩⟩ := inputs
   lookup (Gadgets.ByteLookup x0)
   lookup (Gadgets.ByteLookup x1)
   lookup (Gadgets.ByteLookup x2)
@@ -141,43 +141,45 @@ def u64_witness (compute : Environment (F p) → U64 (F p)) (_ : Var Provable.un
   lookup (Gadgets.ByteLookup x6)
   lookup (Gadgets.ByteLookup x7)
 
-  return ⟨U64.mk x0 x1 x2 x3 x4 x5 x6 x7⟩
+def assumptions (_input : Inputs (F p)) := True
 
-def assumptions (_input : Provable.unit (F p)) := True
-def spec (_input : Provable.unit (F p)) (output: Outputs (F p)) := output.x.is_normalized
+def spec (inputs : Inputs (F p)) := inputs.x.is_normalized
 
-instance elaboratedCircuit (compute : Environment (F p) → U64 (F p)) : ElaboratedCircuit (F p) Provable.unit (Var Outputs (F p)) where
-  main := u64_witness compute
-  local_length _ := 8
-  local_length_eq := by intros; dsimp [u64_witness, circuit_norm]
-  initial_offset_eq := by intros; dsimp [u64_witness, circuit_norm]
-  output_eq := by intros; rfl
-  output _inputs i0 := {x := {
-      x0 := var ⟨i0 + 0⟩,
-      x1 := var ⟨i0 + 1⟩,
-      x2 := var ⟨i0 + 2⟩,
-      x3 := var ⟨i0 + 3⟩,
-      x4 := var ⟨i0 + 4⟩,
-      x5 := var ⟨i0 + 5⟩,
-      x6 := var ⟨i0 + 6⟩,
-      x7 := var ⟨i0 + 7⟩
-    }}
-
-theorem completeness (compute : Environment (F p) → U64 (F p)) : Completeness (circuit:=elaboratedCircuit compute) (F p) Outputs assumptions := by
-  sorry
-
-
-def circuit (compute : Environment (F p) → U64 (F p)) : FormalCircuit (F p) Provable.unit Outputs where
-  main := u64_witness compute
+def circuit : FormalAssertion (F p) Inputs where
+  main := u64_assert_normalized
   assumptions := assumptions
   spec := spec
-  local_length_eq := (elaboratedCircuit compute).local_length_eq
-  initial_offset_eq := (elaboratedCircuit compute).initial_offset_eq
-  output_eq := (elaboratedCircuit compute).output_eq
-  soundness := by sorry
-  completeness := completeness compute
+  soundness := by
+    rintro i0 env ⟨⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩⟩
+    rintro ⟨⟨x0, x1, x2, x3, x4, x5, x6, x7⟩⟩ h_eval _as
 
-end U64.witness
+    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
+    repeat rw [Gadgets.ByteTable.equiv]
+    rw [show x0_var.eval env = x0 by injections h_inputs]
+    rw [show x1_var.eval env = x1 by injections h_inputs]
+    rw [show x2_var.eval env = x2 by injections h_inputs]
+    rw [show x3_var.eval env = x3 by injections h_inputs]
+    rw [show x4_var.eval env = x4 by injections h_inputs]
+    rw [show x5_var.eval env = x5 by injections h_inputs]
+    rw [show x6_var.eval env = x6 by injections h_inputs]
+    rw [show x7_var.eval env = x7 by injections h_inputs]
+
+    tauto
+  completeness := by
+    rintro i0 env ⟨⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩⟩
+    rintro _ ⟨⟨x0, x1, x2, x3, x4, x5, x6, x7⟩⟩ h_eval _as
+    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
+    repeat rw [Gadgets.ByteTable.equiv]
+    rw [show x0_var.eval env = x0 by injections h_inputs]
+    rw [show x1_var.eval env = x1 by injections h_inputs]
+    rw [show x2_var.eval env = x2 by injections h_inputs]
+    rw [show x3_var.eval env = x3 by injections h_inputs]
+    rw [show x4_var.eval env = x4 by injections h_inputs]
+    rw [show x5_var.eval env = x5 by injections h_inputs]
+    rw [show x6_var.eval env = x6 by injections h_inputs]
+    rw [show x7_var.eval env = x7 by injections h_inputs]
+    tauto
+end U64.AssertNormalized
 
 
 end
