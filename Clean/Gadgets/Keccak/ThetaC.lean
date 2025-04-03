@@ -49,13 +49,10 @@ def spec (state : State (F p)) (out: Outputs (F p)) : Prop :=
   -- TODO
   true
 
-#eval! theta_c (p:=p_babybear) default |>.operations.local_length
-#eval! theta_c (p:=p_babybear) default |>.output
-
-def circuit : FormalCircuit (F p) State Outputs where
+-- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
+-- #eval! theta_c (p:=p_babybear) default |>.output
+instance elaborated : ElaboratedCircuit (F p) State (Var Outputs (F p)) where
   main := theta_c
-  assumptions := assumptions
-  spec := spec
   local_length _ := 160
   output _ i0 := #v[
     var_from_offset U64 (i0 + 24),
@@ -64,6 +61,15 @@ def circuit : FormalCircuit (F p) State Outputs where
     var_from_offset U64 (i0 + 120),
     var_from_offset U64 (i0 + 152)
   ]
-  soundness := by sorry
-  completeness := by sorry
+
+theorem soundness : Soundness (F p) assumptions spec := by sorry
+
+theorem completeness : Completeness (F p) Outputs assumptions := by sorry
+
+def circuit : FormalCircuit (F p) State Outputs where
+  main := theta_c
+  assumptions
+  spec
+  soundness
+  completeness
 end Gadgets.Keccak.ThetaC
