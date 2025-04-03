@@ -2,6 +2,7 @@ import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
 import Clean.Circuit.Provable
 import Clean.Utils.Primes
+import Clean.Circuit.SubCircuit
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -181,5 +182,13 @@ def circuit : FormalAssertion (F p) Inputs where
     tauto
 end U64.AssertNormalized
 
+
+/--
+  Witness a 64-bit unsigned integer.
+-/
+def U64.witness (compute : Environment (F p) → U64 (F p)) := do
+  let x ← Provable.witness compute
+  assertion U64.AssertNormalized.circuit ⟨x⟩
+  return x
 
 end

@@ -58,7 +58,7 @@ def rot64 (offset : Fin 64) (input : Var Inputs (F p)) : Circuit (F p) (Var Outp
   let ⟨x6_l, x6_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x6⟩
   let ⟨x7_l, x7_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) ⟨x7⟩
 
-  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← subcircuit (U64.witness.circuit (fun _env => U64.mk 0 0 0 0 0 0 0 0)) ⟨⟩
+  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness fun _env => U64.mk 0 0 0 0 0 0 0 0
 
   assert_zero (x1_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x0_h - y0)
   assert_zero (x2_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x1_h - y1)
@@ -77,25 +77,38 @@ def spec (offset : Fin 64) (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨y⟩ := out
   y.value = rot_right64 x.value offset.val
 
+set_option maxHeartbeats 500000
 def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
   main := rot64 off
   assumptions := assumptions
   spec := spec off
   soundness := by sorry
   completeness := by sorry
-  local_length := 16
-  output := sorry
+  local_length := 24
+  output _inputs i0 := { z := ⟨var ⟨i0 + 16⟩, var ⟨i0 + 17⟩, var ⟨i0 + 18⟩, var ⟨i0 + 19⟩, var ⟨i0 + 20⟩, var ⟨i0 + 21⟩, var ⟨i0 + 22⟩, var ⟨i0 + 23⟩⟩ }
+
+  -- TODO: the following proofs are too slow
   initial_offset_eq := by
     intros
     fin_cases off
-    repeat sorry
+    repeat simp only [Fin.zero_eta, Fin.isValue, Fin.val_zero, rot64, Fin.div_val, Fin.val_natCast,
+      Nat.reduceMod, Fin.mod_val, Nat.cast_ofNat]; rfl
   local_length_eq := by
     intros
     fin_cases off
-    repeat sorry
+    repeat simp only [Fin.zero_eta, Fin.isValue, Fin.val_zero, rot64, Fin.div_val, Fin.val_natCast,
+      Nat.reduceMod, Fin.mod_val, Nat.cast_ofNat, Pi.ofNat_apply]; rfl
   output_eq := by
     intros
     fin_cases off
-    repeat sorry
+    repeat simp only [Circuit.output, rot64, bind, subcircuit, modifyGet, MonadStateOf.modifyGet,
+      Nat.cast_zero, Fin.isValue, Fin.reduceDiv, Fin.val_zero, OperationsList.subcircuit,
+      Fin.zero_eta, Fin.div_val, Fin.val_natCast, Nat.reduceMod, Circuit.subcircuit_local_length_eq,
+      Fin.reduceMod, Fin.mod_val, Provable.witness, size, witness_vars, Vector.init, Nat.reduceAdd,
+      Fin.val_eq_zero, add_zero, Vector.push_mk, List.push_toArray, List.nil_append, Nat.cast_one,
+      Fin.val_one, List.cons_append, Nat.cast_ofNat, Fin.val_two, Fin.coe_eq_castSucc,
+      Fin.reduceCastSucc, OperationsList.witness, to_elements, pure, from_vars, from_elements,
+      assertion, modify, Circuit.assertion_local_length_eq, assert_zero, OperationsList.assert,
+      tsub_zero, OperationsList.from_offset, StateT.bind.eq_1, StateT.modifyGet, U64.witness]; rfl
 
 end Gadgets.Rotation64
