@@ -4,7 +4,7 @@ import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
 
-namespace Gadgets.Keccak.ThetaD
+namespace Gadgets.Keccak.ThetaXor
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -76,4 +76,4 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   soundness := by sorry
   completeness := by sorry
-end Gadgets.Keccak.ThetaD
+end Gadgets.Keccak.ThetaXor
