@@ -101,7 +101,9 @@ theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
 
 theorem natInit_add_eq_append {n m} (create: ℕ → α) :
     natInit (n + m) create = natInit n create ++ natInit m (fun i => create (n + i)) := by
-  sorry
+  induction m with
+  | zero => simp only [Nat.add_zero, natInit, append_empty]
+  | succ m ih => simp only [natInit, Nat.add_eq, append_push, ih]
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
