@@ -182,18 +182,19 @@ namespace ProvableStruct
 @[circuit_norm]
 def components_to_elements {F : Type} : (cs: List WithProvableType) → ProvableTypeList F cs → Vector F (combined_size' cs)
     | [], .nil => #v[]
-    | c :: cs, .cons a as => c.provable_type.to_elements a ++ components_to_elements cs as
+    | _ :: cs, .cons a as => to_elements a ++ components_to_elements cs as
 
 @[circuit_norm]
 def components_from_elements {F : Type} : (cs: List WithProvableType) → Vector F (combined_size' cs) → ProvableTypeList F cs
     | [], _ => .nil
-    | c :: cs, (v : Vector F (c.provable_type.size + combined_size' cs)) =>
-      let size := c.provable_type.size
-      have h_take : size ⊓ (size + combined_size' cs) = size := Nat.min_add_right
-      have h_drop : size + combined_size' cs - size = combined_size' cs := Nat.add_sub_self_left size (combined_size' cs)
-      let head : Vector F size := (v.take size).cast h_take
-      let tail : Vector F (combined_size' cs) := (v.drop size).cast h_drop
-      .cons (c.provable_type.from_elements head) (components_from_elements cs tail)
+    | c :: cs, (v : Vector F (size c.type + combined_size' cs)) =>
+      let head_size := size c.type
+      let tail_size := combined_size' cs
+      have h_head : head_size ⊓ (head_size + tail_size) = head_size := Nat.min_add_right
+      have h_tail : head_size + tail_size - head_size = tail_size := Nat.add_sub_self_left _ _
+      let head : Vector F head_size := (v.take head_size).cast h_head
+      let tail : Vector F tail_size := (v.drop head_size).cast h_tail
+      .cons (from_elements head) (components_from_elements cs tail)
 end ProvableStruct
 
 open ProvableStruct in

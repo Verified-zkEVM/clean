@@ -10,7 +10,7 @@ def witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) :
   let vars ← Circuit.witness_vars (size α) (fun env => compute env |> to_elements)
   return from_vars <| vars.map Expression.var
 
-def synthesize_var : Circuit F (Var α F) := witness (fun _ => synthesize_value)
+def synthesize_var : Circuit F (Var α F) := witness (fun _ => default)
 
 instance [Field F] : Inhabited (Circuit F (Var α F)) where
   default := synthesize_var
