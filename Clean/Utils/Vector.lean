@@ -63,7 +63,7 @@ def induct {motive : {n: ℕ} → Vector α n → Prop}
 /- induction principle for Vector.push -/
 def induct_push {motive : {n: ℕ} → Vector α n → Prop}
   (nil: motive #v[])
-  (push: ∀ {n: ℕ} {as: Vector α n} (a: α), motive as → motive (as.push a))
+  (push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a))
   {n: ℕ} (v: Vector α n) : motive v := by
   match v with
   | ⟨ .mk [], prop ⟩ =>
@@ -75,7 +75,7 @@ def induct_push {motive : {n: ℕ} → Vector α n → Prop}
     subst this
     obtain ⟨ as', a', ih ⟩ := exists_push (xs := ⟨.mk (a :: as), rfl⟩)
     have ih' : motive as' := induct_push nil push as'
-    have h' := push a' ih'
+    have h' := push _ a' ih'
     rwa [ih]
 
 @[simp]
