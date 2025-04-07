@@ -49,21 +49,31 @@ theorem append_empty (as : Operations F n) : as ++ (OperationsFrom.empty (F:=F) 
 theorem append_initial_offset {m n: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) :
     (as ++ bs).initial_offset = as.initial_offset := by
   induction bs using OperationsFrom.induct with
-  | empty n => rw [append_empty]
-  | witness as _ _ _ ih | assert as _ _ ih | lookup as _ _ ih | subcircuit as _ _ ih =>
-    simp only [HAppend.hAppend, append, initial_offset]; exact ih as
+  | empty n => rfl
+  | witness as _ _ _ ih | assert as _ _ ih | lookup as _ _ ih | subcircuit as _ _ ih => exact ih as
 
 instance {o: ℕ} : HAppend (OperationsFrom F m n) (OperationsFrom F n o) (OperationsFrom F m o) where
   hAppend as bs := ⟨ as.val.append bs.val bs.property, by
     show (as.val ++ bs).initial_offset = m
     rw [append_initial_offset, as.property] ⟩
 
-theorem OperationsFrom.append_empty (as : OperationsFrom F m n) : as ++ (OperationsFrom.empty (F:=F) n) = as := rfl
-
 theorem append_assoc {m n o: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) (cs : OperationsFrom F n o) :
   (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
   induction cs using OperationsFrom.induct with
-  | empty n => rw [append_empty, OperationsFrom.append_empty]
+  | empty n => rfl
   | witness _ _ _ _ ih | assert _ _ _ ih | lookup _ _ _ ih | subcircuit _ _ _ ih =>
-    simp [HAppend.hAppend, append]; exact ih bs
+    simp only [HAppend.hAppend, append, witness.injEq, assert.injEq, lookup.injEq, subcircuit.injEq, and_true]
+    exact ih bs
 end Operations
+
+class LawfulCircuit (circuit : Circuit F α) where
+  lawful : ∀ ops : OperationsList F, let n := (circuit ops).snd.offset;
+    ∃ ops' : OperationsFrom F ops.offset n, (circuit ops).snd.withLength = ops.withLength ++ ops'
+
+instance {f: Circuit F α} {g : α → Circuit F β} [hf : LawfulCircuit f] (hg : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
+  lawful := by
+    intro ops n
+    let ⟨ ops', happ ⟩ := hf.lawful ops
+    let ⟨ ops'', happ' ⟩ := (hg (f ops).1).lawful (f ops).2
+    rw [happ, Operations.append_assoc] at happ'
+    use ops' ++ ops'', happ'
