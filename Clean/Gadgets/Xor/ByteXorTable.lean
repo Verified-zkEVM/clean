@@ -24,14 +24,35 @@ def ByteXorTable.soundness
     (hx : x.val < 256)
     (hy : y.val < 256) :
     ByteXorTable.contains (#v[x, y, z]) → z.val = Nat.xor x.val y.val := by
-  sorry
+  dsimp [Table.contains]
+  rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩-- #v[from_byte (i / 256), from_byte (i % 256), from_byte (Nat.xor (i / 256) (i % 256))] ⟩
+  simp [ByteXorTable] at h
 
 def ByteXorTable.completeness
     (x y z: F p)
     (hx : x.val < 256)
     (hy : y.val < 256) :
     z.val = Nat.xor x.val y.val → ByteXorTable.contains (#v[x, y, z]) := by
-  sorry
+  intro h
+  dsimp only [ByteXorTable, Table.contains]
+  use x.val * 256 + y.val
+  simp [from_byte, Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true, Fin.val_cast_of_lt hx]
+
+  have h_x' : x.val % 256 = x.val := by
+    apply (Nat.mod_eq_iff_lt (by linarith)).mpr
+    exact hx
+
+  -- have h_xy : (Fin.val ((ZMod.cast x : Fin 65536) * 256 + ZMod.cast y) / ↑256) % 256 = ZMod.cast x := by
+    -- sorry
+
+  have sanity : ((ZMod.cast x) * 256 : Fin 65536) + ZMod.cast y = 0 := by sorry
+
+  have h_y' : y.val % 256 = y.val := by
+    apply (Nat.mod_eq_iff_lt (by linarith)).mpr
+    exact hy
+
+  constructor
+  rw [sanity]
 
 def ByteXorTable.equiv (x y z: F p) (hx : x.val < 256) (hy : y.val < 256) :
     ByteXorTable.contains (#v[x, y, z]) ↔ z.val = Nat.xor x.val y.val :=
