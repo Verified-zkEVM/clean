@@ -25,8 +25,9 @@ def ByteXorTable.soundness
     (hy : y.val < 256) :
     ByteXorTable.contains (#v[x, y, z]) → z.val = Nat.xor x.val y.val := by
   dsimp [Table.contains]
-  rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩-- #v[from_byte (i / 256), from_byte (i % 256), from_byte (Nat.xor (i / 256) (i % 256))] ⟩
+  rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩
   simp [ByteXorTable] at h
+
 
 def ByteXorTable.completeness
     (x y z: F p)
