@@ -1,4 +1,5 @@
 import Clean.Circuit.Basic
+import Clean.Circuit.SubCircuit
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 
 namespace Operations
@@ -72,15 +73,30 @@ def appends (circuit : Circuit F α) (op : (n : ℕ) → (m: ℕ) × OperationsF
   ∀ n : ℕ, ∀ ops: Operations F n, (circuit ops).snd = ops ++ (op n).snd
 
 theorem pure_appends (a : α) : (pure a : Circuit F α).appends fun n => ⟨ n, .empty n ⟩ := by
-  intro n ops
-  simp only [circuit_norm]
-  rfl
+  intro n ops; rfl
+
+theorem witness_var_appends : ∀ c : Environment F → F,
+  (witness_var c).appends fun n => ⟨n + 1, ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩⟩ := by
+  intros; intro n ops; rfl
+
+theorem witness_vars_appends : ∀ (k : ℕ) (c : Environment F → Vector F k),
+  (witness_vars k c).appends fun n => ⟨n + k, ⟨.witness (.empty n) k c, rfl⟩⟩ := by
+  intros; intro n ops; rfl
 
 theorem assert_zero_appends : ∀ e : Expression F,
-  (assert_zero e).appends fun n => ⟨ n, ⟨.assert (.empty n) e, rfl⟩⟩ := by
-  intro e n ops
-  simp only [circuit_norm, appends]
-  rfl
+  (assert_zero e).appends fun n => ⟨n, ⟨.assert (.empty n) e, rfl⟩⟩ := by
+  intros; intro n ops; rfl
+
+theorem lookup_appends : ∀ l : Lookup F,
+  (lookup l).appends fun n => ⟨n, ⟨.lookup (.empty n) l, rfl⟩⟩ := by
+  intros; intro n ops; rfl
+
+theorem subcircuit_appends {β α: TypeMap} [ProvableType α] [ProvableType β] :
+  ∀ (circuit : FormalCircuit F β α) (input),
+  (subcircuit circuit input).appends fun n =>
+    let s := Circuit.formal_circuit_to_subcircuit n circuit input
+  ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
+  intros; intro n ops; rfl
 end Circuit
 
 class LawfulCircuit (circuit : Circuit F α) where
@@ -121,5 +137,15 @@ instance LawfulCircuit.from_appends {circuit : Circuit F α} {op : (n : ℕ) →
 -- `pure` is a lawful circuit
 instance (a : α) : LawfulCircuit (pure a : Circuit F α) := .from_appends (Circuit.pure_appends a)
 
--- `assert_zero` is a lawful circuit
-instance {e : Expression F} : LawfulCircuit (assert_zero e) := .from_appends (Circuit.assert_zero_appends e)
+-- basic operations are lawful circuits
+instance {c : Environment F → F} : LawfulCircuit (witness_var c) :=
+  .from_appends (Circuit.witness_var_appends c)
+instance {k : ℕ} {c : Environment F → Vector F k} : LawfulCircuit (witness_vars k c) :=
+  .from_appends (Circuit.witness_vars_appends k c)
+instance {e : Expression F} : LawfulCircuit (assert_zero e) :=
+  .from_appends (Circuit.assert_zero_appends e)
+instance {l : Lookup F} : LawfulCircuit (lookup l) :=
+  .from_appends (Circuit.lookup_appends l)
+instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
+    LawfulCircuit (subcircuit circuit input) :=
+  .from_appends (Circuit.subcircuit_appends circuit input)
