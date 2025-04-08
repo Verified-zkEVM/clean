@@ -10,6 +10,12 @@ def from_byte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
 omit [Fact (p ≠ 0)] in
+lemma from_byte_lt (x: Fin 256) : (from_byte (p:=p) x).val < 256 := by
+  dsimp [from_byte]
+  rw [FieldUtils.val_of_nat_to_field_eq]
+  exact x.is_lt
+
+omit [Fact (p ≠ 0)] in
 lemma from_byte_eq (x : F p) (x_lt : x.val < 256) : from_byte ⟨ x.val, x_lt ⟩ = x := by
   dsimp [from_byte]
   apply FieldUtils.nat_to_field_of_val_eq_iff
@@ -62,6 +68,29 @@ def ByteXorTable.soundness
   dsimp [Table.contains]
   rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩
   simp [ByteXorTable] at h
+  simp only [ByteXorTable] at i
+  dsimp [split_two_bytes] at i
+
+  rcases h with ⟨ hx, hy, hz ⟩
+
+  have hxByte : x.val < 256 := by
+    rw [hx]
+    apply from_byte_lt
+
+  have hyByte : y.val < 256 := by
+    rw [hy]
+    apply from_byte_lt
+
+  use hxByte, hyByte
+  rw [hx, hy, hz]
+  repeat rw [from_byte, FieldUtils.val_of_nat_to_field_eq]
+  simp only [split_two_bytes, Fin.val_natCast, Nat.mod_succ_eq_iff_lt,
+    Nat.succ_eq_add_one, Nat.reduceAdd]
+
+
+
+
+
 
 
 def ByteXorTable.completeness
