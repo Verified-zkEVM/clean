@@ -5,7 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
-import Clean.Circuit.Operations
+import Clean.Circuit.Lawful
 import Clean.Utils.Field
 import Clean.Types.U32
 

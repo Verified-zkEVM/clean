@@ -1,6 +1,6 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
-import Clean.Circuit.Operations
+import Clean.Circuit.Lawful
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
