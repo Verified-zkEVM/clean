@@ -119,7 +119,7 @@ theorem nat_to_field_eq_natcast {n: ℕ} {lt: n < p} : ↑n = FieldUtils.nat_to_
     · apply Fin.val_injective
   }
 
-theorem val_of_nat_to_field_eq {n: ℕ} {lt: n < p} : (nat_to_field n lt).val = n := by
+theorem val_of_nat_to_field_eq {n: ℕ} (lt: n < p) : (nat_to_field n lt).val = n := by
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
