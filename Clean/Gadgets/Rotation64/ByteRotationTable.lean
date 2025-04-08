@@ -25,7 +25,10 @@ def ByteRotationTable.soundness
     (ByteRotationTable offset).contains (#v[x, y]) → y.val = rot_right8 ⟨x.val, hx⟩ offset := by
   dsimp only [Table.contains]
   rintro ⟨ i, h: #v[x, y] = #v[from_byte i, from_byte (rot_right8 i offset)] ⟩
-  have list_eq : [x, y] = [from_byte i, from_byte (rot_right8 i offset)] := by injection h
+  have list_eq : [x, y] = [from_byte i, from_byte (rot_right8 i offset)] := by
+    simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true] at h
+    simp only [List.cons.injEq, and_true]
+    trivial
   have h_y : y = from_byte (rot_right8 i offset) := by
     injection list_eq with list_eq tail_eq
     injection tail_eq
@@ -49,15 +52,14 @@ def ByteRotationTable.completeness
   intro h
   dsimp only [ByteRotationTable, Table.contains]
   use x.val
-  simp [from_byte, Fin.val_natCast]
-  ext1
-  simp only [ZMod.natCast_val, List.cons.injEq, and_true]
+  simp only [from_byte, Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true, Fin.val_cast_of_lt hx]
+
   have h_x' : x.val % 256 = x.val := by
     apply (Nat.mod_eq_iff_lt (by linarith)).mpr
     exact hx
+
   constructor
-  · simp only [h_x']
-    rw [FieldUtils.nat_to_field_of_val_eq_iff]
+  · rw [FieldUtils.nat_to_field_of_val_eq_iff]
   · apply_fun ZMod.val
     · rw [h, FieldUtils.val_of_nat_to_field_eq]
       have h_x'' : (⟨x.val, hx⟩ : Fin 256) = ZMod.cast x := by
@@ -66,6 +68,7 @@ def ByteRotationTable.completeness
           simp only [h_x']
         · apply Fin.val_injective
       rw [h_x'']
+      simp only [ZMod.natCast_val]
     · apply ZMod.val_injective
 
 def ByteRotationTable.equiv (offset : Fin 8) (x y: F p) (hx : x.val < 256) :

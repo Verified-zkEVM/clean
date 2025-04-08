@@ -2,6 +2,7 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U64
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Gadgets.Xor.Xor64
+import Clean.Gadgets.Keccak.KeccakState
 
 namespace Gadgets.Keccak.ThetaC
 variable {p : ℕ} [Fact p.Prime]
@@ -9,12 +10,12 @@ variable [p_large_enough: Fact (p > 512)]
 
 open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
+open Clean.Gadgets.Keccak256
 
-@[reducible] def State := ProvableVector U64 25
 @[reducible] def Outputs := ProvableVector U64 5
--- note: `reducible` is needed for type class inference, i.e. `ProvableType State`
+-- note: `reducible` is needed for type class inference, i.e. `ProvableType KeccakState`
 
-def theta_c (state : Var State (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   -- TODO would be nice to have a for loop of length 5 here
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), (state.get 1)⟩
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 2)⟩
@@ -42,10 +43,10 @@ def theta_c (state : Var State (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let c4 ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 24)⟩
   return #v[c0, c1, c2, c3, c4]
 
-def assumptions (state : State (F p)) : Prop :=
+def assumptions (state : KeccakState (F p)) : Prop :=
   ∀ i : Fin 25, state[i].is_normalized
 
-def spec (state : State (F p)) (out: Outputs (F p)) : Prop :=
+def spec (state : KeccakState (F p)) (out: Outputs (F p)) : Prop :=
   let h_norm := out[0].is_normalized ∧ out[1].is_normalized ∧
                 out[2].is_normalized ∧ out[3].is_normalized ∧ out[4].is_normalized
 
@@ -64,7 +65,7 @@ def spec (state : State (F p)) (out: Outputs (F p)) : Prop :=
 
 -- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
 -- #eval! theta_c (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) State (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakState (Var Outputs (F p)) where
   main := theta_c
   local_length _ := 160
   output _ i0 := #v[
@@ -182,7 +183,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   simp [add_assoc]
   sorry
 
-def circuit : FormalCircuit (F p) State Outputs where
+def circuit : FormalCircuit (F p) KeccakState Outputs where
   main := theta_c
   assumptions
   spec
