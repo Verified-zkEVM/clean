@@ -43,7 +43,7 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
   let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
   assertion Boolean.circuit carry_out
 
-  assert_zero (x + y + carry_in - z - carry_out * (const 256))
+  assert_zero (x + y + carry_in - z - carry_out * 256)
 
   return { z, carry_out }
 

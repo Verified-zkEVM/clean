@@ -104,7 +104,7 @@ def ByteXorTable.equiv (x y z: F p) :
     x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val :=
   ⟨ByteXorTable.soundness x y z, ByteXorTable.completeness x y z⟩
 
-def byte_xor_lookup (x y z: Expression (F p)) := lookup {
+def ByteXorLookup (x y z: Expression (F p)) : Lookup (F p) := {
   table := ByteXorTable
   entry := #v[x, y, z]
   index := fun env =>
