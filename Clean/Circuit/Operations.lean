@@ -67,36 +67,65 @@ theorem append_assoc {m n o: ℕ} (as : Operations F m) (bs : OperationsFrom F m
     exact ih bs
 end Operations
 
+structure OperationsListFrom (F: Type) [Field F] (m: ℕ) where
+  offset : ℕ
+  withLength : OperationsFrom F m offset
+
+-- `OperationsListFrom` can be coerced to `OperationsFrom` and back
+instance (ops : OperationsListFrom F m) : CoeDep (OperationsListFrom F m) (ops) (OperationsFrom F m ops.offset) where
+  coe := ops.withLength
+
+instance : CoeOut (OperationsFrom F m n) (OperationsListFrom F m) where
+  coe ops := ⟨ n, ops ⟩
+
 -- classify circuits by what they append to the current operations
 namespace Circuit
-def appends (circuit : Circuit F α) (op : (n : ℕ) → (m: ℕ) × OperationsFrom F n m) :=
-  ∀ n : ℕ, ∀ ops: Operations F n, (circuit ops).snd = ops ++ (op n).snd
+def appends (circuit : Circuit F α) (op : (n : ℕ) → OperationsListFrom F n) :=
+  ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ (op ops.offset).withLength
 
-theorem pure_appends (a : α) : (pure a : Circuit F α).appends fun n => ⟨ n, .empty n ⟩ := by
-  intro n ops; rfl
+theorem pure_appends (a : α) : (pure a : Circuit F α).appends fun n => ⟨n, .empty n⟩ := by
+  intro ops; rfl
 
 theorem witness_var_appends : ∀ c : Environment F → F,
   (witness_var c).appends fun n => ⟨n + 1, ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩⟩ := by
-  intros; intro n ops; rfl
+  intros; intro ops; rfl
 
 theorem witness_vars_appends : ∀ (k : ℕ) (c : Environment F → Vector F k),
   (witness_vars k c).appends fun n => ⟨n + k, ⟨.witness (.empty n) k c, rfl⟩⟩ := by
-  intros; intro n ops; rfl
+  intros; intro ops; rfl
 
 theorem assert_zero_appends : ∀ e : Expression F,
   (assert_zero e).appends fun n => ⟨n, ⟨.assert (.empty n) e, rfl⟩⟩ := by
-  intros; intro n ops; rfl
+  intros; intro ops; rfl
 
 theorem lookup_appends : ∀ l : Lookup F,
   (lookup l).appends fun n => ⟨n, ⟨.lookup (.empty n) l, rfl⟩⟩ := by
-  intros; intro n ops; rfl
+  intros; intro ops; rfl
 
 theorem subcircuit_appends {β α: TypeMap} [ProvableType α] [ProvableType β] :
   ∀ (circuit : FormalCircuit F β α) (input),
   (subcircuit circuit input).appends fun n =>
     let s := Circuit.formal_circuit_to_subcircuit n circuit input
   ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
-  intros; intro n ops; rfl
+  intros; intro ops; rfl
+
+-- these functions `op : (n : ℕ) → OperationsListFrom F n` are an alternative representation of the circuit,
+-- after resolving the successive inputs to each monad bind
+def MetaCircuit (F: Type) [Field F] := (n : ℕ) → OperationsListFrom F n
+
+instance : Append (MetaCircuit F) where
+  append as bs n :=
+    let ⟨ m, ops ⟩ := as n
+    let ⟨ o, ops' ⟩ := bs m
+    ⟨ o, ops ++ ops'⟩
+
+-- `appends` is preserved by `bind`
+theorem bind_appends {f : Circuit F α} {g : α → Circuit F β} {opf opg : MetaCircuit F}
+  (hf : f.appends opf) (hg : ∀ a, (g a).appends opg) : (f >>= g).appends (opf ++ opg) := by
+  intro ops
+  change (g (f ops).1 (f ops).2).2 = _
+  specialize hf ops
+  sorry
 end Circuit
 
 class LawfulCircuit (circuit : Circuit F α) where
@@ -121,14 +150,13 @@ lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} 
   exact h.right
 
 -- given an `appends` lemma for a circuit, we get a lawful circuit
-instance LawfulCircuit.from_appends {circuit : Circuit F α} {op : (n : ℕ) → (m: ℕ) × OperationsFrom F n m}
+instance LawfulCircuit.from_appends {circuit : Circuit F α} {op : (n : ℕ) → OperationsListFrom F n}
   (happ : circuit.appends op) : LawfulCircuit circuit where
   lawful ops := by
     unfold Circuit.appends at happ
-    specialize happ ops.offset ops
-    change (circuit ops).snd = _ at happ
-    have hn : (op ops.offset).fst = (circuit ops).snd.offset := by rw [happ]
-    use hn ▸ (op ops.offset).snd
+    specialize happ ops
+    have hn : (op ops.offset).offset = (circuit ops).snd.offset := by rw [happ]
+    use hn ▸ (op ops.offset).withLength
     apply OperationsList.withLength_eq
     simp only [happ]
     congr
@@ -140,12 +168,16 @@ instance (a : α) : LawfulCircuit (pure a : Circuit F α) := .from_appends (Circ
 -- basic operations are lawful circuits
 instance {c : Environment F → F} : LawfulCircuit (witness_var c) :=
   .from_appends (Circuit.witness_var_appends c)
+
 instance {k : ℕ} {c : Environment F → Vector F k} : LawfulCircuit (witness_vars k c) :=
   .from_appends (Circuit.witness_vars_appends k c)
+
 instance {e : Expression F} : LawfulCircuit (assert_zero e) :=
   .from_appends (Circuit.assert_zero_appends e)
+
 instance {l : Lookup F} : LawfulCircuit (lookup l) :=
   .from_appends (Circuit.lookup_appends l)
+
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     LawfulCircuit (subcircuit circuit input) :=
   .from_appends (Circuit.subcircuit_appends circuit input)
