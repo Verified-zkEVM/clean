@@ -3,5 +3,4 @@ import Clean.Circuit.Provable
 
 namespace Clean.Gadgets.Keccak256
 
-@[reducible]
-def KeccakState := vec_provable U64 25
+@[reducible] def KeccakState := ProvableVector U64 25

@@ -15,9 +15,9 @@ import Clean.Table.SimpTable
 @[reducible]
 def Row (F : Type) (S : Type → Type) [ProvableType S] := S F
 
-variable {F : Type} {S : Type → Type} [NonEmptyProvableType S]
+variable {F : Type} {S : Type → Type} [ProvableType S]
 
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
   let elems := to_elements row
   elems.get i
@@ -39,7 +39,7 @@ namespace Trace
 /--
   The length of a trace is the number of rows it contains.
 -/
-@[table_norm]
+@[table_norm, table_assignment_norm]
 def len : Trace F S → ℕ
   | <+> => 0
   | rest +> _ => rest.len + 1
@@ -47,7 +47,7 @@ def len : Trace F S → ℕ
 /--
   Get the row at a specific index in the trace, starting from the bottom of the trace
 -/
-@[table_norm]
+@[table_assignment_norm]
 def getLeFromBottom :
     (trace : Trace F S) → (row : Fin trace.len) → (col : Fin (size S)) → F
   | _ +> currRow, ⟨0, _⟩, j => currRow.get j
@@ -59,7 +59,7 @@ end Trace
 /--
   A trace of length N is a trace with exactly N rows.
 -/
-def TraceOfLength (F : Type) (S : Type → Type) [NonEmptyProvableType S] (N : ℕ) : Type :=
+def TraceOfLength (F : Type) (S : Type → Type) [ProvableType S] (N : ℕ) : Type :=
   { env : Trace F S // env.len = N }
 
 namespace TraceOfLength
@@ -67,7 +67,7 @@ namespace TraceOfLength
 /--
   Get the row at a specific index in the trace, starting from the top
 -/
-@[table_norm]
+@[table_assignment_norm]
 def get {M : ℕ} :
     (env : TraceOfLength F S M) → (i : Fin M) → (j : Fin (size S)) → F
   | ⟨env, h⟩, i, j => env.getLeFromBottom ⟨
@@ -101,7 +101,6 @@ def forAllRowsOfTraceExceptLast {N : ℕ}
     | <+> +> _, _ => true
     | rest +> curr +> _, prop => prop curr ∧ inner (rest +> curr) prop
 
-
 /--
   Apply a proposition, which could be dependent on the row index, to every row of the trace
 -/
@@ -116,6 +115,7 @@ def forAllRowsOfTraceWithIndex {N : ℕ}
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
 
 end TraceOfLength
+variable {W: ℕ+} {α: Type}
 
 /--
   A cell offset is an offset in a table that points to a specific cell in a row.
@@ -125,149 +125,170 @@ end TraceOfLength
   To make sure that the vertical offset is bounded, it is represented as a `Fin W`.
 -/
 structure CellOffset (W: ℕ+) (S : Type → Type) [ProvableType S]  where
-  rowOffset: Fin W
+  row: Fin W
   column: Fin (size S)
-deriving Repr
+
+instance : Repr (CellOffset W S) where
+  reprPrec off _ := "⟨" ++ reprStr off.row ++ ", " ++ reprStr off.column ++ "⟩"
 
 namespace CellOffset
 
 /--
   Current row offset
 -/
-@[table_norm]
+@[table_assignment_norm]
 def curr {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨0, j⟩
 
 /--
   Next row offset
 -/
-@[table_norm]
+@[table_assignment_norm]
 def next {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
 
 end CellOffset
 
-/--
-  Mapping from the index of a variable to a cell offset in the table.
--/
-@[reducible]
-def CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] := ℕ → CellOffset W S
+inductive Cell (W: ℕ+) (S : Type → Type) [ProvableType S] where
+  | input : CellOffset W S → Cell W S
+  | aux : ℕ → Cell W S
+
+instance : Repr (Cell W S) where
+  reprPrec cell _ := match cell with
+    | .input off => ".input " ++ reprStr off
+    | .aux i => ".aux " ++ reprStr i
 
 /--
-  Atomic operations for constructing a table constraint, which is a constraint applied to a window
-  of rows in a table.
+Mapping between cell offsets in the table and variable indices.
+
+The mapping must maintain the invariant that each variable is assigned to at most one cell.
+On the other hand, a cell can be assigned zero, one or more variables.
 -/
-inductive TableConstraintOperation (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
-  /--
-    Add some witnessed variable to the context
-  -/
-  | Witness : CellOffset W S → (compute : Unit → F) → TableConstraintOperation W S F
+structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
+  offset : ℕ -- number of variables
+  aux_length : ℕ -- maximum number of auxiliary cells (i.e. those not part of the input/output layout)
 
-  /--
-    Witness a fresh variable for each cell in the row at some offset `off` in the trace
-  -/
-  | GetRow : (off : Fin W) → TableConstraintOperation W S F
+  /-- every variable is assigned to exactly one cell in the trace -/
+  vars : Vector (Cell W S) offset
 
-  /--
-    Allocate a subcircuit in the trace
-  -/
-  | Allocate: {n: ℕ} → SubCircuit F n → TableConstraintOperation W S F
+namespace CellAssignment
+@[table_assignment_norm, reducible]
+def empty (W: ℕ+) : CellAssignment W S where
+  offset := 0
+  aux_length := 0
+  vars := #v[]
 
-  /--
-    Assign a variable to a cell in the trace
-  -/
-  | Assign : Variable F → CellOffset W S → TableConstraintOperation W S F
+@[table_assignment_norm]
+def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
+  {
+    offset := assignment.offset + 1
+    aux_length := assignment.aux_length + 1
+    vars := assignment.vars.push (.aux assignment.aux_length)
+  }
+
+@[table_assignment_norm]
+def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
+  | 0 => assignment
+  | n + 1 => (assignment.push_vars_aux n).push_var_aux
+
+@[table_assignment_norm]
+def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S :=
+  {
+    offset := assignment.offset + 1
+    aux_length := assignment.aux_length
+    vars := assignment.vars.push (.input off)
+  }
+
+@[table_assignment_norm]
+def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
+  let row_vars : Vector (Cell W S) (size S) := .init fun col => .input ⟨ row, col ⟩
+  {
+    offset := assignment.offset + size S
+    aux_length := assignment.aux_length
+    vars := assignment.vars ++ row_vars
+  }
+
+@[table_assignment_norm]
+def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: ℕ) : CellAssignment W S :=
+  let vars := assignment.vars.set? var (.input off)
+  -- note that we don't change the `aux_length` and the indices of existing aux variables.
+  -- that would unnecessarily complicate reasoning about the assignment
+  { assignment with vars }
+end CellAssignment
 
 /--
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
 -/
 structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
-  offset: ℕ
+  circuit : OperationsList F
   assignment : CellAssignment W S
-  operations: List (TableConstraintOperation W S F)
 
-variable [Field F]
+variable [Field F] {α : Type}
 
-/--
-  An empty context has offset zero, and all variables are assigned by default to the first cell
--/
-@[reducible]
-def TableContext.empty {W: ℕ+} : TableContext W S F := {
-  offset := 0,
-  -- TODO: is there a better way?
-  assignment := fun _ => ⟨0, ⟨0, NonEmptyProvableType.nonempty⟩⟩,
-  operations := []
-}
+namespace TableContext
+@[reducible, table_norm, table_assignment_norm]
+def empty : TableContext W S F where
+  circuit := .from_offset 0
+  assignment := .empty W
 
-namespace TableConstraintOperation
+@[reducible, table_norm, table_assignment_norm]
+def offset (table : TableContext W S F) : ℕ := table.circuit.offset
+end TableContext
 
-/--
-  Returns the updated table context after applying the table operation
--/
-@[table_norm]
-def update_context {W: ℕ+} (ctx: TableContext W S F) :
-    TableConstraintOperation W S F → TableContext W S F
-  /-
-    Witnessing a fresh variable for a table offsets just increments the offset and add the mapping
-    from the variable index to the cell offset in the assignment mapping
-  -/
-  | Witness offset c => {
-      offset := ctx.offset + 1,
-      assignment := fun x => if x = ctx.offset then offset else ctx.assignment x,
-      operations := ctx.operations ++ [Witness offset c]
-    }
-
-  /-
-    Getting a row is equivalent to witnessing a fresh variable for each cell in the row
-  -/
-  | GetRow off => {
-      offset := ctx.offset + size S,
-      assignment := fun x => if h : x >= ctx.offset && x < ctx.offset + size S then ⟨off, ⟨x-ctx.offset, by
-        simp only [ge_iff_le, Bool.and_eq_true, decide_eq_true_eq] at h
-        omega
-      ⟩⟩ else ctx.assignment x,
-      operations := ctx.operations ++ [GetRow off]
-    }
-
-  /-
-    Allocation of a sub-circuit moves the context offset by the witness length of the sub-circuit
-  -/
-  | Allocate subcircuit => {
-      offset := ctx.offset + subcircuit.local_length,
-      assignment := ctx.assignment,
-      operations := ctx.operations ++ [Allocate subcircuit]
-    }
-
-  /-
-    Assigning a variable to a cell in the trace just updates the assignment mapping
-  -/
-  | Assign v offset => {
-      offset := ctx.offset,
-      assignment := fun x => if x = v.index then offset else ctx.assignment x,
-      operations := ctx.operations ++ [Assign v offset]
-    }
-
-instance {W: ℕ+} [Repr F] :
-    ToString (TableConstraintOperation W S F) where
-  toString
-    | Witness offset _ => "(Witness " ++ reprStr offset ++ ")"
-    | GetRow off => "(GetRow " ++ reprStr off ++ ")"
-    | Allocate {ops, ..} => "(Allocate " ++ reprStr ops ++ ")"
-    | Assign v offset => "(Assign " ++ reprStr v ++ " " ++ reprStr offset ++ ")"
-
-end TableConstraintOperation
-
-@[reducible, table_norm]
-def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] :=
+@[reducible, table_norm, table_assignment_norm]
+def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
 
-namespace TableConstraint
-def operations {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
-    List (TableConstraintOperation W S F) :=
-  table .empty |>.snd.operations
+@[table_assignment_norm]
+def assignment_from_circuit {n} (as: CellAssignment W S) : Operations F n → CellAssignment W S
+  | .empty _ => as
+  | .witness ops m _ => (assignment_from_circuit as ops).push_vars_aux m
+  | .assert ops _ => assignment_from_circuit as ops
+  | .lookup ops _ => assignment_from_circuit as ops
+  | .subcircuit ops s => (assignment_from_circuit as ops).push_vars_aux s.local_length
 
-def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
-    CellAssignment W S :=
+/--
+A `MonadLift` instance from `Circuit` to `TableConstraint` means that we can just use
+all circuit operations inside a table constraint.
+-/
+@[reducible, table_norm, table_assignment_norm]
+instance : MonadLift (Circuit F) (TableConstraint W S F) where
+  monadLift circuit ctx :=
+    let (a, ops) := circuit ctx.circuit
+    (a, {
+      circuit := ops,
+      -- the updated assignment is computed from a fresh starting circuit, independent of the circuit so far.
+      -- (if we would use `ops` instead of `circuit.operations 0`, we would be redoing previous assignments)
+      assignment := assignment_from_circuit ctx.assignment (circuit.operations 0)
+    })
+
+namespace TableConstraint
+@[reducible, table_norm, table_assignment_norm]
+def final_offset (table : TableConstraint W S F α) : ℕ :=
+  table .empty |>.snd.circuit.offset
+
+@[table_norm]
+def operations (table : TableConstraint W S F α) : Operations F table.final_offset :=
+  table .empty |>.snd.circuit.withLength
+
+@[table_assignment_norm]
+def final_assignment (table : TableConstraint W S F α) : CellAssignment W S :=
   table .empty |>.snd.assignment
+
+@[table_assignment_norm]
+def offset_consistent (table : TableConstraint W S F α) : Prop :=
+  table.final_offset = table.final_assignment.offset
+
+-- construct an env by taking the result of the assignment function for input/output cells,
+-- and allowing arbitrary values for aux cells and invalid variables
+def window_env (table : TableConstraint W S F Unit)
+  (window: TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
+  let assignment := table.final_assignment
+  .mk fun i =>
+    if hi : i < assignment.offset then
+      match assignment.vars.get ⟨i, hi⟩ with
+      | .input ⟨i, j⟩ => window.get i j
+      | .aux k => aux_env.get k
+    else aux_env.get (i + assignment.aux_length)
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -275,99 +296,78 @@ def assignment {α: Type} {W: ℕ+} (table : TableConstraint W S F α):
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def constraints_hold_on_window {W : ℕ+}
-    (table : TableConstraint W S F Unit) (window: TraceOfLength F S W) : Prop :=
-  let ctx := table .empty |>.snd
-
-  -- construct an env by simply taking the result of the assignment function
-  let env : Environment F := ⟨ fun x =>
-    match ctx.assignment x with
-    | ⟨i, j⟩ => window.get i j
-  ⟩
-
-  -- then we fold over allocated sub-circuits
-  -- lifting directly to the soundness of the sub-circuit
-  foldl ctx.operations env
-  where
-  @[table_norm]
-  foldl : List (TableConstraintOperation W S F) → (env: Environment F) → Prop
-  | [], _ => true
-  | op :: ops, env =>
-    match op with
-    | .Allocate {soundness ..} => soundness env ∧ foldl ops env
-    | _ => foldl ops env
+def constraints_hold_on_window (table : TableConstraint W S F Unit)
+  (window: TraceOfLength F S W) (aux_env : Environment F) : Prop :=
+  let env := window_env table window aux_env
+  Circuit.constraints_hold.soundness env table.operations
 
 @[table_norm]
-def output {α: Type} {W: ℕ+} (table : TableConstraint W S F α) : α :=
+def output {α: Type} (table : TableConstraint W S F α) : α :=
   table .empty |>.fst
 
-open TableConstraintOperation (update_context)
-
-@[table_norm]
-def witness_cell {W: ℕ+}
-    (off : CellOffset W S) (compute : Unit → F) : TableConstraint W S F (Variable F) :=
+/--
+  Get a fresh variable for each cell in a given row
+-/
+@[table_norm, table_assignment_norm]
+def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
-    (⟨ ctx.offset ⟩, update_context ctx (.Witness off compute))
-
-@[table_norm]
-def get_cell {W: ℕ+}
-    (off : CellOffset W S): TableConstraint W S F (Variable F) :=
-  modifyGet fun ctx =>
-    (⟨ ctx.offset ⟩, update_context ctx (.Witness off (fun _ => 0)))
+    let vars := Vector.natInit (size S) (fun i => ctx.offset + i)
+    let ctx' : TableContext W S F := {
+      circuit := ctx.circuit.witness (size S) (fun env => vars.map fun i => env.get i),
+      assignment := ctx.assignment.push_row row
+    }
+    (var_from_offset S ctx.offset, ctx')
 
 /--
   Get a fresh variable for each cell in the current row
 -/
-@[table_norm]
-def get_curr_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
-  modifyGet fun ctx =>
-    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-    let exprs := vars.map Expression.var
-    (from_vars exprs, update_context ctx (.GetRow 0))
+@[table_norm, table_assignment_norm]
+def get_curr_row : TableConstraint W S F (Var S F) := get_row 0
 
 /--
   Get a fresh variable for each cell in the next row
 -/
-@[table_norm]
-def get_next_row {W: ℕ+} : TableConstraint W S F (Var S F) :=
-  modifyGet fun ctx =>
-    let vars := Vector.init (fun i => ⟨ctx.offset + i⟩)
-    let exprs := vars.map Expression.var
-    (from_vars exprs, update_context ctx (.GetRow 1))
+@[table_norm, table_assignment_norm]
+def get_next_row : TableConstraint W S F (Var S F) := get_row 1
 
-def subcircuit {W: ℕ+} {α β : TypeMap} [ProvableType β] [ProvableType α]
-    (circuit: FormalCircuit F β α) (b: Var β F) : TableConstraint W S F (Var α F) :=
-  modifyGet fun ctx =>
-    let a := circuit.output b ctx.offset
-    let subcircuit := Circuit.formal_circuit_to_subcircuit ctx.offset circuit b
-    (a, update_context ctx (.Allocate subcircuit))
-
-def assertion {W: ℕ+} {β : TypeMap} [ProvableType β]
-    (circuit: FormalAssertion F β) (b: Var β F) : TableConstraint W S F Unit :=
+@[table_norm, table_assignment_norm]
+def assign_var (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
-    let subcircuit := Circuit.formal_assertion_to_subcircuit ctx.offset circuit b
-    update_context ctx (.Allocate subcircuit)
+    let assignment := ctx.assignment.set_var_input off v.index
+    { ctx with assignment }
 
-@[table_norm]
-def assign {W: ℕ+} (v: Variable F) (off : CellOffset W S) : TableConstraint W S F Unit :=
-  modify fun ctx =>
-    update_context ctx (.Assign v off)
+@[table_norm, table_assignment_norm]
+def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
+  -- a variable is assigned directly
+  | .var v => assign_var off v
+  -- a composed expression or constant is first stored in a new variable, which is assigned
+  | x => do
+    let new_var ← witness_var x.eval
+    assert_zero (x - var new_var)
+    assign_var off new_var
 
-attribute [table_norm] size
-attribute [table_norm] to_elements
-attribute [table_norm] from_elements
-attribute [table_norm] to_vars
-attribute [table_norm] from_vars
+@[table_norm, table_assignment_norm]
+def assign_curr_row {W: ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
+  let vars := to_vars curr
+  forM (List.finRange (size S)) fun i =>
+    assign (.curr i) (vars.get i)
+
+@[table_norm, table_assignment_norm]
+def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
+  let vars := to_vars next
+  forM (List.finRange (size S)) fun i =>
+    assign (.next i) (vars.get i)
 end TableConstraint
 
+export TableConstraint (window_env get_curr_row get_next_row assign_var assign assign_next_row assign_curr_row)
 
 @[reducible]
-def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] := TableConstraint 1 S F Unit
+def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
 
 @[reducible]
-def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] := TableConstraint 2 S F Unit
+def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
 
-inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProvableType S] where
+inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
@@ -381,10 +381,13 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProva
 
   /--
     An `EveryRowExceptLast` constraint is a constraint that is applied to every row except the last.
-    It can reference cells from the current row, or the next row
+    It can reference cells from the current row, or the next row.
+
+    Note that this will not apply any constraints to a trace of length one.
   -/
   | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
 
+export TableOperation (Boundary EveryRow EveryRowExceptLast)
 
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
@@ -392,9 +395,10 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [NonEmptyProva
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 @[table_norm]
-def table_constraints_hold {N : ℕ}
-    (constraints : List (TableOperation S F)) (trace: TraceOfLength F S N) : Prop :=
-  foldl constraints trace.val constraints
+def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
+  (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F) : Prop :=
+  let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
+  foldl constraints_and_envs trace.val constraints_and_envs
   where
   /--
     The foldl function applies the constraints to the trace inductively on the trace
@@ -414,29 +418,29 @@ def table_constraints_hold {N : ℕ}
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (cs : List (TableOperation S F)) : Trace F S → (cs_iterator: List (TableOperation S F)) → Prop
+  foldl (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+    Trace F S → (cs_iterator: List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
-    | trace +> curr +> next, (TableOperation.EveryRowExceptLast constraint)::rest =>
+    | trace +> curr +> next, (⟨.EveryRowExceptLast constraint, env⟩)::rest =>
         let others := foldl cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.constraints_hold_on_window window ∧ others
+        constraint.constraints_hold_on_window window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
-    | trace +> row, (TableOperation.Boundary idx constraint)::rest =>
+    | trace +> row, (⟨.Boundary idx constraint, env⟩)::rest =>
         let others := foldl cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        if trace.len = idx then constraint.constraints_hold_on_window window ∧ others else others
+        if trace.len = idx then constraint.constraints_hold_on_window window (env trace.len) ∧ others else others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
-    | trace +> row, (TableOperation.EveryRow constraint)::rest =>
+    | trace +> row, (⟨.EveryRow constraint, env⟩)::rest =>
         let others := foldl cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.constraints_hold_on_window window ∧ others
+        constraint.constraints_hold_on_window window (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
-    -- TODO: this is fine if the trace length M is >= 2, but we should check this somehow
-    | trace, (TableOperation.EveryRowExceptLast _)::rest =>
+    | trace, (⟨.EveryRowExceptLast _, _⟩)::rest =>
         foldl cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
@@ -447,20 +451,66 @@ def table_constraints_hold {N : ℕ}
     | <+>, _ => True
 
 
-structure FormalTable (F : Type) [Field F] (S : Type → Type) [NonEmptyProvableType S] where
-  -- list of constraints that are applied over the table
+structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
+  /-- list of constraints that are applied over the table -/
   constraints : List (TableOperation S F)
 
-  -- optional assumption on the table length
+  /-- optional assumption on the table length -/
   assumption : ℕ → Prop := fun _ => True
 
-  -- specification for the table
+  /-- specification for the table -/
   spec {N : ℕ} : TraceOfLength F S N → Prop
 
-  -- the soundness states that if the assumptions hold, then
-  -- the constraints hold implies that the spec holds
+  /-- the soundness states that if the assumptions hold, then
+      the constraints hold implies that the spec holds. -/
   soundness :
-    ∀ (N : ℕ) (trace: TraceOfLength F S N),
+    ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
     assumption N →
-    table_constraints_hold constraints trace →
+    table_constraints_hold constraints trace env →
     spec trace
+
+  /-- this property tells us that that the number of variables contained in the `assignment` of each
+      constraint is consistent with the number of variables introduced in the circuit. -/
+  offset_consistent :
+    constraints.Forall fun cs =>
+      match cs with
+      | .Boundary _ constraint => constraint.offset_consistent
+      | .EveryRow constraint => constraint.offset_consistent
+      | .EveryRowExceptLast constraint => constraint.offset_consistent
+    := by repeat constructor
+
+
+-- add some important lemmas to simp sets
+attribute [table_norm] List.mapIdx List.mapIdx.go
+attribute [table_norm low] size from_elements to_elements to_vars from_vars
+attribute [table_assignment_norm low] to_elements
+attribute [table_norm] Circuit.constraints_hold.soundness
+
+attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
+
+attribute [table_norm, table_assignment_norm] liftM monadLift
+attribute [table_norm, table_assignment_norm] bind StateT.bind
+attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
+
+-- simp lemma to simplify updated circuit after an assignment
+@[table_norm, table_assignment_norm]
+theorem TableConstraint.assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
+  (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
+
+/--
+Tactic script to unfold `assign_curr_row` and `assign_next_row` in a `TableConstraint`.
+
+TODO this is fairly useless without support for `at h` syntax
+-/
+syntax "simp_assign_row" : tactic
+macro_rules
+  | `(tactic|simp_assign_row) =>
+    `(tactic|(
+    simp only [assign_curr_row, assign_next_row, size]
+    rw [List.finRange, List.ofFn]
+    repeat rw [Fin.foldr_succ]
+    rw [Fin.foldr_zero]
+    repeat rw [List.forM_cons]
+    rw [List.forM_nil, bind_pure_unit]
+    simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))

@@ -5,3 +5,4 @@ import Lean.LabelAttribute
 
 
 register_simp_attr table_norm
+register_simp_attr table_assignment_norm

@@ -13,25 +13,20 @@ structure Inputs (F : Type) where
   y: U32 F
   carry_in: F
 
-instance : ProvableType Inputs where
-  size := size U32 + size U32 + 1
-  to_elements x :=
-    #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.y.x0, x.y.x1, x.y.x2, x.y.x3, x.carry_in]
-  from_elements v :=
-    let ⟨ .mk [x0, x1, x2, x3, y0, y1, y2, y3, carry_in], _ ⟩ := v
-    ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩
+instance : ProvableStruct Inputs where
+  components := [U32, U32, field]
+  to_components := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
+  from_components := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
 
 structure Outputs (F : Type) where
   z: U32 F
   carry_out: F
 deriving Repr
 
-instance : ProvableType Outputs where
-  size := size U32 + 1
-  to_elements x := to_elements x.z ++ #v[x.carry_out]
-  from_elements v :=
-    let ⟨ .mk [z0, z1, z2, z3, carry_out], _ ⟩ := v
-    ⟨ ⟨ z0, z1, z2, z3 ⟩, carry_out ⟩
+instance : ProvableStruct Outputs where
+  components := [U32, field]
+  to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
+  from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
 open Gadgets.Addition8FullCarry (add8_full_carry)
 
@@ -77,6 +72,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
+  simp only [circuit_norm, eval] at h_inputs
   have : x0_var.eval env = x0 := by injections h_inputs
   have : x1_var.eval env = x1 := by injections h_inputs
   have : x2_var.eval env = x2 := by injections h_inputs
@@ -120,7 +116,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   -- simplify output and spec
   set output := eval env (elaboratedCircuit.output _ i0)
-  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := rfl
+  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
+    simp only [output, circuit_norm, eval]; rfl
   rw [h_output]
   dsimp only [spec, U32.value, U32.is_normalized]
 
@@ -143,6 +140,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
+  simp only [circuit_norm, eval] at h_inputs
   have : x0_var.eval env = x0 := by injections
   have : x1_var.eval env = x1 := by injections
   have : x2_var.eval env = x2 := by injections

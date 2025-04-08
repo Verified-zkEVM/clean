@@ -17,7 +17,7 @@ instance : ProvableType Inputs where
 
 def add8 (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
-  let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := const 0 }
+  let z ← subcircuit Gadgets.Addition8Full.circuit { x, y, carry_in := 0 }
   return z
 
 def spec (input : Inputs (F p)) (z: F p) :=
@@ -32,7 +32,7 @@ def assumptions (input : Inputs (F p)) :=
   Compute the 8-bit addition of two numbers.
   Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs Provable.field where
+def circuit : FormalCircuit (F p) Inputs field where
   main := add8
   assumptions := assumptions
   spec := spec
