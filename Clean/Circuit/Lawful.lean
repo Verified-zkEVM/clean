@@ -210,3 +210,30 @@ example :
 
   LawfulCircuit add := by infer_lawful_circuit
 end
+
+-- loops
+
+instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} :
+    (∀ x : α, LawfulCircuit (circuit x)) → ∀ xs : List α, LawfulCircuit (forM xs circuit) := by
+  intro h xs
+  induction xs
+  case nil => rw [List.forM_nil]; infer_instance
+  case cons x xs ih =>
+    rw [List.forM_cons]
+    apply from_bind
+    exact h x
+    rw [forall_const]
+    exact ih
+
+instance LawfulCircuit.from_forM_vector {α: Type} {circuit : α → Circuit F Unit} :
+    (∀ x : α, LawfulCircuit (circuit x)) → ∀ (n : ℕ) (xs : Vector α n), LawfulCircuit (forM xs circuit) := by
+  intro h n xs
+  induction xs using Vector.induct
+  case nil => simp only [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, List.forM_nil]; infer_instance
+  case cons x xs ih =>
+    rw [Vector.cons, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, List.forM_cons]
+    apply from_bind
+    exact h x
+    rw [forall_const]
+    rw [Vector.forM_mk, List.forM_toArray] at ih
+    exact ih
