@@ -311,12 +311,12 @@ def output {α: Type} (table : TableConstraint W S F α) : α :=
 @[table_norm, table_assignment_norm]
 def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
-    let vars : Vector ℕ _ := .init (fun i => ctx.offset + i)
+    let vars := Vector.natInit (size S) (fun i => ctx.offset + i)
     let ctx' : TableContext W S F := {
       circuit := ctx.circuit.witness (size S) (fun env => vars.map fun i => env.get i),
       assignment := ctx.assignment.push_row row
     }
-    (Provable.from_offset S ctx.offset, ctx')
+    (var_from_offset S ctx.offset, ctx')
 
 /--
   Get a fresh variable for each cell in the current row
@@ -359,7 +359,7 @@ def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
     assign (.next i) (vars.get i)
 end TableConstraint
 
-export TableConstraint (window_env get_curr_row get_next_row assign assign_next_row assign_curr_row)
+export TableConstraint (window_env get_curr_row get_next_row assign_var assign assign_next_row assign_curr_row)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
@@ -482,8 +482,8 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
-attribute [table_norm] size from_elements to_elements to_vars from_vars
-attribute [table_assignment_norm] to_elements
+attribute [table_norm low] size from_elements to_elements to_vars from_vars
+attribute [table_assignment_norm low] to_elements
 attribute [table_norm] Circuit.constraints_hold.soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
@@ -513,4 +513,4 @@ macro_rules
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
     simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
-      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]))
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))

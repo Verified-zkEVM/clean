@@ -17,12 +17,10 @@ structure Inputs (F : Type) where
   x: U32 F
   y: U32 F
 
-instance : ProvableType Inputs where
-  size := 8
-  to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.y.x0, s.y.x1, s.y.x2, s.y.x3]
-  from_elements v :=
-    let ⟨ .mk [x0, x1, x2, x3, y0, y1, y2, y3], _ ⟩ := v
-    ⟨ ⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩ ⟩
+instance : ProvableStruct Inputs where
+  components := [U32, U32]
+  to_components := fun { x, y } => .cons x (.cons y .nil)
+  from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
 def assert_eq (input : Var Inputs (F p)) := do
   let ⟨x, y⟩ := input
@@ -47,6 +45,7 @@ def circuit : FormalAssertion (F p) Inputs where
 
     dsimp only [circuit_norm, assert_eq] at h_holds
 
+    simp only [circuit_norm, eval] at h_inputs
     have hx0 : x0_var.eval env = x0 := by injections
     have hx1 : x1_var.eval env = x1 := by injections
     have hx2 : x2_var.eval env = x2 := by injections
@@ -71,6 +70,7 @@ def circuit : FormalAssertion (F p) Inputs where
     let ⟨⟨x0_var, x1_var, x2_var, x3_var⟩, ⟨y0_var, y1_var, y2_var, y3_var⟩⟩ := inputs_var
 
     -- characterize inputs
+    simp only [circuit_norm, eval] at h_inputs
     have hx0 : x0_var.eval env = x0 := by injection h_inputs; injections
     have hx1 : x1_var.eval env = x1 := by injection h_inputs; injections
     have hx2 : x2_var.eval env = x2 := by injection h_inputs; injections

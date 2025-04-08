@@ -4,18 +4,17 @@ import Clean.Circuit.Basic
 variable {F :Type} [Field F]
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
-namespace Provable
-
+namespace ProvableType
 @[circuit_norm]
 def witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) := do
   let vars ← Circuit.witness_vars (size α) (fun env => compute env |> to_elements)
   return from_vars <| vars.map Expression.var
 
-def synthesize_var : Circuit F (Var α F) := witness (fun _ => synthesize_value)
+def synthesize_var : Circuit F (Var α F) := witness (fun _ => default)
 
 instance [Field F] : Inhabited (Circuit F (Var α F)) where
   default := synthesize_var
-end Provable
+end ProvableType
 
 @[circuit_norm]
 def assert_equal (a a': Var α F) : Circuit F Unit :=
