@@ -27,7 +27,7 @@ lemma from_byte_cast_eq {z: F p} (z_lt : z.val < 256) : from_byte z.cast = z := 
   simp only [this]
   apply FieldUtils.nat_to_field_of_val_eq_iff
 
-def split_two_bytes (i : Fin (256 * 256)) : (Fin 256 × Fin 256) :=
+def split_two_bytes (i : Fin (256 * 256)) : Fin 256 × Fin 256 :=
   let x := i.val / 256
   let y := i.val % 256
   have x_lt : x < 256 := by simp [x, Nat.div_lt_iff_lt_mul]
@@ -59,8 +59,7 @@ def ByteXorTable: Table (F p) where
     let (x, y) := split_two_bytes i
     #v[from_byte x, from_byte y, from_byte (Nat.xor x y)]
 
-def ByteXorTable.soundness
-    (x y z: F p) :
+def ByteXorTable.soundness (x y z: F p) :
     ByteXorTable.contains #v[x, y, z] →
     x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val := by
   dsimp [Table.contains]
@@ -86,8 +85,7 @@ def ByteXorTable.soundness
   exact (split_two_bytes i).1.is_lt
   exact (split_two_bytes i).2.is_lt
 
-def ByteXorTable.completeness
-    (x y z: F p) :
+def ByteXorTable.completeness (x y z: F p) :
     x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val →
     ByteXorTable.contains #v[x, y, z] := by
   intro ⟨ hx, hy, h ⟩
