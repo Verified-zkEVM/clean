@@ -108,13 +108,13 @@ theorem lookup_appends : ∀ l : Lookup F,
 
 theorem subcircuit_appends {β α: TypeMap} [ProvableType α] [ProvableType β] : ∀ (circuit : FormalCircuit F β α) (input),
   (subcircuit circuit input).appends fun n =>
-    let s := Circuit.formal_circuit_to_subcircuit n circuit input
+    let s := circuit.to_subcircuit n input
     ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
   intros; intro ops; rfl
 
 theorem assertion_appends {β: TypeMap} [ProvableType β] : ∀ (circuit : FormalAssertion F β) (input),
   (assertion circuit input).appends fun n =>
-    let s := Circuit.formal_assertion_to_subcircuit n circuit input
+    let s := circuit.to_subcircuit n input
     ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
   intros; intro ops; rfl
 
@@ -197,7 +197,7 @@ macro_rules
 
 -- this tactic is pretty good at inferring lawful circuits!
 section
-example : LawfulCircuit (witness (F:=F) (fun _ => 0))
+example : LawfulCircuit (witness (fun _ => (0 : F)))
   := by infer_lawful_circuit
 
 example :
@@ -208,5 +208,5 @@ example :
     assert_zero (x + y - z)
     pure z
 
-  LawfulCircuit add (F:=F) := by infer_lawful_circuit
+  LawfulCircuit add := by infer_lawful_circuit
 end
