@@ -82,8 +82,8 @@ instance : CoeOut (OperationsFrom F m n) (OperationsListFrom F m) where
 -- after resolving the successive inputs to each monad bind
 def MetaCircuit (F: Type) [Field F] := (n : ℕ) → OperationsListFrom F n
 
--- classify circuits by what they append to the current operations
 namespace Circuit
+-- classify circuits by what they append to the current operations
 def appends (circuit : Circuit F α) (op : MetaCircuit F) :=
   ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ (op ops.offset).withLength
 
@@ -123,6 +123,29 @@ instance : Append (MetaCircuit F) where
     let ⟨ m, ops ⟩ := as n
     let ⟨ o, ops' ⟩ := bs m
     ⟨ o, ops ++ ops'⟩
+
+-- classify circuit by their output, depending on the initial offset
+def returns (circuit : Circuit F α) (out : ℕ → α) :=
+  ∀ ops: OperationsList F, (circuit ops).fst = out ops.offset
+
+theorem pure_returns (a : α) : (pure a : Circuit F α).returns fun _ => a := by
+  intro ops; rfl
+
+theorem witness_var_returns : ∀ c : Environment F → F,
+  (witness_var c).returns fun n => ⟨n⟩ := by
+  intros; intro ops; rfl
+
+theorem witness_vars_returns : ∀ (k : ℕ) (c : Environment F → Vector F k),
+  (witness_vars k c).returns fun n => .natInit k fun i => ⟨n + i⟩ := by
+  intros; intro ops; rfl
+
+theorem assert_zero_returns : ∀ e : Expression F,
+  (assert_zero e).returns fun _ => () := by
+  intros; intro ops; rfl
+
+theorem lookup_returns : ∀ l : Lookup F,
+  (lookup l).returns fun _ => () := by
+  intros; intro ops; rfl
 end Circuit
 
 class LawfulCircuit (circuit : Circuit F α) where
@@ -146,8 +169,9 @@ lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} 
   rw [mk.injEq, heq_eq_eq] at h
   exact h.right
 
+namespace LawfulCircuit
 -- given an `appends` lemma for a circuit, we get a lawful circuit
-instance LawfulCircuit.from_appends {circuit : Circuit F α} {op : MetaCircuit F}
+instance from_appends {circuit : Circuit F α} {op : MetaCircuit F}
   (happ : circuit.appends op) : LawfulCircuit circuit where
   lawful ops := by
     unfold Circuit.appends at happ
@@ -182,6 +206,7 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
 instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     LawfulCircuit (assertion circuit input) :=
   .from_appends (Circuit.assertion_appends circuit input)
+end LawfulCircuit
 
 syntax "infer_lawful_circuit" : tactic
 
@@ -210,6 +235,45 @@ example :
 
   LawfulCircuit add := by infer_lawful_circuit
 end
+
+-- unfold constraints from the beginning
+
+namespace LawfulCircuit
+-- theorem independent_of
+
+lemma operations_append (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+  ∃ ops : OperationsFrom F n (circuit.final_offset n),
+  circuit.operations n = Operations.empty (F:=F) n ++ ops := by apply LawfulCircuit.lawful
+
+lemma initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+  (circuit.operations n).initial_offset = n := by
+  obtain ⟨ ops, h_app ⟩ := operations_append circuit n
+  rw [h_app, Operations.append_initial_offset]
+end LawfulCircuit
+
+namespace Circuit
+def lawful_operations (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+    OperationsFrom F n (circuit.final_offset n) :=
+  ⟨ circuit.operations n, LawfulCircuit.initial_offset_eq circuit n⟩
+
+lemma lawful_operations_bind_length {f: Circuit F α} {g : α → Circuit F β}
+    (hg : ∀ a : α, LawfulCircuit (g a)) {n : ℕ} :
+    (f >>= g).final_offset n = (g (f.output n)).final_offset (f.final_offset n)
+   := by
+  unfold Circuit.final_offset
+  have : (f >>= g) n = (g (f n).1) (f n).2 := rfl
+  show ((g (f.output n)) (f n).2).2.offset = _
+  set a := f.output n
+  set opf := (f (OperationsList.from_offset n)).2
+  have ⟨ op_left, h_left ⟩ := LawfulCircuit.lawful (circuit := g a) opf
+  have ⟨ op_right, h_right ⟩ := LawfulCircuit.lawful (circuit := g a) opf.offset
+  -- rw [LawfulCircuit.operations_append (g a)]
+  sorry
+
+theorem lawful_operations_bind (f: Circuit F α) {g : α → Circuit F β} (hg : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
+  (f >>= g).operations n = f.operations n ++ (lawful_operations_bind_length hg ▸ (g (f.output n)).lawful_operations (f.final_offset n)) := by
+  sorry
+end Circuit
 
 -- loops
 
