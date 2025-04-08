@@ -62,9 +62,7 @@ def ByteXorTable: Table (F p) where
 def ByteXorTable.soundness
     (x y z: F p) :
     ByteXorTable.contains #v[x, y, z] →
-    x.val < 256 ∧
-    y.val < 256 ∧
-    z.val = Nat.xor x.val y.val := by
+    x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val := by
   dsimp [Table.contains]
   rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩
   simp [ByteXorTable] at h
@@ -73,31 +71,25 @@ def ByteXorTable.soundness
 
   rcases h with ⟨ hx, hy, hz ⟩
 
-  have hxByte : x.val < 256 := by
-    rw [hx]
+  constructor
+  · rw [hx]
+    apply from_byte_lt
+  constructor
+  · rw [hy]
     apply from_byte_lt
 
-  have hyByte : y.val < 256 := by
-    rw [hy]
-    apply from_byte_lt
-
-  use hxByte, hyByte
   rw [hx, hy, hz]
   repeat rw [from_byte, FieldUtils.val_of_nat_to_field_eq]
-  simp only [split_two_bytes, Fin.val_natCast, Nat.mod_succ_eq_iff_lt,
+  simp only [Fin.val_natCast, Nat.mod_succ_eq_iff_lt,
     Nat.succ_eq_add_one, Nat.reduceAdd]
-
-
-
-
-
-
+  apply Nat.xor_lt_two_pow (n:=8)
+  exact (split_two_bytes i).1.is_lt
+  exact (split_two_bytes i).2.is_lt
 
 def ByteXorTable.completeness
     (x y z: F p) :
-    x.val < 256 ∧
-    y.val < 256 ∧
-    z.val = Nat.xor x.val y.val → ByteXorTable.contains #v[x, y, z] := by
+    x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val →
+    ByteXorTable.contains #v[x, y, z] := by
   intro ⟨ hx, hy, h ⟩
   dsimp only [ByteXorTable, Table.contains]
   use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
