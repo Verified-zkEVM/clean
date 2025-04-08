@@ -10,9 +10,10 @@ variable [p_large_enough: Fact (p > 512)]
 def from_byte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
+omit [Fact (p ≠ 0)] in
 lemma from_byte_eq (x : F p) (x_lt : x.val < 256) : from_byte ⟨ x.val, x_lt ⟩ = x := by
   dsimp [from_byte]
-  sorry
+  apply FieldUtils.nat_to_field_of_val_eq_iff
 
 omit [Fact (p ≠ 0)] in
 lemma from_byte_cast_eq {z: F p} (z_lt : z.val < 256) : from_byte z.cast = z := by
@@ -30,16 +31,20 @@ def split_two_bytes (i : Fin (256 * 256)) : (Fin 256 × Fin 256) :=
 
 def concat_two_bytes (x y : Fin 256) : Fin (256 * 256) :=
   let i := x.val * 256 + y.val
-  have i_lt : i < 256 * 256 := by sorry
+  have i_lt : i < 256 * 256 := by
+    unfold i
+    linarith [x.is_lt, y.is_lt]
   ⟨ i, i_lt ⟩
 
-lemma concat_split_1 (x y : Fin 256) : (split_two_bytes (concat_two_bytes x y)).1 = x := by
+lemma concat_split (x y : Fin 256) : split_two_bytes (concat_two_bytes x y) = (x, y) := by
   dsimp [split_two_bytes, concat_two_bytes]
-  sorry
-
-lemma concat_split_2 (x y : Fin 256) : (split_two_bytes (concat_two_bytes x y)).2 = y := by
-  dsimp [split_two_bytes, concat_two_bytes]
-  sorry
+  ext
+  simp only
+  rw [mul_comm]
+  have h := Nat.mul_add_div (by norm_num : 256 > 0) x.val y.val
+  rw [h]
+  simp
+  simp only [Nat.mul_add_mod_of_lt y.is_lt]
 
 def ByteXorTable: Table (F p) where
   name := "ByteXor"
@@ -68,7 +73,7 @@ def ByteXorTable.completeness
   dsimp only [ByteXorTable, Table.contains]
   use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
   simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
-  rw [concat_split_1, concat_split_2]
+  rw [concat_split]
   simp only [from_byte_eq, true_and]
   have hz : z.val < 256 := h ▸ Nat.xor_lt_two_pow (n:=8) hx hy
   rw [←h]
