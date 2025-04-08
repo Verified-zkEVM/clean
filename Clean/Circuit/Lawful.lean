@@ -252,10 +252,11 @@ lemma initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : �
 end LawfulCircuit
 
 namespace Circuit
-def lawful_operations (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
-    OperationsFrom F n (circuit.final_offset n) :=
-  ⟨ circuit.operations n, LawfulCircuit.initial_offset_eq circuit n⟩
+def lawful_operations (circuit : Circuit F α) [LawfulCircuit circuit] (ops : OperationsList F) :
+    OperationsFrom F n ((circuit ops).2.offset) :=
+  ⟨ (circuit ops).2.withLength, LawfulCircuit.initial_offset_eq circuit n⟩
 
+-- TODO remove
 lemma lawful_operations_bind_length {f: Circuit F α} {g : α → Circuit F β}
     (hg : ∀ a : α, LawfulCircuit (g a)) {n : ℕ} :
     (f >>= g).final_offset n = (g (f.output n)).final_offset (f.final_offset n)
@@ -270,9 +271,13 @@ lemma lawful_operations_bind_length {f: Circuit F α} {g : α → Circuit F β}
   -- rw [LawfulCircuit.operations_append (g a)]
   sorry
 
-theorem lawful_operations_bind (f: Circuit F α) {g : α → Circuit F β} (hg : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
-  (f >>= g).operations n = f.operations n ++ (lawful_operations_bind_length hg ▸ (g (f.output n)).lawful_operations (f.final_offset n)) := by
-  sorry
+-- TODO we still need to characterize the operations
+-- right now with the lawful definition, they could depend on f.operations
+-- maybe that's good enough
+theorem lawful_operations_bind_exist (f: Circuit F α) {g : α → Circuit F β} (hg : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
+  ∃ ops : OperationsFrom F (f.final_offset n) ((f >>= g).final_offset n),
+    (f >>= g).operations n = f.operations n ++ ops := by
+  apply LawfulCircuit.lawful -- why is this so easy? :D
 end Circuit
 
 -- loops
