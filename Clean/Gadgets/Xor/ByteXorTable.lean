@@ -70,8 +70,7 @@ def ByteXorTable.completeness
   simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
   rw [concat_split_1, concat_split_2]
   simp only [from_byte_eq, true_and]
-
-  have hz : z.val < 256 := by sorry
+  have hz : z.val < 256 := h ▸ Nat.xor_lt_two_pow (n:=8) hx hy
   rw [←h]
   simp only [ZMod.natCast_val]
   rw [from_byte_cast_eq hz]
