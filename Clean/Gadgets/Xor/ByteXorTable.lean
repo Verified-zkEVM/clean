@@ -48,6 +48,7 @@ def ByteXorTable.completeness
 
   have sanity : ((ZMod.cast x) * 256 : Fin 65536) + ZMod.cast y = 0 := by sorry
 
+
   have h_y' : y.val % 256 = y.val := by
     apply (Nat.mod_eq_iff_lt (by linarith)).mpr
     exact hy
