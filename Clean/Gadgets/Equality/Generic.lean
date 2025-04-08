@@ -5,6 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
+import Clean.Circuit.Operations
 import Clean.Utils.Field
 import Clean.Types.U32
 
@@ -23,13 +24,18 @@ theorem soundness (offset : ℕ) (env : Environment (F p)) {n} (l : Vector (Expr
   intro h_holds (x,y) ht
   induction l using Vector.induct_push with
   | nil => simp at ht
-  | push t ts ih =>
+  | push ts t ih =>
     simp_all [all_equal]
     rw [←Vector.append_singleton, Vector.forM_append, Vector.forM_mk,
-      Vector.forM_mk, List.forM_toArray [ts],
+      Vector.forM_mk, List.forM_toArray [t],
       List.forM_eq_forM, List.forM_cons, List.forM_nil,
       ] at h_holds
     dsimp only [Circuit.operations] at h_holds
+    have : (do
+          assert_zero (t.1 - t.2)
+          pure PUnit.unit) = assert_zero (t.1 - t.2) := rfl
+    rw [this] at h_holds; clear this
+    rw [Circuit.assert_zero_appends] at h_holds
     rcases ht with ht|ht
     repeat sorry
 
