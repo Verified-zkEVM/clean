@@ -142,7 +142,9 @@ theorem completeness : Completeness (F p) U64 assumptions := by
       xor_cast x2_byte y2_byte, xor_cast x3_byte y3_byte,
       xor_cast x4_byte y4_byte, xor_cast x5_byte y5_byte,
       xor_cast x6_byte y6_byte, xor_cast x7_byte y7_byte]
-  simp only [and_true]
+  simp only [x0_byte, y0_byte, x1_byte, y1_byte, x2_byte, y2_byte,
+    x3_byte, y3_byte, x4_byte, y4_byte, x5_byte, y5_byte,
+    x6_byte, y6_byte, x7_byte, y7_byte, and_true]
 
 def circuit : FormalCircuit (F p) Inputs U64 where
   main := xor_u64
