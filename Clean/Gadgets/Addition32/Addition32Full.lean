@@ -1,5 +1,6 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
+import Clean.Circuit.Operations
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
@@ -37,6 +38,8 @@ def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) :=
   let { z := z2, carry_out := c2 } ← add8_full_carry ⟨ x.x2, y.x2, c1 ⟩
   let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
+
+instance (input : Var Inputs (F p)) : LawfulCircuit (add32_full input) := by infer_lawful_circuit
 
 def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input

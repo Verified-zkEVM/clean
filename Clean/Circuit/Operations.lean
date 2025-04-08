@@ -78,9 +78,13 @@ instance (ops : OperationsListFrom F m) : CoeDep (OperationsListFrom F m) (ops) 
 instance : CoeOut (OperationsFrom F m n) (OperationsListFrom F m) where
   coe ops := ⟨ n, ops ⟩
 
+-- functions of the form `(n : ℕ) → OperationsListFrom F n` are an alternative representation of a circuit,
+-- after resolving the successive inputs to each monad bind
+def MetaCircuit (F: Type) [Field F] := (n : ℕ) → OperationsListFrom F n
+
 -- classify circuits by what they append to the current operations
 namespace Circuit
-def appends (circuit : Circuit F α) (op : (n : ℕ) → OperationsListFrom F n) :=
+def appends (circuit : Circuit F α) (op : MetaCircuit F) :=
   ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ (op ops.offset).withLength
 
 theorem pure_appends (a : α) : (pure a : Circuit F α).appends fun n => ⟨n, .empty n⟩ := by
@@ -102,38 +106,31 @@ theorem lookup_appends : ∀ l : Lookup F,
   (lookup l).appends fun n => ⟨n, ⟨.lookup (.empty n) l, rfl⟩⟩ := by
   intros; intro ops; rfl
 
-theorem subcircuit_appends {β α: TypeMap} [ProvableType α] [ProvableType β] :
-  ∀ (circuit : FormalCircuit F β α) (input),
+theorem subcircuit_appends {β α: TypeMap} [ProvableType α] [ProvableType β] : ∀ (circuit : FormalCircuit F β α) (input),
   (subcircuit circuit input).appends fun n =>
     let s := Circuit.formal_circuit_to_subcircuit n circuit input
-  ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
+    ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
   intros; intro ops; rfl
 
--- these functions `op : (n : ℕ) → OperationsListFrom F n` are an alternative representation of the circuit,
--- after resolving the successive inputs to each monad bind
-def MetaCircuit (F: Type) [Field F] := (n : ℕ) → OperationsListFrom F n
+theorem assertion_appends {β: TypeMap} [ProvableType β] : ∀ (circuit : FormalAssertion F β) (input),
+  (assertion circuit input).appends fun n =>
+    let s := Circuit.formal_assertion_to_subcircuit n circuit input
+    ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
+  intros; intro ops; rfl
 
 instance : Append (MetaCircuit F) where
   append as bs n :=
     let ⟨ m, ops ⟩ := as n
     let ⟨ o, ops' ⟩ := bs m
     ⟨ o, ops ++ ops'⟩
-
--- `appends` is preserved by `bind`
-theorem bind_appends {f : Circuit F α} {g : α → Circuit F β} {opf opg : MetaCircuit F}
-  (hf : f.appends opf) (hg : ∀ a, (g a).appends opg) : (f >>= g).appends (opf ++ opg) := by
-  intro ops
-  change (g (f ops).1 (f ops).2).2 = _
-  specialize hf ops
-  sorry
 end Circuit
 
 class LawfulCircuit (circuit : Circuit F α) where
   lawful : ∀ ops : OperationsList F, let n := (circuit ops).snd.offset;
-    ∃ ops' : OperationsFrom F ops.offset n, (circuit ops).snd.withLength = ops.withLength ++ ops'
+    ∃ op : OperationsFrom F ops.offset n, (circuit ops).snd.withLength = ops.withLength ++ op
 
 -- `bind` of two lawful circuits yields a lawful circuit
-instance {f: Circuit F α} {g : α → Circuit F β} [hf : LawfulCircuit f] (hg : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
+instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β} (hf : LawfulCircuit f) (hg : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
   lawful := by
     intro ops n
     let ⟨ ops', happ ⟩ := hf.lawful ops
@@ -142,7 +139,7 @@ instance {f: Circuit F α} {g : α → Circuit F β} [hf : LawfulCircuit f] (hg 
     use ops' ++ ops'', happ'
 
 lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} {ops' : Operations F ops.offset} :
-  ops = ⟨ ops.offset, ops'⟩ → ops.withLength = ops' := by
+  ops = ⟨ops.offset, ops'⟩ → ops.withLength = ops' := by
   intro h
   -- this is a nice trick: destruct dependent equality
   rcases ops with ⟨ offset, withLength ⟩
@@ -150,7 +147,7 @@ lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} 
   exact h.right
 
 -- given an `appends` lemma for a circuit, we get a lawful circuit
-instance LawfulCircuit.from_appends {circuit : Circuit F α} {op : (n : ℕ) → OperationsListFrom F n}
+instance LawfulCircuit.from_appends {circuit : Circuit F α} {op : MetaCircuit F}
   (happ : circuit.appends op) : LawfulCircuit circuit where
   lawful ops := by
     unfold Circuit.appends at happ
@@ -181,3 +178,35 @@ instance {l : Lookup F} : LawfulCircuit (lookup l) :=
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     LawfulCircuit (subcircuit circuit input) :=
   .from_appends (Circuit.subcircuit_appends circuit input)
+
+instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
+    LawfulCircuit (assertion circuit input) :=
+  .from_appends (Circuit.assertion_appends circuit input)
+
+syntax "infer_lawful_circuit" : tactic
+
+macro_rules
+  | `(tactic|infer_lawful_circuit) => `(tactic|(
+    try intros
+    try repeat infer_instance
+    repeat (
+      try intros
+      apply LawfulCircuit.from_bind
+      repeat infer_instance
+    )))
+
+-- this tactic is pretty good at inferring lawful circuits!
+section
+example : LawfulCircuit (witness (F:=F) (fun _ => 0))
+  := by infer_lawful_circuit
+
+example :
+  let add := do
+    let x : Expression F ← witness (fun _ => 0)
+    let y ← witness (fun _ => 1)
+    let z ← witness (fun eval => eval (x + y))
+    assert_zero (x + y - z)
+    pure z
+
+  LawfulCircuit add (F:=F) := by infer_lawful_circuit
+end
