@@ -6,7 +6,6 @@ namespace Gadgets.Xor
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-
 def from_byte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
@@ -55,21 +54,22 @@ def ByteXorTable: Table (F p) where
     #v[from_byte x, from_byte y, from_byte (Nat.xor x y)]
 
 def ByteXorTable.soundness
-    (x y z: F p)
-    (hx : x.val < 256)
-    (hy : y.val < 256) :
-    ByteXorTable.contains (#v[x, y, z]) → z.val = Nat.xor x.val y.val := by
+    (x y z: F p) :
+    ByteXorTable.contains #v[x, y, z] →
+    x.val < 256 ∧
+    y.val < 256 ∧
+    z.val = Nat.xor x.val y.val := by
   dsimp [Table.contains]
   rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩
   simp [ByteXorTable] at h
 
 
 def ByteXorTable.completeness
-    (x y z: F p)
-    (hx : x.val < 256)
-    (hy : y.val < 256) :
-    z.val = Nat.xor x.val y.val → ByteXorTable.contains (#v[x, y, z]) := by
-  intro h
+    (x y z: F p) :
+    x.val < 256 ∧
+    y.val < 256 ∧
+    z.val = Nat.xor x.val y.val → ByteXorTable.contains #v[x, y, z] := by
+  intro ⟨ hx, hy, h ⟩
   dsimp only [ByteXorTable, Table.contains]
   use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
   simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
@@ -80,9 +80,10 @@ def ByteXorTable.completeness
   simp only [ZMod.natCast_val]
   rw [from_byte_cast_eq hz]
 
-def ByteXorTable.equiv (x y z: F p) (hx : x.val < 256) (hy : y.val < 256) :
-    ByteXorTable.contains (#v[x, y, z]) ↔ z.val = Nat.xor x.val y.val :=
-  ⟨ByteXorTable.soundness x y z hx hy, ByteXorTable.completeness x y z hx hy⟩
+def ByteXorTable.equiv (x y z: F p) :
+    ByteXorTable.contains #v[x, y, z] ↔
+    x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val :=
+  ⟨ByteXorTable.soundness x y z, ByteXorTable.completeness x y z⟩
 
 def byte_xor_lookup (x y z: Expression (F p)) := lookup {
   table := ByteXorTable
