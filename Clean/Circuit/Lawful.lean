@@ -80,87 +80,113 @@ instance : CoeOut (OperationsFrom F m n) (OperationsListFrom F m) where
 
 -- functions of the form `(n : ℕ) → OperationsListFrom F n` are an alternative representation of a circuit,
 -- after resolving the successive inputs to each monad bind
-def MetaCircuit (F: Type) [Field F] := (n : ℕ) → OperationsListFrom F n
+def CircuitDiff (F: Type) [Field F] := (n : ℕ) → (m : ℕ) × OperationsFrom F n m
+
+def CircuitDiff.final_offset (diff : CircuitDiff F) (n : ℕ) : ℕ := (diff n).1
+def CircuitDiff.operations (diff : CircuitDiff F) (n : ℕ) : OperationsFrom F n (diff.final_offset n) :=
+  (diff n).2
 
 namespace Circuit
--- classify circuits by what they append to the current operations
-def appends (circuit : Circuit F α) (op : MetaCircuit F) :=
-  ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ (op ops.offset).withLength
+-- a proper circuit is "append-only"
+def appends (circuit : Circuit F α) (diff : CircuitDiff F) :=
+  ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ diff.operations ops.offset
 
-theorem pure_appends (a : α) : (pure a : Circuit F α).appends fun n => ⟨n, .empty n⟩ := by
-  intro ops; rfl
+-- a proper circuit only depends on the input offset, not on the operations
+def independent (circuit : Circuit F α) : Prop :=
+  ∀ ops: OperationsList F,
+    (circuit ops).fst = circuit.output ops.offset ∧
+    (circuit ops).snd.offset = circuit.final_offset ops.offset
 
-theorem witness_var_appends : ∀ c : Environment F → F,
-  (witness_var c).appends fun n => ⟨n + 1, ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩⟩ := by
-  intros; intro ops; rfl
-
-theorem witness_vars_appends : ∀ (k : ℕ) (c : Environment F → Vector F k),
-  (witness_vars k c).appends fun n => ⟨n + k, ⟨.witness (.empty n) k c, rfl⟩⟩ := by
-  intros; intro ops; rfl
-
-theorem assert_zero_appends : ∀ e : Expression F,
-  (assert_zero e).appends fun n => ⟨n, ⟨.assert (.empty n) e, rfl⟩⟩ := by
-  intros; intro ops; rfl
-
-theorem lookup_appends : ∀ l : Lookup F,
-  (lookup l).appends fun n => ⟨n, ⟨.lookup (.empty n) l, rfl⟩⟩ := by
-  intros; intro ops; rfl
-
-theorem subcircuit_appends {β α: TypeMap} [ProvableType α] [ProvableType β] : ∀ (circuit : FormalCircuit F β α) (input),
-  (subcircuit circuit input).appends fun n =>
-    let s := circuit.to_subcircuit n input
-    ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
-  intros; intro ops; rfl
-
-theorem assertion_appends {β: TypeMap} [ProvableType β] : ∀ (circuit : FormalAssertion F β) (input),
-  (assertion circuit input).appends fun n =>
-    let s := circuit.to_subcircuit n input
-    ⟨n + s.local_length, ⟨.subcircuit (.empty n) s, rfl⟩⟩ := by
-  intros; intro ops; rfl
-
-instance : Append (MetaCircuit F) where
-  append as bs n :=
-    let ⟨ m, ops ⟩ := as n
-    let ⟨ o, ops' ⟩ := bs m
-    ⟨ o, ops ++ ops'⟩
-
--- classify circuit by their output, depending on the initial offset
 def returns (circuit : Circuit F α) (out : ℕ → α) :=
   ∀ ops: OperationsList F, (circuit ops).fst = out ops.offset
-
-theorem pure_returns (a : α) : (pure a : Circuit F α).returns fun _ => a := by
-  intro ops; rfl
-
-theorem witness_var_returns : ∀ c : Environment F → F,
-  (witness_var c).returns fun n => ⟨n⟩ := by
-  intros; intro ops; rfl
-
-theorem witness_vars_returns : ∀ (k : ℕ) (c : Environment F → Vector F k),
-  (witness_vars k c).returns fun n => .natInit k fun i => ⟨n + i⟩ := by
-  intros; intro ops; rfl
-
-theorem assert_zero_returns : ∀ e : Expression F,
-  (assert_zero e).returns fun _ => () := by
-  intros; intro ops; rfl
-
-theorem lookup_returns : ∀ l : Lookup F,
-  (lookup l).returns fun _ => () := by
-  intros; intro ops; rfl
 end Circuit
 
 class LawfulCircuit (circuit : Circuit F α) where
-  lawful : ∀ ops : OperationsList F, let n := (circuit ops).snd.offset;
-    ∃ op : OperationsFrom F ops.offset n, (circuit ops).snd.withLength = ops.withLength ++ op
+  /-- a proper circuit is encapsulated by three functions of the input offset -/
+  output : ℕ → α
+  final_offset : ℕ → ℕ
+  operations : (n : ℕ) → OperationsFrom F n (final_offset n)
+
+  /-- the circuit's output and final offset only depend on the input offset -/
+  output_independent : ∀ ops: OperationsList F, (circuit ops).fst = output ops.offset := by intro _; rfl
+  offset_independent : ∀ ops: OperationsList F, (circuit ops).snd.offset = final_offset ops.offset := by intro _; rfl
+
+  /-- the circuit acts on operations by appending its own operations; which only depend on the input offset -/
+  append_only : ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ operations ops.offset := by intro _; rfl
+
+-- `pure` is a lawful circuit
+instance LawfulCircuit.from_pure {a : α} : LawfulCircuit (pure a : Circuit F α) where
+  output _ := a
+  final_offset n := n
+  operations n := .empty n
 
 -- `bind` of two lawful circuits yields a lawful circuit
-instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β} (hf : LawfulCircuit f) (hg : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
-  lawful := by
-    intro ops n
-    let ⟨ ops', happ ⟩ := hf.lawful ops
-    let ⟨ ops'', happ' ⟩ := (hg (f ops).1).lawful (f ops).2
-    rw [happ, Operations.append_assoc] at happ'
-    use ops' ++ ops'', happ'
+instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
+    (f_lawful : LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
+  output n :=
+    let n' := f_lawful.final_offset n
+    let a := f_lawful.output n
+    (g_lawful a).output n'
 
+  final_offset n :=
+    let n' := f_lawful.final_offset n
+    let a := f_lawful.output n
+    (g_lawful a).final_offset n'
+
+  operations n :=
+    let n' := f_lawful.final_offset n
+    let a := f_lawful.output n
+    let ops_f := f_lawful.operations n
+    let ops_g := (g_lawful a).operations n'
+    ops_f ++ ops_g
+
+  output_independent ops := by
+    show (g _ _).1 = _ -- by definition, `(f >>= g) ops = g (f ops).1 (f ops).2`
+    rw [(g_lawful _).output_independent, f_lawful.output_independent, f_lawful.offset_independent]
+
+  offset_independent ops := by
+    show (g _ _).2.offset = _
+    rw [(g_lawful _).offset_independent, f_lawful.output_independent, f_lawful.offset_independent]
+
+  append_only ops := by
+    show (g _ _).2 = _
+    rw [(g_lawful _).append_only, f_lawful.output_independent, f_lawful.append_only, Operations.append_assoc]
+
+-- basic operations are lawful circuits
+
+instance {c : Environment F → F} : LawfulCircuit (witness_var c) where
+  output n := ⟨ n ⟩
+  final_offset n := n + 1
+  operations n := ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩
+
+instance {k : ℕ} {c : Environment F → Vector F k} : LawfulCircuit (witness_vars k c) where
+  output n := .natInit k fun i => ⟨n + i⟩
+  final_offset n := n + k
+  operations n := ⟨.witness (.empty n) k c, rfl⟩
+
+instance {e : Expression F} : LawfulCircuit (assert_zero e) where
+  output n := ()
+  final_offset n := n
+  operations n := ⟨.assert (.empty n) e, rfl⟩
+
+instance {l : Lookup F} : LawfulCircuit (lookup l) where
+  output n := ()
+  final_offset n := n
+  operations n := ⟨.lookup (.empty n) l, rfl⟩
+
+instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
+    LawfulCircuit (subcircuit circuit input) where
+  output n := circuit.output input n
+  final_offset n := n + (circuit.to_subcircuit n input).local_length
+  operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
+
+instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
+    LawfulCircuit (assertion circuit input) where
+  output n := ()
+  final_offset n := n + (circuit.to_subcircuit n input).local_length
+  operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
+
+-- helper lemma needed right below
 lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} {ops' : Operations F ops.offset} :
   ops = ⟨ops.offset, ops'⟩ → ops.withLength = ops' := by
   intro h
@@ -169,44 +195,16 @@ lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} 
   rw [mk.injEq, heq_eq_eq] at h
   exact h.right
 
-namespace LawfulCircuit
--- given an `appends` lemma for a circuit, we get a lawful circuit
-instance from_appends {circuit : Circuit F α} {op : MetaCircuit F}
-  (happ : circuit.appends op) : LawfulCircuit circuit where
-  lawful ops := by
-    unfold Circuit.appends at happ
-    specialize happ ops
-    have hn : (op ops.offset).offset = (circuit ops).snd.offset := by rw [happ]
-    use hn ▸ (op ops.offset).withLength
-    apply OperationsList.withLength_eq
-    simp only [happ]
-    congr
-    rw [heq_eqRec_iff_heq, heq_eq_eq]
-
--- `pure` is a lawful circuit
-instance (a : α) : LawfulCircuit (pure a : Circuit F α) := .from_appends (Circuit.pure_appends a)
-
--- basic operations are lawful circuits
-instance {c : Environment F → F} : LawfulCircuit (witness_var c) :=
-  .from_appends (Circuit.witness_var_appends c)
-
-instance {k : ℕ} {c : Environment F → Vector F k} : LawfulCircuit (witness_vars k c) :=
-  .from_appends (Circuit.witness_vars_appends k c)
-
-instance {e : Expression F} : LawfulCircuit (assert_zero e) :=
-  .from_appends (Circuit.assert_zero_appends e)
-
-instance {l : Lookup F} : LawfulCircuit (lookup l) :=
-  .from_appends (Circuit.lookup_appends l)
-
-instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
-    LawfulCircuit (subcircuit circuit input) :=
-  .from_appends (Circuit.subcircuit_appends circuit input)
-
-instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
-    LawfulCircuit (assertion circuit input) :=
-  .from_appends (Circuit.assertion_appends circuit input)
-end LawfulCircuit
+-- slightly different way to state the append-only principle, which deals with the type dependency
+def LawfulCircuit.append_only' {circuit : Circuit F α} (lawful : LawfulCircuit circuit) :
+    ∀ ops: OperationsList F,
+      (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
+  intro ops
+  apply OperationsList.withLength_eq
+  simp only [append_only ops]
+  congr
+  repeat exact offset_independent ops |>.symm
+  rw [heq_eqRec_iff_heq, heq_eq_eq]
 
 syntax "infer_lawful_circuit" : tactic
 
