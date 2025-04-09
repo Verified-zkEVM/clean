@@ -47,6 +47,11 @@ instance : HAppend (Operations F m) (OperationsFrom F m n) (Operations F n) wher
 
 theorem append_empty (as : Operations F n) : as ++ (OperationsFrom.empty (F:=F) n) = as := rfl
 
+theorem empty_append (as : OperationsFrom F n m) : Operations.empty (F:=F) n ++ as = as := by
+  induction as using OperationsFrom.induct with
+  | empty n => rfl
+  | witness | assert | lookup | subcircuit => simp_all only [HAppend.hAppend, append]
+
 theorem append_initial_offset {m n: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) :
     (as ++ bs).initial_offset = as.initial_offset := by
   induction bs using OperationsFrom.induct with
@@ -186,26 +191,6 @@ instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input
   final_offset n := n + (circuit.to_subcircuit n input).local_length
   operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
 
--- helper lemma needed right below
-lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} {ops' : Operations F ops.offset} :
-  ops = ⟨ops.offset, ops'⟩ → ops.withLength = ops' := by
-  intro h
-  -- this is a nice trick: destruct dependent equality
-  rcases ops with ⟨ offset, withLength ⟩
-  rw [mk.injEq, heq_eq_eq] at h
-  exact h.right
-
--- slightly different way to state the append-only principle, which deals with the type dependency
-def LawfulCircuit.append_only' {circuit : Circuit F α} (lawful : LawfulCircuit circuit) :
-    ∀ ops: OperationsList F,
-      (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
-  intro ops
-  apply OperationsList.withLength_eq
-  simp only [append_only ops]
-  congr
-  repeat exact offset_independent ops |>.symm
-  rw [heq_eqRec_iff_heq, heq_eq_eq]
-
 syntax "infer_lawful_circuit" : tactic
 
 macro_rules
@@ -234,49 +219,62 @@ example :
   LawfulCircuit add := by infer_lawful_circuit
 end
 
--- unfold constraints from the beginning
+-- characterize the circuit.operations of lawful circuits
+-- (ultimate goal: unfold constraints from the beginning)
+
+-- helper lemma needed right below
+lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} {ops' : Operations F ops.offset} :
+  ops = ⟨ops.offset, ops'⟩ → ops.withLength = ops' := by
+  intro h
+  -- this is a nice trick: destruct dependent equality
+  rcases ops with ⟨ offset, withLength ⟩
+  rw [mk.injEq, heq_eq_eq] at h
+  exact h.right
 
 namespace LawfulCircuit
--- theorem independent_of
+-- slightly different way to state the append-only principle, which deals with the type dependency
+lemma append_only' {circuit : Circuit F α} [lawful : LawfulCircuit circuit] :
+    ∀ ops: OperationsList F,
+      (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
+  intro ops
+  apply OperationsList.withLength_eq
+  simp only [append_only ops]
+  congr
+  repeat exact offset_independent ops |>.symm
+  rw [heq_eqRec_iff_heq, heq_eq_eq]
 
-lemma operations_append (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
-  ∃ ops : OperationsFrom F n (circuit.final_offset n),
-  circuit.operations n = Operations.empty (F:=F) n ++ ops := by apply LawfulCircuit.lawful
+theorem final_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+  circuit.final_offset n = final_offset circuit n := by
+  apply offset_independent
 
-lemma initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+lemma operations_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+    circuit.operations n = (final_offset_eq circuit n ▸ operations n).val := by
+  rw [Circuit.operations, append_only', Operations.empty_append]
+
+theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
   (circuit.operations n).initial_offset = n := by
-  obtain ⟨ ops, h_app ⟩ := operations_append circuit n
-  rw [h_app, Operations.append_initial_offset]
+  rw [operations_eq circuit n]
+  exact (final_offset_eq circuit n ▸ operations n).property
+
+-- lemma operations_bind_length {f: Circuit F α} {g : α → Circuit F β}
+--     (hg : ∀ a : α, LawfulCircuit (g a)) {n : ℕ} :
+--     (f >>= g).final_offset n = (g (f.output n)).final_offset (f.final_offset n)
+--    := by
+--   unfold Circuit.final_offset
+--   have : (f >>= g) n = (g (f n).1) (f n).2 := rfl
+--   show ((g (f.output n)) (f n).2).2.offset = _
+--   set a := f.output n
+--   set opf := (f (OperationsList.from_offset n)).2
+--   have ⟨ op_left, h_left ⟩ := LawfulCircuit.lawful (circuit := g a) opf
+--   have ⟨ op_right, h_right ⟩ := LawfulCircuit.lawful (circuit := g a) opf.offset
+--   -- rw [LawfulCircuit.operations_append (g a)]
+--   sorry
+
+-- theorem operations_bind_eq {f: Circuit F α} {g : α → Circuit F β}
+--   (f_lawful : LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
+--     (f >>= g).operations n = (f_lawful.operations n ++ (g_lawful (output f n)).operations (final_offset f n)).val := by
+--   apply LawfulCircuit.lawful -- why is this so easy? :D
 end LawfulCircuit
-
-namespace Circuit
-def lawful_operations (circuit : Circuit F α) [LawfulCircuit circuit] (ops : OperationsList F) :
-    OperationsFrom F n ((circuit ops).2.offset) :=
-  ⟨ (circuit ops).2.withLength, LawfulCircuit.initial_offset_eq circuit n⟩
-
--- TODO remove
-lemma lawful_operations_bind_length {f: Circuit F α} {g : α → Circuit F β}
-    (hg : ∀ a : α, LawfulCircuit (g a)) {n : ℕ} :
-    (f >>= g).final_offset n = (g (f.output n)).final_offset (f.final_offset n)
-   := by
-  unfold Circuit.final_offset
-  have : (f >>= g) n = (g (f n).1) (f n).2 := rfl
-  show ((g (f.output n)) (f n).2).2.offset = _
-  set a := f.output n
-  set opf := (f (OperationsList.from_offset n)).2
-  have ⟨ op_left, h_left ⟩ := LawfulCircuit.lawful (circuit := g a) opf
-  have ⟨ op_right, h_right ⟩ := LawfulCircuit.lawful (circuit := g a) opf.offset
-  -- rw [LawfulCircuit.operations_append (g a)]
-  sorry
-
--- TODO we still need to characterize the operations
--- right now with the lawful definition, they could depend on f.operations
--- maybe that's good enough
-theorem lawful_operations_bind_exist (f: Circuit F α) {g : α → Circuit F β} (hg : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
-  ∃ ops : OperationsFrom F (f.final_offset n) ((f >>= g).final_offset n),
-    (f >>= g).operations n = f.operations n ++ ops := by
-  apply LawfulCircuit.lawful -- why is this so easy? :D
-end Circuit
 
 -- loops
 
@@ -289,7 +287,7 @@ instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} :
     rw [List.forM_cons]
     apply from_bind
     exact h x
-    rw [forall_const]
+    intro _
     exact ih
 
 instance LawfulCircuit.from_forM_vector {α: Type} {circuit : α → Circuit F Unit} :
@@ -301,6 +299,6 @@ instance LawfulCircuit.from_forM_vector {α: Type} {circuit : α → Circuit F U
     rw [Vector.cons, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, List.forM_cons]
     apply from_bind
     exact h x
-    rw [forall_const]
+    intro _
     rw [Vector.forM_mk, List.forM_toArray] at ih
     exact ih

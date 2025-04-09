@@ -44,7 +44,9 @@ def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector
       Array.length_toList, size_toArray]; exact h⟩
 
 /- induction principle for Vector.cons -/
-def induct {motive : {n: ℕ} → Vector α n → Prop}
+universe u
+
+def induct {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
   (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
   {n: ℕ} (v: Vector α n) : motive v :=
@@ -73,6 +75,7 @@ def induct_push {motive : {n: ℕ} → Vector α n → Prop}
   | ⟨ .mk (a::as), h ⟩ =>
     have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
     subst this
+    -- TODO this should be constructive, so that `motive` can return a `Sort u`
     obtain ⟨ as', a', ih ⟩ := exists_push (xs := ⟨.mk (a :: as), rfl⟩)
     have ih' : motive as' := induct_push nil push as'
     have h' := push _ a' ih'
