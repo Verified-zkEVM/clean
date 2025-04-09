@@ -182,13 +182,13 @@ instance {l : Lookup F} : LawfulCircuit (lookup l) where
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     LawfulCircuit (subcircuit circuit input) where
   output n := circuit.output input n
-  final_offset n := n + (circuit.to_subcircuit n input).local_length
+  final_offset n := n + circuit.local_length input
   operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
 
 instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     LawfulCircuit (assertion circuit input) where
   output n := ()
-  final_offset n := n + (circuit.to_subcircuit n input).local_length
+  final_offset n := n + circuit.local_length input
   operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
 
 syntax "infer_lawful_circuit" : tactic

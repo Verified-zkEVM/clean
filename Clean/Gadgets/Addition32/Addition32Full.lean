@@ -39,8 +39,6 @@ def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) :=
   let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
 
-instance (input : Var Inputs (F p)) : LawfulCircuit (add32_full input) := by infer_lawful_circuit
-
 def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.is_normalized ∧ y.is_normalized ∧ (carry_in = 0 ∨ carry_in = 1)
@@ -162,7 +160,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, Boolean.circuit, assert_bool
+    add32_full, add8_full_carry, Boolean.circuit
   ]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
@@ -191,7 +189,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
     -- this has to unfold all subcircuits :/
-    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, assert_bool]
+    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]

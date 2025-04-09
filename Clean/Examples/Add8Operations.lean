@@ -19,4 +19,18 @@ def circuit := do
 
 def circuit32 := do Gadgets.Addition32Full.add32_full (p:=p) (← default)
 #eval circuit32.operation_list
+
+-- lawful circuit experiments
+open Gadgets.Addition32Full (add32_full Inputs)
+instance (input : Var Inputs (F p)) : LawfulCircuit (add32_full input) := by infer_lawful_circuit
+
+@[reducible] def c := add32_full (p:=p_babybear) default
+#eval LawfulCircuit.final_offset c 0
+#eval LawfulCircuit.output c 0
+
+example : LawfulCircuit.final_offset c 0 = 8 := by
+  dsimp only [LawfulCircuit.final_offset, Boolean.circuit]
+example : LawfulCircuit.output c 0
+    = { z := { x0 := var ⟨0⟩, x1 := var ⟨2⟩, x2 := var ⟨4⟩, x3 := var ⟨6⟩ }, carry_out := var ⟨7⟩ } := by
+  dsimp only [LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
 end
