@@ -27,4 +27,10 @@ instance : ProvableType Outputs where
     let ⟨ .mk [z], _ ⟩ := v
     ⟨ z ⟩
 
+def assumptions (input : Inputs (F p)) :=
+  let ⟨x, y⟩ := input
+  x.val < 256 ∧ y.val < 256
+
+
+
 end Gadgets.And
