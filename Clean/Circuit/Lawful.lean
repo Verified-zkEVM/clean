@@ -19,18 +19,26 @@ instance (as : Operations F n) : CoeDep (Operations F n) (as) (OperationsFrom F 
 
 def OperationsFrom.empty (n: ℕ) : OperationsFrom F n n := .mk (.empty n) rfl
 
+def OperationsFrom.witness (as : OperationsFrom F m n) (k : ℕ) (c : Environment F → Vector F k) : OperationsFrom F m (n + k) :=
+  .mk (.witness as.val k c) as.property
+def OperationsFrom.assert (as : OperationsFrom F m n) (e : Expression F) : OperationsFrom F m n :=
+  .mk (.assert as.val e) as.property
+def OperationsFrom.lookup (as : OperationsFrom F m n) (l : Lookup F) : OperationsFrom F m n :=
+  .mk (.lookup as.val l) as.property
+def OperationsFrom.subcircuit (as : OperationsFrom F m n) (s : SubCircuit F n) : OperationsFrom F m (n + s.local_length) :=
+  .mk (.subcircuit as.val s) as.property
+
 -- induction principle for OperationsFrom
-open Operations in
-def OperationsFrom.induct {F: Type} [Field F] {motive : {n m: ℕ} → OperationsFrom F m n → Prop}
-  (empty : ∀ (n), motive (n:=n) (m:=n) (OperationsFrom.empty n))
+def OperationsFrom.induct' {F: Type} [Field F] {motive : {n m: ℕ} → OperationsFrom F m n → Prop}
+  (empty : ∀ (n), motive (n:=n) (m:=n) (.empty n))
   (witness : ∀ {n m} (as : Operations F n) (k c) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (witness as k c) ha))
+    motive (.mk as ha) → motive (.mk (.witness as k c) ha))
   (assert : ∀ {n m} (as : Operations F n) (e) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (assert as e) ha))
+    motive (.mk as ha) → motive (.mk (.assert as e) ha))
   (lookup : ∀ {n m} (as : Operations F n) (l) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (lookup as l) ha))
+    motive (.mk as ha) → motive (.mk (.lookup as l) ha))
   (subcircuit : ∀ {n m} (as : Operations F n) (s) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (subcircuit as s) ha))
+    motive (.mk as ha) → motive (.mk (.subcircuit as s) ha))
   {n m: ℕ} (as: OperationsFrom F m n) : motive as :=
   motive' as.val as.property
 where
@@ -41,6 +49,20 @@ where
   | .lookup _ _, _ => lookup _ _ _ (motive' _ _)
   | .subcircuit _ _, _ => subcircuit _ _ _ (motive' _ _)
 
+def OperationsFrom.induct {F: Type} [Field F] {motive : {n m: ℕ} → OperationsFrom F m n → Prop}
+  (empty : ∀ (n), motive (n:=n) (m:=n) (.empty n))
+  (witness : ∀ {n m} (as : OperationsFrom F m n) (k c), motive as → motive (.witness as k c))
+  (assert : ∀ {n m} (as : OperationsFrom F m n) (e), motive as → motive (.assert as e))
+  (lookup : ∀ {n m} (as : OperationsFrom F m n) (l), motive as → motive (.lookup as l))
+  (subcircuit : ∀ {n m} (as : OperationsFrom F m n) (s), motive as → motive (.subcircuit as s))
+    {n m: ℕ} (as: OperationsFrom F m n) : motive as := by
+  induction as using OperationsFrom.induct' with
+  | empty n => exact empty n
+  | witness as k c ha ih => exact witness _ _ _ ih
+  | assert as e ha ih => exact assert _ _ ih
+  | lookup as l ha ih => exact lookup _ _ ih
+  | subcircuit as s ha ih => exact subcircuit _ _ ih
+
 namespace Operations
 instance : HAppend (Operations F m) (OperationsFrom F m n) (Operations F n) where
   hAppend as bs := as.append bs.val bs.property
@@ -48,15 +70,24 @@ instance : HAppend (Operations F m) (OperationsFrom F m n) (Operations F n) wher
 theorem append_empty (as : Operations F n) : as ++ (OperationsFrom.empty (F:=F) n) = as := rfl
 
 theorem empty_append (as : OperationsFrom F n m) : empty (F:=F) n ++ as = as.val := by
-  induction as using OperationsFrom.induct with
+  induction as using OperationsFrom.induct' with
   | empty n => rfl
   | witness | assert | lookup | subcircuit => simp_all only [HAppend.hAppend, append]
+
+theorem append_witness (as : Operations F m) (bs : OperationsFrom F m n) (k : ℕ) (c : Environment F → Vector F k) :
+  as ++ (OperationsFrom.witness bs k c) = .witness (as ++ bs) k c := by rfl
+theorem append_assert (as : Operations F m) (bs : OperationsFrom F m n) (e : Expression F) :
+  as ++ (OperationsFrom.assert bs e) = .assert (as ++ bs) e := by rfl
+theorem append_lookup (as : Operations F m) (bs : OperationsFrom F m n) (l : Lookup F) :
+  as ++ (OperationsFrom.lookup bs l) = .lookup (as ++ bs) l := by rfl
+theorem append_subcircuit (as : Operations F m) (bs : OperationsFrom F m n) (s : SubCircuit F n) :
+  as ++ (OperationsFrom.subcircuit bs s) = .subcircuit (as ++ bs) s := by rfl
 
 theorem append_initial_offset {m n: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) :
     (as ++ bs).initial_offset = as.initial_offset := by
   induction bs using OperationsFrom.induct with
   | empty n => rfl
-  | witness as _ _ _ ih | assert as _ _ ih | lookup as _ _ ih | subcircuit as _ _ ih => exact ih as
+  | witness bs _ _ ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih => exact ih as
 
 instance : HAppend (OperationsFrom F m n) (OperationsFrom F n o) (OperationsFrom F m o) where
   hAppend as bs := ⟨ as.val.append bs.val bs.property, by
@@ -65,7 +96,7 @@ instance : HAppend (OperationsFrom F m n) (OperationsFrom F n o) (OperationsFrom
 
 theorem append_assoc {m n o: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) (cs : OperationsFrom F n o) :
   (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
-  induction cs using OperationsFrom.induct with
+  induction cs using OperationsFrom.induct' with
   | empty n => rfl
   | witness _ _ _ _ ih | assert _ _ _ ih | lookup _ _ _ ih | subcircuit _ _ _ ih =>
     simp only [HAppend.hAppend, append, witness.injEq, assert.injEq, lookup.injEq, subcircuit.injEq, and_true]
@@ -88,40 +119,6 @@ theorem append_assoc {p: ℕ} (as : OperationsFrom F m n) (bs : OperationsFrom F
   (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
   ext; simp only [append_val, Operations.append_assoc]
 end OperationsFrom
-
-structure OperationsListFrom (F: Type) [Field F] (m: ℕ) where
-  offset : ℕ
-  withLength : OperationsFrom F m offset
-
--- `OperationsListFrom` can be coerced to `OperationsFrom` and back
-instance (ops : OperationsListFrom F m) : CoeDep (OperationsListFrom F m) (ops) (OperationsFrom F m ops.offset) where
-  coe := ops.withLength
-
-instance : CoeOut (OperationsFrom F m n) (OperationsListFrom F m) where
-  coe ops := ⟨ n, ops ⟩
-
--- functions of the form `(n : ℕ) → OperationsListFrom F n` are an alternative representation of a circuit,
--- after resolving the successive inputs to each monad bind
-def CircuitDiff (F: Type) [Field F] := (n : ℕ) → (m : ℕ) × OperationsFrom F n m
-
-def CircuitDiff.final_offset (diff : CircuitDiff F) (n : ℕ) : ℕ := (diff n).1
-def CircuitDiff.operations (diff : CircuitDiff F) (n : ℕ) : OperationsFrom F n (diff.final_offset n) :=
-  (diff n).2
-
-namespace Circuit
--- a proper circuit is "append-only"
-def appends (circuit : Circuit F α) (diff : CircuitDiff F) :=
-  ∀ ops: OperationsList F, (circuit ops).snd = ops.withLength ++ diff.operations ops.offset
-
--- a proper circuit only depends on the input offset, not on the operations
-def independent (circuit : Circuit F α) : Prop :=
-  ∀ ops: OperationsList F,
-    (circuit ops).fst = circuit.output ops.offset ∧
-    (circuit ops).snd.offset = circuit.final_offset ops.offset
-
-def returns (circuit : Circuit F α) (out : ℕ → α) :=
-  ∀ ops: OperationsList F, (circuit ops).fst = out ops.offset
-end Circuit
 
 class LawfulCircuit (circuit : Circuit F α) where
   /-- a proper circuit is encapsulated by three functions of the input offset -/
@@ -272,26 +269,22 @@ theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : 
   (circuit.operations n).initial_offset = n := by
   rw [operations_eq circuit n]
   exact (final_offset_eq circuit n ▸ operations n).property
-
--- lemma operations_bind_length {f: Circuit F α} {g : α → Circuit F β}
---     (hg : ∀ a : α, LawfulCircuit (g a)) {n : ℕ} :
---     (f >>= g).final_offset n = (g (f.output n)).final_offset (f.final_offset n)
---    := by
---   unfold Circuit.final_offset
---   have : (f >>= g) n = (g (f n).1) (f n).2 := rfl
---   show ((g (f.output n)) (f n).2).2.offset = _
---   set a := f.output n
---   set opf := (f (OperationsList.from_offset n)).2
---   have ⟨ op_left, h_left ⟩ := LawfulCircuit.lawful (circuit := g a) opf
---   have ⟨ op_right, h_right ⟩ := LawfulCircuit.lawful (circuit := g a) opf.offset
---   -- rw [LawfulCircuit.operations_append (g a)]
---   sorry
-
--- theorem operations_bind_eq {f: Circuit F α} {g : α → Circuit F β}
---   (f_lawful : LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
---     (f >>= g).operations n = (f_lawful.operations n ++ (g_lawful (output f n)).operations (final_offset f n)).val := by
---   apply LawfulCircuit.lawful -- why is this so easy? :D
 end LawfulCircuit
+
+namespace Circuit
+theorem constraints_hold_soundness_append (env : Environment F) (as : Operations F m) (bs : OperationsFrom F m n) :
+  constraints_hold.soundness env (as ++ bs) ↔
+    (constraints_hold.soundness env as ∧ constraints_hold.soundness env bs.val) := by
+  repeat rw [constraints_hold.soundness'_iff_soundness]
+  induction bs using OperationsFrom.induct with
+  | empty n => rw [Operations.append_empty]; tauto
+  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
+    specialize ih as
+    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
+    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
+    simp only [constraints_hold.soundness', ih]
+    try tauto
+end Circuit
 
 -- loops
 

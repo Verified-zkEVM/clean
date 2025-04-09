@@ -22,7 +22,7 @@ theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
   intro h
   induction ops with
   | empty => trivial
-  | witness ops c ih | assert ops c ih | lookup ops c ih =>
+  | witness ops _ c ih | assert ops c ih | lookup ops c ih =>
     cases ops <;> simp_all [constraints_hold.completeness, constraints_hold, circuit_norm]
   | subcircuit ops circuit ih =>
     dsimp only [constraints_hold.soundness]
@@ -195,4 +195,20 @@ theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.us
     · use ih h.left
       exact circuit.implied_by_completeness env (env_extends_subcircuit_inner h_env) h.right
 
+/--
+Version of `constraints_hold.soundness` that is simpler to reason about, and equivalent
+-/
+def constraints_hold.soundness' {n : ℕ} (eval : Environment F) : Operations F n → Prop
+  | .empty _ => True
+  | .witness ops _ _ => soundness' eval ops
+  | .assert ops e => soundness' eval ops ∧ eval e = 0
+  | .lookup ops { table, entry, .. } => soundness' eval ops ∧ table.contains (entry.map eval)
+  | .subcircuit ops s => soundness' eval ops ∧ s.soundness eval
+
+theorem constraints_hold.soundness'_iff_soundness {n : ℕ} (env : Environment F) (ops : Operations F n) :
+  soundness env ops ↔ soundness' env ops := by
+  induction ops with
+  | empty => trivial
+  | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
+    cases ops <;> simp_all [soundness, soundness']
 end Circuit
