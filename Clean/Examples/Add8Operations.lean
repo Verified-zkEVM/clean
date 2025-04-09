@@ -33,4 +33,11 @@ example : LawfulCircuit.final_offset c 0 = 8 := by
 example : LawfulCircuit.output c 0
     = { z := { x0 := var ⟨0⟩, x1 := var ⟨2⟩, x2 := var ⟨4⟩, x3 := var ⟨6⟩ }, carry_out := var ⟨7⟩ } := by
   dsimp only [LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
+
+example (i0 : ℕ) : (LawfulCircuit.operations (circuit:=c) i0).val = .empty (F:=F p_babybear) (i0 + 8) := by
+  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
+  open OperationsFrom in
+  simp only [append_empty, empty_append, append_assoc, append_val]
+  -- simp
+  sorry
 end

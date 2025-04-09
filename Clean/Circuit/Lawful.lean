@@ -47,7 +47,7 @@ instance : HAppend (Operations F m) (OperationsFrom F m n) (Operations F n) wher
 
 theorem append_empty (as : Operations F n) : as ++ (OperationsFrom.empty (F:=F) n) = as := rfl
 
-theorem empty_append (as : OperationsFrom F n m) : Operations.empty (F:=F) n ++ as = as := by
+theorem empty_append (as : OperationsFrom F n m) : empty (F:=F) n ++ as = as.val := by
   induction as using OperationsFrom.induct with
   | empty n => rfl
   | witness | assert | lookup | subcircuit => simp_all only [HAppend.hAppend, append]
@@ -71,6 +71,23 @@ theorem append_assoc {m n o: ℕ} (as : Operations F m) (bs : OperationsFrom F m
     simp only [HAppend.hAppend, append, witness.injEq, assert.injEq, lookup.injEq, subcircuit.injEq, and_true]
     exact ih bs
 end Operations
+
+namespace OperationsFrom
+theorem append_val (as : OperationsFrom F m n) (bs : OperationsFrom F n o) :
+    (as ++ bs).val = as.val ++ bs := by
+  dsimp only [HAppend.hAppend]
+
+theorem empty_val (n : ℕ) : (empty (F:=F) n).val = Operations.empty n := rfl
+
+theorem append_empty (as : OperationsFrom F m n) : as ++ empty (F:=F) n = as := rfl
+
+theorem empty_append (as : OperationsFrom F m n) : empty (F:=F) m ++ as = as := by
+  ext; rw [append_val, empty_val, Operations.empty_append]
+
+theorem append_assoc {p: ℕ} (as : OperationsFrom F m n) (bs : OperationsFrom F n o) (cs : OperationsFrom F o p) :
+  (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
+  ext; simp only [append_val, Operations.append_assoc]
+end OperationsFrom
 
 structure OperationsListFrom (F: Type) [Field F] (m: ℕ) where
   offset : ℕ
