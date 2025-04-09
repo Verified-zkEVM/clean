@@ -17,27 +17,47 @@ def circuit := do
 
 #eval Gadgets.Addition32Full.circuit (p:=p) |>.local_length default
 
-def circuit32 := do Gadgets.Addition32Full.add32_full (p:=p) (← default)
-#eval circuit32.operation_list
+#eval (do Gadgets.Addition32Full.add32_full (p:=p) (← default)).operation_list
 
 -- lawful circuit experiments
 open Gadgets.Addition32Full (add32_full Inputs)
 instance (input : Var Inputs (F p)) : LawfulCircuit (add32_full input) := by infer_lawful_circuit
 
-@[reducible] def c := add32_full (p:=p_babybear) default
-#eval LawfulCircuit.final_offset c 0
-#eval LawfulCircuit.output c 0
+@[reducible] def circuit32 input := add32_full (p:=p_babybear) input
+#eval LawfulCircuit.final_offset (circuit32 default) 0
+#eval LawfulCircuit.output (circuit32 default) 0
 
-example : LawfulCircuit.final_offset c 0 = 8 := by
+example : LawfulCircuit.final_offset (circuit32 default) 0 = 8 := by
   dsimp only [LawfulCircuit.final_offset, Boolean.circuit]
-example : LawfulCircuit.output c 0
+example : LawfulCircuit.output (circuit32 default) 0
     = { z := { x0 := var ⟨0⟩, x1 := var ⟨2⟩, x2 := var ⟨4⟩, x3 := var ⟨6⟩ }, carry_out := var ⟨7⟩ } := by
   dsimp only [LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
 
-example (i0 : ℕ) : (LawfulCircuit.operations (circuit:=c) i0).val = .empty (F:=F p_babybear) (i0 + 8) := by
-  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
-  open OperationsFrom in
+open OperationsFrom in
+example (input : Var Inputs (F p_babybear)) (i0 : ℕ) :
+    (LawfulCircuit.operations (circuit:=circuit32 input) i0).val = .empty (F:=F p_babybear) (i0 + 8) := by
+  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output]
+  simp only [FormalAssertion.to_subcircuit]
+  unfold Circuit.subassertion_soundness Circuit.subassertion_completeness
+  simp only [Boolean.circuit]
   simp only [append_empty, empty_append, append_assoc, append_val]
-  -- simp
+  simp only [Nat.add_zero, id_eq, add_zero]
+  let ⟨ x, y, carry_in ⟩ := input
+  sorry
+
+open OperationsFrom in
+example (input : Var Inputs (F p_babybear)) (env) (i0 : ℕ) :
+    Circuit.constraints_hold.soundness env (LawfulCircuit.operations (circuit:=circuit32 input) i0).val = True := by
+  let ⟨ x, y, carry_in ⟩ := input
+  let ⟨ x0, x1, x2, x3 ⟩ := x
+  let ⟨ y0, y1, y2, y3 ⟩ := y
+  dsimp only [circuit32]
+
+  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
+  simp only [append_empty, empty_append, append_assoc, append_val, Circuit.constraints_hold_soundness_append]
+  simp only [FormalAssertion.to_subcircuit]
+  unfold Circuit.subassertion_soundness Circuit.subassertion_completeness
+  simp only
+  -- simp only [Nat.add_zero, id_eq, add_zero]
   sorry
 end
