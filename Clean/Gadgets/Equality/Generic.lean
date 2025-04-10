@@ -12,73 +12,56 @@ import Clean.Types.U32
 section
 variable {p : ℕ} [Fact p.Prime]
 
+def Gadgets.all_zero {n} (xs : Vector (Expression (F p)) n) : Circuit (F p) Unit := forM xs assert_zero
+
+theorem Gadgets.AllZero.soundness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
+    Circuit.constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+  intro h_holds
+  intro x hx
+  unfold all_zero at h_holds
+  rw [Circuit.constraints_hold_forM_vector.soundness, List.forall_iff_forall_mem] at h_holds
+  rw [←Vector.mem_toList_iff, List.mem_iff_getElem?] at hx
+  obtain ⟨ i, hxi ⟩ := hx
+  rw [←List.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
+  specialize h_holds (x, i) hxi
+  simp only [circuit_norm] at h_holds
+  exact h_holds
+
 namespace Gadgets.Equality
-
-def all_equal {n} (l : Vector (Expression (F p) × Expression (F p)) n) : Circuit (F p) Unit :=
-  forM l fun (x, y) => assert_zero (x - y)
-
-theorem soundness (offset : ℕ) (env : Environment (F p)) {n} (l : Vector (Expression (F p) × Expression (F p)) n)
-  (ctx : OperationsList (F p)) :
-  (Circuit.constraints_hold.soundness env ((all_equal l).operations offset)) →
-    (∀ t ∈ l, match t with | (x,y) => x.eval env = y.eval env) := by
-  intro h_holds (x,y) ht
-  induction l using Vector.induct_push with
-  | nil => simp at ht
-  | push ts t ih =>
-    simp_all [all_equal]
-    rw [←Vector.append_singleton, Vector.forM_append, Vector.forM_mk,
-      Vector.forM_mk, List.forM_toArray [t],
-      List.forM_eq_forM, List.forM_cons, List.forM_nil,
-      ] at h_holds
-    dsimp only [Circuit.operations] at h_holds
-    have : (do
-          assert_zero (t.1 - t.2)
-          pure PUnit.unit) = assert_zero (t.1 - t.2) := rfl
-    rw [this] at h_holds; clear this
-    rw [Circuit.assert_zero_appends] at h_holds
-    rcases ht with ht|ht
-    repeat sorry
-
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion (F p) (ProvablePair α α) where
   main (input : Var α (F p) × Var α (F p)) := do
     let (x, y) := input
-    List.forM (.zip (to_vars x).toList (to_vars y).toList) fun (xi, yi) =>
-      assert_zero (xi - yi)
+    let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
+    all_zero diffs
 
   local_length _ := 0
   local_length_eq _ := by sorry
   initial_offset_eq _ := by sorry
 
-  assumptions _ := true
+  assumptions _ := True
   spec : α (F p) × α (F p) → Prop
   | (x, y) => x = y
 
   soundness := by
     intro offset env vars input h_inputs _ h_holds
+    replace h_holds := Gadgets.AllZero.soundness h_holds
+
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := vars
     simp [circuit_norm, eval] at h_inputs
     obtain ⟨ hx, hy ⟩ := h_inputs
-    dsimp
+    simp only
     rw [←hx, ←hy]
     congr 1
-    rw [Vector.ext_iff]
-    simp [Vector.getElem_map]
-    dsimp at h_holds
-    -- suffices h :
-    --     ∀ l : List (Expression (F p) × Expression (F p)),
-    --     Circuit.constraints_hold.soundness env ((forM l (fun (x, y) => assert_zero (x - y))).operations ctx) →
-    --     (∀ t ∈ l, match t with | (x,y) => x.eval env = y.eval env) by sorry
+    ext i hi
+    simp only [Vector.getElem_map]
 
-    sorry
-    -- done
-
-    -- set l := (to_elements x_var).toList.zip (to_elements y_var).toList
-    -- induction l generalizing h_holds with
-    -- | nil => simp only
-    -- | cons a as ih => sorry
-    -- rcases h_holds with ⟨⟨⟨eq0, eq1⟩, eq2⟩, eq3⟩
-    -- rw [eq0, eq1, eq2, eq3]
+    rw [to_vars, ←Vector.forall_getElem] at h_holds
+    specialize h_holds i hi
+    rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
+    simp only [Expression.eval] at h_holds
+    rw [neg_one_mul] at h_holds
+    exact eq_of_add_neg_eq_zero h_holds
 
   completeness := by sorry
     -- -- introductions
