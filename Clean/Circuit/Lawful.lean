@@ -330,10 +330,40 @@ lemma operations_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.operations n = (final_offset_eq circuit n ▸ operations n).val := by
   rw [Circuit.operations, append_only', Operations.empty_append]
 
+lemma operations_eq' (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+    (operations n).val = final_offset_eq circuit n ▸ circuit.operations n := by
+  rw [Circuit.operations, append_only', Operations.empty_append]
+  rw [←heq_eq_eq, heq_eqRec_iff_heq]
+  have h_off : final_offset circuit n = circuit.final_offset n := final_offset_eq circuit n |>.symm
+  congr
+  · apply Function.hfunext; congr; intros; congr
+  · simp
+
 theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
   (circuit.operations n).initial_offset = n := by
   rw [operations_eq circuit n]
   exact (final_offset_eq circuit n ▸ operations n).property
+
+theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit circuit] (n : ℕ) :
+  (circuit.operations n).local_length = lawful.local_length := by
+  apply Nat.add_left_cancel (n:=n)
+  rw [←lawful.local_length_eq]
+  rw (occs := .pos [1]) [←initial_offset_eq circuit n]
+  rw [Circuit.total_length_eq, final_offset_eq]
+
+theorem local_length_bind_eq (f : Circuit F α) (g : α → Circuit F β)
+  [f_lawful: LawfulCircuit f] [g_lawful : ∀ a : α, LawfulCircuit (g a)] (n : ℕ) :
+  ((f >>= g).operations n).local_length = (f.operations n).local_length + ((g (f.output n)).operations (f.final_offset n)).local_length := by
+  apply Nat.add_left_cancel (n:=n)
+  let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
+  rw (occs := .pos [1]) [←fg_lawful.initial_offset_eq _ n]
+  rw [Circuit.total_length_eq, final_offset_eq]
+  rw (occs := .pos [2]) [←f_lawful.initial_offset_eq _ n]
+  rw [←add_assoc, Circuit.total_length_eq, final_offset_eq]
+  rw (occs := .pos [1]) [←(g_lawful (f.output n)).initial_offset_eq _ (final_offset f n)]
+  rw [Circuit.total_length_eq, final_offset_eq]
+  simp [fg_lawful, LawfulCircuit.final_offset]
+  rw [←LawfulCircuit.output_independent (.from_offset n)]
 
 theorem constraints_hold_eq.soundness (circuit : Circuit F α) [lawful : LawfulCircuit circuit] (env : Environment F) (n : ℕ) :
   Circuit.constraints_hold.soundness env (circuit.operations n) ↔
@@ -373,9 +403,20 @@ theorem Circuit.constraints_hold_bind.soundness {env : Environment F}
     simp only [fg_lawful, from_bind]
   rw [h_ops, OperationsFrom.append_val, constraints_hold_append.soundness]
 
+theorem Operations.local_length_append (as : Operations F m) (bs : OperationsFrom F m n) :
+  (as ++ bs).local_length = as.local_length + bs.val.local_length := by
+  induction bs using OperationsFrom.induct with
+  | empty n => rw [Operations.append_empty]; rfl
+  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
+    specialize ih as
+    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
+    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
+    simp only [local_length, ih]
+    try ac_rfl
+
 -- loops
 
-instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} [h : ∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
+instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [h : ∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
      LawfulCircuit (forM xs circuit) := by
   induction xs
   case nil => rw [List.forM_nil]; infer_instance
@@ -386,15 +427,30 @@ instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} [h
     intro _
     exact ih
 
-instance LawfulCircuit.from_forM_vector {α: Type} {circuit : α → Circuit F Unit} :
+instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} :
     (∀ x : α, LawfulCircuit (circuit x)) → ∀ (n : ℕ) (xs : Vector α n), LawfulCircuit (forM xs circuit) := by
   intro h n xs
   rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
   apply from_forM
 
+theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
+  {xs : List α} {n : ℕ} :
+    ((forM xs circuit).operations n).local_length = xs.length * lawful.local_length := by
+  set k := lawful.local_length
+  induction xs generalizing n with
+  | nil =>
+      simp only [List.forM_nil, LawfulCircuit.operations_eq, List.length_nil, zero_mul]
+      rfl
+  | cons x xs ih =>
+    rw [List.forM_cons, List.length_cons]
+    let lawful_cons : LawfulCircuit ((do circuit x; forM xs circuit)) := .from_bind inferInstance inferInstance
+    rw [add_mul, one_mul, add_comm]
+    rw [LawfulCircuit.local_length_bind_eq, LawfulCircuit.local_length_eq, ih (n := ((circuit x).final_offset n))]
+    rfl
+
 theorem Circuit.constraints_hold_forM.soundness
-  (env : Environment F) (circuit : α → Circuit F Unit) [lawful : ConstantLawfulCircuits circuit]
-  (xs : List α) (n : ℕ) :
+  {env : Environment F} {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
+  {xs : List α} {n : ℕ} :
     constraints_hold.soundness env (forM xs circuit |>.operations n) ↔
       xs.zipIdx.Forall fun (x, i) => constraints_hold.soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
 
@@ -404,7 +460,7 @@ theorem Circuit.constraints_hold_forM.soundness
     rw [List.forM_cons, List.zipIdx_cons, List.forall_cons]
     simp only at ih ⊢
     rw [zero_mul, add_zero, zero_add]
-    specialize ih (n + lawful.local_length)
+    specialize ih (n := n + lawful.local_length)
 
     have h_zip : List.Forall (fun (x, i) ↦ constraints_hold.soundness env ((circuit x).operations (n + lawful.local_length + i * lawful.local_length))) xs.zipIdx
       ↔ List.Forall (fun (x, i) ↦ constraints_hold.soundness env ((circuit x).operations (n + i * lawful.local_length))) (xs.zipIdx 1) := by
