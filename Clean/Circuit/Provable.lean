@@ -338,4 +338,5 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)
   (a : Var α F) (b : Var β F) :
     eval (α:=ProvablePair α β) env (a, b) = (eval env a, eval env b) := by
-  sorry
+  simp only [eval, to_vars, to_elements, from_elements, Vector.map_append]
+  rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
