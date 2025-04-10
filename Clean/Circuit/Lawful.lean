@@ -389,15 +389,8 @@ instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} [h
 instance LawfulCircuit.from_forM_vector {α: Type} {circuit : α → Circuit F Unit} :
     (∀ x : α, LawfulCircuit (circuit x)) → ∀ (n : ℕ) (xs : Vector α n), LawfulCircuit (forM xs circuit) := by
   intro h n xs
-  induction xs using Vector.induct
-  case nil => simp only [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, List.forM_nil]; infer_instance
-  case cons x xs ih =>
-    rw [Vector.cons, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, List.forM_cons]
-    apply from_bind
-    exact h x
-    intro _
-    rw [Vector.forM_mk, List.forM_toArray] at ih
-    exact ih
+  rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+  apply from_forM
 
 theorem Circuit.constraints_hold_forM.soundness
   (env : Environment F) (circuit : α → Circuit F Unit) [lawful : ConstantLawfulCircuits circuit]
@@ -428,3 +421,10 @@ theorem Circuit.constraints_hold_forM.soundness
     clear h_zip ih
     rw [constraints_hold_bind.soundness inferInstance inferInstance]
     exact Iff.intro id id
+
+theorem Circuit.constraints_hold_forM_vector.soundness
+  (env : Environment F) (circuit : α → Circuit F Unit) [lawful : ConstantLawfulCircuits circuit]
+  (xs : Vector α n) (m : ℕ) :
+    constraints_hold.soundness env (forM xs circuit |>.operations m) ↔
+      xs.toList.zipIdx.Forall fun (x, i) => constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  rw [←constraints_hold_forM.soundness, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
