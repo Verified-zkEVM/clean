@@ -191,25 +191,25 @@ instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
 
 -- basic operations are (constant) lawful circuits
 
-instance {c : Environment F → F} : ConstantLawfulCircuit (witness_var c) where
-  output n := ⟨ n ⟩
+instance : ConstantLawfulCircuits (F:=F) witness_var where
+  output _ n := ⟨ n ⟩
   local_length := 1
-  operations n := ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩
+  operations c n := ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩
 
 instance {k : ℕ} {c : Environment F → Vector F k} : ConstantLawfulCircuit (witness_vars k c) where
   output n := .natInit k fun i => ⟨n + i⟩
   local_length := k
   operations n := ⟨.witness (.empty n) k c, rfl⟩
 
-instance {e : Expression F} : ConstantLawfulCircuit (assert_zero e) where
-  output n := ()
+instance : ConstantLawfulCircuits (F:=F) assert_zero where
+  output _ _ := ()
   local_length := 0
-  operations n := ⟨.assert (.empty n) e, rfl⟩
+  operations e n := ⟨.assert (.empty n) e, rfl⟩
 
-instance {l : Lookup F} : ConstantLawfulCircuit (lookup l) where
-  output n := ()
+instance : ConstantLawfulCircuits (F:=F) lookup where
+  output _ _ := ()
   local_length := 0
-  operations n := ⟨.lookup (.empty n) l, rfl⟩
+  operations l n := ⟨.lookup (.empty n) l, rfl⟩
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ConstantLawfulCircuit (subcircuit circuit input) where
@@ -224,6 +224,15 @@ instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input
   local_length := circuit.local_length input
   final_offset n := n + circuit.local_length input
   operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
+
+-- lower `ConstantLawfulCircuits` to `ConstantLawfulCircuit`
+instance ConstantLawfulCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantLawfulCircuits circuit] : ConstantLawfulCircuit (circuit a) where
+  output n := lawful.output a n
+  local_length := lawful.local_length
+  operations n := lawful.operations a n
+  output_independent := lawful.output_independent a
+  offset_independent := lawful.offset_independent a
+  append_only := lawful.append_only a
 
 syntax "infer_lawful_circuit" : tactic
 
@@ -251,15 +260,6 @@ example :
     pure z
 
   LawfulCircuit add := by infer_lawful_circuit
-
--- lower `ConstantLawfulCircuits` to `ConstantLawfulCircuit`
-instance ConstantLawfulCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantLawfulCircuits circuit] : ConstantLawfulCircuit (circuit a) where
-  output n := lawful.output a n
-  local_length := lawful.local_length
-  operations n := lawful.operations a n
-  output_independent := lawful.output_independent a
-  offset_independent := lawful.offset_independent a
-  append_only := lawful.append_only a
 
 -- constant version of `bind`
 instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
@@ -426,5 +426,8 @@ theorem Circuit.constraints_hold_forM_vector.soundness
   (env : Environment F) (circuit : α → Circuit F Unit) [lawful : ConstantLawfulCircuits circuit]
   (xs : Vector α n) (m : ℕ) :
     constraints_hold.soundness env (forM xs circuit |>.operations m) ↔
+      -- ∀ (x : α) (i : ℕ) (h : (x, i) ∈ xs.toList.zipIdx), constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
       xs.toList.zipIdx.Forall fun (x, i) => constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  -- intro x i hxi
+  -- rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, constraints_hold_forM.soundness]
   rw [←constraints_hold_forM.soundness, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]

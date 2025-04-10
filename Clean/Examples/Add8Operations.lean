@@ -29,15 +29,16 @@ instance (input : Var Inputs (F p)) : LawfulCircuit (add32_full input) := by inf
 #eval LawfulCircuit.output (circuit32 default) 0
 
 example : LawfulCircuit.final_offset (circuit32 default) 0 = 8 := by
-  dsimp only [LawfulCircuit.final_offset, Boolean.circuit]
+  dsimp only [LawfulCircuit.final_offset, ConstantLawfulCircuits.local_length, Boolean.circuit]
 example : LawfulCircuit.output (circuit32 default) 0
     = { z := { x0 := var ⟨0⟩, x1 := var ⟨2⟩, x2 := var ⟨4⟩, x3 := var ⟨6⟩ }, carry_out := var ⟨7⟩ } := by
-  dsimp only [LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit]
+  dsimp only [LawfulCircuit.final_offset, ConstantLawfulCircuits.local_length, LawfulCircuit.output, ConstantLawfulCircuits.output, Boolean.circuit]
 
 open OperationsFrom in
 example (input : Var Inputs (F p_babybear)) (i0 : ℕ) :
     (LawfulCircuit.operations (circuit:=circuit32 input) i0).val = .empty (F:=F p_babybear) (i0 + 8) := by
-  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output]
+  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output,
+    ConstantLawfulCircuits.local_length, ConstantLawfulCircuits.output, ConstantLawfulCircuits.operations]
   simp only [FormalAssertion.to_subcircuit]
   unfold Circuit.subassertion_soundness Circuit.subassertion_completeness
   simp only [Boolean.circuit]
@@ -57,7 +58,8 @@ example (input : Var Inputs (F p_babybear)) (env) (i0 : ℕ) :
   -- simp only [circuit_norm, subcircuit_norm, true_and, and_true]
 
   simp only [LawfulCircuit.constraints_hold_eq.soundness]
-  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output]
+  dsimp only [LawfulCircuit.operations, LawfulCircuit.final_offset, LawfulCircuit.output, Boolean.circuit,
+    ConstantLawfulCircuits.local_length, ConstantLawfulCircuits.output, ConstantLawfulCircuits.operations]
   simp only [append_empty, empty_append, append_assoc, append_val, Circuit.constraints_hold_append.soundness, Circuit.constraints_hold.soundness]
   simp only [true_and, and_true, subcircuit_norm, circuit_norm]
   sorry
