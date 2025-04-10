@@ -31,6 +31,9 @@ def assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-
+def spec (input : Inputs (F p)) (output : Outputs (F p)) :=
+  let ⟨x, y⟩ := input
+  let z := output.z
+  z.val = Nat.land x.val y.val
 
 end Gadgets.And
