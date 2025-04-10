@@ -215,12 +215,14 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
     ConstantLawfulCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   local_length := circuit.local_length input
+  final_offset n := n + circuit.local_length input
   operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
 
 instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ConstantLawfulCircuit (assertion circuit input) where
   output n := ()
   local_length := circuit.local_length input
+  final_offset n := n + circuit.local_length input
   operations n := ⟨.subcircuit (.empty n) (circuit.to_subcircuit n input), rfl⟩
 
 syntax "infer_lawful_circuit" : tactic
@@ -357,8 +359,8 @@ theorem Circuit.constraints_hold_append.soundness (env : Environment F) (as : Op
     simp only [constraints_hold.soundness', ih]
     try tauto
 
-theorem Circuit.constraints_hold_bind.soundness (env : Environment F)
-  (f : Circuit F α) (g : α → Circuit F β) [f_lawful: LawfulCircuit f] [g_lawful : ∀ a, LawfulCircuit (g a)] (n : ℕ) :
+theorem Circuit.constraints_hold_bind.soundness {env : Environment F}
+  {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) (n : ℕ) :
   constraints_hold.soundness env ((f >>= g).operations n) ↔
     constraints_hold.soundness env (f.operations n)
     ∧ constraints_hold.soundness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
@@ -424,5 +426,5 @@ theorem Circuit.constraints_hold_forM.soundness
 
     rw [←h_zip, ←ih]
     clear h_zip ih
-    rw [constraints_hold_bind.soundness]
+    rw [constraints_hold_bind.soundness inferInstance inferInstance]
     exact Iff.intro id id
