@@ -332,6 +332,16 @@ theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : 
   (circuit.operations n).initial_offset = n := by
   rw [operations_eq circuit n]
   exact (final_offset_eq circuit n ▸ operations n).property
+
+theorem constraints_hold_eq.soundness (circuit : Circuit F α) [lawful : LawfulCircuit circuit] (env : Environment F) (n : ℕ) :
+  Circuit.constraints_hold.soundness env (circuit.operations n) ↔
+    Circuit.constraints_hold.soundness env (lawful.operations n).val := by
+  rw [operations_eq, iff_iff_eq]
+  have h_off : circuit.final_offset n = final_offset circuit n := final_offset_eq circuit n
+  congr
+  · apply Function.hfunext; congr; intros; congr
+  · rw [eqRec_heq_iff_heq, heq_eq_eq]
+
 end LawfulCircuit
 
 theorem Circuit.constraints_hold_append.soundness (env : Environment F) (as : Operations F m) (bs : OperationsFrom F m n) :
@@ -347,18 +357,24 @@ theorem Circuit.constraints_hold_append.soundness (env : Environment F) (as : Op
     simp only [constraints_hold.soundness', ih]
     try tauto
 
-theorem Circuit.constraints_hold_bind_unit.soundness (env : Environment F)
-  (assertion : Circuit F Unit) (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
-  constraints_hold.soundness env ((do assertion; circuit).operations n) ↔
-    constraints_hold.soundness env (assertion.operations n)
-    ∧ constraints_hold.soundness env (circuit.operations (assertion.final_offset n)) := by
-  sorry
+theorem Circuit.constraints_hold_bind.soundness (env : Environment F)
+  (f : Circuit F α) (g : α → Circuit F β) [f_lawful: LawfulCircuit f] [g_lawful : ∀ a, LawfulCircuit (g a)] (n : ℕ) :
+  constraints_hold.soundness env ((f >>= g).operations n) ↔
+    constraints_hold.soundness env (f.operations n)
+    ∧ constraints_hold.soundness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
+  open LawfulCircuit in
+  let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
+  simp only [constraints_hold_eq.soundness]
+  have h_length : fg_lawful.final_offset n = (g_lawful (f_lawful.output n)).final_offset (f_lawful.final_offset n) := by
+    simp only [fg_lawful, from_bind]
+  have h_ops : fg_lawful.operations n = f_lawful.operations n ++ h_length ▸ (g_lawful (f_lawful.output n)).operations (f_lawful.final_offset n) := by
+    simp only [fg_lawful, from_bind]
+  rw [h_ops, OperationsFrom.append_val, constraints_hold_append.soundness]
 
 -- loops
 
-instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} :
-    (∀ x : α, LawfulCircuit (circuit x)) → ∀ xs : List α, LawfulCircuit (forM xs circuit) := by
-  intro h xs
+instance LawfulCircuit.from_forM {α: Type} {circuit : α → Circuit F Unit} [h : ∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
+     LawfulCircuit (forM xs circuit) := by
   induction xs
   case nil => rw [List.forM_nil]; infer_instance
   case cons x xs ih =>
@@ -408,12 +424,5 @@ theorem Circuit.constraints_hold_forM.soundness
 
     rw [←h_zip, ←ih]
     clear h_zip ih
-    have lawful_forM : LawfulCircuit (forM xs circuit) := LawfulCircuit.from_forM inferInstance xs
-    rw [constraints_hold_bind_unit.soundness]
-
-    -- nice pattern: rewrite an equivalence to an equality and use `congr` to resolve type-dependencies
-    -- note that `congr` uses equalities in the context to solve subgoals; here it uses `h1` twice
-    have h1 : (circuit x).final_offset n = n + lawful.local_length := by
-      rw [LawfulCircuit.final_offset_eq, ConstantLawfulCircuit.local_length_eq]; rfl
-    rw [iff_iff_eq]
-    congr
+    rw [constraints_hold_bind.soundness]
+    exact Iff.intro id id
