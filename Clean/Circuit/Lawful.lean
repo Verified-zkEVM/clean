@@ -423,11 +423,25 @@ theorem Circuit.constraints_hold_forM.soundness
     exact Iff.intro id id
 
 theorem Circuit.constraints_hold_forM_vector.soundness
-  (env : Environment F) (circuit : α → Circuit F Unit) [lawful : ConstantLawfulCircuits circuit]
-  (xs : Vector α n) (m : ℕ) :
+  {env : Environment F} {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
+  {xs : Vector α n} {m : ℕ} :
     constraints_hold.soundness env (forM xs circuit |>.operations m) ↔
-      -- ∀ (x : α) (i : ℕ) (h : (x, i) ∈ xs.toList.zipIdx), constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-      xs.toList.zipIdx.Forall fun (x, i) => constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  -- intro x i hxi
-  -- rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, constraints_hold_forM.soundness]
-  rw [←constraints_hold_forM.soundness, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+      ∀ (x : α) (i : ℕ) (_ : (x, i) ∈ xs.toList.zipIdx), constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, constraints_hold_forM.soundness]
+  rw [List.forall_iff_forall_mem]
+  simp
+
+/-- weaker version for when the constraints don't depend on the input offset -/
+theorem Circuit.constraints_hold_forM_vector.soundness'
+  {env : Environment F} {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
+  {xs : Vector α n} {m : ℕ} :
+    constraints_hold.soundness env (forM xs circuit |>.operations m) →
+      ∀ x ∈ xs, ∃ n : ℕ, constraints_hold.soundness env (circuit x |>.operations n) := by
+  intro h
+  replace h := Circuit.constraints_hold_forM_vector.soundness.mp h
+  intro x hx
+  rw [←Vector.mem_toList_iff, List.mem_iff_getElem?] at hx
+  obtain ⟨ i, hxi ⟩ := hx
+  rw [←List.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
+  specialize h x i hxi
+  use m + i * lawful.local_length

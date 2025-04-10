@@ -14,17 +14,10 @@ variable {p : ℕ} [Fact p.Prime]
 
 def Gadgets.all_zero {n} (xs : Vector (Expression (F p)) n) : Circuit (F p) Unit := forM xs assert_zero
 
-theorem Gadgets.AllZero.soundness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
+theorem Gadgets.all_zero.soundness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
     Circuit.constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
-  intro h_holds
-  intro x hx
-  unfold all_zero at h_holds
-  rw [Circuit.constraints_hold_forM_vector.soundness, List.forall_iff_forall_mem] at h_holds
-  rw [←Vector.mem_toList_iff, List.mem_iff_getElem?] at hx
-  obtain ⟨ i, hxi ⟩ := hx
-  rw [←List.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
-  specialize h_holds (x, i) hxi
-  simp only [circuit_norm] at h_holds
+  intro h_holds x hx
+  obtain ⟨_, h_holds⟩ := Circuit.constraints_hold_forM_vector.soundness' h_holds x hx
   exact h_holds
 
 namespace Gadgets.Equality
@@ -35,7 +28,9 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion (F p) (ProvablePa
     all_zero diffs
 
   local_length _ := 0
-  local_length_eq _ := by sorry
+  local_length_eq _ n := by
+    simp only [all_zero]
+    sorry
   initial_offset_eq _ := by sorry
 
   assumptions _ := True
@@ -44,7 +39,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion (F p) (ProvablePa
 
   soundness := by
     intro offset env vars input h_inputs _ h_holds
-    replace h_holds := Gadgets.AllZero.soundness h_holds
+    replace h_holds := Gadgets.all_zero.soundness h_holds
 
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := vars
