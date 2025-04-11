@@ -12,30 +12,33 @@ import Clean.Types.U32
 section
 variable {p : ℕ} [Fact p.Prime]
 
-def Gadgets.all_zero {n} (xs : Vector (Expression (F p)) n) : Circuit (F p) Unit := forM xs assert_zero
+namespace Gadgets
+def all_zero {n} (xs : Vector (Expression (F p)) n) : Circuit (F p) Unit := forM xs assert_zero
 
-theorem Gadgets.all_zero.soundness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
+theorem all_zero.soundness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
     Circuit.constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   intro h_holds x hx
   obtain ⟨_, h_holds⟩ := Circuit.constraints_hold_forM_vector.soundness' h_holds x hx
   exact h_holds
 
-namespace Gadgets.Equality
+namespace Equality
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion (F p) (ProvablePair α α) where
   main (input : Var α (F p) × Var α (F p)) := do
     let (x, y) := input
     let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
-    all_zero diffs
-
-  local_length _ := 0
-  local_length_eq _ n := by
-    simp only [all_zero]
-    sorry
-  initial_offset_eq _ := by sorry
+    forM diffs assert_zero
 
   assumptions _ := True
+
   spec : α (F p) × α (F p) → Prop
   | (x, y) => x = y
+
+  local_length_eq _ n := by
+    simp only
+    rw [Vector.forM_toList, Circuit.forM_local_length]
+    simp only [ConstantLawfulCircuits.local_length, zero_mul]
+
+  initial_offset_eq _ n := by simp only [LawfulCircuit.initial_offset_eq]
 
   soundness := by
     intro offset env vars input h_inputs _ h_holds
@@ -59,31 +62,6 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion (F p) (ProvablePa
     exact eq_of_add_neg_eq_zero h_holds
 
   completeness := by sorry
-    -- -- introductions
-    -- intro n env inputs_var henv inputs h_inputs _ spec
-    -- let ⟨⟨x0, x1, x2, x3⟩, ⟨y0, y1, y2, y3⟩⟩ := inputs
-    -- let ⟨⟨x0_var, x1_var, x2_var, x3_var⟩, ⟨y0_var, y1_var, y2_var, y3_var⟩⟩ := inputs_var
 
-    -- -- characterize inputs
-    -- dsimp only [circuit_norm, eval] at h_inputs
-    -- simp only [circuit_norm] at h_inputs
-    -- have hx0 : x0_var.eval env = x0 := by injection h_inputs; injections
-    -- have hx1 : x1_var.eval env = x1 := by injection h_inputs; injections
-    -- have hx2 : x2_var.eval env = x2 := by injection h_inputs; injections
-    -- have hx3 : x3_var.eval env = x3 := by injection h_inputs; injections
-    -- have hy0 : y0_var.eval env = y0 := by injection h_inputs; injections
-    -- have hy1 : y1_var.eval env = y1 := by injection h_inputs; injections
-    -- have hy2 : y2_var.eval env = y2 := by injection h_inputs; injections
-    -- have hy3 : y3_var.eval env = y3 := by injection h_inputs; injections
-
-    -- have spec0 : x0 = y0 := by injection spec
-    -- have spec1 : x1 = y1 := by injection spec
-    -- have spec2 : x2 = y2 := by injection spec
-    -- have spec3 : x3 = y3 := by injection spec
-
-    -- simp only [circuit_norm, neg_mul, one_mul]
-    -- rw [hx0, hx1, hx2, hx3, hy0, hy1, hy2, hy3]
-    -- rw [spec0, spec1, spec2, spec3]
-    -- simp only [add_neg_cancel, and_self]
-
-end Gadgets.Equality
+end Equality
+end Gadgets
