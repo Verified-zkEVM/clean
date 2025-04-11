@@ -1,3 +1,7 @@
+/-
+This file provides the built-in `assert_equals` gadget, which works for any provable type
+and smoothly simplifies to an equality statement under `circuit_norm`.
+-/
 import Clean.Circuit.Loops
 
 variable {F : Type} [Field F]
