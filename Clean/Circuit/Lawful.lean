@@ -323,37 +323,28 @@ lemma append_only' {circuit : Circuit F α} [lawful : LawfulCircuit circuit] :
   rw [heq_eqRec_iff_heq, heq_eq_eq]
 
 theorem final_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
-  circuit.final_offset n = final_offset circuit n := by
+    circuit.final_offset n = final_offset circuit n := by
   apply offset_independent
 
 lemma operations_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.operations n = (final_offset_eq circuit n ▸ operations n).val := by
   rw [Circuit.operations, append_only', Operations.empty_append]
 
-lemma operations_eq' (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
-    (operations n).val = final_offset_eq circuit n ▸ circuit.operations n := by
-  rw [Circuit.operations, append_only', Operations.empty_append]
-  rw [←heq_eq_eq, heq_eqRec_iff_heq]
-  have h_off : final_offset circuit n = circuit.final_offset n := final_offset_eq circuit n |>.symm
-  congr
-  · apply Function.hfunext; congr; intros; congr
-  · simp
-
 theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
-  (circuit.operations n).initial_offset = n := by
+    (circuit.operations n).initial_offset = n := by
   rw [operations_eq circuit n]
   exact (final_offset_eq circuit n ▸ operations n).property
 
 theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit circuit] (n : ℕ) :
-  (circuit.operations n).local_length = lawful.local_length := by
+    (circuit.operations n).local_length = lawful.local_length := by
   apply Nat.add_left_cancel (n:=n)
   rw [←lawful.local_length_eq]
   rw (occs := .pos [1]) [←initial_offset_eq circuit n]
   rw [Circuit.total_length_eq, final_offset_eq]
 
-theorem local_length_bind_eq (f : Circuit F α) (g : α → Circuit F β)
+theorem local_length_bind (f : Circuit F α) (g : α → Circuit F β)
   [f_lawful: LawfulCircuit f] [g_lawful : ∀ a : α, LawfulCircuit (g a)] (n : ℕ) :
-  ((f >>= g).operations n).local_length = (f.operations n).local_length + ((g (f.output n)).operations (f.final_offset n)).local_length := by
+    ((f >>= g).operations n).local_length = (f.operations n).local_length + ((g (f.output n)).operations (f.final_offset n)).local_length := by
   apply Nat.add_left_cancel (n:=n)
   let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
   rw (occs := .pos [1]) [←fg_lawful.initial_offset_eq _ n]
@@ -404,7 +395,7 @@ theorem Circuit.constraints_hold_bind.soundness {env : Environment F}
   rw [h_ops, OperationsFrom.append_val, constraints_hold_append.soundness]
 
 theorem Operations.local_length_append (as : Operations F m) (bs : OperationsFrom F m n) :
-  (as ++ bs).local_length = as.local_length + bs.val.local_length := by
+    (as ++ bs).local_length = as.local_length + bs.val.local_length := by
   induction bs using OperationsFrom.induct with
   | empty n => rw [Operations.append_empty]; rfl
   | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
@@ -416,36 +407,32 @@ theorem Operations.local_length_append (as : Operations F m) (bs : OperationsFro
 
 -- loops
 
-instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [h : ∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
-     LawfulCircuit (forM xs circuit) := by
+instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [lawful : ∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
+    LawfulCircuit (forM xs circuit) := by
   induction xs
   case nil => rw [List.forM_nil]; infer_instance
-  case cons x xs ih =>
-    rw [List.forM_cons]
-    apply from_bind
-    exact h x
-    intro _
-    exact ih
+  case cons x xs ih => rw [List.forM_cons]; exact from_bind inferInstance inferInstance
 
-instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} :
-    (∀ x : α, LawfulCircuit (circuit x)) → ∀ (n : ℕ) (xs : Vector α n), LawfulCircuit (forM xs circuit) := by
-  intro h n xs
+lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
+    forM xs body = forM xs.toList body := by
   rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+
+instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
+    LawfulCircuit (forM xs circuit) := by
+  rw [Vector.forM_toList]
   apply from_forM
 
 theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
   {xs : List α} {n : ℕ} :
-    ((forM xs circuit).operations n).local_length = xs.length * lawful.local_length := by
+    ((forM xs circuit).operations n).local_length = lawful.local_length * xs.length := by
   set k := lawful.local_length
   induction xs generalizing n with
   | nil =>
-      simp only [List.forM_nil, LawfulCircuit.operations_eq, List.length_nil, zero_mul]
-      rfl
+    rw [List.forM_nil, LawfulCircuit.local_length_eq]
+    rfl
   | cons x xs ih =>
-    rw [List.forM_cons, List.length_cons]
-    let lawful_cons : LawfulCircuit ((do circuit x; forM xs circuit)) := .from_bind inferInstance inferInstance
-    rw [add_mul, one_mul, add_comm]
-    rw [LawfulCircuit.local_length_bind_eq, LawfulCircuit.local_length_eq, ih (n := ((circuit x).final_offset n))]
+    rw [List.forM_cons, LawfulCircuit.local_length_bind, LawfulCircuit.local_length_eq, ih]
+    rw [List.length_cons, mul_add, mul_one, add_comm _ k]
     rfl
 
 theorem Circuit.constraints_hold_forM.soundness
@@ -483,9 +470,7 @@ theorem Circuit.constraints_hold_forM_vector.soundness
   {xs : Vector α n} {m : ℕ} :
     constraints_hold.soundness env (forM xs circuit |>.operations m) ↔
       ∀ (x : α) (i : ℕ) (_ : (x, i) ∈ xs.toList.zipIdx), constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM, constraints_hold_forM.soundness]
-  rw [List.forall_iff_forall_mem]
-  simp
+  rw [Vector.forM_toList, constraints_hold_forM.soundness, List.forall_iff_forall_mem, Prod.forall]
 
 /-- weaker version for when the constraints don't depend on the input offset -/
 theorem Circuit.constraints_hold_forM_vector.soundness'
