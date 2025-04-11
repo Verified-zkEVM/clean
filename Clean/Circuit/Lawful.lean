@@ -37,6 +37,11 @@ instance LawfulCircuit.from_pure {a : α} : ConstantLawfulCircuit (pure a : Circ
   local_length := 0
   operations n := .empty n
 
+instance ConstantLawfulCircuits.from_pure {f : α → β} : ConstantLawfulCircuits (fun a => pure (f a) : α → Circuit F β) where
+  output a _ := f a
+  local_length := 0
+  operations _ n := .empty n
+
 -- `bind` of two lawful circuits yields a lawful circuit
 instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
     (f_lawful : LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
@@ -140,10 +145,11 @@ example :
     pure z
 
   LawfulCircuit add := by infer_lawful_circuit
+end
 
 -- constant version of `bind`
 instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
-    [f_lawful : ConstantLawfulCircuit f] [g_lawful : ConstantLawfulCircuits g] : ConstantLawfulCircuit (f >>= g) where
+    (f_lawful : ConstantLawfulCircuit f) (g_lawful : ConstantLawfulCircuits g) : ConstantLawfulCircuit (f >>= g) where
   output n :=
     let nf := f_lawful.local_length
     let a := f_lawful.output n
@@ -174,9 +180,9 @@ instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F
     show (g _ _).2 = _
     rw [g_lawful.append_only, f_lawful.output_independent, f_lawful.append_only, Operations.append_assoc]
 
--- TODO tactic to infer `ConstantLawfulCircuit(s)`
--- this probably just needs to use a combination of `infer_instance` and `ConstantLawfulCircuit.from_bind`
-end
+-- TODO inferring `ConstantLawfulCircuit` doesn't work yet.
+-- the problem is that in every successive bind, in general, you get one more dependent variable in the second function.
+-- i.e. we would need `ConstantLawfulCircuits (α → β)`, `ConstantLawfulCircuitss (α → β → γ)` etc.
 
 -- characterize various properties of lawful circuits
 
