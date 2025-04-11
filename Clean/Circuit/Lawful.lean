@@ -1,131 +1,6 @@
+import Clean.Circuit.Append
 import Clean.Circuit.SubCircuit
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
-
-def Operations.append {m n: ℕ} (as : Operations F m) : (bs : Operations F n) → bs.initial_offset = m → Operations F n
-  | empty n, (heq : n = _) => heq ▸ as
-  | witness bs k c, heq => witness (append as bs heq) k c
-  | assert bs e, heq => assert (append as bs heq) e
-  | lookup bs l, heq => lookup (append as bs heq) l
-  | subcircuit bs s, heq => subcircuit (append as bs heq) s
-
-@[reducible] def OperationsFrom (F: Type) [Field F] (m: ℕ) (n : ℕ) :=
-  { bs : Operations F n // bs.initial_offset = m }
-
-instance (as : Operations F n) : CoeDep (Operations F n) (as) (OperationsFrom F (as.initial_offset) n) where
-  coe := ⟨ as, rfl ⟩
-
--- constructors
-
-def OperationsFrom.empty (n: ℕ) : OperationsFrom F n n := .mk (.empty n) rfl
-
-def OperationsFrom.witness (as : OperationsFrom F m n) (k : ℕ) (c : Environment F → Vector F k) : OperationsFrom F m (n + k) :=
-  .mk (.witness as.val k c) as.property
-
-def OperationsFrom.assert (as : OperationsFrom F m n) (e : Expression F) : OperationsFrom F m n :=
-  .mk (.assert as.val e) as.property
-
-def OperationsFrom.lookup (as : OperationsFrom F m n) (l : Lookup F) : OperationsFrom F m n :=
-  .mk (.lookup as.val l) as.property
-
-def OperationsFrom.subcircuit (as : OperationsFrom F m n) (s : SubCircuit F n) : OperationsFrom F m (n + s.local_length) :=
-  .mk (.subcircuit as.val s) as.property
-
--- induction principle for OperationsFrom
-def OperationsFrom.induct' {F: Type} [Field F] {motive : {n m: ℕ} → OperationsFrom F m n → Prop}
-  (empty : ∀ (n), motive (n:=n) (m:=n) (.empty n))
-  (witness : ∀ {n m} (as : Operations F n) (k c) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (.witness as k c) ha))
-  (assert : ∀ {n m} (as : Operations F n) (e) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (.assert as e) ha))
-  (lookup : ∀ {n m} (as : Operations F n) (l) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (.lookup as l) ha))
-  (subcircuit : ∀ {n m} (as : Operations F n) (s) (ha : as.initial_offset = m),
-    motive (.mk as ha) → motive (.mk (.subcircuit as s) ha))
-  {n m: ℕ} (as: OperationsFrom F m n) : motive as :=
-  motive' as.val as.property
-where
-  motive' {n m} : (as : Operations F n) → (ha: as.initial_offset = m) → motive (.mk as ha)
-  | .empty n, rfl => empty n
-  | .witness _ _ _, _ => witness _ _ _ _ (motive' _ _)
-  | .assert _ _, _ => assert _ _ _ (motive' _ _)
-  | .lookup _ _, _ => lookup _ _ _ (motive' _ _)
-  | .subcircuit _ _, _ => subcircuit _ _ _ (motive' _ _)
-
-def OperationsFrom.induct {F: Type} [Field F] {motive : {n m: ℕ} → OperationsFrom F m n → Prop}
-  (empty : ∀ (n), motive (n:=n) (m:=n) (.empty n))
-  (witness : ∀ {n m} (as : OperationsFrom F m n) (k c), motive as → motive (.witness as k c))
-  (assert : ∀ {n m} (as : OperationsFrom F m n) (e), motive as → motive (.assert as e))
-  (lookup : ∀ {n m} (as : OperationsFrom F m n) (l), motive as → motive (.lookup as l))
-  (subcircuit : ∀ {n m} (as : OperationsFrom F m n) (s), motive as → motive (.subcircuit as s))
-    {n m: ℕ} (as: OperationsFrom F m n) : motive as := by
-  induction as using OperationsFrom.induct' with
-  | empty n => exact empty n
-  | witness as k c ha ih => exact witness _ _ _ ih
-  | assert as e ha ih => exact assert _ _ ih
-  | lookup as l ha ih => exact lookup _ _ ih
-  | subcircuit as s ha ih => exact subcircuit _ _ ih
-
-namespace Operations
-instance : HAppend (Operations F m) (OperationsFrom F m n) (Operations F n) where
-  hAppend as bs := as.append bs.val bs.property
-
-theorem append_empty (as : Operations F n) : as ++ (OperationsFrom.empty (F:=F) n) = as := rfl
-
-theorem empty_append (as : OperationsFrom F n m) : empty (F:=F) n ++ as = as.val := by
-  induction as using OperationsFrom.induct' with
-  | empty n => rfl
-  | witness | assert | lookup | subcircuit => simp_all only [HAppend.hAppend, append]
-
-theorem append_witness (as : Operations F m) (bs : OperationsFrom F m n) (k : ℕ) (c : Environment F → Vector F k) :
-  as ++ (OperationsFrom.witness bs k c) = .witness (as ++ bs) k c := by rfl
-
-theorem append_assert (as : Operations F m) (bs : OperationsFrom F m n) (e : Expression F) :
-  as ++ (OperationsFrom.assert bs e) = .assert (as ++ bs) e := by rfl
-
-theorem append_lookup (as : Operations F m) (bs : OperationsFrom F m n) (l : Lookup F) :
-  as ++ (OperationsFrom.lookup bs l) = .lookup (as ++ bs) l := by rfl
-
-theorem append_subcircuit (as : Operations F m) (bs : OperationsFrom F m n) (s : SubCircuit F n) :
-  as ++ (OperationsFrom.subcircuit bs s) = .subcircuit (as ++ bs) s := by rfl
-
-theorem append_initial_offset {m n: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) :
-    (as ++ bs).initial_offset = as.initial_offset := by
-  induction bs using OperationsFrom.induct with
-  | empty n => rfl
-  | witness bs _ _ ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih => exact ih as
-end Operations
-
-instance : HAppend (OperationsFrom F m n) (OperationsFrom F n o) (OperationsFrom F m o) where
-  hAppend as bs := ⟨ as.val.append bs.val bs.property, by
-    show (as.val ++ bs).initial_offset = m
-    rw [Operations.append_initial_offset, as.property] ⟩
-
-theorem Operations.append_assoc {m n o: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) (cs : OperationsFrom F n o) :
-  (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
-  induction cs using OperationsFrom.induct' with
-  | empty n => rfl
-  | witness _ _ _ _ ih | assert _ _ _ ih | lookup _ _ _ ih | subcircuit _ _ _ ih =>
-    simp only [HAppend.hAppend, append, witness.injEq, assert.injEq, lookup.injEq, subcircuit.injEq, and_true]
-    exact ih bs
-
-namespace OperationsFrom
-theorem append_val (as : OperationsFrom F m n) (bs : OperationsFrom F n o) :
-    (as ++ bs).val = as.val ++ bs := by
-  dsimp only [HAppend.hAppend]
-
-theorem empty_val (n : ℕ) : (empty (F:=F) n).val = Operations.empty n := rfl
-
-theorem self_val (as : Operations F n) : as = (⟨ as, rfl ⟩ : OperationsFrom F as.initial_offset n).val := rfl
-
-theorem append_empty (as : OperationsFrom F m n) : as ++ empty (F:=F) n = as := rfl
-
-theorem empty_append (as : OperationsFrom F m n) : empty (F:=F) m ++ as = as := by
-  ext; rw [append_val, empty_val, Operations.empty_append]
-
-theorem append_assoc {p: ℕ} (as : OperationsFrom F m n) (bs : OperationsFrom F n o) (cs : OperationsFrom F o p) :
-  (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
-  ext; simp only [append_val, Operations.append_assoc]
-end OperationsFrom
 
 class LawfulCircuit (circuit : Circuit F α) where
   /-- a proper circuit is encapsulated by three functions of the input offset -/
@@ -303,8 +178,7 @@ instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F
 -- this probably just needs to use a combination of `infer_instance` and `ConstantLawfulCircuit.from_bind`
 end
 
--- characterize the circuit.operations of lawful circuits
--- (ultimate goal: unfold constraints from the beginning)
+-- characterize various properties of lawful circuits
 
 -- helper lemma needed right below
 lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} {ops' : Operations F ops.offset} :
@@ -371,12 +245,12 @@ theorem local_length_bind (f : Circuit F α) (g : α → Circuit F β)
   rw [←LawfulCircuit.output_independent (.from_offset n)]
 
 theorem soundness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit] {env} {n : ℕ} :
-    Circuit.constraints_hold.soundness env (circuit.operations n) ↔ Circuit.constraints_hold.soundness env (lawful.operations n).val := by
-  simp only [LawfulCircuit.operations_eq' (Circuit.constraints_hold.soundness env )]
+    Circuit.constraints_hold.soundness env (circuit.operations n) ↔ Circuit.constraints_hold.soundness env (lawful.operations n).val :=
+  LawfulCircuit.operations_eq' (Circuit.constraints_hold.soundness env)
 
 theorem completeness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit] {env} {n : ℕ} :
-    Circuit.constraints_hold.completeness env (circuit.operations n) ↔ Circuit.constraints_hold.completeness env (lawful.operations n).val := by
-  simp only [LawfulCircuit.operations_eq' (Circuit.constraints_hold.completeness env )]
+    Circuit.constraints_hold.completeness env (circuit.operations n) ↔ Circuit.constraints_hold.completeness env (lawful.operations n).val :=
+  LawfulCircuit.operations_eq' (Circuit.constraints_hold.completeness env)
 end LawfulCircuit
 
 namespace Circuit.constraints_hold
@@ -436,117 +310,3 @@ theorem Operations.local_length_append (as : Operations F m) (bs : OperationsFro
     simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
     simp only [local_length, ih]
     try ac_rfl
-
--- loops
-
-instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [lawful : ∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
-    LawfulCircuit (forM xs circuit) := by
-  induction xs
-  case nil => rw [List.forM_nil]; infer_instance
-  case cons x xs ih => rw [List.forM_cons]; exact from_bind inferInstance inferInstance
-
-lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
-    forM xs body = forM xs.toList body := by
-  rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
-
-instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
-    LawfulCircuit (forM xs circuit) := by
-  rw [Vector.forM_toList]
-  apply from_forM
-
-theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
-  {xs : List α} {n : ℕ} :
-    ((forM xs circuit).operations n).local_length = lawful.local_length * xs.length := by
-  set k := lawful.local_length
-  induction xs generalizing n with
-  | nil =>
-    rw [List.forM_nil, LawfulCircuit.local_length_eq]
-    rfl
-  | cons x xs ih =>
-    rw [List.forM_cons, LawfulCircuit.local_length_bind, LawfulCircuit.local_length_eq, ih]
-    rw [List.length_cons, mul_add, mul_one, add_comm _ k]
-    rfl
-
-namespace Circuit.constraints_hold
--- characterize `constraints_hold` for variants of `forM`
-
-variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
-variable {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
-
-theorem forM_generic {xs : List α} :
-  generic from_subcircuit env (forM xs circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => generic from_subcircuit env (circuit x |>.operations (n + i*lawful.local_length)) := by
-
-  induction xs generalizing n with
-  | nil => simp [generic, circuit_norm]
-  | cons x xs ih =>
-    rw [List.forM_cons, List.zipIdx_cons, List.forall_cons]
-    simp only at ih ⊢
-    rw [zero_mul, add_zero, zero_add]
-    specialize ih (n := n + lawful.local_length)
-
-    have h_zip : List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + lawful.local_length + i * lawful.local_length))) xs.zipIdx
-      ↔ List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + i * lawful.local_length))) (xs.zipIdx 1) := by
-      rw [List.zipIdx_succ, List.forall_map_iff]
-      conv =>
-        rhs
-        change List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + (i + 1) * lawful.local_length))) xs.zipIdx
-        lhs
-        intro t
-        simp only
-        rw [add_mul, one_mul, add_comm _ lawful.local_length, ←add_assoc]
-
-    rw [←h_zip, ←ih]
-    clear h_zip ih
-    rw [bind_generic _ inferInstance inferInstance]
-    exact Iff.intro id id
-
-theorem forM_vector_generic {xs : Vector α n} :
-  generic from_subcircuit env (forM xs circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  rw [Vector.forM_toList, forM_generic, List.forall_iff_forall_mem, Prod.forall]
-  have h_elem_iff : ∀ {t}, (t ∈ xs.zipIdx ↔ t ∈ xs.toList.zipIdx) := by
-    intro t
-    rw [←Array.toList_zipIdx, ←Vector.mem_toList_iff]
-    exact ⟨ id, id ⟩
-  constructor
-  · exact fun h x _ i hxi => h x i (h_elem_iff.mp hxi)
-  · intro h x i hxi
-    rw [←h_elem_iff (t:=(x, i))] at hxi
-    have hx : x ∈ xs := by
-      rw [Vector.mem_iff_getElem?]
-      exact ⟨ i, Vector.mem_zipIdx_iff_getElem? (x:=(x, i)).mp hxi⟩
-    exact h x hx i hxi
-
--- specialization to soundness / completeness
-theorem forM_soundness {xs : List α} :
-  soundness env (forM xs circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [soundness_iff_generic, forM_generic]
-
-theorem forM_completeness {xs : List α} :
-  completeness env (forM xs circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [completeness_iff_generic, forM_generic]
-
-theorem forM_vector_soundness {xs : Vector α n} :
-  soundness env (forM xs circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [soundness_iff_generic, forM_vector_generic]
-
-theorem forM_vector_completeness {xs : Vector α n} :
-  completeness env (forM xs circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [completeness_iff_generic, forM_vector_generic]
-
-/-- simpler version for when the constraints don't depend on the input offset -/
-theorem forM_vector_soundness' {xs : Vector α n} :
-    soundness env (forM xs circuit |>.operations m) → ∀ x ∈ xs, ∃ k : ℕ, soundness env (circuit x |>.operations k) := by
-  intro h
-  replace h := forM_vector_soundness.mp h
-  intro x hx
-  obtain ⟨ i, hxi ⟩ := Vector.mem_iff_getElem?.mp hx
-  rw [←Vector.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
-  specialize h x hx i hxi
-  use m + i * lawful.local_length
-end Circuit.constraints_hold

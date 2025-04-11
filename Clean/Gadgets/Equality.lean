@@ -1,4 +1,4 @@
-import Clean.Circuit.Lawful
+import Clean.Circuit.Loops
 
 variable {F : Type} [Field F]
 open Circuit (constraints_hold)
