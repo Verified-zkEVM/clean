@@ -196,19 +196,27 @@ theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.us
       exact circuit.implied_by_completeness env (env_extends_subcircuit_inner h_env) h.right
 
 /--
-Version of `constraints_hold.soundness` that is simpler to reason about, and equivalent
+Generic version of `constraints_hold`, to reason about soundness and completeness at the same time
 -/
-def constraints_hold.soundness' {n : ℕ} (eval : Environment F) : Operations F n → Prop
+def constraints_hold.generic (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+  (eval : Environment F) {n : ℕ} : Operations F n → Prop
   | .empty _ => True
-  | .witness ops _ _ => soundness' eval ops
-  | .assert ops e => soundness' eval ops ∧ eval e = 0
-  | .lookup ops { table, entry, .. } => soundness' eval ops ∧ table.contains (entry.map eval)
-  | .subcircuit ops s => soundness' eval ops ∧ s.soundness eval
+  | .witness ops _ _ => generic from_subcircuit eval ops
+  | .assert ops e => generic from_subcircuit eval ops ∧ eval e = 0
+  | .lookup ops { table, entry, .. } => generic from_subcircuit eval ops ∧ table.contains (entry.map eval)
+  | .subcircuit ops s => generic from_subcircuit eval ops ∧ from_subcircuit eval s
 
-theorem constraints_hold.soundness'_iff_soundness {n : ℕ} (env : Environment F) (ops : Operations F n) :
-  soundness env ops ↔ soundness' env ops := by
+theorem constraints_hold.soundness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
+  soundness env ops ↔ generic (fun env s => s.soundness env) env ops := by
   induction ops with
   | empty => trivial
   | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
-    cases ops <;> simp_all [soundness, soundness']
+    cases ops <;> simp_all [soundness, generic]
+
+theorem constraints_hold.completeness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
+  completeness env ops ↔ generic (fun env s => s.completeness env) env ops := by
+  induction ops with
+  | empty => trivial
+  | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
+    cases ops <;> simp_all [completeness, generic]
 end Circuit

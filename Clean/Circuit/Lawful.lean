@@ -330,6 +330,15 @@ lemma operations_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.operations n = (final_offset_eq circuit n ▸ operations n).val := by
   rw [Circuit.operations, append_only', Operations.empty_append]
 
+theorem operations_eq' (motive : {n : ℕ} → Operations F n → Prop)
+    {circuit : Circuit F α} [lawful : LawfulCircuit circuit] {n : ℕ} :
+  motive (circuit.operations n) ↔ motive (lawful.operations n).val := by
+  rw [operations_eq, iff_iff_eq]
+  have h_off : circuit.final_offset n = final_offset circuit n := final_offset_eq circuit n
+  congr
+  · apply Function.hfunext; congr; intros; congr
+  · rw [eqRec_heq_iff_heq, heq_eq_eq]
+
 theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     (circuit.operations n).initial_offset = n := by
   rw [operations_eq circuit n]
@@ -353,46 +362,56 @@ theorem local_length_bind (f : Circuit F α) (g : α → Circuit F β)
   rw [←add_assoc, Circuit.total_length_eq, final_offset_eq]
   rw (occs := .pos [1]) [←(g_lawful (f.output n)).initial_offset_eq _ (final_offset f n)]
   rw [Circuit.total_length_eq, final_offset_eq]
-  simp [fg_lawful, LawfulCircuit.final_offset]
+  simp only [fg_lawful, final_offset]
   rw [←LawfulCircuit.output_independent (.from_offset n)]
-
-theorem constraints_hold_eq.soundness (circuit : Circuit F α) [lawful : LawfulCircuit circuit] (env : Environment F) (n : ℕ) :
-  Circuit.constraints_hold.soundness env (circuit.operations n) ↔
-    Circuit.constraints_hold.soundness env (lawful.operations n).val := by
-  rw [operations_eq, iff_iff_eq]
-  have h_off : circuit.final_offset n = final_offset circuit n := final_offset_eq circuit n
-  congr
-  · apply Function.hfunext; congr; intros; congr
-  · rw [eqRec_heq_iff_heq, heq_eq_eq]
-
 end LawfulCircuit
 
-theorem Circuit.constraints_hold_append.soundness (env : Environment F) (as : Operations F m) (bs : OperationsFrom F m n) :
-  constraints_hold.soundness env (as ++ bs) ↔
-    constraints_hold.soundness env as ∧ constraints_hold.soundness env bs.val := by
-  simp only [constraints_hold.soundness'_iff_soundness]
+namespace Circuit.constraints_hold
+variable {env : Environment F} {n : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+
+theorem append_generic (as : Operations F m) (bs : OperationsFrom F m n) :
+  generic from_subcircuit env (as ++ bs) ↔
+    generic from_subcircuit env as ∧ generic from_subcircuit env bs.val := by
   induction bs using OperationsFrom.induct with
   | empty n => rw [Operations.append_empty]; tauto
   | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
     specialize ih as
     simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
     simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
-    simp only [constraints_hold.soundness', ih]
-    try tauto
+    simp only [generic, ih, and_assoc]
 
-theorem Circuit.constraints_hold_bind.soundness {env : Environment F}
-  {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) (n : ℕ) :
-  constraints_hold.soundness env ((f >>= g).operations n) ↔
-    constraints_hold.soundness env (f.operations n)
-    ∧ constraints_hold.soundness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
+theorem bind_generic {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
+  generic from_subcircuit env ((f >>= g).operations n) ↔
+    generic from_subcircuit env (f.operations n)
+    ∧ generic from_subcircuit env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
   open LawfulCircuit in
   let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
-  simp only [constraints_hold_eq.soundness]
+  simp only [LawfulCircuit.operations_eq' (generic from_subcircuit env)]
   have h_length : fg_lawful.final_offset n = (g_lawful (f_lawful.output n)).final_offset (f_lawful.final_offset n) := by
     simp only [fg_lawful, from_bind]
   have h_ops : fg_lawful.operations n = f_lawful.operations n ++ h_length ▸ (g_lawful (f_lawful.output n)).operations (f_lawful.final_offset n) := by
     simp only [fg_lawful, from_bind]
-  rw [h_ops, OperationsFrom.append_val, constraints_hold_append.soundness]
+  rw [h_ops, OperationsFrom.append_val, append_generic]
+
+-- specializations to soundness / completeness
+theorem append_soundness (as : Operations F m) (bs : OperationsFrom F m n) :
+    soundness env (as ++ bs) ↔ soundness env as ∧ soundness env bs.val := by
+  simp only [soundness_iff_generic, append_generic]
+
+theorem append_completeness (as : Operations F m) (bs : OperationsFrom F m n) :
+  completeness env (as ++ bs) ↔ completeness env as ∧ completeness env bs.val := by
+  simp only [completeness_iff_generic, append_generic]
+
+theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
+    soundness env ((f >>= g).operations n) ↔
+    soundness env (f.operations n) ∧ soundness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
+  simp only [soundness_iff_generic, bind_generic]
+
+theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
+    completeness env ((f >>= g).operations n) ↔
+    completeness env (f.operations n) ∧ completeness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
+  simp only [completeness_iff_generic, bind_generic]
+end Circuit.constraints_hold
 
 theorem Operations.local_length_append (as : Operations F m) (bs : OperationsFrom F m n) :
     (as ++ bs).local_length = as.local_length + bs.val.local_length := by
@@ -435,26 +454,30 @@ theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : Co
     rw [List.length_cons, mul_add, mul_one, add_comm _ k]
     rfl
 
-theorem Circuit.constraints_hold_forM.soundness
-  {env : Environment F} {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
-  {xs : List α} {n : ℕ} :
-    constraints_hold.soundness env (forM xs circuit |>.operations n) ↔
-      xs.zipIdx.Forall fun (x, i) => constraints_hold.soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
+namespace Circuit.constraints_hold
+-- characterize `constraints_hold` for variants of `forM`
+
+variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
+
+theorem forM_generic {xs : List α} :
+  generic from_subcircuit env (forM xs circuit |>.operations n) ↔
+    xs.zipIdx.Forall fun (x, i) => generic from_subcircuit env (circuit x |>.operations (n + i*lawful.local_length)) := by
 
   induction xs generalizing n with
-  | nil => simp [circuit_norm]
+  | nil => simp [generic, circuit_norm]
   | cons x xs ih =>
     rw [List.forM_cons, List.zipIdx_cons, List.forall_cons]
     simp only at ih ⊢
     rw [zero_mul, add_zero, zero_add]
     specialize ih (n := n + lawful.local_length)
 
-    have h_zip : List.Forall (fun (x, i) ↦ constraints_hold.soundness env ((circuit x).operations (n + lawful.local_length + i * lawful.local_length))) xs.zipIdx
-      ↔ List.Forall (fun (x, i) ↦ constraints_hold.soundness env ((circuit x).operations (n + i * lawful.local_length))) (xs.zipIdx 1) := by
+    have h_zip : List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + lawful.local_length + i * lawful.local_length))) xs.zipIdx
+      ↔ List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + i * lawful.local_length))) (xs.zipIdx 1) := by
       rw [List.zipIdx_succ, List.forall_map_iff]
       conv =>
         rhs
-        change List.Forall (fun (x, i) ↦ constraints_hold.soundness env ((circuit x).operations (n + (i + 1) * lawful.local_length))) xs.zipIdx
+        change List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + (i + 1) * lawful.local_length))) xs.zipIdx
         lhs
         intro t
         simp only
@@ -462,27 +485,55 @@ theorem Circuit.constraints_hold_forM.soundness
 
     rw [←h_zip, ←ih]
     clear h_zip ih
-    rw [constraints_hold_bind.soundness inferInstance inferInstance]
+    rw [bind_generic _ inferInstance inferInstance]
     exact Iff.intro id id
 
-theorem Circuit.constraints_hold_forM_vector.soundness
-  {env : Environment F} {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
-  {xs : Vector α n} {m : ℕ} :
-    constraints_hold.soundness env (forM xs circuit |>.operations m) ↔
-      ∀ (x : α) (i : ℕ) (_ : (x, i) ∈ xs.toList.zipIdx), constraints_hold.soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  rw [Vector.forM_toList, constraints_hold_forM.soundness, List.forall_iff_forall_mem, Prod.forall]
+theorem forM_vector_generic {xs : Vector α n} :
+  generic from_subcircuit env (forM xs circuit |>.operations m) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  rw [Vector.forM_toList, forM_generic, List.forall_iff_forall_mem, Prod.forall]
+  have h_elem_iff : ∀ {t}, (t ∈ xs.zipIdx ↔ t ∈ xs.toList.zipIdx) := by
+    intro t
+    rw [←Array.toList_zipIdx, ←Vector.mem_toList_iff]
+    exact ⟨ id, id ⟩
+  constructor
+  · exact fun h x _ i hxi => h x i (h_elem_iff.mp hxi)
+  · intro h x i hxi
+    rw [←h_elem_iff (t:=(x, i))] at hxi
+    have hx : x ∈ xs := by
+      rw [Vector.mem_iff_getElem?]
+      exact ⟨ i, Vector.mem_zipIdx_iff_getElem? (x:=(x, i)).mp hxi⟩
+    exact h x hx i hxi
 
-/-- weaker version for when the constraints don't depend on the input offset -/
-theorem Circuit.constraints_hold_forM_vector.soundness'
-  {env : Environment F} {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
-  {xs : Vector α n} {m : ℕ} :
-    constraints_hold.soundness env (forM xs circuit |>.operations m) →
-      ∀ x ∈ xs, ∃ n : ℕ, constraints_hold.soundness env (circuit x |>.operations n) := by
+-- specialization to soundness / completeness
+theorem forM_soundness {xs : List α} :
+  soundness env (forM xs circuit |>.operations n) ↔
+    xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
+  simp only [soundness_iff_generic, forM_generic]
+
+theorem forM_completeness {xs : List α} :
+  completeness env (forM xs circuit |>.operations n) ↔
+    xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
+  simp only [completeness_iff_generic, forM_generic]
+
+theorem forM_vector_soundness {xs : Vector α n} :
+  soundness env (forM xs circuit |>.operations m) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  simp only [soundness_iff_generic, forM_vector_generic]
+
+theorem forM_vector_completeness {xs : Vector α n} :
+  completeness env (forM xs circuit |>.operations m) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  simp only [completeness_iff_generic, forM_vector_generic]
+
+/-- simpler version for when the constraints don't depend on the input offset -/
+theorem forM_vector_soundness' {xs : Vector α n} :
+    soundness env (forM xs circuit |>.operations m) → ∀ x ∈ xs, ∃ k : ℕ, soundness env (circuit x |>.operations k) := by
   intro h
-  replace h := Circuit.constraints_hold_forM_vector.soundness.mp h
+  replace h := forM_vector_soundness.mp h
   intro x hx
-  rw [←Vector.mem_toList_iff, List.mem_iff_getElem?] at hx
-  obtain ⟨ i, hxi ⟩ := hx
-  rw [←List.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
-  specialize h x i hxi
+  obtain ⟨ i, hxi ⟩ := Vector.mem_iff_getElem?.mp hx
+  rw [←Vector.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
+  specialize h x hx i hxi
   use m + i * lawful.local_length
+end Circuit.constraints_hold
