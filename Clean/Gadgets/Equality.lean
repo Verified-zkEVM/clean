@@ -114,5 +114,14 @@ end Gadgets
 
 -- this is exported at the top level because it is a core builtin gadget
 @[circuit_norm]
-def assert_equals {α : TypeMap} [LawfulProvableType α] (x y : Var α F) : Circuit F Unit :=
+def assert_equals {α : TypeMap} [LawfulProvableType α] (x y : α (Expression F)) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit α) (x, y)
+
+-- TODO unfortunately, if the inputs to `assert_equals` are just `Expression F`,
+-- Lean doesn't come up with `α = id` -- even though `LawfulProvableType` is inferred when `(α:=id)` is passed explicitly.
+-- this definition is a somehwat natural alternative that can be used on `Expression F` directly
+@[reducible]
+def Expression.assert_equals (x y : Expression F) : Circuit F Unit :=
+  assertion (Gadgets.Equality.circuit id) (x, y)
+
+-- TODO define a custom syntax e.g. `===` that figures out whether to use `assert_equals` or `Expression.assert_equals`
