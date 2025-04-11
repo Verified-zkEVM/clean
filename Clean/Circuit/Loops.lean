@@ -28,7 +28,7 @@ theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : Co
     rw [List.forM_nil, LawfulCircuit.local_length_eq]
     rfl
   | cons x xs ih =>
-    rw [List.forM_cons, LawfulCircuit.local_length_bind, LawfulCircuit.local_length_eq, ih]
+    rw [List.forM_cons, LawfulCircuit.bind_local_length, LawfulCircuit.local_length_eq, ih]
     rw [List.length_cons, mul_add, mul_one, add_comm _ k]
     rfl
 

@@ -230,7 +230,7 @@ theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit 
   rw (occs := .pos [1]) [←initial_offset_eq circuit n]
   rw [Circuit.total_length_eq, final_offset_eq]
 
-theorem local_length_bind (f : Circuit F α) (g : α → Circuit F β)
+theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β)
   [f_lawful: LawfulCircuit f] [g_lawful : ∀ a : α, LawfulCircuit (g a)] (n : ℕ) :
     ((f >>= g).operations n).local_length = (f.operations n).local_length + ((g (f.output n)).operations (f.final_offset n)).local_length := by
   apply Nat.add_left_cancel (n:=n)
@@ -256,17 +256,6 @@ end LawfulCircuit
 namespace Circuit.constraints_hold
 variable {env : Environment F} {n : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
 
-theorem append_generic (as : Operations F m) (bs : OperationsFrom F m n) :
-  generic from_subcircuit env (as ++ bs) ↔
-    generic from_subcircuit env as ∧ generic from_subcircuit env bs.val := by
-  induction bs using OperationsFrom.induct with
-  | empty n => rw [Operations.append_empty]; tauto
-  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
-    specialize ih as
-    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
-    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
-    simp only [generic, ih, and_assoc]
-
 theorem bind_generic {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
   generic from_subcircuit env ((f >>= g).operations n) ↔
     generic from_subcircuit env (f.operations n)
@@ -281,13 +270,6 @@ theorem bind_generic {f : Circuit F α} {g : α → Circuit F β} (f_lawful: Law
   rw [h_ops, OperationsFrom.append_val, append_generic]
 
 -- specializations to soundness / completeness
-theorem append_soundness (as : Operations F m) (bs : OperationsFrom F m n) :
-    soundness env (as ++ bs) ↔ soundness env as ∧ soundness env bs.val := by
-  simp only [soundness_iff_generic, append_generic]
-
-theorem append_completeness (as : Operations F m) (bs : OperationsFrom F m n) :
-  completeness env (as ++ bs) ↔ completeness env as ∧ completeness env bs.val := by
-  simp only [completeness_iff_generic, append_generic]
 
 theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
     soundness env ((f >>= g).operations n) ↔
@@ -299,14 +281,3 @@ theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (f_lawful
     completeness env (f.operations n) ∧ completeness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
   simp only [completeness_iff_generic, bind_generic]
 end Circuit.constraints_hold
-
-theorem Operations.local_length_append (as : Operations F m) (bs : OperationsFrom F m n) :
-    (as ++ bs).local_length = as.local_length + bs.val.local_length := by
-  induction bs using OperationsFrom.induct with
-  | empty n => rw [Operations.append_empty]; rfl
-  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
-    specialize ih as
-    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
-    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
-    simp only [local_length, ih]
-    try ac_rfl
