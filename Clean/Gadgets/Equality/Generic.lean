@@ -10,19 +10,19 @@ import Clean.Utils.Field
 import Clean.Types.U32
 
 section
-variable {p : ℕ} [Fact p.Prime]
+variable {F : Type} [Field F]
 open Circuit (constraints_hold)
 
 namespace Gadgets
-def all_zero {n} (xs : Vector (Expression (F p)) n) : Circuit (F p) Unit := forM xs assert_zero
+def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := forM xs assert_zero
 
-theorem all_zero.soundness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
+theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   intro h_holds x hx
   obtain ⟨_, h_holds⟩ := constraints_hold.forM_vector_soundness' h_holds x hx
   exact h_holds
 
-theorem all_zero.completeness {offset : ℕ} {env : Environment (F p)} {n} {xs : Vector (Expression (F p)) n} :
+theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → constraints_hold.completeness env ((all_zero xs).operations offset) := by
   intro h_holds
   apply constraints_hold.forM_vector_completeness.mpr
@@ -30,24 +30,29 @@ theorem all_zero.completeness {offset : ℕ} {env : Environment (F p)} {n} {xs :
   exact h_holds x hx
 
 namespace Equality
+def main {α : TypeMap} [LawfulProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
+  let (x, y) := input
+  let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
+  forM diffs assert_zero
 
-def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion (F p) (ProvablePair α α) where
-  main (input : Var α (F p) × Var α (F p)) := do
-    let (x, y) := input
-    let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
-    forM diffs assert_zero
-
-  assumptions _ := True
-
-  spec : α (F p) × α (F p) → Prop
-  | (x, y) => x = y
+@[reducible]
+instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F (ProvablePair α α) Unit where
+  main := main
+  local_length _ := 0
+  output _ _ := ()
 
   local_length_eq _ n := by
     simp only
-    rw [Vector.forM_toList, Circuit.forM_local_length]
+    rw [main, Vector.forM_toList, Circuit.forM_local_length]
     simp only [ConstantLawfulCircuits.local_length, zero_mul]
 
-  initial_offset_eq _ n := by simp only [LawfulCircuit.initial_offset_eq]
+  initial_offset_eq _ n := by simp only [main, LawfulCircuit.initial_offset_eq]
+
+def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (ProvablePair α α) where
+  assumptions _ := True
+
+  spec : α F × α F → Prop
+  | (x, y) => x = y
 
   soundness := by
     intro offset env input_var input h_input _ h_holds
@@ -94,8 +99,26 @@ def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion (F p) (Prov
     rw [h_spec]
     ring
 
-end Equality
+-- allow `circuit_norm` to elaborate properties of the `circuit` while keeping main/spec/assumptions opaque
+@[circuit_norm ↓]
+lemma elaborated_eq (α : TypeMap) [LawfulProvableType α] : (circuit α (F:=F)).toElaboratedCircuit = elaborated α := rfl
 
-def assert_equals {α : TypeMap} [LawfulProvableType α] (x y : Var α (F p)) : Circuit (F p) Unit :=
-  assertion (Equality.circuit α) (x, y)
+-- rewrite soundness/completeness directly
+
+@[circuit_norm]
+theorem soundness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+    ((circuit α).to_subcircuit n (x, y)).soundness env = (eval env x = eval env y) := by
+  simp only [subcircuit_norm, circuit_norm, circuit, forall_const]
+
+@[circuit_norm]
+theorem completeness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+    ((circuit α).to_subcircuit n (x, y)).completeness env = (eval env x = eval env y) := by
+  simp only [subcircuit_norm, circuit_norm, circuit, true_and]
+
+end Equality
 end Gadgets
+
+-- this is exported at the top level because it is a core builtin gadget
+@[circuit_norm]
+def assert_equals {α : TypeMap} [LawfulProvableType α] (x y : Var α F) : Circuit F Unit :=
+  assertion (Gadgets.Equality.circuit α) (x, y)
