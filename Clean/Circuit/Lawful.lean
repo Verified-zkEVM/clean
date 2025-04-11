@@ -364,6 +364,14 @@ theorem local_length_bind (f : Circuit F α) (g : α → Circuit F β)
   rw [Circuit.total_length_eq, final_offset_eq]
   simp only [fg_lawful, final_offset]
   rw [←LawfulCircuit.output_independent (.from_offset n)]
+
+theorem soundness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit] {env} {n : ℕ} :
+    Circuit.constraints_hold.soundness env (circuit.operations n) ↔ Circuit.constraints_hold.soundness env (lawful.operations n).val := by
+  simp only [LawfulCircuit.operations_eq' (Circuit.constraints_hold.soundness env )]
+
+theorem completeness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit] {env} {n : ℕ} :
+    Circuit.constraints_hold.completeness env (circuit.operations n) ↔ Circuit.constraints_hold.completeness env (lawful.operations n).val := by
+  simp only [LawfulCircuit.operations_eq' (Circuit.constraints_hold.completeness env )]
 end LawfulCircuit
 
 namespace Circuit.constraints_hold
