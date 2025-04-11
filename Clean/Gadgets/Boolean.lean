@@ -44,21 +44,21 @@ by
 Asserts that x = 0 ∨ x = 1 by adding the constraint x * (x - 1) = 0
 -/
 def circuit : FormalAssertion (F p) field where
-  main := assert_bool
+  main (x : Expression (F p)) := assert_zero (x * (x - 1))
   assumptions _ := True
-  spec := spec
+  spec (x : F p) := x = 0 ∨ x = 1
 
   soundness := by
     intro _ env x_var x hx _ h_holds
     change x_var.eval env = x at hx
-    simp only [circuit_norm, assert_bool] at h_holds
+    simp only [circuit_norm] at h_holds
     rw [hx] at h_holds
     apply equiv.mp h_holds
 
   completeness := by
     intro n env x_var _ x hx _ spec
     change x_var.eval env = x at hx
-    simp only [circuit_norm, assert_bool]
+    simp only [circuit_norm]
     rw [hx]
     apply equiv.mpr spec
 end Boolean
