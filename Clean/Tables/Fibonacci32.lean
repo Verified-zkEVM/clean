@@ -2,7 +2,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Theorems
 import Clean.Gadgets.Addition32.Addition32Full
-import Clean.Gadgets.Equality.U32
+import Clean.Gadgets.Equality.Generic
 import Clean.Types.U32
 
 namespace Tables.Fibonacci32
@@ -52,15 +52,15 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   }
 
   assign_U32 next_row_off.y z
-  assertion Gadgets.Equality.U32.circuit ⟨curr.y, next.x⟩
+  assert_equals curr.y next.x
 
 /--
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  assertion Gadgets.Equality.U32.circuit ⟨row.x, const (U32.from_byte 0)⟩
-  assertion Gadgets.Equality.U32.circuit ⟨row.y, const (U32.from_byte 1)⟩
+  assert_equals row.x (const (U32.from_byte 0))
+  assert_equals row.y (const (U32.from_byte 1))
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
@@ -98,10 +98,10 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-    dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
-      Gadgets.Addition32Full.circuit, assign_U32, Gadgets.Equality.U32.circuit]
-    simp only [circuit_norm, table_norm]
-    rfl
+  dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
+    Gadgets.Addition32Full.circuit, assign_U32]
+  simp only [circuit_norm, table_norm]
+  rfl
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -132,19 +132,15 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   simp only [table_norm]
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
   set env := recursive_relation.window_env  ⟨<+> +> curr +> next, rfl⟩ aux_env
-  simp only [table_norm, circuit_norm, recursive_relation, assign_U32,
-    Gadgets.Equality.U32.circuit, Gadgets.Addition32Full.circuit
-  ]
+  simp only [table_norm, circuit_norm, recursive_relation,
+    assign_U32, Gadgets.Addition32Full.circuit]
   rintro ⟨ ⟨_, h_add⟩, h_eq ⟩
-  -- TODO make this work with simp only [circuit_norm]
-  simp [circuit_norm] at h_add h_eq
-  simp only [table_norm, circuit_norm, subcircuit_norm, true_implies, Nat.reduceAdd] at h_add h_eq
+  simp only [table_norm, circuit_norm, subcircuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
   constructor
-  · rw [Gadgets.Equality.U32.spec] at h_eq
-    exact h_eq
+  · exact h_eq
   rw [Gadgets.Addition32Full.assumptions, Gadgets.Addition32Full.spec] at h_add
   intro h_norm_x h_norm_y
   specialize h_add ⟨ h_norm_x, h_norm_y, Or.inl rfl ⟩
@@ -157,11 +153,8 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.is_normalized ∧ first_row.y.is_normalized
   := by
   set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ aux_env
-  simp only [table_norm, boundary, circuit_norm, Gadgets.Equality.U32.circuit]
-  -- TODO make this work with simp only [circuit_norm]
-  simp [circuit_norm]
-  simp only [subcircuit_norm, Gadgets.Equality.U32.spec]
-  simp [circuit_norm]
+  simp only [table_norm, boundary, circuit_norm]
+  simp only [true_and, and_imp]
   have hx : eval env (var_from_offset U32 0) = first_row.x := by rfl
   have hy : eval env (var_from_offset U32 4) = first_row.y := by rfl
   rw [hx, hy]
@@ -215,7 +208,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       simp at constraints_hold
       have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 (rest.len + 1)) constraints_hold
 
-      -- and now we can reason at high level with U32s
+      -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y
       simp only [fib32, Trace.len]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
