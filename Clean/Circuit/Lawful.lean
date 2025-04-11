@@ -46,33 +46,30 @@ instance ConstantLawfulCircuits.from_pure {f : α → β} : ConstantLawfulCircui
 instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
     (f_lawful : LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
   output n :=
-    let n' := f_lawful.final_offset n
-    let a := f_lawful.output n
-    (g_lawful a).output n'
+    let a := output f n
+    output (g a) (final_offset f n)
 
   final_offset n :=
-    let n' := f_lawful.final_offset n
-    let a := f_lawful.output n
-    (g_lawful a).final_offset n'
+    let a := output f n
+    final_offset (g a) (final_offset f n)
 
   operations n :=
-    let n' := f_lawful.final_offset n
-    let a := f_lawful.output n
+    let a := output f n
     let ops_f := f_lawful.operations n
-    let ops_g := (g_lawful a).operations n'
+    let ops_g := (g_lawful a).operations (final_offset f n)
     ops_f ++ ops_g
 
   output_independent ops := by
     show (g _ _).1 = _ -- by definition, `(f >>= g) ops = g (f ops).1 (f ops).2`
-    rw [(g_lawful _).output_independent, f_lawful.output_independent, f_lawful.offset_independent]
+    rw [output_independent, output_independent, offset_independent]
 
   offset_independent ops := by
     show (g _ _).2.offset = _
-    rw [(g_lawful _).offset_independent, f_lawful.output_independent, f_lawful.offset_independent]
+    rw [offset_independent, output_independent, offset_independent]
 
   append_only ops := by
     show (g _ _).2 = _
-    rw [(g_lawful _).append_only, f_lawful.output_independent, f_lawful.append_only, Operations.append_assoc]
+    rw [append_only, output_independent, append_only, Operations.append_assoc]
 
 -- basic operations are (constant) lawful circuits
 
@@ -112,12 +109,12 @@ instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input
 
 -- lower `ConstantLawfulCircuits` to `ConstantLawfulCircuit`
 instance ConstantLawfulCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantLawfulCircuits circuit] : ConstantLawfulCircuit (circuit a) where
-  output n := lawful.output a n
-  local_length := lawful.local_length
-  operations n := lawful.operations a n
-  output_independent := lawful.output_independent a
-  offset_independent := lawful.offset_independent a
-  append_only := lawful.append_only a
+  output n := output circuit a n
+  local_length := local_length circuit
+  operations n := operations a n
+  output_independent := output_independent a
+  offset_independent := offset_independent a
+  append_only := append_only a
 
 syntax "infer_lawful_circuit" : tactic
 
@@ -148,37 +145,36 @@ example :
 end
 
 -- constant version of `bind`
+open LawfulCircuit in
 instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
     (f_lawful : ConstantLawfulCircuit f) (g_lawful : ConstantLawfulCircuits g) : ConstantLawfulCircuit (f >>= g) where
   output n :=
-    let nf := f_lawful.local_length
-    let a := f_lawful.output n
-    g_lawful.output a (n + nf)
+    let a := output f n
+    g_lawful.output a (n + local_length f)
 
-  local_length := f_lawful.local_length + g_lawful.local_length
-  final_offset n := f_lawful.final_offset n + g_lawful.local_length
+  local_length := local_length f + g_lawful.local_length
+  final_offset n := final_offset f n + g_lawful.local_length
   local_length_eq n := by
-    show f_lawful.final_offset n + g_lawful.local_length = _
-    rw [f_lawful.local_length_eq, add_assoc]
+    show final_offset f n + g_lawful.local_length = _
+    rw [local_length_eq, add_assoc]
 
   operations n :=
-    let n' := f_lawful.final_offset n
-    let a := f_lawful.output n
+    let a := output f n
     let ops_f := f_lawful.operations n
-    let ops_g := g_lawful.operations a n'
+    let ops_g := g_lawful.operations a (final_offset f n)
     ops_f ++ ops_g
 
   output_independent ops := by
     show (g _ _).1 = _
-    rw [g_lawful.output_independent, f_lawful.output_independent, f_lawful.offset_independent, f_lawful.local_length_eq]
+    rw [g_lawful.output_independent, output_independent, offset_independent, local_length_eq]
 
   offset_independent ops := by
     show (g _ _).2.offset = _
-    rw [g_lawful.offset_independent, f_lawful.offset_independent]
+    rw [g_lawful.offset_independent, offset_independent]
 
   append_only ops := by
     show (g _ _).2 = _
-    rw [g_lawful.append_only, f_lawful.output_independent, f_lawful.append_only, Operations.append_assoc]
+    rw [g_lawful.append_only, output_independent, append_only, Operations.append_assoc]
 
 -- TODO inferring `ConstantLawfulCircuit` doesn't work yet.
 -- the problem is that in every successive bind, in general, you get one more dependent variable in the second function.
