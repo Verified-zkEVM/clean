@@ -2,7 +2,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Theorems
 import Clean.Gadgets.Addition32.Addition32Full
-import Clean.Gadgets.Equality.Generic
+import Clean.Gadgets.Equality
 import Clean.Types.U32
 
 namespace Tables.Fibonacci32
