@@ -76,7 +76,6 @@ def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (Provable
 
     let ⟨x, y⟩ := input
     let ⟨x_var, y_var⟩ := input_var
-    simp only [circuit_norm, Prod.mk.injEq] at h_input
     simp only [circuit_norm, eval, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
     rw [←hx, ←hy] at h_spec
