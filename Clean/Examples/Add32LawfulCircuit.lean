@@ -1,5 +1,4 @@
 import Clean.Utils.Primes
-import Clean.Gadgets.Addition8.Addition8
 import Clean.Gadgets.Addition32.Addition32Full
 
 open Gadgets.Addition8FullCarry (add8_full_carry)

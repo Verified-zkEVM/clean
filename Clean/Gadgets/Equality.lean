@@ -1,15 +1,5 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
 import Clean.Circuit.Lawful
-import Clean.Utils.Field
-import Clean.Types.U32
 
-section
 variable {F : Type} [Field F]
 open Circuit (constraints_hold)
 
