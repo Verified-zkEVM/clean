@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-namespace Gadgets.And
+namespace Gadgets.And.And8
 open Gadgets.Xor (ByteXorLookup ByteXorTable)
 open FieldUtils
 
@@ -147,4 +147,4 @@ theorem completeness : Completeness (F p) field assumptions := by
 def circuit : FormalCircuit (F p) Inputs field :=
   { assumptions, spec, soundness, completeness }
 
-end Gadgets.And
+end Gadgets.And.And8
