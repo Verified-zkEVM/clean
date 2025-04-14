@@ -44,10 +44,9 @@ def xor (x y : Expression (F p)) :  Circuit (F p) (Expression (F p)) := do
 
 def and8 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y⟩ := input
-
-  -- witness the result
   let z ← witness (fun eval => Nat.land  (eval x).val (eval y).val)
-
+  let xor_x_y ← xor x y
+  assert_zero (2 * z + xor_x_y - x - y)
   return { z }
 
 end Gadgets.And
