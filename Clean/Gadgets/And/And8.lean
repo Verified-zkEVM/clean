@@ -38,12 +38,16 @@ def spec (input : Inputs (F p)) (output : Outputs (F p)) :=
   z.val = Nat.land x.val y.val
 
 def xor (x y : Expression (F p)) :  Circuit (F p) (Expression (F p)) := do
-  let z ← witness (fun eval => Nat.xor x.val y.val)
+  let z ← witness (fun eval => Nat.xor (eval x).val (eval y).val)
+  lookup (Gadgets.Xor.ByteXorLookup x y z)
+  return z
 
 def and8 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y⟩ := input
 
   -- witness the result
   let z ← witness (fun eval => Nat.land  (eval x).val (eval y).val)
+
+  return { z }
 
 end Gadgets.And
