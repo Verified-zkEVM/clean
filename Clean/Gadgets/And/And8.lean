@@ -11,30 +11,17 @@ structure Inputs (F : Type) where
   x: F
   y: F
 
-instance : ProvableType Inputs where
-  size := 2
-  to_elements x := #v[x.x, x.y]
-  from_elements v :=
-    let ⟨ .mk [x, y], _ ⟩ := v
-    ⟨ x, y ⟩
-
-structure Outputs (F : Type) where
-  z: F
-
-instance : ProvableType Outputs where
-  size := 1
-  to_elements x := #v[x.z]
-  from_elements v :=
-    let ⟨ .mk [z], _ ⟩ := v
-    ⟨ z ⟩
+instance : ProvableStruct Inputs where
+  components := [field, field]
+  to_components := fun { x, y } => .cons x (.cons y .nil)
+  from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
 def assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def spec (input : Inputs (F p)) (output : Outputs (F p)) :=
+def spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
-  let z := output.z
   z.val = Nat.land x.val y.val
 
 def xor (x y : Expression (F p)) :  Circuit (F p) (Expression (F p)) := do
@@ -42,11 +29,11 @@ def xor (x y : Expression (F p)) :  Circuit (F p) (Expression (F p)) := do
   lookup (Gadgets.Xor.ByteXorLookup x y z)
   return z
 
-def and8 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def and8 (input : Var Inputs (F p)) : Circuit (F p) (Var field (F p)) := do
   let ⟨x, y⟩ := input
-  let z ← witness (fun eval => Nat.land  (eval x).val (eval y).val)
+  let z ← witness (fun eval => Nat.land (eval x).val (eval y).val)
   let xor_x_y ← xor x y
   assert_zero (2 * z + xor_x_y - x - y)
-  return { z }
+  return z
 
 end Gadgets.And
