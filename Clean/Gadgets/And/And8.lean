@@ -81,7 +81,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (Var field (F p)) where
   output := fun ⟨ x, y ⟩ i => (x + y - var ⟨i⟩) / 2
 
 theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_holds
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
   simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
@@ -108,10 +108,14 @@ theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   have two_and : (2 * w).val = 2 * (x.val &&& y.val) := by
     rw [two_and_field, x_y_z_val, h_xor, ←and_times_two_add_xor hx_byte hy_byte, Nat.add_sub_cancel]
 
-  -- rewrite the goal to the form (2 * w).val = (2 * v).val,
-  -- where we can prove (2 * v).val = 2 * v.val
+  clear two_and_field x_y_val x_y_z_val h_xor z_lt
+
+  -- rewrite the goal to the form `(2 * w).val = (2 * v).val`,
+  -- where we can prove `(2 * v).val = 2 * v.val`
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
-  let v : F p := nat_to_field (x.val &&& y.val) (by linarith [p_large_enough.elim])
+  have p_large := p_large_enough.elim
+
+  let v : F p := nat_to_field (x.val &&& y.val) (by linarith)
   have v_val_eq : v.val = x.val &&& y.val := nat_to_field_eq v rfl
   rw [←v_val_eq] at two_and ⊢
   apply congrArg ZMod.val
@@ -120,16 +124,27 @@ theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   rw [two_and]
 
   -- this is now easy
-  have rhs_lt : (2 : F p).val * v.val < p := by
-    rw [v_val_eq, val_two]
-    linarith [p_large_enough.elim]
+  have rhs_lt : (2 : F p).val * v.val < p := by rw [v_val_eq, val_two]; linarith
   rw [ZMod.val_mul_of_lt rhs_lt, val_two]
 
-def circuit : FormalCircuit (F p) Inputs field where
-  assumptions
-  spec
-  soundness
+theorem completeness : Completeness (F p) field assumptions := by
+  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
+  simp only [Inputs.mk.injEq] at h_input
+  obtain ⟨ hx, hy ⟩ := h_input
+  rw [ByteXorTable.equiv, hx, hy]
+  set z := env.get i
 
-  completeness := by sorry
+  obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  suffices h_xor : z.val = x.val ^^^ y.val from ⟨ trivial, hx_byte, hy_byte, h_xor ⟩
+
+  specialize h_env 0
+  rw [h_env, hx, hy]
+  apply ZMod.val_natCast_of_lt
+  have z_lt : x.val.xor y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx_byte hy_byte
+  linarith [p_large_enough.elim]
+
+def circuit : FormalCircuit (F p) Inputs field :=
+  { assumptions, spec, soundness, completeness }
 
 end Gadgets.And
