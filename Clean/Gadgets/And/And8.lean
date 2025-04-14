@@ -1,6 +1,7 @@
 import Clean.Circuit.Basic
 import Clean.Types.U64
 import Clean.Gadgets.Xor.ByteXorTable
+import Clean.Utils.Primes
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
@@ -29,9 +30,20 @@ def xor (x y : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
   lookup (Gadgets.Xor.ByteXorLookup x y z)
   return z
 
-def and8 (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let ⟨x, y⟩ := input
   let w ← xor x y
-  return (2 : F p)⁻¹ * (x + y - w)
+  return (x + y - w) / 2
+
+def circuit : FormalCircuit (F p) Inputs field where
+  main
+  local_length _ := 1
+  output := fun ⟨ x, y ⟩ i => (x + y - var ⟨i⟩) / 2
+
+  assumptions
+  spec
+
+  soundness := by sorry
+  completeness := by sorry
 
 end Gadgets.And
