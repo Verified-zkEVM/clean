@@ -22,7 +22,7 @@ def Inputs (F : Type) := U64 F
 def Outputs (F : Type) := U64 F
 
 def not_u64 (x : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := do
-  let y ← Provable.witness (fun env =>
+  let y ← ProvableType.witness (fun env =>
     let y0 := 255 - (env x.x0).val
     let y1 := 255 - (env x.x1).val
     let y2 := 255 - (env x.x2).val

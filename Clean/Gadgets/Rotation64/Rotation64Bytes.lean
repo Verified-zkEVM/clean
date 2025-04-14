@@ -88,35 +88,35 @@ theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circui
 
   dsimp only [assumptions, U64.is_normalized] at as
   fin_cases off
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     simp [U64.value, rot_right64, Nat.mod_one]
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase1 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase2 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (3 : Fin 8).val = 3 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (3 : Fin 8).val = 3 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase3 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (4 : Fin 8).val = 4 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (4 : Fin 8).val = 4 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase4 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (5 : Fin 8).val = 5 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (5 : Fin 8).val = 5 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase5 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (6 : Fin 8).val = 6 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (6 : Fin 8).val = 6 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase6 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, show (7 : Fin 8).val = 7 by rfl]
+  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (7 : Fin 8).val = 7 by rfl]
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase7 x0 x1 x2 x3 x4 x5 x6 x7 as
 
