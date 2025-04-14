@@ -144,6 +144,47 @@ example :
   LawfulCircuit add := by infer_lawful_circuit
 end
 
+-- `ConstantLawfulCircuit(s)` can be proved from `LawfulCircuit` by adding the requirement that `final_offset` is `n` plus a constant.
+-- the latter can usually be proved by rfl!
+open LawfulCircuit in
+instance ConstantLawfulCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, LawfulCircuit (circuit a))
+  (h_length : ∀ (a : α) (n : ℕ), final_offset (circuit a) n = n + final_offset (circuit default) 0) :
+    ConstantLawfulCircuits circuit where
+
+  output a n := LawfulCircuit.output (circuit a) n
+  local_length := LawfulCircuit.final_offset (circuit default) 0
+  operations a n := h_length a n ▸ LawfulCircuit.operations n
+
+  output_independent a ops := LawfulCircuit.output_independent ops
+  offset_independent a ops := by rw [LawfulCircuit.offset_independent, h_length]
+  append_only a ops := by
+    rw [LawfulCircuit.append_only]
+    have h_offset := h_length a ops.offset
+    congr; simp
+
+syntax "infer_constant_lawful_circuits" : tactic
+
+macro_rules
+  | `(tactic|infer_constant_lawful_circuits) => `(tactic|(
+    apply ConstantLawfulCircuits.from_constant_length (by infer_lawful_circuit)
+    try intros
+    try simp only [LawfulCircuit.final_offset]
+    try ac_rfl))
+
+section
+example : ConstantLawfulCircuits (witness (F:=F))
+  := by infer_constant_lawful_circuits
+
+example :
+  let add (x : Expression F) := do
+    let y ← witness (fun _ => (1 : F))
+    let z ← witness (fun eval => eval (x + y))
+    assert_zero (x + y - z)
+    pure z
+
+  ConstantLawfulCircuits add := by infer_constant_lawful_circuits
+end
+
 -- constant version of `bind`
 open LawfulCircuit in
 instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
@@ -175,10 +216,6 @@ instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F
   append_only ops := by
     show (g _ _).2 = _
     rw [g_lawful.append_only, output_independent, append_only, Operations.append_assoc]
-
--- TODO inferring `ConstantLawfulCircuit` doesn't work yet.
--- the problem is that in every successive bind, in general, you get one more dependent variable in the second function.
--- i.e. we would need `ConstantLawfulCircuits (α → β)`, `ConstantLawfulCircuitss (α → β → γ)` etc.
 
 -- characterize various properties of lawful circuits
 

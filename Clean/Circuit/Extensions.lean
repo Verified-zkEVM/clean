@@ -1,5 +1,5 @@
 /- This file contains possible additions to the Circuit DSL that aren't currently used -/
-import Clean.Circuit.Basic
+import Clean.Circuit.Lawful
 
 variable {F :Type} [Field F]
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
@@ -14,6 +14,9 @@ def synthesize_var : Circuit F (Var α F) := witness (fun _ => default)
 
 instance [Field F] : Inhabited (Circuit F (Var α F)) where
   default := synthesize_var
+
+instance {α: TypeMap} [ProvableType α] : ConstantLawfulCircuits (witness (α:=α) (F:=F)) := by
+  infer_constant_lawful_circuits
 end ProvableType
 
 @[circuit_norm]
