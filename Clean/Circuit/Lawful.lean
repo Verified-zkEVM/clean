@@ -147,12 +147,17 @@ end
 -- `ConstantLawfulCircuit(s)` can be proved from `LawfulCircuit` by adding the requirement that `final_offset` is `n` plus a constant.
 -- the latter can usually be proved by rfl!
 open LawfulCircuit in
-instance ConstantLawfulCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, LawfulCircuit (circuit a))
-  (h_length : ∀ (a : α) (n : ℕ), final_offset (circuit a) n = n + final_offset (circuit default) 0) :
-    ConstantLawfulCircuits circuit where
+def ConstantLawfulCircuit.from_constant_length {circuit : Circuit F α} (lawful : LawfulCircuit circuit)
+  (h_length : ∀ n, final_offset circuit n = n + final_offset circuit 0) : ConstantLawfulCircuit circuit where
+  local_length := final_offset circuit 0
+  local_length_eq := h_length
+
+open LawfulCircuit in
+def ConstantLawfulCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, LawfulCircuit (circuit a))
+  (h_length : ∀ a n, final_offset (circuit a) n = n + final_offset (circuit default) 0) : ConstantLawfulCircuits circuit where
 
   output a n := LawfulCircuit.output (circuit a) n
-  local_length := LawfulCircuit.final_offset (circuit default) 0
+  local_length := final_offset (circuit default) 0
   operations a n := h_length a n ▸ LawfulCircuit.operations n
 
   output_independent a ops := LawfulCircuit.output_independent ops
