@@ -57,7 +57,7 @@ def rot64 (offset : Fin 64) (x : Var Inputs (F p)) : Circuit (F p) (Var Outputs 
 def assumptions (input : Inputs (F p)) := input.is_normalized
 
 def spec (offset : Fin 64) (x : Inputs (F p)) (y: Outputs (F p)) :=
-  y.value = rot_right64 x.value offset.val
+  y.value = rot_right64 x.value offset.val ∧ y.is_normalized
 
 def circuit (off : Fin 64) : FormalCircuit (F p) Inputs Outputs where
   main := rot64 off
