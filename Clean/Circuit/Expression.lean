@@ -74,6 +74,12 @@ instance {n: ℕ} [OfNat F n] : OfNat (Expression F) n where
 instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
 
+instance : HDiv (Expression F) F (Expression F) where
+  hDiv := fun e f => mul (f⁻¹ : F) e
+
+instance : HDiv (Expression F) ℕ (Expression F) where
+  hDiv := fun e f => mul (f⁻¹ : F) e
+
 -- TODO probably should just make Variable F := ℕ
 instance {n: ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
