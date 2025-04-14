@@ -338,7 +338,10 @@ def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations 
   | .subcircuit ops s =>
     let constraint := s.completeness eval
     if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+end Circuit
 
+section
+open Circuit (constraints_hold)
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 /-
@@ -406,6 +409,7 @@ extends ElaboratedCircuit F β (Var α F) where
   soundness: Soundness F assumptions spec
   completeness: Completeness F α assumptions
 
+namespace Circuit
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (offset: ℕ) (env : Environment F) :=
   let b := eval env b_var
@@ -417,6 +421,7 @@ def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (of
 def subcircuit_completeness (circuit: FormalCircuit F β α) (b_var : Var β F) (env : Environment F) :=
   let b := eval env b_var
   circuit.assumptions b
+end Circuit
 
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
@@ -462,6 +467,7 @@ extends ElaboratedCircuit F β Unit where
 
   output := fun _ _ => ()
 
+namespace Circuit
 @[circuit_norm]
 def subassertion_soundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
@@ -472,9 +478,9 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F)
   let b := eval env b_var
   circuit.assumptions b ∧ circuit.spec b
 end Circuit
+end
 
-export Circuit (witness_var witness witness_vars assert_zero lookup
-  ElaboratedCircuit Soundness Completeness FormalCircuit FormalAssertion)
+export Circuit (witness_var witness witness_vars assert_zero lookup)
 
 /-- move from inductive (nested) operations back to flat operations -/
 def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)

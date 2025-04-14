@@ -2,8 +2,6 @@ import Clean.Utils.Vector
 import Clean.Circuit.Extensions
 import Clean.Table.Theorems
 import Clean.Gadgets.Addition8.Addition8
-import Clean.Gadgets.Equality.Field
-
 
 /-
   8-bit Fibonacci inductive table definition. The i-th row of the table
@@ -131,10 +129,10 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
       set env := fib_relation.window_env ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
 
-      simp [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
-          Gadgets.Addition8.circuit, Gadgets.Equality.Field.circuit] at constraints_hold
-      simp [circuit_norm, subcircuit_norm, Trace.getLeFromBottom, eval, var_from_offset] at constraints_hold
-      dsimp only [Gadgets.Addition8.assumptions, Gadgets.Addition8.spec, Gadgets.Equality.Field.spec] at constraints_hold
+      simp only [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
+          Gadgets.Addition8.circuit] at constraints_hold
+      simp only [circuit_norm, subcircuit_norm, eval, var_from_offset, true_and] at constraints_hold
+      dsimp only [Gadgets.Addition8.assumptions, Gadgets.Addition8.spec] at constraints_hold
 
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl

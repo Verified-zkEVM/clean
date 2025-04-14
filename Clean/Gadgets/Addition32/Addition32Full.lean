@@ -1,5 +1,6 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
+import Clean.Circuit.Lawful
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
@@ -159,7 +160,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, Boolean.circuit, assert_bool
+    add32_full, add8_full_carry, Boolean.circuit
   ]
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
@@ -188,7 +189,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
     floordiv (x3 + y3 + env.get (i0 + 5)) 256
   ] := by
     -- this has to unfold all subcircuits :/
-    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, assert_bool]
+    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit]
     rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
       ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]

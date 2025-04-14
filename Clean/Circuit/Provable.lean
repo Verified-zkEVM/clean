@@ -323,3 +323,20 @@ theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α]
   simp only [Vector.map_flatten, Vector.map_map]
   rw [Vector.toChunks_flatten]
   simp [from_elements, eval, to_vars]
+
+-- `ProvablePair`
+
+instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType β] : ProvableType (ProvablePair α β) where
+  size := size α + size β
+  to_elements := fun (a, b) => to_elements a ++ to_elements b
+  from_elements {F} v :=
+    let a : α F := v.take (size α) |>.cast Nat.min_add_right |> from_elements
+    let b : β F := v.drop (size α) |>.cast (Nat.add_sub_self_left _ _) |> from_elements
+    (a, b)
+
+@[circuit_norm ↓ high]
+theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)
+  (a : Var α F) (b : Var β F) :
+    eval (α:=ProvablePair α β) env (a, b) = (eval env a, eval env b) := by
+  simp only [eval, to_vars, to_elements, from_elements, Vector.map_append]
+  rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
