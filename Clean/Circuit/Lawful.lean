@@ -185,38 +185,6 @@ example :
   ConstantLawfulCircuits add := by infer_constant_lawful_circuits
 end
 
--- constant version of `bind`
-open LawfulCircuit in
-instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
-    (f_lawful : ConstantLawfulCircuit f) (g_lawful : ConstantLawfulCircuits g) : ConstantLawfulCircuit (f >>= g) where
-  output n :=
-    let a := output f n
-    g_lawful.output a (n + local_length f)
-
-  local_length := local_length f + g_lawful.local_length
-  final_offset n := final_offset f n + g_lawful.local_length
-  local_length_eq n := by
-    show final_offset f n + g_lawful.local_length = _
-    rw [local_length_eq, add_assoc]
-
-  operations n :=
-    let a := output f n
-    let ops_f := f_lawful.operations n
-    let ops_g := g_lawful.operations a (final_offset f n)
-    ops_f ++ ops_g
-
-  output_independent ops := by
-    show (g _ _).1 = _
-    rw [g_lawful.output_independent, output_independent, offset_independent, local_length_eq]
-
-  offset_independent ops := by
-    show (g _ _).2.offset = _
-    rw [g_lawful.offset_independent, offset_independent]
-
-  append_only ops := by
-    show (g _ _).2 = _
-    rw [g_lawful.append_only, output_independent, append_only, Operations.append_assoc]
-
 -- characterize various properties of lawful circuits
 
 -- helper lemma needed right below
