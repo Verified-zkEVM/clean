@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
-import Clean.Gadgets.ByteLookup
+import Clean.Types.U64
+import Clean.Gadgets.Xor.ByteXorTable
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
@@ -35,5 +36,14 @@ def spec (input : Inputs (F p)) (output : Outputs (F p)) :=
   let ⟨x, y⟩ := input
   let z := output.z
   z.val = Nat.land x.val y.val
+
+def xor (x y : Expression (F p)) :  Circuit (F p) (Expression (F p)) := do
+  let z ← witness (fun eval => Nat.xor x.val y.val)
+
+def and8 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+  let ⟨x, y⟩ := input
+
+  -- witness the result
+  let z ← witness (fun eval => Nat.land  (eval x).val (eval y).val)
 
 end Gadgets.And
