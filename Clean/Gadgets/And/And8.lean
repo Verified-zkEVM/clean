@@ -24,16 +24,14 @@ def spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = Nat.land x.val y.val
 
-def xor (x y : Expression (F p)) :  Circuit (F p) (Expression (F p)) := do
+def xor (x y : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
   let z ← witness (fun eval => Nat.xor (eval x).val (eval y).val)
   lookup (Gadgets.Xor.ByteXorLookup x y z)
   return z
 
-def and8 (input : Var Inputs (F p)) : Circuit (F p) (Var field (F p)) := do
+def and8 (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let ⟨x, y⟩ := input
-  let z ← witness (fun eval => Nat.land (eval x).val (eval y).val)
-  let xor_x_y ← xor x y
-  assert_zero (2 * z + xor_x_y - x - y)
-  return z
+  let w ← xor x y
+  return (2 : F p)⁻¹ * (x + y - w)
 
 end Gadgets.And
