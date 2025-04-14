@@ -5,21 +5,23 @@ open Gadgets.Addition8FullCarry (add8_full_carry)
 open Gadgets.Addition32Full (add32_full Inputs)
 
 @[reducible] def p := p_babybear
--- `infer_lawful_circuit` seems to work for all circuits
-instance (input : Var Inputs (F p)) : LawfulCircuit (add32_full input) := by infer_lawful_circuit
 
-@[reducible] def circuit32 input := add32_full (p:=p_babybear) input
+-- `infer_lawful_circuit` / `infer_constant_lawful_circuits` seem to work for all circuits
+instance : ConstantLawfulCircuits (add32_full (p:=p)) := by infer_constant_lawful_circuits
+
+@[reducible] def circuit32 input := add32_full (p:=p) input
 #eval LawfulCircuit.final_offset (circuit32 default) 0
 #eval LawfulCircuit.output (circuit32 default) 0
 
 example : LawfulCircuit.final_offset (circuit32 default) 0 = 8 := by
   dsimp only [LawfulCircuit.final_offset, ConstantLawfulCircuits.local_length, Boolean.circuit]
+
 example : LawfulCircuit.output (circuit32 default) 0
     = { z := { x0 := var ⟨0⟩, x1 := var ⟨2⟩, x2 := var ⟨4⟩, x3 := var ⟨6⟩ }, carry_out := var ⟨7⟩ } := by
   dsimp only [LawfulCircuit.final_offset, ConstantLawfulCircuits.local_length, LawfulCircuit.output, ConstantLawfulCircuits.output, Boolean.circuit]
 
 open OperationsFrom in
-example (input : Var Inputs (F p_babybear)) (env) (i0 : ℕ) :
+example (input : Var Inputs (F p)) (env) (i0 : ℕ) :
     Circuit.constraints_hold.soundness env ((circuit32 input).operations i0) := by
   let ⟨ x, y, carry_in ⟩ := input
   let ⟨ x0, x1, x2, x3 ⟩ := x

@@ -144,41 +144,51 @@ example :
   LawfulCircuit add := by infer_lawful_circuit
 end
 
--- constant version of `bind`
+-- `ConstantLawfulCircuit(s)` can be proved from `LawfulCircuit` by adding the requirement that `final_offset` is `n` plus a constant.
+-- the latter can usually be proved by rfl!
 open LawfulCircuit in
-instance ConstantLawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
-    (f_lawful : ConstantLawfulCircuit f) (g_lawful : ConstantLawfulCircuits g) : ConstantLawfulCircuit (f >>= g) where
-  output n :=
-    let a := output f n
-    g_lawful.output a (n + local_length f)
+def ConstantLawfulCircuit.from_constant_length {circuit : Circuit F α} (lawful : LawfulCircuit circuit)
+  (h_length : ∀ n, final_offset circuit n = n + final_offset circuit 0) : ConstantLawfulCircuit circuit where
+  local_length := final_offset circuit 0
+  local_length_eq := h_length
 
-  local_length := local_length f + g_lawful.local_length
-  final_offset n := final_offset f n + g_lawful.local_length
-  local_length_eq n := by
-    show final_offset f n + g_lawful.local_length = _
-    rw [local_length_eq, add_assoc]
+open LawfulCircuit in
+def ConstantLawfulCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, LawfulCircuit (circuit a))
+  (h_length : ∀ a n, final_offset (circuit a) n = n + final_offset (circuit default) 0) : ConstantLawfulCircuits circuit where
 
-  operations n :=
-    let a := output f n
-    let ops_f := f_lawful.operations n
-    let ops_g := g_lawful.operations a (final_offset f n)
-    ops_f ++ ops_g
+  output a n := LawfulCircuit.output (circuit a) n
+  local_length := final_offset (circuit default) 0
+  operations a n := h_length a n ▸ LawfulCircuit.operations n
 
-  output_independent ops := by
-    show (g _ _).1 = _
-    rw [g_lawful.output_independent, output_independent, offset_independent, local_length_eq]
+  output_independent a ops := LawfulCircuit.output_independent ops
+  offset_independent a ops := by rw [LawfulCircuit.offset_independent, h_length]
+  append_only a ops := by
+    rw [LawfulCircuit.append_only]
+    have h_offset := h_length a ops.offset
+    congr; simp
 
-  offset_independent ops := by
-    show (g _ _).2.offset = _
-    rw [g_lawful.offset_independent, offset_independent]
+syntax "infer_constant_lawful_circuits" : tactic
 
-  append_only ops := by
-    show (g _ _).2 = _
-    rw [g_lawful.append_only, output_independent, append_only, Operations.append_assoc]
+macro_rules
+  | `(tactic|infer_constant_lawful_circuits) => `(tactic|(
+    apply ConstantLawfulCircuits.from_constant_length (by infer_lawful_circuit)
+    try intros
+    try simp only [LawfulCircuit.final_offset]
+    try ac_rfl))
 
--- TODO inferring `ConstantLawfulCircuit` doesn't work yet.
--- the problem is that in every successive bind, in general, you get one more dependent variable in the second function.
--- i.e. we would need `ConstantLawfulCircuits (α → β)`, `ConstantLawfulCircuitss (α → β → γ)` etc.
+section
+example : ConstantLawfulCircuits (witness (F:=F))
+  := by infer_constant_lawful_circuits
+
+example :
+  let add (x : Expression F) := do
+    let y ← witness (fun _ => (1 : F))
+    let z ← witness (fun eval => eval (x + y))
+    assert_zero (x + y - z)
+    pure z
+
+  ConstantLawfulCircuits add := by infer_constant_lawful_circuits
+end
 
 -- characterize various properties of lawful circuits
 
