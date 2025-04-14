@@ -87,3 +87,9 @@ end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
+
+instance [Field F] : Inhabited F where
+  default := 0
+
+instance [Field F] : Inhabited (Expression F) where
+  default := .const 0
