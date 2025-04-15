@@ -102,7 +102,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
 lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
   apply FieldUtils.val_lt_p
-  have h_byte : x.val ^^^ y.val < 256:= Nat.xor_lt_two_pow (n:=8) hx hy
+  have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
 theorem completeness : Completeness (F p) U64 assumptions := by
