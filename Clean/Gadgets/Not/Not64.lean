@@ -1,71 +1,70 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 import Clean.Types.U64
-import Clean.Gadgets.Not.ByteNotTable
 
 section
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
+variable {p : ℕ} [Fact p.Prime] variable [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Not
-@[reducible]
-def Inputs (F : Type) := U64 F
+def not8 (x : Expression (F p)) := 255 - x
 
-@[reducible]
-def Outputs (F : Type) := U64 F
+def not64 (x : Var U64 (F p)) : Var U64 (F p) :=
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
+  ⟨ not8 x0, not8 x1, not8 x2, not8 x3, not8 x4, not8 x5, not8 x6, not8 x7 ⟩
 
-def not_u64 (x : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := do
-  let y ← ProvableType.witness (fun env =>
-    let y0 := 255 - (env x.x0).val
-    let y1 := 255 - (env x.x1).val
-    let y2 := 255 - (env x.x2).val
-    let y3 := 255 - (env x.x3).val
-    let y4 := 255 - (env x.x4).val
-    let y5 := 255 - (env x.x5).val
-    let y6 := 255 - (env x.x6).val
-    let y7 := 255 - (env x.x7).val
-    U64.mk y0 y1 y2 y3 y4 y5 y6 y7)
+theorem not_zify (n : ℕ) {x : ℕ} (hx : x < n) : ((n - 1 - x : ℕ) : ℤ) = ↑n - 1 - ↑x := by
+  have n_ge_1 : 1 ≤ n := by linarith
+  have x_le : x ≤ n - 1 := Nat.le_pred_of_lt hx
+  rw [Nat.cast_sub x_le, Nat.cast_sub n_ge_1]
+  rfl
 
-  byte_not_lookup x.x0 y.x0
-  byte_not_lookup x.x1 y.x1
-  byte_not_lookup x.x2 y.x2
-  byte_not_lookup x.x3 y.x3
-  byte_not_lookup x.x4 y.x4
-  byte_not_lookup x.x5 y.x5
-  byte_not_lookup x.x6 y.x6
-  byte_not_lookup x.x7 y.x7
-  return y
+theorem not_lt (n : ℕ) {x : ℕ} (hx : x < n) : n - 1 - (x : ℤ) < n := by
+  rw [←not_zify n hx, Int.ofNat_lt]
+  exact Nat.sub_one_sub_lt_of_lt hx
 
-def assumptions (x: Inputs (F p)) := x.is_normalized
+def circuit : FormalCircuit (F p) U64 U64 where
+  main x := pure (not64 x)
+  assumptions x := x.is_normalized
+  spec x z := z.value = 2^64 - 1 - x.value ∧ z.is_normalized
 
-def spec (x: Inputs (F p)) (y : Outputs (F p)) :=
-  y.x0.val = 255 - x.x0.val ∧
-  y.x1.val = 255 - x.x1.val ∧
-  y.x2.val = 255 - x.x2.val ∧
-  y.x3.val = 255 - x.x3.val ∧
-  y.x4.val = 255 - x.x4.val ∧
-  y.x5.val = 255 - x.x5.val ∧
-  y.x6.val = 255 - x.x6.val ∧
-  y.x7.val = 255 - x.x7.val
-
-def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := not_u64
-  assumptions := assumptions
-  spec := spec
-  local_length _ := 8
-  output _ i0 := { y := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
+  local_length _ := 0
+  output x _ := not64 x
 
   soundness := by
-    sorry
+    intro i env x_var x h_input h_assumptions h_holds
+    cases x
+    simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
+      not8, not64] at h_holds h_input ⊢
+    simp_all only [U64.mk.injEq]
+    clear h_input
 
-  completeness := by
-    sorry
+    have h_not_val : ∀ {x : F p}, x.val < 256 → ((255 + -x).val : ℤ) = 255 - ↑x.val := by
+      intro x hx
+      have val_255 : (255 : F p).val = 255 := FieldUtils.val_lt_p 255 (by linarith [p_large_enough.elim])
+      have hx' : x.val ≤ (255 : F p).val := by linarith
+      rw [←sub_eq_add_neg, ZMod.val_sub hx', val_255]
+      exact not_zify 256 hx
+
+    have h_not_val_64 : ∀ {x : U64 (F p)}, x.is_normalized → ((2^64 - 1 - x.value : ℕ) : ℤ) = 2^64 - 1 - ↑x.value := by
+      intro x hx
+      exact not_zify (2^64) (U64.value_lt_of_normalized hx)
+
+    have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := h_assumptions
+    rw [U64.value, U64.is_normalized]
+    zify
+    rw [h_not_val_64 h_assumptions, U64.value]
+    zify
+    repeat rw [h_not_val]
+    constructor
+    · ring
+    exact ⟨ not_lt 256 hx0, not_lt 256 hx1, not_lt 256 hx2, not_lt 256 hx3,
+      not_lt 256 hx4, not_lt 256 hx5, not_lt 256 hx6, not_lt 256 hx7 ⟩
+    repeat assumption
+
+  completeness _ := by
+    -- there are no constraints to satisfy!
+    intros
+    exact trivial
 
 end Gadgets.Not

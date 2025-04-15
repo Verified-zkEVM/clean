@@ -74,6 +74,12 @@ instance {n: ℕ} [OfNat F n] : OfNat (Expression F) n where
 instance : HMul F (Expression F) (Expression F) where
   hMul := fun f e => mul f e
 
+instance : HDiv (Expression F) F (Expression F) where
+  hDiv := fun e f => mul (f⁻¹ : F) e
+
+instance : HDiv (Expression F) ℕ (Expression F) where
+  hDiv := fun e f => mul (f⁻¹ : F) e
+
 -- TODO probably should just make Variable F := ℕ
 instance {n: ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
@@ -81,3 +87,9 @@ end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
+
+instance [Field F] : Inhabited F where
+  default := 0
+
+instance [Field F] : Inhabited (Expression F) where
+  default := .const 0
