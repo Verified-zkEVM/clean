@@ -70,7 +70,6 @@ def value (x: U64 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3 +
   x.x4.val * 256^4 + x.x5.val * 256^5 + x.x6.val * 256^6 + x.x7.val * 256^7
 
-
 def value_nat (x: U64 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
   x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
@@ -112,6 +111,15 @@ def decompose_nat_nat (x: ℕ) : U64 ℕ :=
 def decompose_nat_expr (x: ℕ) : U64 (Expression (F p)) :=
   let (⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ : U64 (F p)) := decompose_nat x
   ⟨ x0, x1, x2, x3 , x4, x5, x6, x7 ⟩
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma normalized_u64 (x : U64 (F p)) : x.is_normalized → x.value < 2^64 := by
+  simp [is_normalized, value]
+  intros
+  linarith
+
+def value_u64 (x : U64 (F p)) (h : x.is_normalized) : UInt64 :=
+  UInt64.ofNatCore x.value (normalized_u64 x h)
 
 
 end U64
