@@ -97,7 +97,7 @@ def ByteXorTable.soundness (x y z: F p) :
   exact (split_two_bytes i).2.is_lt
 
 def ByteXorTable.completeness (x y z: F p) :
-    x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val →
+    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val →
     ByteXorTable.contains #v[x, y, z] := by
   intro ⟨ hx, hy, h ⟩
   dsimp only [ByteXorTable, Table.contains]
@@ -113,7 +113,7 @@ def ByteXorTable.completeness (x y z: F p) :
 
 def ByteXorTable.equiv (x y z: F p) :
     ByteXorTable.contains #v[x, y, z] ↔
-    x.val < 256 ∧ y.val < 256 ∧ z.val = Nat.xor x.val y.val :=
+    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
   ⟨ByteXorTable.soundness x y z, ByteXorTable.completeness x y z⟩
 
 end Gadgets.Xor
