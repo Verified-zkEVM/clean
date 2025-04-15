@@ -44,7 +44,7 @@ def assumptions (input : Inputs (F p)) := input.is_normalized
 def spec (offset : Fin 8) (x : Inputs (F p)) (y: Outputs (F p)) :=
   y.value = rot_right64 x.value (offset.val * 8)
 
-instance elaboratedCircuit (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
   main := rot64_bytes off
   local_length _ := 0
   output input i0 :=
@@ -72,7 +72,7 @@ instance elaboratedCircuit (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Ou
     repeat rfl
 
 
-theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circuit:=elaboratedCircuit off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circuit:=elaborated off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -120,31 +120,21 @@ theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circui
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase7 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-theorem completeness (off : Fin 8) : Completeness (F p) Outputs assumptions (circuit := elaboratedCircuit off) := by
+theorem completeness (off : Fin 8) : Completeness (F p) Outputs assumptions (circuit := elaborated off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _
   fin_cases off
   repeat
     intro assumptions
-    simp [elaboratedCircuit, rot64_bytes, circuit_norm]
+    simp [elaborated, rot64_bytes, circuit_norm]
 
 
 
-def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
+def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs := {
+  elaborated off with
   main := rot64_bytes off
   assumptions := assumptions
   spec := spec off
   soundness := soundness off
   completeness := completeness off
-  initial_offset_eq := by
-    intros
-    fin_cases off
-    repeat rfl
-  local_length_eq := by
-    intros
-    fin_cases off
-    repeat rfl
-  output_eq := by
-    intros
-    fin_cases off
-    repeat rfl
+}
 end Gadgets.Rotation64Bytes

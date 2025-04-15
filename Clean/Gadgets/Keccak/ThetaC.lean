@@ -183,10 +183,13 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   simp [add_assoc]
   sorry
 
-def circuit : FormalCircuit (F p) KeccakState Outputs where
+def circuit : FormalCircuit (F p) KeccakState Outputs := {
+  elaborated with
   main := theta_c
   assumptions
   spec
   soundness
   completeness
+}
+
 end Gadgets.Keccak.ThetaC
