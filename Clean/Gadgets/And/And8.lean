@@ -24,15 +24,18 @@ def assumptions (input : Inputs (F p)) :=
 
 def spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
-  z.val = Nat.land x.val y.val
+  z.val = x.val &&& y.val
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let ⟨x, y⟩ := input
-  let z ← witness (fun eval => Nat.xor (eval x).val (eval y).val)
-  lookup (ByteXorLookup x y z)
-  return (x + y - z) / 2
+  let and ← witness (fun eval => (eval x).val &&& (eval y).val)
+  -- we prove AND correct using an XOR lookup and the following identity:
+  let xor := x + y - 2 * and
+  lookup (ByteXorLookup x y xor)
+  return and
 
--- main theorem about AND that justifies the circuit
+-- AND / XOR identity that justifies the circuit
+
 theorem and_times_two_add_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) : 2 * (x &&& y) + (x ^^^ y) = x + y := by
   -- proof strategy: prove a UInt16 version of the identity using `bv_decide`,
   -- and show that the UInt16 identity is the same as the Nat version since everything is small enough
@@ -57,8 +60,12 @@ theorem and_times_two_add_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) : 2 * (x
   rw [Nat.mod_eq_of_lt h_lhs, Nat.mod_eq_of_lt h_rhs] at h_mod_2_to_16
   exact h_mod_2_to_16
 
--- corollary that we also need
+-- corollaries that we also need
+
 theorem xor_le_add {x y : ℕ} (hx : x < 256) (hy : y < 256) : x ^^^ y ≤ x + y := by
+  rw [←and_times_two_add_xor hx hy]; linarith
+
+theorem two_and_le_add {x y : ℕ} (hx : x < 256) (hy : y < 256) : 2 * (x &&& y) ≤ x + y := by
   rw [←and_times_two_add_xor hx hy]; linarith
 
 -- some helper lemmas about 2
@@ -78,7 +85,7 @@ theorem mul_left_inj {F: Type} [Field F] : ∀ {x y z : F}, x ≠ 0 → x * y = 
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var field (F p)) where
   main
   local_length _ := 1
-  output := fun ⟨ x, y ⟩ i => (x + y - var ⟨i⟩) / 2
+  output _ i := var ⟨i⟩
 
 theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
@@ -86,17 +93,14 @@ theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
   rw [ByteXorTable.equiv, hx, hy] at h_holds
-  rw [hx, hy]
   clear hx hy
   obtain ⟨ _, hx_byte, hy_byte, h_xor ⟩ := h_holds
-  set z := env.get i
-  change z.val = x.val ^^^ y.val at h_xor
-  set w := (2 : F p)⁻¹ * (x + y + -z)
+  set w := env.get i
+  set z := x + y + -(2 * w)
   show w.val = x.val &&& y.val
 
-  -- it's easier to prove something about 2 * w, since we can cancel the 2⁻¹
-  have two_and_field : 2 * w = x + y - z := by
-    rw [←mul_assoc, Field.mul_inv_cancel _ two_non_zero]; ring
+  -- it's easier to prove something about 2 * w since it features in the constraint
+  have two_and_field : 2 * w = x + y - z := by ring
 
   have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
   have z_lt : z.val ≤ (x + y).val := by
@@ -133,16 +137,33 @@ theorem completeness : Completeness (F p) field assumptions := by
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
   rw [ByteXorTable.equiv, hx, hy]
-  set z := env.get i
+  set w := env.get i
+  let z := x + y + -(2 * w)
 
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  suffices h_xor : z.val = x.val ^^^ y.val from ⟨ trivial, hx_byte, hy_byte, h_xor ⟩
+  suffices h_xor : (x + y + -(2 * w)).val = x.val ^^^ y.val from ⟨ trivial, hx_byte, hy_byte, h_xor ⟩
 
+  -- now it's pretty much the soundness proof in reverse
   specialize h_env 0
-  rw [h_env, hx, hy]
-  apply ZMod.val_natCast_of_lt
-  have z_lt : x.val.xor y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx_byte hy_byte
-  linarith [p_large_enough.elim]
+  have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
+  have p_large := p_large_enough.elim
+  have and_lt : x.val &&& y.val < p := by linarith
+  rw [hx, hy, nat_to_field_eq_natcast and_lt] at h_env
+  have h_and : w.val = x.val &&& y.val := nat_to_field_eq w h_env
+  clear h_env
+
+  have two_and_val : (2 * w).val = 2 * (x.val &&& y.val) := by
+    rw [ZMod.val_mul_of_lt, val_two, h_and]
+    rw [val_two]
+    linarith
+
+  have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
+  have two_and_lt : (2 * w).val ≤ (x + y).val := by
+    rw [two_and_val, x_y_val]
+    exact two_and_le_add hx_byte hy_byte
+
+  rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
+    ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit : FormalCircuit (F p) Inputs field :=
   { assumptions, spec, soundness, completeness }
