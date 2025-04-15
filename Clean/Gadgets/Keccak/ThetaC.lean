@@ -107,7 +107,13 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   dsimp only [circuit_norm, theta_c, Xor.circuit]
   simp only [circuit_norm, subcircuit_norm]
   dsimp only [Xor.assumptions, Xor.spec]
-  simp [add_assoc]
+  simp [add_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two]
+
+  have s (i : Fin 25) : eval env (state_var[i.val]) = state[i.val] := by
+    rw [←h_input, Vector.getElem_map]
+
+  simp only [s]
+
   sorry
 
 def circuit : FormalCircuit (F p) KeccakState Outputs := {

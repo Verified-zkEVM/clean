@@ -85,18 +85,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [s] at h_holds
   simp [circuit_norm, spec]
 
-  -- lift everything to U64 variables
-  set c0 := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 16)
-  set c0' := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 24)
-  set c1 := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 48)
-  set c1' := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 56)
-  set c2 := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 80)
-  set c2' := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 88)
-  set c3 := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 112)
-  set c3' := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 120)
-  set c4 := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 144)
-  set c4' := eval env <| var_from_offset (F:=(F p)) U64 (i0 + 152)
-
   obtain ⟨ h_rot0, h_xor0, h_rot1, h_xor1, h_rot2, h_xor2, h_rot3, h_xor3, h_rot4, h_xor4 ⟩ := h_holds
 
   specialize h_rot0 (state_norm 1)
