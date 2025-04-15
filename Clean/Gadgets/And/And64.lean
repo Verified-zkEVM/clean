@@ -36,6 +36,11 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.is_normalized
 
+instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
+  main
+  local_length _ := 8
+  output _ i := var_from_offset U64 i
+
 theorem soundness_to_u64 {x y z : U64 (F p)}
   (x_norm : x.is_normalized) (y_norm : y.is_normalized)
   (h_eq :
@@ -50,33 +55,39 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   spec { x, y } z := by
   sorry
 
-#eval (do main (p:=p_babybear) (default)).output 100
+theorem soundness : Soundness (F p) assumptions spec := by
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_holds
+  let ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ := x_var
+  let ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩ := y_var
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
+  let ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ := y
+  obtain ⟨ x_norm, y_norm ⟩ := h_assumptions
+  apply soundness_to_u64 x_norm y_norm
+  simp only
+  simp_all only [circuit_norm, subcircuit_norm, main, assumptions, spec, And8.circuit, eval, var_from_offset]
+  simp only [Inputs.mk.injEq, U64.mk.injEq] at h_input
+  obtain ⟨ hx, hy ⟩ := h_input
+  obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
+  obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
+  rw [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
+    h_x6, h_y6, h_x7, h_y7] at h_holds
+  simp only [And8.assumptions, And8.spec] at h_holds
+
+  simp only [U64.is_normalized] at x_norm y_norm
+  have ⟨ x0_byte, x1_byte, x2_byte, x3_byte, x4_byte, x5_byte, x6_byte, x7_byte ⟩ := x_norm
+  have ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_norm
+  simp only [x0_byte, y0_byte, x1_byte, y1_byte, x2_byte, y2_byte,
+    x3_byte, y3_byte, x4_byte, y4_byte, x5_byte, y5_byte,
+    x6_byte, y6_byte, x7_byte, y7_byte, and_true, true_implies] at h_holds
+  simp [h_holds]
+
+theorem completeness : Completeness (F p) U64 assumptions := by
+  sorry
 
 def circuit : FormalCircuit (F p) Inputs U64 where
-  main
   assumptions
   spec
-
-  local_length _ := 8
-
-  -- this would be nicer if we could add/subtract/scalar-multiply entire provable types
-  output := fun ⟨ x, y ⟩ i => {
-    x0 := (x.x0 + y.x0 - var ⟨ i + 0 ⟩) / 2,
-    x1 := (x.x1 + y.x1 - var ⟨ i + 1 ⟩) / 2,
-    x2 := (x.x2 + y.x2 - var ⟨ i + 2 ⟩) / 2,
-    x3 := (x.x3 + y.x3 - var ⟨ i + 3 ⟩) / 2,
-    x4 := (x.x4 + y.x4 - var ⟨ i + 4 ⟩) / 2,
-    x5 := (x.x5 + y.x5 - var ⟨ i + 5 ⟩) / 2,
-    x6 := (x.x6 + y.x6 - var ⟨ i + 6 ⟩) / 2,
-    x7 := (x.x7 + y.x7 - var ⟨ i + 7 ⟩) / 2
-  }
-
-  soundness := by
-    intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
-    simp_all only [circuit_norm, main, assumptions, spec, And8.circuit]
-    sorry
-
-  completeness := by
-    sorry
+  soundness
+  completeness
 
 end Gadgets.And.And64
