@@ -38,7 +38,8 @@ def circuit : FormalCircuit (F p) U64 U64 where
     cases x
     simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
       not8, not64] at h_holds h_input ⊢
-    simp_all only [gt_iff_lt, U64.mk.injEq]
+    simp_all only [U64.mk.injEq]
+    clear h_input
 
     have h_not_val : ∀ {x : F p}, x.val < 256 → ((255 + -x).val : ℤ) = 255 - ↑x.val := by
       intro x hx
