@@ -81,131 +81,129 @@ def rol_u64 (value : U64 ℕ) (left : Nat) : U64 ℕ:=
   U64.decompose_nat_nat res
 
 
-def theta_c (state : List (U64 ℕ)) : List (U64 ℕ) :=
-    [
-      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.getD 0 zero_u64) (state.getD 1 zero_u64)) (state.getD 2 zero_u64)) (state.getD 3 zero_u64)) (state.getD 4 zero_u64),
-      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.getD 5 zero_u64) (state.getD 6 zero_u64)) (state.getD 7 zero_u64)) (state.getD 8 zero_u64)) (state.getD 9 zero_u64),
-      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.getD 10 zero_u64) (state.getD 11 zero_u64)) (state.getD 12 zero_u64)) (state.getD 13 zero_u64)) (state.getD 14 zero_u64),
-      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.getD 15 zero_u64) (state.getD 16 zero_u64)) (state.getD 17 zero_u64)) (state.getD 18 zero_u64)) (state.getD 19 zero_u64),
-      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.getD 20 zero_u64) (state.getD 21 zero_u64)) (state.getD 22 zero_u64)) (state.getD 23 zero_u64)) (state.getD 24 zero_u64)
+def theta_c (state : Vector (U64 ℕ) 25) : Vector (U64 ℕ) 5 :=
+    #v[
+      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.get 0) (state.get 1)) (state.get 2)) (state.get 3)) (state.get 4),
+      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.get 5) (state.get 6)) (state.get 7)) (state.get 8)) (state.get 9),
+      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.get 10) (state.get 11)) (state.get 12)) (state.get 13)) (state.get 14),
+      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.get 15) (state.get 16)) (state.get 17)) (state.get 18)) (state.get 19),
+      xor_u64 (xor_u64 (xor_u64 (xor_u64 (state.get 20) (state.get 21)) (state.get 22)) (state.get 23)) (state.get 24)
     ]
 
-def theta_d (c : List (U64 ℕ)) : List (U64 ℕ) :=
-  [
-    xor_u64 (c.getD 4 zero_u64) (rol_u64 (c.getD 1 zero_u64) 1),
-    xor_u64 (c.getD 0 zero_u64) (rol_u64 (c.getD 2 zero_u64) 1),
-    xor_u64 (c.getD 1 zero_u64) (rol_u64 (c.getD 3 zero_u64) 1),
-    xor_u64 (c.getD 2 zero_u64) (rol_u64 (c.getD 4 zero_u64) 1),
-    xor_u64 (c.getD 3 zero_u64) (rol_u64 (c.getD 0 zero_u64) 1)
+def theta_d (c : Vector (U64 ℕ) 5) : Vector (U64 ℕ) 5 :=
+  #v[
+    xor_u64 (c.get 4) (rol_u64 (c.get 1) 1),
+    xor_u64 (c.get 0) (rol_u64 (c.get 2) 1),
+    xor_u64 (c.get 1) (rol_u64 (c.get 3) 1),
+    xor_u64 (c.get 2) (rol_u64 (c.get 4) 1),
+    xor_u64 (c.get 3) (rol_u64 (c.get 0) 1)
   ]
 
 
-def theta_xor (state : List (U64 ℕ)) (d : List (U64 ℕ)) : List (U64 ℕ) :=
-  [
-    xor_u64 (state.getD 0 zero_u64) (d.getD 0 zero_u64),
-    xor_u64 (state.getD 1 zero_u64) (d.getD 0 zero_u64),
-    xor_u64 (state.getD 2 zero_u64) (d.getD 0 zero_u64),
-    xor_u64 (state.getD 3 zero_u64) (d.getD 0 zero_u64),
-    xor_u64 (state.getD 4 zero_u64) (d.getD 0 zero_u64),
-    xor_u64 (state.getD 5 zero_u64) (d.getD 1 zero_u64),
-    xor_u64 (state.getD 6 zero_u64) (d.getD 1 zero_u64),
-    xor_u64 (state.getD 7 zero_u64) (d.getD 1 zero_u64),
-    xor_u64 (state.getD 8 zero_u64) (d.getD 1 zero_u64),
-    xor_u64 (state.getD 9 zero_u64) (d.getD 1 zero_u64),
-    xor_u64 (state.getD 10 zero_u64) (d.getD 2 zero_u64),
-    xor_u64 (state.getD 11 zero_u64) (d.getD 2 zero_u64),
-    xor_u64 (state.getD 12 zero_u64) (d.getD 2 zero_u64),
-    xor_u64 (state.getD 13 zero_u64) (d.getD 2 zero_u64),
-    xor_u64 (state.getD 14 zero_u64) (d.getD 2 zero_u64),
-    xor_u64 (state.getD 15 zero_u64) (d.getD 3 zero_u64),
-    xor_u64 (state.getD 16 zero_u64) (d.getD 3 zero_u64),
-    xor_u64 (state.getD 17 zero_u64) (d.getD 3 zero_u64),
-    xor_u64 (state.getD 18 zero_u64) (d.getD 3 zero_u64),
-    xor_u64 (state.getD 19 zero_u64) (d.getD 3 zero_u64),
-    xor_u64 (state.getD 20 zero_u64) (d.getD 4 zero_u64),
-    xor_u64 (state.getD 21 zero_u64) (d.getD 4 zero_u64),
-    xor_u64 (state.getD 22 zero_u64) (d.getD 4 zero_u64),
-    xor_u64 (state.getD 23 zero_u64) (d.getD 4 zero_u64),
-    xor_u64 (state.getD 24 zero_u64) (d.getD 4 zero_u64)
+def theta_xor (state : Vector (U64 ℕ) 25) (d : Vector (U64 ℕ) 5) : Vector (U64 ℕ) 25 :=
+  #v[
+    xor_u64 (state.get 0) (d.get 0),
+    xor_u64 (state.get 1) (d.get 0),
+    xor_u64 (state.get 2) (d.get 0),
+    xor_u64 (state.get 3) (d.get 0),
+    xor_u64 (state.get 4) (d.get 0),
+    xor_u64 (state.get 5) (d.get 1),
+    xor_u64 (state.get 6) (d.get 1),
+    xor_u64 (state.get 7) (d.get 1),
+    xor_u64 (state.get 8) (d.get 1),
+    xor_u64 (state.get 9) (d.get 1),
+    xor_u64 (state.get 10) (d.get 2),
+    xor_u64 (state.get 11) (d.get 2),
+    xor_u64 (state.get 12) (d.get 2),
+    xor_u64 (state.get 13) (d.get 2),
+    xor_u64 (state.get 14) (d.get 2),
+    xor_u64 (state.get 15) (d.get 3),
+    xor_u64 (state.get 16) (d.get 3),
+    xor_u64 (state.get 17) (d.get 3),
+    xor_u64 (state.get 18) (d.get 3),
+    xor_u64 (state.get 19) (d.get 3),
+    xor_u64 (state.get 20) (d.get 4),
+    xor_u64 (state.get 21) (d.get 4),
+    xor_u64 (state.get 22) (d.get 4),
+    xor_u64 (state.get 23) (d.get 4),
+    xor_u64 (state.get 24) (d.get 4)
   ]
 
-def theta (state : List (U64 ℕ)) : List (U64 ℕ) :=
+def theta (state : Vector (U64 ℕ) 25) : Vector (U64 ℕ) 25 :=
   let c := theta_c state
   let d := theta_d c
   theta_xor state d
 
-def rho_phi (state : List (U64 ℕ)) : List (U64 ℕ) :=
-  [
-    rol_u64 (state.getD 0 zero_u64) 0,
-    rol_u64 (state.getD 15 zero_u64) 28,
-    rol_u64 (state.getD 5 zero_u64) 1,
-    rol_u64 (state.getD 20 zero_u64) 27,
-    rol_u64 (state.getD 10 zero_u64) 62,
-    rol_u64 (state.getD 6 zero_u64) 44,
-    rol_u64 (state.getD 21 zero_u64) 20,
-    rol_u64 (state.getD 11 zero_u64) 6,
-    rol_u64 (state.getD 1 zero_u64) 36,
-    rol_u64 (state.getD 16 zero_u64) 55,
-    rol_u64 (state.getD 12 zero_u64) 43,
-    rol_u64 (state.getD 2 zero_u64) 3,
-    rol_u64 (state.getD 17 zero_u64) 25,
-    rol_u64 (state.getD 7 zero_u64) 10,
-    rol_u64 (state.getD 22 zero_u64) 39,
-    rol_u64 (state.getD 18 zero_u64) 21,
-    rol_u64 (state.getD 8 zero_u64) 45,
-    rol_u64 (state.getD 23 zero_u64) 8,
-    rol_u64 (state.getD 13 zero_u64) 15,
-    rol_u64 (state.getD 3 zero_u64) 41,
-    rol_u64 (state.getD 24 zero_u64) 14,
-    rol_u64 (state.getD 14 zero_u64) 61,
-    rol_u64 (state.getD 4 zero_u64) 18,
-    rol_u64 (state.getD 19 zero_u64) 56,
-    rol_u64 (state.getD 9 zero_u64) 2
+def rho_phi (state : Vector (U64 ℕ) 25) : Vector (U64 ℕ) 25 :=
+  #v[
+    rol_u64 (state.get 0) 0,
+    rol_u64 (state.get 15) 28,
+    rol_u64 (state.get 5) 1,
+    rol_u64 (state.get 20) 27,
+    rol_u64 (state.get 10) 62,
+    rol_u64 (state.get 6) 44,
+    rol_u64 (state.get 21) 20,
+    rol_u64 (state.get 11) 6,
+    rol_u64 (state.get 1) 36,
+    rol_u64 (state.get 16) 55,
+    rol_u64 (state.get 12) 43,
+    rol_u64 (state.get 2) 3,
+    rol_u64 (state.get 17) 25,
+    rol_u64 (state.get 7) 10,
+    rol_u64 (state.get 22) 39,
+    rol_u64 (state.get 18) 21,
+    rol_u64 (state.get 8) 45,
+    rol_u64 (state.get 23) 8,
+    rol_u64 (state.get 13) 15,
+    rol_u64 (state.get 3) 41,
+    rol_u64 (state.get 24) 14,
+    rol_u64 (state.get 14) 61,
+    rol_u64 (state.get 4) 18,
+    rol_u64 (state.get 19) 56,
+    rol_u64 (state.get 9) 2
   ]
 
-def chi (b : List (U64 ℕ)) : List (U64 ℕ) :=
-  [
-    xor_u64 (b.getD 0 zero_u64) (and_u64 (not_u64 (b.getD 5 zero_u64)) (b.getD 10 zero_u64)),
-    xor_u64 (b.getD 1 zero_u64) (and_u64 (not_u64 (b.getD 6 zero_u64)) (b.getD 11 zero_u64)),
-    xor_u64 (b.getD 2 zero_u64) (and_u64 (not_u64 (b.getD 7 zero_u64)) (b.getD 12 zero_u64)),
-    xor_u64 (b.getD 3 zero_u64) (and_u64 (not_u64 (b.getD 8 zero_u64)) (b.getD 13 zero_u64)),
-    xor_u64 (b.getD 4 zero_u64) (and_u64 (not_u64 (b.getD 9 zero_u64)) (b.getD 14 zero_u64)),
-    xor_u64 (b.getD 5 zero_u64) (and_u64 (not_u64 (b.getD 10 zero_u64)) (b.getD 15 zero_u64)),
-    xor_u64 (b.getD 6 zero_u64) (and_u64 (not_u64 (b.getD 11 zero_u64)) (b.getD 16 zero_u64)),
-    xor_u64 (b.getD 7 zero_u64) (and_u64 (not_u64 (b.getD 12 zero_u64)) (b.getD 17 zero_u64)),
-    xor_u64 (b.getD 8 zero_u64) (and_u64 (not_u64 (b.getD 13 zero_u64)) (b.getD 18 zero_u64)),
-    xor_u64 (b.getD 9 zero_u64) (and_u64 (not_u64 (b.getD 14 zero_u64)) (b.getD 19 zero_u64)),
-    xor_u64 (b.getD 10 zero_u64) (and_u64 (not_u64 (b.getD 15 zero_u64)) (b.getD 20 zero_u64)),
-    xor_u64 (b.getD 11 zero_u64) (and_u64 (not_u64 (b.getD 16 zero_u64)) (b.getD 21 zero_u64)),
-    xor_u64 (b.getD 12 zero_u64) (and_u64 (not_u64 (b.getD 17 zero_u64)) (b.getD 22 zero_u64)),
-    xor_u64 (b.getD 13 zero_u64) (and_u64 (not_u64 (b.getD 18 zero_u64)) (b.getD 23 zero_u64)),
-    xor_u64 (b.getD 14 zero_u64) (and_u64 (not_u64 (b.getD 19 zero_u64)) (b.getD 24 zero_u64)),
-    xor_u64 (b.getD 15 zero_u64) (and_u64 (not_u64 (b.getD 20 zero_u64)) (b.getD 0 zero_u64)),
-    xor_u64 (b.getD 16 zero_u64) (and_u64 (not_u64 (b.getD 21 zero_u64)) (b.getD 1 zero_u64)),
-    xor_u64 (b.getD 17 zero_u64) (and_u64 (not_u64 (b.getD 22 zero_u64)) (b.getD 2 zero_u64)),
-    xor_u64 (b.getD 18 zero_u64) (and_u64 (not_u64 (b.getD 23 zero_u64)) (b.getD 3 zero_u64)),
-    xor_u64 (b.getD 19 zero_u64) (and_u64 (not_u64 (b.getD 24 zero_u64)) (b.getD 4 zero_u64)),
-    xor_u64 (b.getD 20 zero_u64) (and_u64 (not_u64 (b.getD 0 zero_u64)) (b.getD 5 zero_u64)),
-    xor_u64 (b.getD 21 zero_u64) (and_u64 (not_u64 (b.getD 1 zero_u64)) (b.getD 6 zero_u64)),
-    xor_u64 (b.getD 22 zero_u64) (and_u64 (not_u64 (b.getD 2 zero_u64)) (b.getD 7 zero_u64)),
-    xor_u64 (b.getD 23 zero_u64) (and_u64 (not_u64 (b.getD 3 zero_u64)) (b.getD 8 zero_u64)),
-    xor_u64 (b.getD 24 zero_u64) (and_u64 (not_u64 (b.getD 4 zero_u64)) (b.getD 9 zero_u64))
+def chi (b : Vector (U64 ℕ) 25) : Vector (U64 ℕ) 25 :=
+  #v[
+    xor_u64 (b.get 0) (and_u64 (not_u64 (b.get 5)) (b.get 10)),
+    xor_u64 (b.get 1) (and_u64 (not_u64 (b.get 6)) (b.get 11)),
+    xor_u64 (b.get 2) (and_u64 (not_u64 (b.get 7)) (b.get 12)),
+    xor_u64 (b.get 3) (and_u64 (not_u64 (b.get 8)) (b.get 13)),
+    xor_u64 (b.get 4) (and_u64 (not_u64 (b.get 9)) (b.get 14)),
+    xor_u64 (b.get 5) (and_u64 (not_u64 (b.get 10)) (b.get 15)),
+    xor_u64 (b.get 6) (and_u64 (not_u64 (b.get 11)) (b.get 16)),
+    xor_u64 (b.get 7) (and_u64 (not_u64 (b.get 12)) (b.get 17)),
+    xor_u64 (b.get 8) (and_u64 (not_u64 (b.get 13)) (b.get 18)),
+    xor_u64 (b.get 9) (and_u64 (not_u64 (b.get 14)) (b.get 19)),
+    xor_u64 (b.get 10) (and_u64 (not_u64 (b.get 15)) (b.get 20)),
+    xor_u64 (b.get 11) (and_u64 (not_u64 (b.get 16)) (b.get 21)),
+    xor_u64 (b.get 12) (and_u64 (not_u64 (b.get 17)) (b.get 22)),
+    xor_u64 (b.get 13) (and_u64 (not_u64 (b.get 18)) (b.get 23)),
+    xor_u64 (b.get 14) (and_u64 (not_u64 (b.get 19)) (b.get 24)),
+    xor_u64 (b.get 15) (and_u64 (not_u64 (b.get 20)) (b.get 0)),
+    xor_u64 (b.get 16) (and_u64 (not_u64 (b.get 21)) (b.get 1)),
+    xor_u64 (b.get 17) (and_u64 (not_u64 (b.get 22)) (b.get 2)),
+    xor_u64 (b.get 18) (and_u64 (not_u64 (b.get 23)) (b.get 3)),
+    xor_u64 (b.get 19) (and_u64 (not_u64 (b.get 24)) (b.get 4)),
+    xor_u64 (b.get 20) (and_u64 (not_u64 (b.get 0)) (b.get 5)),
+    xor_u64 (b.get 21) (and_u64 (not_u64 (b.get 1)) (b.get 6)),
+    xor_u64 (b.get 22) (and_u64 (not_u64 (b.get 2)) (b.get 7)),
+    xor_u64 (b.get 23) (and_u64 (not_u64 (b.get 3)) (b.get 8)),
+    xor_u64 (b.get 24) (and_u64 (not_u64 (b.get 4)) (b.get 9))
   ]
 
-def iota (state : List (U64 ℕ)) (rc : U64 ℕ) : List (U64 ℕ) :=
-  match state with
-  | [] => []
-  | h :: t => xor_u64 h rc :: t
+def iota (state : Vector (U64 ℕ) 25) (rc : U64 ℕ) : Vector (U64 ℕ) 25 :=
+  state.set 0 (xor_u64 rc <| state.get 0)
 
 
-def keccak_round (state : List (U64 ℕ)) (rc : U64 ℕ) : List (U64 ℕ) :=
+def keccak_round (state : Vector (U64 ℕ) 25) (rc : U64 ℕ) : Vector (U64 ℕ) 25 :=
   let theta_state := theta state
   let rho_phi_state := rho_phi theta_state
   let chi_state := chi rho_phi_state
   iota chi_state rc
 
-def keccak_f (state : List (U64 ℕ)): List (U64 ℕ) :=
-  let rec keccak_f_aux (state : List (U64 ℕ)) (i : ℕ) : List (U64 ℕ) :=
+def keccak_f (state : Vector (U64 ℕ) 25): Vector (U64 ℕ) 25 :=
+  let rec keccak_f_aux (state : Vector (U64 ℕ) 25) (i : ℕ) : Vector (U64 ℕ) 25 :=
     match i with
     | 0 => state
     | i + 1 =>
@@ -219,7 +217,7 @@ end Clean.Gadgets.Keccak256
 namespace Clean.Gadgets.Keccak256.Tests
 -- ============= Testing =============
 
-def state : List (U64 ℕ) :=[
+def state : Vector (U64 ℕ) 25 := #v[
   ⟨67, 168, 144, 181, 2, 173, 144, 47⟩,
   ⟨114, 52, 107, 105, 171, 22, 114, 75⟩,
   ⟨196, 118, 22, 253, 100, 162, 87, 52⟩,
