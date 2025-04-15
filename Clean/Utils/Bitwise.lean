@@ -1,0 +1,48 @@
+import Mathlib.Tactic
+import Mathlib.Algebra.Field.ZMod
+
+namespace Bitwise
+
+theorem eq_of_mod_eq_and_div_eq (m : ℕ) {x y : ℕ} (mod : x % m = y % m) (div : x / m = y / m) : x = y := by
+  rw [←Nat.mod_add_div x m, ←Nat.mod_add_div y m, mod, div]
+
+theorem xor_eq_add {x : ℕ} (n : ℕ) (hx : x < 2^n) (y : ℕ) : x + 2^n * y = x ^^^ 2^n * y := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [add_comm, Nat.testBit_mul_pow_two_add _ hx, Nat.testBit_xor, Nat.testBit_mul_pow_two]
+  by_cases hi : i < n
+  · have : ¬(n ≤ i) := by linarith
+    simp [this]
+  · have : n ≤ i := by linarith
+    replace hx : x < 2^i := by
+      apply lt_of_lt_of_le hx
+      exact Nat.pow_le_pow_of_le (a:=2) (by norm_num) this
+    rw [Nat.testBit_lt_two_pow hx]
+    simp [this]
+
+theorem and_mul_two_pow {x y n : Nat} : (x &&& y) * 2 ^ n = x * 2 ^ n &&& y * 2 ^ n := Nat.bitwise_mul_two_pow
+
+lemma and_mul_pow_two_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^n * y = 0 := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [Nat.testBit_and, Nat.zero_testBit, Nat.testBit_mul_pow_two]
+  by_cases h : i < n
+  · simp [h]
+  · have : n ≤ i := by linarith
+    replace hx : x < 2^i := by
+      apply lt_of_lt_of_le hx
+      exact Nat.pow_le_pow_of_le (a:=2) (by norm_num) this
+    rw [Nat.testBit_lt_two_pow hx]
+    simp
+
+lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
+  (x0 ^^^ (2^8 * x1)) &&& (y0 ^^^ (2^8 * y1)) = (x0 &&& y0) ^^^ (x1 &&& y1) * 2^8 := by
+  simp only [Nat.and_xor_distrib_left, Nat.and_xor_distrib_right]
+  have zero0 : 2 ^ 8 * x1 &&& y0 = 0 := by rw [Nat.and_comm]; apply and_mul_pow_two_lt hy0
+  have zero1 : x0 &&& 2 ^ 8 * y1 = 0 := and_mul_pow_two_lt hx0 _
+  rw [zero0, zero1, Nat.xor_zero, Nat.zero_xor]
+  congr; symm
+  rw [mul_comm _ x1, mul_comm _ y1]
+  exact and_mul_two_pow
+
+end Bitwise
