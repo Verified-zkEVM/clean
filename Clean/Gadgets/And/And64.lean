@@ -61,27 +61,18 @@ theorem soundness : Soundness (F p) assumptions spec := by
   let ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩ := y_var
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
   let ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ := y
-  obtain ⟨ x_norm, y_norm ⟩ := h_assumptions
-  apply soundness_to_u64 x_norm y_norm
-  simp only
-  simp_all only [circuit_norm, subcircuit_norm, main, assumptions, spec, And8.circuit, eval, var_from_offset]
-  simp only [Inputs.mk.injEq, U64.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
-  obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
-  rw [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
-    h_x6, h_y6, h_x7, h_y7] at h_holds
-  simp only [And8.assumptions, And8.spec] at h_holds
-
-  simp only [U64.is_normalized] at x_norm y_norm
-  have ⟨ x0_byte, x1_byte, x2_byte, x3_byte, x4_byte, x5_byte, x6_byte, x7_byte ⟩ := x_norm
-  have ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_norm
-  simp only [x0_byte, y0_byte, x1_byte, y1_byte, x2_byte, y2_byte,
-    x3_byte, y3_byte, x4_byte, y4_byte, x5_byte, y5_byte,
-    x6_byte, y6_byte, x7_byte, y7_byte, and_true, true_implies] at h_holds
-  simp [h_holds]
+  apply soundness_to_u64 h_assumptions.left h_assumptions.right
+  simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
+    main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
+    U64.is_normalized] at h_assumptions h_holds h_input ⊢
+  simp_all
 
 theorem completeness : Completeness (F p) U64 assumptions := by
+  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+  let ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ := x_var
+  let ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩ := y_var
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
+  let ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ := y
   sorry
 
 def circuit : FormalCircuit (F p) Inputs U64 where
