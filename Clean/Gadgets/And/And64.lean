@@ -56,11 +56,8 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   sorry
 
 theorem soundness : Soundness (F p) assumptions spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_holds
-  let ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ := x_var
-  let ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩ := y_var
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
-  let ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ := y
+  intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
+  cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
   simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
     main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
@@ -68,12 +65,12 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp_all
 
 theorem completeness : Completeness (F p) U64 assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  let ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ := x_var
-  let ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩ := y_var
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
-  let ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ := y
-  sorry
+  intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
+  cases x; cases y
+  simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
+    main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
+    U64.is_normalized] at h_assumptions h_input ⊢
+  simp_all
 
 def circuit : FormalCircuit (F p) Inputs U64 where
   assumptions
