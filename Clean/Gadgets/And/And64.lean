@@ -67,7 +67,6 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   suffices z.value = x.value &&& y.value from ⟨ this, z_norm ⟩
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq]
   repeat rw [Bitwise.and_xor_sum]
-  ac_rfl
   repeat assumption
 
 theorem soundness : Soundness (F p) assumptions spec := by

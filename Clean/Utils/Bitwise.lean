@@ -20,7 +20,13 @@ theorem xor_eq_add {x : ℕ} (n : ℕ) (hx : x < 2^n) (y : ℕ) : x + 2^n * y = 
     rw [Nat.testBit_lt_two_pow hx]
     simp [this]
 
-theorem and_mul_two_pow {x y n : Nat} : (x &&& y) * 2 ^ n = x * 2 ^ n &&& y * 2 ^ n := Nat.bitwise_mul_two_pow
+theorem and_mul_two_pow {x y n : Nat} : 2 ^ n * (x &&& y) =  2 ^ n * x &&&  2 ^ n * y := by
+  simp only [mul_comm]
+  exact Nat.bitwise_mul_two_pow
+
+theorem xor_mul_two_pow {x y n : Nat} : 2 ^ n * (x ^^^ y) =  2 ^ n * x ^^^  2 ^ n * y := by
+  simp only [mul_comm]
+  exact Nat.bitwise_mul_two_pow
 
 lemma and_mul_pow_two_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^n * y = 0 := by
   apply Nat.eq_of_testBit_eq
@@ -36,13 +42,12 @@ lemma and_mul_pow_two_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^
     simp
 
 lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
-  (x0 ^^^ (2^8 * x1)) &&& (y0 ^^^ (2^8 * y1)) = (x0 &&& y0) ^^^ (x1 &&& y1) * 2^8 := by
+  (x0 ^^^ (2^8 * x1)) &&& (y0 ^^^ (2^8 * y1)) = (x0 &&& y0) ^^^ 2^8 * (x1 &&& y1) := by
   simp only [Nat.and_xor_distrib_left, Nat.and_xor_distrib_right]
   have zero0 : 2 ^ 8 * x1 &&& y0 = 0 := by rw [Nat.and_comm]; apply and_mul_pow_two_lt hy0
   have zero1 : x0 &&& 2 ^ 8 * y1 = 0 := and_mul_pow_two_lt hx0 _
   rw [zero0, zero1, Nat.xor_zero, Nat.zero_xor]
   congr; symm
-  rw [mul_comm _ x1, mul_comm _ y1]
   exact and_mul_two_pow
 
 end Bitwise
