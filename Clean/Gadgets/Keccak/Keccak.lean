@@ -24,7 +24,7 @@ def bits2bytes (x : Nat) : Nat :=
   (x + 7) / 8
 
 @[reducible]
-def xor_u64 (a b : ℕ) : ℕ := a.xor b
+def xor_u64 (a b : ℕ) : ℕ := a ^^^ b
 
 def not_u64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
