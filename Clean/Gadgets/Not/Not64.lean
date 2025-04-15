@@ -20,10 +20,8 @@ theorem not_zify (n : ℕ) {x : ℕ} (hx : x < n) : ((n - 1 - x : ℕ) : ℤ) = 
   rfl
 
 theorem not_lt (n : ℕ) {x : ℕ} (hx : x < n) : n - 1 - (x : ℤ) < n := by
-  rw [←not_zify n hx]
-  have h := Nat.sub_one_sub_lt_of_lt hx
-  zify at h
-  exact h
+  rw [←not_zify n hx, Int.ofNat_lt]
+  exact Nat.sub_one_sub_lt_of_lt hx
 
 def circuit : FormalCircuit (F p) U64 U64 where
   main x := pure (not64 x)
