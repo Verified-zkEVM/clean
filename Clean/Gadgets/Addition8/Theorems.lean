@@ -4,7 +4,6 @@ namespace Gadgets.Addition8.Theorems
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-
 /-
   First part of the soundness direction: case of zero carry
 -/
@@ -14,7 +13,7 @@ theorem soundness_zero_carry (x y out carry_in: F p):
     ∧ (carry_in.val + x.val + y.val) / 256 = 0)) := by
   intros hx hy hout hb h
   -- we show that the sum do not overflow the field
-  have not_wrap := FieldUtils.byte_sum_and_bit_do_not_wrap x y carry_in hx hy hb
+  have not_wrap := ByteUtils.byte_sum_and_bit_do_not_wrap x y carry_in hx hy hb
   rw [sub_eq_zero] at h
   apply_fun ZMod.val at h
   constructor
@@ -32,9 +31,9 @@ theorem soundness_one_carry (x y out carry_in: F p):
     ∧ (carry_in.val + x.val + y.val) / 256 = 1) := by
 
   intros hx hy hout hb h
-  have xy_not_wrap := FieldUtils.byte_sum_do_not_wrap x y hx hy
-  have not_wrap := FieldUtils.byte_sum_and_bit_do_not_wrap x y carry_in hx hy hb
-  have out_plus_256_not_wrap := FieldUtils.byte_plus_256_do_not_wrap out hout
+  have xy_not_wrap := ByteUtils.byte_sum_do_not_wrap x y hx hy
+  have not_wrap := ByteUtils.byte_sum_and_bit_do_not_wrap x y carry_in hx hy hb
+  have out_plus_256_not_wrap := ByteUtils.byte_plus_256_do_not_wrap out hout
 
   rw [sub_eq_zero] at h
   apply eq_add_of_sub_eq at h
@@ -45,7 +44,7 @@ theorem soundness_one_carry (x y out carry_in: F p):
     Eq.symm (Nat.eq_sub_of_add_eq (Eq.symm h))
 
   -- reason about the bounds of the sum
-  have sum_bound := FieldUtils.byte_sum_le_bound x y hx hy
+  have sum_bound := ByteUtils.byte_sum_le_bound x y hx hy
   have sum_le_511 : carry_in.val + (x + y).val ≤ 511 := by
     apply Nat.le_sub_one_of_lt at sum_bound
     apply Nat.le_sub_one_of_lt at hb
@@ -145,13 +144,13 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     y.val < 256 ->
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
-    let z := FieldUtils.mod_256 (x + y + carry_in)
+    let z := ByteUtils.mod_256 (x + y + carry_in)
     x + y + carry_in + -z + -(carry_out * 256) = 0 := by
   intro as_x as_y carry_in_bound
   simp
   rw [←sub_eq_add_neg, sub_eq_zero, add_eq_of_eq_sub]
   ring_nf
-  dsimp only [FieldUtils.mod_256, FieldUtils.mod, PNat.val_ofNat]
+  dsimp only [ByteUtils.mod_256, FieldUtils.mod, PNat.val_ofNat]
 
   -- lift everything to the naturals
   apply_fun ZMod.val
@@ -166,7 +165,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     have T_not_wrap : T % p = T := by
       dsimp only
       rw [Nat.mod_eq_iff_lt p_neq_zero.out]
-      have sum_bound := FieldUtils.byte_sum_le_bound x y as_x as_y
+      have sum_bound := ByteUtils.byte_sum_le_bound x y as_x as_y
       have sum_lt_512 : (x + y).val + carry_in.val ≤ 511 := by
         apply Nat.le_sub_one_of_lt at sum_bound
         apply Nat.le_sub_one_of_lt at carry_in_bound
@@ -175,7 +174,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
         apply Nat.add_le_add sum_bound carry_in_bound
       have sum_lt_p : (x + y).val + carry_in.val < p := Nat.lt_trans
         (by apply Nat.lt_add_one_of_le at sum_lt_512; assumption) p_large_enough.elim
-      rw [FieldUtils.byte_sum_do_not_wrap x y as_x as_y] at sum_lt_p
+      rw [ByteUtils.byte_sum_do_not_wrap x y as_x as_y] at sum_lt_p
       assumption
     rw [T_not_wrap]
 
@@ -219,7 +218,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
       rw [Nat.div_eq_of_lt sum_lt_256]
       simp
     · apply ZMod.val_injective
-  · have sum_bound := FieldUtils.byte_sum_le_bound x y as_x as_y
+  · have sum_bound := ByteUtils.byte_sum_le_bound x y as_x as_y
     have sum_le_511 : (x + y).val + carry_in.val ≤ 511 := by
       apply Nat.le_sub_one_of_lt at sum_bound
       apply Nat.le_sub_one_of_lt at carry_in_bound
@@ -227,7 +226,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
       simp at carry_in_bound
       rw [add_comm]
       apply Nat.add_le_add carry_in_bound sum_bound
-    rw [FieldUtils.byte_sum_do_not_wrap x y as_x as_y] at sum_le_511
+    rw [ByteUtils.byte_sum_do_not_wrap x y as_x as_y] at sum_le_511
 
     -- we want to show that the carry is 1
     apply Or.inr
@@ -238,7 +237,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
         · simp; apply sum_ge_256
         · simp; apply Nat.lt_add_one_of_le; apply sum_le_511
       rw [ZMod.val_one]
-      rw [FieldUtils.byte_sum_and_bit_do_not_wrap' x y carry_in as_x as_y carry_in_bound]
+      rw [ByteUtils.byte_sum_and_bit_do_not_wrap' x y carry_in as_x as_y carry_in_bound]
       assumption
     · apply ZMod.val_injective
 

@@ -1,91 +1,95 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.Basic
-import Clean.Utils.Field
+import Clean.Circuit.SubCircuit
 import Clean.Types.U64
-import Clean.Gadgets.And.ByteAndTable
+import Clean.Gadgets.And.And8
 
-section
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-
-namespace Gadgets.And
+namespace Gadgets.And.And64
 structure Inputs (F : Type) where
   x: U64 F
   y: U64 F
 
-structure Outputs (F : Type) where
-  z: U64 F
+instance : ProvableStruct Inputs where
+  components := [U64, U64]
+  to_components := fun { x, y } => .cons x (.cons y .nil)
+  from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
-instance : ProvableType Inputs where
-  size := 16
-  to_elements s := #v[s.x.x0, s.x.x1, s.x.x2, s.x.x3, s.x.x4, s.x.x5, s.x.x6, s.x.x7, s.y.x0, s.y.x1, s.y.x2, s.y.x3, s.y.x4, s.y.x5, s.y.x6, s.y.x7]
-  from_elements v :=
-    let ⟨ .mk [x0, x1, x2, x3, x4, x5, x6, x7, y0, y1, y2, y3, y4, y5, y6, y7], _ ⟩ := v
-    ⟨ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩, ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ⟩
-
-instance : ProvableType Outputs where
-  size := 8
-  to_elements s := #v[s.z.x0, s.z.x1, s.z.x2, s.z.x3, s.z.x4, s.z.x5, s.z.x6, s.z.x7]
-  from_elements v :=
-    let ⟨ .mk [z0, z1, z2, z3, z4, z5, z6, z7], _ ⟩ := v
-    ⟨ ⟨z0, z1, z2, z3, z4, z5, z6, z7⟩ ⟩
-
-def and_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p))  := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← Provable.witness (fun env =>
-    let z0 := Nat.land (env x.x0).val (env y.x0).val
-    let z1 := Nat.land (env x.x1).val (env y.x1).val
-    let z2 := Nat.land (env x.x2).val (env y.x2).val
-    let z3 := Nat.land (env x.x3).val (env y.x3).val
-    let z4 := Nat.land (env x.x4).val (env y.x4).val
-    let z5 := Nat.land (env x.x5).val (env y.x5).val
-    let z6 := Nat.land (env x.x6).val (env y.x6).val
-    let z7 := Nat.land (env x.x7).val (env y.x7).val
-    U64.mk z0 z1 z2 z3 z4 z5 z6 z7)
-
-  byte_and_lookup x.x0 y.x0 z.x0
-  byte_and_lookup x.x1 y.x1 z.x1
-  byte_and_lookup x.x2 y.x2 z.x2
-  byte_and_lookup x.x3 y.x3 z.x3
-  byte_and_lookup x.x4 y.x4 z.x4
-  byte_and_lookup x.x5 y.x5 z.x5
-  byte_and_lookup x.x6 y.x6 z.x6
-  byte_and_lookup x.x7 y.x7 z.x7
-  return { z }
+  let z0 ← subcircuit And8.circuit ⟨ x.x0, y.x0 ⟩
+  let z1 ← subcircuit And8.circuit ⟨ x.x1, y.x1 ⟩
+  let z2 ← subcircuit And8.circuit ⟨ x.x2, y.x2 ⟩
+  let z3 ← subcircuit And8.circuit ⟨ x.x3, y.x3 ⟩
+  let z4 ← subcircuit And8.circuit ⟨ x.x4, y.x4 ⟩
+  let z5 ← subcircuit And8.circuit ⟨ x.x5, y.x5 ⟩
+  let z6 ← subcircuit And8.circuit ⟨ x.x6, y.x6 ⟩
+  let z7 ← subcircuit And8.circuit ⟨ x.x7, y.x7 ⟩
+  return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
 def assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.is_normalized ∧ y.is_normalized
 
-def spec (input: Inputs (F p)) (outputs : Outputs (F p)) :=
+def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
-  let z := outputs.z
-  z.x0.val = Nat.land x.x0.val y.x0.val ∧
-  z.x1.val = Nat.land x.x1.val y.x1.val ∧
-  z.x2.val = Nat.land x.x2.val y.x2.val ∧
-  z.x3.val = Nat.land x.x3.val y.x3.val ∧
-  z.x4.val = Nat.land x.x4.val y.x4.val ∧
-  z.x5.val = Nat.land x.x5.val y.x5.val ∧
-  z.x6.val = Nat.land x.x6.val y.x6.val ∧
-  z.x7.val = Nat.land x.x7.val y.x7.val
+  z.value = x.value &&& y.value ∧ z.is_normalized
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := and_u64
-  assumptions := assumptions
-  spec := spec
+instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
+  main
   local_length _ := 8
-  output _ i0 := { z := ⟨var ⟨i0⟩, var ⟨i0 + 1⟩, var ⟨i0 + 2⟩, var ⟨i0 + 3⟩, var ⟨i0 + 4⟩, var ⟨i0 + 5⟩, var ⟨i0 + 6⟩, var ⟨i0 + 7⟩ ⟩ }
+  output _ i := var_from_offset U64 i
 
-  soundness := by
-    sorry
+omit [Fact (Nat.Prime p)] p_large_enough in
+theorem soundness_to_u64 {x y z : U64 (F p)}
+  (x_norm : x.is_normalized) (y_norm : y.is_normalized)
+  (h_eq :
+    z.x0.val = x.x0.val &&& y.x0.val ∧
+    z.x1.val = x.x1.val &&& y.x1.val ∧
+    z.x2.val = x.x2.val &&& y.x2.val ∧
+    z.x3.val = x.x3.val &&& y.x3.val ∧
+    z.x4.val = x.x4.val &&& y.x4.val ∧
+    z.x5.val = x.x5.val &&& y.x5.val ∧
+    z.x6.val = x.x6.val &&& y.x6.val ∧
+    z.x7.val = x.x7.val &&& y.x7.val) : spec { x, y } z := by
+  simp only [spec]
+  have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
+  have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm
 
-  completeness := by
-    sorry
+  have z_norm : z.is_normalized := by
+    simp only [U64.is_normalized, h_eq]
+    exact ⟨ Nat.and_lt_two_pow (n:=8) _ hy0, Nat.and_lt_two_pow (n:=8) _ hy1,
+      Nat.and_lt_two_pow (n:=8) _ hy2, Nat.and_lt_two_pow (n:=8) _ hy3,
+      Nat.and_lt_two_pow (n:=8) _ hy4, Nat.and_lt_two_pow (n:=8) _ hy5,
+      Nat.and_lt_two_pow (n:=8) _ hy6, Nat.and_lt_two_pow (n:=8) _ hy7 ⟩
 
-end Gadgets.And
+  suffices z.value = x.value &&& y.value from ⟨ this, z_norm ⟩
+  simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq]
+  repeat rw [Bitwise.and_xor_sum]
+  repeat assumption
+
+theorem soundness : Soundness (F p) assumptions spec := by
+  intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
+  cases x; cases y
+  apply soundness_to_u64 h_assumptions.left h_assumptions.right
+  simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
+    main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
+    U64.is_normalized] at h_assumptions h_holds h_input ⊢
+  simp_all
+
+theorem completeness : Completeness (F p) U64 assumptions := by
+  intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
+  cases x; cases y
+  simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
+    main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
+    U64.is_normalized] at h_assumptions h_input ⊢
+  simp_all
+
+def circuit : FormalCircuit (F p) Inputs U64 where
+  assumptions
+  spec
+  soundness
+  completeness
+
+end Gadgets.And.And64

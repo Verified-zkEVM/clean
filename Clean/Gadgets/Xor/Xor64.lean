@@ -25,14 +25,14 @@ instance : ProvableStruct Inputs where
 def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z ← ProvableType.witness (fun env =>
-    let z0 := Nat.xor (env x.x0).val (env y.x0).val
-    let z1 := Nat.xor (env x.x1).val (env y.x1).val
-    let z2 := Nat.xor (env x.x2).val (env y.x2).val
-    let z3 := Nat.xor (env x.x3).val (env y.x3).val
-    let z4 := Nat.xor (env x.x4).val (env y.x4).val
-    let z5 := Nat.xor (env x.x5).val (env y.x5).val
-    let z6 := Nat.xor (env x.x6).val (env y.x6).val
-    let z7 := Nat.xor (env x.x7).val (env y.x7).val
+    let z0 := (env x.x0).val ^^^ (env y.x0).val
+    let z1 := (env x.x1).val ^^^ (env y.x1).val
+    let z2 := (env x.x2).val ^^^ (env y.x2).val
+    let z3 := (env x.x3).val ^^^ (env y.x3).val
+    let z4 := (env x.x4).val ^^^ (env y.x4).val
+    let z5 := (env x.x5).val ^^^ (env y.x5).val
+    let z6 := (env x.x6).val ^^^ (env y.x6).val
+    let z7 := (env x.x7).val ^^^ (env y.x7).val
     U64.mk z0 z1 z2 z3 z4 z5 z6 z7)
 
   lookup (ByteXorLookup x.x0 y.x0 z.x0)
@@ -51,26 +51,39 @@ def assumptions (input: Inputs (F p)) :=
 
 def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
-  z.value = Nat.xor x.value y.value ∧ z.is_normalized
+  z.value = x.value ^^^ y.value ∧ z.is_normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
   main := xor_u64
   local_length _ := 8
   output _ i0 := var_from_offset U64 i0
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}
   (x_norm : x.is_normalized) (y_norm : y.is_normalized)
   (h_eq :
-    Nat.xor x.x0.val y.x0.val = z.x0.val ∧
-    Nat.xor x.x1.val y.x1.val = z.x1.val ∧
-    Nat.xor x.x2.val y.x2.val = z.x2.val ∧
-    Nat.xor x.x3.val y.x3.val = z.x3.val ∧
-    Nat.xor x.x4.val y.x4.val = z.x4.val ∧
-    Nat.xor x.x5.val y.x5.val = z.x5.val ∧
-    Nat.xor x.x6.val y.x6.val = z.x6.val ∧
-    Nat.xor x.x7.val y.x7.val = z.x7.val) :
-  spec { x, y } z := by
-  sorry
+    z.x0.val = x.x0.val ^^^ y.x0.val ∧
+    z.x1.val = x.x1.val ^^^ y.x1.val ∧
+    z.x2.val = x.x2.val ^^^ y.x2.val ∧
+    z.x3.val = x.x3.val ^^^ y.x3.val ∧
+    z.x4.val = x.x4.val ^^^ y.x4.val ∧
+    z.x5.val = x.x5.val ^^^ y.x5.val ∧
+    z.x6.val = x.x6.val ^^^ y.x6.val ∧
+    z.x7.val = x.x7.val ^^^ y.x7.val) : spec { x, y } z := by
+  simp only [spec]
+  have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
+  have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm
+
+  have z_norm : z.is_normalized := by
+    simp only [U64.is_normalized, h_eq]
+    exact ⟨ Nat.xor_lt_two_pow (n:=8) hx0 hy0, Nat.xor_lt_two_pow (n:=8) hx1 hy1,
+      Nat.xor_lt_two_pow (n:=8) hx2 hy2, Nat.xor_lt_two_pow (n:=8) hx3 hy3,
+      Nat.xor_lt_two_pow (n:=8) hx4 hy4, Nat.xor_lt_two_pow (n:=8) hx5 hy5,
+      Nat.xor_lt_two_pow (n:=8) hx6 hy6, Nat.xor_lt_two_pow (n:=8) hx7 hy7 ⟩
+
+  suffices z.value = x.value ^^^ y.value from ⟨ this, z_norm ⟩
+  simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, Bitwise.xor_mul_two_pow]
+  ac_rfl
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env input_var input h_input h_as h_holds
@@ -100,9 +113,9 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp [h_holds]
 
 lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
-  (Nat.xor x.val y.val : F p).val = Nat.xor x.val y.val := by
+  (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
   apply FieldUtils.val_lt_p
-  have h_byte : Nat.xor x.val y.val < 256:= Nat.xor_lt_two_pow (n:=8) hx hy
+  have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
 theorem completeness : Completeness (F p) U64 assumptions := by
@@ -147,7 +160,6 @@ theorem completeness : Completeness (F p) U64 assumptions := by
     x6_byte, y6_byte, x7_byte, y7_byte, and_true]
 
 def circuit : FormalCircuit (F p) Inputs U64 where
-  main := xor_u64
   assumptions
   spec
   soundness
