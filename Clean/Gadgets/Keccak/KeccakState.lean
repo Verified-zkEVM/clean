@@ -9,10 +9,13 @@ variable [p_large_enough: Fact (p > 512)]
 
 @[reducible] def KeccakState := ProvableVector U64 25
 
+def KeccakState.is_normalized (state : KeccakState (F p)) :=
+  ∀ i : Fin 25, state[i].is_normalized
 
-@[reducible]
-def KeccakState_is_normalized_iff (state : KeccakState (F p)) :
-    (∀ i : Fin 25, state[i].is_normalized) ↔
+def KeccakState.value (state : KeccakState (F p)) := state.map U64.value
+
+def KeccakState.is_normalized_iff (state : KeccakState (F p)) :
+    state.is_normalized ↔
     state[0].is_normalized ∧
     state[1].is_normalized ∧
     state[2].is_normalized ∧
@@ -38,8 +41,25 @@ def KeccakState_is_normalized_iff (state : KeccakState (F p)) :
     state[22].is_normalized ∧
     state[23].is_normalized ∧
     state[24].is_normalized := by
-  simp only [Fin.getElem_fin, Fin.forall_fin_succ, Fin.isValue,
+  simp only [KeccakState.is_normalized, Fin.getElem_fin, Fin.forall_fin_succ, Fin.isValue,
     Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd, Fin.val_eq_zero, IsEmpty.forall_iff,
     and_true]
+
+@[reducible]
+def KeccakSlice := ProvableVector U64 5
+
+def KeccakSlice.is_normalized (slice : KeccakSlice (F p)) :=
+  ∀ i : Fin 5, slice[i].is_normalized
+
+def KeccakSlice.value (slice : KeccakSlice (F p)) := slice.map U64.value
+
+def KeccakSlice.is_normalized_iff (slice : KeccakSlice (F p)) :
+    slice.is_normalized ↔
+    slice[0].is_normalized ∧
+    slice[1].is_normalized ∧
+    slice[2].is_normalized ∧
+    slice[3].is_normalized ∧
+    slice[4].is_normalized := by
+  simp [KeccakSlice.is_normalized, IsEmpty.forall_iff, Fin.forall_fin_succ]
 
 end Clean.Gadgets.Keccak256
