@@ -12,17 +12,16 @@ variable [p_large_enough: Fact (p > 512)]
 
 open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState KeccakState_is_normalized_iff)
+open Clean.Gadgets.Keccak256 (KeccakState KeccakSlice)
 
 structure Inputs (F : Type) where
   state : KeccakState F
-  d : ProvableVector U64 5 F
+  d : KeccakSlice F
 
 instance : ProvableStruct Inputs where
-  components := [KeccakState, ProvableVector U64 5]
+  components := [KeccakState, KeccakSlice]
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
-
 
 def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let ⟨state, d⟩ := inputs
@@ -54,30 +53,22 @@ def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)
     ←subcircuit Gadgets.Xor.circuit ⟨state.get 24, d.get 4⟩
   ]
 
-
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var KeccakState (F p)) where
   main := theta_xor
   local_length _ := 200
   output _ i0 := var_from_offset KeccakState i0
   output_eq _ i := by
-    simp only [var_from_offset_vector, circuit_norm, theta_xor, Xor.circuit]
+    simp only [var_from_offset_vector, theta_xor, Xor.circuit]
+    simp only [circuit_norm]
     rfl
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  (∀ i : Fin 25, state[i].is_normalized) ∧ (∀ i : Fin 5, d[i].is_normalized)
+  state.is_normalized ∧ d.is_normalized
 
 def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  let h_norm := ∀ i : Fin 25, out[i].is_normalized
-
-  let state_u64 := state.map (fun x => x.value)
-  let d_u64 := d.map (fun x => x.value)
-  let out_u64 := out.map (fun x => x.value)
-
-  let state' := Clean.Gadgets.Keccak256.theta_xor state_u64 d_u64
-
-  h_norm ∧ state' = out_u64
+  out.is_normalized ∧ out.value = Clean.Gadgets.Keccak256.theta_xor state.value d.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
@@ -98,7 +89,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp only [s_d, s_state] at h_holds
   simp [circuit_norm, spec, Clean.Gadgets.Keccak256.theta_xor, Clean.Gadgets.Keccak256.xor_u64, Fin.forall_fin_succ,
-    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector]
+    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector,
+    KeccakState.is_normalized, KeccakState.value, KeccakSlice.value]
 
   repeat
     first
@@ -107,6 +99,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     specialize h (state_norm _) (d_norm _)
     obtain ⟨ xor, norm ⟩ := h
     simp [xor, norm]
+
 
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
