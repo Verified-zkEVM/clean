@@ -43,8 +43,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakSlice (Var KeccakSlice (F p)
     var_from_offset U64 (i0 + 152)
   ]
 
-def assumptions (state : KeccakSlice (F p)) : Prop :=
-  ∀ i : Fin 5, state[i].is_normalized
+def assumptions (state : KeccakSlice (F p)) := state.is_normalized
 
 def spec (state : KeccakSlice (F p)) (out: KeccakSlice (F p)) : Prop :=
   out.is_normalized ∧ out.value = Clean.Gadgets.Keccak256.theta_d state.value
