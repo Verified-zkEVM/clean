@@ -324,6 +324,10 @@ theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α]
   rw [Vector.toChunks_flatten]
   simp [from_elements, eval, to_vars]
 
+theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : Nat) :
+    var_from_offset (F:=F) (ProvableVector α n) offset = .natInit n fun i => var_from_offset α (offset + (size α)*i) := by
+  sorry
+
 -- `ProvablePair`
 
 instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType β] : ProvableType (ProvablePair α β) where

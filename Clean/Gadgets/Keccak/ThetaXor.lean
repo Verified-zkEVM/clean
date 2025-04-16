@@ -54,36 +54,14 @@ def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)
     ←subcircuit Gadgets.Xor.circuit ⟨state.get 24, d.get 4⟩
   ]
 
+
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var KeccakState (F p)) where
   main := theta_xor
   local_length _ := 200
-  output _ i0 := #v[
-    var_from_offset U64 (i0),
-    var_from_offset U64 (i0 + 8),
-    var_from_offset U64 (i0 + 16),
-    var_from_offset U64 (i0 + 24),
-    var_from_offset U64 (i0 + 32),
-    var_from_offset U64 (i0 + 40),
-    var_from_offset U64 (i0 + 48),
-    var_from_offset U64 (i0 + 56),
-    var_from_offset U64 (i0 + 64),
-    var_from_offset U64 (i0 + 72),
-    var_from_offset U64 (i0 + 80),
-    var_from_offset U64 (i0 + 88),
-    var_from_offset U64 (i0 + 96),
-    var_from_offset U64 (i0 + 104),
-    var_from_offset U64 (i0 + 112),
-    var_from_offset U64 (i0 + 120),
-    var_from_offset U64 (i0 + 128),
-    var_from_offset U64 (i0 + 136),
-    var_from_offset U64 (i0 + 144),
-    var_from_offset U64 (i0 + 152),
-    var_from_offset U64 (i0 + 160),
-    var_from_offset U64 (i0 + 168),
-    var_from_offset U64 (i0 + 176),
-    var_from_offset U64 (i0 + 184),
-    var_from_offset U64 (i0 + 192)
-  ]
+  output _ i0 := var_from_offset KeccakState i0
+  output_eq _ i := by
+    simp only [var_from_offset_vector, circuit_norm, theta_xor, Xor.circuit]
+    rfl
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
@@ -120,7 +98,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp only [s_d, s_state] at h_holds
   simp [circuit_norm, spec, Clean.Gadgets.Keccak256.theta_xor, Clean.Gadgets.Keccak256.xor_u64, Fin.forall_fin_succ,
-    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two]
+    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector]
 
   repeat
     first
