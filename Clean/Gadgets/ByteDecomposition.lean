@@ -67,6 +67,10 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) Inputs (Var Outputs (F
   local_length _ := 2
   output _ i0 := var_from_offset Outputs i0
 
+-- TODO: remove when updating to new mathlib
+theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
+  Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
+
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   sorry
 
@@ -82,10 +86,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
     List.getElem_cons_zero] at h1
 
   simp [eval, circuit_norm] at h_eval
-
   simp [circuit_norm, byte_decomposition, elaborated, ByteLookup]
-  rw [ByteTable.equiv, ByteTable.equiv]
-  rw [h_eval, h0, h1]
+  rw [ByteTable.equiv, ByteTable.equiv, h_eval, h0, h1]
 
   if zero_off : offset = 0 then
     simp only [Fin.isValue, zero_off, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
@@ -98,15 +100,36 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
     have off_ge_zero : offset > 0 := by
       simp only [Fin.isValue, gt_iff_lt, Fin.pos_iff_ne_zero', ne_eq, zero_off, not_false_eq_true]
     simp [FieldUtils.mod, h_eval, FieldUtils.floordiv, off_ge_zero]
+
+    have x_lt : x.val < p := by linarith [as, p_large_enough.elim]
+    have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+
+    have h : ZMod.val (2 : F p) ^ offset.val < 256 := by
+      rw [val_two]
+      fin_cases offset
+      repeat simp
+
+    have h' : ZMod.val (2 : F p) ^ offset.val < p := by
+      linarith [p_large_enough.elim]
+
     constructor
-    · sorry
+    · repeat rw [FieldUtils.val_of_nat_to_field_eq]
+
+      have h_mod : x.val % (2^offset.val) < 256 := by
+        apply Nat.mod_lt_of_lt
+        exact as
+
+      have h_div : x.val / (2^offset.val) < 256 := by
+        apply Nat.div_lt_of_lt_mul
+        fin_cases offset
+        repeat linarith
+
+      simp only [h_mod, h_div, and_self]
+
     · apply_fun ZMod.val
       · repeat rw [ZMod.val_add]
-        have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
-        have h : ZMod.val (2 : F p) ^ offset.val < p := by
-          sorry
 
-        rw [ZMod.val_mul, ZMod.val_pow h, ZMod.neg_val]
+        rw [ZMod.val_mul, ZMod.val_pow h', ZMod.neg_val]
         repeat rw [FieldUtils.val_of_nat_to_field_eq]
 
         simp only [Nat.add_mod_mod, Nat.mod_add_mod, ZMod.val_zero, val_two]
@@ -114,10 +137,14 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
         if h: x = 0 then
           simp [h]
         else
-          simp [h]
-          set x := x.val
+          have x_ne_zero : NeZero x.val := by
+            rw [neZero_iff]
+            simp only [ne_eq, ZMod.val_eq_zero, h, not_false_eq_true]
 
-          sorry
+          simp only [h, ↓reduceIte]
+          rw [Nat.mod_add_div', Nat.add_mod]
+          rw [Nat.self_sub_mod, Nat.mod_eq_of_lt x_lt, Nat.add_sub_of_le (by linarith)]
+          simp only [Nat.mod_self]
 
       · apply ZMod.val_injective
 
