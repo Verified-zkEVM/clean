@@ -4,10 +4,8 @@ import Clean.Gadgets.Addition32.Theorems
 import Clean.Gadgets.Xor.Xor64
 
 namespace Gadgets.Keccak.ThetaC
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
 
 @[reducible] def State := ProvableVector U64 25
