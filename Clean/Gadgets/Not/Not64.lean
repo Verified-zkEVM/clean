@@ -4,7 +4,7 @@ import Clean.Utils.Field
 import Clean.Types.U64
 
 section
-variable {p : ℕ} [Fact p.Prime] variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Not
 def not8 (x : Expression (F p)) := 255 - x
