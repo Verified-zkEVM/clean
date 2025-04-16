@@ -80,19 +80,33 @@ def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs where
     simp [circuit_norm, byte_decomposition]
     rw [h_eval, h0, h1]
 
-    fin_cases off
-    · simp only [Fin.isValue, Fin.zero_eta, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
-      pow_zero, PNat.val_ofNat, Nat.div_one, mul_one, zero_add]
+    if zero_off : off = 0 then
+      simp only [Fin.isValue, zero_off, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
+        Fin.val_zero, pow_zero, PNat.val_ofNat, Nat.div_one, mul_one, zero_add]
       rw [FieldUtils.nat_to_field_of_val_eq_iff, h_eval]
       ring
-    · simp [FieldUtils.mod, h_eval, FieldUtils.floordiv]
+    else
+      have off_ge_zero : off > 0 := by
+        simp only [Fin.isValue, gt_iff_lt, Fin.pos_iff_ne_zero', ne_eq, zero_off, not_false_eq_true]
+      simp [FieldUtils.mod, h_eval, FieldUtils.floordiv, off_ge_zero]
       apply_fun ZMod.val
       · repeat rw [ZMod.val_add]
-        rw [ZMod.val_mul]
+        have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+        have h : ZMod.val (2 : F p) ^ off.val < p := by
+          sorry
+
+        rw [ZMod.val_mul, ZMod.val_pow h, ZMod.neg_val]
         repeat rw [FieldUtils.val_of_nat_to_field_eq]
 
-        sorry
+        simp only [Nat.add_mod_mod, Nat.mod_add_mod, ZMod.val_zero, val_two]
+        set bin_pow := 2^off.val
+        if h: x = 0 then
+          simp [h]
+        else
+          simp [h]
+          set x := x.val
+
+          sorry
 
       · apply ZMod.val_injective
-    repeat sorry
 end Gadgets.ByteDecomposition
