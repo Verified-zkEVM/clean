@@ -47,6 +47,9 @@ def byte_decomposition (offset : Fin 8) (input : Var Inputs (F p)) : Circuit (F 
 
   let high ← witness fun env => FieldUtils.floordiv (env x) (2^offset.val)
 
+  lookup (ByteLookup low)
+  lookup (ByteLookup high)
+
   assert_zero (low + high * ((2 : ℕ)^offset.val : F p) - x)
 
   return ⟨ low, high ⟩
@@ -73,44 +76,50 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
   simp [circuit_norm, byte_decomposition, elaborated] at henv
 
   let h0 := henv 0
-  simp at h0
+  simp only [Fin.isValue, Fin.val_zero, add_zero, gt_iff_lt, List.getElem_cons_zero] at h0
   let h1 := henv 1
-  simp at h1
+  simp only [Fin.isValue, Fin.val_one, gt_iff_lt, List.getElem_cons_succ,
+    List.getElem_cons_zero] at h1
 
   simp [eval, circuit_norm] at h_eval
 
-  simp [circuit_norm, byte_decomposition, elaborated]
+  simp [circuit_norm, byte_decomposition, elaborated, ByteLookup]
+  rw [ByteTable.equiv, ByteTable.equiv]
   rw [h_eval, h0, h1]
 
   if zero_off : offset = 0 then
     simp only [Fin.isValue, zero_off, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
       Fin.val_zero, pow_zero, PNat.val_ofNat, Nat.div_one, mul_one, zero_add]
     rw [FieldUtils.nat_to_field_of_val_eq_iff, h_eval]
-    ring
+    ring_nf
+    simp only [ZMod.val_zero, Nat.ofNat_pos, true_and, and_true, gt_iff_lt]
+    linarith
   else
     have off_ge_zero : offset > 0 := by
       simp only [Fin.isValue, gt_iff_lt, Fin.pos_iff_ne_zero', ne_eq, zero_off, not_false_eq_true]
     simp [FieldUtils.mod, h_eval, FieldUtils.floordiv, off_ge_zero]
-    apply_fun ZMod.val
-    · repeat rw [ZMod.val_add]
-      have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
-      have h : ZMod.val (2 : F p) ^ offset.val < p := by
-        sorry
+    constructor
+    · sorry
+    · apply_fun ZMod.val
+      · repeat rw [ZMod.val_add]
+        have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+        have h : ZMod.val (2 : F p) ^ offset.val < p := by
+          sorry
 
-      rw [ZMod.val_mul, ZMod.val_pow h, ZMod.neg_val]
-      repeat rw [FieldUtils.val_of_nat_to_field_eq]
+        rw [ZMod.val_mul, ZMod.val_pow h, ZMod.neg_val]
+        repeat rw [FieldUtils.val_of_nat_to_field_eq]
 
-      simp only [Nat.add_mod_mod, Nat.mod_add_mod, ZMod.val_zero, val_two]
-      set bin_pow := 2^offset.val
-      if h: x = 0 then
-        simp [h]
-      else
-        simp [h]
-        set x := x.val
+        simp only [Nat.add_mod_mod, Nat.mod_add_mod, ZMod.val_zero, val_two]
+        set bin_pow := 2^offset.val
+        if h: x = 0 then
+          simp [h]
+        else
+          simp [h]
+          set x := x.val
 
-        sorry
+          sorry
 
-    · apply ZMod.val_injective
+      · apply ZMod.val_injective
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) Inputs Outputs := {
   elaborated offset with
