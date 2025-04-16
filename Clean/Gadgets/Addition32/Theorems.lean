@@ -9,25 +9,13 @@ namespace Gadgets.Addition32.Theorems
 
 lemma lift_val1 {x y b : (F p)} (x_byte : x.val < 256) (y_byte : y.val < 256) (b_bool : b = 0 ∨ b = 1) :
     (x + y + b).val = (x.val + y.val + b.val) := by
-  calc (x + y + b).val
-  _ = (b + x + y).val := by ring_nf
-  _ = b.val + x.val + y.val := by
-    rw [FieldUtils.byte_sum_and_bit_do_not_wrap _ _ _ x_byte y_byte]
-    apply FieldUtils.boolean_lt_2
-    exact b_bool
-  _ = x.val + y.val + b.val := by ring
+  have b_lt_2 := FieldUtils.boolean_lt_2 b_bool
+  field_to_nat
 
 lemma lift_val2 {x b : (F p)} (x_byte : x.val < 256) (b_bool : b = 0 ∨ b = 1) :
     (b * 256 + x).val = (b.val * 256 + x.val) := by
-  rcases b_bool with b_zero | b_one
-  · rw [b_zero]
-    simp only [zero_mul, zero_add, ZMod.val_zero]
-  · rw [b_one, ZMod.val_one]
-    simp
-    rw [add_comm 256 _]
-    rw [FieldUtils.byte_plus_256_do_not_wrap]
-    rw [add_comm]
-    assumption
+  have b_lt_2 := FieldUtils.boolean_lt_2 b_bool
+  field_to_nat
 
 omit p_large_enough in
 lemma zify_bool {b : (F p)} (b_bool : b = 0 ∨ b = 1) : (↑(b.val) : ℤ) = 0 ∨ (↑(b.val) : ℤ) = 1  := by
