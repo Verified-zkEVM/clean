@@ -86,6 +86,12 @@ def value (x: U64 (F p)) :=
   x.x4.val * 256^4 + x.x5.val * 256^5 + x.x6.val * 256^6 + x.x7.val * 256^7
 
 omit [Fact (Nat.Prime p)] p_large_enough in
+theorem value_lt_of_normalized {x : U64 (F p)} (hx: x.is_normalized) : x.value < 2^64 := by
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
+  simp_all only [value, is_normalized]
+  linarith
+
+omit [Fact (Nat.Prime p)] p_large_enough in
 theorem value_horner (x : U64 (F p)) : x.value =
     x.x0.val + 2^8 * (x.x1.val + 2^8 * (x.x2.val + 2^8 * (x.x3.val +
       2^8 * (x.x4.val + 2^8 * (x.x5.val + 2^8 * (x.x6.val + 2^8 * x.x7.val)))))) := by
