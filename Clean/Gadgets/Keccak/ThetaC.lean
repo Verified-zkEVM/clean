@@ -83,18 +83,16 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   repeat
     first
-    | obtain⟨ h00, h01, h02, h03, h_holds ⟩ := h_holds
-    | obtain⟨ h00, h01, h02, h03 ⟩ := h_holds
-    obtain ⟨ xor00, norm00 ⟩ := h00 (state_norm _) (state_norm _)
-    obtain ⟨ xor01, norm01 ⟩ := h01 norm00 (state_norm _)
-    obtain ⟨ xor02, norm02 ⟩ := h02 norm01 (state_norm _)
-    obtain ⟨ xor0, norm0 ⟩ := h03 norm02 (state_norm _)
-    rw [xor02, xor01, xor00] at xor0
-    clear h00 h01 h02 h03 norm00 norm01 norm02 xor00 xor01 xor02
+    | obtain⟨ h0, h1, h2, h3, h_holds ⟩ := h_holds
+    | obtain⟨ h0, h1, h2, h3 ⟩ := h_holds
+    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm _) (state_norm _)
+    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm _)
+    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm _)
+    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm _)
+    rw [xor2, xor1, xor0] at xor
+    clear h0 h1 h2 h3 xor0 xor1 xor2 norm0 norm1 norm2
 
-
-  simp [Specs.Keccak256.theta_c, spec]
-  simp only [true_and, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two, *]
+  simp_all [Specs.Keccak256.theta_c, spec]
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
