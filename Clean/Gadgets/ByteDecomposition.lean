@@ -26,16 +26,14 @@ def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (V
   let two_power : ℕ := (2 : ℕ)^offset.val
 
   let low ← witness fun env =>
-    if offset > 0 then
-      FieldUtils.mod (env x) ⟨two_power, by dsimp only [two_power]; simp⟩ (by
-        dsimp only [two_power, PNat.mk_coe, two_power];
-        have h : 2^offset.val < 2^8 := by
-          apply Nat.pow_lt_pow_of_lt
-          simp only [Nat.one_lt_ofNat, two_power]
-          simp only [Fin.is_lt, two_power]
-        linarith [p_large_enough.elim]
-      )
-    else 0
+    FieldUtils.mod (env x) ⟨two_power, by dsimp only [two_power]; simp⟩ (by
+      dsimp only [two_power, PNat.mk_coe, two_power];
+      have h : 2^offset.val < 2^8 := by
+        apply Nat.pow_lt_pow_of_lt
+        simp only [Nat.one_lt_ofNat, two_power]
+        simp only [Fin.is_lt, two_power]
+      linarith [p_large_enough.elim]
+    )
 
   let high ← witness fun env => FieldUtils.floordiv (env x) (2^offset.val)
 
@@ -81,12 +79,10 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
   rw [ByteTable.equiv, ByteTable.equiv, h_eval, h0, h1]
 
   if zero_off : offset = 0 then
-    simp only [Fin.isValue, zero_off, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
-      Fin.val_zero, pow_zero, PNat.val_ofNat, Nat.div_one, mul_one, zero_add]
-    rw [FieldUtils.nat_to_field_of_val_eq_iff, h_eval]
-    ring_nf
-    simp only [ZMod.val_zero, Nat.ofNat_pos, true_and, and_true, gt_iff_lt]
-    linarith
+    simp [Fin.isValue, zero_off, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
+      Fin.val_zero, pow_zero, PNat.val_ofNat, Nat.div_one, mul_one, zero_add, FieldUtils.mod]
+    simp only [h_eval, Nat.mod_one, FieldUtils.nat_to_field_zero, ZMod.val_zero, Nat.ofNat_pos,
+      FieldUtils.nat_to_field_of_val_eq_iff, as, and_self, zero_add, add_neg_cancel]
   else
     have off_ge_zero : offset > 0 := by
       simp only [Fin.isValue, gt_iff_lt, Fin.pos_iff_ne_zero', ne_eq, zero_off, not_false_eq_true]
