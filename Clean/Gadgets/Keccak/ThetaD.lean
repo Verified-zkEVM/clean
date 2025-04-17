@@ -14,7 +14,6 @@ instance : Fact (p > 512) := by
   linarith [p_large_enough.elim]
 
 open Gadgets.Keccak256 (KeccakRow)
-open Gadgets.Rotation64.Theorems (rot_right64)
 
 def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 1)
@@ -45,23 +44,15 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow (Var KeccakRow (F p)) wh
     var_from_offset U64 (i0 + 152)
   ]
 
-def assumptions (state : KeccakRow (F p)) : Prop :=
-  ∀ i : Fin 5, state[i].is_normalized
+def assumptions (state : KeccakRow (F p)) := state.is_normalized
 
 def spec (state : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
-  let h_norm := out[0].is_normalized ∧ out[1].is_normalized ∧
-            out[2].is_normalized ∧ out[3].is_normalized ∧ out[4].is_normalized
-
-  let state_u64 := state.map (fun x => x.value)
-  let out_u64 := out.map (fun x => x.value)
-
-  let state' := Specs.Keccak256.theta_d state_u64
-
-  h_norm ∧ state' = out_u64
+  out.is_normalized
+  ∧ out.value = Specs.Keccak256.theta_d state.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [assumptions] at state_norm
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit] at h_holds
   simp only [circuit_norm, subcircuit_norm] at h_holds
@@ -72,8 +63,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
     rw [←h_input, Vector.getElem_map]
 
   simp only [s] at h_holds
-  simp [circuit_norm, spec]
-
   obtain ⟨ h_rot0, h_xor0, h_rot1, h_xor1, h_rot2, h_xor2, h_rot3, h_xor3, h_rot4, h_xor4 ⟩ := h_holds
 
   specialize h_rot0 (state_norm 1)
@@ -96,13 +85,13 @@ theorem soundness : Soundness (F p) assumptions spec := by
   specialize h_xor4 (state_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64]
+  simp only [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
+  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64, eval_vector]
   get_elem_tactic
-
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit]
   simp only [circuit_norm, subcircuit_norm]
   dsimp only [Xor.assumptions, Xor.spec]

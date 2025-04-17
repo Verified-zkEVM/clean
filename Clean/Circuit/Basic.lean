@@ -575,11 +575,14 @@ attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
   Vector.init Vector.natInit Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.eq_mk Vector.mk_eq
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)
 -- TODO handle other small indices as well
 attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray
-  List.getElem_cons_zero Fin.cast_eq_self Fin.val_zero Fin.val_one List.getElem_cons_succ
+  List.getElem_cons_zero Fin.cast_eq_self List.getElem_cons_succ
+  Vector.getElem_mk Vector.getElem_toArray Vector.getElem_map Fin.getElem_fin
+  Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero

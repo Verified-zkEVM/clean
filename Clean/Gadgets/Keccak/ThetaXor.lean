@@ -6,10 +6,7 @@ import Clean.Gadgets.Rotation64.Rotation64
 import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaXor
-
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 structure Inputs (F : Type) where
@@ -20,7 +17,6 @@ instance : ProvableStruct Inputs where
   components := [KeccakState, KeccakRow]
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
-
 
 def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let ⟨state, d⟩ := inputs
@@ -55,53 +51,24 @@ def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var KeccakState (F p)) where
   main := theta_xor
   local_length _ := 200
-  output _ i0 := #v[
-    var_from_offset U64 (i0),
-    var_from_offset U64 (i0 + 8),
-    var_from_offset U64 (i0 + 16),
-    var_from_offset U64 (i0 + 24),
-    var_from_offset U64 (i0 + 32),
-    var_from_offset U64 (i0 + 40),
-    var_from_offset U64 (i0 + 48),
-    var_from_offset U64 (i0 + 56),
-    var_from_offset U64 (i0 + 64),
-    var_from_offset U64 (i0 + 72),
-    var_from_offset U64 (i0 + 80),
-    var_from_offset U64 (i0 + 88),
-    var_from_offset U64 (i0 + 96),
-    var_from_offset U64 (i0 + 104),
-    var_from_offset U64 (i0 + 112),
-    var_from_offset U64 (i0 + 120),
-    var_from_offset U64 (i0 + 128),
-    var_from_offset U64 (i0 + 136),
-    var_from_offset U64 (i0 + 144),
-    var_from_offset U64 (i0 + 152),
-    var_from_offset U64 (i0 + 160),
-    var_from_offset U64 (i0 + 168),
-    var_from_offset U64 (i0 + 176),
-    var_from_offset U64 (i0 + 184),
-    var_from_offset U64 (i0 + 192)
-  ]
+  output _ i0 := var_from_offset KeccakState i0
+  output_eq _ i := by
+    simp only [var_from_offset_vector, theta_xor, Xor.circuit]
+    simp only [circuit_norm]
+    rfl
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  (∀ i : Fin 25, state[i].is_normalized) ∧ (∀ i : Fin 5, d[i].is_normalized)
+  state.is_normalized ∧ d.is_normalized
 
 def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  let h_norm := ∀ i : Fin 25, out[i].is_normalized
-
-  let state_u64 := state.map (fun x => x.value)
-  let d_u64 := d.map (fun x => x.value)
-  let out_u64 := out.map (fun x => x.value)
-
-  let state' := Specs.Keccak256.theta_xor state_u64 d_u64
-
-  h_norm ∧ state' = out_u64
+  out.is_normalized
+  ∧ out.value = Specs.Keccak256.theta_xor state.value d.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit] at h_holds
   simp only [circuit_norm, subcircuit_norm] at h_holds
   dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
@@ -118,7 +85,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp only [s_d, s_state] at h_holds
   simp [circuit_norm, spec, Specs.Keccak256.theta_xor, Fin.forall_fin_succ,
-    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two]
+    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector, eval_vector,
+    KeccakState.is_normalized, KeccakState.value, KeccakRow.value]
 
   repeat
     first
@@ -127,6 +95,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     specialize h (state_norm _) (d_norm _)
     obtain ⟨ xor, norm ⟩ := h
     simp [xor, norm]
+
   get_elem_tactic
 
 

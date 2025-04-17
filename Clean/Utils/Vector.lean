@@ -102,6 +102,9 @@ theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
     natInit n create = (natInit m create).cast h.symm := by
   subst h; simp
 
+theorem natInit_succ {n} {create: ℕ → α} :
+    natInit (n + 1) create = (natInit n create).push (create n) := rfl
+
 theorem natInit_add_eq_append {n m} (create: ℕ → α) :
     natInit (n + m) create = natInit n create ++ natInit m (fun i => create (n + i)) := by
   induction m with
@@ -181,12 +184,12 @@ def toChunks (m: ℕ+) {α : Type} (v : Vector α (n*m)) : Vector (Vector α m) 
     rw [←Composition.blocks_length, List.length_replicate]
   )
 
-theorem flatten_toChunks {α : Type} (m: ℕ+) (v : Vector α (n*m)) :
+theorem toChunks_flatten {α : Type} (m: ℕ+) (v : Vector α (n*m)) :
     (v.toChunks m).flatten = v := by
   -- simp can reduce the statement to lists and use `List.flatten_splitWrtComposition`!
   simp [toChunks]
 
-theorem toChunks_flatten {α : Type} (m: ℕ+) (v : Vector (Vector α m) n) :
+theorem flatten_toChunks {α : Type} (m: ℕ+) (v : Vector (Vector α m) n) :
     v.flatten.toChunks m = v := by
   simp only [toChunks]
   rw [←Vector.toArray_inj,←Array.toList_inj]
@@ -211,4 +214,11 @@ theorem toChunks_flatten {α : Type} (m: ℕ+) (v : Vector (Vector α m) n) :
   simp only [h', v_list_list]
   rw [List.map_attachWith, List.pmap_map]
   simp
+
+-- using the above, it's quite easy to prove theorems about `toChunks` from similar theorems about `flatten`!
+theorem toChunks_push (m: ℕ+) {α : Type} (vs : Vector α (n*m)) (v : Vector α m) :
+    have h : n * m + m = (n + 1) * m := by simp [add_mul];
+    (vs.toChunks m).push v = ((vs ++ v).cast h).toChunks m := by
+  simp only
+  rw [Vector.eq_iff_flatten_eq, toChunks_flatten, flatten_push, toChunks_flatten]
 end Vector
