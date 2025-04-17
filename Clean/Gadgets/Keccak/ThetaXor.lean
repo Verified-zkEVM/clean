@@ -12,14 +12,14 @@ variable [p_large_enough: Fact (p > 512)]
 
 open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState KeccakSlice)
+open Clean.Gadgets.Keccak256 (KeccakState KeccakRow)
 
 structure Inputs (F : Type) where
   state : KeccakState F
-  d : KeccakSlice F
+  d : KeccakRow F
 
 instance : ProvableStruct Inputs where
-  components := [KeccakState, KeccakSlice]
+  components := [KeccakState, KeccakRow]
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
 
@@ -90,7 +90,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [s_d, s_state] at h_holds
   simp [circuit_norm, spec, Clean.Gadgets.Keccak256.theta_xor, Clean.Gadgets.Keccak256.xor_u64, Fin.forall_fin_succ,
     -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector, eval_vector,
-    KeccakState.is_normalized, KeccakState.value, KeccakSlice.value]
+    KeccakState.is_normalized, KeccakState.value, KeccakRow.value]
 
   repeat
     first

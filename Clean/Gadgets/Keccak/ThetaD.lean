@@ -14,7 +14,7 @@ open Xor (xor_u64)
 open Clean.Gadgets.Keccak256
 open Gadgets.Rotation64.Theorems (rot_right64)
 
-def theta_d (state : Var KeccakSlice (F p)) : Circuit (F p) (Var KeccakSlice (F p)) := do
+def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 1)
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 4), c0⟩
 
@@ -32,7 +32,7 @@ def theta_d (state : Var KeccakSlice (F p)) : Circuit (F p) (Var KeccakSlice (F 
 
   return #v[c0, c1, c2, c3, c4]
 
-instance elaborated : ElaboratedCircuit (F p) KeccakSlice (Var KeccakSlice (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakRow (Var KeccakRow (F p)) where
   main := theta_d
   local_length _ := 160
   output _ i0 := #v[
@@ -43,9 +43,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakSlice (Var KeccakSlice (F p)
     var_from_offset U64 (i0 + 152)
   ]
 
-def assumptions (state : KeccakSlice (F p)) := state.is_normalized
+def assumptions (state : KeccakRow (F p)) := state.is_normalized
 
-def spec (state : KeccakSlice (F p)) (out: KeccakSlice (F p)) : Prop :=
+def spec (state : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
   out.is_normalized ∧ out.value = Clean.Gadgets.Keccak256.theta_d state.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
@@ -68,7 +68,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     rw [←h_input, Vector.getElem_map]
 
   simp only [s] at h_holds
-  simp [circuit_norm, spec, KeccakSlice.is_normalized_iff, KeccakSlice.value, KeccakState.value]
+  simp [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
 
   obtain ⟨ h_rot0, h_xor0, h_rot1, h_xor1, h_rot2, h_xor2, h_rot3, h_xor3, h_rot4, h_xor4 ⟩ := h_holds
 
@@ -95,7 +95,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp [Clean.Gadgets.Keccak256.theta_d, Clean.Gadgets.Keccak256.xor_u64, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rol_u64, eval_vector]
 
 
-theorem completeness : Completeness (F p) KeccakSlice assumptions := by
+theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit]
@@ -104,7 +104,7 @@ theorem completeness : Completeness (F p) KeccakSlice assumptions := by
   simp [add_assoc]
   sorry
 
-def circuit : FormalCircuit (F p) KeccakSlice KeccakSlice := {
+def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
   elaborated with
   assumptions
   spec
