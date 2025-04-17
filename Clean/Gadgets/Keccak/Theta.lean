@@ -3,24 +3,22 @@ import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 import Clean.Gadgets.Keccak.ThetaC
 import Clean.Gadgets.Keccak.ThetaD
 import Clean.Gadgets.Keccak.ThetaXor
 
-namespace Gadgets.Keccak.Theta
+namespace Gadgets.Keccak256.Theta
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256
+open Gadgets.Keccak256
 
 
 def theta (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let c ← subcircuit Gadgets.Keccak.ThetaC.circuit state
-  let d ← subcircuit Gadgets.Keccak.ThetaD.circuit c
-  return ←subcircuit Gadgets.Keccak.ThetaXor.circuit ⟨state, d⟩
+  let c ← subcircuit ThetaC.circuit state
+  let d ← subcircuit ThetaD.circuit c
+  subcircuit ThetaXor.circuit ⟨state, d⟩
 
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
@@ -63,7 +61,7 @@ def spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
   let state_u64 := state.map (fun x => x.value)
   let out_u64 := out_state.map (fun x => x.value)
 
-  let state' := Clean.Gadgets.Keccak256.theta state_u64
+  let state' := Specs.Keccak256.theta state_u64
 
   h_norm ∧ state' = out_u64
 
@@ -91,4 +89,4 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   completeness
 }
 
-end Gadgets.Keccak.Theta
+end Gadgets.Keccak256.Theta

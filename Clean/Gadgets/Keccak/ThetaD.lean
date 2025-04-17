@@ -3,16 +3,13 @@ import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaD
+namespace Gadgets.Keccak256.ThetaD
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open ByteUtils (mod_256)
-open FieldUtils (floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256
+open Gadgets.Keccak256
 open Gadgets.Rotation64.Theorems (rot_right64)
 
 @[reducible]
@@ -60,7 +57,7 @@ def spec (state : Inputs (F p)) (out: Outputs (F p)) : Prop :=
   let state_u64 := state.map (fun x => x.value)
   let out_u64 := out.map (fun x => x.value)
 
-  let state' := Clean.Gadgets.Keccak256.theta_d state_u64
+  let state' := Specs.Keccak256.theta_d state_u64
 
   h_norm ∧ state' = out_u64
 
@@ -101,7 +98,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   specialize h_xor4 (state_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp [Clean.Gadgets.Keccak256.theta_d, Clean.Gadgets.Keccak256.xor_u64, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rol_u64]
+  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64]
 
 
 theorem completeness : Completeness (F p) Outputs assumptions := by
@@ -121,4 +118,4 @@ def circuit : FormalCircuit (F p) Inputs Outputs := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaD
+end Gadgets.Keccak256.ThetaD

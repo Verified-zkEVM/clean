@@ -3,13 +3,12 @@ import Clean.Types.U64
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaC
+namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState)
+open Gadgets.Keccak256 (KeccakState)
 
 @[reducible] def Outputs := ProvableVector U64 5
 -- note: `reducible` is needed for type class inference, i.e. `ProvableType KeccakState`
@@ -52,7 +51,7 @@ def spec (state : KeccakState (F p)) (out: Outputs (F p)) : Prop :=
   let state_u64 := state.map (fun x => x.value)
   let out_u64 := out.map (fun x => x.value)
 
-  let state' := Clean.Gadgets.Keccak256.theta_c state_u64
+  let state' := Specs.Keccak256.theta_c state_u64
 
   h_norm ∧ state' = out_u64
 
@@ -96,7 +95,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     clear h00 h01 h02 h03 norm00 norm01 norm02 xor00 xor01 xor02
 
 
-  simp [Clean.Gadgets.Keccak256.theta_c, Clean.Gadgets.Keccak256.xor_u64, spec]
+  simp [Specs.Keccak256.theta_c, spec]
   simp only [true_and, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two, *]
 
 theorem completeness : Completeness (F p) Outputs assumptions := by
@@ -123,4 +122,4 @@ def circuit : FormalCircuit (F p) KeccakState Outputs := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaC
+end Gadgets.Keccak256.ThetaC

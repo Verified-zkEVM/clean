@@ -1,6 +1,5 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
-import Clean.Gadgets.Rotation64.Theorems
 
 namespace Gadgets.Xor
 open ByteUtils
