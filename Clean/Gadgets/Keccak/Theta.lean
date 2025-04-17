@@ -10,7 +10,11 @@ import Clean.Gadgets.Keccak.ThetaXor
 
 namespace Gadgets.Keccak256.Theta
 variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+
+instance : Fact (p > 512) := by
+  constructor
+  linarith [p_large_enough.elim]
 
 open Gadgets.Keccak256
 
