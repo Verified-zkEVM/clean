@@ -10,7 +10,7 @@ namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Gadgets.Keccak256 (KeccakState KeccakState_is_normalized_iff)
+open Gadgets.Keccak256 (KeccakState)
 
 structure Inputs (F : Type) where
   state : KeccakState F
