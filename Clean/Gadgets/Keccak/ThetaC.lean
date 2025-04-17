@@ -6,10 +6,8 @@ import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Keccak.Keccak
 
 namespace Gadgets.Keccak.ThetaC
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
 open Xor (xor_u64)
 open Clean.Gadgets.Keccak256 (KeccakState)
 
