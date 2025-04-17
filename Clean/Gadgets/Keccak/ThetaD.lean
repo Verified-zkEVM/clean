@@ -93,6 +93,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   rw [h_rot4.left] at h_xor4
 
   simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64]
+  get_elem_tactic
 
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by

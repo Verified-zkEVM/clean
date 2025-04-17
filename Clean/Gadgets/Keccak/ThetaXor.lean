@@ -127,6 +127,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     specialize h (state_norm _) (d_norm _)
     obtain ⟨ xor, norm ⟩ := h
     simp [xor, norm]
+  get_elem_tactic
 
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
