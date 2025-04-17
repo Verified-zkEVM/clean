@@ -22,8 +22,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
   local_length _ := 520
   output _ i0 := var_from_offset KeccakState (i0 + 320)
 
-def assumptions (state : KeccakState (F p)) : Prop :=
-  state.is_normalized
+def assumptions (state : KeccakState (F p)) := state.is_normalized
 
 def spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
   out_state.is_normalized
