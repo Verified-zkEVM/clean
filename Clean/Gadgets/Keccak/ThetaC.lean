@@ -7,9 +7,7 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-
 open Gadgets.Keccak256 (KeccakState KeccakRow)
-
 
 def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   -- TODO would be nice to have a for loop of length 5 here
@@ -39,19 +37,11 @@ def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)
   let c4 ← subcircuit Gadgets.Xor.circuit ⟨c4, (state.get 24)⟩
   return #v[c0, c1, c2, c3, c4]
 
-def assumptions (state : KeccakState (F p)) : Prop :=
-  ∀ i : Fin 25, state[i].is_normalized
+def assumptions (state : KeccakState (F p)) := state.is_normalized
 
-def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) : Prop :=
-  let h_norm := out[0].is_normalized ∧ out[1].is_normalized ∧
-             out[2].is_normalized ∧ out[3].is_normalized ∧ out[4].is_normalized
-
-  let state_u64 := state.map (fun x => x.value)
-  let out_u64 := out.map (fun x => x.value)
-
-  let state' := Specs.Keccak256.theta_c state_u64
-
-  h_norm ∧ state' = out_u64
+def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
+  out.is_normalized
+  ∧ out.value = Specs.Keccak256.theta_c state.value
 
 -- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
 -- #eval! theta_c (p:=p_babybear) default |>.output
@@ -68,18 +58,15 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakRow (F p)) 
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
-  simp only [circuit_norm] at h_input
-  dsimp only [assumptions] at state_norm
-  dsimp only [circuit_norm, theta_c, Xor.circuit] at h_holds
-  simp only [circuit_norm, subcircuit_norm] at h_holds
-  dsimp only [Xor.assumptions, Xor.spec] at h_holds
-  simp [add_assoc, and_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two] at h_holds
+  simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
+    theta_c, Xor.circuit, Xor.assumptions, Xor.spec] at *
+  simp only [and_imp, and_assoc, add_assoc, Nat.reduceAdd] at h_holds
 
-  have s (i : Fin 25) : eval env (state_var[i.val]) = state[i.val] := by
+  have s (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
     rw [←h_input, Vector.getElem_map]
-
   simp only [s] at h_holds
-  simp [circuit_norm, spec]
+  simp only [circuit_norm, spec, KeccakRow.is_normalized_iff,
+    KeccakRow.value, KeccakState.value, Specs.Keccak256.theta_c]
 
   repeat
     first
@@ -92,22 +79,24 @@ theorem soundness : Soundness (F p) assumptions spec := by
     rw [xor2, xor1, xor0] at xor
     clear h0 h1 h2 h3 xor0 xor1 xor2 norm0 norm1 norm2
 
-  simp_all [Specs.Keccak256.theta_c, spec]
+  simp_all
   get_elem_tactic
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
-  simp only [circuit_norm] at h_input
-  dsimp only [circuit_norm, theta_c, Xor.circuit]
-  simp only [circuit_norm, subcircuit_norm]
-  dsimp only [Xor.assumptions, Xor.spec]
-  simp [add_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two]
+  simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
+    theta_c, Xor.circuit, Xor.assumptions, Xor.spec] at h_input h_assumptions ⊢
+  simp only [add_assoc, Nat.reduceAdd]
 
-  have s (i : Fin 25) : eval env (state_var[i.val]) = state[i.val] := by
-    rw [←h_input, Vector.getElem_map]
+  rw [KeccakState.is_normalized] at h_assumptions
+  have s (i : Fin 25) : (eval env state_var[i.val]).is_normalized = True := by
+    have : eval env state_var[i.val] = state[i.val] := by rw [←h_input, Vector.getElem_map]
+    rw [this, eq_iff_iff, iff_true]
+    exact h_assumptions i
+  simp only [s, true_and, and_true]
 
-  simp only [s]
-
+  dsimp only [Environment.uses_local_witnesses, elaborated] at h_env
+  -- simp only [theta_c, circuit_norm] at h_env
   sorry
 
 def circuit : FormalCircuit (F p) KeccakState KeccakRow := {
