@@ -29,13 +29,11 @@ def spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
-  intro i0 env state_var state h_input h_assumptions h_holds
-  dsimp only [circuit_norm, subcircuit_norm, theta, assumptions, spec,
+  simp_all [Soundness, circuit_norm, subcircuit_norm, spec, theta, assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,
     ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta
-  ] at *
-  simp_all [circuit_norm]
+  ]
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
