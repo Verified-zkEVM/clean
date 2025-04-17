@@ -72,7 +72,7 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit] at h_holds
   simp only [circuit_norm, subcircuit_norm] at h_holds
   dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
@@ -89,7 +89,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp only [s_d, s_state] at h_holds
   simp [circuit_norm, spec, Clean.Gadgets.Keccak256.theta_xor, Clean.Gadgets.Keccak256.xor_u64, Fin.forall_fin_succ,
-    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector,
+    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector, eval_vector,
     KeccakState.is_normalized, KeccakState.value, KeccakSlice.value]
 
   repeat
@@ -99,7 +99,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
     specialize h (state_norm _) (d_norm _)
     obtain ⟨ xor, norm ⟩ := h
     simp [xor, norm]
-
 
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by

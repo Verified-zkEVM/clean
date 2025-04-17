@@ -62,11 +62,11 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakSlice (F p)
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
-  simp only [circuit_norm, subcircuit_norm, assumptions,
+  simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
     theta_c, Xor.circuit, Xor.assumptions, Xor.spec] at *
   simp only [and_imp, and_assoc, add_assoc, Nat.reduceAdd] at h_holds
 
-  have s (i : Fin 25) : eval env (state_var[i.val]) = state[i.val] := by
+  have s (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
     rw [←h_input, Vector.getElem_map]
   simp only [s] at h_holds
   simp only [circuit_norm, spec, KeccakSlice.is_normalized_iff,
@@ -88,17 +88,19 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
 theorem completeness : Completeness (F p) KeccakSlice assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
-  simp only [circuit_norm] at h_input
-  dsimp only [circuit_norm, theta_c, Xor.circuit]
-  simp only [circuit_norm, subcircuit_norm]
-  dsimp only [Xor.assumptions, Xor.spec]
-  simp [add_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two]
+  simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
+    theta_c, Xor.circuit, Xor.assumptions, Xor.spec] at h_input h_assumptions ⊢
+  simp only [add_assoc, Nat.reduceAdd]
 
-  have s (i : Fin 25) : eval env (state_var[i.val]) = state[i.val] := by
-    rw [←h_input, Vector.getElem_map]
+  rw [KeccakState.is_normalized] at h_assumptions
+  have s (i : Fin 25) : (eval env state_var[i.val]).is_normalized = True := by
+    have : eval env state_var[i.val] = state[i.val] := by rw [←h_input, Vector.getElem_map]
+    rw [this, eq_iff_iff, iff_true]
+    exact h_assumptions i
+  simp only [s, true_and, and_true]
 
-  simp only [s]
-
+  dsimp only [Environment.uses_local_witnesses, elaborated] at h_env
+  -- simp only [theta_c, circuit_norm] at h_env
   sorry
 
 def circuit : FormalCircuit (F p) KeccakState KeccakSlice := {

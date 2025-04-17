@@ -50,7 +50,7 @@ def spec (state : KeccakSlice (F p)) (out: KeccakSlice (F p)) : Prop :=
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [assumptions] at state_norm
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit] at h_holds
   simp only [circuit_norm, subcircuit_norm] at h_holds
@@ -92,13 +92,12 @@ theorem soundness : Soundness (F p) assumptions spec := by
   specialize h_xor4 (state_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp [Clean.Gadgets.Keccak256.theta_d, Clean.Gadgets.Keccak256.xor_u64, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rol_u64]
-
+  simp [Clean.Gadgets.Keccak256.theta_d, Clean.Gadgets.Keccak256.xor_u64, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rol_u64, eval_vector]
 
 
 theorem completeness : Completeness (F p) KeccakSlice assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
-  simp only [circuit_norm] at h_input
+  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit]
   simp only [circuit_norm, subcircuit_norm]
   dsimp only [Xor.assumptions, Xor.spec]
