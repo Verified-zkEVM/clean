@@ -7,7 +7,7 @@ namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
+open ByteUtils (mod_256 floordiv_256)
 
 structure Inputs (F : Type) where
   x: F
@@ -40,7 +40,7 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
   lookup (ByteLookup z)
 
   -- witness the output carry
-  let carry_out ← witness (fun eval => floordiv (eval (x + y + carry_in)) 256)
+  let carry_out ← witness (fun eval => floordiv_256 (eval (x + y + carry_in)))
   assertion Boolean.circuit carry_out
 
   assert_zero (x + y + carry_in - z - carry_out * 256)
@@ -134,7 +134,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       dsimp only [add8_full_carry, circuit_norm] at henv0
       rwa [hx, hy, hcarry_in] at henv0
 
-    have hcarry_out : carry_out = floordiv (x + y + carry_in) 256 := by
+    have hcarry_out : carry_out = floordiv_256 (x + y + carry_in) := by
       have henv1 := henv (1 : Fin 2)
       dsimp only [add8_full_carry, circuit_norm] at henv1
       rwa [hx, hy, hcarry_in] at henv1
@@ -148,7 +148,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
-    have completeness1 : goal_byte := ByteTable.completeness z (hz ▸ FieldUtils.mod_256_lt _)
+    have completeness1 : goal_byte := ByteTable.completeness z (hz ▸ ByteUtils.mod_256_lt _)
 
     have ⟨as_x, as_y, as_carry_in⟩ := as
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in

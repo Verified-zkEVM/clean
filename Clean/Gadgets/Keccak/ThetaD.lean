@@ -3,16 +3,11 @@ import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaD
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
-open FieldUtils (mod_256 floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256
-open Gadgets.Rotation64.Theorems (rot_right64)
+namespace Gadgets.Keccak256.ThetaD
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+open Gadgets.Keccak256 (KeccakRow)
 
 def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 1)
@@ -46,7 +41,8 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow (Var KeccakRow (F p)) wh
 def assumptions (state : KeccakRow (F p)) := state.is_normalized
 
 def spec (state : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
-  out.is_normalized ∧ out.value = Clean.Gadgets.Keccak256.theta_d state.value
+  out.is_normalized
+  ∧ out.value = Specs.Keccak256.theta_d state.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
@@ -56,13 +52,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [circuit_norm, subcircuit_norm] at h_holds
   dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
   simp [add_assoc, and_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two] at h_holds
-
-  have u64_from_offset (i : ℕ) : var_from_offset (F:=(F p)) U64 (i0 + i) = ⟨var ⟨i0 + i⟩, var ⟨i0 + i + 1⟩, var ⟨i0 + i + 2⟩, var ⟨i0 + i + 3⟩, var ⟨i0 + i + 4⟩, var ⟨i0 + i + 5⟩, var ⟨i0 + i + 6⟩, var ⟨i0 + i + 7⟩⟩ := by
-    simp only [var_from_offset, from_vars, from_elements, Vector.natInit, add_zero, Vector.push_mk,
-      Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append]
-
-  rw [←u64_from_offset 16, ←u64_from_offset 48, ←u64_from_offset 80, ←u64_from_offset 112, ←u64_from_offset 144] at h_holds
-  clear u64_from_offset
 
   have s (i : Fin 5) : eval env (state_var[i.val]) = state[i.val] := by
     rw [←h_input, Vector.getElem_map]
@@ -92,7 +81,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
   specialize h_xor4 (state_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp [Clean.Gadgets.Keccak256.theta_d, Clean.Gadgets.Keccak256.xor_u64, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rol_u64, eval_vector]
+  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64, eval_vector]
+  get_elem_tactic
 
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
@@ -112,4 +102,4 @@ def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaD
+end Gadgets.Keccak256.ThetaD

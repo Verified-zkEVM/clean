@@ -3,16 +3,11 @@ import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaXor
-
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
-open FieldUtils (mod_256 floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState KeccakRow)
+namespace Gadgets.Keccak256.ThetaXor
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 structure Inputs (F : Type) where
   state : KeccakState F
@@ -68,7 +63,8 @@ def assumptions (inputs : Inputs (F p)) : Prop :=
 
 def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  out.is_normalized ∧ out.value = Clean.Gadgets.Keccak256.theta_xor state.value d.value
+  out.is_normalized
+  ∧ out.value = Specs.Keccak256.theta_xor state.value d.value
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
@@ -88,7 +84,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     rw [← h_state, Vector.getElem_map]
 
   simp only [s_d, s_state] at h_holds
-  simp [circuit_norm, spec, Clean.Gadgets.Keccak256.theta_xor, Clean.Gadgets.Keccak256.xor_u64, Fin.forall_fin_succ,
+  simp [circuit_norm, spec, Specs.Keccak256.theta_xor, Fin.forall_fin_succ,
     -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector, eval_vector,
     KeccakState.is_normalized, KeccakState.value, KeccakRow.value]
 
@@ -99,6 +95,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
     specialize h (state_norm _) (d_norm _)
     obtain ⟨ xor, norm ⟩ := h
     simp [xor, norm]
+
+  get_elem_tactic
 
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
@@ -118,4 +116,4 @@ def circuit : FormalCircuit (F p) Inputs KeccakState := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaXor
+end Gadgets.Keccak256.ThetaXor

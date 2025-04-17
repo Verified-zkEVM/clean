@@ -3,15 +3,11 @@ import Clean.Types.U64
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaC
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
-
-open FieldUtils (mod_256 floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState KeccakRow)
+namespace Gadgets.Keccak256.ThetaC
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   -- TODO would be nice to have a for loop of length 5 here
@@ -45,7 +41,7 @@ def assumptions (state : KeccakState (F p)) := state.is_normalized
 
 def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
   out.is_normalized
-  ∧ out.value = Clean.Gadgets.Keccak256.theta_c state.value
+  ∧ out.value = Specs.Keccak256.theta_c state.value
 
 -- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
 -- #eval! theta_c (p:=p_babybear) default |>.output
@@ -70,21 +66,21 @@ theorem soundness : Soundness (F p) assumptions spec := by
     rw [←h_input, Vector.getElem_map]
   simp only [s] at h_holds
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff,
-    KeccakRow.value, KeccakState.value,
-    Clean.Gadgets.Keccak256.theta_c, Clean.Gadgets.Keccak256.xor_u64]
+    KeccakRow.value, KeccakState.value, Specs.Keccak256.theta_c]
 
   repeat
     first
-    | obtain⟨ h00, h01, h02, h03, h_holds ⟩ := h_holds
-    | obtain⟨ h00, h01, h02, h03 ⟩ := h_holds
-    obtain ⟨ xor00, norm00 ⟩ := h00 (state_norm _) (state_norm _)
-    obtain ⟨ xor01, norm01 ⟩ := h01 norm00 (state_norm _)
-    obtain ⟨ xor02, norm02 ⟩ := h02 norm01 (state_norm _)
-    obtain ⟨ xor0, norm0 ⟩ := h03 norm02 (state_norm _)
-    rw [xor02, xor01, xor00] at xor0
-    clear h00 h01 h02 h03 norm00 norm01 norm02 xor00 xor01 xor02
+    | obtain⟨ h0, h1, h2, h3, h_holds ⟩ := h_holds
+    | obtain⟨ h0, h1, h2, h3 ⟩ := h_holds
+    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm _) (state_norm _)
+    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm _)
+    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm _)
+    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm _)
+    rw [xor2, xor1, xor0] at xor
+    clear h0 h1 h2 h3 xor0 xor1 xor2 norm0 norm1 norm2
 
-  simp [*]
+  simp_all [Specs.Keccak256.theta_c, spec]
+  get_elem_tactic
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
@@ -112,4 +108,4 @@ def circuit : FormalCircuit (F p) KeccakState KeccakRow := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaC
+end Gadgets.Keccak256.ThetaC

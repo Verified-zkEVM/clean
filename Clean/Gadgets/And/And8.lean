@@ -76,12 +76,6 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
--- TODO where is this in mathlib? seems like an obvious theorem to have
-theorem mul_left_inj {F: Type} [Field F] : ∀ {x y z : F}, x ≠ 0 → x * y = x * z → y = z := by
-  intro x y z hx h
-  rw [←one_mul y, ←Field.mul_inv_cancel x hx, mul_comm x, mul_assoc, h,
-    ←mul_assoc, mul_comm _ x, Field.mul_inv_cancel x hx, one_mul]
-
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var field (F p)) where
   main
   local_length _ := 1
@@ -123,7 +117,7 @@ theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   have v_val_eq : v.val = x.val &&& y.val := nat_to_field_eq v rfl
   rw [←v_val_eq] at two_and ⊢
   apply congrArg ZMod.val
-  apply mul_left_inj (F:=F p) two_non_zero
+  rw [←mul_right_inj' two_non_zero]
   apply ext
   rw [two_and]
 

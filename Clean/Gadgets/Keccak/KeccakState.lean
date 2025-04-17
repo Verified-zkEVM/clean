@@ -2,7 +2,7 @@ import Clean.Types.U64
 import Clean.Circuit.Provable
 import Clean.Utils.Field
 
-namespace Clean.Gadgets.Keccak256
+namespace Gadgets.Keccak256
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
@@ -62,4 +62,4 @@ def KeccakRow.is_normalized_iff (slice : KeccakRow (F p)) :
     slice[4].is_normalized := by
   simp [KeccakRow.is_normalized, IsEmpty.forall_iff, Fin.forall_fin_succ]
 
-end Clean.Gadgets.Keccak256
+end Gadgets.Keccak256
