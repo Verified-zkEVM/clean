@@ -13,17 +13,11 @@ variable [p_large_enough: Fact (p > 512)]
 open Gadgets.Rotation64.Theorems (rot_right64)
 open Gadgets.Rotation64 (byte_rotation_lookup)
 
-@[reducible]
-def Inputs (F : Type) :=  U64 F
-
-@[reducible]
-def Outputs (F : Type) := U64 F
-
 
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def rot64 (offset : Fin 64) (x : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def rot64 (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let byte_offset := offset / 8
   let bit_offset : ℕ := (offset % 8).val
 
@@ -54,20 +48,20 @@ def rot64 (offset : Fin 64) (x : Var Inputs (F p)) : Circuit (F p) (Var Outputs 
   assert_zero (x0_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x7_h - y7)
   return ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩
 
-def assumptions (input : Inputs (F p)) := input.is_normalized
+def assumptions (input : U64 (F p)) := input.is_normalized
 
-def spec (offset : Fin 64) (x : Inputs (F p)) (y: Outputs (F p)) :=
+def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value offset.val
   ∧ y.is_normalized
 
-def circuit (off : Fin 64) : FormalCircuit (F p) Inputs Outputs where
+def circuit (off : Fin 64) : FormalCircuit (F p) U64 U64 where
   main := rot64 off
   assumptions := assumptions
   spec := spec off
   soundness := by sorry
   completeness := by sorry
   local_length := 24
-  output _inputs i0 := ⟨var ⟨i0 + 16⟩, var ⟨i0 + 17⟩, var ⟨i0 + 18⟩, var ⟨i0 + 19⟩, var ⟨i0 + 20⟩, var ⟨i0 + 21⟩, var ⟨i0 + 22⟩, var ⟨i0 + 23⟩⟩
+  output _inputs i0 := var_from_offset U64 (i0 + 16)
 
   initial_offset_eq := by
     intros

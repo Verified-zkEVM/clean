@@ -9,7 +9,8 @@ namespace Gadgets.Keccak.ThetaD
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
+open ByteUtils (mod_256)
+open FieldUtils (floordiv)
 open Xor (xor_u64)
 open Clean.Gadgets.Keccak256
 open Gadgets.Rotation64.Theorems (rot_right64)
@@ -72,13 +73,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
   dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
   simp [add_assoc, and_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two] at h_holds
 
-  have u64_from_offset (i : ℕ) : var_from_offset (F:=(F p)) U64 (i0 + i) = ⟨var ⟨i0 + i⟩, var ⟨i0 + i + 1⟩, var ⟨i0 + i + 2⟩, var ⟨i0 + i + 3⟩, var ⟨i0 + i + 4⟩, var ⟨i0 + i + 5⟩, var ⟨i0 + i + 6⟩, var ⟨i0 + i + 7⟩⟩ := by
-    simp only [var_from_offset, from_vars, from_elements, Vector.natInit, add_zero, Vector.push_mk,
-      Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append]
-
-  rw [←u64_from_offset 16, ←u64_from_offset 48, ←u64_from_offset 80, ←u64_from_offset 112, ←u64_from_offset 144] at h_holds
-  clear u64_from_offset
-
   have s (i : Fin 5) : eval env (state_var[i.val]) = state[i.val] := by
     rw [←h_input, Vector.getElem_map]
 
@@ -108,7 +102,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
   rw [h_rot4.left] at h_xor4
 
   simp [Clean.Gadgets.Keccak256.theta_d, Clean.Gadgets.Keccak256.xor_u64, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rol_u64]
-
 
 
 theorem completeness : Completeness (F p) Outputs assumptions := by
