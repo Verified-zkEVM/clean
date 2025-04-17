@@ -14,8 +14,7 @@ def KeccakState.is_normalized (state : KeccakState (F p)) :=
 
 def KeccakState.value (state : KeccakState (F p)) := state.map U64.value
 
-@[reducible]
-def KeccakRow := ProvableVector U64 5
+@[reducible] def KeccakRow := ProvableVector U64 5
 
 def KeccakRow.is_normalized (slice : KeccakRow (F p)) :=
   ∀ i : Fin 5, slice[i].is_normalized
