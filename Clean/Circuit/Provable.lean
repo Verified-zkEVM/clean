@@ -315,7 +315,6 @@ instance ProvableVector.instance {α: TypeMap} [NonEmptyProvableType α] : Prova
   to_elements x := x.map to_elements |>.flatten
   from_elements v := v.toChunks (psize α) |>.map from_elements
 
-@[circuit_norm ↓ high]
 theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (env : Environment F)
   (x : Var (ProvableVector α n) F) :
     eval env x = x.map (eval env) := by
