@@ -1,6 +1,9 @@
 import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
 import Clean.Utils.Bitwise
+import Clean.Circuit.Provable
+import Clean.Utils.Primes
+import Clean.Circuit.SubCircuit
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -53,23 +56,6 @@ lemma ext {x y : U64 (F p)}
     simp only [h0, h1, h2, h3, h4, h5, h6, h7] at *
     simp only [h0, h1, h2, h3, h4, h5, h6, h7]
 
-
-/--
-  Witness a 64-bit unsigned integer.
--/
-def witness (compute : Environment (F p) → U64 (F p)) := do
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ ← ProvableType.witness compute
-
-  lookup (Gadgets.ByteLookup x0)
-  lookup (Gadgets.ByteLookup x1)
-  lookup (Gadgets.ByteLookup x2)
-  lookup (Gadgets.ByteLookup x3)
-  lookup (Gadgets.ByteLookup x4)
-  lookup (Gadgets.ByteLookup x5)
-  lookup (Gadgets.ByteLookup x6)
-  lookup (Gadgets.ByteLookup x7)
-
-  return U64.mk x0 x1 x2 x3 x4 x5 x6 x7
 
 /--
   A 64-bit unsigned integer is normalized if all its limbs are less than 256.
@@ -150,6 +136,66 @@ def decompose_nat_expr (x: ℕ) : U64 (Expression (F p)) :=
   let (⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ : U64 (F p)) := decompose_nat x
   ⟨ x0, x1, x2, x3 , x4, x5, x6, x7 ⟩
 
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma normalized_u64 (x : U64 (F p)) : x.is_normalized → x.value < 2^64 := by
+  simp [is_normalized, value]
+  intros
+  linarith
+
+def value_u64 (x : U64 (F p)) (h : x.is_normalized) : UInt64 :=
+  UInt64.ofNatCore x.value (normalized_u64 x h)
+
 
 end U64
+
+namespace U64.AssertNormalized
+
+/--
+  Assert that a 64-bit unsigned integer is normalized.
+  This means that all its limbs are less than 256.
+-/
+def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
+  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
+  lookup (Gadgets.ByteLookup x0)
+  lookup (Gadgets.ByteLookup x1)
+  lookup (Gadgets.ByteLookup x2)
+  lookup (Gadgets.ByteLookup x3)
+  lookup (Gadgets.ByteLookup x4)
+  lookup (Gadgets.ByteLookup x5)
+  lookup (Gadgets.ByteLookup x6)
+  lookup (Gadgets.ByteLookup x7)
+
+def assumptions (_input : U64 (F p)) := True
+
+def spec (inputs : U64 (F p)) := inputs.is_normalized
+
+def circuit : FormalAssertion (F p) U64 where
+  main := u64_assert_normalized
+  assumptions := assumptions
+  spec := spec
+  soundness := by
+    rintro i0 env x_var
+    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
+    repeat rw [Gadgets.ByteTable.equiv]
+    simp_all [circuit_norm, eval]
+
+  completeness := by
+    rintro i0 env x_var
+    rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
+    repeat rw [Gadgets.ByteTable.equiv]
+    simp_all [circuit_norm, eval]
+
+end U64.AssertNormalized
+
+
+/--
+  Witness a 64-bit unsigned integer.
+-/
+def U64.witness (compute : Environment (F p) → U64 (F p)) := do
+  let x ← ProvableType.witness compute
+  assertion U64.AssertNormalized.circuit x
+  return x
+
 end

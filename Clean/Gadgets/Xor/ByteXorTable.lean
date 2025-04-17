@@ -1,6 +1,5 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
-import Clean.Gadgets.Rotation64.Theorems
 
 namespace Gadgets.Xor
 open ByteUtils
@@ -57,7 +56,7 @@ def ByteXorTable.completeness (x y z: F p) :
   use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
   simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
   rw [concat_split]
-  simp [from_byte_eq, true_and]
+  simp [from_byte_eq, true_and, from_byte, FieldUtils.nat_to_field_of_val_eq_iff]
   apply FieldUtils.ext
   simp only [h, HXor.hXor, Xor.xor, Fin.xor, from_byte, FieldUtils.val_of_nat_to_field_eq]
   symm
