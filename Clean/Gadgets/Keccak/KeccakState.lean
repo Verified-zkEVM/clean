@@ -9,4 +9,6 @@ variable [p_large_enough: Fact (p > 512)]
 
 @[reducible] def KeccakState := ProvableVector U64 25
 
+@[reducible] def KeccakRow := ProvableVector U64 5
+
 end Gadgets.Keccak256

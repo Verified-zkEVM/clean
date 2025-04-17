@@ -9,16 +9,10 @@ namespace Gadgets.Keccak256.ThetaD
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Gadgets.Keccak256
+open Gadgets.Keccak256 (KeccakRow)
 open Gadgets.Rotation64.Theorems (rot_right64)
 
-@[reducible]
-def Inputs := ProvableVector U64 5
-
-@[reducible]
-def Outputs := ProvableVector U64 5
-
-def theta_d (state : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 1)
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 4), c0⟩
 
@@ -36,7 +30,7 @@ def theta_d (state : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
   return #v[c0, c1, c2, c3, c4]
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakRow (Var KeccakRow (F p)) where
   main := theta_d
   local_length _ := 160
   output _ i0 := #v[
@@ -47,10 +41,10 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
     var_from_offset U64 (i0 + 152)
   ]
 
-def assumptions (state : Inputs (F p)) : Prop :=
+def assumptions (state : KeccakRow (F p)) : Prop :=
   ∀ i : Fin 5, state[i].is_normalized
 
-def spec (state : Inputs (F p)) (out: Outputs (F p)) : Prop :=
+def spec (state : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
   let h_norm := out[0].is_normalized ∧ out[1].is_normalized ∧
             out[2].is_normalized ∧ out[3].is_normalized ∧ out[4].is_normalized
 
@@ -101,7 +95,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64]
 
 
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm] at h_input
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit]
@@ -110,7 +104,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   simp [add_assoc]
   sorry
 
-def circuit : FormalCircuit (F p) Inputs Outputs := {
+def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
   elaborated with
   assumptions
   spec

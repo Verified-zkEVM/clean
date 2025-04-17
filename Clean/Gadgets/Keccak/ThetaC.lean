@@ -8,12 +8,10 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open Gadgets.Keccak256 (KeccakState)
+open Gadgets.Keccak256 (KeccakState KeccakRow)
 
-@[reducible] def Outputs := ProvableVector U64 5
--- note: `reducible` is needed for type class inference, i.e. `ProvableType KeccakState`
 
-def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   -- TODO would be nice to have a for loop of length 5 here
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), (state.get 1)⟩
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 2)⟩
@@ -44,7 +42,7 @@ def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var Outputs (F p)) 
 def assumptions (state : KeccakState (F p)) : Prop :=
   ∀ i : Fin 25, state[i].is_normalized
 
-def spec (state : KeccakState (F p)) (out: Outputs (F p)) : Prop :=
+def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) : Prop :=
   let h_norm := out[0].is_normalized ∧ out[1].is_normalized ∧
              out[2].is_normalized ∧ out[3].is_normalized ∧ out[4].is_normalized
 
@@ -57,7 +55,7 @@ def spec (state : KeccakState (F p)) (out: Outputs (F p)) : Prop :=
 
 -- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
 -- #eval! theta_c (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakRow (F p)) where
   main := theta_c
   local_length _ := 160
   output _ i0 := #v[
@@ -98,7 +96,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp [Specs.Keccak256.theta_c, spec]
   simp only [true_and, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two, *]
 
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm] at h_input
   dsimp only [circuit_norm, theta_c, Xor.circuit]
@@ -113,7 +111,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
 
   sorry
 
-def circuit : FormalCircuit (F p) KeccakState Outputs := {
+def circuit : FormalCircuit (F p) KeccakState KeccakRow := {
   elaborated with
   main := theta_c
   assumptions

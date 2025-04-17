@@ -10,14 +10,14 @@ namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Gadgets.Keccak256 (KeccakState)
+open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 structure Inputs (F : Type) where
   state : KeccakState F
-  d : ProvableVector U64 5 F
+  d : KeccakRow F
 
 instance : ProvableStruct Inputs where
-  components := [KeccakState, ProvableVector U64 5]
+  components := [KeccakState, KeccakRow]
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
 
