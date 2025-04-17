@@ -3,23 +3,21 @@ import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaXor
+namespace Gadgets.Keccak256.ThetaXor
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState KeccakState_is_normalized_iff)
+open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 structure Inputs (F : Type) where
   state : KeccakState F
-  d : ProvableVector U64 5 F
+  d : KeccakRow F
 
 instance : ProvableStruct Inputs where
-  components := [KeccakState, ProvableVector U64 5]
+  components := [KeccakState, KeccakRow]
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
 
@@ -97,7 +95,7 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   let d_u64 := d.map (fun x => x.value)
   let out_u64 := out.map (fun x => x.value)
 
-  let state' := Clean.Gadgets.Keccak256.theta_xor state_u64 d_u64
+  let state' := Specs.Keccak256.theta_xor state_u64 d_u64
 
   h_norm ∧ state' = out_u64
 
@@ -119,7 +117,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     rw [← h_state, Vector.getElem_map]
 
   simp only [s_d, s_state] at h_holds
-  simp [circuit_norm, spec, Clean.Gadgets.Keccak256.theta_xor, Clean.Gadgets.Keccak256.xor_u64, Fin.forall_fin_succ,
+  simp [circuit_norm, spec, Specs.Keccak256.theta_xor, Fin.forall_fin_succ,
     -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two]
 
   repeat
@@ -129,6 +127,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     specialize h (state_norm _) (d_norm _)
     obtain ⟨ xor, norm ⟩ := h
     simp [xor, norm]
+  get_elem_tactic
 
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
@@ -148,4 +147,4 @@ def circuit : FormalCircuit (F p) Inputs KeccakState := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaXor
+end Gadgets.Keccak256.ThetaXor

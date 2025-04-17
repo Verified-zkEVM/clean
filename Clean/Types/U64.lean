@@ -150,23 +150,12 @@ end U64
 
 namespace U64.AssertNormalized
 
-
-structure Inputs (F : Type) where
-  x: U64 F
-
-instance : ProvableType Inputs where
-  size := 8
-  to_elements x := #v[x.x.x0, x.x.x1, x.x.x2, x.x.x3, x.x.x4, x.x.x5, x.x.x6, x.x.x7]
-  from_elements v :=
-    let ⟨.mk [v0, v1, v2, v3, v4, v5, v6, v7], _⟩ := v
-    ⟨ ⟨ v0, v1, v2, v3, v4, v5, v6, v7 ⟩ ⟩
-
 /--
   Assert that a 64-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def u64_assert_normalized (inputs : Var Inputs (F p)) : Circuit (F p) Unit  := do
-  let ⟨⟨x0, x1, x2, x3, x4, x5, x6, x7⟩⟩ := inputs
+def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
+  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
   lookup (Gadgets.ByteLookup x0)
   lookup (Gadgets.ByteLookup x1)
   lookup (Gadgets.ByteLookup x2)
@@ -176,44 +165,28 @@ def u64_assert_normalized (inputs : Var Inputs (F p)) : Circuit (F p) Unit  := d
   lookup (Gadgets.ByteLookup x6)
   lookup (Gadgets.ByteLookup x7)
 
-def assumptions (_input : Inputs (F p)) := True
+def assumptions (_input : U64 (F p)) := True
 
-def spec (inputs : Inputs (F p)) := inputs.x.is_normalized
+def spec (inputs : U64 (F p)) := inputs.is_normalized
 
-def circuit : FormalAssertion (F p) Inputs where
+def circuit : FormalAssertion (F p) U64 where
   main := u64_assert_normalized
   assumptions := assumptions
   spec := spec
   soundness := by
-    rintro i0 env ⟨⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩⟩
-    rintro ⟨⟨x0, x1, x2, x3, x4, x5, x6, x7⟩⟩ h_eval _as
-
+    rintro i0 env x_var
+    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
     repeat rw [Gadgets.ByteTable.equiv]
-    rw [show x0_var.eval env = x0 by injections h_inputs]
-    rw [show x1_var.eval env = x1 by injections h_inputs]
-    rw [show x2_var.eval env = x2 by injections h_inputs]
-    rw [show x3_var.eval env = x3 by injections h_inputs]
-    rw [show x4_var.eval env = x4 by injections h_inputs]
-    rw [show x5_var.eval env = x5 by injections h_inputs]
-    rw [show x6_var.eval env = x6 by injections h_inputs]
-    rw [show x7_var.eval env = x7 by injections h_inputs]
+    simp_all [circuit_norm, eval]
 
-    tauto
   completeness := by
-    rintro i0 env ⟨⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩⟩
-    rintro _ ⟨⟨x0, x1, x2, x3, x4, x5, x6, x7⟩⟩ h_eval _as
+    rintro i0 env x_var
+    rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
     repeat rw [Gadgets.ByteTable.equiv]
-    rw [show x0_var.eval env = x0 by injections h_inputs]
-    rw [show x1_var.eval env = x1 by injections h_inputs]
-    rw [show x2_var.eval env = x2 by injections h_inputs]
-    rw [show x3_var.eval env = x3 by injections h_inputs]
-    rw [show x4_var.eval env = x4 by injections h_inputs]
-    rw [show x5_var.eval env = x5 by injections h_inputs]
-    rw [show x6_var.eval env = x6 by injections h_inputs]
-    rw [show x7_var.eval env = x7 by injections h_inputs]
-    tauto
+    simp_all [circuit_norm, eval]
+
 end U64.AssertNormalized
 
 
@@ -222,7 +195,7 @@ end U64.AssertNormalized
 -/
 def U64.witness (compute : Environment (F p) → U64 (F p)) := do
   let x ← ProvableType.witness compute
-  assertion U64.AssertNormalized.circuit ⟨x⟩
+  assertion U64.AssertNormalized.circuit x
   return x
 
 end

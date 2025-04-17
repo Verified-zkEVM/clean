@@ -3,20 +3,15 @@ import Clean.Types.U64
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
-import Clean.Gadgets.Keccak.Keccak
+import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak.ThetaC
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+namespace Gadgets.Keccak256.ThetaC
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open FieldUtils (mod_256 floordiv)
-open Xor (xor_u64)
-open Clean.Gadgets.Keccak256 (KeccakState)
+open Gadgets.Keccak256 (KeccakState KeccakRow)
 
-@[reducible] def Outputs := ProvableVector U64 5
--- note: `reducible` is needed for type class inference, i.e. `ProvableType KeccakState`
 
-def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   -- TODO would be nice to have a for loop of length 5 here
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), (state.get 1)⟩
   let c0 ← subcircuit Gadgets.Xor.circuit ⟨c0, (state.get 2)⟩
@@ -47,20 +42,20 @@ def theta_c (state : Var KeccakState (F p)) : Circuit (F p) (Var Outputs (F p)) 
 def assumptions (state : KeccakState (F p)) : Prop :=
   ∀ i : Fin 25, state[i].is_normalized
 
-def spec (state : KeccakState (F p)) (out: Outputs (F p)) : Prop :=
+def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) : Prop :=
   let h_norm := out[0].is_normalized ∧ out[1].is_normalized ∧
              out[2].is_normalized ∧ out[3].is_normalized ∧ out[4].is_normalized
 
   let state_u64 := state.map (fun x => x.value)
   let out_u64 := out.map (fun x => x.value)
 
-  let state' := Clean.Gadgets.Keccak256.theta_c state_u64
+  let state' := Specs.Keccak256.theta_c state_u64
 
   h_norm ∧ state' = out_u64
 
 -- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
 -- #eval! theta_c (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakRow (F p)) where
   main := theta_c
   local_length _ := 160
   output _ i0 := #v[
@@ -88,20 +83,19 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   repeat
     first
-    | obtain⟨ h00, h01, h02, h03, h_holds ⟩ := h_holds
-    | obtain⟨ h00, h01, h02, h03 ⟩ := h_holds
-    obtain ⟨ xor00, norm00 ⟩ := h00 (state_norm _) (state_norm _)
-    obtain ⟨ xor01, norm01 ⟩ := h01 norm00 (state_norm _)
-    obtain ⟨ xor02, norm02 ⟩ := h02 norm01 (state_norm _)
-    obtain ⟨ xor0, norm0 ⟩ := h03 norm02 (state_norm _)
-    rw [xor02, xor01, xor00] at xor0
-    clear h00 h01 h02 h03 norm00 norm01 norm02 xor00 xor01 xor02
+    | obtain⟨ h0, h1, h2, h3, h_holds ⟩ := h_holds
+    | obtain⟨ h0, h1, h2, h3 ⟩ := h_holds
+    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm _) (state_norm _)
+    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm _)
+    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm _)
+    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm _)
+    rw [xor2, xor1, xor0] at xor
+    clear h0 h1 h2 h3 xor0 xor1 xor2 norm0 norm1 norm2
 
+  simp_all [Specs.Keccak256.theta_c, spec]
+  get_elem_tactic
 
-  simp [Clean.Gadgets.Keccak256.theta_c, Clean.Gadgets.Keccak256.xor_u64, spec]
-  simp only [true_and, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two, *]
-
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm] at h_input
   dsimp only [circuit_norm, theta_c, Xor.circuit]
@@ -116,7 +110,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
 
   sorry
 
-def circuit : FormalCircuit (F p) KeccakState Outputs := {
+def circuit : FormalCircuit (F p) KeccakState KeccakRow := {
   elaborated with
   main := theta_c
   assumptions
@@ -125,4 +119,4 @@ def circuit : FormalCircuit (F p) KeccakState Outputs := {
   completeness
 }
 
-end Gadgets.Keccak.ThetaC
+end Gadgets.Keccak256.ThetaC

@@ -1,10 +1,9 @@
 import Clean.Circuit.Basic
-import Clean.Utils.Bitwise
-import Clean.Gadgets.Rotation64.Theorems
+import Clean.Utils.Field
 
 namespace Gadgets.Xor
-open Bytes
-variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+open ByteUtils
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 def ByteXorTable: Table (F p) where
   name := "ByteXor"

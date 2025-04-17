@@ -6,14 +6,6 @@ namespace Gadgets.ByteDecomposition
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-structure Inputs (F : Type) where
-  x: F
-
-instance instProvableTypeInputs : ProvableType Inputs where
-  size := 1
-  to_elements x := #v[x.x]
-  from_elements v := ⟨ v.get 0 ⟩
-
 structure Outputs (F : Type) where
   low : F
   high : F
@@ -29,8 +21,8 @@ instance instProvableTypeOutputs : ProvableType Outputs where
   Decompose a byte into a low and a high part.
   The low part is the least significant `offset` bits, and the high part is the most significant `8 - offset` bits.
 -/
-def byte_decomposition (offset : Fin 8) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x⟩ := input
+def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+  let x : Expression (F p) := x
   let two_power : ℕ := (2 : ℕ)^offset.val
 
   let low ← witness fun env =>
@@ -54,15 +46,13 @@ def byte_decomposition (offset : Fin 8) (input : Var Inputs (F p)) : Circuit (F 
 
   return ⟨ low, high ⟩
 
-def assumptions (input : Inputs (F p)) := input.x.val < 256
+def assumptions (x : field (F p)) := x.val < 256
 
-def spec (offset : Fin 8) (input : Inputs (F p)) (out: Outputs (F p)) :=
-  let ⟨x⟩ := input
+def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
   x.val = low.val + high.val * 2^(offset.val)
 
-
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F p)) where
   main := byte_decomposition offset
   local_length _ := 2
   output _ i0 := var_from_offset Outputs i0
@@ -75,9 +65,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   sorry
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
-  rintro i0 env ⟨x_var⟩ henv ⟨ x ⟩ h_eval as
+  rintro i0 env x_var henv x h_eval as
   simp only [assumptions] at as
   simp [circuit_norm, byte_decomposition, elaborated] at henv
+  simp only [field, id] at x
 
   let h0 := henv 0
   simp only [Fin.isValue, Fin.val_zero, add_zero, gt_iff_lt, List.getElem_cons_zero] at h0
@@ -148,7 +139,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
 
       · apply ZMod.val_injective
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) Inputs Outputs := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
   main := byte_decomposition offset
   assumptions
