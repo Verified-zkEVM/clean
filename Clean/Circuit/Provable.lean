@@ -321,12 +321,25 @@ theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α]
     eval env x = x.map (eval env) := by
   simp only [eval, to_vars, to_elements, from_elements]
   simp only [Vector.map_flatten, Vector.map_map]
-  rw [Vector.toChunks_flatten]
+  rw [Vector.flatten_toChunks]
   simp [from_elements, eval, to_vars]
 
 theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : Nat) :
-    var_from_offset (F:=F) (ProvableVector α n) offset = .natInit n fun i => var_from_offset α (offset + (size α)*i) := by
-  sorry
+    var_from_offset (F:=F) (ProvableVector α n) offset
+    = .natInit n fun i => var_from_offset α (offset + (size α)*i) := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [Vector.natInit_succ, ←ih]
+    simp only [var_from_offset, from_vars, from_elements, size]
+    rw [←Vector.map_push, Vector.toChunks_push]
+    congr
+    conv => rhs; congr; rhs; congr; intro i; rw [mul_comm, add_assoc]
+    let create (i : ℕ) : Expression F := var ⟨ offset + i ⟩
+    have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := by rfl
+    rw [h_create, ←Vector.natInit_add_eq_append]
+    have h_size_succ : (n + 1) * size α = n * size α + size α := by rw [add_mul]; ac_rfl
+    rw [←Vector.cast_natInit h_size_succ]
 
 -- `ProvablePair`
 
