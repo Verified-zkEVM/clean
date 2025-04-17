@@ -64,6 +64,8 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F 
 theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
   Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
 
+lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_byte h_holds
   simp only [id_eq, circuit_norm] at h_input
@@ -71,28 +73,26 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
   obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
 
-  have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
-
-  have h : ZMod.val (2 : F p) ^ offset.val < 256 := by
+  have pow_val_field : ZMod.val (2 : F p) ^ offset.val < 256 := by
     rw [val_two]
     fin_cases offset
     repeat simp
 
-  have h' : ZMod.val (2 : F p) ^ offset.val < p := by
+  have pow_val_field : ZMod.val (2 : F p) ^ offset.val < p := by
     linarith [p_large_enough.elim]
 
-  have h'' : (2 ^ offset.val) < 2^16 := by
+  have pow_val : (2 ^ offset.val) < 2^16 := by
     apply Nat.pow_lt_pow_of_lt
     · simp only [Nat.one_lt_ofNat]
     · linarith [offset.is_lt]
 
-  have h''' : (2 ^ offset.val) < p := by
+  have pow_val' : (2 ^ offset.val) < p := by
     linarith [p_large_enough.elim]
 
   rw [add_neg_eq_iff_eq_add, zero_add] at c
   apply_fun ZMod.val at c
-  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow h', Nat.mul_mod] at c
-  rw [val_two, Nat.mod_eq_of_lt h'''] at c
+  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow pow_val_field, Nat.mul_mod] at c
+  rw [val_two, Nat.mod_eq_of_lt pow_val'] at c
 
   set low := ZMod.val <| env.get i0
   set high := ZMod.val <| env.get (i0 + 1)
@@ -152,7 +152,6 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
       PNat.val_ofNat]
 
     have x_lt : x.val < p := by linarith [as, p_large_enough.elim]
-    have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
 
     have h : ZMod.val (2 : F p) ^ offset.val < 256 := by
       rw [val_two]
