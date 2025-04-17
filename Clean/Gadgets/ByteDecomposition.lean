@@ -60,6 +60,32 @@ theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
   Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+  intro i0 env x_var x h_input x_byte h_holds
+  simp only [id_eq, circuit_norm] at h_input
+  simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
+  simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
+
+  set low := env.get i0
+  set high := env.get (i0 + 1)
+  obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
+
+
+  have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+
+  have h : ZMod.val (2 : F p) ^ offset.val < 256 := by
+    rw [val_two]
+    fin_cases offset
+    repeat simp
+
+  have h' : ZMod.val (2 : F p) ^ offset.val < p := by
+    linarith [p_large_enough.elim]
+
+
+  rw [add_neg_eq_iff_eq_add, zero_add] at c
+  apply_fun ZMod.val at c
+  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow h', Nat.mul_mod] at c
+
+
   sorry
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
@@ -74,7 +100,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
   simp only [Fin.isValue, Fin.val_one, gt_iff_lt, List.getElem_cons_succ,
     List.getElem_cons_zero] at h1
 
-  simp [eval, circuit_norm] at h_eval
+  simp only [id_eq, ↓eval_field] at h_eval
   simp [circuit_norm, byte_decomposition, elaborated, ByteLookup]
   rw [ByteTable.equiv, ByteTable.equiv, h_eval, h0, h1]
 
@@ -86,7 +112,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
   else
     have off_ge_zero : offset > 0 := by
       simp only [Fin.isValue, gt_iff_lt, Fin.pos_iff_ne_zero', ne_eq, zero_off, not_false_eq_true]
-    simp [FieldUtils.mod, h_eval, FieldUtils.floordiv, off_ge_zero]
+    simp only [FieldUtils.mod, h_eval, PNat.mk_coe, FieldUtils.floordiv, PNat.pow_coe,
+      PNat.val_ofNat]
 
     have x_lt : x.val < p := by linarith [as, p_large_enough.elim]
     have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
