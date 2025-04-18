@@ -176,16 +176,29 @@ lemma extends_vector_subcircuit (env : Environment F) {n} {circuit : SubCircuit 
   simp [SubCircuit.witnesses]
 
 theorem can_replace_local_witnesses {env: Environment F} {n: ℕ} {ops: Operations F n}  :
-  env.uses_local_witnesses' ops → env.uses_local_witnesses_completeness ops := by
+  env.uses_local_witnesses' ops → env.uses_local_witnesses ops := by
   intro h
   induction ops with
   | empty => trivial
-  | assert ops _ ih | lookup ops _ ih => simp_all [uses_local_witnesses', circuit_norm]
+  | assert ops _ ih | lookup ops _ ih => simp_all [uses_local_witnesses', uses_local_witnesses, circuit_norm]
   | witness ops m _ ih =>
     exact ⟨ ih (env_extends_witness h), env_extends_witness_inner h ⟩
   | subcircuit ops circuit ih =>
     use ih (env_extends_subcircuit h)
-    exact circuit.implied_by_local_witnesses env (env_extends_subcircuit_inner h)
+    rw [extends_vector_subcircuit]
+    exact env_extends_subcircuit_inner h
+
+theorem can_replace_local_witnesses_completeness {env: Environment F} {n: ℕ} {ops: Operations F n}  :
+  env.uses_local_witnesses ops → env.uses_local_witnesses_completeness ops := by
+  intro h
+  induction ops with
+  | empty => trivial
+  | witness | assert | lookup => simp_all [uses_local_witnesses, uses_local_witnesses_completeness]
+  | subcircuit ops circuit ih =>
+    simp_all [uses_local_witnesses, uses_local_witnesses_completeness]
+    apply circuit.implied_by_local_witnesses
+    rw [←extends_vector_subcircuit]
+    exact h.right
 end Environment
 
 namespace Circuit
