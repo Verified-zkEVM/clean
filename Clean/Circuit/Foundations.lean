@@ -1,10 +1,10 @@
 /-
 This file provides a justification for our definitions of `FormalCircuit` and `FormalAssertion`.
 
-In those definitions, we used modified statements for `constraints_hold` and `uses_local_witnesses`,
-where subcircuits replaced the original statement with a new one that is easier to reason about during proofs.
+In those definitions, we use modified statements for `constraints_hold` and `uses_local_witnesses`,
+where subcircuits replace the original statement with a new one that is easier to reason about during proofs.
 
-Here, we prove the soundness and completeness using the original statements, from the modified ones.
+Here, we prove soundness and completeness using the _original_ statements.
 
 This ensures that the `FormalCircuit` and `FormalAssertion` definitions are not accidentally weaker than they should be.
 -/
