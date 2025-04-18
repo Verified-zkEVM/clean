@@ -97,6 +97,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   -- and `completeness` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   soundness : Environment F → Prop
   completeness : Environment F → Prop
+  uses_local_witnesses : Environment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
@@ -109,6 +110,9 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
     completeness env → constraints_hold_flat env ops
+
+  implied_by_local_witnesses : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+    uses_local_witnesses env
 
   -- `local_length` must be consistent with the operations
   local_length_eq : local_length = FlatOperation.witness_length ops
@@ -281,13 +285,20 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-@[circuit_norm]
 def Environment.uses_local_witnesses (env: Environment F) : {n: ℕ} → Operations F n → Prop
   | _, .empty _ => True
   | n + _, .witness ops m c => env.uses_local_witnesses ops ∧ env.extends_vector (c env) n
   | _, .assert ops _ => env.uses_local_witnesses ops
   | _, .lookup ops _ => env.uses_local_witnesses ops
   | n + _, .subcircuit ops s => env.uses_local_witnesses ops ∧ env.extends_vector (s.witnesses env) n
+
+@[circuit_norm]
+def Environment.uses_local_witnesses_completeness (env: Environment F) : {n: ℕ} → Operations F n → Prop
+  | _, .empty _ => True
+  | n + _, .witness ops m c => env.uses_local_witnesses ops ∧ env.extends_vector (c env) n
+  | _, .assert ops _ => env.uses_local_witnesses ops
+  | _, .lookup ops _ => env.uses_local_witnesses ops
+  | _, .subcircuit ops s => env.uses_local_witnesses ops ∧ s.uses_local_witnesses env
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
@@ -398,7 +409,7 @@ def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit 
   (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
-  env.uses_local_witnesses (circuit.main b_var |>.operations offset) →
+  env.uses_local_witnesses_completeness (circuit.main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β F, eval env b_var = b →
   assumptions b →
@@ -459,7 +470,7 @@ extends ElaboratedCircuit F β Unit where
   completeness:
     -- for all environments which _use the default witness generators for local variables_
     ∀ offset, ∀ env, ∀ b_var : Var β F,
-    env.uses_local_witnesses (main b_var |>.operations offset) →
+    env.uses_local_witnesses_completeness (main b_var |>.operations offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β F, eval env b_var = b →
     assumptions b → spec b →

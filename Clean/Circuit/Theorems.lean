@@ -240,7 +240,7 @@ theorem can_replace_completeness {n: ℕ} {ops : Operations F n} {env} : env.use
   intro h_env h
   induction ops with
   | empty => trivial
-  | witness | assert | lookup => simp_all [circuit_norm, constraints_hold.generic]
+  | witness | assert | lookup => simp_all [circuit_norm, Environment.uses_local_witnesses, constraints_hold.generic]
   | subcircuit ops circuit ih =>
     simp only [Environment.uses_local_witnesses, constraints_hold.generic] at *
     exact ⟨ ih h_env.left h.left,
