@@ -136,14 +136,6 @@ lemma env_extends_witness_inner {n: ℕ} {ops: Operations F n} {env: Environment
   rw [h, Vector.getElem_append]
   simp
 
-lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-    env.uses_local_witnesses' (ops.assert c) → env.uses_local_witnesses' ops := by
-  intro h i; simp_all only [uses_local_witnesses', extends_vector, circuit_norm]
-
-lemma env_extends_lookup {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-    env.uses_local_witnesses' (ops.lookup c) → env.uses_local_witnesses' ops := by
-  intro h i; simp_all only [uses_local_witnesses', extends_vector, circuit_norm]
-
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
     env.uses_local_witnesses' (ops.subcircuit c) → env.uses_local_witnesses' ops := by
   intro h i
@@ -202,37 +194,6 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {n: ℕ} {
 end Environment
 
 namespace Circuit
-open Environment (env_extends_subcircuit env_extends_subcircuit_inner env_extends_witness env_extends_assert env_extends_lookup)
-
-/--
-Completeness theorem which proves that we can replace constraints in subcircuits
-with their `completeness` statement.
-
-Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only proving the nested version
-`constraints_hold.completeness` when defining formal circuits,
-because it already implies the flat version.
--/
-theorem can_replace_completeness' {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses' ops →
-  constraints_hold.completeness env ops → constraints_hold env ops := by
-  intro h_env h
-  induction ops with
-  | empty => trivial
-  | witness ops m c ih | assert ops c ih | lookup ops c ih =>
-    try replace h_env := env_extends_witness h_env
-    try replace h_env := env_extends_assert h_env
-    try replace h_env := env_extends_lookup h_env
-    specialize ih h_env
-    cases ops <;> simp_all [constraints_hold.completeness, constraints_hold]
-  | subcircuit ops circuit ih =>
-    specialize ih (env_extends_subcircuit h_env)
-    dsimp only [constraints_hold.completeness] at h
-    dsimp only [constraints_hold]
-    split at h
-    · use trivial
-      exact circuit.implied_by_completeness env (env_extends_subcircuit_inner h_env) h
-    · use ih h.left
-      exact circuit.implied_by_completeness env (env_extends_subcircuit_inner h_env) h.right
-
 /--
 Generic version of `constraints_hold`, to reason about soundness and completeness at the same time
 -/
