@@ -282,8 +282,12 @@ for all variables declared locally within the circuit.
 This is the condition needed to prove completeness of a circuit.
 -/
 @[circuit_norm]
-def Environment.uses_local_witnesses (env: Environment F) (ops: Operations F n) :=
-  ∀ i : Fin ops.local_length, env.get (ops.initial_offset + i) = (ops.local_witnesses env).get i
+def Environment.uses_local_witnesses (env: Environment F) : {n: ℕ} → Operations F n → Prop
+  | _, .empty _ => True
+  | n + _, .witness ops m c => env.uses_local_witnesses ops ∧ env.extends_vector (c env) n
+  | _, .assert ops _ => env.uses_local_witnesses ops
+  | _, .lookup ops _ => env.uses_local_witnesses ops
+  | n + _, .subcircuit ops s => env.uses_local_witnesses ops ∧ env.extends_vector (s.witnesses env) n
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
