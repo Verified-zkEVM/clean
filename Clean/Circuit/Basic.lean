@@ -94,8 +94,8 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   ops: List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
-  -- for convenience, we allow the framework to transform that into custom `soundness`
-  -- and `completeness` statements (which may involve inputs/outputs, assumptions on inputs, etc)
+  -- for convenience, we allow the framework to transform that into custom `soundness`,
+  -- `completeness` and `uses_local_witnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   soundness : Environment F → Prop
   completeness : Environment F → Prop
   uses_local_witnesses : Environment F → Prop
@@ -112,6 +112,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
     completeness env → constraints_hold_flat env ops
 
+  -- `uses_local_witnesses` needs to follow from the local witness generator condition
   implied_by_local_witnesses : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
     uses_local_witnesses env
 
@@ -293,6 +294,9 @@ def Environment.uses_local_witnesses (env: Environment F) : {n: ℕ} → Operati
   | _, .lookup ops _ => env.uses_local_witnesses ops
   | n + _, .subcircuit ops s => env.uses_local_witnesses ops ∧ env.extends_vector (s.witnesses env) n
 
+/--
+Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
+-/
 @[circuit_norm]
 def Environment.uses_local_witnesses_completeness (env: Environment F) : {n: ℕ} → Operations F n → Prop
   | _, .empty _ => True
