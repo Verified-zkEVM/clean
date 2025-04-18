@@ -11,8 +11,6 @@ This ensures that the `FormalCircuit` and `FormalAssertion` definitions are not 
 import Clean.Circuit.Theorems
 
 variable {F: Type} [Field F]
-
-section
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 open Circuit (constraints_hold)
 
@@ -78,4 +76,3 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
   apply Circuit.can_replace_completeness h_env
   have h_env' := Environment.can_replace_local_witnesses_completeness h_env
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
-end
