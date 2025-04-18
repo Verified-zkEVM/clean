@@ -95,7 +95,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
       let b := eval env b_var
       have as : circuit.assumptions b := h_completeness
 
-      have h_env' : env.uses_local_witnesses ops := by
+      have h_env' : env.uses_local_witnesses' ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
         have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
         rw [←hn] at h_env

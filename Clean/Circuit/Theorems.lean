@@ -103,42 +103,43 @@ lemma flat_witness_eq_witness {n: ℕ} {ops: Operations F n} {env} :
     rw [←ih, witnesses_append]
     try simp only [witness_length, witnesses, Vector.toArray_empty, Array.append_empty, subcircuit_witness_eq]
 
+/-- equivalent, non-inductive statement of `Environment.uses_local_witnesses` (that is harder to unfold for a circuit) -/
+def uses_local_witnesses' (env: Environment F) {n} (ops: Operations F n) :=
+  env.extends_vector (ops.local_witnesses env) ops.initial_offset
+
 /--
 Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
 -/
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
-  env.extends_vector (witnesses env (to_flat_operations ops)) ops.initial_offset →
-  env.uses_local_witnesses ops := by
-  unfold Environment.uses_local_witnesses Environment.extends_vector
+    env.extends_vector (witnesses env (to_flat_operations ops)) ops.initial_offset →
+    env.uses_local_witnesses' ops := by
+  simp only [uses_local_witnesses', extends_vector, Vector.get, flat_witness_eq_witness]
   intro h i
-  specialize h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
-  simp only [Fin.cast_mk] at h
-  rw [h]
-  simp only [Vector.get, Fin.cast_mk, List.get_eq_getElem, flat_witness_eq_witness, Fin.coe_cast]
+  exact h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m c} :
-  env.uses_local_witnesses (ops.witness m c) → env.uses_local_witnesses ops
+  env.uses_local_witnesses' (ops.witness m c) → env.uses_local_witnesses' ops
 := by
   intro h i
-  simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [uses_local_witnesses', Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   specialize h ⟨ i, by omega ⟩
   simp only [Fin.coe_cast, Fin.cast_mk] at h
   rw [h]
   simp [Vector.get, Vector.append, Array.getElem_append]
 
 lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses (ops.assert c) → env.uses_local_witnesses ops := by
-  intro h i; simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
+  env.uses_local_witnesses' (ops.assert c) → env.uses_local_witnesses' ops := by
+  intro h i; simp_all only [uses_local_witnesses', extends_vector, circuit_norm]
 
 lemma env_extends_lookup {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses (ops.lookup c) → env.uses_local_witnesses ops := by
-  intro h i; simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses]
+  env.uses_local_witnesses' (ops.lookup c) → env.uses_local_witnesses' ops := by
+  intro h i; simp_all only [uses_local_witnesses', extends_vector, circuit_norm]
 
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses (ops.subcircuit c) → env.uses_local_witnesses ops
+  env.uses_local_witnesses' (ops.subcircuit c) → env.uses_local_witnesses' ops
 := by
   intro h i
-  simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
+  simp_all only [uses_local_witnesses', Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   have : i < ops.local_length + c.local_length := by linarith [i.is_lt]
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
@@ -146,11 +147,10 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   simp [Vector.get, Vector.append, Array.getElem_append]
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses (ops.subcircuit c) → env.extends_vector (witnesses env c.ops) n
+  env.uses_local_witnesses' (ops.subcircuit c) → env.extends_vector (witnesses env c.ops) n
 := by
   intro h i
-  simp_all only [Environment.uses_local_witnesses, Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
-  -- unfold SubCircuit.local_length at h
+  simp_all only [uses_local_witnesses', Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   have : ops.local_length + i < ops.local_length + c.local_length := by rw [c.local_length_eq]; linarith [i.is_lt]
   specialize h ⟨ ops.local_length + i, this ⟩
   simp only [Vector.get, Vector.append, Fin.cast_mk, List.get_eq_getElem] at h
@@ -161,6 +161,12 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   rw [Array.getElem_append_right' (ops.local_witnesses env).toArray lt1]
   simp [Nat.add_comm, subcircuit_witness_eq]
 
+
+lemma extends_vector_subcircuit (env : Environment F) {n} {circuit : SubCircuit F n} :
+    env.extends_vector (circuit.witnesses env) n = env.extends_vector (FlatOperation.witnesses env circuit.ops) n := by
+  have h_length : circuit.local_length = FlatOperation.witness_length circuit.ops := circuit.local_length_eq
+  congr
+  simp [SubCircuit.witnesses]
 end Environment
 
 namespace Circuit
@@ -174,7 +180,7 @@ Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only pr
 `constraints_hold.completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness  {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses ops →
+theorem can_replace_completeness' {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses' ops →
   constraints_hold.completeness env ops → constraints_hold env ops := by
   intro h_env h
   induction ops with
@@ -219,4 +225,25 @@ theorem constraints_hold.completeness_iff_generic {n : ℕ} (env : Environment F
   | empty => trivial
   | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
     cases ops <;> simp_all [completeness, generic]
+
+/--
+Completeness theorem which proves that we can replace constraints in subcircuits
+with their `completeness` statement.
+
+Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only proving the nested version
+`constraints_hold.completeness` when defining formal circuits,
+because it already implies the flat version.
+-/
+theorem can_replace_completeness {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses ops →
+  constraints_hold.completeness env ops → constraints_hold env ops := by
+  rw [constraints_hold.completeness_iff_generic]
+  intro h_env h
+  induction ops with
+  | empty => trivial
+  | witness | assert | lookup => simp_all [circuit_norm, constraints_hold.generic]
+  | subcircuit ops circuit ih =>
+    simp only [Environment.uses_local_witnesses, constraints_hold.generic] at *
+    exact ⟨ ih h_env.left h.left,
+      circuit.implied_by_completeness env (env.extends_vector_subcircuit ▸ h_env.right) h.right ⟩
+
 end Circuit
