@@ -58,21 +58,31 @@ def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value offset.val
   ∧ y.is_normalized
 
-def circuit (off : Fin 64) : FormalCircuit (F p) U64 U64 where
+def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) where
   main := rot64 off
-  assumptions := assumptions
-  spec := spec off
-  soundness := by sorry
-  completeness := by sorry
-  local_length := 24
+  local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
-
   initial_offset_eq := by
     intros
-    simp only [Fin.zero_eta, Fin.isValue, Fin.val_zero, rot64, Fin.div_val, Fin.val_natCast,
-      Nat.reduceMod, Fin.mod_val, Nat.cast_ofNat]; rfl
+    simp only [rot64]
+    rfl
   local_length_eq := by
     intros
-    simp only [rot64, Fin.isValue, Fin.div_val, Fin.mod_val, Nat.cast_ofNat, Pi.ofNat_apply]; rfl
+    simp only [rot64]
+    rfl
+
+theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+  sorry
+
+theorem completeness (offset : Fin 64) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
+  sorry
+
+def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
+  elaborated offset with
+  assumptions := assumptions
+  spec := spec offset
+  soundness := soundness offset
+  completeness := completeness offset
+}
 
 end Gadgets.Rotation64
