@@ -64,7 +64,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
   let ops := circuit.main b_var |>.operations n
   let flat_ops := to_flat_operations ops
 
-  have imply_soundness : ∀ (env : Environment F),
+  have imply_soundness : ∀ env : Environment F,
       constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
     intro env h_holds
@@ -84,7 +84,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     apply can_replace_soundness
     exact can_replace_subcircuits.mpr h_holds
 
-  have implied_by_completeness : ∀ (env : Environment F),
+  have implied_by_completeness : ∀ env : Environment F,
       env.extends_vector (FlatOperation.witnesses env flat_ops) n →
       subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
     -- we are given that the assumptions are true
