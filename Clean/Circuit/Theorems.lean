@@ -279,3 +279,41 @@ theorem can_replace_completeness {n: ℕ} {ops : Operations F n} {env} : env.use
       circuit.implied_by_completeness env (env.extends_vector_subcircuit ▸ h_env.right) h.right ⟩
 
 end Circuit
+
+section
+variable {α β: TypeMap} [ProvableType α] [ProvableType β]
+open Circuit (constraints_hold)
+
+/--
+  Justification for using a modified statement for `constraints_hold`
+  in the `FormalCircuit` definition.
+-/
+theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
+    -- if the constraints hold (original definition)
+    constraints_hold env (circuit.main b_var |>.operations offset) →
+    -- the spec holds
+    let a := eval env (circuit.output b_var offset)
+    circuit.spec b a := by
+
+  intro offset env b_var b h_input h_assumptions h_holds
+  have h_holds' := Circuit.can_replace_soundness h_holds
+  exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+
+/--
+  Justification for using modified statements for `uses_local_witnesses`
+  and `constraints_hold` in the `FormalCircuit` definition.
+-/
+theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
+    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
+    -- if the environment uses default witness generators (original definition)
+    env.uses_local_witnesses (circuit.main b_var |>.operations offset) →
+    -- the constraints hold (original definition)
+    constraints_hold env (circuit.main b_var |>.operations offset) := by
+
+  intro offset env b_var b h_input h_assumptions h_env
+  apply Circuit.can_replace_completeness h_env
+  have h_env' := Environment.can_replace_local_witnesses_completeness h_env
+  exact circuit.completeness offset env b_var h_env' b h_input h_assumptions
+
+end
