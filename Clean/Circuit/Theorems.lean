@@ -118,8 +118,7 @@ lemma env_extends_of_flat {n: ℕ} {ops: Operations F n} {env: Environment F} :
   exact h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m c} :
-  env.uses_local_witnesses' (ops.witness m c) → env.uses_local_witnesses' ops
-:= by
+    env.uses_local_witnesses' (ops.witness m c) → env.uses_local_witnesses' ops := by
   intro h i
   simp_all only [uses_local_witnesses', Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   specialize h ⟨ i, by omega ⟩
@@ -127,17 +126,26 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m
   rw [h]
   simp [Vector.get, Vector.append, Array.getElem_append]
 
+lemma env_extends_witness_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {m c} :
+    env.uses_local_witnesses' (ops.witness m c) → env.extends_vector (c env) n := by
+  intro h i
+  simp only [uses_local_witnesses', extends_vector, circuit_norm] at h
+  specialize h ⟨ ops.local_length + i, by linarith [i.is_lt] ⟩
+  simp only at h
+  rw [←add_assoc, Circuit.total_length_eq] at h
+  rw [h, Vector.getElem_append]
+  simp
+
 lemma env_extends_assert {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses' (ops.assert c) → env.uses_local_witnesses' ops := by
+    env.uses_local_witnesses' (ops.assert c) → env.uses_local_witnesses' ops := by
   intro h i; simp_all only [uses_local_witnesses', extends_vector, circuit_norm]
 
 lemma env_extends_lookup {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses' (ops.lookup c) → env.uses_local_witnesses' ops := by
+    env.uses_local_witnesses' (ops.lookup c) → env.uses_local_witnesses' ops := by
   intro h i; simp_all only [uses_local_witnesses', extends_vector, circuit_norm]
 
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
-  env.uses_local_witnesses' (ops.subcircuit c) → env.uses_local_witnesses' ops
-:= by
+    env.uses_local_witnesses' (ops.subcircuit c) → env.uses_local_witnesses' ops := by
   intro h i
   simp_all only [uses_local_witnesses', Operations.local_length, Operations.initial_offset, Operations.local_witnesses, Vector.push]
   have : i < ops.local_length + c.local_length := by linarith [i.is_lt]
@@ -161,12 +169,23 @@ lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environm
   rw [Array.getElem_append_right' (ops.local_witnesses env).toArray lt1]
   simp [Nat.add_comm, subcircuit_witness_eq]
 
-
 lemma extends_vector_subcircuit (env : Environment F) {n} {circuit : SubCircuit F n} :
     env.extends_vector (circuit.witnesses env) n = env.extends_vector (FlatOperation.witnesses env circuit.ops) n := by
   have h_length : circuit.local_length = FlatOperation.witness_length circuit.ops := circuit.local_length_eq
   congr
   simp [SubCircuit.witnesses]
+
+theorem can_replace_local_witnesses {env: Environment F} {n: ℕ} {ops: Operations F n}  :
+  env.uses_local_witnesses' ops → env.uses_local_witnesses_completeness ops := by
+  intro h
+  induction ops with
+  | empty => trivial
+  | assert ops _ ih | lookup ops _ ih => simp_all [uses_local_witnesses', circuit_norm]
+  | witness ops m _ ih =>
+    exact ⟨ ih (env_extends_witness h), env_extends_witness_inner h ⟩
+  | subcircuit ops circuit ih =>
+    use ih (env_extends_subcircuit h)
+    exact circuit.implied_by_local_witnesses env (env_extends_subcircuit_inner h)
 end Environment
 
 namespace Circuit

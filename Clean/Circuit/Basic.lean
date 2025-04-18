@@ -295,10 +295,10 @@ def Environment.uses_local_witnesses (env: Environment F) : {n: ℕ} → Operati
 @[circuit_norm]
 def Environment.uses_local_witnesses_completeness (env: Environment F) : {n: ℕ} → Operations F n → Prop
   | _, .empty _ => True
-  | n + _, .witness ops m c => env.uses_local_witnesses ops ∧ env.extends_vector (c env) n
-  | _, .assert ops _ => env.uses_local_witnesses ops
-  | _, .lookup ops _ => env.uses_local_witnesses ops
-  | _, .subcircuit ops s => env.uses_local_witnesses ops ∧ s.uses_local_witnesses env
+  | n + _, .witness ops m c => env.uses_local_witnesses_completeness ops ∧ env.extends_vector (c env) n
+  | _, .assert ops _ => env.uses_local_witnesses_completeness ops
+  | _, .lookup ops _ => env.uses_local_witnesses_completeness ops
+  | _, .subcircuit ops s => env.uses_local_witnesses_completeness ops ∧ s.uses_local_witnesses env
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit

@@ -96,14 +96,15 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
       let b := eval env b_var
       have as : circuit.assumptions b := h_completeness
 
-      have h_env' : env.uses_local_witnesses' ops := by
+      have h_env : env.uses_local_witnesses_completeness ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
         have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
         rw [←hn] at h_env
+        apply env.can_replace_local_witnesses
         exact env_extends_of_flat h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env b_var h_env' b rfl as
+      have h_holds := circuit.completeness n env b_var h_env b rfl as
 
       -- so we just need to go from constraints to flattened constraints
       apply can_replace_subcircuits.mp
@@ -118,10 +119,11 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
       have h1 : circuit.assumptions b → constraints_hold_flat env flat_ops := by
         intro as
 
-        have h_env' : env.uses_local_witnesses' ops := by
+        have h_env' : env.uses_local_witnesses_completeness ops := by
           guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
           have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
           rw [←hn] at h_env
+          apply env.can_replace_local_witnesses
           exact env_extends_of_flat h_env
 
         -- by completeness of the circuit, this means we can make the constraints hold
@@ -191,10 +193,11 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       let b := eval env b_var
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
-      have h_env' : env.uses_local_witnesses' ops := by
+      have h_env' : env.uses_local_witnesses_completeness ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
         have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
         rw [←hn] at h_env
+        apply env.can_replace_local_witnesses
         exact env_extends_of_flat h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
