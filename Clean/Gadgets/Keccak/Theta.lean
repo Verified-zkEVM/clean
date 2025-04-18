@@ -42,17 +42,10 @@ theorem soundness : Soundness (F p) assumptions spec := by
   ]
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
-  intro i0 env state_var h_env state h_input h_assumptions
-  dsimp only [circuit_norm, subcircuit_norm, theta, assumptions, spec,
+  simp_all [Completeness, circuit_norm, subcircuit_norm, theta, assumptions, spec,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,
-    ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta
-  ] at h_input h_assumptions ⊢
-  simp [circuit_norm] at h_input h_assumptions ⊢
-  simp_all [elaborated, theta]
-  -- TODO: we need subcircuit abstraction of `env.uses_local_witnesses`
-  -- to make this as easy as it should be!
-  sorry
+    ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with
