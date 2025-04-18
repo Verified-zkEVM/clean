@@ -161,7 +161,7 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm,
     add32_full, add8_full_carry, Boolean.circuit
-  ]
+  ] at henv ⊢
   simp only [true_and, and_assoc]
   rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
   rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]
@@ -169,32 +169,12 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
 
   -- characterize local witnesses
-  -- TODO: this is too hard
-  let wit : Vector (F p) 8 := add32_full ⟨
-    ⟨ x0_var, x1_var, x2_var, x3_var ⟩,
-    ⟨ y0_var, y1_var, y2_var, y3_var ⟩,
-    carry_in_var
-    ⟩ |>.operations i0 |>.local_witnesses env
-
-  change ∀ i : Fin 8, env.get (i0 + i) = wit.get i at henv
-
-  have hwit : wit.toArray = #[
-    mod_256 (x0 + y0 + carry_in),
-    floordiv_256 (x0 + y0 + carry_in),
-    mod_256 (x1 + y1 + env.get (i0 + 1)),
-    floordiv_256 (x1 + y1 + env.get (i0 + 1)),
-    mod_256 (x2 + y2 + env.get (i0 + 3)),
-    floordiv_256 (x2 + y2 + env.get (i0 + 3)),
-    mod_256 (x3 + y3 + env.get (i0 + 5)),
-    floordiv_256 (x3 + y3 + env.get (i0 + 5))
-  ] := by
-    -- this has to unfold all subcircuits :/
-    simp only [wit, circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit]
-    rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
+  simp only [forall_const, true_and, and_true, and_assoc] at henv
+  rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
       ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
-      ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
-
+      ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at henv
   repeat clear this
+  obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := henv
 
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -204,33 +184,6 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   set c2 := env.get (i0 + 5)
   set z3 := env.get (i0 + 6)
   set c3 := env.get (i0 + 7)
-
-  -- note: List accesses like `[a, b, c][2] = c` can also be proved by `rfl`,
-  -- but that seems slower than simp with getElem lemmas
-  have hz0 : z0 = mod_256 (x0 + y0 + carry_in) := by
-    rw [(show z0 = wit.get 0 from henv 0), wit.get_eq_lt 0]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_zero]
-  have hc0 : c0 = floordiv_256 (x0 + y0 + carry_in) := by
-    rw [(show c0 = wit.get 1 from henv 1), wit.get_eq_lt 1]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
-  have hz1 : z1 = mod_256 (x1 + y1 + c0) := by
-    rw [(show z1 = wit.get 2 from henv 2), wit.get_eq_lt 2]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
-  have hc1 : c1 = floordiv_256 (x1 + y1 + c0) := by
-    rw [(show c1 = wit.get 3 from henv 3), wit.get_eq_lt 3]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
-  have hz2 : z2 = mod_256 (x2 + y2 + c1) := by
-    rw [(show z2 = wit.get 4 from henv 4), wit.get_eq_lt 4]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
-  have hc2 : c2 = floordiv_256 (x2 + y2 + c1) := by
-    rw [(show c2 = wit.get 5 from henv 5), wit.get_eq_lt 5]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
-  have hz3 : z3 = mod_256 (x3 + y3 + c2) := by
-    rw [(show z3 = wit.get 6 from henv 6), wit.get_eq_lt 6]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
-  have hc3 : c3 = floordiv_256 (x3 + y3 + c2) := by
-    rw [(show c3 = wit.get 7 from henv 7), wit.get_eq_lt 7]
-    simp only [hwit, List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero]
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}

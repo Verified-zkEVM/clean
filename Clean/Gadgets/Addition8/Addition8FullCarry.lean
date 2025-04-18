@@ -109,7 +109,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   completeness := by
    -- introductions
-    rintro i0 env inputs_var henv inputs h_inputs
+    rintro i0 env inputs_var h_env inputs h_inputs
     let ⟨x, y, carry_in⟩ := inputs
     let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
     rintro as
@@ -122,22 +122,15 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     -- simplify assumptions
     dsimp [assumptions] at as
 
+    -- simplify local witnesses
+    simp only [circuit_norm, subcircuit_norm, add8_full_carry, Boolean.circuit, forall_const] at h_env
+    have ⟨⟨⟨_, hz⟩, hcarry_out⟩, _ ⟩ := h_env
+
     -- unfold goal, (re)introduce names for some of unfolded variables
     simp only [add8_full_carry, circuit_norm]
-    rw [hx, hy, hcarry_in]
+    rw [hx, hy, hcarry_in] at hz hcarry_out ⊢
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
-
-    -- simplify local witnesses
-    have hz : z = mod_256 (x + y + carry_in) := by
-      have henv0 := henv (0 : Fin 2)
-      dsimp only [add8_full_carry, circuit_norm] at henv0
-      rwa [hx, hy, hcarry_in] at henv0
-
-    have hcarry_out : carry_out = floordiv_256 (x + y + carry_in) := by
-      have henv1 := henv (1 : Fin 2)
-      dsimp only [add8_full_carry, circuit_norm] at henv1
-      rwa [hx, hy, hcarry_in] at henv1
 
     -- now it's just mathematics!
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)

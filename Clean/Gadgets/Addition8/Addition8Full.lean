@@ -41,23 +41,16 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     -- introductions
-    rintro offset env inputs_var inputs h_inputs as
-    let ⟨x, y, carry_in⟩ := inputs
-    let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
-    intro h_holds z
-
-    -- characterize inputs
-    simp only [circuit_norm] at h_inputs
-    have hx : x_var.eval env = x := by injection h_inputs
-    have hy : y_var.eval env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
+    rintro offset env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs as h_holds z
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
     simp only [add8_full, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit, eval] at h_holds
 
     -- rewrite input and ouput values
-    rw [hx, hy, hcarry_in, ←(by rfl : z = env.get offset)] at h_holds
+    simp only [circuit_norm, Inputs.mk.injEq] at h_inputs
+    simp only [h_inputs] at h_holds
+    rw [←(by rfl : z = env.get offset)] at h_holds
 
     -- satisfy `Add8FullCarry.assumptions` by using our own assumptions
     let ⟨ asx, asy, as_carry_in ⟩ := as
@@ -67,31 +60,22 @@ def circuit : FormalCircuit (F p) Inputs field where
     guard_hyp h_holds : Addition8FullCarry.spec { x, y, carry_in } { z, .. }
 
     -- unfold `Add8FullCarry` spec to show what the hypothesis is in our context
-    dsimp [Addition8FullCarry.spec] at h_holds
-    dsimp [spec]
+    dsimp only [Addition8FullCarry.spec] at h_holds
+    dsimp only [spec]
     -- discard second part of the spec
     exact h_holds.left
 
   completeness := by
     -- introductions
-    rintro offset env inputs_var henv inputs h_inputs
-    let ⟨x, y, carry_in⟩ := inputs
-    let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
-    rintro as
-
-    -- characterize inputs
-    simp only [circuit_norm] at h_inputs
-    have hx : x_var.eval env = x := by injection h_inputs
-    have hy : y_var.eval env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
+    rintro offset env ⟨x_var, y_var, carry_in_var⟩ henv ⟨x, y, carry_in⟩ h_inputs as
 
     -- simplify assumptions and goal
-    dsimp [assumptions] at as
-    simp only [circuit_norm, add8_full, subcircuit_norm, eval]
-    rw [hx, hy, hcarry_in]
+    simp_all only [circuit_norm, Inputs.mk.injEq, assumptions, add8_full, eval,
+      subcircuit_norm, Addition8FullCarry.circuit]
 
     -- the goal is just the `subcircuit_completeness` of `Add8FullCarry.circuit`, i.e. the assumptions must hold.
     -- this is equivalent to our own assumptions
+    simp only [Addition8FullCarry.assumptions]
     exact as
 
 end Gadgets.Addition8Full
