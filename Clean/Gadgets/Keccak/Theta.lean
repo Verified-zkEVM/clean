@@ -1,22 +1,12 @@
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Types.U64
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Gadgets.Rotation64.Rotation64
 import Clean.Specs.Keccak256
 import Clean.Gadgets.Keccak.ThetaC
 import Clean.Gadgets.Keccak.ThetaD
 import Clean.Gadgets.Keccak.ThetaXor
 
 namespace Gadgets.Keccak256.Theta
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
-instance : Fact (p > 512) := by
-  constructor
-  linarith [p_large_enough.elim]
-
-open Gadgets.Keccak256
+instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 def theta (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let c ← subcircuit ThetaC.circuit state
@@ -38,8 +28,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp_all [Soundness, circuit_norm, subcircuit_norm, spec, theta, assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,
-    ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta
-  ]
+    ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   simp_all [Completeness, circuit_norm, subcircuit_norm, theta, assumptions, spec,
@@ -48,11 +37,6 @@ theorem completeness : Completeness (F p) KeccakState assumptions := by
     ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated with
-  assumptions
-  spec
-  soundness
-  completeness
+  elaborated with assumptions, spec, soundness, completeness
 }
-
 end Gadgets.Keccak256.Theta
