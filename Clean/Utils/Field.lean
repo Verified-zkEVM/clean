@@ -71,6 +71,12 @@ def nat_to_field (n: ℕ) (lt: n < p) : F p :=
   | 0 => False.elim (Nat.not_lt_zero n lt)
   | _ + 1 => ⟨ n, lt ⟩
 
+theorem nat_to_field_zero : nat_to_field 0 (p_prime.elim.pos) = 0 := by
+  dsimp [nat_to_field]
+  cases p
+  · exact False.elim (Nat.not_lt_zero 0 p_prime.elim.pos)
+  · simp only
+
 theorem nat_to_field_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = nat_to_field n lt) : x.val = n := by
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)

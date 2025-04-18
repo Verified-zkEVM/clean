@@ -9,7 +9,13 @@ import Clean.Gadgets.Keccak.ThetaD
 import Clean.Gadgets.Keccak.ThetaXor
 
 namespace Gadgets.Keccak256.Theta
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+
+instance : Fact (p > 512) := by
+  constructor
+  linarith [p_large_enough.elim]
+
 open Gadgets.Keccak256
 
 def theta (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do

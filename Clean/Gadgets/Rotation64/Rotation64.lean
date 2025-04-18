@@ -8,7 +8,11 @@ import Clean.Circuit.Provable
 
 namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+
+instance : Fact (p > 512) := by
+  constructor
+  linarith [p_large_enough.elim]
 
 open Gadgets.Rotation64.Theorems (rot_right64)
 open Gadgets.Rotation64 (byte_rotation_lookup)

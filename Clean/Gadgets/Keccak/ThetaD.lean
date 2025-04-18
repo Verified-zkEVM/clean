@@ -6,7 +6,13 @@ import Clean.Gadgets.Rotation64.Rotation64
 import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaD
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+
+instance : Fact (p > 512) := by
+  constructor
+  linarith [p_large_enough.elim]
+
 open Gadgets.Keccak256 (KeccakRow)
 
 def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
