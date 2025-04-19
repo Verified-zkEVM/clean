@@ -138,7 +138,7 @@ theorem completeness : Completeness (F p) field assumptions := by
   suffices h_xor : (x + y + -(2 * w)).val = x.val ^^^ y.val from ⟨ trivial, hx_byte, hy_byte, h_xor ⟩
 
   -- now it's pretty much the soundness proof in reverse
-  specialize h_env 0
+  simp only [forall_const, true_and] at h_env
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
   have p_large := p_large_enough.elim
   have and_lt : x.val &&& y.val < p := by linarith
