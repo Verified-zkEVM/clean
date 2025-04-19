@@ -41,4 +41,38 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   ←xor state[24] (←and (←not state[4]) state[9])
 ]
 
+#eval! main (p:=p_babybear) default |>.operations.local_length
+#eval! main (p:=p_babybear) default |>.output
+
+instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
+  main := main
+  local_length _ := 400
+  output _ i0 := #v[
+    var_from_offset U64 (i0 + 8),
+    var_from_offset U64 (i0 + 24),
+    var_from_offset U64 (i0 + 40),
+    var_from_offset U64 (i0 + 56),
+    var_from_offset U64 (i0 + 72),
+    var_from_offset U64 (i0 + 88),
+    var_from_offset U64 (i0 + 104),
+    var_from_offset U64 (i0 + 120),
+    var_from_offset U64 (i0 + 136),
+    var_from_offset U64 (i0 + 152),
+    var_from_offset U64 (i0 + 168),
+    var_from_offset U64 (i0 + 184),
+    var_from_offset U64 (i0 + 200),
+    var_from_offset U64 (i0 + 216),
+    var_from_offset U64 (i0 + 232),
+    var_from_offset U64 (i0 + 248),
+    var_from_offset U64 (i0 + 264),
+    var_from_offset U64 (i0 + 280),
+    var_from_offset U64 (i0 + 296),
+    var_from_offset U64 (i0 + 312),
+    var_from_offset U64 (i0 + 328),
+    var_from_offset U64 (i0 + 344),
+    var_from_offset U64 (i0 + 360),
+    var_from_offset U64 (i0 + 376),
+    var_from_offset U64 (i0 + 392)
+  ]
+
 end Gadgets.Keccak256.Chi
