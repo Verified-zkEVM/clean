@@ -293,3 +293,7 @@ theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (f_lawful
     completeness env (f.operations n) ∧ completeness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
   simp only [completeness_iff_generic, bind_generic]
 end Circuit.constraints_hold
+
+attribute [lawful_norm] LawfulCircuit.final_offset LawfulCircuit.operations LawfulCircuit.output
+attribute [lawful_norm] ConstantLawfulCircuits.output ConstantLawfulCircuits.local_length ConstantLawfulCircuits.operations
+  ConstantLawfulCircuits.from_constant_length id_eq
