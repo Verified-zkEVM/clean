@@ -51,4 +51,16 @@ lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
   congr; symm
   exact and_mul_two_pow
 
+def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
+
+theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
+    not64 x = 2^64 - 1 - x := by
+  rw [not64]
+  have h_u64 : (x.toUInt64 ^^^ 0xffffffffffffffff).toNat = (0xffffffffffffffff - x.toUInt64).toNat := by
+    apply congrArg UInt64.toNat
+    bv_decide
+  rw [UInt64.toNat_xor, UInt64.toNat_sub_of_le, UInt64.toNat_ofNat_of_lt x_lt] at h_u64
+  exact h_u64
+  rw [UInt64.le_iff_toNat_le, UInt64.toNat_ofNat_of_lt x_lt]
+  exact Nat.le_pred_of_lt x_lt
 end Bitwise
