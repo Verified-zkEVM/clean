@@ -32,6 +32,11 @@ instance lawfulBody (state : Var KeccakState (F p)) : ConstantLawfulCircuits (fu
   (by dsimp only [xor, not, and]; infer_lawful_circuit)
   (by intros; ac_rfl)
 
+instance lawful (state : Var KeccakState (F p)) : LawfulCircuit (main state) := .from_mapM_vector _ (by
+  have := ConstantLawfulCircuits.to_single (lawful := lawfulBody state)
+  infer_instance
+)
+
 -- #eval! main (p:=p_babybear) default |>.operations.local_length
 -- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
@@ -40,6 +45,8 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
   local_length_eq state i0 := by
     rw [main, Circuit.mapM_vector_local_length]
     dsimp only [lawful_norm, circuit_norm, lawfulBody, Not.circuit, And.And64.circuit, Xor.circuit]
+
+  initial_offset_eq state i := LawfulCircuit.initial_offset_eq (main state) i
 
   output _ i0 := #v[
     var_from_offset U64 (i0 + 8),
@@ -69,7 +76,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
     var_from_offset U64 (i0 + 392)
   ]
   output_eq state i := by
-    dsimp only [circuit_norm, main, not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit]
+    dsimp only [circuit_norm, main]
+    -- TODO need theorem about output of `mapM`!
+    sorry
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i env state_var state h_input state_norm h_holds
