@@ -221,11 +221,33 @@ theorem mapM_generic {xs : List α} :
   simp only [operations_ignore]
   trivial
 
-theorem mapM_generic_vector {xs : Vector α n} :
+theorem mapM_vector_generic {xs : Vector α n} :
   generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
   rw [mapM_generic_vector_iff_list, mapM_generic_iff_forM, ←Vector.forM_toList, forM_vector_generic]
   simp only [operations_ignore]
   trivial
+
+-- specialization to soundness / completeness
+
+theorem mapM_soundness {xs : List α} :
+  soundness env (xs.mapM circuit |>.operations n) ↔
+    xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
+  simp only [soundness_iff_generic, mapM_generic]
+
+theorem mapM_completeness {xs : List α} :
+  completeness env (xs.mapM circuit |>.operations n) ↔
+    xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
+  simp only [completeness_iff_generic, mapM_generic]
+
+theorem mapM_vector_soundness {xs : Vector α n} :
+  soundness env (xs.mapM circuit |>.operations m) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  simp only [soundness_iff_generic, mapM_vector_generic]
+
+theorem mapM_vector_completeness {xs : Vector α n} :
+  completeness env (xs.mapM circuit |>.operations m) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  simp only [completeness_iff_generic, mapM_vector_generic]
 end Circuit.constraints_hold
 end
