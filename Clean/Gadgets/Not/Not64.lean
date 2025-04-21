@@ -33,8 +33,8 @@ theorem not_bytewise_eq_sub {x : U64 (F p)} :
     x.is_normalized → (not64_bytewise_value x).value = 2^64 - 1 - x.value := by
   sorry
 
-theorem not_eq_sub {x : U64 (F p)} :
-    x.is_normalized → not64 x.value = 2^64 - 1 - x.value := by
+theorem not_eq_sub {x : ℕ} :
+    x < 2^64 → not64 x = 2^64 - 1 - x := by
   sorry
 
 theorem not_bytewise_normalized {x : U64 (F p)} :
@@ -55,7 +55,8 @@ def circuit : FormalCircuit (F p) U64 U64 where
     cases x
     simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
       not64_bytewise] at h_holds h_input ⊢
-    rw [not_eq_sub h_assumptions]
+    have x_lt := U64.value_lt_of_normalized h_assumptions
+    rw [not_eq_sub x_lt]
     simp_all only [U64.mk.injEq]
     clear h_input
 

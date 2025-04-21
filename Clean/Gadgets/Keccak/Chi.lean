@@ -97,8 +97,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
     ring_nf
 
   have h_input_not_value (i : Fin 25) : (Not.not64_bytewise_value state[i.val]).value = Not.not64 state[i.val].value := by
-    rw [Not.not_bytewise_eq_sub, ←Not.not_eq_sub]
-    all_goals (exact h_assumptions i)
+    have state_norm : state[i.val].is_normalized := h_assumptions i
+    rw [Not.not_bytewise_eq_sub state_norm, ←Not.not_eq_sub (U64.value_lt_of_normalized state_norm)]
 
   have h_not_normalized (i : Fin 25) : (Not.not64_bytewise_value state[i.val]).is_normalized := by
     apply Not.not_bytewise_normalized (h_assumptions i)
@@ -117,7 +117,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     and_self, imp_self, forall_const, true_and, and_imp, and_assoc, and_true] at h_holds
 
   simp_all [Not.not64, Specs.Keccak256.not_u64]
-  get_elem_tactic
+  and_intros <;> rfl
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   sorry
