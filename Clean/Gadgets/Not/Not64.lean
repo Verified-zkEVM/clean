@@ -9,9 +9,11 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 namespace Gadgets.Not
 def not8 (x : Expression (F p)) := 255 - x
 
-def not64 (x : Var U64 (F p)) : Var U64 (F p) :=
+def not64_bytewise (x : Var U64 (F p)) : Var U64 (F p) :=
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
   ⟨ not8 x0, not8 x1, not8 x2, not8 x3, not8 x4, not8 x5, not8 x6, not8 x7 ⟩
+
+def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 theorem not_zify (n : ℕ) {x : ℕ} (hx : x < n) : ((n - 1 - x : ℕ) : ℤ) = ↑n - 1 - ↑x := by
   have n_ge_1 : 1 ≤ n := by linarith
@@ -23,19 +25,24 @@ theorem not_lt (n : ℕ) {x : ℕ} (hx : x < n) : n - 1 - (x : ℤ) < n := by
   rw [←not_zify n hx, Int.ofNat_lt]
   exact Nat.sub_one_sub_lt_of_lt hx
 
+theorem not_eq_sub (x : U64 (F p)) :
+    x.is_normalized → not64 x.value = 2^64 - 1 - x.value := by
+  sorry
+
 def circuit : FormalCircuit (F p) U64 U64 where
-  main x := pure (not64 x)
+  main x := pure (not64_bytewise x)
   assumptions x := x.is_normalized
-  spec x z := z.value = 2^64 - 1 - x.value ∧ z.is_normalized
+  spec x z := z.value = not64 x.value ∧ z.is_normalized
 
   local_length _ := 0
-  output x _ := not64 x
+  output x _ := not64_bytewise x
 
   soundness := by
     intro i env x_var x h_input h_assumptions h_holds
     cases x
     simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
-      not8, not64] at h_holds h_input ⊢
+      not8, not64_bytewise] at h_holds h_input ⊢
+    rw [not_eq_sub _ h_assumptions]
     simp_all only [U64.mk.injEq]
     clear h_input
 
