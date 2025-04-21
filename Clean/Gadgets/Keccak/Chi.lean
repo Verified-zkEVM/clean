@@ -1,4 +1,5 @@
 import Clean.Types.U64
+import Clean.Circuit.Loops
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.And.And64
 import Clean.Gadgets.Not.Not64
@@ -15,33 +16,9 @@ def xor (x y : Var U64 (F p)) := subcircuit Xor.circuit ⟨x, y⟩
 def and (x y : Var U64 (F p)) := subcircuit And.And64.circuit ⟨x, y⟩
 def not (x : Var U64 (F p)) := subcircuit Not.circuit x
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do return #v[
-  ←xor (state.get 0) (←and (←not (state.get 5)) (state.get 10)),
-  ←xor (state.get 1) (←and (←not (state.get 6)) (state.get 11)),
-  ←xor (state.get 2) (←and (←not (state.get 7)) (state.get 12)),
-  ←xor (state.get 3) (←and (←not (state.get 8)) (state.get 13)),
-  ←xor (state.get 4) (←and (←not (state.get 9)) (state.get 14)),
-  ←xor (state.get 5) (←and (←not (state.get 10)) (state.get 15)),
-  ←xor (state.get 6) (←and (←not (state.get 11)) (state.get 16)),
-  ←xor (state.get 7) (←and (←not (state.get 12)) (state.get 17)),
-  ←xor (state.get 8) (←and (←not (state.get 13)) (state.get 18)),
-  ←xor (state.get 9) (←and (←not (state.get 14)) (state.get 19)),
-  ←xor (state.get 10) (←and (←not (state.get 15)) (state.get 20)),
-  ←xor (state.get 11) (←and (←not (state.get 16)) (state.get 21)),
-  ←xor (state.get 12) (←and (←not (state.get 17)) (state.get 22)),
-  ←xor (state.get 13) (←and (←not (state.get 18)) (state.get 23)),
-  ←xor (state.get 14) (←and (←not (state.get 19)) (state.get 24)),
-  ←xor (state.get 15) (←and (←not (state.get 20)) (state.get 0)),
-  ←xor (state.get 16) (←and (←not (state.get 21)) (state.get 1)),
-  ←xor (state.get 17) (←and (←not (state.get 22)) (state.get 2)),
-  ←xor (state.get 18) (←and (←not (state.get 23)) (state.get 3)),
-  ←xor (state.get 19) (←and (←not (state.get 24)) (state.get 4)),
-  ←xor (state.get 20) (←and (←not (state.get 0)) (state.get 5)),
-  ←xor (state.get 21) (←and (←not (state.get 1)) (state.get 6)),
-  ←xor (state.get 22) (←and (←not (state.get 2)) (state.get 7)),
-  ←xor (state.get 23) (←and (←not (state.get 3)) (state.get 8)),
-  ←xor (state.get 24) (←and (←not (state.get 4)) (state.get 9))
-]
+def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+  Vector.finRange 25 |>.mapM fun i => do
+    xor (state.get i) (←and (←not (state.get (i + 5))) (state.get (i + 10)))
 
 def assumptions := KeccakState.is_normalized (p:=p)
 
@@ -49,13 +26,20 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
+instance lawfulBody (state : Var KeccakState (F p)) : ConstantLawfulCircuits (fun i => do
+  xor (state.get i) (←and (←not (state.get (i + 5))) (state.get (i + 10)))
+) := ConstantLawfulCircuits.from_constant_length
+  (by dsimp only [xor, not, and]; infer_lawful_circuit)
+  (by intros; ac_rfl)
+
 -- #eval! main (p:=p_babybear) default |>.operations.local_length
 -- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
   main
   local_length _ := 400
-  local_length_eq state i := by
-    dsimp only [circuit_norm, main, not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit]
+  local_length_eq state i0 := by
+    rw [main, Circuit.mapM_vector_local_length]
+    dsimp only [lawful_norm, circuit_norm, lawfulBody, Not.circuit, And.And64.circuit, Xor.circuit]
 
   output _ i0 := #v[
     var_from_offset U64 (i0 + 8),

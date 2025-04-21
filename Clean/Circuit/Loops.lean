@@ -29,7 +29,8 @@ instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x
   rw [Vector.forM_toList]
   apply from_forM
 
-instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β] [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
+instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
+    (xs : Vector α n) (lawful : ∀ x : α, LawfulCircuit (circuit x)) :
     LawfulCircuit (xs.mapM circuit) := by
   induction xs using Vector.induct_push
   case nil => rw [Vector.mapM_mk_empty]; infer_instance
