@@ -8,6 +8,8 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 open Gadgets.Keccak256 (KeccakState)
+open Bitwise (not64)
+open Not (not64_bytewise not64_bytewise_value)
 
 def xor (x y : Var U64 (F p)) := subcircuit Xor.circuit ⟨x, y⟩
 def and (x y : Var U64 (F p)) := subcircuit And.And64.circuit ⟨x, y⟩
@@ -86,37 +88,34 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
     dsimp only [circuit_norm, main, not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit]
 
 theorem soundness : Soundness (F p) assumptions spec := by
-  intro i env state_var state h_input h_assumptions h_holds
+  intro i env state_var state h_input state_norm h_holds
 
   have h_input' (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
     rw [←h_input, eval_vector, Vector.getElem_map]
 
-  have h_input_not (i : Fin 25) : (eval env (Not.not64_bytewise state_var[i.val])) = Not.not64_bytewise_value state[i.val] := by
-    rw [←h_input']
-    simp only [Not.not64_bytewise, Not.not64_bytewise_value, eval, circuit_norm]
-    ring_nf
+  have h_input_not (i : Fin 25) : (eval env (not64_bytewise state_var[i.val])) = not64_bytewise_value state[i.val] := by
+    rw [←h_input', Not.eval_not]
 
-  have h_input_not_value (i : Fin 25) : (Not.not64_bytewise_value state[i.val]).value = Not.not64 state[i.val].value := by
-    have state_norm : state[i.val].is_normalized := h_assumptions i
-    rw [Not.not_bytewise_eq_sub state_norm, ←Not.not_eq_sub (U64.value_lt_of_normalized state_norm)]
+  have h_not_value (i : Fin 25) : (not64_bytewise_value state[i.val]).value = not64 state[i.val].value :=
+    (Not.not_bytewise_value_spec (state_norm i)).left
 
-  have h_not_normalized (i : Fin 25) : (Not.not64_bytewise_value state[i.val]).is_normalized := by
-    apply Not.not_bytewise_normalized (h_assumptions i)
+  have h_not_normalized (i : Fin 25) : (not64_bytewise_value state[i.val]).is_normalized :=
+    (Not.not_bytewise_value_spec (state_norm i)).right
 
   simp only [circuit_norm, spec, KeccakState.is_normalized_iff,
     Specs.Keccak256.chi, KeccakState.value, eval_vector,
     Array.mk.injEq, List.cons.injEq, and_true]
-  simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at h_assumptions
+  simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
 
   dsimp only [circuit_norm, main,
     not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit] at h_holds
   simp only [circuit_norm, subcircuit_norm, Xor.assumptions, Xor.spec,
     And.And64.assumptions, And.And64.spec] at h_holds
 
-  simp only [h_input', h_assumptions, h_input_not, h_input_not_value, h_not_normalized,
+  simp only [h_input', h_input_not, h_not_value, state_norm, h_not_normalized,
     and_self, imp_self, forall_const, true_and, and_imp, and_assoc, and_true] at h_holds
 
-  simp_all [Not.not64, Specs.Keccak256.not_u64]
+  simp_all [not64, Specs.Keccak256.not_u64]
   and_intros <;> rfl
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
