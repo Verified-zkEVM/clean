@@ -176,17 +176,17 @@ instance ConstantLawfulCircuits.ignore (circuit : α → Circuit F β) [lawful :
 lemma LawfulCircuit.ignore_final_offset {circuit : Circuit F β} [LawfulCircuit circuit] :
     final_offset (circuit.ignore) = final_offset circuit := rfl
 
-namespace Circuit.constraints_hold
-variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
-variable {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
-
--- `.operations` doesn't care about circuit outputs
+  -- `.operations` doesn't care about circuit outputs
 
 lemma operations_map {circuit : Circuit F α} (f : α → β) :
     (f <$> circuit).operations n = circuit.operations n := rfl
 
 lemma operations_ignore {circuit : Circuit F α} :
     circuit.ignore.operations n = circuit.operations n := rfl
+
+namespace Circuit.constraints_hold
+variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
 
 lemma mapM_generic_iff_forM {xs : List α} :
   generic from_subcircuit env (xs.mapM circuit |>.operations n) ↔
@@ -249,5 +249,14 @@ theorem mapM_vector_completeness {xs : Vector α n} :
   completeness env (xs.mapM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
   simp only [completeness_iff_generic, mapM_vector_generic]
-end Circuit.constraints_hold
+end constraints_hold
+
+theorem mapM_vector_local_length {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
+  {xs : Vector α m} {n : ℕ} :
+    ((xs.mapM circuit).operations n).local_length = lawful.local_length * m := by
+  suffices ((xs.toList.mapM circuit).operations n).local_length = lawful.local_length * m by
+    rw [←Vector.mapM_toList, operations_map] at this
+    exact this
+  simp [mapM_local_length]
+end Circuit
 end
