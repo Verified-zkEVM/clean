@@ -62,8 +62,18 @@ def induct {motive : {n: ℕ} → Vector α n → Sort u}
     let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 
+structure ToPush (v : Vector α (n + 1)) where
+  as : Vector α n
+  a : α
+  h : v = as.push a
+
+def to_push (v : Vector α (n + 1)) : ToPush v where
+  as := v.take n |>.cast Nat.min_add_right
+  a := v[n]
+  h := by rcases v with ⟨ ⟨xs⟩, h ⟩; simp_all
+
 /- induction principle for Vector.push -/
-def induct_push {motive : {n: ℕ} → Vector α n → Prop}
+def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
   (push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a))
   {n: ℕ} (v: Vector α n) : motive v := by
@@ -75,8 +85,7 @@ def induct_push {motive : {n: ℕ} → Vector α n → Prop}
   | ⟨ .mk (a::as), h ⟩ =>
     have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
     subst this
-    -- TODO this should be constructive, so that `motive` can return a `Sort u`
-    obtain ⟨ as', a', ih ⟩ := exists_push (xs := ⟨.mk (a :: as), rfl⟩)
+    obtain ⟨ as', a', ih ⟩ := to_push ⟨.mk (a :: as), rfl⟩
     have ih' : motive as' := induct_push nil push as'
     have h' := push _ a' ih'
     rwa [ih]
@@ -221,4 +230,16 @@ theorem toChunks_push (m: ℕ+) {α : Type} (vs : Vector α (n*m)) (v : Vector �
     (vs.toChunks m).push v = ((vs ++ v).cast h).toChunks m := by
   simp only
   rw [Vector.eq_iff_flatten_eq, toChunks_flatten, flatten_push, toChunks_flatten]
+
+theorem mapM_singleton (a : α) {m : Type → Type} [Monad m] [LawfulMonad m] (f : α → m β) :
+    #v[a].mapM f = (do pure #v[←f a]) := by
+  simp [mapM, mapM.go]
+
+theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad m] [Nonempty β] (f : α → m β) (a : α) :
+    (as.push a).mapM f = (do
+      let bs ← as.mapM f
+      let b ← f a
+      pure (bs.push b)) := by
+  rw [←append_singleton, mapM_append, mapM_singleton]
+  simp only [bind_pure_comp, Functor.map_map, append_singleton]
 end Vector

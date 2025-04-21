@@ -10,14 +10,34 @@ instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [∀ x : α, 
   case nil => rw [List.forM_nil]; infer_instance
   case cons x xs ih => rw [List.forM_cons]; exact from_bind inferInstance inferInstance
 
+instance LawfulCircuit.from_mapM {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
+    LawfulCircuit (xs.mapM circuit) := by
+  induction xs
+  case nil => rw [List.mapM_nil]; infer_instance
+  case cons x xs ih =>  rw [List.mapM_cons]; infer_lawful_circuit
+
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     forM xs body = forM xs.toList body := by
   rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+
+lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m Unit) :
+    (fun v => v.toArray.toList) <$> (xs.mapM body) = xs.toList.mapM body := by
+  rw [←Array.toList_mapM, ←Vector.toArray_mapM, Functor.map_map]
 
 instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
     LawfulCircuit (forM xs circuit) := by
   rw [Vector.forM_toList]
   apply from_forM
+
+instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
+    LawfulCircuit (xs.mapM circuit) := by
+  induction xs using Vector.induct_push
+  case nil => rw [Vector.mapM_mk_empty]; infer_instance
+  case push xs x ih =>
+   rw [Vector.mapM_push]
+   apply from_bind ih
+   intro a
+   exact from_bind inferInstance inferInstance
 
 theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
   {xs : List α} {n : ℕ} :
