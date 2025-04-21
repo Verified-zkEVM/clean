@@ -10,7 +10,7 @@ instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [∀ x : α, 
   case nil => rw [List.forM_nil]; infer_instance
   case cons x xs ih => rw [List.forM_cons]; exact from_bind inferInstance inferInstance
 
-instance LawfulCircuit.from_mapM {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
+instance LawfulCircuit.from_mapM {circuit : α → Circuit F β} [∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
     LawfulCircuit (xs.mapM circuit) := by
   induction xs
   case nil => rw [List.mapM_nil]; infer_instance
@@ -20,7 +20,7 @@ lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body 
     forM xs body = forM xs.toList body := by
   rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
 
-lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m Unit) :
+lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m β) :
     (fun v => v.toArray.toList) <$> (xs.mapM body) = xs.toList.mapM body := by
   rw [←Array.toList_mapM, ←Vector.toArray_mapM, Functor.map_map]
 
@@ -29,7 +29,7 @@ instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x
   rw [Vector.forM_toList]
   apply from_forM
 
-instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
+instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β] [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
     LawfulCircuit (xs.mapM circuit) := by
   induction xs using Vector.induct_push
   case nil => rw [Vector.mapM_mk_empty]; infer_instance
@@ -39,7 +39,8 @@ instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F Unit} [∀ x
    intro a
    exact from_bind inferInstance inferInstance
 
-theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
+namespace Circuit
+theorem forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
   {xs : List α} {n : ℕ} :
     ((forM xs circuit).operations n).local_length = lawful.local_length * xs.length := by
   set k := lawful.local_length
@@ -51,10 +52,26 @@ theorem Circuit.forM_local_length {circuit : α → Circuit F Unit} [lawful : Co
     rw [List.forM_cons, LawfulCircuit.bind_local_length, LawfulCircuit.local_length_eq, ih]
     rw [List.length_cons, mul_add, mul_one, add_comm _ k]
     rfl
+    all_goals infer_instance
 
-namespace Circuit.constraints_hold
+theorem mapM_local_length {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
+  {xs : List α} {n : ℕ} :
+    ((xs.mapM circuit).operations n).local_length = lawful.local_length * xs.length := by
+  set k := lawful.local_length
+  induction xs generalizing n with
+  | nil =>
+    rw [List.mapM_nil, LawfulCircuit.local_length_eq]
+    rfl
+  | cons x xs ih =>
+    rw [List.mapM_cons]
+    rw [LawfulCircuit.bind_local_length _ _ inferInstance (fun x => LawfulCircuit.from_bind inferInstance inferInstance)]
+    rw [LawfulCircuit.bind_local_length _ _ inferInstance inferInstance]
+    rw [ih, List.length_cons, mul_add, mul_one, add_comm _ k, LawfulCircuit.local_length_eq]
+    rfl
+
+namespace constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
-
+section
 variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
 variable {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
 
@@ -134,4 +151,81 @@ theorem forM_vector_soundness' {xs : Vector α n} :
   rw [←Vector.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
   specialize h x hx i hxi
   use m + i * lawful.local_length
+end
+
 end Circuit.constraints_hold
+section
+def Circuit.ignore (circuit : Circuit F β) : Circuit F Unit := do
+  let _ ← circuit
+
+instance LawfulCircuit.ignore (circuit : Circuit F β) [LawfulCircuit circuit] :
+    LawfulCircuit (circuit.ignore) := by infer_lawful_circuit
+
+instance ConstantLawfulCircuits.ignore (circuit : α → Circuit F β) [lawful : ConstantLawfulCircuits circuit] :
+    ConstantLawfulCircuits (fun x => (circuit x).ignore) where
+  output _ _ := ()
+  local_length := local_length circuit
+  operations x n := operations x n
+  offset_independent x ops := by
+    change (circuit x ops).2.offset = _
+    apply offset_independent
+  append_only x ops := by
+    change (circuit x ops).2 = _
+    apply append_only
+
+lemma LawfulCircuit.ignore_final_offset {circuit : Circuit F β} [LawfulCircuit circuit] :
+    final_offset (circuit.ignore) = final_offset circuit := rfl
+
+namespace Circuit.constraints_hold
+variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
+
+-- `.operations` doesn't care about circuit outputs
+
+lemma operations_map {circuit : Circuit F α} (f : α → β) :
+    (f <$> circuit).operations n = circuit.operations n := rfl
+
+lemma operations_ignore {circuit : Circuit F α} :
+    circuit.ignore.operations n = circuit.operations n := rfl
+
+lemma mapM_generic_iff_forM {xs : List α} :
+  generic from_subcircuit env (xs.mapM circuit |>.operations n) ↔
+    generic from_subcircuit env (forM xs (fun a => (circuit a).ignore) |>.operations n) := by
+
+  induction xs generalizing n with
+  | nil =>
+    exact ⟨ fun _ => trivial, fun _ => trivial ⟩
+  | cons xs x ih =>
+    rw [List.mapM_cons, List.forM_cons]
+    rw [bind_generic, bind_generic, bind_generic, ih]
+    constructor
+    · rintro ⟨ h, hrest, hpure ⟩
+      rw [LawfulCircuit.ignore_final_offset]
+      exact ⟨ h, hrest ⟩
+    · rintro ⟨ h, hrest ⟩
+      rw [LawfulCircuit.ignore_final_offset] at hrest
+      use h, hrest
+      simp only [generic, circuit_norm]
+    infer_lawful_circuit
+
+omit lawful in
+lemma mapM_generic_vector_iff_list {xs : Vector α n} :
+  generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
+    generic from_subcircuit env (xs.toList.mapM circuit |>.operations m) := by
+  rw [←Vector.mapM_toList xs, operations_map]
+
+theorem mapM_generic {xs : List α} :
+  generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
+    xs.zipIdx.Forall fun (x, i) => generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  rw [mapM_generic_iff_forM, forM_generic]
+  simp only [operations_ignore]
+  trivial
+
+theorem mapM_generic_vector {xs : Vector α n} :
+  generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
+  rw [mapM_generic_vector_iff_list, mapM_generic_iff_forM, ←Vector.forM_toList, forM_vector_generic]
+  simp only [operations_ignore]
+  trivial
+end Circuit.constraints_hold
+end
