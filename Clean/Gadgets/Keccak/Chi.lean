@@ -41,12 +41,20 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   ←xor state[24] (←and (←not state[4]) state[9])
 ]
 
-#eval! main (p:=p_babybear) default |>.operations.local_length
-#eval! main (p:=p_babybear) default |>.output
+def assumptions := KeccakState.is_normalized (p:=p)
 
+def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+  out_state.is_normalized
+  ∧ out_state.value = Specs.Keccak256.chi state.value
+
+-- #eval! main (p:=p_babybear) default |>.operations.local_length
+-- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
-  main := main
+  main
   local_length _ := 400
+  local_length_eq state i := by
+    dsimp only [circuit_norm, main, not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit]
+
   output _ i0 := #v[
     var_from_offset U64 (i0 + 8),
     var_from_offset U64 (i0 + 24),
@@ -74,5 +82,18 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
     var_from_offset U64 (i0 + 376),
     var_from_offset U64 (i0 + 392)
   ]
+  output_eq state i := by
+    dsimp only [circuit_norm, main, not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit]
 
+theorem soundness : Soundness (F p) assumptions spec := by
+  sorry
+
+theorem completeness : Completeness (F p) KeccakState assumptions := by
+  sorry
+
+def circuit : FormalCircuit (F p) KeccakState KeccakState where
+  assumptions
+  spec
+  soundness
+  completeness
 end Gadgets.Keccak256.Chi
