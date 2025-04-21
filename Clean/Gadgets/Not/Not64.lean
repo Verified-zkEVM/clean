@@ -7,11 +7,15 @@ section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Not
-def not8 (x : Expression (F p)) := 255 - x
-
 def not64_bytewise (x : Var U64 (F p)) : Var U64 (F p) :=
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
-  ⟨ not8 x0, not8 x1, not8 x2, not8 x3, not8 x4, not8 x5, not8 x6, not8 x7 ⟩
+  ⟨ 255 - x0, 255 - x1, 255 - x2, 255 - x3, 255 - x4, 255 - x5, 255 - x6, 255 - x7 ⟩
+
+def not64_bytewise_value (x : U64 (F p)) : U64 (F p) :=
+  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
+  ⟨ 255 - x0, 255 - x1, 255 - x2, 255 - x3, 255 - x4, 255 - x5, 255 - x6, 255 - x7 ⟩
+
+def u64_max : ℕ := 0xffffffffffffffff
 
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
@@ -25,8 +29,17 @@ theorem not_lt (n : ℕ) {x : ℕ} (hx : x < n) : n - 1 - (x : ℤ) < n := by
   rw [←not_zify n hx, Int.ofNat_lt]
   exact Nat.sub_one_sub_lt_of_lt hx
 
-theorem not_eq_sub (x : U64 (F p)) :
+theorem not_bytewise_eq_sub {x : U64 (F p)} :
+    x.is_normalized → (not64_bytewise_value x).value = 2^64 - 1 - x.value := by
+  sorry
+
+theorem not_eq_sub {x : U64 (F p)} :
     x.is_normalized → not64 x.value = 2^64 - 1 - x.value := by
+  sorry
+
+theorem not_bytewise_normalized {x : U64 (F p)} :
+    x.is_normalized → (not64_bytewise_value x).is_normalized := by
+  intro h
   sorry
 
 def circuit : FormalCircuit (F p) U64 U64 where
@@ -41,8 +54,8 @@ def circuit : FormalCircuit (F p) U64 U64 where
     intro i env x_var x h_input h_assumptions h_holds
     cases x
     simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
-      not8, not64_bytewise] at h_holds h_input ⊢
-    rw [not_eq_sub _ h_assumptions]
+      not64_bytewise] at h_holds h_input ⊢
+    rw [not_eq_sub h_assumptions]
     simp_all only [U64.mk.injEq]
     clear h_input
 
