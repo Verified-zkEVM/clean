@@ -265,7 +265,7 @@ def witness (compute : Environment F → F) := do
 @[circuit_norm]
 def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) :=
   modifyGet fun ops =>
-    let vars := Vector.natInit n fun i => ⟨ ops.offset + i ⟩
+    let vars := Vector.mapRange n fun i => ⟨ ops.offset + i ⟩
     ⟨vars, .witness ops n compute⟩
 
 /-- Add a constraint. -/
@@ -556,14 +556,14 @@ def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (E
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.init (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
+      ⟨ (Vector.mapFinRange (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
         simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
     | assert _ | lookup _ =>
       ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 
 def Operations.witness_generators {n: ℕ} : (ops: Operations F n) → Vector (Environment F → F) ops.local_length
   | .empty _ => #v[]
-  | .witness ops _ c => witness_generators ops ++ Vector.init (fun i env => (c env).get i)
+  | .witness ops _ c => witness_generators ops ++ Vector.mapFinRange (fun i env => (c env).get i)
   | .assert ops _ => witness_generators ops
   | .lookup ops _ => witness_generators ops
   | .subcircuit ops s => witness_generators ops ++ (s.local_length_eq ▸ FlatOperation.witness_generators s.ops)
@@ -594,7 +594,7 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.init Vector.natInit Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.mapFinRange Vector.mapRange Vector.toArray_push Array.push_toList List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)

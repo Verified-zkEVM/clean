@@ -38,7 +38,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
 
   initial_offset_eq state i := LawfulCircuit.initial_offset_eq (main state) i
 
-  output _ i0 :=  Vector.natInit 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
+  output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
   output_eq state i := by
     rw [LawfulCircuit.output_eq]
     simp only [lawful_norm, lawful, Xor.circuit, And.And64.circuit, Not.circuit]
@@ -46,8 +46,8 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.chi state = .init fun i => state[i] ^^^ ((not64 state[i + 5]) &&& state[i + 10]) := by
-  rw [Specs.Keccak256.chi, Vector.init, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+    Specs.Keccak256.chi state = .mapFinRange fun i => state[i] ^^^ ((not64 state[i + 5]) &&& state[i + 10]) := by
+  rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
 theorem soundness : Soundness (F p) assumptions spec := by

@@ -29,7 +29,8 @@ instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x
   rw [Vector.forM_toList]
   apply from_forM
 
-instance LawfulCircuit.from_mapM_vector' {circuit : α → Circuit F β} [Nonempty β]
+/-- TODO remove in favor of `ConstantLawfulCircuit.from_mapM_vector` -/
+instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
   (xs : Vector α n) (lawful : ∀ x : α, LawfulCircuit (circuit x)) :
     LawfulCircuit (xs.mapM circuit) := by
   induction xs using Vector.induct_push
@@ -184,13 +185,14 @@ def Circuit.ignore (circuit : Circuit F β) : Circuit F Unit := do
   let _ ← circuit
 
 instance LawfulCircuit.ignore (circuit : Circuit F β) [LawfulCircuit circuit] :
-    LawfulCircuit (circuit.ignore) := by infer_lawful_circuit
+    LawfulCircuit circuit.ignore := by infer_lawful_circuit
 
 instance ConstantLawfulCircuits.ignore (circuit : α → Circuit F β) [lawful : ConstantLawfulCircuits circuit] :
     ConstantLawfulCircuits (fun x => (circuit x).ignore) where
   output _ _ := ()
   local_length := local_length circuit
   operations x n := operations x n
+
   offset_independent x ops := by
     change (circuit x ops).2.offset = _
     apply offset_independent
@@ -199,7 +201,7 @@ instance ConstantLawfulCircuits.ignore (circuit : α → Circuit F β) [lawful :
     apply append_only
 
 lemma LawfulCircuit.ignore_final_offset {circuit : Circuit F β} [LawfulCircuit circuit] :
-    final_offset (circuit.ignore) = final_offset circuit := rfl
+    final_offset circuit.ignore = final_offset circuit := rfl
 
   -- `.operations` doesn't care about circuit outputs
 

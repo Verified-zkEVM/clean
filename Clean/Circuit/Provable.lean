@@ -94,7 +94,7 @@ instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
 
 def var_from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
-  let vars := Vector.natInit (size α) fun i => var ⟨offset + i⟩
+  let vars := Vector.mapRange (size α) fun i => var ⟨offset + i⟩
   from_vars vars
 end ProvableType
 
@@ -273,7 +273,7 @@ theorem from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (off
 where
   from_offset_eq_from_offset_struct_aux : (cs : List WithProvableType) → (offset: ℕ) →
     var_from_offset.go cs offset = (
-      Vector.natInit (combined_size' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> components_from_elements cs)
+      Vector.mapRange (combined_size' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> components_from_elements cs)
     | [], _ => rfl
     | c :: cs, offset => by
       simp only [var_from_offset.go, components_from_elements, ProvableType.var_from_offset, from_vars]
@@ -325,7 +325,7 @@ theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α]
 
 theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : Nat) :
     var_from_offset (F:=F) (ProvableVector α n) offset
-    = .natInit n fun i => var_from_offset α (offset + (size α)*i) := by
+    = .mapRange n fun i => var_from_offset α (offset + (size α)*i) := by
   induction n with
   | zero => rfl
   | succ n ih =>

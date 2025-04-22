@@ -93,39 +93,39 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
 
-def init {n} (create: Fin n → α) : Vector α n := finRange n |>.map create
+def mapFinRange {n} (create: Fin n → α) : Vector α n := finRange n |>.map create
 
 theorem cast_init {n} {create: Fin n → α} (h : n = m) :
-    init create = (init (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
+    mapFinRange create = (mapFinRange (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
   subst h; simp
 
 theorem getElemFin_init {n} {create: Fin n → α} :
-    ∀ i : Fin n, (init create)[i] = create i := by
-  simp [init, finRange]
+    ∀ i : Fin n, (mapFinRange create)[i] = create i := by
+  simp [mapFinRange, finRange]
 
 theorem getElem_init {n} {create: Fin n → α} :
-    ∀ (i : ℕ) (hi : i < n), (init create)[i] = create ⟨ i, hi ⟩ := by
-  simp [init, finRange]
+    ∀ (i : ℕ) (hi : i < n), (mapFinRange create)[i] = create ⟨ i, hi ⟩ := by
+  simp [mapFinRange, finRange]
 
-def natInit (n: ℕ) (create: ℕ → α) : Vector α n :=
+def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=
   match n with
   | 0 => #v[]
-  | k + 1 => natInit k create |>.push (create k)
+  | k + 1 => mapRange k create |>.push (create k)
 
 @[simp]
-theorem natInit_zero {create: ℕ → α} : natInit 0 create = #v[] := rfl
+theorem natInit_zero {create: ℕ → α} : mapRange 0 create = #v[] := rfl
 
 @[simp]
 theorem natInit_succ {n} {create: ℕ → α} :
-    natInit (n + 1) create = (natInit n create).push (create n) := rfl
+    mapRange (n + 1) create = (mapRange n create).push (create n) := rfl
 
 theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
-    natInit n create = (natInit m create).cast h.symm := by
+    mapRange n create = (mapRange m create).cast h.symm := by
   subst h; simp
 
 @[simp]
 theorem getElem_natInit {n} {create: ℕ → α} :
-    ∀ (i : ℕ) (hi : i < n), (natInit n create)[i] = create i := by
+    ∀ (i : ℕ) (hi : i < n), (mapRange n create)[i] = create i := by
   intros i hi
   induction n
   case zero => simp at hi
@@ -138,10 +138,10 @@ theorem getElem_natInit {n} {create: ℕ → α} :
       rw [getElem_push_eq]
 
 theorem natInit_add_eq_append {n m} (create: ℕ → α) :
-    natInit (n + m) create = natInit n create ++ natInit m (fun i => create (n + i)) := by
+    mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
   induction m with
-  | zero => simp only [Nat.add_zero, natInit, append_empty]
-  | succ m ih => simp only [natInit, Nat.add_eq, append_push, ih]
+  | zero => simp only [Nat.add_zero, mapRange, append_empty]
+  | succ m ih => simp only [mapRange, Nat.add_eq, append_push, ih]
 
 @[simp]
 def fill (n : ℕ) (a: α) : Vector α n :=

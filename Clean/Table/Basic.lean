@@ -199,7 +199,7 @@ def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : Cell
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
-  let row_vars : Vector (Cell W S) (size S) := .init fun col => .input ⟨ row, col ⟩
+  let row_vars : Vector (Cell W S) (size S) := .mapFinRange fun col => .input ⟨ row, col ⟩
   {
     offset := assignment.offset + size S
     aux_length := assignment.aux_length
@@ -311,7 +311,7 @@ def output {α: Type} (table : TableConstraint W S F α) : α :=
 @[table_norm, table_assignment_norm]
 def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
-    let vars := Vector.natInit (size S) (fun i => ctx.offset + i)
+    let vars := Vector.mapRange (size S) (fun i => ctx.offset + i)
     let ctx' : TableContext W S F := {
       circuit := ctx.circuit.witness (size S) (fun env => vars.map fun i => env.get i),
       assignment := ctx.assignment.push_row row

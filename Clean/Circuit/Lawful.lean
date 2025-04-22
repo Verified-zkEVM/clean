@@ -79,7 +79,7 @@ instance : ConstantLawfulCircuits (F:=F) witness_var where
   operations c n := ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩
 
 instance {k : ℕ} {c : Environment F → Vector F k} : ConstantLawfulCircuit (witness_vars k c) where
-  output n := .natInit k fun i => ⟨n + i⟩
+  output n := .mapRange k fun i => ⟨n + i⟩
   local_length := k
   operations n := ⟨.witness (.empty n) k c, rfl⟩
 
