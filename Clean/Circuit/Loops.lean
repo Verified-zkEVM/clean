@@ -292,11 +292,18 @@ theorem mapFinRangeM_generic {n : ℕ} :
   case mpr =>
     intro h i
     intro _ i' hi'
+    -- TODO can we simplify this?
     have hi : i' = i.val := by
       rw [Vector.mem_zipIdx_iff_getElem?, Vector.finRange] at hi'
       simp only [Vector.getElem?_mk, List.getElem?_toArray, List.finRange_eq_pmap_range] at hi'
       simp only [List.getElem?_pmap, Option.pmap_eq_some_iff, exists_and_left] at hi'
-      sorry
+      obtain ⟨ ival, hival, ival_lt, ival_eq ⟩ := hi'
+      rw [ival_eq]
+      rw [List.getElem?_range, Option.some_inj] at hival
+      exact hival
+      rw [List.getElem?_eq_some_iff] at hival
+      obtain ⟨ hlt, _ ⟩ := hival
+      simpa using hlt
     subst hi
     exact h i
 

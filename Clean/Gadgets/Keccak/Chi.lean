@@ -99,8 +99,7 @@ theorem completeness : Completeness (F p) KeccakState assumptions := by
   simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
 
   -- TODO need theorem about `env.uses_local_witnesses_completeness (Vector.mapM ...)`
-  dsimp only [circuit_norm, main, Vector.mapFinRangeM,
-    not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit] at h_env
+  dsimp only [circuit_norm, main, Vector.mapFinRangeM, Xor.circuit, And.And64.circuit, Not.circuit] at h_env
   sorry
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
