@@ -213,6 +213,10 @@ lemma append_only' {circuit : Circuit F α} [lawful : LawfulCircuit circuit] :
   repeat exact offset_independent ops |>.symm
   rw [heq_eqRec_iff_heq, heq_eq_eq]
 
+theorem output_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+    circuit.output n = output circuit n := by
+  apply output_independent
+
 theorem final_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.final_offset n = final_offset circuit n := by
   apply offset_independent
@@ -297,3 +301,4 @@ end Circuit.constraints_hold
 attribute [lawful_norm] LawfulCircuit.final_offset LawfulCircuit.operations LawfulCircuit.output ConstantLawfulCircuit.local_length
 attribute [lawful_norm] ConstantLawfulCircuits.output ConstantLawfulCircuits.local_length ConstantLawfulCircuits.operations
   ConstantLawfulCircuits.from_constant_length id_eq
+attribute [lawful_norm] ElaboratedCircuit.local_length ElaboratedCircuit.output
