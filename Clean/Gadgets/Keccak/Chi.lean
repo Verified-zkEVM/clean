@@ -88,36 +88,20 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i env state_var h_env state h_input state_norm
-  stop
 
-  have h_input' (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
-    rw [←h_input, eval_vector, Vector.getElem_map]
-
-  have h_input_not (i : Fin 25) : (eval env (not64_bytewise state_var[i.val])) = not64_bytewise_value state[i.val] := by
-    rw [←h_input', Not.eval_not]
-
-  have h_not_value (i : Fin 25) : (not64_bytewise_value state[i.val]).value = not64 state[i.val].value :=
-    (Not.not_bytewise_value_spec (state_norm i)).left
-
-  have h_not_normalized (i : Fin 25) : (not64_bytewise_value state[i.val]).is_normalized :=
-    (Not.not_bytewise_value_spec (state_norm i)).right
+  -- simplify constraints using mapM theory
+  simp only [elaborated, main]
+  rw [Circuit.constraints_hold.mapFinRangeM_completeness (lawfulFin := by infer_constant_lawful_circuits)]
+  simp only [circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+    Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd]
+  intro i
 
   simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
-  dsimp only [circuit_norm, main,
+
+  -- TODO need theorem about `env.uses_local_witnesses_completeness (Vector.mapM ...)`
+  dsimp only [circuit_norm, main, Vector.mapFinRangeM,
     not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit] at h_env
-  simp only [circuit_norm, subcircuit_norm, Xor.assumptions, Xor.spec,
-    And.And64.assumptions, And.And64.spec] at h_env
-  simp only [h_input', h_input_not, h_not_value, state_norm, h_not_normalized,
-    and_self, imp_self, forall_const, true_and, and_imp, and_assoc, and_true] at h_env
-
-  dsimp only [circuit_norm, main,
-    not, xor, and, Xor.circuit, And.And64.circuit, Not.circuit]
-  simp only [circuit_norm, subcircuit_norm, Xor.assumptions, Xor.spec,
-    And.And64.assumptions, And.And64.spec]
-  simp only [h_input', h_input_not, h_not_value, state_norm, h_not_normalized,
-    and_self, imp_self, forall_const, true_and, and_imp, and_assoc, and_true]
-
-  simp_all
+  sorry
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   assumptions
