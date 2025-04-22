@@ -13,7 +13,7 @@ open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
-  Vector.finRange 25 |>.mapM fun i => do
+  Vector.mapFinRangeM 25 fun i => do
     let state_not ← subcircuit Not.circuit (state.get (i + 5))
     let state_and ← subcircuit And.And64.circuit ⟨state_not, state.get (i + 10)⟩
     subcircuit Xor.circuit ⟨state.get i, state_and⟩
@@ -72,20 +72,11 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   -- simplify constraints using mapM theory
   simp only [elaborated, main] at h_holds
-  rw [Circuit.constraints_hold.mapM_vector_soundness (lawful := by infer_constant_lawful_circuits)] at h_holds
+  rw [Circuit.constraints_hold.mapFinRangeM_soundness (lawfulFin := by infer_constant_lawful_circuits)] at h_holds
   simp only [circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd] at h_holds
 
-  -- TODO: this would be simpler if we had special theorems about Vector.finRange loops
   intro i
-  specialize h_holds i
-  have : i ∈ Vector.finRange 25 := by simp [Vector.finRange]
-  specialize h_holds this i
-  have : (i, ↑i) ∈ (Vector.finRange 25).zipIdx := by
-    simp only [Vector.mem_zipIdx_iff_getElem?, Fin.is_lt, Vector.getElem?_eq_getElem, Option.some.injEq]
-    simp [Vector.finRange]
-  specialize h_holds this
-
   have h_input (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
     rw [←h_input, eval_vector, Vector.getElem_map]
 

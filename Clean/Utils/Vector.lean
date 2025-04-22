@@ -267,4 +267,8 @@ theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad 
       pure (bs.push b)) := by
   rw [←append_singleton, mapM_append, mapM_singleton]
   simp only [bind_pure_comp, Functor.map_map, append_singleton]
+
+def mapRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : ℕ → m β) : m (Vector β n) := (range n).mapM f
+
+def mapFinRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : Fin n → m β) : m (Vector β n) := (finRange n).mapM f
 end Vector

@@ -213,6 +213,7 @@ lemma operations_ignore {circuit : Circuit F α} :
 
 namespace Circuit.constraints_hold
 variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+section
 variable {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
 
 lemma mapM_generic_iff_forM {xs : List α} :
@@ -276,8 +277,52 @@ theorem mapM_vector_completeness {xs : Vector α n} :
   completeness env (xs.mapM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
   simp only [completeness_iff_generic, mapM_vector_generic]
+end
+
+-- specialization to mapRangeM / mapFinRangeM
+section
+variable {circuitNat : ℕ → Circuit F β} [lawfulNat : ConstantLawfulCircuits circuitNat]
+variable {circuitFin : Fin m → Circuit F β} [lawfulFin : ConstantLawfulCircuits circuitFin]
+
+theorem mapFinRangeM_generic {n : ℕ} :
+  generic from_subcircuit env (Vector.mapFinRangeM m circuitFin |>.operations n) ↔
+    ∀ i : Fin m, generic from_subcircuit env (circuitFin i |>.operations (n + i*lawfulFin.local_length)) := by
+  rw [Vector.mapFinRangeM, mapM_vector_generic]
+  constructor
+  case mpr =>
+    intro h i
+    intro _ i' hi'
+    have hi : i' = i.val := by
+      rw [Vector.mem_zipIdx_iff_getElem?, Vector.finRange] at hi'
+      simp only [Vector.getElem?_mk, List.getElem?_toArray, List.finRange_eq_pmap_range] at hi'
+      simp only [List.getElem?_pmap, Option.pmap_eq_some_iff, exists_and_left] at hi'
+      sorry
+    subst hi
+    exact h i
+
+  intro h i
+  specialize h i
+  have : i ∈ Vector.finRange m := by simp [Vector.finRange]
+  specialize h this i
+  have : (i, ↑i) ∈ (Vector.finRange m).zipIdx := by
+    simp only [Vector.mem_zipIdx_iff_getElem?, Fin.is_lt, Vector.getElem?_eq_getElem, Option.some.injEq]
+    simp [Vector.finRange]
+  specialize h this
+  exact h
+
+theorem mapFinRangeM_soundness {n : ℕ} :
+  soundness env (Vector.mapFinRangeM m circuitFin |>.operations n) ↔
+    ∀ i : Fin m, soundness env (circuitFin i |>.operations (n + i*lawfulFin.local_length)) := by
+  simp only [soundness_iff_generic, mapFinRangeM_generic]
+
+theorem mapFinRangeM_completeness {n : ℕ} :
+  completeness env (Vector.mapFinRangeM m circuitFin |>.operations n) ↔
+    ∀ i : Fin m, completeness env (circuitFin i |>.operations (n + i*lawfulFin.local_length)) := by
+  simp only [completeness_iff_generic, mapFinRangeM_generic]
+end
 end constraints_hold
 
+/-- TODO remove when proof above is done -/
 theorem mapM_vector_local_length {circuit : α → Circuit F β} (lawful : ConstantLawfulCircuits circuit)
   {xs : Vector α m} {n : ℕ} :
     ((xs.mapM circuit).operations n).local_length = lawful.local_length * m := by
