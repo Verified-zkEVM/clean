@@ -58,7 +58,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   -- simplify goal
   simp only [spec, lawful_norm]
   rw [chi_loop, eval_vector, KeccakState.is_normalized, Vector.ext_iff]
-  simp only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_init,
+  simp only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapFinRange, Vector.getElem_mapRange,
     KeccakState.value, Vector.map_map, Function.comp_apply]
 
   suffices h : ∀ i : Fin 25, (eval env (var_from_offset U64 (i0 + i.val*16 + 8))).is_normalized ∧

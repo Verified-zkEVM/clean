@@ -95,15 +95,15 @@ def finRange (n : ℕ) : Vector (Fin n) n :=
 
 def mapFinRange {n} (create: Fin n → α) : Vector α n := finRange n |>.map create
 
-theorem cast_init {n} {create: Fin n → α} (h : n = m) :
+theorem cast_mapFinRange {n} {create: Fin n → α} (h : n = m) :
     mapFinRange create = (mapFinRange (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
   subst h; simp
 
-theorem getElemFin_init {n} {create: Fin n → α} :
+theorem getElemFin_mapFinRange {n} {create: Fin n → α} :
     ∀ i : Fin n, (mapFinRange create)[i] = create i := by
   simp [mapFinRange, finRange]
 
-theorem getElem_init {n} {create: Fin n → α} :
+theorem getElem_mapFinRange {n} {create: Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange create)[i] = create ⟨ i, hi ⟩ := by
   simp [mapFinRange, finRange]
 
