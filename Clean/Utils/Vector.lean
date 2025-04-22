@@ -90,38 +90,58 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
     have h' := push _ a' ih'
     rwa [ih]
 
-@[simp]
-def init {n} (create: Fin n → α) : Vector α n :=
-  match n with
-  | 0 => #v[]
-  | k + 1 =>
-    (init (fun i : Fin k => create i)).push (create k)
+def finRange (n : ℕ) : Vector (Fin n) n :=
+  ⟨ .mk (List.finRange n), List.length_finRange n ⟩
+
+def init {n} (create: Fin n → α) : Vector α n := finRange n |>.map create
 
 theorem cast_init {n} {create: Fin n → α} (h : n = m) :
     init create = (init (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
   subst h; simp
 
-@[simp]
+theorem getElemFin_init {n} {create: Fin n → α} :
+    ∀ i : Fin n, (init create)[i] = create i := by
+  simp [init, finRange]
+
+theorem getElem_init {n} {create: Fin n → α} :
+    ∀ (i : ℕ) (hi : i < n), (init create)[i] = create ⟨ i, hi ⟩ := by
+  simp [init, finRange]
+
 def natInit (n: ℕ) (create: ℕ → α) : Vector α n :=
   match n with
   | 0 => #v[]
   | k + 1 => natInit k create |>.push (create k)
 
+@[simp]
+theorem natInit_zero {create: ℕ → α} : natInit 0 create = #v[] := rfl
+
+@[simp]
+theorem natInit_succ {n} {create: ℕ → α} :
+    natInit (n + 1) create = (natInit n create).push (create n) := rfl
+
 theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
     natInit n create = (natInit m create).cast h.symm := by
   subst h; simp
 
-theorem natInit_succ {n} {create: ℕ → α} :
-    natInit (n + 1) create = (natInit n create).push (create n) := rfl
+@[simp]
+theorem getElem_natInit {n} {create: ℕ → α} :
+    ∀ (i : ℕ) (hi : i < n), (natInit n create)[i] = create i := by
+  intros i hi
+  induction n
+  case zero => simp at hi
+  case succ n ih =>
+    rw [natInit_succ]
+    by_cases hi' : i < n
+    · rw [getElem_push_lt hi', ih hi']
+    · have i_eq : n = i := by linarith
+      subst i_eq
+      rw [getElem_push_eq]
 
 theorem natInit_add_eq_append {n m} (create: ℕ → α) :
     natInit (n + m) create = natInit n create ++ natInit m (fun i => create (n + i)) := by
   induction m with
   | zero => simp only [Nat.add_zero, natInit, append_empty]
   | succ m ih => simp only [natInit, Nat.add_eq, append_push, ih]
-
-def finRange (n : ℕ) : Vector (Fin n) n :=
-  ⟨ .mk (List.finRange n), List.length_finRange n ⟩
 
 @[simp]
 def fill (n : ℕ) (a: α) : Vector α n :=
