@@ -113,31 +113,31 @@ def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=
   | k + 1 => mapRange k create |>.push (create k)
 
 @[simp]
-theorem natInit_zero {create: ℕ → α} : mapRange 0 create = #v[] := rfl
+theorem mapRange_zero {create: ℕ → α} : mapRange 0 create = #v[] := rfl
 
 @[simp]
-theorem natInit_succ {n} {create: ℕ → α} :
+theorem mapRange_succ {n} {create: ℕ → α} :
     mapRange (n + 1) create = (mapRange n create).push (create n) := rfl
 
-theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
+theorem cast_mapRange {n} {create: ℕ → α} (h : n = m) :
     mapRange n create = (mapRange m create).cast h.symm := by
   subst h; simp
 
 @[simp]
-theorem getElem_natInit {n} {create: ℕ → α} :
+theorem getElem_mapRange {n} {create: ℕ → α} :
     ∀ (i : ℕ) (hi : i < n), (mapRange n create)[i] = create i := by
   intros i hi
   induction n
   case zero => simp at hi
   case succ n ih =>
-    rw [natInit_succ]
+    rw [mapRange_succ]
     by_cases hi' : i < n
     · rw [getElem_push_lt hi', ih hi']
     · have i_eq : n = i := by linarith
       subst i_eq
       rw [getElem_push_eq]
 
-theorem natInit_add_eq_append {n m} (create: ℕ → α) :
+theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
   induction m with
   | zero => simp only [Nat.add_zero, mapRange, append_empty]
