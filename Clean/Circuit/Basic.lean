@@ -120,7 +120,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   local_length_eq : local_length = FlatOperation.witness_length ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env := sc.local_length_eq ▸ FlatOperation.witnesses env sc.ops
+def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.

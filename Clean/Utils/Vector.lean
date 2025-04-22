@@ -152,9 +152,6 @@ def fill (n : ℕ) (a: α) : Vector α n :=
 instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
   default := fill n default
 
--- some simp tagging because we use Vectors a lot
-attribute [simp] Vector.append Vector.get Array.getElem_append
-
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
 theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :
     (v ++ w |>.take n |>.cast Nat.min_add_right) = v := by
@@ -175,6 +172,14 @@ theorem cast_drop_append_of_eq_length {v : Vector α n} {w : Vector α m} :
     List.drop_append_of_le_length (Nat.le_of_eq hv_length.symm),
     List.drop_of_length_le (Nat.le_of_eq hv_length), List.nil_append,
     List.take_of_length_le (Nat.le_of_eq hw_length), List.toArray_toList]
+
+theorem cast_heq {v : Vector α n} (h : n = m) : HEq (v.cast h) v := by
+  subst h
+  rw [heq_eq_eq, cast_rfl]
+
+theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
+  subst h
+  rw [heq_eq_eq, cast_rfl]
 end Vector
 
 -- helpers for `Vector.toChunks`
