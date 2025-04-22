@@ -29,8 +29,8 @@ instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x
   rw [Vector.forM_toList]
   apply from_forM
 
-instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
-    (xs : Vector α n) (lawful : ∀ x : α, LawfulCircuit (circuit x)) :
+instance LawfulCircuit.from_mapM_vector' {circuit : α → Circuit F β} [Nonempty β]
+  (xs : Vector α n) (lawful : ∀ x : α, LawfulCircuit (circuit x)) :
     LawfulCircuit (xs.mapM circuit) := by
   induction xs using Vector.induct_push
   case nil => rw [Vector.mapM_mk_empty]; infer_instance
@@ -69,8 +69,32 @@ theorem mapM_local_length {circuit : α → Circuit F β} [lawful : ConstantLawf
     rw [LawfulCircuit.bind_local_length _ _ inferInstance inferInstance]
     rw [ih, List.length_cons, mul_add, mul_one, add_comm _ k, LawfulCircuit.local_length_eq]
     rfl
+end Circuit
 
-namespace constraints_hold
+instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
+  (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) :
+    ConstantLawfulCircuit (xs.mapM circuit) where
+  output n := xs.mapIdx fun i x => lawful.output x (n + lawful.local_length * i)
+  local_length := lawful.local_length * m
+  final_offset n := n + lawful.local_length * m
+  operations n := by
+    set k := ConstantLawfulCircuits.local_length circuit
+    induction xs using Vector.induct
+    case nil => exact .empty n
+    case cons x xs ops =>
+      rename_i n'
+      simp only [Vector.size_toArray] at ops ⊢
+      rw [mul_add, ←add_assoc, mul_one]
+      exact ops ++ lawful.operations x (n + k * n')
+
+  output_independent ops := by
+    sorry
+  offset_independent ops := by
+    sorry
+  append_only ops := by
+    sorry
+
+namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
 section
 variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
@@ -252,7 +276,7 @@ theorem mapM_vector_completeness {xs : Vector α n} :
   simp only [completeness_iff_generic, mapM_vector_generic]
 end constraints_hold
 
-theorem mapM_vector_local_length {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
+theorem mapM_vector_local_length {circuit : α → Circuit F β} (lawful : ConstantLawfulCircuits circuit)
   {xs : Vector α m} {n : ℕ} :
     ((xs.mapM circuit).operations n).local_length = lawful.local_length * m := by
   suffices ((xs.toList.mapM circuit).operations n).local_length = lawful.local_length * m by
