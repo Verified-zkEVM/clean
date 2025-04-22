@@ -1,10 +1,9 @@
 import Clean.Utils.Primes
 import Clean.Gadgets.Addition32.Addition32Full
+import Clean.Examples.AddOperations
 
 open Gadgets.Addition8FullCarry (add8_full_carry)
 open Gadgets.Addition32Full (add32_full Inputs)
-
-@[reducible] def p := p_babybear
 
 -- `infer_lawful_circuit` / `infer_constant_lawful_circuits` seem to work for all circuits
 instance lawful : ConstantLawfulCircuits (add32_full (p:=p)) := by infer_constant_lawful_circuits
