@@ -72,6 +72,17 @@ theorem mapM_local_length {circuit : α → Circuit F β} [lawful : ConstantLawf
     rfl
 end Circuit
 
+theorem bind_push_output {n : ℕ} (f : α → Circuit F β)
+    (xs : Vector α n) (x : α) (ops : OperationsList F) :
+    ((Vector.mapM f xs >>= fun out => out.push <$> f x) ops).1 =
+    (Vector.mapM f xs ops).1.push (f x (Vector.mapM f xs ops).2).1 := by
+  set rest := Vector.mapM f xs ops with ←rest_h
+  suffices ((rest.1.push <$> f x) rest.2).1 = (Vector.mapM f xs ops).1.push (f x rest.2).1 by
+    simp_all only [rest]
+    exact this
+  rw [rest_h]
+  simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq, rest]
+
 instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
   (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) :
     ConstantLawfulCircuit (xs.mapM circuit) where
@@ -89,9 +100,38 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       exact ops ++ lawful.operations x (n + k * n')
 
   output_independent ops := by
-    sorry
+    induction xs using Vector.induct_push
+    case nil => simp
+    case push xs x ih =>
+      rename_i n'
+      -- TODO: is this necessary?
+      let lawful_rec : ConstantLawfulCircuit (xs.mapM circuit) := by
+        sorry
+      rw [Vector.mapM_push]
+      simp [Vector.mapIdx, Vector.cons] at ih ⊢
+      rw [bind_push_output]
+      have h := lawful.offset_independent x ops
+      have h' := lawful_rec.append_only ops
+      set s := Vector.mapM circuit xs ops
+      simp only [Vector.toArray_push, ih]
+      rw [lawful.output_independent x s.2]
+      rw [Array.push_eq_push]
+      simp only [and_true]
+      have h := lawful_rec.offset_independent ops
+      rw [h']
+      simp [lawful_rec.local_length_eq]
+
+      sorry
+
   offset_independent ops := by
-    sorry
+    induction xs using Vector.induct_push
+    case nil => simp only [Vector.mapM_mk_empty, pure, StateT.pure, mul_zero, add_zero]
+    case push xs x ih =>
+      rename_i n'
+      rw [Vector.mapM_push]
+      simp only [Vector.mapIdx, Vector.cons] at ih ⊢
+
+      sorry
   append_only ops := by
     sorry
 
