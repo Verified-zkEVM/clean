@@ -72,7 +72,7 @@ theorem mapM_local_length {circuit : α → Circuit F β} [lawful : ConstantLawf
     rfl
 end Circuit
 
-theorem bind_push_output {n : ℕ} (f : α → Circuit F β)
+theorem bind_mapM_push_output {n : ℕ} (f : α → Circuit F β)
     (xs : Vector α n) (x : α) (ops : OperationsList F) :
     ((Vector.mapM f xs >>= fun out => out.push <$> f x) ops).1 =
     (Vector.mapM f xs ops).1.push (f x (Vector.mapM f xs ops).2).1 := by
@@ -82,6 +82,18 @@ theorem bind_push_output {n : ℕ} (f : α → Circuit F β)
     exact this
   rw [rest_h]
   simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq, rest]
+
+theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
+
+theorem bind_mapM_push_offset {n : ℕ} (f : α → Circuit F β)
+    (xs : Vector α n) (x : α) (ops : OperationsList F) :
+    ((Vector.mapM f xs >>= fun out => out.push <$> f x) ops).2.offset =
+    (f x (Vector.mapM f xs ops).2).2.offset := by
+    set rest := Vector.mapM f xs ops with ←rest_h
+    suffices ((rest.1.push <$> f x) rest.2).2.offset = (f x rest.2).2.offset by
+      simp_all only [rest]
+      exact this
+    simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq]
 
 instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
   (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) :
@@ -109,7 +121,7 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
         sorry
       rw [Vector.mapM_push]
       simp [Vector.mapIdx, Vector.cons] at ih ⊢
-      rw [bind_push_output]
+      rw [bind_mapM_push_output]
       have h := lawful.offset_independent x ops
       have h' := lawful_rec.append_only ops
       set s := Vector.mapM circuit xs ops
@@ -120,6 +132,8 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       have h := lawful_rec.offset_independent ops
       rw [h']
       simp [lawful_rec.local_length_eq]
+      rw [local_length]
+
 
       sorry
 
@@ -129,9 +143,11 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
     case push xs x ih =>
       rename_i n'
       rw [Vector.mapM_push]
-      simp only [Vector.mapIdx, Vector.cons] at ih ⊢
+      simp [Vector.mapIdx, Vector.cons] at ih ⊢
+      rw [bind_mapM_push_offset]
+      rw [lawful.offset_independent x (Vector.mapM circuit xs ops).2, ih]
+      ring
 
-      sorry
   append_only ops := by
     sorry
 
