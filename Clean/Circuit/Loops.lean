@@ -138,26 +138,14 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
     case nil => simp
     case push xs x ih =>
       rename_i n'
-      -- TODO: is this necessary?
-      let lawful_rec : ConstantLawfulCircuit (xs.mapM circuit) := by
-        sorry
       rw [Vector.mapM_push]
       simp only [Vector.mapIdx, Vector.eq_mk, bind_pure_comp, Vector.toArray_push,
         Array.mapIdx_push, Vector.size_toArray] at ih ⊢
-      rw [bind_mapM_push_output]
-      have h := lawful.offset_independent x ops
-      have h' := lawful_rec.append_only ops
-      set s := Vector.mapM circuit xs ops
-      simp only [Vector.toArray_push, ih]
-      rw [lawful.output_independent x s.2]
-      rw [Array.push_eq_push]
-      simp only [and_true]
-      have h := lawful_rec.offset_independent ops
-      rw [h']
-      simp [lawful_rec.local_length_eq]
-      rw [local_length]
-
-
+      rw [bind_mapM_push_output, ←ih]
+      simp only [Vector.toArray_push]
+      rw [lawful.output_independent x (Vector.mapM circuit xs ops).2]
+      congr
+      -- TODO: how to prove this?
       sorry
 
   offset_independent ops := by
