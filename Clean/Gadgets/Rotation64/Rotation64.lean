@@ -29,16 +29,10 @@ def rot64 (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) 
   let out ← subcircuit (Gadgets.Rotation64Bytes.circuit byte_offset) x
 
   -- apply the bit rotation
-  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := out
 
-  let ⟨x0_l, x0_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x0
-  let ⟨x1_l, x1_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x1
-  let ⟨x2_l, x2_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x2
-  let ⟨x3_l, x3_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x3
-  let ⟨x4_l, x4_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x4
-  let ⟨x5_l, x5_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x5
-  let ⟨x6_l, x6_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x6
-  let ⟨x7_l, x7_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit bit_offset) x7
+  let ⟨low, high⟩ ← subcircuit (Gadgets.U64ByteDecomposition.circuit bit_offset) out
+  let ⟨x0_l, x1_l, x2_l, x3_l, x4_l, x5_l, x6_l, x7_l⟩ := low
+  let ⟨x0_h, x1_h, x2_h, x3_h, x4_h, x5_h, x6_h, x7_h⟩ := high
 
   let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness fun _env => U64.mk 0 0 0 0 0 0 0 0
 
@@ -51,6 +45,8 @@ def rot64 (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) 
   assert_zero (x7_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x6_h - y6)
   assert_zero (x0_l * ((2 : ℕ)^(8 - bit_offset) : F p) + x7_h - y7)
   return ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩
+
+instance lawful (off : Fin 64) : ConstantLawfulCircuits (F := (F p)) (rot64 off) := by infer_constant_lawful_circuits
 
 def assumptions (input : U64 (F p)) := input.is_normalized
 
@@ -71,7 +67,19 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) wher
     simp only [rot64]
     rfl
 
+
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+  intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_byte h_holds
+
+  simp [elaborated, subcircuit_norm, rot64, Circuit.constraints_hold.soundness] at h_holds
+
+  simp [subcircuit_norm, circuit_norm] at h_holds
+  simp [U64.witness] at h_holds
+
+  simp [circuit_norm, subcircuit_norm,
+    Rotation64Bytes.circuit, Rotation64Bytes.elaborated,
+    Rotation64Bytes.assumptions, Rotation64Bytes.spec,
+    U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated] at h_holds
   sorry
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by

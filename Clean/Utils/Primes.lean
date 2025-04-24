@@ -10,3 +10,6 @@ instance prime_mersenne : Fact (p_mersenne.Prime) := by native_decide
 
 instance : Fact (p_babybear > 512) := by native_decide
 instance : Fact (p_mersenne > 512) := by native_decide
+
+instance : Fact (p_babybear > 2^16 + 2^8) := by native_decide
+instance : Fact (p_mersenne > 2^16 + 2^8) := by native_decide
