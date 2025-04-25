@@ -72,6 +72,14 @@ def to_push (v : Vector α (n + 1)) : ToPush v where
   a := v[n]
   h := by rcases v with ⟨ ⟨xs⟩, h ⟩; simp_all
 
+theorem cons_reverse_push {n} (v: Vector α n) (a: α) :
+    (Vector.cons a v).reverse = v.reverse.push a := by
+  induction v using Vector.induct
+  case nil => rfl
+  case cons x xs _ih =>
+    simp only [reverse, cons, List.reverse_toArray, List.reverse_cons, List.append_assoc,
+      List.cons_append, List.nil_append, push_mk, List.push_toArray]
+
 /- induction principle for Vector.push -/
 def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
@@ -88,6 +96,36 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
     obtain ⟨ as', a', ih ⟩ := to_push ⟨.mk (a :: as), rfl⟩
     rw [ih]
     exact push as' a' (induct_push nil push as')
+
+/- Alternative definition of the induction principle for Vector.push -/
+@[elab_as_elim]
+def induct_push' {motive : ∀ {n : ℕ}, Vector α n → Sort*} {n : ℕ}
+    (nil : motive #v[])
+    (push : ∀ {n : ℕ} (xs : Vector α n) (x : α), motive xs → motive (xs.push x))
+    (v : Vector α n):
+    motive v :=
+  cast (by simp only [reverse_reverse]) <| induct
+    (motive := fun v => motive v.reverse)
+    nil
+    (@fun n x xs (r : motive xs.reverse) => by
+      let ih := push xs.reverse x r
+      rw [← cons_reverse_push] at ih
+      exact ih)
+    v.reverse
+
+theorem induct_push_iff {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+  {n: ℕ} (v: Vector α n) :
+    induct_push nil push v = induct_push' nil push v := by
+  induction v using Vector.induct
+  case nil =>
+    simp only [induct_push, induct_push', cast, reverse, Array.reverse, size_toArray, push_mk,
+      add_le_iff_nonpos_left, nonpos_iff_eq_zero, eq_mp_eq_cast, reverse_mk, Array.size_toArray,
+      List.length_nil, zero_le, ↓dreduceDIte, induct]
+  case cons x xs ih =>
+    simp [induct_push, induct_push', cons]
+    sorry
 
 theorem empty_push_list (x : α) : #[].push x = #[x] := by rfl
 theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
@@ -106,20 +144,7 @@ theorem induct_push_cons {motive : {n: ℕ} → Vector α n → Sort u}
     (h : induct_push nil push (xs.push a) = push xs a (induct_push nil push xs)):
     induct_push nil push (Vector.cons x (xs.push a)) = push (Vector.cons x xs) a (induct_push nil push (Vector.cons x xs)) := by
   simp [Vector.cons, cons_push, induct_push, to_push]
-  induction xs using Vector.induct
-  case nil =>
-    simp [empty_push_list]
-    congr
-    suffices induct_push nil push #v[x] = push #v[] x (induct_push nil push #v[]) by congr
-    simp only [induct_push, List.length_nil, Nat.reduceAdd, eq_mpr_eq_cast, cast_eq]
-    suffices induct_push nil push #v[] = nil by congr
-    simp only [induct_push]
-  case cons y ys ih =>
-    simp [induct_push, cons_push]
-    suffices induct_push nil push #v[x] = push #v[] x (induct_push nil push #v[]) by
-      sorry
-
-    sorry
+  sorry
 
 theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
@@ -139,10 +164,20 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
 
   case cons x xs ih =>
     simp only [cons_push, Vector.push]
-    simp only [cons]
-    suffices induct_push nil push (Vector.cons x (xs.push a)) = push (Vector.cons x xs) a (induct_push nil push (Vector.cons x xs)) by
-      congr
-    simp only [induct_push_cons _ _ _ ih]
+    sorry
+
+
+theorem induct_push_push' {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+  {n: ℕ} (as: Vector α n) (a: α) :
+    induct_push' nil push (as.push a) = push as a (induct_push' nil push as) := by
+  induction as using Vector.induct
+  case nil =>
+    simp [induct_push', Array.reverse, induct, empty_push_list]
+  case cons x xs ih =>
+    simp only [cons_push, Vector.push]
+    sorry
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
