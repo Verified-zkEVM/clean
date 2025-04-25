@@ -80,6 +80,14 @@ theorem cons_reverse_push {n} (v: Vector α n) (a: α) :
     simp only [reverse, cons, List.reverse_toArray, List.reverse_cons, List.append_assoc,
       List.cons_append, List.nil_append, push_mk, List.push_toArray]
 
+theorem cons_push_reverse {n} (v: Vector α n) (a: α) :
+    (v.push a).reverse = (Vector.cons a v.reverse) := by
+  induction v using Vector.induct
+  case nil => rfl
+  case cons x xs _ih =>
+    simp only [reverse, cons, push_mk, List.push_toArray, List.cons_append, List.reverse_toArray,
+      List.reverse_cons, List.reverse_append, List.reverse_nil, List.nil_append]
+
 /- induction principle for Vector.push -/
 def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
@@ -107,10 +115,8 @@ def induct_push' {motive : ∀ {n : ℕ}, Vector α n → Sort*} {n : ℕ}
   cast (by simp only [reverse_reverse]) <| induct
     (motive := fun v => motive v.reverse)
     nil
-    (@fun n x xs (r : motive xs.reverse) => by
-      let ih := push xs.reverse x r
-      rw [← cons_reverse_push] at ih
-      exact ih)
+    (@fun n x xs (r : motive xs.reverse) =>
+      cast (by rw [←cons_reverse_push]) <| push xs.reverse x r)
     v.reverse
 
 theorem induct_push_iff {motive : {n: ℕ} → Vector α n → Sort u}
@@ -166,7 +172,7 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
     simp only [cons_push, Vector.push]
     sorry
 
-
+set_option pp.proofs true
 theorem induct_push_push' {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
@@ -176,7 +182,8 @@ theorem induct_push_push' {motive : {n: ℕ} → Vector α n → Sort u}
   case nil =>
     simp [induct_push', Array.reverse, induct, empty_push_list]
   case cons x xs ih =>
-    simp only [cons_push, Vector.push]
+    simp [induct_push']
+    -- TODO: `cast` is annoying, but this goal is better than the other one
     sorry
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
