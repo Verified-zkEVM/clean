@@ -81,14 +81,27 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
   | ⟨ .mk [], prop ⟩ =>
     have : n = 0 := by rw [←prop, List.length_eq_zero]
     subst this
-    congr
+    exact nil
   | ⟨ .mk (a::as), h ⟩ =>
     have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
     subst this
     obtain ⟨ as', a', ih ⟩ := to_push ⟨.mk (a :: as), rfl⟩
-    have ih' : motive as' := induct_push nil push as'
-    have h' := push _ a' ih'
-    rwa [ih]
+    rw [ih]
+    exact push as' a' (induct_push nil push as')
+
+theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
+    induct_push nil push #v[] = nil := by simp only [induct_push]
+
+theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
+
+theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+  {n: ℕ} (as: Vector α n) (a: α) :
+    induct_push nil push (as.push a) = push as a (induct_push nil push as) := by
+  sorry
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
