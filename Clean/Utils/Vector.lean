@@ -89,19 +89,60 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
     rw [ih]
     exact push as' a' (induct_push nil push as')
 
+theorem empty_push_list (x : α) : #[].push x = #[x] := by rfl
+theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
+
+theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
+
 theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
     induct_push nil push #v[] = nil := by simp only [induct_push]
 
-theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
+theorem induct_push_cons {motive : {n: ℕ} → Vector α n → Sort u}
+    {nil: motive #v[]}
+    {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+    {n: ℕ} (xs: Vector α n) (x a: α)
+    (h : induct_push nil push (xs.push a) = push xs a (induct_push nil push xs)):
+    induct_push nil push (Vector.cons x (xs.push a)) = push (Vector.cons x xs) a (induct_push nil push (Vector.cons x xs)) := by
+  simp [Vector.cons, cons_push, induct_push, to_push]
+  induction xs using Vector.induct
+  case nil =>
+    simp [empty_push_list]
+    congr
+    suffices induct_push nil push #v[x] = push #v[] x (induct_push nil push #v[]) by congr
+    simp only [induct_push, List.length_nil, Nat.reduceAdd, eq_mpr_eq_cast, cast_eq]
+    suffices induct_push nil push #v[] = nil by congr
+    simp only [induct_push]
+  case cons y ys ih =>
+    simp [induct_push, cons_push]
+    suffices induct_push nil push #v[x] = push #v[] x (induct_push nil push #v[]) by
+      sorry
+
+    sorry
 
 theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
   {n: ℕ} (as: Vector α n) (a: α) :
     induct_push nil push (as.push a) = push as a (induct_push nil push as) := by
-  sorry
+  induction as using Vector.induct
+  case nil =>
+    suffices induct_push nil push #v[a] = push #v[] a (induct_push nil push #v[]) by congr
+    simp only [induct_push, List.length_nil, Nat.reduceAdd, to_push, take_eq_extract, extract_mk,
+      Nat.sub_zero, cast_mk, getElem_mk, id_eq, Int.reduceNeg, Int.Nat.cast_ofNat_Int,
+      Int.reduceAdd, Int.reduceSub, List.getElem_toArray, List.length_cons, eq_mp_eq_cast, cast_eq,
+      List.getElem_cons_zero, push_mk, eq_mpr_eq_cast]
+    congr
+    suffices induct_push nil push #v[] = nil by congr
+    simp [induct_push]
+
+  case cons x xs ih =>
+    simp only [cons_push, Vector.push]
+    simp only [cons]
+    suffices induct_push nil push (Vector.cons x (xs.push a)) = push (Vector.cons x xs) a (induct_push nil push (Vector.cons x xs)) by
+      congr
+    simp only [induct_push_cons _ _ _ ih]
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
