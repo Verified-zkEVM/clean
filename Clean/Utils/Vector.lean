@@ -62,6 +62,14 @@ def induct {motive : {n: ℕ} → Vector α n → Sort u}
     let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 
+theorem induct_cons {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as)}
+  {n: ℕ} (xs: Vector α n) (x : α)  :
+    induct nil cons (Vector.cons x xs) = cons x xs (induct nil cons xs) := by
+  simp [Vector.cons, induct]
+  sorry
+
 structure ToPush (v : Vector α (n + 1)) where
   as : Vector α n
   a : α
@@ -178,13 +186,12 @@ theorem induct_push_push' {motive : {n: ℕ} → Vector α n → Sort u}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
   {n: ℕ} (as: Vector α n) (a: α) :
     induct_push' nil push (as.push a) = push as a (induct_push' nil push as) := by
-  induction as using Vector.induct
-  case nil =>
-    simp [induct_push', Array.reverse, induct, empty_push_list]
-  case cons x xs ih =>
-    simp [induct_push']
-    -- TODO: `cast` is annoying, but this goal is better than the other one
-    sorry
+  simp [induct_push']
+  rw [cast_eq_iff_heq, heq_comm, cons_push_reverse, induct_cons]
+  simp only [heq_cast_iff_heq]
+  -- TODO: should be manageable now, but Heq is annoying
+  sorry
+
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
