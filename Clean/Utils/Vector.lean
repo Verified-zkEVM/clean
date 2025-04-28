@@ -43,6 +43,14 @@ def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector
     pure ⟨ .mk <| hd :: tl.toList, by simp only [Array.size_toArray, List.length_cons,
       Array.length_toList, size_toArray]; exact h⟩
 
+theorem cast_heq {v : Vector α n} (h : n = m) : HEq (v.cast h) v := by
+  subst h
+  rw [heq_eq_eq, cast_rfl]
+
+theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
+  subst h
+  rw [heq_eq_eq, cast_rfl]
+
 /- induction principle for Vector.cons -/
 universe u
 
@@ -73,15 +81,15 @@ theorem induct_cons {motive : {n: ℕ} → Vector α n → Sort u}
 structure ToPush (v : Vector α (n + 1)) where
   as : Vector α n
   a : α
-  h : v = as.push a
+  eq : v = as.push a
 
 def to_push (v : Vector α (n + 1)) : ToPush v where
   as := v.take n |>.cast Nat.min_add_right
   a := v[n]
-  h := by rcases v with ⟨ ⟨xs⟩, h ⟩; simp_all
+  eq := by rcases v with ⟨ ⟨xs⟩, h ⟩; simp_all
 
 theorem cons_reverse_push {n} (v: Vector α n) (a: α) :
-    (Vector.cons a v).reverse = v.reverse.push a := by
+    (cons a v).reverse = v.reverse.push a := by
   induction v using Vector.induct
   case nil => rfl
   case cons x xs _ih =>
@@ -100,46 +108,31 @@ theorem cons_push_reverse {n} (v: Vector α n) (a: α) :
 def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
   (push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a))
-  {n: ℕ} (v: Vector α n) : motive v := by
+  {n: ℕ} (v: Vector α n) : motive v :=
   match v with
-  | ⟨ .mk [], prop ⟩ =>
-    have : n = 0 := by rw [←prop, List.length_eq_zero]
-    subst this
-    exact nil
+  | ⟨ .mk [], (h : 0 = n) ⟩ =>
+    cast (by subst h; rfl) nil
   | ⟨ .mk (a::as), h ⟩ =>
-    have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
-    subst this
-    obtain ⟨ as', a', ih ⟩ := to_push ⟨.mk (a :: as), rfl⟩
-    rw [ih]
-    exact push as' a' (induct_push nil push as')
+    have hlen : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
+    let ⟨ as', a', is_push ⟩ := to_push ⟨.mk (a :: as), rfl⟩
+    cast (by subst hlen; rw [is_push]) (push as' a' (induct_push nil push as'))
 
-/- Alternative definition of the induction principle for Vector.push -/
-@[elab_as_elim]
-def induct_push' {motive : ∀ {n : ℕ}, Vector α n → Sort*} {n : ℕ}
-    (nil : motive #v[])
-    (push : ∀ {n : ℕ} (xs : Vector α n) (x : α), motive xs → motive (xs.push x))
-    (v : Vector α n):
-    motive v :=
-  cast (by simp only [reverse_reverse]) <| induct
-    (motive := fun v => motive v.reverse)
-    nil
-    (@fun n x xs (r : motive xs.reverse) =>
-      cast (by rw [←cons_reverse_push]) <| push xs.reverse x r)
-    v.reverse
-
-theorem induct_push_iff {motive : {n: ℕ} → Vector α n → Sort u}
+theorem induct_push_cons {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
-  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
-  {n: ℕ} (v: Vector α n) :
-    induct_push nil push v = induct_push' nil push v := by
-  induction v using Vector.induct
-  case nil =>
-    simp only [induct_push, induct_push', cast, reverse, Array.reverse, size_toArray, push_mk,
-      add_le_iff_nonpos_left, nonpos_iff_eq_zero, eq_mp_eq_cast, reverse_mk, Array.size_toArray,
-      List.length_nil, zero_le, ↓dreduceDIte, induct]
-  case cons x xs ih =>
-    simp [induct_push, induct_push', cons]
-    sorry
+  {push': ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+  {n: ℕ} (xs: Vector α n) (x a: α) :
+    induct_push nil push' (cons x (xs.push a)) = push' (cons x xs) a (induct_push nil push' (cons x xs)) := by
+  conv => lhs; simp only [cons, induct_push]
+  rw [cast_eq_iff_heq]
+  have h_push_len : (xs.push a).toList.length = n + 1 := by simp
+  have h_to_push_cons : HEq (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).as (cons x xs) := by
+    have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).as = (cons x xs).cast h_push_len.symm := by
+      simp [cons, to_push]
+    rw [this]; apply cast_heq
+  congr
+  · have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).a = a := by
+      simp [cons, to_push]
+    rw [this]
 
 theorem empty_push_list (x : α) : #[].push x = #[x] := by rfl
 theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
@@ -149,16 +142,7 @@ theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (x
 theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
-    induct_push nil push #v[] = nil := by simp only [induct_push]
-
-theorem induct_push_cons {motive : {n: ℕ} → Vector α n → Sort u}
-    {nil: motive #v[]}
-    {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
-    {n: ℕ} (xs: Vector α n) (x a: α)
-    (h : induct_push nil push (xs.push a) = push xs a (induct_push nil push xs)):
-    induct_push nil push (Vector.cons x (xs.push a)) = push (Vector.cons x xs) a (induct_push nil push (Vector.cons x xs)) := by
-  simp [Vector.cons, cons_push, induct_push, to_push]
-  sorry
+    induct_push nil push #v[] = nil := by simp only [induct_push]; rfl
 
 theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
@@ -173,25 +157,10 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
       Int.reduceAdd, Int.reduceSub, List.getElem_toArray, List.length_cons, eq_mp_eq_cast, cast_eq,
       List.getElem_cons_zero, push_mk, eq_mpr_eq_cast]
     congr
-    suffices induct_push nil push #v[] = nil by congr
-    simp [induct_push]
-
+    exact induct_push_nil
   case cons x xs ih =>
-    simp only [cons_push, Vector.push]
-    sorry
-
-set_option pp.proofs true
-theorem induct_push_push' {motive : {n: ℕ} → Vector α n → Sort u}
-  {nil: motive #v[]}
-  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
-  {n: ℕ} (as: Vector α n) (a: α) :
-    induct_push' nil push (as.push a) = push as a (induct_push' nil push as) := by
-  simp [induct_push']
-  rw [cast_eq_iff_heq, heq_comm, cons_push_reverse, induct_cons]
-  simp only [heq_cast_iff_heq]
-  -- TODO: should be manageable now, but Heq is annoying
-  sorry
-
+    simp only [cons_push]
+    rw [induct_push_cons]
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
@@ -275,14 +244,6 @@ theorem cast_drop_append_of_eq_length {v : Vector α n} {w : Vector α m} :
     List.drop_append_of_le_length (Nat.le_of_eq hv_length.symm),
     List.drop_of_length_le (Nat.le_of_eq hv_length), List.nil_append,
     List.take_of_length_le (Nat.le_of_eq hw_length), List.toArray_toList]
-
-theorem cast_heq {v : Vector α n} (h : n = m) : HEq (v.cast h) v := by
-  subst h
-  rw [heq_eq_eq, cast_rfl]
-
-theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
-  subst h
-  rw [heq_eq_eq, cast_rfl]
 end Vector
 
 -- helpers for `Vector.toChunks`
