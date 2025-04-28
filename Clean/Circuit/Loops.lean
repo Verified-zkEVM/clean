@@ -29,18 +29,6 @@ instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x
   rw [Vector.forM_toList]
   apply from_forM
 
-/-- TODO remove in favor of `ConstantLawfulCircuit.from_mapM_vector` -/
-instance LawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
-  (xs : Vector α n) (lawful : ∀ x : α, LawfulCircuit (circuit x)) :
-    LawfulCircuit (xs.mapM circuit) := by
-  induction xs using Vector.induct_push
-  case nil => rw [Vector.mapM_mk_empty]; infer_instance
-  case push xs x ih =>
-   rw [Vector.mapM_push]
-   apply from_bind ih
-   intro a
-   exact from_bind inferInstance inferInstance
-
 namespace Circuit
 theorem forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
   {xs : List α} {n : ℕ} :
@@ -371,14 +359,5 @@ theorem mapFinRangeM_completeness {n : ℕ} :
   simp only [completeness_iff_generic, mapFinRangeM_generic]
 end
 end constraints_hold
-
-/-- TODO remove when proof above is done -/
-theorem mapM_vector_local_length {circuit : α → Circuit F β} (lawful : ConstantLawfulCircuits circuit)
-  {xs : Vector α m} {n : ℕ} :
-    ((xs.mapM circuit).operations n).local_length = lawful.local_length * m := by
-  suffices ((xs.toList.mapM circuit).operations n).local_length = lawful.local_length * m by
-    rw [←Vector.mapM_toList, operations_map] at this
-    exact this
-  simp [mapM_local_length]
 end Circuit
 end

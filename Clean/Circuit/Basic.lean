@@ -190,22 +190,6 @@ def lookup (ops: OperationsList F) (l: Lookup F) : OperationsList F :=
 def subcircuit (ops: OperationsList F) (s: SubCircuit F ops.offset) : OperationsList F :=
   ⟨ ops.offset + s.local_length, .subcircuit ops.withLength s ⟩
 
-def cast (ops: OperationsList F) (n: ℕ) (h: n = ops.offset) : OperationsList F :=
-  {
-    offset := n
-    withLength := by
-      let ops' := ops.withLength
-      rw [<-h] at ops'
-      exact ops'
-  }
-
-theorem ext {offset1 offset2 : ℕ} (ops1: Operations F offset1) (ops2: Operations F offset2)
-    (h : offset1 = offset2) (h1: ops1 = (by rw [←h] at ops2; exact ops2)) :
-    (⟨offset1, ops1⟩ : OperationsList F) = ⟨offset2, ops2⟩ := by
-  simp only [mk.injEq, h, true_and]
-  rw [h1]
-  simp only [eq_mp_eq_cast, cast_heq]
-
 /--
 `Operations` and `OperationsList` are basically the same so we want easy coercions between them.
 -/
