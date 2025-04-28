@@ -93,7 +93,16 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
     let ⟨ as', a', is_push ⟩ := to_push ⟨.mk (a :: as), rfl⟩
     cast (by subst hlen; rw [is_push]) (push as' a' (induct_push nil push as'))
 
-theorem induct_push_cons {motive : {n: ℕ} → Vector α n → Sort u}
+theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
+
+theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
+
+theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
+    induct_push nil push #v[] = nil := by simp only [induct_push]; rfl
+
+lemma induct_push_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push': ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
   {n: ℕ} (xs: Vector α n) (x a: α) :
@@ -109,15 +118,6 @@ theorem induct_push_cons {motive : {n: ℕ} → Vector α n → Sort u}
   · have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).a = a := by
       simp [cons, to_push]
     rw [this]
-
-theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
-
-theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
-
-theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
-  {nil: motive #v[]}
-  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
-    induct_push nil push #v[] = nil := by simp only [induct_push]; rfl
 
 theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
@@ -135,7 +135,7 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
     exact induct_push_nil
   case cons x xs ih =>
     simp only [cons_push]
-    rw [induct_push_cons]
+    rw [induct_push_cons_push]
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
