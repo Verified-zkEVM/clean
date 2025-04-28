@@ -43,6 +43,14 @@ def mapMonad {M : Type → Type} {n} [Monad M] (v : Vector (M α) n) : M (Vector
     pure ⟨ .mk <| hd :: tl.toList, by simp only [Array.size_toArray, List.length_cons,
       Array.length_toList, size_toArray]; exact h⟩
 
+theorem cast_heq {v : Vector α n} (h : n = m) : HEq (v.cast h) v := by
+  subst h
+  rw [heq_eq_eq, cast_rfl]
+
+theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
+  subst h
+  rw [heq_eq_eq, cast_rfl]
+
 /- induction principle for Vector.cons -/
 universe u
 
@@ -62,57 +70,125 @@ def induct {motive : {n: ℕ} → Vector α n → Sort u}
     let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 
+structure ToPush (v : Vector α (n + 1)) where
+  as : Vector α n
+  a : α
+  eq : v = as.push a
+
+def to_push (v : Vector α (n + 1)) : ToPush v where
+  as := v.take n |>.cast Nat.min_add_right
+  a := v[n]
+  eq := by rcases v with ⟨ ⟨xs⟩, h ⟩; simp_all
+
 /- induction principle for Vector.push -/
-def induct_push {motive : {n: ℕ} → Vector α n → Prop}
+def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
   (push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a))
-  {n: ℕ} (v: Vector α n) : motive v := by
+  {n: ℕ} (v: Vector α n) : motive v :=
   match v with
-  | ⟨ .mk [], prop ⟩ =>
-    have : n = 0 := by rw [←prop, List.length_eq_zero]
-    subst this
-    congr
+  | ⟨ .mk [], (h : 0 = n) ⟩ =>
+    cast (by subst h; rfl) nil
   | ⟨ .mk (a::as), h ⟩ =>
-    have : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
-    subst this
-    -- TODO this should be constructive, so that `motive` can return a `Sort u`
-    obtain ⟨ as', a', ih ⟩ := exists_push (xs := ⟨.mk (a :: as), rfl⟩)
-    have ih' : motive as' := induct_push nil push as'
-    have h' := push _ a' ih'
-    rwa [ih]
+    have hlen : as.length + 1 = n := by rw [←h, Array.size_toArray, List.length_cons]
+    let ⟨ as', a', is_push ⟩ := to_push ⟨.mk (a :: as), rfl⟩
+    cast (by subst hlen; rw [is_push]) (push as' a' (induct_push nil push as'))
 
-@[simp]
-def init {n} (create: Fin n → α) : Vector α n :=
-  match n with
-  | 0 => #v[]
-  | k + 1 =>
-    (init (fun i : Fin k => create i)).push (create k)
+theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
 
-theorem cast_init {n} {create: Fin n → α} (h : n = m) :
-    init create = (init (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
-  subst h; simp
+theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
 
-@[simp]
-def natInit (n: ℕ) (create: ℕ → α) : Vector α n :=
-  match n with
-  | 0 => #v[]
-  | k + 1 => natInit k create |>.push (create k)
+theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
+    induct_push nil push #v[] = nil := by simp only [induct_push]; rfl
 
-theorem cast_natInit {n} {create: ℕ → α} (h : n = m) :
-    natInit n create = (natInit m create).cast h.symm := by
-  subst h; simp
+lemma induct_push_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push': ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+  {n: ℕ} (xs: Vector α n) (x a: α) :
+    induct_push nil push' (cons x (xs.push a)) = push' (cons x xs) a (induct_push nil push' (cons x xs)) := by
+  conv => lhs; simp only [cons, induct_push]
+  rw [cast_eq_iff_heq]
+  have h_push_len : (xs.push a).toList.length = n + 1 := by simp
+  have h_to_push_cons : HEq (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).as (cons x xs) := by
+    have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).as = (cons x xs).cast h_push_len.symm := by
+      simp [cons, to_push]
+    rw [this]; apply cast_heq
+  congr
+  · have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).a = a := by
+      simp [cons, to_push]
+    rw [this]
 
-theorem natInit_succ {n} {create: ℕ → α} :
-    natInit (n + 1) create = (natInit n create).push (create n) := rfl
-
-theorem natInit_add_eq_append {n m} (create: ℕ → α) :
-    natInit (n + m) create = natInit n create ++ natInit m (fun i => create (n + i)) := by
-  induction m with
-  | zero => simp only [Nat.add_zero, natInit, append_empty]
-  | succ m ih => simp only [natInit, Nat.add_eq, append_push, ih]
+theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
+  {nil: motive #v[]}
+  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
+  {n: ℕ} (as: Vector α n) (a: α) :
+    induct_push nil push (as.push a) = push as a (induct_push nil push as) := by
+  induction as using Vector.induct
+  case nil =>
+    suffices induct_push nil push #v[a] = push #v[] a (induct_push nil push #v[]) by congr
+    simp only [induct_push, List.length_nil, Nat.reduceAdd, to_push, take_eq_extract, extract_mk,
+      Nat.sub_zero, cast_mk, getElem_mk, id_eq, Int.reduceNeg, Int.Nat.cast_ofNat_Int,
+      Int.reduceAdd, Int.reduceSub, List.getElem_toArray, List.length_cons, eq_mp_eq_cast, cast_eq,
+      List.getElem_cons_zero, push_mk, eq_mpr_eq_cast]
+    congr
+    exact induct_push_nil
+  case cons x xs ih =>
+    simp only [cons_push]
+    rw [induct_push_cons_push]
 
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
+
+def mapFinRange {n} (create: Fin n → α) : Vector α n := finRange n |>.map create
+
+theorem cast_mapFinRange {n} {create: Fin n → α} (h : n = m) :
+    mapFinRange create = (mapFinRange (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
+  subst h; simp
+
+theorem getElemFin_mapFinRange {n} {create: Fin n → α} :
+    ∀ i : Fin n, (mapFinRange create)[i] = create i := by
+  simp [mapFinRange, finRange]
+
+theorem getElem_mapFinRange {n} {create: Fin n → α} :
+    ∀ (i : ℕ) (hi : i < n), (mapFinRange create)[i] = create ⟨ i, hi ⟩ := by
+  simp [mapFinRange, finRange]
+
+def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=
+  match n with
+  | 0 => #v[]
+  | k + 1 => mapRange k create |>.push (create k)
+
+@[simp]
+theorem mapRange_zero {create: ℕ → α} : mapRange 0 create = #v[] := rfl
+
+@[simp]
+theorem mapRange_succ {n} {create: ℕ → α} :
+    mapRange (n + 1) create = (mapRange n create).push (create n) := rfl
+
+theorem cast_mapRange {n} {create: ℕ → α} (h : n = m) :
+    mapRange n create = (mapRange m create).cast h.symm := by
+  subst h; simp
+
+@[simp]
+theorem getElem_mapRange {n} {create: ℕ → α} :
+    ∀ (i : ℕ) (hi : i < n), (mapRange n create)[i] = create i := by
+  intros i hi
+  induction n
+  case zero => simp at hi
+  case succ n ih =>
+    rw [mapRange_succ]
+    by_cases hi' : i < n
+    · rw [getElem_push_lt hi', ih hi']
+    · have i_eq : n = i := by linarith
+      subst i_eq
+      rw [getElem_push_eq]
+
+theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
+    mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
+  induction m with
+  | zero => simp only [Nat.add_zero, mapRange, append_empty]
+  | succ m ih => simp only [mapRange, Nat.add_eq, append_push, ih]
 
 @[simp]
 def fill (n : ℕ) (a: α) : Vector α n :=
@@ -122,9 +198,6 @@ def fill (n : ℕ) (a: α) : Vector α n :=
 
 instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
   default := fill n default
-
--- some simp tagging because we use Vectors a lot
-attribute [simp] Vector.append Vector.get Array.getElem_append
 
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
 theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :
@@ -221,4 +294,20 @@ theorem toChunks_push (m: ℕ+) {α : Type} (vs : Vector α (n*m)) (v : Vector �
     (vs.toChunks m).push v = ((vs ++ v).cast h).toChunks m := by
   simp only
   rw [Vector.eq_iff_flatten_eq, toChunks_flatten, flatten_push, toChunks_flatten]
+
+theorem mapM_singleton (a : α) {m : Type → Type} [Monad m] [LawfulMonad m] (f : α → m β) :
+    #v[a].mapM f = (do pure #v[←f a]) := by
+  simp [mapM, mapM.go]
+
+theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad m] [Nonempty β] (f : α → m β) (a : α) :
+    (as.push a).mapM f = (do
+      let bs ← as.mapM f
+      let b ← f a
+      pure (bs.push b)) := by
+  rw [←append_singleton, mapM_append, mapM_singleton]
+  simp only [bind_pure_comp, Functor.map_map, append_singleton]
+
+def mapRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : ℕ → m β) : m (Vector β n) := (range n).mapM f
+
+def mapFinRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : Fin n → m β) : m (Vector β n) := (finRange n).mapM f
 end Vector

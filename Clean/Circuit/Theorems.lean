@@ -86,10 +86,7 @@ lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
 
 lemma subcircuit_witness_eq {n: ℕ} (sc : SubCircuit F n) {env} :
     (sc.witnesses env).toArray = (FlatOperation.witnesses env sc.ops).toArray := by
-  unfold SubCircuit.witnesses
-  congr
-  exact sc.local_length_eq
-  simp only [eqRec_heq_iff_heq, heq_eq_eq]
+  simp only [SubCircuit.witnesses, Vector.toArray_cast]
 
 /--
 The witnesses created from flat and nested operations are the same
@@ -124,7 +121,7 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F n} {env: Environment F} {m
   specialize h ⟨ i, by omega ⟩
   simp only [Fin.coe_cast, Fin.cast_mk] at h
   rw [h]
-  simp [Vector.get, Vector.append, Array.getElem_append]
+  simp [Vector.get, Array.getElem_append]
 
 lemma env_extends_witness_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {m c} :
     env.uses_local_witnesses' (ops.witness m c) → env.extends_vector (c env) n := by
@@ -134,7 +131,7 @@ lemma env_extends_witness_inner {n: ℕ} {ops: Operations F n} {env: Environment
   simp only at h
   rw [←add_assoc, Circuit.total_length_eq] at h
   rw [h, Vector.getElem_append]
-  simp
+  simp [Vector.get]
 
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
     env.uses_local_witnesses' (ops.subcircuit c) → env.uses_local_witnesses' ops := by
@@ -144,7 +141,7 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F n} {env: Environment F}
   specialize h ⟨ i, this ⟩
   simp only [Fin.coe_eq_castSucc, Fin.coe_castSucc] at h
   rw [h]
-  simp [Vector.get, Vector.append, Array.getElem_append]
+  simp [Vector.get, Array.getElem_append]
 
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F n} {env: Environment F} {c} :
   env.uses_local_witnesses' (ops.subcircuit c) → env.extends_vector (witnesses env c.ops) n
@@ -165,7 +162,8 @@ lemma extends_vector_subcircuit (env : Environment F) {n} {circuit : SubCircuit 
     env.extends_vector (circuit.witnesses env) n = env.extends_vector (FlatOperation.witnesses env circuit.ops) n := by
   have h_length : circuit.local_length = FlatOperation.witness_length circuit.ops := circuit.local_length_eq
   congr
-  simp [SubCircuit.witnesses]
+  rw [SubCircuit.witnesses]
+  apply Vector.cast_heq
 
 theorem can_replace_local_witnesses {env: Environment F} {n: ℕ} {ops: Operations F n}  :
   env.uses_local_witnesses' ops → env.uses_local_witnesses ops := by

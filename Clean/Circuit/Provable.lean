@@ -94,7 +94,7 @@ instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
 
 def var_from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
-  let vars := Vector.natInit (size α) fun i => var ⟨offset + i⟩
+  let vars := Vector.mapRange (size α) fun i => var ⟨offset + i⟩
   from_vars vars
 end ProvableType
 
@@ -268,17 +268,17 @@ theorem from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (off
   symm
   simp only [var_from_offset, ProvableType.var_from_offset, from_vars, size, from_elements]
   congr
-  rw [←Vector.cast_natInit combined_size_eq.symm]
+  rw [←Vector.cast_mapRange combined_size_eq.symm]
   apply from_offset_eq_from_offset_struct_aux (components α) offset
 where
   from_offset_eq_from_offset_struct_aux : (cs : List WithProvableType) → (offset: ℕ) →
     var_from_offset.go cs offset = (
-      Vector.natInit (combined_size' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> components_from_elements cs)
+      Vector.mapRange (combined_size' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> components_from_elements cs)
     | [], _ => rfl
     | c :: cs, offset => by
       simp only [var_from_offset.go, components_from_elements, ProvableType.var_from_offset, from_vars]
       have h_size : combined_size' (c :: cs) = size c.type + combined_size' cs := rfl
-      rw [Vector.cast_natInit h_size, Vector.natInit_add_eq_append, Vector.cast_rfl,
+      rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append, Vector.cast_rfl,
         Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
       congr
       -- recursively use this lemma
@@ -325,20 +325,20 @@ theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α]
 
 theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : Nat) :
     var_from_offset (F:=F) (ProvableVector α n) offset
-    = .natInit n fun i => var_from_offset α (offset + (size α)*i) := by
+    = .mapRange n fun i => var_from_offset α (offset + (size α)*i) := by
   induction n with
   | zero => rfl
   | succ n ih =>
-    rw [Vector.natInit_succ, ←ih]
+    rw [Vector.mapRange_succ, ←ih]
     simp only [var_from_offset, from_vars, from_elements, size]
     rw [←Vector.map_push, Vector.toChunks_push]
     congr
     conv => rhs; congr; rhs; congr; intro i; rw [mul_comm, add_assoc]
     let create (i : ℕ) : Expression F := var ⟨ offset + i ⟩
     have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := by rfl
-    rw [h_create, ←Vector.natInit_add_eq_append]
+    rw [h_create, ←Vector.mapRange_add_eq_append]
     have h_size_succ : (n + 1) * size α = n * size α + size α := by rw [add_mul]; ac_rfl
-    rw [←Vector.cast_natInit h_size_succ]
+    rw [←Vector.cast_mapRange h_size_succ]
 
 -- `ProvablePair`
 

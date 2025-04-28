@@ -35,6 +35,8 @@ instance (T: Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 
 namespace U64
+def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
+  ⟨ f x.x0, f x.x1, f x.x2, f x.x3, f x.x4, f x.x5, f x.x6, f x.x7 ⟩
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--

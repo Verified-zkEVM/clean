@@ -79,7 +79,7 @@ instance : ConstantLawfulCircuits (F:=F) witness_var where
   operations c n := ⟨.witness (.empty n) 1 fun env => #v[c env], rfl⟩
 
 instance {k : ℕ} {c : Environment F → Vector F k} : ConstantLawfulCircuit (witness_vars k c) where
-  output n := .natInit k fun i => ⟨n + i⟩
+  output n := .mapRange k fun i => ⟨n + i⟩
   local_length := k
   operations n := ⟨.witness (.empty n) k c, rfl⟩
 
@@ -213,6 +213,10 @@ lemma append_only' {circuit : Circuit F α} [lawful : LawfulCircuit circuit] :
   repeat exact offset_independent ops |>.symm
   rw [heq_eqRec_iff_heq, heq_eq_eq]
 
+theorem output_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
+    circuit.output n = output circuit n := by
+  apply output_independent
+
 theorem final_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.final_offset n = final_offset circuit n := by
   apply offset_independent
@@ -243,7 +247,7 @@ theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit 
   rw [Circuit.total_length_eq, final_offset_eq]
 
 theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β)
-  [f_lawful: LawfulCircuit f] [g_lawful : ∀ a : α, LawfulCircuit (g a)] (n : ℕ) :
+  (f_lawful: LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
     ((f >>= g).operations n).local_length = (f.operations n).local_length + ((g (f.output n)).operations (f.final_offset n)).local_length := by
   apply Nat.add_left_cancel (n:=n)
   let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
@@ -293,3 +297,8 @@ theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (f_lawful
     completeness env (f.operations n) ∧ completeness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
   simp only [completeness_iff_generic, bind_generic]
 end Circuit.constraints_hold
+
+attribute [lawful_norm] LawfulCircuit.final_offset LawfulCircuit.operations LawfulCircuit.output ConstantLawfulCircuit.local_length
+attribute [lawful_norm] ConstantLawfulCircuits.output ConstantLawfulCircuits.local_length ConstantLawfulCircuits.operations
+  ConstantLawfulCircuits.from_constant_length id_eq
+attribute [lawful_norm] ElaboratedCircuit.local_length ElaboratedCircuit.output
