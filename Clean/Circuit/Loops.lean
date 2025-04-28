@@ -72,58 +72,18 @@ theorem mapM_local_length {circuit : α → Circuit F β} [lawful : ConstantLawf
     rfl
 end Circuit
 
-theorem bind_mapM_push_output {n : ℕ} (f : α → Circuit F β)
-    (xs : Vector α n) (x : α) (ops : OperationsList F) :
-    ((Vector.mapM f xs >>= fun out => out.push <$> f x) ops).1 =
-    (Vector.mapM f xs ops).1.push (f x (Vector.mapM f xs ops).2).1 := by
-  set rest := Vector.mapM f xs ops with ←rest_h
-  suffices ((rest.1.push <$> f x) rest.2).1 = (Vector.mapM f xs ops).1.push (f x rest.2).1 by
-    simp_all only [rest]
-    exact this
-  rw [rest_h]
-  simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq, rest]
-
-theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
-
-theorem bind_mapM_push_operation_list {n : ℕ} (f : α → Circuit F β)
-    (xs : Vector α n) (x : α) (ops : OperationsList F) :
-    ((Vector.mapM f xs >>= fun out => out.push <$> f x) ops).2 =
-    (f x (Vector.mapM f xs ops).2).2 := by
-    set rest := Vector.mapM f xs ops with ←rest_h
-    suffices ((rest.1.push <$> f x) rest.2).2 = (f x rest.2).2 by
-      simp_all only [rest]
-      exact this
-    simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq]
-
-theorem bind_mapM_cons_operation_list {n : ℕ} (f : α → Circuit F β)
-    (xs : Vector α n) (x : α) (ops : OperationsList F) :
-    ((Vector.mapM f xs >>= fun out => out.push <$> f x) ops).2 =
-    (f x (Vector.mapM f xs ops).2).2 := by
-    set rest := Vector.mapM f xs ops with ←rest_h
-    suffices ((rest.1.push <$> f x) rest.2).2 = (f x rest.2).2 by
-      simp_all only [rest]
-      exact this
-    simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq]
-
-@[reducible]
-def operations_mapM {m : ℕ} {circuit : α → Circuit F β} [Nonempty β]
-  (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) (n : ℕ) :
-  OperationsFrom F n ((fun n ↦ n + ConstantLawfulCircuits.local_length circuit * m) n) :=
-  match xs with
-  | ⟨ .mk [], _⟩ => by
-    rename_i size_h
-    simp only [Array.size_toArray, List.length_nil] at size_h
-    rw [←size_h]
-    simp only [mul_zero, add_zero]
-    exact .empty n
-  | ⟨.mk (x::xs), h⟩ => by
-    have hm: xs.length + 1 = m := by rw [←h, Array.size_toArray, List.length_cons]
-    have ops := operations_mapM (m:=xs.length) ⟨.mk xs, rfl⟩ lawful (n + lawful.local_length)
-    let ops_x := lawful.operations x n
-    rw [←hm]
-    ring_nf
-    exact ops_x ++ ops
-
+lemma ConstantLawfulCircuit.from_mapM_vector.offset_independent {circuit : α → Circuit F β} [Nonempty β]
+  {xs : Vector α m} [lawful: ConstantLawfulCircuits circuit] (ops : OperationsList F) :
+      (Vector.mapM circuit xs ops).2.offset = ops.offset + lawful.local_length * m := by
+    induction xs using Vector.induct_push
+    case nil => simp only [Vector.mapM_mk_empty, pure, StateT.pure, mul_zero, add_zero]
+    case push xs x ih =>
+      rename_i n'
+      rw [Vector.mapM_push]
+      simp only [bind_pure_comp] at ih ⊢
+      show (circuit x (xs.mapM circuit ops).2).2.offset = _
+      rw [lawful.offset_independent x (Vector.mapM circuit xs ops).2, ih]
+      ring
 
 instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
   (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) :
@@ -131,7 +91,16 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
   output n := xs.mapIdx fun i x => lawful.output x (n + lawful.local_length * i)
   local_length := lawful.local_length * m
   final_offset n := n + lawful.local_length * m
-  operations n := operations_mapM xs lawful n
+  operations n : OperationsFrom F n (n + lawful.local_length * m) := by
+    set k := ConstantLawfulCircuits.local_length circuit
+    induction xs using Vector.induct_push
+    case nil => exact .empty n
+    case push xs x ops =>
+      rename_i n'
+      rw [mul_add, ←add_assoc, mul_one]
+      exact ops ++ lawful.operations x (n + k * n')
+
+  offset_independent := from_mapM_vector.offset_independent
 
   output_independent ops := by
     induction xs using Vector.induct_push
@@ -141,42 +110,33 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       rw [Vector.mapM_push]
       simp only [Vector.mapIdx, Vector.eq_mk, bind_pure_comp, Vector.toArray_push,
         Array.mapIdx_push, Vector.size_toArray] at ih ⊢
-      rw [bind_mapM_push_output, ←ih]
+      rw [←ih]
+      show ((xs.mapM circuit ops).1.push (circuit x (xs.mapM circuit ops).2).1).toArray = _
       simp only [Vector.toArray_push]
       rw [lawful.output_independent x (Vector.mapM circuit xs ops).2]
       congr
-      -- TODO: how to prove this?
-      sorry
-
-  offset_independent ops := by
-    induction xs using Vector.induct_push
-    case nil => simp only [Vector.mapM_mk_empty, pure, StateT.pure, mul_zero, add_zero]
-    case push xs x ih =>
-      rename_i n'
-      rw [Vector.mapM_push]
-      simp only [bind_pure_comp] at ih ⊢
-      rw [bind_mapM_push_operation_list]
-      rw [lawful.offset_independent x (Vector.mapM circuit xs ops).2, ih]
-      ring
+      apply from_mapM_vector.offset_independent
 
   append_only ops := by
+    simp only [eq_mpr_eq_cast, cast_cast, cast_eq]
     induction xs using Vector.induct_push
     case nil =>
-      simp [Vector.induct_push]
-      rfl
+      simp [Vector.mapM_mk_empty, pure, StateT.pure, Vector.induct_push, Operations.append_empty]
     case push xs x ih =>
       rename_i n'
-      simp [Vector.mapM_push, bind_pure_comp, operations_mapM]
-      have h := bind_mapM_push_operation_list circuit xs x ops
-      have h' := lawful.append_only x (Vector.mapM circuit xs ops).2
-      simp only [h, h', ih]
-      simp only [lawful.append_only x _]
-      simp only [operations_mapM, Vector.push, OperationsList.mk.injEq]
-      ring_nf
-      simp only [true_and]
-      sorry
-
-
+      simp only [Vector.mapM_push]
+      let g (bs : Vector β n') := (do let b ← circuit x; pure (bs.push b))
+      let bs := ((xs.mapM circuit) ops).1
+      let lawful' : LawfulCircuit (g bs) := by infer_lawful_circuit
+      change (g bs ((xs.mapM circuit) ops).2).2 = _
+      simp only [ih, lawful'.append_only, lawful', LawfulCircuit.final_offset, LawfulCircuit.operations]
+      set k := lawful.local_length
+      have h_offset : ops.offset + lawful.local_length * n' + lawful.local_length
+        = ops.offset + lawful.local_length * (n' + 1) := by ring
+      simp only [OperationsFrom.append_empty, OperationsList.mk.injEq, h_offset, true_and, lawful']
+      rw [Operations.append_assoc]
+      congr
+      simp [Vector.induct_push_push]
 
 namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
