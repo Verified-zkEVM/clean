@@ -102,9 +102,6 @@ theorem completeness : Completeness (F p) KeccakState assumptions := by
   dsimp only [circuit_norm, main, Vector.mapFinRangeM, Xor.circuit, And.And64.circuit, Not.circuit] at h_env
   sorry
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState where
-  assumptions
-  spec
-  soundness
-  completeness
+def circuit : FormalCircuit (F p) KeccakState KeccakState :=
+  { elaborated with assumptions, spec, soundness, completeness }
 end Gadgets.Keccak256.Chi
