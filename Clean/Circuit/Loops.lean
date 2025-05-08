@@ -357,23 +357,29 @@ section
 variable {env : Environment F} {m n : ℕ} [Nonempty β] {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
 @[circuit_norm]
-lemma mapFinRangeM.soundness :
+lemma mapFinRange.soundness :
   constraints_hold.soundness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*lawful.local_length)) := by
   apply Circuit.constraints_hold.mapFinRangeM_soundness
 
 @[circuit_norm]
-lemma mapFinRangeM.completeness :
+lemma mapFinRange.completeness :
   constraints_hold.completeness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*lawful.local_length)) := by
   apply Circuit.constraints_hold.mapFinRangeM_completeness
 
 @[circuit_norm]
-lemma mapFinRangeM.local_length :
+lemma mapFinRange.local_length_eq :
     (mapFinRange m body lawful |>.operations n).local_length = lawful.local_length * m := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.local_length_eq]
   simp only [lawful_loop, lawful_norm]
+
+@[circuit_norm]
+lemma mapFinRange.initial_offset_eq :
+    (mapFinRange m body lawful |>.operations n).initial_offset = n := by
+  let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.initial_offset_eq]
 end
 
 end Circuit

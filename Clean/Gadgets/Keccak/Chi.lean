@@ -32,10 +32,8 @@ instance lawful (state : Var KeccakState (F p)) : ConstantLawfulCircuit (main st
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
   main
   local_length _ := 400
-  local_length_eq state i0 := by
-    simp only [main, circuit_norm, lawful_norm, Not.circuit, And.And64.circuit, Xor.circuit]
-
-  initial_offset_eq state i := LawfulCircuit.initial_offset_eq (main state) i
+  local_length_eq state i0 := by simp only [main, circuit_norm]; ac_rfl
+  initial_offset_eq state i := by simp only [main, circuit_norm]
 
   output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
   output_eq state i := by
