@@ -60,39 +60,41 @@ theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
   simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
     theta_c, Xor.circuit, Xor.assumptions, Xor.spec] at *
-  simp only [and_imp, and_assoc, add_assoc, Nat.reduceAdd] at h_holds
+  simp only [and_imp, and_assoc, add_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
 
-  have s (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
+  have s {i : ℕ} (hi : i < 25) : eval env state_var[i] = state[i] := by
     rw [←h_input, Vector.getElem_map]
   simp only [s] at h_holds
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff,
     KeccakRow.value, KeccakState.value, Specs.Keccak256.theta_c]
 
+  have state_norm' : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized :=
+    fun hi => state_norm ⟨ _, hi ⟩
+
   repeat
     first
     | obtain⟨ h0, h1, h2, h3, h_holds ⟩ := h_holds
     | obtain⟨ h0, h1, h2, h3 ⟩ := h_holds
-    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm _) (state_norm _)
-    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm _)
-    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm _)
-    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm _)
+    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm' _) (state_norm' _)
+    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm' _)
+    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm' _)
+    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm' _)
     rw [xor2, xor1, xor0] at xor
     clear h0 h1 h2 h3 xor0 xor1 xor2 norm0 norm1 norm2
 
   simp_all
-  get_elem_tactic
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
     theta_c, Xor.circuit, Xor.assumptions, Xor.spec] at h_input h_assumptions ⊢
-  simp only [add_assoc, Nat.reduceAdd]
+  simp only [add_assoc, Nat.reduceAdd, Nat.reduceMod]
 
   rw [KeccakState.is_normalized] at h_assumptions
-  have s (i : Fin 25) : (eval env state_var[i.val]).is_normalized = True := by
-    have : eval env state_var[i.val] = state[i.val] := by rw [←h_input, Vector.getElem_map]
+  have s {i : ℕ} (hi : i < 25) : (eval env state_var[i]).is_normalized = True := by
+    have : eval env state_var[i] = state[i] := by rw [←h_input, Vector.getElem_map]
     rw [this, eq_iff_iff, iff_true]
-    exact h_assumptions i
+    exact h_assumptions ⟨ i, hi ⟩
   simp only [s, true_and, and_true]
 
   dsimp only [Environment.uses_local_witnesses, elaborated] at h_env

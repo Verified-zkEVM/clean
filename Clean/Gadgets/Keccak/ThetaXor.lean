@@ -68,19 +68,18 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
-  simp only [circuit_norm, eval_vector] at h_input
-  dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit] at h_holds
-  simp only [circuit_norm, subcircuit_norm] at h_holds
-  dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
-  simp [add_assoc, and_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two] at h_holds
+  simp only [circuit_norm, eval_vector, Inputs.mk.injEq] at h_input
+  simp only [circuit_norm, subcircuit_norm, theta_xor, Xor.circuit, Rotation64.circuit,
+    Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
+  simp only [Nat.zero_mod, and_imp, Nat.one_mod, Nat.reduceMod, add_assoc, Nat.reduceAdd, and_assoc,
+    Nat.mod_succ] at h_holds
 
-  simp at h_input
   obtain ⟨h_state, h_d⟩ := h_input
 
-  have s_d (i : Fin 5) : eval env (state_var.d[i.val]) = d[i.val] := by
+  have s_d (i : ℕ) (hi : i < 5) : eval env (state_var.d[i]) = d[i] := by
     rw [← h_d, Vector.getElem_map]
 
-  have s_state (i : Fin 25) : eval env (state_var.state[i.val]) = state[i.val] := by
+  have s_state (i : ℕ) (hi : i < 25) : eval env (state_var.state[i]) = state[i] := by
     rw [← h_state, Vector.getElem_map]
 
   simp only [s_d, s_state] at h_holds
@@ -88,16 +87,16 @@ theorem soundness : Soundness (F p) assumptions spec := by
     -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector, eval_vector,
     KeccakState.is_normalized, KeccakState.value, KeccakRow.value]
 
+  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized := fun hi => state_norm ⟨ _, hi ⟩
+  have d_norm : ∀ {i : ℕ} (hi : i < 5), d[i].is_normalized := fun hi => d_norm ⟨ _, hi ⟩
+
   repeat
-    first
-    | obtain ⟨ h, h_holds ⟩ := h_holds
-    | let h := h_holds; let h_holds := True
-    specialize h (state_norm _) (d_norm _)
-    obtain ⟨ xor, norm ⟩ := h
-    simp [xor, norm]
+    obtain ⟨ h, h_holds ⟩ := h_holds
+    obtain ⟨ xor, norm ⟩ := h (state_norm _) (d_norm _)
+    simp only [xor, norm, true_and]
 
-  get_elem_tactic
-
+  have ⟨ xor, norm ⟩ := h_holds (state_norm _) (d_norm _)
+  exact ⟨norm, xor⟩
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
