@@ -68,17 +68,17 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff,
     KeccakRow.value, KeccakState.value, Specs.Keccak256.theta_c]
 
-  have state_norm' : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized :=
+  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
 
   repeat
     first
     | obtain⟨ h0, h1, h2, h3, h_holds ⟩ := h_holds
     | obtain⟨ h0, h1, h2, h3 ⟩ := h_holds
-    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm' _) (state_norm' _)
-    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm' _)
-    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm' _)
-    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm' _)
+    obtain ⟨ xor0, norm0 ⟩ := h0 (state_norm _) (state_norm _)
+    obtain ⟨ xor1, norm1 ⟩ := h1 norm0 (state_norm _)
+    obtain ⟨ xor2, norm2 ⟩ := h2 norm1 (state_norm _)
+    obtain ⟨ xor, norm ⟩ := h3 norm2 (state_norm _)
     rw [xor2, xor1, xor0] at xor
     clear h0 h1 h2 h3 xor0 xor1 xor2 norm0 norm1 norm2
 
