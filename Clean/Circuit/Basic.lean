@@ -594,7 +594,7 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.mapFinRange Vector.mapRange Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.mapRange_zero Vector.mapRange_succ Vector.toArray_push Array.push_toList List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
 -- simplify `vector.get 0` (which occurs in ProvableType definitions)
