@@ -13,7 +13,7 @@ open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
-  .mapFinRangeM 25 fun i => do
+  .mapFinRange 25 fun i => do
     let state_not ← subcircuit Not.circuit (state.get (i + 5))
     let state_and ← subcircuit And.And64.circuit ⟨state_not, state.get (i + 10)⟩
     subcircuit Xor.circuit ⟨state.get i, state_and⟩
@@ -33,8 +33,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
   main
   local_length _ := 400
   local_length_eq state i0 := by
-    rw [LawfulCircuit.local_length_eq]
-    simp only [lawful_norm, Not.circuit, And.And64.circuit, Xor.circuit]
+    simp only [main, circuit_norm, lawful_norm, Not.circuit, And.And64.circuit, Xor.circuit]
 
   initial_offset_eq state i := LawfulCircuit.initial_offset_eq (main state) i
 
@@ -85,7 +84,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp_all [KeccakState.value]
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
-  intro i env state_var h_env state h_input state_norm
+  intro i0 env state_var h_env state h_input state_norm
 
   -- simplify constraints
   simp only [main, circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
