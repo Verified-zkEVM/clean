@@ -37,9 +37,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
 
   output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
   output_eq state i := by
-    rw [LawfulCircuit.output_eq]
-    simp only [lawful_norm, lawful, Xor.circuit, And.And64.circuit, Not.circuit]
-    simp [Vector.finRange, List.finRange, Vector.range_succ, Array.range]
+    simp only [main, circuit_norm, lawful_norm, Xor.circuit, And.And64.circuit, Not.circuit]
+    simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.push_mk, List.push_toArray, List.nil_append, List.cons_append]
+    simp only [Nat.cast_zero, Nat.cast_one, Nat.cast_ofNat, Fin.coe_eq_castSucc, Fin.reduceCastSucc]
+    rfl
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
