@@ -597,8 +597,14 @@ attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push
   Vector.mapRange_zero Vector.mapRange_succ Vector.toArray_push Array.push_toList List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
--- simplify `vector.get 0` (which occurs in ProvableType definitions)
--- TODO handle other small indices as well
+-- simplify Vector.mapFinRange
+attribute [circuit_norm] Vector.mapFinRange_succ Vector.mapFinRange_zero
+    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
+
+-- simplify stuff like (3 : Fin 8).val = 3 % 8
+attribute [circuit_norm] Fin.coe_ofNat_eq_mod
+
+-- simplify `vector.get i` (which occurs in ProvableType definitions) and similar
 attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray
   List.getElem_cons_zero Fin.cast_eq_self List.getElem_cons_succ
   Vector.getElem_mk Vector.getElem_toArray Vector.getElem_map Fin.getElem_fin

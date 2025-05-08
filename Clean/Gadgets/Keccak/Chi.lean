@@ -24,9 +24,6 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
-instance lawful (state : Var KeccakState (F p)) : ConstantLawfulCircuit (main state) :=
-  .from_mapM_vector _ (by infer_constant_lawful_circuits)
-
 -- #eval! main (p:=p_babybear) default |>.operations.local_length
 -- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
@@ -38,9 +35,6 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
   output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
   output_eq state i := by
     simp only [main, circuit_norm, lawful_norm, Xor.circuit, And.And64.circuit, Not.circuit]
-    simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.push_mk, List.push_toArray, List.nil_append, List.cons_append]
-    simp only [Nat.cast_zero, Nat.cast_one, Nat.cast_ofNat, Fin.coe_eq_castSucc, Fin.reduceCastSucc]
-    rfl
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
