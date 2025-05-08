@@ -346,5 +346,23 @@ theorem mapFinRangeM_completeness {n : ℕ} :
   simp only [completeness_iff_generic, mapFinRangeM_generic]
 end
 end constraints_hold
+
+-- Loop constructs designed to simplify under `circuit_norm`
+
+def mapFinRangeM (m : ℕ) (body : Fin m → Circuit F β)
+    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
+  Vector.mapFinRangeM m body
+
+@[circuit_norm]
+lemma mapFinRangeM.soundness {env : Environment F} {m : ℕ} {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body} :
+  constraints_hold.soundness env (mapFinRangeM m body lawful |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*lawful.local_length)) := by
+  apply Circuit.constraints_hold.mapFinRangeM_soundness
+
+@[circuit_norm]
+lemma mapFinRangeM.completeness {env : Environment F} {m : ℕ} {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body} :
+  constraints_hold.completeness env (mapFinRangeM m body lawful |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*lawful.local_length)) := by
+  apply Circuit.constraints_hold.mapFinRangeM_completeness
 end Circuit
 end

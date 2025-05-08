@@ -13,7 +13,7 @@ open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
-  Vector.mapFinRangeM 25 fun i => do
+  .mapFinRangeM 25 fun i => do
     let state_not ← subcircuit Not.circuit (state.get (i + 5))
     let state_and ← subcircuit And.And64.circuit ⟨state_not, state.get (i + 10)⟩
     subcircuit Xor.circuit ⟨state.get i, state_and⟩
@@ -70,10 +70,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
       specialize h ⟨ i', hi'⟩
       simp_all [KeccakState.value]
 
-  -- simplify constraints using mapM theory
-  simp only [elaborated, main] at h_holds
-  rw [Circuit.constraints_hold.mapFinRangeM_soundness (lawfulFin := by infer_constant_lawful_circuits)] at h_holds
-  simp only [circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+  -- simplify constraints
+  simp only [main, circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd] at h_holds
 
   intro i
@@ -89,10 +87,8 @@ theorem soundness : Soundness (F p) assumptions spec := by
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i env state_var h_env state h_input state_norm
 
-  -- simplify constraints using mapM theory
-  simp only [elaborated, main]
-  rw [Circuit.constraints_hold.mapFinRangeM_completeness (lawfulFin := by infer_constant_lawful_circuits)]
-  simp only [circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+  -- simplify constraints
+  simp only [main, circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd]
   intro i
 
