@@ -29,12 +29,12 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
   main
   local_length _ := 400
-  local_length_eq state i0 := by simp only [main, circuit_norm]; ac_rfl
+  local_length_eq state i0 := by simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
   initial_offset_eq state i := by simp only [main, circuit_norm]
 
   output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
   output_eq state i := by
-    simp only [main, circuit_norm, lawful_norm, Xor.circuit, And.And64.circuit, Not.circuit]
+    simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
@@ -48,7 +48,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
 
   -- simplify goal
-  simp only [spec, lawful_norm]
+  simp only [spec, ElaboratedCircuit.output]
   rw [chi_loop, eval_vector, KeccakState.is_normalized, Vector.ext_iff]
   simp only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapFinRange, Vector.getElem_mapRange,
     KeccakState.value, Vector.map_map, Function.comp_apply]
@@ -63,7 +63,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
       simp_all [KeccakState.value]
 
   -- simplify constraints
-  simp only [main, circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+  simp only [main, circuit_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd] at h_holds
 
   intro i
@@ -80,7 +80,7 @@ theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input state_norm
 
   -- simplify constraints
-  simp only [main, circuit_norm, lawful_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+  simp only [main, circuit_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd]
   intro i
 
