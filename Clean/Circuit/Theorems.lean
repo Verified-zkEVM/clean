@@ -192,30 +192,34 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {n: ℕ} {
 end Environment
 
 namespace Circuit
-/--
-Generic version of `constraints_hold`, to reason about soundness and completeness at the same time
--/
-def constraints_hold.generic (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
-  (eval : Environment F) {n : ℕ} : Operations F n → Prop
-  | .empty _ => True
-  | .witness ops _ _ => generic from_subcircuit eval ops
-  | .assert ops e => generic from_subcircuit eval ops ∧ eval e = 0
-  | .lookup ops { table, entry, .. } => generic from_subcircuit eval ops ∧ table.contains (entry.map eval)
-  | .subcircuit ops s => generic from_subcircuit eval ops ∧ from_subcircuit eval s
+
+def constraints_hold.soundnessRecursor (eval : Environment F) : Operations.PropRecursor F where
+  empty _ := True
+  witness acc _ _ := acc
+  assert acc e := acc ∧ (eval e = 0)
+  lookup acc l := acc ∧ l.table.contains (l.entry.map eval)
+  subcircuit acc s := acc ∧ s.soundness eval
 
 theorem constraints_hold.soundness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
-  soundness env ops ↔ generic (fun env s => s.soundness env) env ops := by
+  soundness env ops ↔ ops.foldlProp (soundnessRecursor env) := by
   induction ops with
   | empty => trivial
   | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
-    cases ops <;> simp_all [soundness, generic]
+    cases ops <;> simp_all [soundness, soundnessRecursor, Operations.foldlProp]
+
+def constraints_hold.completenessRecursor (eval : Environment F) : Operations.PropRecursor F where
+  empty _ := True
+  witness acc _ _ := acc
+  assert acc e := acc ∧ (eval e = 0)
+  lookup acc l := acc ∧ l.table.contains (l.entry.map eval)
+  subcircuit acc s := acc ∧ s.completeness eval
 
 theorem constraints_hold.completeness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
-  completeness env ops ↔ generic (fun env s => s.completeness env) env ops := by
+  completeness env ops ↔ ops.foldlProp (completenessRecursor env) := by
   induction ops with
   | empty => trivial
   | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
-    cases ops <;> simp_all [completeness, generic]
+    cases ops <;> simp_all [completeness, completenessRecursor, Operations.foldlProp]
 
 /--
 Completeness theorem which proves that we can replace constraints in subcircuits
@@ -231,9 +235,10 @@ theorem can_replace_completeness {n: ℕ} {ops : Operations F n} {env} : env.use
   intro h_env h
   induction ops with
   | empty => trivial
-  | witness | assert | lookup => simp_all [circuit_norm, Environment.uses_local_witnesses, constraints_hold.generic]
+  | witness | assert | lookup =>
+    simp_all [circuit_norm, Environment.uses_local_witnesses, constraints_hold.completenessRecursor, Operations.foldlProp]
   | subcircuit ops circuit ih =>
-    simp only [Environment.uses_local_witnesses, constraints_hold.generic] at *
+    simp only [Environment.uses_local_witnesses] at *
     exact ⟨ ih h_env.left h.left,
       circuit.implied_by_completeness env (env.extends_vector_subcircuit ▸ h_env.right) h.right ⟩
 
