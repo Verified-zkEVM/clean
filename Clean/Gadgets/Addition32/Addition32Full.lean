@@ -29,7 +29,7 @@ instance : ProvableStruct Outputs where
   to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
   from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
-open Gadgets.Addition8FullCarry (add8_full_carry)
+open Addition8FullCarry (add8_full_carry)
 
 def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
@@ -109,7 +109,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 
   -- apply the main soundness theorem
-  apply Gadgets.Addition32.Theorems.add32_soundness
+  apply Addition32.Theorems.add32_soundness
     x0_byte x1_byte x2_byte x3_byte
     y0_byte y1_byte y2_byte y3_byte
     z0_byte z1_byte z2_byte z3_byte
