@@ -127,18 +127,17 @@ end OperationsFrom
 -- append behaves as expected with `constraints_hold`
 
 namespace Circuit.constraints_hold
-variable {env : Environment F} {n : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {env : Environment F} {n : ℕ} (prop : Operations.Condition F)
 
 theorem append_generic (as : Operations F m) (bs : OperationsFrom F m n) :
-  generic from_subcircuit env (as ++ bs) ↔
-    generic from_subcircuit env as ∧ generic from_subcircuit env bs.val := by
+  (as ++ bs).forAll prop ↔ as.forAll prop ∧ bs.val.forAll prop := by
   induction bs using OperationsFrom.induct with
   | empty n => rw [Operations.append_empty]; tauto
   | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
     specialize ih as
     simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
     simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
-    simp only [generic, ih, and_assoc]
+    simp only [Operations.forAll, ih, and_assoc]
 
 theorem append_soundness (as : Operations F m) (bs : OperationsFrom F m n) :
     soundness env (as ++ bs) ↔ soundness env as ∧ soundness env bs.val := by
