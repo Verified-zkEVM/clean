@@ -29,4 +29,18 @@ def KeccakRow.is_normalized_iff (row : KeccakRow (F p)) :
     row[3].is_normalized ∧
     row[4].is_normalized := by
   simp [KeccakRow.is_normalized, IsEmpty.forall_iff, Fin.forall_fin_succ]
+
+-- many of our specs are of the form `state.is_normalized ∧ state.value = ...` and soundness proofs use this lemma
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma KeccakState.normalized_value_ext (state : KeccakState (F p)) (rhs : Vector ℕ 25) :
+  (∀ i : Fin 25, state[i.val].is_normalized ∧ state[i.val].value = rhs[i.val]) →
+    state.is_normalized ∧ state.value = rhs := by
+  intro h
+  constructor
+  · intro i
+    exact (h i).left
+  simp only [Vector.ext_iff, value, Vector.getElem_map]
+  intro i hi
+  exact (h ⟨ i, hi ⟩).right
+
 end Gadgets.Keccak256

@@ -51,28 +51,20 @@ lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
   -- rewrite goal
-  simp only [spec, elaborated, theta_xor_loop, var_from_offset_vector, eval_vector]
+  apply KeccakState.normalized_value_ext
+  simp only [elaborated, size, theta_xor_loop, var_from_offset_vector, eval_vector,
+    Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange, mul_comm,
+    KeccakState.value, KeccakRow.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
   simp only [circuit_norm, subcircuit_norm, theta_xor, h_input, Xor.circuit, Rotation64.circuit,
     Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
 
-  -- use assumptions
-  have d_norm' (i : Fin 25) : d[i.val / 5].is_normalized := d_norm ⟨_, by omega⟩
-
-  replace h_holds := fun (i : Fin 25) => h_holds i ⟨ state_norm i, d_norm' i ⟩
-  clear state_norm d_norm d_norm' h_input
-
-  -- prove two goals individually
-  constructor
-  · intro i
-    rw [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapRange, mul_comm]
-    exact (h_holds i).right
-  · simp only [Vector.ext_iff, KeccakState.value, KeccakRow.value]
-    intro i hi
-    simp only [Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange, mul_comm]
-    exact (h_holds ⟨ i, hi ⟩).left
+  -- use assumptions, and prove goal
+  intro i
+  specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
+  exact ⟨ h_holds.right, h_holds.left ⟩
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
