@@ -199,7 +199,7 @@ def constraints_hold.soundnessCondition (eval : Environment F) : Operations.Cond
   lookup l := l.table.contains (l.entry.map eval)
   subcircuit s := s.soundness eval
 
-theorem constraints_hold.soundness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
+theorem constraints_hold.soundness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
   soundness env ops ↔ ops.forAll (soundnessCondition env) := by
   induction ops with
   | empty => trivial
@@ -212,7 +212,7 @@ def constraints_hold.completenessCondition (eval : Environment F) : Operations.C
   lookup l := l.table.contains (l.entry.map eval)
   subcircuit s := s.completeness eval
 
-theorem constraints_hold.completeness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
+theorem constraints_hold.completeness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
   completeness env ops ↔ ops.forAll (completenessCondition env) := by
   induction ops with
   | empty => trivial
@@ -229,7 +229,7 @@ because it already implies the flat version.
 -/
 theorem can_replace_completeness {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses ops →
   constraints_hold.completeness env ops → constraints_hold env ops := by
-  rw [constraints_hold.completeness_iff_generic]
+  rw [constraints_hold.completeness_iff_forAll]
   intro h_env h
   induction ops with
   | empty => trivial

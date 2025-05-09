@@ -127,9 +127,9 @@ end OperationsFrom
 -- append behaves as expected with `constraints_hold`
 
 namespace Circuit.constraints_hold
-variable {env : Environment F} {n : ℕ} (prop : Operations.Condition F)
+variable {env : Environment F} {n : ℕ} {prop : Operations.Condition F}
 
-theorem append_generic (as : Operations F m) (bs : OperationsFrom F m n) :
+theorem append_forAll (as : Operations F m) (bs : OperationsFrom F m n) :
   (as ++ bs).forAll prop ↔ as.forAll prop ∧ bs.val.forAll prop := by
   induction bs using OperationsFrom.induct with
   | empty n => rw [Operations.append_empty]; tauto
@@ -141,11 +141,11 @@ theorem append_generic (as : Operations F m) (bs : OperationsFrom F m n) :
 
 theorem append_soundness (as : Operations F m) (bs : OperationsFrom F m n) :
     soundness env (as ++ bs) ↔ soundness env as ∧ soundness env bs.val := by
-  simp only [soundness_iff_generic, append_generic]
+  simp only [soundness_iff_forAll, append_forAll]
 
 theorem append_completeness (as : Operations F m) (bs : OperationsFrom F m n) :
   completeness env (as ++ bs) ↔ completeness env as ∧ completeness env bs.val := by
-  simp only [completeness_iff_generic, append_generic]
+  simp only [completeness_iff_forAll, append_forAll]
 
 end Circuit.constraints_hold
 
