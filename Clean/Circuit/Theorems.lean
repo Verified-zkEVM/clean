@@ -35,14 +35,14 @@ theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
 Initial offset + size of local witnesses = final offset of a circuit
 -/
 lemma total_length_eq {n: ℕ} {ops: Operations F n} : ops.initial_offset + ops.local_length = n := by
-  open Operations (initial_offset local_length) in
+  open Operations (initial_offset) in
   induction ops with
-  | empty n => simp only [initial_offset, local_length, add_zero]
+  | empty n => simp only [initial_offset, Operations.local_length, add_zero]
   | witness ops _ _ ih | subcircuit ops s ih =>
-    dsimp only [initial_offset, local_length]
+    dsimp only [initial_offset, Operations.local_length]
     rw [←add_assoc, ih]
   | assert ops _ ih | lookup op _ ih =>
-    simp only [initial_offset, local_length, ih]
+    simp only [initial_offset, Operations.local_length, ih]
 
 end Circuit
 

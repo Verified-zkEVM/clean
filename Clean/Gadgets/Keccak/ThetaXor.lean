@@ -8,7 +8,6 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 structure Inputs (F : Type) where
   state : KeccakState F
@@ -22,14 +21,14 @@ instance : ProvableStruct Inputs where
 def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   let { state, d } := inputs
   .mapFinRange 25 fun i =>
-    subcircuit Gadgets.Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
+    subcircuit Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var KeccakState (F p)) where
   main := theta_xor
   local_length _ := 200
   output _ i0 := var_from_offset KeccakState i0
 
-  local_length_eq _ n := by simp only [theta_xor, circuit_norm]; ac_rfl
+  local_length_eq _ n := by simp only [theta_xor, circuit_norm, Xor.circuit]
   initial_offset_eq _ i := by simp only [theta_xor, circuit_norm]
   output_eq _ i := by simp only [theta_xor, circuit_norm, Xor.circuit, var_from_offset_vector]
 

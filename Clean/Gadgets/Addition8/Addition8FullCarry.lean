@@ -105,7 +105,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have h_byte': z.val < 256 := ByteTable.soundness z h_byte
 
     have ⟨as_x, as_y, as_carry_in⟩ := as
-    apply Gadgets.Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry h_add
+    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry h_add
 
   completeness := by
    -- introductions
@@ -148,12 +148,12 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
       rw [hcarry_out]
-      apply Gadgets.Addition8.Theorems.completeness_bool
+      apply Addition8.Theorems.completeness_bool
       repeat assumption
 
     have completeness3 : x + y + carry_in + -z + -(carry_out * 256) = 0 := by
       rw [hz, hcarry_out]
-      apply Gadgets.Addition8.Theorems.completeness_add
+      apply Addition8.Theorems.completeness_add
       repeat assumption
 
     exact ⟨completeness1, completeness2, completeness3⟩

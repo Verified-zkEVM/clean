@@ -8,14 +8,13 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Gadgets.Keccak256 (KeccakState KeccakRow)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
   .mapFinRange 5 fun i => do
-    let c ← subcircuit Gadgets.Xor.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
-    let c ← subcircuit Gadgets.Xor.circuit ⟨c, state[5*i.val + 2]⟩
-    let c ← subcircuit Gadgets.Xor.circuit ⟨c, state[5*i.val + 3]⟩
-    let c ← subcircuit Gadgets.Xor.circuit ⟨c, state[5*i.val + 4]⟩
+    let c ← subcircuit Xor.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
+    let c ← subcircuit Xor.circuit ⟨c, state[5*i.val + 2]⟩
+    let c ← subcircuit Xor.circuit ⟨c, state[5*i.val + 3]⟩
+    let c ← subcircuit Xor.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
 def assumptions (state : KeccakState (F p)) := state.is_normalized
@@ -31,7 +30,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakRow (F p)) 
   local_length _ := 160
   output _ i0 := .mapRange 5 fun i => var_from_offset U64 (i0 + i*32 + 24)
 
-  local_length_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
+  local_length_eq _ _ := by simp only [main, circuit_norm, Xor.circuit]
   initial_offset_eq _ _ := by simp only [main, circuit_norm]
   output_eq _ _ := by simp only [main, circuit_norm, Xor.circuit]
 

@@ -6,7 +6,7 @@ import Clean.Utils.Primes
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Gadgets.Xor (ByteXorLookup ByteXorTable)
+open Xor (ByteXorLookup ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where

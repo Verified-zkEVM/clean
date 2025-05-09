@@ -17,7 +17,7 @@ instance : ProvableStruct Inputs where
 def add8_full (input : Var Inputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
-  let res ← subcircuit Gadgets.Addition8FullCarry.circuit { x, y, carry_in }
+  let res ← subcircuit Addition8FullCarry.circuit { x, y, carry_in }
   return res.z
 
 def assumptions (input : Inputs (F p)) :=

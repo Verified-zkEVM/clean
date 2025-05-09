@@ -5,8 +5,8 @@ import Clean.Utils.Primes
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 
-open Gadgets.Rotation64.Theorems (rot_right64)
-open Gadgets.Rotation64.Theorems (soundnessCase1 soundnessCase2 soundnessCase3 soundnessCase4 soundnessCase5 soundnessCase6 soundnessCase7)
+open Rotation64.Theorems (rot_right64)
+open Rotation64.Theorems (soundnessCase1 soundnessCase2 soundnessCase3 soundnessCase4 soundnessCase5 soundnessCase6 soundnessCase7)
 
 @[reducible]
 def Inputs (F : Type) :=  U64 F

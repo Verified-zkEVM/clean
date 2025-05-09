@@ -151,6 +151,7 @@ def value_u64 (x : U64 (F p)) (h : x.is_normalized) : UInt64 :=
 end U64
 
 namespace U64.AssertNormalized
+open Gadgets (ByteLookup ByteTable)
 
 /--
   Assert that a 64-bit unsigned integer is normalized.
@@ -158,14 +159,14 @@ namespace U64.AssertNormalized
 -/
 def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
-  lookup (Gadgets.ByteLookup x0)
-  lookup (Gadgets.ByteLookup x1)
-  lookup (Gadgets.ByteLookup x2)
-  lookup (Gadgets.ByteLookup x3)
-  lookup (Gadgets.ByteLookup x4)
-  lookup (Gadgets.ByteLookup x5)
-  lookup (Gadgets.ByteLookup x6)
-  lookup (Gadgets.ByteLookup x7)
+  lookup (ByteLookup x0)
+  lookup (ByteLookup x1)
+  lookup (ByteLookup x2)
+  lookup (ByteLookup x3)
+  lookup (ByteLookup x4)
+  lookup (ByteLookup x5)
+  lookup (ByteLookup x6)
+  lookup (ByteLookup x7)
 
 def assumptions (_input : U64 (F p)) := True
 
@@ -178,15 +179,15 @@ def circuit : FormalAssertion (F p) U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
-    repeat rw [Gadgets.ByteTable.equiv]
+    simp [spec, circuit_norm, u64_assert_normalized, ByteLookup, is_normalized]
+    repeat rw [ByteTable.equiv]
     simp_all [circuit_norm, eval]
 
   completeness := by
     rintro i0 env x_var
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
-    repeat rw [Gadgets.ByteTable.equiv]
+    simp [spec, circuit_norm, u64_assert_normalized, ByteLookup, is_normalized]
+    repeat rw [ByteTable.equiv]
     simp_all [circuit_norm, eval]
 
 end U64.AssertNormalized

@@ -8,7 +8,6 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Gadgets.Keccak256 (KeccakState)
 open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 

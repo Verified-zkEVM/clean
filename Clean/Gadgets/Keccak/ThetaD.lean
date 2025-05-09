@@ -13,23 +13,21 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Gadgets.Keccak256 (KeccakRow)
-
 def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
-  let c0 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 1)
-  let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 4), c0⟩
+  let c0 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 1)
+  let c0 ← subcircuit Xor.circuit ⟨(state.get 4), c0⟩
 
-  let c1 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 2)
-  let c1 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), c1⟩
+  let c1 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 2)
+  let c1 ← subcircuit Xor.circuit ⟨(state.get 0), c1⟩
 
-  let c2 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 3)
-  let c2 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 1), c2⟩
+  let c2 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 3)
+  let c2 ← subcircuit Xor.circuit ⟨(state.get 1), c2⟩
 
-  let c3 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 4)
-  let c3 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 2), c3⟩
+  let c3 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 4)
+  let c3 ← subcircuit Xor.circuit ⟨(state.get 2), c3⟩
 
-  let c4 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 0)
-  let c4 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 3), c4⟩
+  let c4 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 0)
+  let c4 ← subcircuit Xor.circuit ⟨(state.get 3), c4⟩
 
   return #v[c0, c1, c2, c3, c4]
 
