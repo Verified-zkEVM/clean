@@ -29,12 +29,11 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
   main
   local_length _ := 400
+  output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
+
   local_length_eq state i0 := by simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
   initial_offset_eq state i := by simp only [main, circuit_norm]
-
-  output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
-  output_eq state i := by
-    simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
+  output_eq state i := by simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
