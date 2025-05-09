@@ -54,29 +54,15 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [spec, elaborated, theta_xor_loop, var_from_offset_vector, eval_vector]
 
   -- simplify constraints
-  simp only [circuit_norm, eval_vector, Inputs.mk.injEq] at h_input
-  simp only [circuit_norm, subcircuit_norm, theta_xor, Xor.circuit, Rotation64.circuit,
+  simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
+  simp only [circuit_norm, subcircuit_norm, theta_xor, h_input, Xor.circuit, Rotation64.circuit,
     Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
-  simp only [Nat.zero_mod, and_imp, Nat.one_mod, Nat.reduceMod, add_assoc, Nat.reduceAdd, and_assoc,
-    Nat.mod_succ] at h_holds
-
-  obtain ⟨h_state, h_d⟩ := h_input
-
-  have s_d (i : ℕ) (hi : i < 5) : eval env d_var[i] = d[i] := by
-    rw [←h_d, Vector.getElem_map]
-
-  have s_state (i : ℕ) (hi : i < 25) : eval env state_var[i] = state[i] := by
-    rw [←h_state, Vector.getElem_map]
-
-  simp only [s_d, s_state] at h_holds
 
   -- use assumptions
-  have d_norm (i : Fin 25) : d[i.val / 5].is_normalized := by
-    have hi' : i.val / 5 < 5 := by omega
-    exact d_norm ⟨_, hi'⟩
+  have d_norm' (i : Fin 25) : d[i.val / 5].is_normalized := d_norm ⟨_, by omega⟩
 
-  replace h_holds := fun (i : Fin 25) => h_holds i (state_norm i) (d_norm i)
-  clear state_norm d_norm h_d h_state s_d s_state
+  replace h_holds := fun (i : Fin 25) => h_holds i ⟨ state_norm i, d_norm' i ⟩
+  clear state_norm d_norm d_norm' h_input
 
   -- prove two goals individually
   constructor
