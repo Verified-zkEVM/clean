@@ -50,6 +50,7 @@ lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
 
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
+
   -- rewrite goal
   apply KeccakState.normalized_value_ext
   simp only [elaborated, size, theta_xor_loop, var_from_offset_vector, eval_vector,
@@ -61,7 +62,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [circuit_norm, subcircuit_norm, theta_xor, h_input, Xor.circuit, Rotation64.circuit,
     Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
 
-  -- use assumptions, and prove goal
+  -- use assumptions, prove goal
   intro i
   specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
   exact ⟨ h_holds.right, h_holds.left ⟩

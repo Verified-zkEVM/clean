@@ -43,4 +43,15 @@ lemma KeccakState.normalized_value_ext (state : KeccakState (F p)) (rhs : Vector
   intro i hi
   exact (h ⟨ i, hi ⟩).right
 
+lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5) :
+  (∀ i : Fin 5, row[i.val].is_normalized ∧ row[i.val].value = rhs[i.val]) →
+    row.is_normalized ∧ row.value = rhs := by
+  intro h
+  constructor
+  · intro i
+    exact (h i).left
+  simp only [Vector.ext_iff, value, Vector.getElem_map]
+  intro i hi
+  exact (h ⟨ i, hi ⟩).right
+
 end Gadgets.Keccak256
