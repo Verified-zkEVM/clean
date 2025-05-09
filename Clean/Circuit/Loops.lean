@@ -32,7 +32,7 @@ instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x
 namespace Circuit
 theorem forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
   {xs : List α} {n : ℕ} :
-    ((forM xs circuit).operations n).local_length = lawful.local_length * xs.length := by
+    (forM xs circuit).local_length n = lawful.local_length * xs.length := by
   set k := lawful.local_length
   induction xs generalizing n with
   | nil =>
@@ -359,7 +359,7 @@ variable {env : Environment F} {m n : ℕ} [NeZero m] [Nonempty β] {body : Fin 
 @[circuit_norm]
 lemma mapFinRange.soundness :
   constraints_hold.soundness env (mapFinRange m body lawful |>.operations n) ↔
-    ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*(body 0 |>.operations n).local_length)) := by
+    ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*(body 0).local_length)) := by
   simp only [mapFinRange]
   rw [Circuit.constraints_hold.mapFinRangeM_soundness, LawfulCircuit.local_length_eq]
   trivial
@@ -367,19 +367,19 @@ lemma mapFinRange.soundness :
 @[circuit_norm]
 lemma mapFinRange.completeness :
   constraints_hold.completeness env (mapFinRange m body lawful |>.operations n) ↔
-    ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*(body 0 |>.operations n).local_length)) := by
+    ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*(body 0).local_length)) := by
   simp only [mapFinRange]
   rw [Circuit.constraints_hold.mapFinRangeM_completeness, LawfulCircuit.local_length_eq]
   trivial
 
 @[circuit_norm]
 lemma mapFinRange.local_length_eq :
-    (mapFinRange m body lawful |>.operations n).local_length = (body 0 |>.operations n).local_length * m := by
+    (mapFinRange m body lawful).local_length n = m * (body 0).local_length := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.local_length_eq]
   simp only [lawful_loop, lawful_norm]
   rw [LawfulCircuit.local_length_eq]
-  rfl
+  ac_rfl
 
 @[circuit_norm]
 lemma mapFinRange.initial_offset_eq :
@@ -390,14 +390,14 @@ lemma mapFinRange.initial_offset_eq :
 @[circuit_norm]
 lemma mapFinRange.output_eq :
   (mapFinRange m body lawful).output n =
-    Vector.mapFinRange m fun i => (body i).output (n + (body 0 |>.operations n).local_length * i) := by
+    Vector.mapFinRange m fun i => (body i).output (n + i*(body 0).local_length) := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.output_eq]
   simp only [lawful_loop, lawful_norm]
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange,
     LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
-  rfl
+  ac_rfl
 end
 
 end Circuit

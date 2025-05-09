@@ -240,7 +240,7 @@ theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : 
   exact (final_offset_eq circuit n ▸ operations n).property
 
 theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit circuit] (n : ℕ) :
-    (circuit.operations n).local_length = lawful.local_length := by
+    circuit.local_length n = lawful.local_length := by
   apply Nat.add_left_cancel (n:=n)
   rw [←lawful.local_length_eq]
   rw (occs := .pos [1]) [←initial_offset_eq circuit n]
@@ -248,7 +248,7 @@ theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit 
 
 theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β)
   (f_lawful: LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
-    ((f >>= g).operations n).local_length = (f.operations n).local_length + ((g (f.output n)).operations (f.final_offset n)).local_length := by
+    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (f.final_offset n) := by
   apply Nat.add_left_cancel (n:=n)
   let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
   rw (occs := .pos [1]) [←fg_lawful.initial_offset_eq _ n]

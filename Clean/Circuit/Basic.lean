@@ -247,6 +247,10 @@ def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.fin
 def output (circuit: Circuit F α) (offset := 0) : α :=
   circuit offset |>.fst
 
+@[reducible, circuit_norm]
+def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
+  (circuit.operations offset).local_length
+
 -- core operations we can do in a circuit
 
 /-- Create a new variable -/
@@ -377,7 +381,7 @@ class ElaboratedCircuit (F: Type) [Field F] (β: TypeMap) [ProvableType β] (Out
   local_length: Var β F → ℕ
 
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
-  local_length_eq : ∀ var offset, (main var |>.operations offset).local_length = local_length var
+  local_length_eq : ∀ var offset, (main var).local_length offset = local_length var
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
