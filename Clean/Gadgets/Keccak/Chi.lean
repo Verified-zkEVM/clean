@@ -45,36 +45,18 @@ lemma chi_loop (state : Vector ℕ 25) :
 theorem soundness : Soundness (F p) assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
-  simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
-
   -- simplify goal
-  simp only [spec, ElaboratedCircuit.output]
-  rw [chi_loop, eval_vector, KeccakState.is_normalized, Vector.ext_iff]
-  simp only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapFinRange, Vector.getElem_mapRange,
-    KeccakState.value, Vector.map_map, Function.comp_apply]
-
-  suffices h : ∀ i : Fin 25, (eval env (var_from_offset U64 (i0 + i.val*16 + 8))).is_normalized ∧
-    (eval env (var_from_offset U64 (i0 + i.val*16 + 8))).value =
-      state.value[i] ^^^ ((not64 state.value[i + 5]) &&& state.value[i + 10]) by
-    constructor
-    · intro i; exact (h i).left
-    · intro i' hi'
-      specialize h ⟨ i', hi'⟩
-      simp_all [KeccakState.value]
+  apply KeccakState.normalized_value_ext
+  simp only [spec, elaborated, chi_loop, eval_vector, KeccakState.value,
+    Vector.getElem_map, Vector.getElem_mapRange, Fin.getElem_fin, Vector.getElem_mapFinRange]
 
   -- simplify constraints
+  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
   simp only [main, circuit_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd] at h_holds
 
-  intro i
-  have h_input (i : Fin 25) : eval env state_var[i.val] = state[i.val] := by
-    rw [←h_input, eval_vector, Vector.getElem_map]
-
-  have h_input_not : (eval env (not64_bytewise state_var[(i + 5).val])) = not64_bytewise_value state[((i + 5)).val] := by
-    rw [←h_input, Not.eval_not]
-
-  have ⟨ state_not_value, state_not_norm ⟩ := Not.not_bytewise_value_spec (state_norm (i + 5))
-  simp_all [KeccakState.value]
+  simp_all
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input state_norm
