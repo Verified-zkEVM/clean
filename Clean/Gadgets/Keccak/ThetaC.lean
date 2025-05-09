@@ -37,7 +37,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakRow (F p)) 
 
 -- rewrite theta_c as a loop
 lemma theta_c_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.theta_c state = .mapFinRange fun i =>
+    Specs.Keccak256.theta_c state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
   rw [Specs.Keccak256.theta_c, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl

@@ -38,7 +38,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.chi state = .mapFinRange fun i => state[i] ^^^ ((not64 state[i + 5]) &&& state[i + 10]) := by
+    Specs.Keccak256.chi state = .mapFinRange 25 fun i => state[i] ^^^ ((not64 state[i + 5]) &&& state[i + 10]) := by
   rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 

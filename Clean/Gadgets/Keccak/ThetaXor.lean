@@ -44,7 +44,7 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
 
 -- rewrite theta_xor as a loop
 lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
-    Specs.Keccak256.theta_xor state d = .mapFinRange fun i => state[i.val] ^^^ d[i.val / 5] := by
+    Specs.Keccak256.theta_xor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
   rw [Specs.Keccak256.theta_xor, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 

@@ -390,7 +390,7 @@ lemma mapFinRange.initial_offset_eq :
 @[circuit_norm]
 lemma mapFinRange.output_eq :
   (mapFinRange m body lawful).output n =
-    Vector.mapFinRange (fun i => (body i).output (n + (body 0 |>.operations n).local_length * i)) := by
+    Vector.mapFinRange m fun i => (body i).output (n + (body 0 |>.operations n).local_length * i) := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.output_eq]
   simp only [lawful_loop, lawful_norm]
