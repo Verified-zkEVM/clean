@@ -98,10 +98,8 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
+  simp only [recursive_relation, table_assignment_norm, circuit_norm,
     Gadgets.Addition32Full.circuit, assign_U32]
-  simp only [circuit_norm, table_norm]
-  rfl
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
