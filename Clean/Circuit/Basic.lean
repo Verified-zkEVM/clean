@@ -2,6 +2,8 @@ import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
 
+open Lean
+
 variable {F: Type} [Field F]
 
 structure Table (F : Type) where
@@ -19,6 +21,12 @@ structure Lookup (F : Type) where
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
+
+instance : ToJson (Lookup F) where
+  toJson l := Json.mkObj [
+    ("table", toJson l.table.name),
+    ("entry", toJson l.entry.toArray),
+  ]
 
 variable {α : Type} {n : ℕ}
 
@@ -46,6 +54,12 @@ def toString [Repr F] : FlatOperation F → String
 
 instance [Repr F] : Repr (FlatOperation F) where
   reprPrec op _ := toString op
+
+instance : ToJson (FlatOperation F) where
+  toJson op := match op with
+    | witness m _ => Json.mkObj [("witness", toJson m)]
+    | assert e => Json.mkObj [("assert", toJson e)]
+    | lookup l => Json.mkObj [("lookup", toJson l)]
 
 /--
 What it means that "constraints hold" on a list of flat operations:
@@ -531,6 +545,14 @@ instance [Repr F] : Repr (Operation F) where
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
+
+instance : ToJson (Operation F) where
+  toJson op := match op with
+    | witness m _ => Json.mkObj [("witness", toJson m)]
+    | assert e => Json.mkObj [("assert", toJson e)]
+    | lookup l => Json.mkObj [("lookup", toJson l)]
+    | subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
+
 end Operation
 
 def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
@@ -548,6 +570,9 @@ def Circuit.operation_list (circuit: Circuit F α) (offset := 0) : List (Operati
 
 instance [Repr F] : Repr (OperationsList F) where
   reprPrec ops _ := reprStr ops.toList
+
+instance : ToJson (OperationsList F) where
+  toJson ops := ToJson.toJson ops.toList
 
 -- witness generation
 
