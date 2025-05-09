@@ -580,6 +580,24 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
     acc.push (compute ⟨ env ⟩))
   #[]
 
+-- generic folding over `Operations`
+
+structure Operations.PropRecursor (F: Type) [Field F] where
+  empty : (n : ℕ) → Prop
+  witness : Prop → (m : ℕ) → (Environment F → Vector F m) → Prop
+  assert : Prop → Expression F → Prop
+  lookup : Prop → Lookup F → Prop
+  subcircuit {n: ℕ} : Prop → SubCircuit F n → Prop
+
+def Operations.foldlProp (recursor : Operations.PropRecursor F) {n : ℕ} : Operations F n → Prop
+  | .empty n => recursor.empty n
+  | .witness ops m c => recursor.witness (foldlProp recursor ops) m c
+  | .assert ops e => recursor.assert (foldlProp recursor ops) e
+  | .lookup ops l => recursor.lookup (foldlProp recursor ops) l
+  | .subcircuit ops s => recursor.subcircuit (foldlProp recursor ops) s
+
+-- `circuit_norm` attributes
+
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
 attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
