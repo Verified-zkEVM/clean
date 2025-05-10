@@ -116,27 +116,27 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
 namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
 section
-variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {env : Environment F} {n m : ℕ} {prop : Operations.Condition F}
 variable {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
 
-theorem forM_generic {xs : List α} :
-  generic from_subcircuit env (forM xs circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => generic from_subcircuit env (circuit x |>.operations (n + i*lawful.local_length)) := by
+theorem forM_forAll {xs : List α} :
+  (forM xs circuit |>.operations n).forAll prop ↔
+    xs.zipIdx.Forall fun (x, i) => (circuit x |>.operations (n + i*lawful.local_length)).forAll prop := by
 
   induction xs generalizing n with
-  | nil => simp [generic, circuit_norm]
+  | nil => simp [Operations.forAll, circuit_norm]
   | cons x xs ih =>
     rw [List.forM_cons, List.zipIdx_cons, List.forall_cons]
     simp only at ih ⊢
     rw [zero_mul, add_zero, zero_add]
     specialize ih (n := n + lawful.local_length)
 
-    have h_zip : List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + lawful.local_length + i * lawful.local_length))) xs.zipIdx
-      ↔ List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + i * lawful.local_length))) (xs.zipIdx 1) := by
+    have h_zip : xs.zipIdx.Forall (fun (x, i) => ((circuit x).operations (n + lawful.local_length + i * lawful.local_length)).forAll prop)
+      ↔ (xs.zipIdx 1).Forall (fun (x, i) => ((circuit x).operations (n + i * lawful.local_length)).forAll prop) := by
       rw [List.zipIdx_succ, List.forall_map_iff]
       conv =>
         rhs
-        change List.Forall (fun (x, i) ↦ generic from_subcircuit env ((circuit x).operations (n + (i + 1) * lawful.local_length))) xs.zipIdx
+        change xs.zipIdx.Forall fun (x, i) => ((circuit x).operations (n + (i + 1) * lawful.local_length)).forAll prop
         lhs
         intro t
         simp only
@@ -144,13 +144,13 @@ theorem forM_generic {xs : List α} :
 
     rw [←h_zip, ←ih]
     clear h_zip ih
-    rw [bind_generic _ inferInstance inferInstance]
+    rw [bind_forAll inferInstance inferInstance]
     exact Iff.intro id id
 
-theorem forM_vector_generic {xs : Vector α n} :
-  generic from_subcircuit env (forM xs circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  rw [Vector.forM_toList, forM_generic, List.forall_iff_forall_mem, Prod.forall]
+theorem forM_vector_forAll {xs : Vector α n} :
+  (forM xs circuit |>.operations m).forAll prop ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), (circuit x |>.operations (m + i*lawful.local_length)).forAll prop := by
+  rw [Vector.forM_toList, forM_forAll, List.forall_iff_forall_mem, Prod.forall]
   have h_elem_iff : ∀ {t}, (t ∈ xs.zipIdx ↔ t ∈ xs.toList.zipIdx) := by
     intro t
     rw [←Array.toList_zipIdx, ←Vector.mem_toList_iff]
@@ -168,22 +168,22 @@ theorem forM_vector_generic {xs : Vector α n} :
 theorem forM_soundness {xs : List α} :
   soundness env (forM xs circuit |>.operations n) ↔
     xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [soundness_iff_generic, forM_generic]
+  simp only [soundness_iff_forAll, forM_forAll]
 
 theorem forM_completeness {xs : List α} :
   completeness env (forM xs circuit |>.operations n) ↔
     xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [completeness_iff_generic, forM_generic]
+  simp only [completeness_iff_forAll, forM_forAll]
 
 theorem forM_vector_soundness {xs : Vector α n} :
   soundness env (forM xs circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [soundness_iff_generic, forM_vector_generic]
+  simp only [soundness_iff_forAll, forM_vector_forAll]
 
 theorem forM_vector_completeness {xs : Vector α n} :
   completeness env (forM xs circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [completeness_iff_generic, forM_vector_generic]
+  simp only [completeness_iff_forAll, forM_vector_forAll]
 
 /-- simpler version for when the constraints don't depend on the input offset -/
 theorem forM_vector_soundness' {xs : Vector α n} :
@@ -230,20 +230,20 @@ lemma operations_ignore {circuit : Circuit F α} :
     circuit.ignore.operations n = circuit.operations n := rfl
 
 namespace Circuit.constraints_hold
-variable {env : Environment F} {n m : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {env : Environment F} {n m : ℕ} {prop : Operations.Condition F}
 section
 variable {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit]
 
-lemma mapM_generic_iff_forM {xs : List α} :
-  generic from_subcircuit env (xs.mapM circuit |>.operations n) ↔
-    generic from_subcircuit env (forM xs (fun a => (circuit a).ignore) |>.operations n) := by
+lemma mapM_forAll_iff_forM {xs : List α} :
+  (xs.mapM circuit |>.operations n).forAll prop ↔
+    (forM xs (fun a => (circuit a).ignore) |>.operations n).forAll prop := by
 
   induction xs generalizing n with
   | nil =>
     exact ⟨ fun _ => trivial, fun _ => trivial ⟩
   | cons xs x ih =>
     rw [List.mapM_cons, List.forM_cons]
-    rw [bind_generic, bind_generic, bind_generic, ih]
+    rw [bind_forAll, bind_forAll, bind_forAll, ih]
     constructor
     · rintro ⟨ h, hrest, hpure ⟩
       rw [LawfulCircuit.ignore_final_offset]
@@ -251,26 +251,26 @@ lemma mapM_generic_iff_forM {xs : List α} :
     · rintro ⟨ h, hrest ⟩
       rw [LawfulCircuit.ignore_final_offset] at hrest
       use h, hrest
-      simp only [generic, circuit_norm]
+      simp only [Operations.forAll, circuit_norm]
     infer_lawful_circuit
 
 omit lawful in
-lemma mapM_generic_vector_iff_list {xs : Vector α n} :
-  generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
-    generic from_subcircuit env (xs.toList.mapM circuit |>.operations m) := by
+lemma mapM_forAll_vector_iff_list {xs : Vector α n} :
+  (xs.mapM circuit |>.operations m).forAll prop ↔
+    (xs.toList.mapM circuit |>.operations m).forAll prop := by
   rw [←Vector.mapM_toList xs, operations_map]
 
-theorem mapM_generic {xs : List α} :
-  generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
-    xs.zipIdx.Forall fun (x, i) => generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  rw [mapM_generic_iff_forM, forM_generic]
+theorem mapM_forAll {xs : List α} :
+  (xs.mapM circuit |>.operations m).forAll prop ↔
+    xs.zipIdx.Forall fun (x, i) => (circuit x |>.operations (m + i*lawful.local_length)).forAll prop := by
+  rw [mapM_forAll_iff_forM, forM_forAll]
   simp only [operations_ignore]
   trivial
 
-theorem mapM_vector_generic {xs : Vector α n} :
-  generic from_subcircuit env (xs.mapM circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), generic from_subcircuit env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  rw [mapM_generic_vector_iff_list, mapM_generic_iff_forM, ←Vector.forM_toList, forM_vector_generic]
+theorem mapM_vector_forAll {xs : Vector α n} :
+  (xs.mapM circuit |>.operations m).forAll prop ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), (circuit x |>.operations (m + i*lawful.local_length)).forAll prop := by
+  rw [mapM_forAll_vector_iff_list, mapM_forAll_iff_forM, ←Vector.forM_toList, forM_vector_forAll]
   simp only [operations_ignore]
   trivial
 
@@ -279,29 +279,29 @@ theorem mapM_vector_generic {xs : Vector α n} :
 theorem mapM_soundness {xs : List α} :
   soundness env (xs.mapM circuit |>.operations n) ↔
     xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [soundness_iff_generic, mapM_generic]
+  simp only [soundness_iff_forAll, mapM_forAll]
 
 theorem mapM_completeness {xs : List α} :
   completeness env (xs.mapM circuit |>.operations n) ↔
     xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [completeness_iff_generic, mapM_generic]
+  simp only [completeness_iff_forAll, mapM_forAll]
 
 theorem mapM_vector_soundness {xs : Vector α n} :
   soundness env (xs.mapM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [soundness_iff_generic, mapM_vector_generic]
+  simp only [soundness_iff_forAll, mapM_vector_forAll]
 
 theorem mapM_vector_completeness {xs : Vector α n} :
   completeness env (xs.mapM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [completeness_iff_generic, mapM_vector_generic]
+  simp only [completeness_iff_forAll, mapM_vector_forAll]
 end
 
 -- specialization to mapFinRangeM
-theorem mapFinRangeM_generic {n : ℕ} {circuit : Fin m → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
-  generic from_subcircuit env (Vector.mapFinRangeM m circuit |>.operations n) ↔
-    ∀ i : Fin m, generic from_subcircuit env (circuit i |>.operations (n + i*lawful.local_length)) := by
-  rw [Vector.mapFinRangeM, mapM_vector_generic]
+theorem mapFinRangeM_forAll {n : ℕ} {circuit : Fin m → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+  (Vector.mapFinRangeM m circuit |>.operations n).forAll prop ↔
+    ∀ i : Fin m, (circuit i |>.operations (n + i*lawful.local_length)).forAll prop := by
+  rw [Vector.mapFinRangeM, mapM_vector_forAll]
   constructor
   case mpr =>
     intro h i
@@ -345,7 +345,7 @@ variable {env : Environment F} {m n : ℕ} [NeZero m] [Nonempty β] {body : Fin 
 lemma mapFinRange.soundness :
   constraints_hold.soundness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*(body 0).local_length)) := by
-  simp only [mapFinRange, constraints_hold.soundness_iff_generic, constraints_hold.mapFinRangeM_generic]
+  simp only [mapFinRange, constraints_hold.soundness_iff_forAll, constraints_hold.mapFinRangeM_forAll]
   rw [LawfulCircuit.local_length_eq]
   trivial
 
@@ -353,7 +353,7 @@ lemma mapFinRange.soundness :
 lemma mapFinRange.completeness :
   constraints_hold.completeness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*(body 0).local_length)) := by
-  simp only [mapFinRange, constraints_hold.completeness_iff_generic, constraints_hold.mapFinRangeM_generic]
+  simp only [mapFinRange, constraints_hold.completeness_iff_forAll, constraints_hold.mapFinRangeM_forAll]
   rw [LawfulCircuit.local_length_eq]
   trivial
 
