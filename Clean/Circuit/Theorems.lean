@@ -192,30 +192,30 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {n: ℕ} {
 end Environment
 
 namespace Circuit
-/--
-Generic version of `constraints_hold`, to reason about soundness and completeness at the same time
--/
-def constraints_hold.generic (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
-  (eval : Environment F) {n : ℕ} : Operations F n → Prop
-  | .empty _ => True
-  | .witness ops _ _ => generic from_subcircuit eval ops
-  | .assert ops e => generic from_subcircuit eval ops ∧ eval e = 0
-  | .lookup ops { table, entry, .. } => generic from_subcircuit eval ops ∧ table.contains (entry.map eval)
-  | .subcircuit ops s => generic from_subcircuit eval ops ∧ from_subcircuit eval s
 
-theorem constraints_hold.soundness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
-  soundness env ops ↔ generic (fun env s => s.soundness env) env ops := by
+theorem constraints_hold.soundness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
+  soundness env ops ↔ ops.forAll {
+    witness _ _ := True,
+    assert e := env e = 0,
+    lookup l := l.table.contains (l.entry.map env),
+    subcircuit s := s.soundness env
+  } := by
   induction ops with
   | empty => trivial
   | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
-    cases ops <;> simp_all [soundness, generic]
+    cases ops <;> simp_all [soundness, Operations.forAll]
 
-theorem constraints_hold.completeness_iff_generic {n : ℕ} (env : Environment F) (ops : Operations F n) :
-  completeness env ops ↔ generic (fun env s => s.completeness env) env ops := by
+theorem constraints_hold.completeness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
+  completeness env ops ↔ ops.forAll {
+    witness _ _ := True,
+    assert e := env e = 0,
+    lookup l := l.table.contains (l.entry.map env),
+    subcircuit s := s.completeness env
+  } := by
   induction ops with
   | empty => trivial
   | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
-    cases ops <;> simp_all [completeness, generic]
+    cases ops <;> simp_all [completeness, Operations.forAll]
 
 /--
 Completeness theorem which proves that we can replace constraints in subcircuits
@@ -227,13 +227,14 @@ because it already implies the flat version.
 -/
 theorem can_replace_completeness {n: ℕ} {ops : Operations F n} {env} : env.uses_local_witnesses ops →
   constraints_hold.completeness env ops → constraints_hold env ops := by
-  rw [constraints_hold.completeness_iff_generic]
+  rw [constraints_hold.completeness_iff_forAll]
   intro h_env h
   induction ops with
   | empty => trivial
-  | witness | assert | lookup => simp_all [circuit_norm, Environment.uses_local_witnesses, constraints_hold.generic]
+  | witness | assert | lookup =>
+    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll]
   | subcircuit ops circuit ih =>
-    simp only [Environment.uses_local_witnesses, constraints_hold.generic] at *
+    simp only [Environment.uses_local_witnesses] at *
     exact ⟨ ih h_env.left h.left,
       circuit.implied_by_completeness env (env.extends_vector_subcircuit ▸ h_env.right) h.right ⟩
 

@@ -270,32 +270,32 @@ theorem completeness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit
 end LawfulCircuit
 
 namespace Circuit.constraints_hold
-variable {env : Environment F} {n : ℕ} (from_subcircuit : {n : ℕ} → Environment F → SubCircuit F n → Prop)
+variable {env : Environment F} {n : ℕ} {prop : Operations.Condition F}
 
-theorem bind_generic {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
-  generic from_subcircuit env ((f >>= g).operations n) ↔
-    generic from_subcircuit env (f.operations n)
-    ∧ generic from_subcircuit env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
+theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
+  ((f >>= g).operations n).forAll prop ↔
+    (f.operations n).forAll prop ∧
+      ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)).forAll prop := by
   open LawfulCircuit in
   let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
-  simp only [LawfulCircuit.operations_eq' (generic from_subcircuit env)]
+  simp only [LawfulCircuit.operations_eq' (Operations.forAll prop)]
   have h_length : fg_lawful.final_offset n = (g_lawful (f_lawful.output n)).final_offset (f_lawful.final_offset n) := by
     simp only [fg_lawful, from_bind]
   have h_ops : fg_lawful.operations n = f_lawful.operations n ++ h_length ▸ (g_lawful (f_lawful.output n)).operations (f_lawful.final_offset n) := by
     simp only [fg_lawful, from_bind]
-  rw [h_ops, OperationsFrom.append_val, append_generic]
+  rw [h_ops, OperationsFrom.append_val, append_forAll]
 
 -- specializations to soundness / completeness
 
 theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
     soundness env ((f >>= g).operations n) ↔
     soundness env (f.operations n) ∧ soundness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
-  simp only [soundness_iff_generic, bind_generic]
+  simp only [soundness_iff_forAll, bind_forAll]
 
 theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
     completeness env ((f >>= g).operations n) ↔
     completeness env (f.operations n) ∧ completeness env ((g (LawfulCircuit.output f n)).operations (LawfulCircuit.final_offset f n)) := by
-  simp only [completeness_iff_generic, bind_generic]
+  simp only [completeness_iff_forAll, bind_forAll]
 end Circuit.constraints_hold
 
 attribute [lawful_norm] LawfulCircuit.final_offset LawfulCircuit.operations LawfulCircuit.output ConstantLawfulCircuit.local_length
