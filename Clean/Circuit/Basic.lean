@@ -414,8 +414,8 @@ def Soundness (F: Type) [Field F] [circuit : ElaboratedCircuit F β α]
     let a := eval env (circuit.output b_var offset)
     spec b a
 
-def Completeness (F: Type) [Field F] (α: TypeMap) [ProvableType α] [circuit : ElaboratedCircuit F β α]
-  (assumptions: β F → Prop) :=
+def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
+    (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
   env.uses_local_witnesses_completeness (circuit.main b_var |>.operations offset) →
@@ -425,13 +425,12 @@ def Completeness (F: Type) [Field F] (α: TypeMap) [ProvableType α] [circuit : 
   -- the constraints hold
   constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-extends ElaboratedCircuit F β α where
+structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β] extends ElaboratedCircuit F β α where
   -- β = inputs, α = outputs
   assumptions: β F → Prop
   spec: β F → α F → Prop
   soundness: Soundness F assumptions spec
-  completeness: Completeness F α assumptions
+  completeness: Completeness F (α:=α) inferInstance assumptions
 
 namespace Circuit
 @[circuit_norm]
