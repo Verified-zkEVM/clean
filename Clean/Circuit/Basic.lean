@@ -583,17 +583,17 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
 -- generic folding over `Operations`
 
 structure Operations.Condition (F: Type) [Field F] where
-  witness : (m : ℕ) → (Environment F → Vector F m) → Prop
-  assert : Expression F → Prop
-  lookup : Lookup F → Prop
-  subcircuit {n: ℕ} : SubCircuit F n → Prop
+  witness (n: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop
+  assert (n: ℕ) : Expression F → Prop
+  lookup (n: ℕ) : Lookup F → Prop
+  subcircuit (n: ℕ) : SubCircuit F n → Prop
 
-def Operations.forAll (recursor : Operations.Condition F) {n : ℕ} : Operations F n → Prop
-  | .empty n => True
-  | .witness ops m c => forAll recursor ops ∧ recursor.witness m c
-  | .assert ops e => forAll recursor ops ∧ recursor.assert e
-  | .lookup ops l => forAll recursor ops ∧ recursor.lookup l
-  | .subcircuit ops s => forAll recursor ops ∧ recursor.subcircuit s
+def Operations.forAll (recursor : Operations.Condition F) : {n : ℕ} → Operations F n → Prop
+  | _, .empty _ => True
+  | n + .(m), .witness ops m c => forAll recursor ops ∧ recursor.witness n m c
+  | n, .assert ops e => forAll recursor ops ∧ recursor.assert n e
+  | n, .lookup ops l => forAll recursor ops ∧ recursor.lookup n l
+  | n + _, .subcircuit ops s => forAll recursor ops ∧ recursor.subcircuit n s
 
 -- `circuit_norm` attributes
 

@@ -189,32 +189,45 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {n: ℕ} {
     apply circuit.implied_by_local_witnesses
     rw [←extends_vector_subcircuit]
     exact h.right
+
+theorem uses_local_witnesses_completeness_iff_forAll {env: Environment F} {n: ℕ} {ops: Operations F n} :
+  env.uses_local_witnesses_completeness ops ↔
+    ops.forAll {
+      witness n _ c := env.extends_vector (c env) n,
+      assert _ _ := True,
+      lookup _ _ := True,
+      subcircuit _ s := s.uses_local_witnesses env
+    } := by
+  induction ops with
+  | empty => trivial
+  | assert | lookup | witness | subcircuit =>
+    simp_all [uses_local_witnesses_completeness, Operations.forAll]
 end Environment
 
 namespace Circuit
 
 theorem constraints_hold.soundness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
   soundness env ops ↔ ops.forAll {
-    witness _ _ := True,
-    assert e := env e = 0,
-    lookup l := l.table.contains (l.entry.map env),
-    subcircuit s := s.soundness env
+    witness _ _ _ := True,
+    assert _ e := env e = 0,
+    lookup _ l := l.table.contains (l.entry.map env),
+    subcircuit _ s := s.soundness env
   } := by
   induction ops with
   | empty => trivial
-  | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
+  | witness ops | assert ops | lookup ops | subcircuit ops =>
     cases ops <;> simp_all [soundness, Operations.forAll]
 
 theorem constraints_hold.completeness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
   completeness env ops ↔ ops.forAll {
-    witness _ _ := True,
-    assert e := env e = 0,
-    lookup l := l.table.contains (l.entry.map env),
-    subcircuit s := s.completeness env
+    witness _ _ _ := True,
+    assert _ e := env e = 0,
+    lookup _ l := l.table.contains (l.entry.map env),
+    subcircuit _ s := s.completeness env
   } := by
   induction ops with
   | empty => trivial
-  | witness ops _ _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
+  | witness ops | assert ops | lookup ops | subcircuit ops =>
     cases ops <;> simp_all [completeness, Operations.forAll]
 
 /--
