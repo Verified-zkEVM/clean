@@ -73,13 +73,8 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
 
   simp [elaborated, subcircuit_norm, rot64, Circuit.constraints_hold.soundness] at h_holds
 
-  simp [subcircuit_norm, circuit_norm] at h_holds
-  simp [U64.witness] at h_holds
+  rw [Circuit.constraints_hold.bind_soundness (by infer_lawful_circuit) (by infer_lawful_circuit)] at h_holds
 
-  simp [circuit_norm, subcircuit_norm,
-    Rotation64Bytes.circuit, Rotation64Bytes.elaborated,
-    Rotation64Bytes.assumptions, Rotation64Bytes.spec,
-    U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated] at h_holds
   sorry
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
