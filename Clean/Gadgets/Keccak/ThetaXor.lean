@@ -1,3 +1,4 @@
+import Clean.Circuit.Loops
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
@@ -18,44 +19,19 @@ instance : ProvableStruct Inputs where
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
 
-def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let ⟨state, d⟩ := inputs
-  return #v[
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 0, d.get 0⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 1, d.get 0⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 2, d.get 0⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 3, d.get 0⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 4, d.get 0⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 5, d.get 1⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 6, d.get 1⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 7, d.get 1⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 8, d.get 1⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 9, d.get 1⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 10, d.get 2⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 11, d.get 2⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 12, d.get 2⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 13, d.get 2⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 14, d.get 2⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 15, d.get 3⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 16, d.get 3⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 17, d.get 3⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 18, d.get 3⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 19, d.get 3⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 20, d.get 4⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 21, d.get 4⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 22, d.get 4⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 23, d.get 4⟩,
-    ←subcircuit Gadgets.Xor.circuit ⟨state.get 24, d.get 4⟩
-  ]
+def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+  let { state, d } := inputs
+  .mapFinRange 25 fun i =>
+    subcircuit Gadgets.Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (Var KeccakState (F p)) where
   main := theta_xor
   local_length _ := 200
   output _ i0 := var_from_offset KeccakState i0
-  output_eq _ i := by
-    simp only [var_from_offset_vector, theta_xor, Xor.circuit]
-    simp only [circuit_norm]
-    rfl
+
+  local_length_eq _ n := by simp only [theta_xor, circuit_norm]; ac_rfl
+  initial_offset_eq _ i := by simp only [theta_xor, circuit_norm]
+  output_eq _ i := by simp only [theta_xor, circuit_norm, Xor.circuit, var_from_offset_vector]
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
@@ -66,38 +42,30 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   out.is_normalized
   ∧ out.value = Specs.Keccak256.theta_xor state.value d.value
 
+-- rewrite theta_xor as a loop
+lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
+    Specs.Keccak256.theta_xor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
+  rw [Specs.Keccak256.theta_xor, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+  rfl
+
 theorem soundness : Soundness (F p) assumptions spec := by
-  intro i0 env state_var ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
-  simp only [circuit_norm, eval_vector] at h_input
-  dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit] at h_holds
-  simp only [circuit_norm, subcircuit_norm] at h_holds
-  dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
-  simp [add_assoc, and_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two] at h_holds
+  intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
 
-  simp at h_input
-  obtain ⟨h_state, h_d⟩ := h_input
+  -- rewrite goal
+  apply KeccakState.normalized_value_ext
+  simp only [elaborated, size, theta_xor_loop, var_from_offset_vector, eval_vector,
+    Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange, mul_comm,
+    KeccakState.value, KeccakRow.value]
 
-  have s_d (i : Fin 5) : eval env (state_var.d[i.val]) = d[i.val] := by
-    rw [← h_d, Vector.getElem_map]
+  -- simplify constraints
+  simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
+  simp only [circuit_norm, subcircuit_norm, theta_xor, h_input, Xor.circuit, Rotation64.circuit,
+    Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
 
-  have s_state (i : Fin 25) : eval env (state_var.state[i.val]) = state[i.val] := by
-    rw [← h_state, Vector.getElem_map]
-
-  simp only [s_d, s_state] at h_holds
-  simp [circuit_norm, spec, Specs.Keccak256.theta_xor, Fin.forall_fin_succ,
-    -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two, var_from_offset_vector, eval_vector,
-    KeccakState.is_normalized, KeccakState.value, KeccakRow.value]
-
-  repeat
-    first
-    | obtain ⟨ h, h_holds ⟩ := h_holds
-    | let h := h_holds; let h_holds := True
-    specialize h (state_norm _) (d_norm _)
-    obtain ⟨ xor, norm ⟩ := h
-    simp [xor, norm]
-
-  get_elem_tactic
-
+  -- use assumptions, prove goal
+  intro i
+  specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
+  exact ⟨ h_holds.right, h_holds.left ⟩
 
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
@@ -105,7 +73,6 @@ theorem completeness : Completeness (F p) KeccakState assumptions := by
   dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit]
   simp only [circuit_norm, subcircuit_norm]
   dsimp only [Xor.assumptions, Xor.spec]
-  simp [add_assoc]
   sorry
 
 def circuit : FormalCircuit (F p) Inputs KeccakState := {

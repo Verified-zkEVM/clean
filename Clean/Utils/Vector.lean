@@ -140,18 +140,39 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
 def finRange (n : ℕ) : Vector (Fin n) n :=
   ⟨ .mk (List.finRange n), List.length_finRange n ⟩
 
-def mapFinRange {n} (create: Fin n → α) : Vector α n := finRange n |>.map create
+theorem finRange_zero : finRange 0 = #v[] := rfl
+
+theorem getElemFin_finRange {n} (i : Fin n) : (finRange n)[i] = i := by
+  simp [finRange, List.finRange]
+
+theorem getElem_finRange {n} (i : ℕ) (hi : i < n) : (finRange n)[i] = ⟨ i, hi ⟩ := by
+  simp [finRange, List.finRange]
+
+theorem finRange_succ {n} : finRange (n + 1) = ((finRange n).map Fin.castSucc).push n := by
+  ext i hi
+  simp only [getElem_finRange, getElem_push, getElem_map, Fin.castSucc_mk]
+  by_cases hi' : i < n <;> simp [hi']; linarith
+
+def mapFinRange (n: ℕ) (create: Fin n → α) : Vector α n := finRange n |>.map create
+
+theorem mapFinRange_zero {create: Fin 0 → α} : mapFinRange 0 create = #v[] := rfl
+
+theorem mapFinRange_succ {n} {create: Fin (n + 1) → α} :
+    mapFinRange (n + 1) create = (mapFinRange n (fun i => create i)).push (create n) := by
+  rw [mapFinRange, mapFinRange, finRange_succ, map_push, map_map]
+  simp only [Fin.coe_eq_castSucc]
+  rfl
 
 theorem cast_mapFinRange {n} {create: Fin n → α} (h : n = m) :
-    mapFinRange create = (mapFinRange (n:=m) (fun i => create (i.cast h.symm))).cast h.symm := by
+    mapFinRange n create = (mapFinRange m (fun i => create (i.cast h.symm))).cast h.symm := by
   subst h; simp
 
 theorem getElemFin_mapFinRange {n} {create: Fin n → α} :
-    ∀ i : Fin n, (mapFinRange create)[i] = create i := by
+    ∀ i : Fin n, (mapFinRange n create)[i] = create i := by
   simp [mapFinRange, finRange]
 
 theorem getElem_mapFinRange {n} {create: Fin n → α} :
-    ∀ (i : ℕ) (hi : i < n), (mapFinRange create)[i] = create ⟨ i, hi ⟩ := by
+    ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
   simp [mapFinRange, finRange]
 
 def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=

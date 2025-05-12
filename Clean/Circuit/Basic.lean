@@ -556,14 +556,14 @@ def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (E
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.mapFinRange (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
+      ⟨ (Vector.mapFinRange m (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
         simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
     | assert _ | lookup _ =>
       ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 
 def Operations.witness_generators {n: ℕ} : (ops: Operations F n) → Vector (Environment F → F) ops.local_length
   | .empty _ => #v[]
-  | .witness ops _ c => witness_generators ops ++ Vector.mapFinRange (fun i env => (c env).get i)
+  | .witness ops m c => witness_generators ops ++ Vector.mapFinRange m (fun i env => (c env).get i)
   | .assert ops _ => witness_generators ops
   | .lookup ops _ => witness_generators ops
   | .subcircuit ops s => witness_generators ops ++ (s.local_length_eq ▸ FlatOperation.witness_generators s.ops)
@@ -594,11 +594,17 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.mapFinRange Vector.mapRange Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.mapRange_zero Vector.mapRange_succ Vector.toArray_push Array.push_toList List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
--- simplify `vector.get 0` (which occurs in ProvableType definitions)
--- TODO handle other small indices as well
+-- simplify Vector.mapFinRange
+attribute [circuit_norm] Vector.mapFinRange_succ Vector.mapFinRange_zero
+    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
+
+-- simplify stuff like (3 : Fin 8).val = 3 % 8
+attribute [circuit_norm] Fin.coe_ofNat_eq_mod
+
+-- simplify `vector.get i` (which occurs in ProvableType definitions) and similar
 attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray
   List.getElem_cons_zero Fin.cast_eq_self List.getElem_cons_succ
   Vector.getElem_mk Vector.getElem_toArray Vector.getElem_map Fin.getElem_fin

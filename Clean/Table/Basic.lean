@@ -199,7 +199,7 @@ def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : Cell
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
-  let row_vars : Vector (Cell W S) (size S) := .mapFinRange fun col => .input ⟨ row, col ⟩
+  let row_vars : Vector (Cell W S) (size S) := .mapFinRange _ fun col => .input ⟨ row, col ⟩
   {
     offset := assignment.offset + size S
     aux_length := assignment.aux_length

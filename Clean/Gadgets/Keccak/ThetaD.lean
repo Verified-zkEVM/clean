@@ -55,11 +55,11 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [assumptions] at state_norm
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit] at h_holds
-  simp only [circuit_norm, subcircuit_norm] at h_holds
-  dsimp only [Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
-  simp [add_assoc, and_assoc, -Fin.val_zero, -Fin.val_one', -Fin.val_one, -Fin.val_two] at h_holds
+  simp only [circuit_norm, subcircuit_norm, Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
+  simp only [circuit_norm, add_assoc, and_assoc, and_imp, Nat.reduceMod, Nat.reduceAdd,
+    zero_sub, Fin.coe_neg_one, Pi.ofNat_apply, Nat.cast_ofNat] at h_holds
 
-  have s (i : Fin 5) : eval env (state_var[i.val]) = state[i.val] := by
+  have s (i : ℕ) (hi : i < 5) : eval env (state_var[i]) = state[i] := by
     rw [←h_input, Vector.getElem_map]
 
   simp only [s] at h_holds
@@ -87,7 +87,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
   simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64, eval_vector]
-  get_elem_tactic
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
