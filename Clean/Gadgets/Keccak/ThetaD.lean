@@ -86,7 +86,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
   simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64, eval_vector]
 
-theorem completeness : Completeness (F p) KeccakRow assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit]

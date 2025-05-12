@@ -30,7 +30,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,
     ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
 
-theorem completeness : Completeness (F p) KeccakState assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   simp_all [Completeness, circuit_norm, subcircuit_norm, theta, assumptions, spec,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,

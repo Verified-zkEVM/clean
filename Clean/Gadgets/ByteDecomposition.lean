@@ -124,7 +124,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   rw [Nat.mod_eq_of_lt sum_val'] at c
   simp only [c]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv x h_eval as
   simp only [assumptions] at as
   simp [circuit_norm, byte_decomposition, elaborated] at henv

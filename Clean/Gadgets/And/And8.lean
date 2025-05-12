@@ -125,7 +125,7 @@ theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   have rhs_lt : (2 : F p).val * v.val < p := by rw [v_val_eq, val_two]; linarith
   rw [ZMod.val_mul_of_lt rhs_lt, val_two]
 
-theorem completeness : Completeness (F p) field assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
   simp only [Inputs.mk.injEq] at h_input

@@ -66,7 +66,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
   exact ⟨ h_holds.right, h_holds.left ⟩
 
-theorem completeness : Completeness (F p) KeccakState assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm] at h_input
   dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit]
