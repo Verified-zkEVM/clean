@@ -14,9 +14,7 @@ instance : ToJson (CellOffset W S) where
 instance : ToJson (Cell W S) where
   toJson
     | .input off => toJson off
-    | .aux i => Json.mkObj [
-      ("aux", toJson i)
-    ]
+    | .aux i => Json.mkObj [("aux", toJson i)]
 
 instance : ToJson (CellAssignment W S) where
   toJson assignment := Json.mkObj [
@@ -42,19 +40,13 @@ instance : ToJson (TableOperation S F) where
       ("row", toJson i),
       ("context", toJson c)
     ]
-    | .EveryRow c => Json.mkObj [
-      ("EveryRow", toJson c)
-    ]
-    | .EveryRowExceptLast c => Json.mkObj [
-      ("EveryRowExceptLast", toJson c)
-    ]
+    | .EveryRow c => Json.mkObj [("EveryRow", toJson c)]
+    | .EveryRowExceptLast c => Json.mkObj [("EveryRowExceptLast", toJson c)]
 
 instance : ToJson (Cell W S) where
   toJson
     | .input off => toJson off
-    | .aux i => Json.mkObj [
-      ("aux", toJson i)
-    ]
+    | .aux i => Json.mkObj [("aux", toJson i)]
 
 instance : ToJson (CellAssignment W S) where
   toJson assignment := Json.mkObj [
