@@ -18,19 +18,19 @@ instance : ProvableStruct Inputs where
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
 
-def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   let { state, d } := inputs
   .mapFinRange 25 fun i =>
     subcircuit Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
-  main := theta_xor
+  main
   local_length _ := 200
   output _ i0 := var_from_offset KeccakState i0
 
-  local_length_eq _ n := by simp only [theta_xor, circuit_norm, Xor.circuit]
-  initial_offset_eq _ i := by simp only [theta_xor, circuit_norm]
-  output_eq _ i := by simp only [theta_xor, circuit_norm, Xor.circuit, var_from_offset_vector]
+  local_length_eq _ n := by simp only [main, circuit_norm, Xor.circuit]
+  initial_offset_eq _ i := by simp only [main, circuit_norm]
+  output_eq _ i := by simp only [main, circuit_norm, Xor.circuit, var_from_offset_vector]
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
@@ -58,8 +58,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [circuit_norm, subcircuit_norm, theta_xor, h_input, Xor.circuit, Rotation64.circuit,
-    Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
+  simp only [circuit_norm, subcircuit_norm, main, h_input, Xor.circuit, Xor.assumptions, Xor.spec] at h_holds
 
   -- use assumptions, prove goal
   intro i
@@ -67,19 +66,14 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   exact ⟨ h_holds.right, h_holds.left ⟩
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
-  intro i0 env state_var h_env state h_input h_assumptions
-  simp only [circuit_norm] at h_input
-  dsimp only [circuit_norm, theta_xor, Xor.circuit, Rotation64.circuit]
-  simp only [circuit_norm, subcircuit_norm]
-  dsimp only [Xor.assumptions, Xor.spec]
-  sorry
+  intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
+  simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
+  simp only [h_input, main, circuit_norm, subcircuit_norm, Xor.circuit, Xor.assumptions]
+  intro i
+  exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
 def circuit : FormalCircuit (F p) Inputs KeccakState := {
-  elaborated with
-  assumptions
-  spec
-  soundness
-  completeness
+  elaborated with assumptions, spec, soundness, completeness
 }
 
 end Gadgets.Keccak256.ThetaXor
