@@ -400,19 +400,18 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.local_length ElaboratedCircuit.output
 
-def Soundness (F: Type) [Field F] [circuit : ElaboratedCircuit F β α]
-  (assumptions: β F → Prop)
-  (spec: β F → α F → Prop) :=
+def Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
+    (assumptions: β F → Prop) (spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
-    ∀ offset : ℕ, ∀ env,
-    -- for all inputs that satisfy the assumptions
-    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
-    assumptions b →
-    -- if the constraints hold
-    constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
-    -- the spec holds on the input and output
-    let a := eval env (circuit.output b_var offset)
-    spec b a
+  ∀ offset : ℕ, ∀ env,
+  -- for all inputs that satisfy the assumptions
+  ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
+  assumptions b →
+  -- if the constraints hold
+  constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let a := eval env (circuit.output b_var offset)
+  spec b a
 
 def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
     (assumptions: β F → Prop) :=
@@ -429,7 +428,7 @@ structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [
   -- β = inputs, α = outputs
   assumptions: β F → Prop
   spec: β F → α F → Prop
-  soundness: Soundness F assumptions spec
+  soundness: Soundness F inferInstance assumptions spec
   completeness: Completeness F (α:=α) inferInstance assumptions
 
 namespace Circuit
