@@ -114,7 +114,7 @@ def theta(state : List[List[int]]):
     d = theta_d(c)
     return theta_xor(state, c, d)
 
-def rho_phi(state):
+def rho_pi(state):
     b = [zero_u64()] * 25
     b[0] = rol_u64(state[0], 0)
     b[1] = rol_u64(state[15], 28)
@@ -179,7 +179,7 @@ def iota(state, rc):
 
 def keccak_round(state, rc):
     state1 = theta(state)
-    b = rho_phi(state1)
+    b = rho_pi(state1)
     state2 = chi(b)
     state3 = iota(state2, rc)
     return state3
