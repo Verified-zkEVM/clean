@@ -60,6 +60,8 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   clear theta_norm h_rhopi_norm theta_eq h_rhopi_eq
   rw [KeccakState.value, eval_vector] at h_chi_eq
 
+  -- this is a hack to work around bad simplification (unfolding array before applying getElem lemmas)
+  -- TODO fix this with priority / ↑ in simp attributes
   have h_out : (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) : Vector (Var U64 (F p)) 25) =
     .mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) := rfl
   conv at h_out => lhs; simp only [circuit_norm]
