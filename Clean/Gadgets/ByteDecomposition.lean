@@ -130,11 +130,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
   simp [circuit_norm, byte_decomposition, elaborated] at henv
   simp only [field, id] at x
 
-  let h0 := henv 0
-  simp only [Fin.isValue, Fin.val_zero, add_zero, gt_iff_lt, List.getElem_cons_zero] at h0
-  let h1 := henv 1
-  simp only [Fin.isValue, Fin.val_one, gt_iff_lt, List.getElem_cons_succ,
-    List.getElem_cons_zero] at h1
+  let ⟨ h0, h1 ⟩ := henv
 
   simp only [id_eq, ↓eval_field] at h_eval
   simp [circuit_norm, byte_decomposition, elaborated, ByteLookup]

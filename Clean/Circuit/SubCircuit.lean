@@ -63,50 +63,65 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := to_flat_operations ops
+
+  have imply_soundness : ∀ env : Environment F,
+      constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
+    -- we are given an environment where the constraints hold, and can assume the assumptions are true
+    intro env h_holds
+    show subcircuit_soundness circuit b_var n env
+
+    let b : β F := eval env b_var
+    let a : α F := eval env (circuit.output b_var n)
+    rintro (as : circuit.assumptions b)
+    show circuit.spec b a
+
+    -- by soundness of the circuit, the spec is satisfied if only the constraints hold
+    suffices h: constraints_hold.soundness env ops by
+      exact circuit.soundness n env b_var b rfl as h
+
+    -- so we just need to go from flattened constraints to constraints
+    guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
+    apply can_replace_soundness
+    exact can_replace_subcircuits.mpr h_holds
+
+  have implied_by_completeness : ∀ env : Environment F,
+      env.extends_vector (FlatOperation.witnesses env flat_ops) n →
+      subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
+    -- we are given that the assumptions are true
+    intro env h_env
+    let b := eval env b_var
+    intro (as : circuit.assumptions b)
+
+    have h_env : env.uses_local_witnesses ops := by
+      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
+      have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
+      rw [←hn] at h_env
+      apply env.can_replace_local_witnesses
+      exact env_extends_of_flat h_env
+    have h_env_completeness := env.can_replace_local_witnesses_completeness h_env
+
+    -- by completeness of the circuit, this means we can make the constraints hold
+    have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
+
+    -- so we just need to go from constraints to flattened constraints
+    apply can_replace_subcircuits.mp
+    exact can_replace_completeness h_env h_holds
+
   {
     ops := flat_ops,
     soundness := subcircuit_soundness circuit b_var n,
     completeness := subcircuit_completeness circuit b_var,
+    uses_local_witnesses := subcircuit_soundness circuit b_var n,
     local_length := circuit.local_length b_var
 
-    imply_soundness := by
-      -- we are given an environment where the constraints hold, and can assume the assumptions are true
-      intro env h_holds
-      show subcircuit_soundness circuit b_var n env
-
-      let b : β F := eval env b_var
-      let a : α F := eval env (circuit.output b_var n)
-      rintro (as : circuit.assumptions b)
-      show circuit.spec b a
-
-      -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-      suffices h: constraints_hold.soundness env ops by
-        exact circuit.soundness n env b_var b rfl as h
-
-      -- so we just need to go from flattened constraints to constraints
-      guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
-      apply can_replace_soundness
-      exact can_replace_subcircuits.mpr h_holds
-
-    implied_by_completeness := by
-      -- we are given that the assumptions are true
-      intro env h_env h_completeness
-
-      let b := eval env b_var
-      have as : circuit.assumptions b := h_completeness
-
-      have h_env' : env.uses_local_witnesses ops := by
-        guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
-        rw [←hn] at h_env
-        exact env_extends_of_flat h_env
-
-      -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env b_var h_env' b rfl as
-
-      -- so we just need to go from constraints to flattened constraints
-      apply can_replace_subcircuits.mp
-      exact can_replace_completeness h_env' h_holds
+    imply_soundness
+    implied_by_completeness
+    implied_by_local_witnesses := by
+      intro env h_env as
+      -- by completeness, the constraints hold
+      have h_holds := implied_by_completeness env h_env as
+      -- by soundness, this implies the spec
+      exact imply_soundness env h_holds as
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
@@ -124,6 +139,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     ops := flat_ops,
     soundness := subassertion_soundness circuit b_var,
     completeness := subassertion_completeness circuit b_var,
+    uses_local_witnesses _ := True,
     local_length := circuit.local_length b_var
 
     imply_soundness := by
@@ -151,18 +167,22 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       let b := eval env b_var
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
-      have h_env' : env.uses_local_witnesses ops := by
+      have h_env : env.uses_local_witnesses ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
         have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
         rw [←hn] at h_env
+        apply env.can_replace_local_witnesses
         exact env_extends_of_flat h_env
+      have h_env_completeness := env.can_replace_local_witnesses_completeness h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env b_var h_env' b rfl as.left as.right
+      have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
       apply can_replace_subcircuits.mp
-      exact can_replace_completeness h_env' h_holds
+      exact can_replace_completeness h_env h_holds
+
+    implied_by_local_witnesses := by intros; exact trivial
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
