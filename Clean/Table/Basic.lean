@@ -437,10 +437,10 @@ instance [Repr F] : Repr (TableOperation S F) where
 instance : ToJson (TableOperation S F) where
   toJson op := match op with
     | .Boundary i c => Json.mkObj [
-        ("Boundary", Json.mkObj [
-          ("row", toJson i),
-          ("context", toJson c)
-        ])
+      ("type", Json.str "Boundary"),
+      ("row", toJson i),
+      ("context", toJson c)
+    ]
       ]
     | .EveryRow c => Json.mkObj [
         ("EveryRow", toJson c)
