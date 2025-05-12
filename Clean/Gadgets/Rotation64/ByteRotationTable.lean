@@ -6,8 +6,7 @@ namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-open Theorems (rot_right8)
-
+open Bitwise (rot_right8)
 
 def from_byte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])

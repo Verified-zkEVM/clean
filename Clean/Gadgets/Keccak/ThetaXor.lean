@@ -1,9 +1,6 @@
 import Clean.Circuit.Loops
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
-import Clean.Gadgets.Rotation64.Rotation64
 import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.ThetaXor
@@ -43,8 +40,7 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
 -- rewrite theta_xor as a loop
 lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
     Specs.Keccak256.theta_xor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
-  rw [Specs.Keccak256.theta_xor, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
-  rfl
+  simp only [Specs.Keccak256.theta_xor, circuit_norm]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds

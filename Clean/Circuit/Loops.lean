@@ -164,6 +164,18 @@ theorem forM_vector_forAll {xs : Vector α n} :
       exact ⟨ i, Vector.mem_zipIdx_iff_getElem? (x:=(x, i)).mp hxi⟩
     exact h x hx i hxi
 
+theorem forM_vector_forAll' {xs : Vector α n} :
+  (forM xs circuit |>.operations m).forAll prop ↔
+    ∀ (i : Fin n), (circuit xs[i.val] |>.operations (m + i*lawful.local_length)).forAll prop := by
+  rw [forM_vector_forAll]
+  constructor
+  · intro h i
+    exact h xs[i] (by simp) i (by simp [Vector.mem_zipIdx_iff_getElem?])
+  · intro h x hx i hxi
+    simp only [Vector.mem_zipIdx_iff_getElem?, Vector.getElem?_eq_some_iff] at hxi
+    have ⟨ i_lt, x_eq ⟩ := hxi
+    exact x_eq ▸ h ⟨ i, i_lt ⟩
+
 -- specialization to soundness / completeness
 theorem forM_soundness {xs : List α} :
   soundness env (forM xs circuit |>.operations n) ↔
@@ -269,8 +281,8 @@ theorem mapM_forAll {xs : List α} :
 
 theorem mapM_vector_forAll {xs : Vector α n} :
   (xs.mapM circuit |>.operations m).forAll prop ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), (circuit x |>.operations (m + i*lawful.local_length)).forAll prop := by
-  rw [mapM_forAll_vector_iff_list, mapM_forAll_iff_forM, ←Vector.forM_toList, forM_vector_forAll]
+    ∀ i : Fin n, (circuit xs[i.val] |>.operations (m + i*lawful.local_length)).forAll prop := by
+  rw [mapM_forAll_vector_iff_list, mapM_forAll_iff_forM, ←Vector.forM_toList, forM_vector_forAll']
   simp only [operations_ignore]
   trivial
 
@@ -285,16 +297,6 @@ theorem mapM_completeness {xs : List α} :
   completeness env (xs.mapM circuit |>.operations n) ↔
     xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
   simp only [completeness_iff_forAll, mapM_forAll]
-
-theorem mapM_vector_soundness {xs : Vector α n} :
-  soundness env (xs.mapM circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [soundness_iff_forAll, mapM_vector_forAll]
-
-theorem mapM_vector_completeness {xs : Vector α n} :
-  completeness env (xs.mapM circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [completeness_iff_forAll, mapM_vector_forAll]
 end
 
 -- specialization to mapFinRangeM
@@ -303,33 +305,14 @@ theorem mapFinRangeM_forAll {n : ℕ} {circuit : Fin m → Circuit F β} [lawful
     ∀ i : Fin m, (circuit i |>.operations (n + i*lawful.local_length)).forAll prop := by
   rw [Vector.mapFinRangeM, mapM_vector_forAll]
   constructor
-  case mpr =>
-    intro h i
-    intro _ i' hi'
-    -- TODO can we simplify this?
-    have hi : i' = i.val := by
-      rw [Vector.mem_zipIdx_iff_getElem?, Vector.finRange] at hi'
-      simp only [Vector.getElem?_mk, List.getElem?_toArray, List.finRange_eq_pmap_range] at hi'
-      simp only [List.getElem?_pmap, Option.pmap_eq_some_iff, exists_and_left] at hi'
-      obtain ⟨ ival, hival, ival_lt, ival_eq ⟩ := hi'
-      rw [ival_eq]
-      rw [List.getElem?_range, Option.some_inj] at hival
-      exact hival
-      rw [List.getElem?_eq_some_iff] at hival
-      obtain ⟨ hlt, _ ⟩ := hival
-      simpa using hlt
-    subst hi
+  · intro h i
+    specialize h i
+    rw [Vector.getElem_finRange] at h
+    exact h
+  · intro h i
+    rw [Vector.getElem_finRange]
     exact h i
 
-  intro h i
-  specialize h i
-  have : i ∈ Vector.finRange m := by simp [Vector.finRange]
-  specialize h this i
-  have : (i, ↑i) ∈ (Vector.finRange m).zipIdx := by
-    simp only [Vector.mem_zipIdx_iff_getElem?, Fin.is_lt, Vector.getElem?_eq_getElem, Option.some.injEq]
-    simp [Vector.finRange]
-  specialize h this
-  exact h
 end constraints_hold
 
 -- Loop constructs designed to simplify under `circuit_norm`
@@ -390,6 +373,66 @@ lemma mapFinRange.output_eq :
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange,
     LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
+  ac_rfl
+end
+
+def map {m : ℕ} [Nonempty β] (xs : Vector α m) (body : α → Circuit F β)
+    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
+  xs.mapM body
+
+section
+variable {env : Environment F} {m n : ℕ} [Inhabited α] [Nonempty β] {xs : Vector α m}
+  {body : α → Circuit F β} {lawful : ConstantLawfulCircuits body}
+
+@[circuit_norm]
+lemma map.soundness :
+  constraints_hold.soundness env (map xs body lawful |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.soundness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, constraints_hold.soundness_iff_forAll, constraints_hold.mapM_vector_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
+lemma map.completeness :
+  constraints_hold.completeness env (map xs body lawful |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, constraints_hold.completeness_iff_forAll, constraints_hold.mapM_vector_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
+lemma map.uses_local_witnesses :
+  env.uses_local_witnesses_completeness (map xs body lawful |>.operations n) ↔
+    ∀ i : Fin m, env.uses_local_witnesses_completeness (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, env.uses_local_witnesses_completeness_iff_forAll, constraints_hold.mapM_vector_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
+lemma map.local_length_eq :
+    (map xs body lawful).local_length n = m * (body default).local_length := by
+  let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.local_length_eq]
+  simp only [lawful_loop, lawful_norm]
+  rw [LawfulCircuit.local_length_eq]
+  ac_rfl
+
+omit [Inhabited α] in
+@[circuit_norm]
+lemma map.initial_offset_eq :
+    (map xs body lawful |>.operations n).initial_offset = n := by
+  let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.initial_offset_eq]
+
+@[circuit_norm]
+lemma map.output_eq :
+  (map xs body lawful).output n =
+    xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
+  let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.output_eq]
+  simp only [lawful_loop, lawful_norm]
+  ext i hi
+  rw [Vector.getElem_mapIdx, Vector.getElem_mapIdx, LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
   ac_rfl
 end
 
