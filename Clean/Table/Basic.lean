@@ -9,8 +9,6 @@ import Clean.Circuit.Provable
 import Clean.Utils.Field
 import Clean.Table.SimpTable
 
-open Lean
-
 /--
   A row is StructuredElement that contains field elements.
 -/
@@ -133,12 +131,6 @@ structure CellOffset (W: ℕ+) (S : Type → Type) [ProvableType S]  where
 instance : Repr (CellOffset W S) where
   reprPrec off _ := "⟨" ++ reprStr off.row ++ ", " ++ reprStr off.column ++ "⟩"
 
-instance : ToJson (CellOffset W S) where
-  toJson off := Json.mkObj [
-    ("row", off.row),
-    ("column", off.column)
-  ]
-
 namespace CellOffset
 
 /--
@@ -164,12 +156,6 @@ instance : Repr (Cell W S) where
     | .input off => ".input " ++ reprStr off
     | .aux i => ".aux " ++ reprStr i
 
-instance : ToJson (Cell W S) where
-  toJson cell := match cell with
-    | .input off => toJson off
-    | .aux i => Json.mkObj [
-        ("aux", toJson i)
-      ]
 
 /--
 Mapping between cell offsets in the table and variable indices.
@@ -188,13 +174,6 @@ namespace CellAssignment
 instance : Repr (CellAssignment W S) where
   reprPrec := fun { offset, aux_length, vars } _ =>
     "{ offset := " ++ reprStr offset ++ ", aux_length := " ++ reprStr aux_length ++ ", vars := " ++ reprStr vars ++ "}"
-
-instance : ToJson (CellAssignment W S) where
-  toJson assignment := Json.mkObj [
-    ("offset", toJson assignment.offset),
-    ("aux_length", toJson assignment.aux_length),
-    ("vars", toJson assignment.vars.toArray)
-  ]
 
 @[table_assignment_norm, reducible]
 def empty (W: ℕ+) : CellAssignment W S where
@@ -250,13 +229,6 @@ structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Prova
   assignment : CellAssignment W S
 deriving Repr
 
-
-instance [Field F] [ToJson F]: ToJson (TableContext W S F) where
-  toJson ctx := Json.mkObj [
-    ("circuit", toJson ctx.circuit),
-    ("assignment", toJson ctx.assignment)
-  ]
-
 variable [Field F] {α : Type}
 
 namespace TableContext
@@ -275,9 +247,6 @@ def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Provable
 
 instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
-
-instance [ToJson F]: ToJson (TableConstraint W S F α) where
-  toJson table := toJson (table .empty).2
 
 @[table_assignment_norm]
 def assignment_from_circuit {n} (as: CellAssignment W S) : Operations F n → CellAssignment W S
@@ -433,22 +402,6 @@ instance [Repr F] : Repr (TableOperation S F) where
     | .Boundary i c => "Boundary " ++ reprStr i ++ " " ++ reprStr c
     | .EveryRow c => "EveryRow " ++ reprStr c
     | .EveryRowExceptLast c => "EveryRowExceptLast " ++ reprStr c
-
-instance [ToJson F]: ToJson (TableOperation S F) where
-  toJson op := match op with
-    | .Boundary i c => Json.mkObj [
-      ("type", Json.str "Boundary"),
-      ("row", toJson i),
-      ("context", toJson c)
-    ]
-      ]
-    | .EveryRow c => Json.mkObj [
-        ("EveryRow", toJson c)
-      ]
-    | .EveryRowExceptLast c => Json.mkObj [
-        ("EveryRowExceptLast", toJson c)
-      ]
-
 
 export TableOperation (Boundary EveryRow EveryRowExceptLast)
 

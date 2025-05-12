@@ -15,30 +15,6 @@ inductive Expression (F : Type) where
   | add : Expression F -> Expression F -> Expression F
   | mul : Expression F -> Expression F -> Expression F
 
-
-def exprToJson [Lean.ToJson F]: Expression F → Lean.Json
-  | .var v   => Lean.Json.mkObj [
-                  ("type", Lean.Json.str "var"),
-                  ("index",     Lean.Json.num v.index)
-                ]
-  | .const c => Lean.Json.mkObj [
-                  ("type", Lean.Json.str "const"),
-                  ("value", Lean.toJson c)
-                ]
-  | .add x y => Lean.Json.mkObj [
-                  ("type", Lean.Json.str "add"),
-                  ("lhs",  exprToJson x),
-                  ("rhs", exprToJson y)
-                ]
-  | .mul x y => Lean.Json.mkObj [
-                  ("type", Lean.Json.str "mul"),
-                  ("lhs",  exprToJson x),
-                  ("rhs", exprToJson y)
-                ]
-
-instance [Lean.ToJson F]: Lean.ToJson (Expression F) where
-  toJson := exprToJson
-
 export Expression (var)
 
 structure Environment (F: Type) where

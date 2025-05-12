@@ -7,8 +7,6 @@ instance (p : ℕ) [Fact p.Prime]: Field (F p) := ZMod.instField p
 instance (p : ℕ) [Fact p.Prime] : Fintype (F p) := ZMod.fintype p
 instance (p : ℕ) [Fact p.Prime] : Inhabited (F p) := ⟨0⟩
 instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
-instance (p : ℕ) : Lean.ToJson (F p) where
-  toJson x := Lean.ToJson.toJson x.val
 
 namespace FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
