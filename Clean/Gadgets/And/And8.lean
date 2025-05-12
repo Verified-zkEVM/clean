@@ -6,7 +6,7 @@ import Clean.Utils.Primes
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Gadgets.Xor (ByteXorLookup ByteXorTable)
+open Xor (ByteXorLookup ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -76,12 +76,12 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var field (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   local_length _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
   simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
   simp only [Inputs.mk.injEq] at h_input
@@ -125,7 +125,7 @@ theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
   have rhs_lt : (2 : F p).val * v.val < p := by rw [v_val_eq, val_two]; linarith
   rw [ZMod.val_mul_of_lt rhs_lt, val_two]
 
-theorem completeness : Completeness (F p) field assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
   simp only [Inputs.mk.injEq] at h_input

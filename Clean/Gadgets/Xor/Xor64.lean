@@ -53,7 +53,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.is_normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main := xor_u64
   local_length _ := 8
   output _ i0 := var_from_offset U64 i0
@@ -85,7 +85,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, Bitwise.xor_mul_two_pow]
   ac_rfl
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env input_var input h_input h_as h_holds
 
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
@@ -118,7 +118,7 @@ lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness : Completeness (F p) U64 assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var

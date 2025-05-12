@@ -29,7 +29,7 @@ instance : ProvableStruct Outputs where
   to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
   from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
-open Gadgets.Addition8FullCarry (add8_full_carry)
+open Addition8FullCarry (add8_full_carry)
 
 def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
@@ -58,7 +58,7 @@ def c := add32_full (p:=p_babybear) default
 #eval c.output
 ```
 -/
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main := add32_full
   local_length _ := 8
   output _ i0 := {
@@ -66,7 +66,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
     carry_out := var ⟨i0 + 7⟩
   }
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -109,7 +109,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 
   -- apply the main soundness theorem
-  apply Gadgets.Addition32.Theorems.add32_soundness
+  apply Addition32.Theorems.add32_soundness
     x0_byte x1_byte x2_byte x3_byte
     y0_byte y1_byte y2_byte y3_byte
     z0_byte z1_byte z2_byte z3_byte
@@ -117,7 +117,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y

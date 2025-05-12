@@ -247,6 +247,10 @@ def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.fin
 def output (circuit: Circuit F α) (offset := 0) : α :=
   circuit offset |>.fst
 
+@[reducible, circuit_norm]
+def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
+  (circuit.operations offset).local_length
+
 -- core operations we can do in a circuit
 
 /-- Create a new variable -/
@@ -370,18 +374,18 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F: Type) [Field F] (β: TypeMap) [ProvableType β] (Output: Type) where
-  main: Var β F → Circuit F Output
+class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [ProvableType α] where
+  main: Var β F → Circuit F (Var α F)
 
   /-- how many local witnesses this circuit introduces -/
   local_length: Var β F → ℕ
 
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
-  local_length_eq : ∀ var offset, (main var |>.operations offset).local_length = local_length var
+  local_length_eq : ∀ var offset, (main var).local_length offset = local_length var
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
-  output : Var β F → ℕ → Output
+  output : Var β F → ℕ → Var α F
 
   /-- correctness of `output` -/
   output_eq : ∀ var offset, (main var).output offset = output var offset
@@ -396,22 +400,21 @@ class ElaboratedCircuit (F: Type) [Field F] (β: TypeMap) [ProvableType β] (Out
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.local_length ElaboratedCircuit.output
 
-def Soundness (F: Type) [Field F] [circuit : ElaboratedCircuit F β (Var α F)]
-  (assumptions: β F → Prop)
-  (spec: β F → α F → Prop) :=
+def Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
+    (assumptions: β F → Prop) (spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
-    ∀ offset : ℕ, ∀ env,
-    -- for all inputs that satisfy the assumptions
-    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
-    assumptions b →
-    -- if the constraints hold
-    constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
-    -- the spec holds on the input and output
-    let a := eval env (circuit.output b_var offset)
-    spec b a
+  ∀ offset : ℕ, ∀ env,
+  -- for all inputs that satisfy the assumptions
+  ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
+  assumptions b →
+  -- if the constraints hold
+  constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let a := eval env (circuit.output b_var offset)
+  spec b a
 
-def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit F β (Var α F)]
-  (assumptions: β F → Prop) :=
+def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
+    (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
   env.uses_local_witnesses_completeness (circuit.main b_var |>.operations offset) →
@@ -421,13 +424,12 @@ def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit 
   -- the constraints hold
   constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-extends ElaboratedCircuit F β (Var α F) where
+structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β] extends ElaboratedCircuit F β α where
   -- β = inputs, α = outputs
   assumptions: β F → Prop
   spec: β F → α F → Prop
-  soundness: Soundness F assumptions spec
-  completeness: Completeness F α assumptions
+  soundness: Soundness F inferInstance assumptions spec
+  completeness: Completeness F (α:=α) inferInstance assumptions
 
 namespace Circuit
 @[circuit_norm]
@@ -457,7 +459,7 @@ In other words, for `FormalAssertion`s the spec must be an equivalent reformulat
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
 structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
-extends ElaboratedCircuit F β Unit where
+extends ElaboratedCircuit F β unit where
   assumptions: β F → Prop
   spec: β F → Prop
 

@@ -55,7 +55,7 @@ def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
   x.val = low.val + high.val * 2^(offset.val)
 
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F p)) where
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := byte_decomposition offset
   local_length _ := 2
   output _ i0 := var_from_offset Outputs i0
@@ -66,7 +66,7 @@ theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
 
 lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_byte h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
@@ -124,7 +124,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   rw [Nat.mod_eq_of_lt sum_val'] at c
   simp only [c]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv x h_eval as
   simp only [assumptions] at as
   simp [circuit_norm, byte_decomposition, elaborated] at henv

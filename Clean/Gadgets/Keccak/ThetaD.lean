@@ -13,27 +13,25 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Gadgets.Keccak256 (KeccakRow)
-
 def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
-  let c0 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 1)
-  let c0 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 4), c0⟩
+  let c0 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 1)
+  let c0 ← subcircuit Xor.circuit ⟨(state.get 4), c0⟩
 
-  let c1 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 2)
-  let c1 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 0), c1⟩
+  let c1 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 2)
+  let c1 ← subcircuit Xor.circuit ⟨(state.get 0), c1⟩
 
-  let c2 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 3)
-  let c2 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 1), c2⟩
+  let c2 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 3)
+  let c2 ← subcircuit Xor.circuit ⟨(state.get 1), c2⟩
 
-  let c3 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 4)
-  let c3 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 2), c3⟩
+  let c3 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 4)
+  let c3 ← subcircuit Xor.circuit ⟨(state.get 2), c3⟩
 
-  let c4 ← subcircuit (Gadgets.Rotation64.circuit (64 - 1)) (state.get 0)
-  let c4 ← subcircuit Gadgets.Xor.circuit ⟨(state.get 3), c4⟩
+  let c4 ← subcircuit (Rotation64.circuit (64 - 1)) (state.get 0)
+  let c4 ← subcircuit Xor.circuit ⟨(state.get 3), c4⟩
 
   return #v[c0, c1, c2, c3, c4]
 
-instance elaborated : ElaboratedCircuit (F p) KeccakRow (Var KeccakRow (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main := theta_d
   local_length _ := 160
   output _ i0 := #v[
@@ -50,7 +48,7 @@ def spec (state : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
   out.is_normalized
   ∧ out.value = Specs.Keccak256.theta_d state.value
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [assumptions] at state_norm
@@ -88,7 +86,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
   simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64, eval_vector]
 
-theorem completeness : Completeness (F p) KeccakRow assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit]

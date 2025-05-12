@@ -8,7 +8,6 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Gadgets.Keccak256 (KeccakState)
 open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
@@ -26,7 +25,7 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 -- #eval! main (p:=p_babybear) default |>.operations.local_length
 -- #eval! main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   local_length _ := 400
   output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
@@ -41,7 +40,7 @@ lemma chi_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
@@ -57,7 +56,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp_all
 
-theorem completeness : Completeness (F p) KeccakState assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
 
   -- simplify constraints
