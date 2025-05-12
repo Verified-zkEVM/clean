@@ -23,7 +23,7 @@ def theta_xor (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)
   .mapFinRange 25 fun i =>
     subcircuit Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var KeccakState (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   main := theta_xor
   local_length _ := 200
   output _ i0 := var_from_offset KeccakState i0

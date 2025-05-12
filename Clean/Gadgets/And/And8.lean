@@ -76,7 +76,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var field (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   local_length _ := 1
   output _ i := var ⟨i⟩

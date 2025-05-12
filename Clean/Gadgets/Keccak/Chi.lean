@@ -25,7 +25,7 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 -- #eval! main (p:=p_babybear) default |>.operations.local_length
 -- #eval! main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakState (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   local_length _ := 400
   output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)

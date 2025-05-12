@@ -31,7 +31,7 @@ def theta_d (state : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) 
 
   return #v[c0, c1, c2, c3, c4]
 
-instance elaborated : ElaboratedCircuit (F p) KeccakRow (Var KeccakRow (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main := theta_d
   local_length _ := 160
   output _ i0 := #v[
