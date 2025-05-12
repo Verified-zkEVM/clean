@@ -36,7 +36,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.is_normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main
   local_length _ := 8
   output _ i := var_from_offset U64 i

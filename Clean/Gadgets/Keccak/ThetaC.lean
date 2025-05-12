@@ -25,7 +25,7 @@ def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
 
 -- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
 -- #eval! theta_c (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) KeccakState (Var KeccakRow (F p)) where
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
   local_length _ := 160
   output _ i0 := .mapRange 5 fun i => var_from_offset U64 (i0 + i*32 + 24)

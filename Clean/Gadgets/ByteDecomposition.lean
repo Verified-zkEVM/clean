@@ -55,7 +55,7 @@ def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
   x.val = low.val + high.val * 2^(offset.val)
 
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F p)) where
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := byte_decomposition offset
   local_length _ := 2
   output _ i0 := var_from_offset Outputs i0

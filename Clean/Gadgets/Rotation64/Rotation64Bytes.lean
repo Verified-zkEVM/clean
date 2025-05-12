@@ -44,7 +44,7 @@ def assumptions (input : Inputs (F p)) := input.is_normalized
 def spec (offset : Fin 8) (x : Inputs (F p)) (y: Outputs (F p)) :=
   y.value = rot_right64 x.value (offset.val * 8)
 
-instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs Outputs where
   main := rot64_bytes off
   local_length _ := 0
   output input i0 :=

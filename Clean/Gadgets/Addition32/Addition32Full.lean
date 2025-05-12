@@ -58,7 +58,7 @@ def c := add32_full (p:=p_babybear) default
 #eval c.output
 ```
 -/
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main := add32_full
   local_length _ := 8
   output _ i0 := {

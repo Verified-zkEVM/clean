@@ -30,7 +30,7 @@ def main {α : TypeMap} [LawfulProvableType α] (input : Var α F × Var α F) :
   forM diffs assert_zero
 
 @[reducible]
-instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F (ProvablePair α α) Unit where
+instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
   main := main
   local_length _ := 0
   output _ _ := ()
