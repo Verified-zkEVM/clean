@@ -393,5 +393,39 @@ lemma mapFinRange.output_eq :
   ac_rfl
 end
 
+def map {m : ℕ} [Nonempty β] (xs : Vector α m) (body : α → Circuit F β)
+    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
+  xs.mapM body
+
+section
+variable {env : Environment F} {m n : ℕ} [Inhabited α] [Nonempty β] {xs : Vector α m}
+  {body : α → Circuit F β} {lawful : ConstantLawfulCircuits body}
+
+@[circuit_norm]
+lemma map.soundness :
+  constraints_hold.soundness env (map xs body lawful |>.operations n) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx),
+    constraints_hold.soundness env (body x |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, constraints_hold.soundness_iff_forAll, constraints_hold.mapM_vector_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
+lemma map.local_length_eq :
+    (map xs body lawful).local_length n = m * (body default).local_length := by
+  let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.local_length_eq]
+  simp only [lawful_loop, lawful_norm]
+  rw [LawfulCircuit.local_length_eq]
+  ac_rfl
+
+omit [Inhabited α] in
+@[circuit_norm]
+lemma map.initial_offset_eq :
+    (map xs body lawful |>.operations n).initial_offset = n := by
+  let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.initial_offset_eq]
+end
+
 end Circuit
 end
