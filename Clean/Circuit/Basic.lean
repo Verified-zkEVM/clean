@@ -578,7 +578,7 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
     acc.push (compute ⟨ env ⟩))
   #[]
 
--- generic folding over `Operations`
+-- generic folding over `Operations` resulting in a proposition
 
 structure Operations.Condition (F: Type) [Field F] where
   witness (n: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop
@@ -586,12 +586,12 @@ structure Operations.Condition (F: Type) [Field F] where
   lookup (n: ℕ) : Lookup F → Prop
   subcircuit (n: ℕ) : SubCircuit F n → Prop
 
-def Operations.forAll (recursor : Operations.Condition F) : {n : ℕ} → Operations F n → Prop
+def Operations.forAll (condition : Operations.Condition F) : {n : ℕ} → Operations F n → Prop
   | _, .empty _ => True
-  | n + .(m), .witness ops m c => forAll recursor ops ∧ recursor.witness n m c
-  | n, .assert ops e => forAll recursor ops ∧ recursor.assert n e
-  | n, .lookup ops l => forAll recursor ops ∧ recursor.lookup n l
-  | n + _, .subcircuit ops s => forAll recursor ops ∧ recursor.subcircuit n s
+  | n + .(m), .witness ops m c => ops.forAll condition ∧ condition.witness n m c
+  | n, .assert ops e => ops.forAll condition ∧ condition.assert n e
+  | n, .lookup ops l => ops.forAll condition ∧ condition.lookup n l
+  | n + _, .subcircuit ops s => ops.forAll condition ∧ condition.subcircuit n s
 
 -- `circuit_norm` attributes
 
