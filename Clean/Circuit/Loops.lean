@@ -411,6 +411,24 @@ lemma map.soundness :
   trivial
 
 @[circuit_norm]
+lemma map.completeness :
+  constraints_hold.completeness env (map xs body lawful |>.operations n) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx),
+    constraints_hold.completeness env (body x |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, constraints_hold.completeness_iff_forAll, constraints_hold.mapM_vector_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
+lemma map.uses_local_witnesses :
+  env.uses_local_witnesses_completeness (map xs body lawful |>.operations n) ↔
+    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx),
+    env.uses_local_witnesses_completeness (body x |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, env.uses_local_witnesses_completeness_iff_forAll, constraints_hold.mapM_vector_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
 lemma map.local_length_eq :
     (map xs body lawful).local_length n = m * (body default).local_length := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
@@ -425,6 +443,17 @@ lemma map.initial_offset_eq :
     (map xs body lawful |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.initial_offset_eq]
+
+@[circuit_norm]
+lemma map.output_eq :
+  (map xs body lawful).output n =
+    xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
+  let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
+  rw [LawfulCircuit.output_eq]
+  simp only [lawful_loop, lawful_norm]
+  ext i hi
+  rw [Vector.getElem_mapIdx, Vector.getElem_mapIdx, LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
+  ac_rfl
 end
 
 end Circuit
