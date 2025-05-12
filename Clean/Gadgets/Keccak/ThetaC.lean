@@ -59,16 +59,10 @@ theorem soundness : Soundness (F p) assumptions spec := by
     fun hi => state_norm ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
 
+  simp only [KeccakState.value, Vector.getElem_map]
   intro i
   specialize h_holds i
-  obtain ⟨ h0, h1, h2, h3 ⟩ := h_holds
-  obtain ⟨ xor0, norm0 ⟩ := h0
-  have ⟨ xor1, norm1 ⟩ := h1 norm0
-  have ⟨ xor2, norm2 ⟩ := h2 norm1
-  have ⟨ xor4, norm ⟩ := h3 norm2
-  clear h1 h2 h3 norm0 norm1 norm2
-  use norm
-  simp only [xor0, xor1, xor2, xor4, KeccakState.value, Vector.getElem_map]
+  aesop
 
 theorem completeness : Completeness (F p) KeccakRow assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
