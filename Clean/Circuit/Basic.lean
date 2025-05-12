@@ -527,8 +527,8 @@ def added_witness : Operation F → ℕ
   | subcircuit s => s.local_length
   | _ => 0
 
-instance [Repr F] : ToString (Operation F) where
-  toString
+instance [Repr F] : Repr (Operation F) where
+  reprPrec op _ := match op with
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
@@ -547,6 +547,9 @@ def OperationsList.toList : OperationsList F → List (Operation F)
 
 def Circuit.operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
   (circuit |>.operations offset).toList
+
+instance [Repr F] : Repr (OperationsList F) where
+  reprPrec ops _ := reprStr ops.toList
 
 -- witness generation
 

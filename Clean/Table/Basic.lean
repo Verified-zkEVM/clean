@@ -170,6 +170,10 @@ structure CellAssignment (W: ℕ+) (S : Type → Type) [ProvableType S] where
   vars : Vector (Cell W S) offset
 
 namespace CellAssignment
+instance : Repr (CellAssignment W S) where
+  reprPrec := fun { offset, aux_length, vars } _ =>
+    "{ offset := " ++ reprStr offset ++ ", aux_length := " ++ reprStr aux_length ++ ", vars := " ++ reprStr vars ++ "}"
+
 @[table_assignment_norm, reducible]
 def empty (W: ℕ+) : CellAssignment W S where
   offset := 0
@@ -212,6 +216,7 @@ def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: �
   -- note that we don't change the `aux_length` and the indices of existing aux variables.
   -- that would unnecessarily complicate reasoning about the assignment
   { assignment with vars }
+
 end CellAssignment
 
 /--
@@ -221,6 +226,7 @@ end CellAssignment
 structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   circuit : OperationsList F
   assignment : CellAssignment W S
+deriving Repr
 
 variable [Field F] {α : Type}
 
@@ -237,6 +243,9 @@ end TableContext
 @[reducible, table_norm, table_assignment_norm]
 def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
+
+instance [Repr F] : Repr (TableConstraint W S F α) where
+  reprPrec table _ := reprStr (table .empty).2
 
 @[table_assignment_norm]
 def assignment_from_circuit {n} (as: CellAssignment W S) : Operations F n → CellAssignment W S
@@ -386,6 +395,12 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
     Note that this will not apply any constraints to a trace of length one.
   -/
   | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
+
+instance [Repr F] : Repr (TableOperation S F) where
+  reprPrec op _ := match op with
+    | .Boundary i c => "Boundary " ++ reprStr i ++ " " ++ reprStr c
+    | .EveryRow c => "EveryRow " ++ reprStr c
+    | .EveryRowExceptLast c => "EveryRowExceptLast " ++ reprStr c
 
 export TableOperation (Boundary EveryRow EveryRowExceptLast)
 
