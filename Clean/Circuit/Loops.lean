@@ -358,6 +358,14 @@ lemma mapFinRange.completeness :
   trivial
 
 @[circuit_norm]
+lemma mapFinRange.uses_local_witnesses :
+  env.uses_local_witnesses_completeness (mapFinRange m body lawful |>.operations n) ↔
+    ∀ i : Fin m, env.uses_local_witnesses_completeness (body i |>.operations (n + i*(body 0).local_length)) := by
+  simp only [mapFinRange, env.uses_local_witnesses_completeness_iff_forAll, constraints_hold.mapFinRangeM_forAll]
+  rw [LawfulCircuit.local_length_eq]
+  trivial
+
+@[circuit_norm]
 lemma mapFinRange.local_length_eq :
     (mapFinRange m body lawful).local_length n = m * (body 0).local_length := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
