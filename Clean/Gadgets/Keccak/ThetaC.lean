@@ -46,7 +46,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [elaborated, theta_c_loop, eval_vector,
+  simp only [elaborated, theta_c_loop, eval_vector, KeccakState.value,
     Vector.getElem_map, Vector.getElem_mapFinRange, Vector.getElem_mapRange]
 
   -- simplify constraints
@@ -60,14 +60,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   intro i
   specialize h_holds i
-  obtain ⟨ h0, h1, h2, h3 ⟩ := h_holds
-  obtain ⟨ xor0, norm0 ⟩ := h0
-  have ⟨ xor1, norm1 ⟩ := h1 norm0
-  have ⟨ xor2, norm2 ⟩ := h2 norm1
-  have ⟨ xor4, norm ⟩ := h3 norm2
-  clear h1 h2 h3 norm0 norm1 norm2
-  use norm
-  simp only [xor0, xor1, xor2, xor4, KeccakState.value, Vector.getElem_map]
+  aesop
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
