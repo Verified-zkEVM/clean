@@ -47,7 +47,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [elaborated, theta_c_loop, eval_vector,
+  simp only [elaborated, theta_c_loop, eval_vector, KeccakState.value,
     Vector.getElem_map, Vector.getElem_mapFinRange, Vector.getElem_mapRange]
 
   -- simplify constraints
@@ -59,7 +59,6 @@ theorem soundness : Soundness (F p) assumptions spec := by
     fun hi => state_norm ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
 
-  simp only [KeccakState.value, Vector.getElem_map]
   intro i
   specialize h_holds i
   aesop
