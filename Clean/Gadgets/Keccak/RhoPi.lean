@@ -66,4 +66,18 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec] at h_holds
   simp_all [Bitwise.rot_left_eq_rot_right]
 
+theorem completeness : Completeness (F p) elaborated assumptions := by
+  intro i0 env state_var h_env state h_input state_norm
+
+  -- simplify assumptions
+  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [assumptions, KeccakState.is_normalized] at state_norm
+
+  -- simplify constraints (goal + environment) and apply assumptions
+  simp_all [state_norm, h_input, main, circuit_norm, subcircuit_norm,
+    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec]
+
+def circuit : FormalCircuit (F p) KeccakState KeccakState := {
+  elaborated with assumptions, spec, soundness, completeness
+}
 end Gadgets.Keccak256.RhoPhi
