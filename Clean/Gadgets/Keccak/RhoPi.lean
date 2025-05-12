@@ -8,11 +8,11 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
 open Bitwise (rot_left64)
 
-def rhoPiIndices : Vector (Fin 25) 25 := #v[
+@[reducible] def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
 ]
 
-def rhoPiShifts : Vector ℕ 25 := #v[
+@[reducible] def rhoPiShifts : Vector ℕ 25 := #v[
   0, 28, 1, 27, 62, 44, 20, 6, 36, 55, 43, 3, 25, 10, 39, 21, 45, 8, 15, 41, 14, 61, 18, 56, 2
 ]
 
@@ -30,16 +30,14 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .map (rhoPiIndices.zip rhoPiShifts) fun (i, s) =>
     subcircuit (Rotation64.circuit s) state[i.val]
 
-#eval! main (p:=p_babybear) default |>.output
-
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   local_length _ := 600
   output _ i0 := .mapRange 25 fun i => var_from_offset U64 (i0 + i*24 + 16)
 
-  local_length_eq _ _ := by
-    simp only [main, circuit_norm, Rotation64.circuit]
-    rfl
+  local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit]
   initial_offset_eq _ _ := by simp only [main, circuit_norm]
-  output_eq _ _ := by sorry
+  output_eq state i0 := by
+    simp only [main, circuit_norm, Rotation64.circuit]
+    simp
 end Gadgets.Keccak256.RhoPhi
