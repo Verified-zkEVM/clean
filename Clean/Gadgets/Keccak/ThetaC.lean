@@ -69,7 +69,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   use norm
   simp only [xor0, xor1, xor2, xor4, KeccakState.value, Vector.getElem_map]
 
-theorem completeness : Completeness (F p) KeccakRow assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm, subcircuit_norm, assumptions, eval_vector,

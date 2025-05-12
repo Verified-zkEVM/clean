@@ -56,7 +56,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
 
   simp_all
 
-theorem completeness : Completeness (F p) KeccakState assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
 
   -- simplify assumptions

@@ -120,7 +120,7 @@ theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circui
     rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
     exact soundnessCase7 x0 x1 x2 x3 x4 x5 x6 x7 as
 
-theorem completeness (off : Fin 8) : Completeness (F p) Outputs assumptions (circuit := elaborated off) := by
+theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _
   fin_cases off
   repeat

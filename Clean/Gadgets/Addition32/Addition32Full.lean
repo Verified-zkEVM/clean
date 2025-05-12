@@ -117,7 +117,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y

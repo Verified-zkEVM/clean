@@ -78,7 +78,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
     U64.is_normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness : Completeness (F p) U64 assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
