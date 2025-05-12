@@ -72,7 +72,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs Outputs where
     repeat rfl
 
 
-theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circuit:=elaborated off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs

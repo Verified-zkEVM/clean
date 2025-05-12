@@ -41,7 +41,7 @@ lemma theta_c_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.theta_c, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- rewrite goal

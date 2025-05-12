@@ -66,7 +66,7 @@ theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
 
 lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_byte h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds

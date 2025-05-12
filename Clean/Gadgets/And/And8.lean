@@ -81,7 +81,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   local_length _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness : Soundness (F p) (circuit:=elaborated) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
   simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
   simp only [Inputs.mk.injEq] at h_input

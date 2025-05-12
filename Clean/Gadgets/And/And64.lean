@@ -69,7 +69,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat rw [Bitwise.and_xor_sum]
   repeat assumption
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
   cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right

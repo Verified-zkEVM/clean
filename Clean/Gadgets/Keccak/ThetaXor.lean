@@ -47,7 +47,7 @@ lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
   rw [Specs.Keccak256.theta_xor, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
 
   -- rewrite goal

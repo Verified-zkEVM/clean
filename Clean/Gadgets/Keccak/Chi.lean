@@ -40,7 +40,7 @@ lemma chi_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
