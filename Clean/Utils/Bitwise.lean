@@ -25,6 +25,10 @@ def rot_left64 (value : ℕ) (left : Fin 64) : ℕ:=
   let right := (64 - left) % 64
   rot_right64 value right
 
+lemma rot_left_eq_rot_right (x : ℕ) (offset : Fin 64) :
+    rot_left64 x offset = rot_right64 x (-offset).val := by
+  simp [rot_left64]
+
 theorem eq_of_mod_eq_and_div_eq (m : ℕ) {x y : ℕ} (mod : x % m = y % m) (div : x / m = y / m) : x = y := by
   rw [←Nat.mod_add_div x m, ←Nat.mod_add_div y m, mod, div]
 
