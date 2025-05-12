@@ -5,7 +5,7 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.RhoPhi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
--- instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > 2^16 + 2^8)›.elim])
+instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
 open Bitwise (rot_left64)
 
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
@@ -27,8 +27,19 @@ lemma rho_pi_loop (state : Vector ℕ 25) :
   rfl
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
-  -- TODO `circuit_norm` friendly map
-  (rhoPiIndices.zip rhoPiShifts).mapM fun (i, s) =>
+  .map (rhoPiIndices.zip rhoPiShifts) fun (i, s) =>
     subcircuit (Rotation64.circuit s) state[i.val]
 
+#eval! main (p:=p_babybear) default |>.output
+
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
+  main
+  local_length _ := 600
+  output _ i0 := .mapRange 25 fun i => var_from_offset U64 (i0 + i*24 + 16)
+
+  local_length_eq _ _ := by
+    simp only [main, circuit_norm, Rotation64.circuit]
+    rfl
+  initial_offset_eq _ _ := by simp only [main, circuit_norm]
+  output_eq _ _ := by sorry
 end Gadgets.Keccak256.RhoPhi
