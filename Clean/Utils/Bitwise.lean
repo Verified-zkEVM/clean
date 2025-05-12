@@ -3,6 +3,27 @@ import Mathlib.Algebra.Field.ZMod
 import Clean.Utils.Field
 
 namespace Bitwise
+def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
+
+def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
+  let low := x % (2^offset.val)
+  let high := x / (2^offset.val)
+  low * (2^(8 - offset.val)) + high
+
+def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
+  let low := x % (2^(8 - offset.val))
+  let high := x / (2^(8 - offset.val))
+  low * (2^offset.val) + high
+
+def rot_right64 (x : ℕ) (offset : ℕ) : ℕ :=
+  let offset := offset % 64
+  let low := x % (2^offset)
+  let high := x / (2^offset)
+  low * (2^(64 - offset)) + high
+
+def rot_left64 (value : ℕ) (left : Fin 64) : ℕ:=
+  let right := (64 - left) % 64
+  rot_right64 value right
 
 theorem eq_of_mod_eq_and_div_eq (m : ℕ) {x y : ℕ} (mod : x % m = y % m) (div : x / m = y / m) : x = y := by
   rw [←Nat.mod_add_div x m, ←Nat.mod_add_div y m, mod, div]
@@ -51,7 +72,6 @@ lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
   congr; symm
   exact and_mul_two_pow
 
-def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
     not64 x = 2^64 - 1 - x := by
