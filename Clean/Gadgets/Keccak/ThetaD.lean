@@ -52,8 +52,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   dsimp only [assumptions] at state_norm
   dsimp only [circuit_norm, theta_d, Xor.circuit, Rotation64.circuit] at h_holds
   simp only [circuit_norm, subcircuit_norm, Xor.assumptions, Xor.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
-  simp only [circuit_norm, add_assoc, and_assoc, and_imp, Nat.reduceMod, Nat.reduceAdd,
-    zero_sub, Fin.coe_neg_one, Pi.ofNat_apply, Nat.cast_ofNat] at h_holds
+  simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
 
   have s (i : ℕ) (hi : i < 5) : eval env (state_var[i]) = state[i] := by
     rw [←h_input, Vector.getElem_map]

@@ -62,7 +62,7 @@ def circuit (off : Fin 64) : FormalCircuit (F p) U64 U64 where
   spec := spec off
   soundness := by sorry
   completeness := by sorry
-  local_length := 24
+  local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
 
   initial_offset_eq := by
@@ -71,6 +71,6 @@ def circuit (off : Fin 64) : FormalCircuit (F p) U64 U64 where
       Nat.reduceMod, Fin.mod_val, Nat.cast_ofNat]; rfl
   local_length_eq := by
     intros
-    simp only [rot64, Fin.isValue, Fin.div_val, Fin.mod_val, Nat.cast_ofNat, Pi.ofNat_apply]; rfl
+    simp only [rot64, Fin.div_val, Fin.mod_val, Nat.cast_ofNat]; rfl
 
 end Gadgets.Rotation64
