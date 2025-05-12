@@ -5,7 +5,7 @@ namespace Specs.Keccak256
 
 open Bitwise (not64 rot_left64)
 
-def roundConstants : Vector ℕ 24 := #v[
+def roundConstants : Vector UInt64 24 := #v[
   0x0000000000000001, 0x0000000000008082,
   0x800000000000808a, 0x8000000080008000,
   0x000000000000808b, 0x0000000080000001,
@@ -134,11 +134,11 @@ def chi (b : Vector ℕ 25) : Vector ℕ 25 :=
     b[24] ^^^ ((not64 b[4]) &&& b[9])
   ]
 
-def iota (state : Vector ℕ 25) (rc : ℕ) : Vector ℕ 25 :=
-  state.set 0 ((state.get 0) ^^^ rc)
+def iota (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
+  state.set 0 ((state.get 0) ^^^ rc.val)
 
 
-def keccak_round (state : Vector ℕ 25) (rc : ℕ) : Vector ℕ 25 :=
+def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   let theta_state := theta state
   let rho_pi_state := rho_pi theta_state
   let chi_state := chi rho_pi_state
