@@ -156,7 +156,6 @@ instance : Repr (Cell W S) where
     | .input off => ".input " ++ reprStr off
     | .aux i => ".aux " ++ reprStr i
 
-
 /--
 Mapping between cell offsets in the table and variable indices.
 

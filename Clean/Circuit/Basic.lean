@@ -2,8 +2,6 @@ import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
 
-open Lean
-
 variable {F: Type} [Field F]
 
 structure Table (F : Type) where
@@ -533,7 +531,6 @@ instance [Repr F] : Repr (Operation F) where
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
-
 end Operation
 
 def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
