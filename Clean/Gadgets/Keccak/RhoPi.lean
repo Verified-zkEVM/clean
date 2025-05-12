@@ -11,26 +11,14 @@ open Bitwise (rot_left64)
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
 ]
-
 def rhoPiShifts : Vector ℕ 25 := #v[
   0, 28, 1, 27, 62, 44, 20, 6, 36, 55, 43, 3, 25, 10, 39, 21, 45, 8, 15, 41, 14, 61, 18, 56, 2
 ]
-
 def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
-
--- recharacterize rho_phi as a loop
-lemma rho_pi_loop (state : Vector ℕ 25) :
-  Specs.Keccak256.rho_pi state =
-    rhoPiConstants.map fun (i, s) => rot_left64 state[i.val] s := by
-  simp only [Specs.Keccak256.rho_pi, circuit_norm]
-  rw [Vector.map_mk]
-  simp only
-  rw [List.map_toArray]
-  rfl
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .map rhoPiConstants fun (i, s) =>
-    subcircuit (Rotation64.circuit (64 - s)) state[i.val]
+    subcircuit (Rotation64.circuit (-s)) state[i.val]
 
 def assumptions := KeccakState.is_normalized (p:=p)
 
@@ -50,6 +38,16 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
     simp only [rhoPiConstants, rhoPiIndices, rhoPiShifts, Vector.mk_zip_mk, List.zip_toArray, Vector.mapIdx_mk, List.mapIdx_toArray]
     simp only [List.zip_cons_cons, List.zip_nil_right]
     simp only [List.mapIdx_cons, List.mapIdx_nil]
+
+-- recharacterize rho_phi as a loop
+lemma rho_pi_loop (state : Vector ℕ 25) :
+  Specs.Keccak256.rho_pi state =
+    rhoPiConstants.map fun (i, s) => rot_left64 state[i.val] s := by
+  simp only [Specs.Keccak256.rho_pi, circuit_norm]
+  rw [Vector.map_mk]
+  simp only
+  rw [List.map_toArray]
+  rfl
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
