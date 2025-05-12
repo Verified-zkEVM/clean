@@ -18,9 +18,8 @@ instance : ProvableStruct Inputs where
   to_components := fun { state, d } => .cons state (.cons d .nil)
   from_components := fun (.cons state (.cons d .nil)) => { state, d }
 
-def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
-  let { state, d } := inputs
-  .mapFinRange 25 fun i =>
+def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
+  | { state, d } => .mapFinRange 25 fun i =>
     subcircuit Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
