@@ -46,11 +46,11 @@ theorem soundness : Soundness (F p) assumptions spec := by
   -- simplify goal
   apply KeccakState.normalized_value_ext
   simp only [spec, elaborated, chi_loop, eval_vector, KeccakState.value,
-    Vector.getElem_map, Vector.getElem_mapRange, Fin.getElem_fin, Vector.getElem_mapFinRange]
+    Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
+  simp only [assumptions, KeccakState.is_normalized] at state_norm
   simp only [main, circuit_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd] at h_holds
 
@@ -59,16 +59,13 @@ theorem soundness : Soundness (F p) assumptions spec := by
 theorem completeness : Completeness (F p) KeccakState assumptions := by
   intro i0 env state_var h_env state h_input state_norm
 
-  -- simplify constraints
-  simp only [main, circuit_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+  -- simplify assumptions
+  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [assumptions, KeccakState.is_normalized] at state_norm
+
+  -- simplify constraints (goal + environment) and apply assumptions
+  simp_all [state_norm, h_input, main, circuit_norm, subcircuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
     Xor.assumptions, Xor.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd]
-  intro i
-
-  simp only [assumptions, KeccakState.is_normalized, Fin.getElem_fin] at state_norm
-
-  -- TODO need theorem about `env.uses_local_witnesses_completeness (Vector.mapM ...)`
-  dsimp only [circuit_norm, main, Vector.mapFinRangeM, Xor.circuit, And.And64.circuit, Not.circuit] at h_env
-  sorry
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   assumptions
