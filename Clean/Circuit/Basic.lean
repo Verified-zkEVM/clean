@@ -22,7 +22,7 @@ structure Lookup (F : Type) where
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
-instance : ToJson (Lookup F) where
+instance [ToJson F]: ToJson (Lookup F) where
   toJson l := Json.mkObj [
     ("table", toJson l.table.name),
     ("entry", toJson l.entry.toArray),
@@ -55,7 +55,7 @@ def toString [Repr F] : FlatOperation F → String
 instance [Repr F] : Repr (FlatOperation F) where
   reprPrec op _ := toString op
 
-instance : ToJson (FlatOperation F) where
+instance [ToJson F]: ToJson (FlatOperation F) where
   toJson op := match op with
     | witness m _ => Json.mkObj [("witness", toJson m)]
     | assert e => Json.mkObj [("assert", toJson e)]
@@ -546,7 +546,7 @@ instance [Repr F] : Repr (Operation F) where
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 
-instance : ToJson (Operation F) where
+instance [ToJson F] : ToJson (Operation F) where
   toJson op := match op with
     | witness m _ => Json.mkObj [("witness", toJson m)]
     | assert e => Json.mkObj [("assert", toJson e)]
@@ -571,7 +571,7 @@ def Circuit.operation_list (circuit: Circuit F α) (offset := 0) : List (Operati
 instance [Repr F] : Repr (OperationsList F) where
   reprPrec ops _ := reprStr ops.toList
 
-instance : ToJson (OperationsList F) where
+instance [ToJson F]: ToJson (OperationsList F) where
   toJson ops := ToJson.toJson ops.toList
 
 -- witness generation

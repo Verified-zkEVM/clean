@@ -251,7 +251,7 @@ structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Prova
 deriving Repr
 
 
-instance [Field F] : ToJson (TableContext W S F) where
+instance [Field F] [ToJson F]: ToJson (TableContext W S F) where
   toJson ctx := Json.mkObj [
     ("circuit", toJson ctx.circuit),
     ("assignment", toJson ctx.assignment)
@@ -276,7 +276,7 @@ def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [Provable
 instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
 
-instance : ToJson (TableConstraint W S F α) where
+instance [ToJson F]: ToJson (TableConstraint W S F α) where
   toJson table := toJson (table .empty).2
 
 @[table_assignment_norm]
@@ -434,7 +434,7 @@ instance [Repr F] : Repr (TableOperation S F) where
     | .EveryRow c => "EveryRow " ++ reprStr c
     | .EveryRowExceptLast c => "EveryRowExceptLast " ++ reprStr c
 
-instance : ToJson (TableOperation S F) where
+instance [ToJson F]: ToJson (TableOperation S F) where
   toJson op := match op with
     | .Boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),
