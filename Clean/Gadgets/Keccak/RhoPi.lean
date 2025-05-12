@@ -3,7 +3,7 @@ import Clean.Gadgets.Rotation64.Rotation64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak256.RhoPhi
+namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
 open Bitwise (rot_left64)
@@ -78,4 +78,4 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with assumptions, spec, soundness, completeness
 }
-end Gadgets.Keccak256.RhoPhi
+end Gadgets.Keccak256.RhoPi
