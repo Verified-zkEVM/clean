@@ -48,7 +48,7 @@ def spec (state : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
   out.is_normalized
   ∧ out.value = Specs.Keccak256.theta_d state.value
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input state_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [assumptions] at state_norm

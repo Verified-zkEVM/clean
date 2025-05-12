@@ -24,7 +24,7 @@ def spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp_all [Soundness, circuit_norm, subcircuit_norm, spec, theta, assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,

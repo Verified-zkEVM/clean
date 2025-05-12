@@ -66,7 +66,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
     carry_out := var ⟨i0 + 7⟩
   }
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
