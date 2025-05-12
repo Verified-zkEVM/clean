@@ -1,5 +1,3 @@
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Types.U64
 import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
@@ -84,7 +82,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rw [h_rot4.left] at h_xor4
 
   simp only [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
-  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Specs.Keccak256.rol_u64, eval_vector]
+  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Bitwise.rot_left64, eval_vector]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
