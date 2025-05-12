@@ -63,21 +63,12 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   aesop
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
-  intro i0 env state_var h_env state h_input h_assumptions
-  simp only [circuit_norm, subcircuit_norm, assumptions, eval_vector,
-    main, Xor.circuit, Xor.assumptions, Xor.spec] at h_input h_assumptions ⊢
-  simp only [add_assoc, Nat.reduceAdd, Nat.reduceMod]
-
-  rw [KeccakState.is_normalized] at h_assumptions
-  have s {i : ℕ} (hi : i < 25) : (eval env state_var[i]).is_normalized = True := by
-    have : eval env state_var[i] = state[i] := by rw [←h_input, Vector.getElem_map]
-    rw [this, eq_iff_iff, iff_true]
-    exact h_assumptions ⟨ i, hi ⟩
-  simp only [s, true_and, and_true]
-
-  dsimp only [Environment.uses_local_witnesses, elaborated] at h_env
-  -- simp only [theta_c, circuit_norm] at h_env
-  sorry
+  intro i0 env state_var h_env state h_input state_norm
+  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [h_input, circuit_norm, subcircuit_norm, assumptions, eval_vector,
+    main, Xor.circuit, Xor.assumptions, Xor.spec, KeccakState.is_normalized] at h_env ⊢
+  have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].is_normalized := fun i hi => state_norm ⟨ i, hi ⟩
+  simp_all
 
 def circuit : FormalCircuit (F p) KeccakState KeccakRow := {
   elaborated with assumptions, spec, soundness, completeness

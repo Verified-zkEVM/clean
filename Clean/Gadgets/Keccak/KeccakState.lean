@@ -10,14 +10,14 @@ variable [p_large_enough: Fact (p > 512)]
 @[reducible] def KeccakState := ProvableVector U64 25
 
 def KeccakState.is_normalized (state : KeccakState (F p)) :=
-  ∀ i : Fin 25, state[i].is_normalized
+  ∀ i : Fin 25, state[i.val].is_normalized
 
 def KeccakState.value (state : KeccakState (F p)) := state.map U64.value
 
 @[reducible] def KeccakRow := ProvableVector U64 5
 
 def KeccakRow.is_normalized (row : KeccakRow (F p)) :=
-  ∀ i : Fin 5, row[i].is_normalized
+  ∀ i : Fin 5, row[i.val].is_normalized
 
 def KeccakRow.value (row : KeccakRow (F p)) := row.map U64.value
 
@@ -43,6 +43,7 @@ lemma KeccakState.normalized_value_ext (state : KeccakState (F p)) (rhs : Vector
   intro i hi
   exact (h ⟨ i, hi ⟩).right
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5) :
   (∀ i : Fin 5, row[i.val].is_normalized ∧ row[i.val].value = rhs[i.val]) →
     row.is_normalized ∧ row.value = rhs := by
