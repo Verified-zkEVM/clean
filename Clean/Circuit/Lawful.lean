@@ -83,6 +83,11 @@ instance {k : ℕ} {c : Environment F → Vector F k} : ConstantLawfulCircuit (w
   local_length := k
   operations n := ⟨.witness (.empty n) k c, rfl⟩
 
+instance {α: TypeMap} [ProvableType α] : ConstantLawfulCircuits (ProvableType.witness (α:=α) (F:=F)) where
+  output _ n := var_from_offset α n
+  local_length := size α
+  operations c n := ⟨.witness (.empty n) (size α) (to_elements ∘ c), rfl⟩
+
 instance : ConstantLawfulCircuits (F:=F) assert_zero where
   output _ _ := ()
   local_length := 0
