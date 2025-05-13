@@ -91,7 +91,22 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [Nat.div_add_mod']
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
-  sorry
+  intro i0 env x_var h_env x h_eval x_normalized
+
+  simp [circuit_norm, rot64, elaborated, subcircuit_norm,
+    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.assumptions,
+    Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.assumptions]
+  simp [circuit_norm, elaborated, rot64, subcircuit_norm,
+    Rotation64Bytes.circuit, Rotation64Bytes.assumptions, Rotation64Bytes.spec] at h_env
+
+  obtain ⟨h0, _⟩ := h_env
+  rw [h_eval] at h0
+  specialize h0 x_normalized
+  obtain ⟨h_rot, h_norm⟩ := h0
+
+  simp only [assumptions] at x_normalized
+  rw [h_eval]
+  simp only [x_normalized, true_and, h_norm]
 
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with
