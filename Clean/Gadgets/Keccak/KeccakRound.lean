@@ -7,6 +7,7 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.RoundFunction
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
+open Specs.Keccak256
 
 def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let state ← subcircuit Theta.circuit state
@@ -21,7 +22,7 @@ def assumptions (state : KeccakState (F p)) := state.is_normalized
 
 def spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
-  ∧ out_state.value = Specs.Keccak256.keccak_round state.value rc
+  ∧ out_state.value = keccak_round state.value rc
 
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := main rc
@@ -36,8 +37,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, eval_vector, Vector.getElem_map, Vector.getElem_set,
-    Vector.getElem_mapRange, Specs.Keccak256.keccak_round, Specs.Keccak256.iota]
+  simp only [circuit_norm, elaborated, eval_vector, keccak_round, iota]
 
   -- simplify constraints
   simp only [assumptions] at state_norm
@@ -48,37 +48,34 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   ] at h_holds
   simp only [forall_const, and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
-  obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_final ⟩ := h_holds
-  specialize h_rhopi theta_norm
-  obtain ⟨ h_rhopi_norm, h_rhopi_eq ⟩ := h_rhopi
-  specialize h_chi h_rhopi_norm
-  obtain ⟨ h_chi_norm, h_chi_eq ⟩ := h_chi
-  rw [theta_eq] at h_rhopi_eq
-  rw [h_rhopi_eq] at h_chi_eq
-  clear theta_norm h_rhopi_norm theta_eq h_rhopi_eq
+  obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
+  have ⟨ rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
+  have ⟨ chi_norm, chi_eq ⟩ := h_chi rhopi_norm
+  rw [rhopi_eq, theta_eq] at chi_eq
+  clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi state_norm h_input
 
-  set z_final := eval env (var_from_offset U64 (i0 + 1128))
-  have norm_final : z_final.is_normalized := by
-    simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at h_chi_norm
-    exact h_chi_norm 0
-  have eq_final : z_final.value =
-    (Specs.Keccak256.chi (Specs.Keccak256.rho_pi (Specs.Keccak256.theta state.value)))[0] := by
-    simp only [Vector.ext_iff] at h_chi_eq
-    specialize h_chi_eq 0 (by linarith)
-    rw [←h_chi_eq]
-    simp only [z_final, KeccakState.value, eval_vector, circuit_norm]
-  simp only [norm_final, U64.from_u64_normalized, forall_const] at h_final
-  rw [eq_final, U64.value_from_u64_eq] at h_final
+  -- simplify round constant constraint
+  set state0_before_rc := eval env (var_from_offset U64 (i0 + 1128))
+  have h_rc_norm : state0_before_rc.is_normalized := by
+    simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at chi_norm
+    exact chi_norm 0
+  have h_rc_eq : state0_before_rc.value = (chi (rho_pi (theta state.value)))[0] := by
+    simp only [Vector.ext_iff] at chi_eq
+    specialize chi_eq 0 (by linarith)
+    rw [←chi_eq]
+    simp only [state0_before_rc, KeccakState.value, eval_vector, circuit_norm]
+  simp only [h_rc_norm, U64.from_u64_normalized, forall_const] at h_rc
+  rw [h_rc_eq, U64.value_from_u64_eq] at h_rc
 
+  -- prove goal, treating the i=0 case separately
   intro i
-  by_cases hi : 0 = i.val
-  · simp [circuit_norm, hi, h_final]
-  simp only [hi, reduceIte]
+  by_cases hi : 0 = i.val <;> simp only [hi, reduceIte]
+  · simp [←hi, h_rc]
   simp only [KeccakState.value, KeccakState.is_normalized, eval_vector,
-    Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at h_chi_norm h_chi_eq
-  specialize h_chi_eq i i.is_lt
-  specialize h_chi_norm i
-  ring_nf at h_chi_eq h_chi_norm ⊢
-  exact ⟨ h_chi_norm, h_chi_eq ⟩
+    Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at chi_norm chi_eq
+  specialize chi_eq i i.is_lt
+  specialize chi_norm i
+  ring_nf at chi_eq chi_norm ⊢
+  exact ⟨ chi_norm, chi_eq ⟩
 
 end Gadgets.Keccak256.RoundFunction
