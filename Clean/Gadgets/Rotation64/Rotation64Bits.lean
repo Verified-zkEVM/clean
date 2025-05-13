@@ -66,15 +66,58 @@ set_option maxHeartbeats 10000000
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
 
-  -- TODO: this is slow
+  -- TODO: this simplification is slow
   simp [circuit_norm, elaborated, rot64_bits, U64.witness] at h_holds
   simp [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.circuit, circuit_norm] at h_holds
   simp [U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, U64ByteDecomposition.spec,
     U64ByteDecomposition.assumptions, U64.AssertNormalized.spec, circuit_norm, eval] at h_holds
 
-  save
+  simp only [assumptions] at x_normalized
+  simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset]
+  ring_nf at *
 
-  simp [circuit_norm, spec, rot_right64, eval, elaborated]
+  set x0_l := env.get (i0)
+  set x1_l := env.get (1 + i0)
+  set x2_l := env.get (2 + i0)
+  set x3_l := env.get (3 + i0)
+  set x4_l := env.get (4 + i0)
+  set x5_l := env.get (5 + i0)
+  set x6_l := env.get (6 + i0)
+  set x7_l := env.get (7 + i0)
+  set x0_h := env.get (8 + i0)
+  set x1_h := env.get (9 + i0)
+  set x2_h := env.get (10 + i0)
+  set x3_h := env.get (11 + i0)
+  set x4_h := env.get (12 + i0)
+  set x5_h := env.get (13 + i0)
+  set x6_h := env.get (14 + i0)
+  set x7_h := env.get (15 + i0)
+  set y0 := env.get (16 + i0)
+  set y1 := env.get (17 + i0)
+  set y2 := env.get (18 + i0)
+  set y3 := env.get (19 + i0)
+  set y4 := env.get (20 + i0)
+  set y5 := env.get (21 + i0)
+  set y6 := env.get (22 + i0)
+  set y7 := env.get (23 + i0)
+
+  rw [
+    show Expression.eval env x0_var = x0 by injections h_input,
+    show Expression.eval env x1_var = x1 by injections h_input,
+    show Expression.eval env x2_var = x2 by injections h_input,
+    show Expression.eval env x3_var = x3 by injections h_input,
+    show Expression.eval env x4_var = x4 by injections h_input,
+    show Expression.eval env x5_var = x5 by injections h_input,
+    show Expression.eval env x6_var = x6 by injections h_input,
+    show Expression.eval env x7_var = x7 by injections h_input,
+  ] at h_holds
+  save
+  simp [and_assoc] at h_holds
+  obtain ⟨h_decomposition, y_normalized, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
+  specialize h_decomposition x_normalized
+  obtain ⟨h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7⟩ := h_decomposition
+
+
   -- now the statement is reasonable
 
   sorry
