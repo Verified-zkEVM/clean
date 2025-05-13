@@ -15,12 +15,15 @@ def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let high := x / (2^(8 - offset.val))
   low * (2^offset.val) + high
 
-
 def rot_right64 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 64
   let low := x % (2^offset)
   let high := x / (2^offset)
   low * (2^(64 - offset)) + high
+
+theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) : rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
+  simp only [rot_right64]
+  sorry
 
 omit [Fact (Nat.Prime p)] in
 lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x4, x4 := x5, x5 := x6, x6 := x7, x7 := x0 : U64 _}.value =

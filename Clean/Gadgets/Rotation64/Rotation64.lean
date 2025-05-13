@@ -52,7 +52,6 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) wher
     simp only [rot64]
     rfl
 
-
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
@@ -79,10 +78,17 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [hy_rot] at h1
   obtain ⟨hy, hy_norm⟩ := h1
   simp only [hy_norm, and_true]
+  rw [h_input] at hy x_normalized
 
-  -- now it is left only a statement about rot64
-
-  sorry
+  -- reason about rotation
+  rw [Theorems.rot_right_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
+  rw [hy]
+  rw [show @Fin.val 64 8 = 8 by rfl, Nat.mod_mod]
+  rw [show(offset.val / 8) % 8 = offset.val / 8 by
+    apply Nat.mod_eq_of_lt
+    apply Nat.div_lt_of_lt_mul
+    exact offset.is_lt]
+  rw [Nat.div_add_mod']
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
   sorry

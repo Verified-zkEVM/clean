@@ -69,8 +69,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   -- TODO: this is slow
   simp [circuit_norm, elaborated, rot64_bits, U64.witness] at h_holds
   simp [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.circuit, circuit_norm] at h_holds
-  save
-
   simp [U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, U64ByteDecomposition.spec,
     U64ByteDecomposition.assumptions, U64.AssertNormalized.spec, circuit_norm, eval] at h_holds
 
