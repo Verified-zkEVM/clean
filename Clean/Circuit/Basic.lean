@@ -284,6 +284,12 @@ def lookup (l: Lookup F) : Circuit F Unit :=
 
 end Circuit
 
+@[circuit_norm]
+def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+  modifyGet fun ops =>
+    let var := var_from_offset α ops.offset
+    ⟨var, .witness ops (size α) (fun env => compute env |> to_elements)⟩
+
 /--
 If an environment "uses local witnesses" it means that the environment's evaluation
 matches the output of the witness generator passed along with a `witness` declaration,
@@ -616,21 +622,32 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.mapRange_zero Vector.mapRange_succ Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.toArray_push Array.push_toList List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
+-- `getElem` lemmas should be tried before expanding Vectors/Lists
+attribute [circuit_norm ↓] Fin.getElem_fin
+  Vector.getElem_map Vector.getElem_mapFinRange Vector.getElem_mapRange Vector.getElem_finRange
+  Vector.getElem_push Vector.getElem_set Vector.getElem_cast
+  Vector.getElem_mk Vector.getElem_toArray
+  List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
+
+/-
+lemmas that would expand `Vector.{mapRange, mapFinRange}` are not added to the simp set,
+because they would sometimes be applied too eagerly where using the corresponding `getElem` lemma is much better
+-/
+-- attribute [circuit_norm] Vector.mapRange_zero Vector.mapRange_succ Vector.mapFinRange_succ Vector.mapFinRange_zero
+
 -- simplify Vector.mapFinRange
-attribute [circuit_norm] Vector.mapFinRange_succ Vector.mapFinRange_zero
+attribute [circuit_norm]
     Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
 
 -- simplify stuff like (3 : Fin 8).val = 3 % 8
 attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 
 -- simplify `vector.get i` (which occurs in ProvableType definitions) and similar
-attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray
-  List.getElem_cons_zero Fin.cast_eq_self List.getElem_cons_succ
-  Vector.getElem_mk Vector.getElem_toArray Vector.getElem_map Fin.getElem_fin
-  Fin.coe_cast Fin.isValue
+attribute [circuit_norm] Vector.get Fin.val_eq_zero
+  Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero

@@ -32,7 +32,8 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
 
   local_length_eq _ _ := by simp only [main, circuit_norm, Xor.circuit]
   initial_offset_eq _ _ := by simp only [main, circuit_norm]
-  output_eq _ _ := by simp only [main, circuit_norm, Xor.circuit]
+  output_eq _ _ := by simp only [main, circuit_norm, Xor.circuit,
+    Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite theta_c as a loop
 lemma theta_c_loop (state : Vector ℕ 25) :
