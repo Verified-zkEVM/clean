@@ -78,4 +78,32 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
+theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumptions := by
+  intro i0 env state_var h_env state h_input state_norm
+
+  -- simplify goal and witness hypotheses
+  simp only [assumptions] at state_norm
+  dsimp only [main, circuit_norm, subcircuit_norm,
+    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit,
+    Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
+    Chi.assumptions, Chi.spec, Xor.assumptions, Xor.spec
+  ] at h_env ⊢
+  simp only [and_assoc] at h_env
+  simp_all only [main, h_input, state_norm, circuit_norm,
+    U64.from_u64_normalized, and_true, true_and, true_implies]
+
+  -- `simp_all` left one goal to pull out of hypotheses
+  obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
+  have ⟨ rhopi_norm, _ ⟩ := h_rhopi theta_norm
+  have ⟨ chi_norm, _ ⟩ := h_chi rhopi_norm
+  simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at chi_norm
+  exact chi_norm 0
+
+def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
+  elaborated rc with
+  spec := spec rc
+  assumptions,
+  soundness := soundness rc,
+  completeness := completeness rc,
+}
 end Gadgets.Keccak256.RoundFunction
