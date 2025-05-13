@@ -29,7 +29,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
   output _ i0 := (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) ).set 0 (var_from_offset U64 (i0 + 1520))
 
   output_eq state i0 := by
-    simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit]
+    simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit, Vector.mapRange]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (spec rc) := by
   intro i0 env state_var state h_input state_norm h_holds
@@ -41,14 +41,12 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
 
   -- simplify constraints
   simp only [assumptions] at state_norm
-  simp only [main, h_input, state_norm, circuit_norm, subcircuit_norm, Theta.circuit,
-    RhoPi.circuit, Chi.circuit, Xor.circuit,
-    Theta.assumptions, Theta.spec,
-    RhoPi.assumptions, RhoPi.spec,
-    Chi.assumptions, Chi.spec,
-    Xor.assumptions, Xor.spec] at h_holds
-  simp only [forall_const, Nat.reduceAdd, zero_mul, add_zero, Nat.reduceMul,
-    UInt64.val_val_eq_toNat, and_imp, and_assoc] at h_holds
+  simp only [main, h_input, state_norm, circuit_norm, subcircuit_norm,
+    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit,
+    Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
+    Chi.assumptions, Chi.spec, Xor.assumptions, Xor.spec
+  ] at h_holds
+  simp only [forall_const, and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
   obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_final ⟩ := h_holds
   specialize h_rhopi theta_norm
@@ -58,36 +56,29 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   rw [theta_eq] at h_rhopi_eq
   rw [h_rhopi_eq] at h_chi_eq
   clear theta_norm h_rhopi_norm theta_eq h_rhopi_eq
-  rw [KeccakState.value, eval_vector] at h_chi_eq
 
-  -- this is a hack to work around bad simplification (unfolding array before applying getElem lemmas)
-  -- TODO fix this with priority / ↑ in simp attributes
-  have h_out : (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) : Vector (Var U64 (F p)) 25) =
-    .mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) := rfl
-  conv at h_out => lhs; simp only [circuit_norm]
-  rw [h_out] at h_chi_eq h_chi_norm
-  clear h_out
-
-  have norm_final : (eval env (var_from_offset U64 (i0 + 520 + 600 + 8))).is_normalized := by
+  set z_final := eval env (var_from_offset U64 (i0 + 1128))
+  have norm_final : z_final.is_normalized := by
     simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at h_chi_norm
     exact h_chi_norm 0
-  have eq_final : (eval env (var_from_offset U64 (i0 + 520 + 600 + 8))).value =
+  have eq_final : z_final.value =
     (Specs.Keccak256.chi (Specs.Keccak256.rho_pi (Specs.Keccak256.theta state.value)))[0] := by
     simp only [Vector.ext_iff] at h_chi_eq
     specialize h_chi_eq 0 (by linarith)
-    simpa using h_chi_eq
-  simp only [norm_final, U64.from_u64_normalized, U64.value_from_u64_eq, forall_const] at h_final
-  rw [eq_final] at h_final
-  simp only [zero_mul, add_zero, Nat.reduceMul, Vector.size_toArray, Nat.zero_mod, UInt64.val_val_eq_toNat]
+    rw [←h_chi_eq]
+    simp only [z_final, KeccakState.value, eval_vector, circuit_norm]
+  simp only [norm_final, U64.from_u64_normalized, forall_const] at h_final
+  rw [eq_final, U64.value_from_u64_eq] at h_final
 
   intro i
   by_cases hi : 0 = i.val
   · simp [circuit_norm, hi, h_final]
   simp only [hi, reduceIte]
-  simp only [Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at h_chi_eq
-  simp only [KeccakState.is_normalized, eval_vector, Vector.getElem_map, Vector.getElem_mapRange] at h_chi_norm
+  simp only [KeccakState.value, KeccakState.is_normalized, eval_vector,
+    Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at h_chi_norm h_chi_eq
   specialize h_chi_eq i i.is_lt
   specialize h_chi_norm i
+  ring_nf at h_chi_eq h_chi_norm ⊢
   exact ⟨ h_chi_norm, h_chi_eq ⟩
 
 end Gadgets.Keccak256.RoundFunction
