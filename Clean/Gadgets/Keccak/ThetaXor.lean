@@ -26,7 +26,8 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
 
   local_length_eq _ n := by simp only [main, circuit_norm, Xor.circuit]
   initial_offset_eq _ i := by simp only [main, circuit_norm]
-  output_eq _ i := by simp only [main, circuit_norm, Xor.circuit, var_from_offset_vector]
+  output_eq _ i := by simp only [main, circuit_norm, Xor.circuit, var_from_offset_vector,
+    Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
@@ -40,7 +41,7 @@ def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
 -- rewrite theta_xor as a loop
 lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
     Specs.Keccak256.theta_xor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
-  simp only [Specs.Keccak256.theta_xor, circuit_norm]
+  simp only [Specs.Keccak256.theta_xor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds

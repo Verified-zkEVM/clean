@@ -32,7 +32,8 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 
   local_length_eq state i0 := by simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
   initial_offset_eq state i := by simp only [main, circuit_norm]
-  output_eq state i := by simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit]
+  output_eq state i := by simp only [main, circuit_norm, Xor.circuit, And.And64.circuit, Not.circuit,
+    Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
@@ -45,8 +46,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [spec, elaborated, chi_loop, eval_vector, KeccakState.value,
-    Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange]
+  simp only [circuit_norm, spec, elaborated, chi_loop, eval_vector, KeccakState.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

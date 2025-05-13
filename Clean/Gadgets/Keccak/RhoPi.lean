@@ -34,7 +34,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit]
   initial_offset_eq _ _ := by simp only [main, circuit_norm]
   output_eq state i0 := by
-    simp only [main, circuit_norm, Rotation64.circuit]
+    simp only [main, circuit_norm, Rotation64.circuit, Vector.mapRange]
     simp only [rhoPiConstants, rhoPiIndices, rhoPiShifts, Vector.mk_zip_mk, List.zip_toArray, Vector.mapIdx_mk, List.mapIdx_toArray]
     simp only [List.zip_cons_cons, List.zip_nil_right]
     simp only [List.mapIdx_cons, List.mapIdx_nil]
