@@ -166,24 +166,16 @@ theorem value_from_u64_eq (x : UInt64) : value (from_u64 (p:=p) x) = x.toNat := 
     have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
     linarith [p_large_enough.elim]
   simp only [h]
-  have : 2^8 = 256 := by norm_num
+  have : 2^8 = 256 := rfl
   simp only [this]
   have : x < 256^8 := by simp [x, UInt64.toNat_lt_size]
   have : x / 256^7 % 256 = x / 256^7 := by rw [Nat.mod_eq_of_lt]; omega
   rw [this]
-  have : x / 256^7 = (x / 256^6) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  rw [this, Nat.mod_add_div]
-  have : x / 256^6 = (x / 256^5) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  rw [this, Nat.mod_add_div]
-  have : x / 256^5 = (x / 256^4) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  rw [this, Nat.mod_add_div]
-  have : x / 256^4 = (x / 256^3) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  rw [this, Nat.mod_add_div]
-  have : x / 256^3 = (x / 256^2) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  rw [this, Nat.mod_add_div]
-  have : x / 256^2 = (x / 256) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  rw [this, Nat.mod_add_div]
-  rw [Nat.mod_add_div]
+  have div_succ_pow (n : ℕ) : x / 256^(n + 1) = (x / 256^n) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
+  have mod_add_div (n : ℕ) : x / 256^n % 256 + 256 * (x / 256^(n + 1)) = x / 256^n := by
+    rw [div_succ_pow n, Nat.mod_add_div]
+  simp only [mod_add_div]
+  rw [div_succ_pow 1, Nat.pow_one, Nat.mod_add_div, Nat.mod_add_div]
 end U64
 
 namespace U64.AssertNormalized
