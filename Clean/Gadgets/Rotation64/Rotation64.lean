@@ -37,8 +37,8 @@ def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value offset.val
   ∧ y.is_normalized
 
-#eval! (rot64 (p:=p_babybear) 0) default |>.operations.local_length
-#eval! (rot64 (p:=p_babybear) 0) default |>.output
+-- #eval! (rot64 (p:=p_babybear) 0) default |>.operations.local_length
+-- #eval! (rot64 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) where
   main := rot64 off
   local_length _ := 24
@@ -54,7 +54,33 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) wher
 
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
-  intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
+  intro i0 env x_var x h_input x_normalized h_holds
+
+  simp [circuit_norm, rot64, elaborated, U64.copy, subcircuit_norm,
+    Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
+
+  -- abstract away intermediate U64
+  let byte_offset : ℕ := offset.val / 8
+  let bit_offset : ℕ := (offset % 8).val
+  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
+
+  simp [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.spec, Rotation64Bytes.assumptions,
+    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.spec, Rotation64Bits.assumptions] at h_holds
+
+  simp [circuit_norm, spec, h_holds, elaborated]
+  set y := eval env (var_from_offset U64 (i0 + 16))
+
+  simp [assumptions] at x_normalized
+  rw [←h_input] at x_normalized
+  obtain ⟨h0, h1⟩ := h_holds
+  specialize h0 x_normalized
+  obtain ⟨hy_rot, hy_norm⟩ := h0
+  specialize h1 hy_norm
+  rw [hy_rot] at h1
+  obtain ⟨hy, hy_norm⟩ := h1
+  simp only [hy_norm, and_true]
+
+  -- now it is left only a statement about rot64
 
   sorry
 
