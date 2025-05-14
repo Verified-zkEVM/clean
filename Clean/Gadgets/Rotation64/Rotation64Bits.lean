@@ -89,6 +89,9 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3 + y4.val * 256 ^ 4 +
       y5.val * 256 ^ 5 + y6.val * 256 ^ 6 + y7.val * 256 ^ 7
     y_val = (x_val) % 2 ^ (offset.val % 64) * 2 ^ (64 - offset.val % 64) + (x_val) / 2 ^ (offset.val % 64) := by
+
+  rw [←add_sub_assoc, sub_eq_add_neg] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
+  have h := ByteDecomposition.byte_decomposition_lift offset y0 x2_l x1_l
   sorry
 
 set_option maxHeartbeats 10000000
@@ -104,31 +107,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset]
   ring_nf at *
-
-  set x0_l := env.get (i0)
-  set x1_l := env.get (1 + i0)
-  set x2_l := env.get (2 + i0)
-  set x3_l := env.get (3 + i0)
-  set x4_l := env.get (4 + i0)
-  set x5_l := env.get (5 + i0)
-  set x6_l := env.get (6 + i0)
-  set x7_l := env.get (7 + i0)
-  set x0_h := env.get (8 + i0)
-  set x1_h := env.get (9 + i0)
-  set x2_h := env.get (10 + i0)
-  set x3_h := env.get (11 + i0)
-  set x4_h := env.get (12 + i0)
-  set x5_h := env.get (13 + i0)
-  set x6_h := env.get (14 + i0)
-  set x7_h := env.get (15 + i0)
-  set y0 := env.get (16 + i0)
-  set y1 := env.get (17 + i0)
-  set y2 := env.get (18 + i0)
-  set y3 := env.get (19 + i0)
-  set y4 := env.get (20 + i0)
-  set y5 := env.get (21 + i0)
-  set y6 := env.get (22 + i0)
-  set y7 := env.get (23 + i0)
 
   rw [
     show Expression.eval env x0_var = x0 by injections h_input,
