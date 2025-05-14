@@ -53,7 +53,9 @@ def assumptions (x : field (F p)) := x.val < 256
 
 def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
-  x.val = low.val + high.val * 2^(offset.val)
+  x.val = low.val + high.val * 2^offset.val ∧
+  low.val < 2^offset.val ∧
+  high.val < 2^(8 - offset.val)
 
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F p)) where
   main := byte_decomposition offset
@@ -127,7 +129,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
   obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
-  rw [byte_decomposition_lift offset _ _ _ low_byte high_byte c]
+  simp only [byte_decomposition_lift offset _ _ _ low_byte high_byte c, true_and]
+  sorry
 
 
 
@@ -255,13 +258,21 @@ def spec (offset : Fin 8) (input : U64 (F p)) (out: Outputs (F p)) :=
   let ⟨⟨x0_l, x1_l, x2_l, x3_l, x4_l, x5_l, x6_l, x7_l⟩,
         ⟨x0_h, x1_h, x2_h, x3_h, x4_h, x5_h, x6_h, x7_h⟩⟩ := out
   x0.val = x0_l.val + x0_h.val * 2^(offset.val) ∧
+  x0_l.val < 2^offset.val ∧ x0_h.val < 2^(8 - offset.val) ∧
   x1.val = x1_l.val + x1_h.val * 2^(offset.val) ∧
+  x1_l.val < 2^offset.val ∧ x1_h.val < 2^(8 - offset.val) ∧
   x2.val = x2_l.val + x2_h.val * 2^(offset.val) ∧
+  x2_l.val < 2^offset.val ∧ x2_h.val < 2^(8 - offset.val) ∧
   x3.val = x3_l.val + x3_h.val * 2^(offset.val) ∧
+  x3_l.val < 2^offset.val ∧ x3_h.val < 2^(8 - offset.val) ∧
   x4.val = x4_l.val + x4_h.val * 2^(offset.val) ∧
+  x4_l.val < 2^offset.val ∧ x4_h.val < 2^(8 - offset.val) ∧
   x5.val = x5_l.val + x5_h.val * 2^(offset.val) ∧
+  x5_l.val < 2^offset.val ∧ x5_h.val < 2^(8 - offset.val) ∧
   x6.val = x6_l.val + x6_h.val * 2^(offset.val) ∧
-  x7.val = x7_l.val + x7_h.val * 2^(offset.val)
+  x6_l.val < 2^offset.val ∧ x6_h.val < 2^(8 - offset.val) ∧
+  x7.val = x7_l.val + x7_h.val * 2^(offset.val) ∧
+  x7_l.val < 2^offset.val ∧ x7_h.val < 2^(8 - offset.val)
 
 -- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.output
@@ -292,7 +303,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
 
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := h_holds
   simp_all only [Nat.reducePow, Nat.reduceAdd, gt_iff_lt, forall_const]
-  trivial
+  sorry
 
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
