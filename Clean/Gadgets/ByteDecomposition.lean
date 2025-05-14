@@ -66,13 +66,10 @@ theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
 
 lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
-  intro i0 env x_var x h_input x_byte h_holds
-  simp only [id_eq, circuit_norm] at h_input
-  simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
-  simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
-  obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
-
+theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
+    (h_low : low.val < 256) (h_high : high.val < 256)
+    (h : low + high * (2^offset.val) + -x = 0) :
+    x.val = low.val + high.val * (2^offset.val) := by
   have pow_val_field : ZMod.val (2 : F p) ^ offset.val < 256 := by
     rw [val_two]
     fin_cases offset
@@ -89,13 +86,13 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have pow_val' : (2 ^ offset.val) < p := by
     linarith [p_large_enough.elim]
 
-  rw [add_neg_eq_iff_eq_add, zero_add] at c
-  apply_fun ZMod.val at c
-  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow pow_val_field, Nat.mul_mod] at c
-  rw [val_two, Nat.mod_eq_of_lt pow_val'] at c
+  rw [add_neg_eq_iff_eq_add, zero_add] at h
+  apply_fun ZMod.val at h
+  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow pow_val_field, Nat.mul_mod] at h
+  rw [val_two, Nat.mod_eq_of_lt pow_val'] at h
 
-  set low := ZMod.val <| env.get i0
-  set high := ZMod.val <| env.get (i0 + 1)
+  set low := low.val
+  set high := high.val
 
   have high_val : high % p = high := by
     apply Nat.mod_eq_of_lt
@@ -112,7 +109,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have mul_val' : high * (2^offset.val) < p := by
     linarith [p_large_enough.elim]
 
-  rw [high_val, Nat.mod_eq_of_lt mul_val'] at c
+  rw [high_val, Nat.mod_eq_of_lt mul_val'] at h
 
   have sum_val : low + high * (2^offset.val) < 2^8 + 2^16 := by
     apply Nat.add_lt_add
@@ -121,8 +118,18 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have sum_val' : low + high * (2^offset.val) < p := by
     linarith [p_large_enough.elim]
 
-  rw [Nat.mod_eq_of_lt sum_val'] at c
-  simp only [c]
+  rw [Nat.mod_eq_of_lt sum_val'] at h
+  simp only [h]
+
+theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+  intro i0 env x_var x h_input x_byte h_holds
+  simp only [id_eq, circuit_norm] at h_input
+  simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
+  simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
+  obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
+  rw [byte_decomposition_lift offset _ _ _ low_byte high_byte c]
+
+
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
   rintro i0 env x_var henv x h_eval as
