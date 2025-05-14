@@ -62,6 +62,35 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) where
     simp only [rot64_bits]
     rfl
 
+theorem rotation64_bits_soundness (offset : Fin 8) {
+      x0 x1 x2 x3 x4 x5 x6 x7
+      y0 y1 y2 y3 y4 y5 y6 y7
+      x0_l x1_l x2_l x3_l x4_l x5_l x6_l x7_l
+      x0_h x1_h x2_h x3_h x4_h x5_h x6_h x7_h : F p
+    }
+    (h_x0 : ZMod.val x0 = ZMod.val x0_l + ZMod.val x1_l * 2 ^ offset.val)
+    (h_x1 : ZMod.val x1 = ZMod.val x2_l + ZMod.val x3_l * 2 ^ offset.val)
+    (h_x2 : ZMod.val x2 = ZMod.val x4_l + ZMod.val x5_l * 2 ^ offset.val)
+    (h_x3 : ZMod.val x3 = ZMod.val x6_l + ZMod.val x7_l * 2 ^ offset.val)
+    (h_x4 : ZMod.val x4 = ZMod.val x0_h + ZMod.val x1_h * 2 ^ offset.val)
+    (h_x5 : ZMod.val x5 = ZMod.val x2_h + ZMod.val x3_h * 2 ^ offset.val)
+    (h_x6 : ZMod.val x6 = ZMod.val x4_h + ZMod.val x5_h * 2 ^ offset.val)
+    (h_x7 : ZMod.val x7 = ZMod.val x6_h + ZMod.val x7_h * 2 ^ offset.val)
+    (eq0 : x2_l * 2 ^ offset.val + (x1_l - y0) = 0)
+    (eq1 : x4_l * 2 ^ offset.val + (x3_l - y1) = 0)
+    (eq2 : x6_l * 2 ^ offset.val + (x5_l - y2) = 0)
+    (eq3 : x0_h * 2 ^ offset.val + (x7_l - y3) = 0)
+    (eq4 : x2_h * 2 ^ offset.val + (x1_h - y4) = 0)
+    (eq5 : x4_h * 2 ^ offset.val + (x3_h - y5) = 0)
+    (eq6 : x6_h * 2 ^ offset.val + (x5_h - y6) = 0)
+    (eq7 : x0_l * 2 ^ offset.val + (x7_h - y7) = 0):
+    let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3 + x4.val * 256 ^ 4 +
+      x5.val * 256 ^ 5 + x6.val * 256 ^ 6 + x7.val * 256 ^ 7
+    let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3 + y4.val * 256 ^ 4 +
+      y5.val * 256 ^ 5 + y6.val * 256 ^ 6 + y7.val * 256 ^ 7
+    y_val = (x_val) % 2 ^ (offset.val % 64) * 2 ^ (64 - offset.val % 64) + (x_val) / 2 ^ (offset.val % 64) := by
+  sorry
+
 set_option maxHeartbeats 10000000
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
@@ -111,16 +140,13 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
     show Expression.eval env x6_var = x6 by injections h_input,
     show Expression.eval env x7_var = x7 by injections h_input,
   ] at h_holds
-  save
   simp [and_assoc] at h_holds
-  obtain ⟨h_decomposition, y_normalized, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
+  obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
   specialize h_decomposition x_normalized
   obtain ⟨h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7⟩ := h_decomposition
+  simp only [U64.value, y_normalized, and_true]
 
-
-  -- now the statement is reasonable
-
-  sorry
+  rw [rotation64_bits_soundness offset h_x0 h_x1 h_x2 h_x3 h_x4 h_x5 h_x6 h_x7 eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
   sorry
