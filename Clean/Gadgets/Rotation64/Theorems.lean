@@ -21,8 +21,29 @@ def rot_right64 (x : ℕ) (offset : ℕ) : ℕ :=
   let high := x / (2^offset)
   low * (2^(64 - offset)) + high
 
-theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) : rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
+def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
+    rot_right64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
+  sorry
+
+lemma rot_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
+    rot_right64 x off1 = rot_right64 x off2 := by
   simp only [rot_right64]
+  rw [←h]
+  have h' : off2 % 64 < 64 := Nat.mod_lt off2 (by linarith)
+  rw [←h] at h'
+  rw [Nat.mod_eq_of_lt h']
+
+lemma rot_right64_fin (x : ℕ) (offset : Fin 64) :
+    rot_right64 x offset.val = x % (2^offset.val) * (2^(64 - offset.val)) + x / (2^offset.val) := by
+  simp only [rot_right64]
+  rw [Nat.mod_eq_of_lt offset.is_lt]
+
+theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
+    rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
+  rw [rot_right64_eq_bv_rotate _ h,
+    rot_right64_eq_bv_rotate _ h,
+    rot_right64_eq_bv_rotate _ (by sorry)]
+
   sorry
 
 omit [Fact (Nat.Prime p)] in
