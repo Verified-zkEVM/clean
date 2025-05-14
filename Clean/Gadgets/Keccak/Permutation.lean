@@ -6,7 +6,8 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
-  roundConstants.foldlM (fun state rc => subcircuit (KeccakRound.circuit rc) state) state
+  .foldl roundConstants state
+    fun state rc => subcircuit (KeccakRound.circuit rc) state
 
 def assumptions (state : KeccakState (F p)) := state.is_normalized
 
