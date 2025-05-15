@@ -535,6 +535,31 @@ section
 variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
 
+@[circuit_norm]
+lemma foldl.local_length_eq :
+    (foldl xs init body lawful).local_length n = m * (body default default).local_length := by
+  let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful) := .from_foldlM_vector xs lawful
+  rw [lawful_loop.local_length_eq]
+  simp only [lawful_loop, lawful_norm]
+  rw [←lawful.local_length_eq (default, default) 0]
+  ac_rfl
+
+omit [Inhabited α] in
+@[circuit_norm]
+lemma foldl.initial_offset_eq :
+    (foldl xs init body lawful |>.operations n).initial_offset = n := by
+  let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful) := .from_foldlM_vector xs lawful
+  apply lawful_loop.initial_offset_eq
+
+@[circuit_norm]
+lemma foldl.output_eq :
+  (foldl xs init body lawful).output n =
+    Fin.foldl m (fun acc i => (body acc xs[i.val]).output (n + i*(body default default).local_length)) init := by
+  let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful) := .from_foldlM_vector xs lawful
+  rw [lawful_loop.output_eq]
+  simp only [lawful_loop, lawful_norm, ←lawful.output_eq]
+  rw [lawful.local_length_eq (default, default) 0]
+  ac_rfl
 end
 
 end Circuit

@@ -275,9 +275,19 @@ theorem completeness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit
 end LawfulCircuit
 
 namespace ConstantLawfulCircuits
+theorem output_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), (circuit a).output n = lawful.output a n := by
+  intros; apply output_independent
+
 theorem final_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
     ∀ (a : α) (n : ℕ), (circuit a).final_offset n = n + lawful.local_length := by
   intros; apply offset_independent
+
+theorem initial_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), ((circuit a).operations n).initial_offset = n := by
+  intro a n
+  have : LawfulCircuit (circuit a) := lawful.to_single _ _ |>.toLawfulCircuit
+  apply LawfulCircuit.initial_offset_eq
 
 theorem local_length_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
     ∀ (a : α) (n : ℕ), (circuit a).local_length n = lawful.local_length := by
