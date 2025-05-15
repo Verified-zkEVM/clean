@@ -1,7 +1,7 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 
-namespace Gadgets
+namespace Gadgets.TwoPowerLookup
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
@@ -23,7 +23,7 @@ def ByteLessThanTwoPower (two_power : Fin 8) : Table (F p) where
   arity := 1
   row i := #v[from_byte_limb i]
 
-def ByteLessThanTwoPower.soundness (two_power : Fin 8) (x: F p) :
+def soundness (two_power : Fin 8) (x: F p) :
     (ByteLessThanTwoPower two_power).contains (#v[x]) → x.val < 2^two_power.val := by
   dsimp only [ByteLessThanTwoPower, Table.contains]
   rintro ⟨ i, h: #v[x] = #v[from_byte_limb i] ⟩
@@ -31,7 +31,7 @@ def ByteLessThanTwoPower.soundness (two_power : Fin 8) (x: F p) :
   rw [FieldUtils.nat_to_field_eq x h']
   exact i.is_lt
 
-def ByteLessThanTwoPower.completeness (two_power : Fin 8) (x: F p) :
+def completeness (two_power : Fin 8) (x: F p) :
     x.val < 2^two_power.val → (ByteLessThanTwoPower two_power).contains (#v[x]) := by
   intro h
   dsimp only [ByteLessThanTwoPower, Table.contains]
@@ -43,11 +43,11 @@ def ByteLessThanTwoPower.completeness (two_power : Fin 8) (x: F p) :
   simp only [h', List.cons.injEq, and_true]
   simp [FieldUtils.nat_to_field_of_val_eq_iff]
 
-def ByteLessThanTwoPower.equiv (two_power : Fin 8) (x: F p) :
+def equiv (two_power : Fin 8) (x: F p) :
     (ByteLessThanTwoPower two_power).contains (#v[x]) ↔ x.val < 2^two_power.val :=
-  ⟨ByteLessThanTwoPower.soundness two_power x, ByteLessThanTwoPower.completeness two_power x⟩
+  ⟨soundness two_power x, completeness two_power x⟩
 
-def assert_less_than_two_power (two_power : Fin 8) (x: Expression (F p)) : Lookup (F p) := {
+def lookup (two_power : Fin 8) (x: Expression (F p)) : Lookup (F p) := {
   table := ByteLessThanTwoPower two_power
   entry := #v[x]
   index := fun env =>
@@ -56,4 +56,4 @@ def assert_less_than_two_power (two_power : Fin 8) (x: Expression (F p)) : Looku
     then ⟨x, h⟩
     else ⟨0, by show 0 < 2^two_power.val; norm_num⟩
 }
-end Gadgets
+end Gadgets.TwoPowerLookup

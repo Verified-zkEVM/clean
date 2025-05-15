@@ -1,6 +1,7 @@
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Utils.Primes
 import Clean.Utils.Field
+import Clean.Gadgets.TwoPowerLookup
 
 namespace Gadgets.ByteDecomposition
 variable {p : ℕ} [Fact p.Prime]
@@ -24,7 +25,8 @@ instance instProvableTypeOutputs : ProvableType Outputs where
 
 /--
   Decompose a byte into a low and a high part.
-  The low part is the least significant `offset` bits, and the high part is the most significant `8 - offset` bits.
+  The low part is the least significant `offset` bits,
+  and the high part is the most significant `8 - offset` bits.
 -/
 def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let x : Expression (F p) := x
@@ -42,8 +44,8 @@ def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (V
 
   let high ← witness fun env => FieldUtils.floordiv (env x) (2^offset.val)
 
-  lookup (ByteLookup low)
-  lookup (ByteLookup high)
+  lookup (TwoPowerLookup.lookup (offset) low)
+  lookup (TwoPowerLookup.lookup (8 - offset) high)
 
   assert_zero (low + high * ((2 : ℕ)^offset.val : F p) - x)
 
@@ -53,9 +55,8 @@ def assumptions (x : field (F p)) := x.val < 256
 
 def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
-  x.val = low.val + high.val * 2^offset.val ∧
-  low.val < 2^offset.val ∧
-  high.val < 2^(8 - offset.val)
+  low.val = x.val % (2^offset.val) ∧
+  high.val = x.val / (2^offset.val)
 
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F p)) where
   main := byte_decomposition offset
@@ -126,10 +127,18 @@ theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_byte h_holds
   simp only [id_eq, circuit_norm] at h_input
-  simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
+  simp [circuit_norm, elaborated, byte_decomposition, TwoPowerLookup.lookup, TwoPowerLookup.equiv, h_input] at h_holds
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
-  obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
-  simp only [byte_decomposition_lift offset _ _ _ low_byte high_byte c, true_and]
+  obtain ⟨⟨low_lt, high_lt⟩, c⟩ := h_holds
+  simp_all [h_input]
+  set low := env.get i0
+  set high := env.get (i0 + 1)
+  have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
+  have two_power_lt' : 2^(-offset).val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) (by simp only [Fin.is_lt])
+  have low_byte : low.val < 256 := by linarith
+  have high_byte : high.val < 256 := by linarith
+  have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
+
   sorry
 
 
@@ -143,65 +152,10 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborate
   let ⟨ h0, h1 ⟩ := henv
 
   simp only [id_eq, ↓eval_field] at h_eval
-  simp [circuit_norm, byte_decomposition, elaborated, ByteLookup]
-  rw [ByteTable.equiv, ByteTable.equiv, h_eval, h0, h1]
+  simp [circuit_norm, byte_decomposition, elaborated, ByteLookup, TwoPowerLookup.lookup]
+  rw [TwoPowerLookup.equiv, TwoPowerLookup.equiv, h_eval, h0, h1]
+  sorry
 
-  if zero_off : offset = 0 then
-    simp [Fin.isValue, zero_off, lt_self_iff_false, ↓reduceIte, FieldUtils.floordiv,
-      Fin.val_zero, pow_zero, PNat.val_ofNat, Nat.div_one, mul_one, zero_add, FieldUtils.mod]
-    simp only [h_eval, Nat.mod_one, FieldUtils.nat_to_field_zero, ZMod.val_zero, Nat.ofNat_pos,
-      FieldUtils.nat_to_field_of_val_eq_iff, as, and_self, zero_add, add_neg_cancel]
-  else
-    have off_ge_zero : offset > 0 := by
-      simp only [Fin.isValue, gt_iff_lt, Fin.pos_iff_ne_zero', ne_eq, zero_off, not_false_eq_true]
-    simp only [FieldUtils.mod, h_eval, PNat.mk_coe, FieldUtils.floordiv, PNat.pow_coe,
-      PNat.val_ofNat]
-
-    have x_lt : x.val < p := by linarith [as, p_large_enough.elim]
-
-    have h : ZMod.val (2 : F p) ^ offset.val < 256 := by
-      rw [val_two]
-      fin_cases offset
-      repeat simp
-
-    have h' : ZMod.val (2 : F p) ^ offset.val < p := by
-      linarith [p_large_enough.elim]
-
-    constructor
-    · repeat rw [FieldUtils.val_of_nat_to_field_eq]
-
-      have h_mod : x.val % (2^offset.val) < 256 := by
-        apply Nat.mod_lt_of_lt
-        exact as
-
-      have h_div : x.val / (2^offset.val) < 256 := by
-        apply Nat.div_lt_of_lt_mul
-        fin_cases offset
-        repeat linarith
-
-      simp only [h_mod, h_div, and_self]
-
-    · apply_fun ZMod.val
-      · repeat rw [ZMod.val_add]
-
-        rw [ZMod.val_mul, ZMod.val_pow h', ZMod.neg_val]
-        repeat rw [FieldUtils.val_of_nat_to_field_eq]
-
-        simp only [Nat.add_mod_mod, Nat.mod_add_mod, ZMod.val_zero, val_two]
-        set bin_pow := 2^offset.val
-        if h: x = 0 then
-          simp [h]
-        else
-          have x_ne_zero : NeZero x.val := by
-            rw [neZero_iff]
-            simp only [ne_eq, ZMod.val_eq_zero, h, not_false_eq_true]
-
-          simp only [h, ↓reduceIte]
-          rw [Nat.mod_add_div', Nat.add_mod]
-          rw [Nat.self_sub_mod, Nat.mod_eq_of_lt x_lt, Nat.add_sub_of_le (by linarith)]
-          simp only [Nat.mod_self]
-
-      · apply ZMod.val_injective
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
@@ -257,22 +211,14 @@ def spec (offset : Fin 8) (input : U64 (F p)) (out: Outputs (F p)) :=
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
   let ⟨⟨x0_l, x1_l, x2_l, x3_l, x4_l, x5_l, x6_l, x7_l⟩,
         ⟨x0_h, x1_h, x2_h, x3_h, x4_h, x5_h, x6_h, x7_h⟩⟩ := out
-  x0.val = x0_l.val + x0_h.val * 2^(offset.val) ∧
-  x0_l.val < 2^offset.val ∧ x0_h.val < 2^(8 - offset.val) ∧
-  x1.val = x1_l.val + x1_h.val * 2^(offset.val) ∧
-  x1_l.val < 2^offset.val ∧ x1_h.val < 2^(8 - offset.val) ∧
-  x2.val = x2_l.val + x2_h.val * 2^(offset.val) ∧
-  x2_l.val < 2^offset.val ∧ x2_h.val < 2^(8 - offset.val) ∧
-  x3.val = x3_l.val + x3_h.val * 2^(offset.val) ∧
-  x3_l.val < 2^offset.val ∧ x3_h.val < 2^(8 - offset.val) ∧
-  x4.val = x4_l.val + x4_h.val * 2^(offset.val) ∧
-  x4_l.val < 2^offset.val ∧ x4_h.val < 2^(8 - offset.val) ∧
-  x5.val = x5_l.val + x5_h.val * 2^(offset.val) ∧
-  x5_l.val < 2^offset.val ∧ x5_h.val < 2^(8 - offset.val) ∧
-  x6.val = x6_l.val + x6_h.val * 2^(offset.val) ∧
-  x6_l.val < 2^offset.val ∧ x6_h.val < 2^(8 - offset.val) ∧
-  x7.val = x7_l.val + x7_h.val * 2^(offset.val) ∧
-  x7_l.val < 2^offset.val ∧ x7_h.val < 2^(8 - offset.val)
+  x0_l.val = x0.val % (2^offset.val) ∧ x0_h.val = x0.val / (2^offset.val) ∧
+  x1_l.val = x1.val % (2^offset.val) ∧ x1_h.val = x1.val / (2^offset.val) ∧
+  x2_l.val = x2.val % (2^offset.val) ∧ x2_h.val = x2.val / (2^offset.val) ∧
+  x3_l.val = x3.val % (2^offset.val) ∧ x3_h.val = x3.val / (2^offset.val) ∧
+  x4_l.val = x4.val % (2^offset.val) ∧ x4_h.val = x4.val / (2^offset.val) ∧
+  x5_l.val = x5.val % (2^offset.val) ∧ x5_h.val = x5.val / (2^offset.val) ∧
+  x6_l.val = x6.val % (2^offset.val) ∧ x6_h.val = x6.val / (2^offset.val) ∧
+  x7_l.val = x7.val % (2^offset.val) ∧ x7_h.val = x7.val / (2^offset.val)
 
 -- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.output
