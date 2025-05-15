@@ -129,35 +129,27 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       congr
       simp [Vector.induct_push_push]
 
-instance ConstantLawfulCircuit.from_foldlM_vector {circuit : β → α → Circuit F β} [Nonempty β]
-  (xs : Vector α m) (init : β) (lawful : ConstantLawfulCircuits fun (z, x) => circuit z x) :
-    ConstantLawfulCircuit (xs.foldlM circuit init) := by
-  let lawful_product : ∀ z x, ConstantLawfulCircuit (circuit z x) :=
-    fun z x => ConstantLawfulCircuits.to_single (fun (z, x) => circuit z x) (z, x)
-  let lawful_loop : LawfulCircuit (xs.foldlM circuit init) := by
-    apply LawfulCircuit.from_foldlM_vector fun z x =>
-      ConstantLawfulCircuits.to_single (fun (z, x) => circuit z x) (z, x) |>.toLawfulCircuit
-  apply ConstantLawfulCircuit.from_constant_length lawful_loop
-  intro n
-  rw [←LawfulCircuit.final_offset_eq, ←LawfulCircuit.final_offset_eq]
-  clear lawful_loop
-  simp only [circuit_norm]
-  suffices h : ∀ (ops : OperationsList F) (init : β),
-      (xs.foldlM circuit init ops).2.offset = ops.offset + ((xs.foldlM circuit init).final_offset 0) by rw [h]
+instance ConstantLawfulCircuit.from_foldlM_vector {circuit : β → α → Circuit F β} [Inhabited β]
+  (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (z, x) => circuit z x) :
+    ConstantLawfulCircuits (xs.foldlM circuit) := by
+  apply ConstantLawfulCircuits.from_constant_length (.from_foldlM_vector (fun z x =>
+    lawful.to_single _ (z, x) |>.toLawfulCircuit) xs)
+  intro init n
+  simp only [←LawfulCircuit.final_offset_eq, Circuit.final_offset]
+  suffices h : ∀ ops init,
+    (xs.foldlM circuit init ops).2.offset = ops.offset + ((xs.foldlM circuit default).final_offset 0) by rw [h]
   induction xs using Vector.induct
-  case nil => intro ops init; rfl
+  case nil => intros; rfl
   case cons x xs ih =>
     intro ops init
-    simp only [Circuit.final_offset]
-    rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+    rw [Vector.foldlM_toList, Vector.foldlM_toList, Vector.cons, List.foldlM_cons, List.foldlM_cons]
     simp only [←Vector.foldlM_toList]
-    -- show (xs.foldlM circuit ((circuit init x).output n) ((circuit init x).operations n)).2.offset = _
-    show (xs.foldlM circuit _ _).2.offset = _ + (xs.foldlM circuit _ _).2.offset
-    rw [ih, LawfulCircuit.offset_independent, LawfulCircuit.output_independent, ConstantLawfulCircuit.local_length_eq]
-    rw [ih, LawfulCircuit.offset_independent, LawfulCircuit.output_independent, ConstantLawfulCircuit.local_length_eq]
-    -- simp [circuit_norm]
-  simp only [lawful_norm, lawful_loop, LawfulCircuit.from_foldlM_vector, LawfulCircuit.from_foldlM]
-
+    show (xs.foldlM circuit ..).2.offset = _ + (xs.foldlM circuit ..).2.offset
+    rw [ih, ih]
+    let prod_circuit := fun (z, x) => circuit z x
+    show (prod_circuit (init, x) _).2.offset + _ = ops.offset + ((prod_circuit (default, x) _).2.offset + _)
+    simp only [ConstantLawfulCircuits.offset_independent]
+    ac_rfl
 
 namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
