@@ -274,9 +274,15 @@ theorem completeness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit
   LawfulCircuit.operations_eq' (Circuit.constraints_hold.completeness env)
 end LawfulCircuit
 
-theorem ConstantLawfulCircuits.final_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] (a : α) (n : ℕ) :
-    (circuit a).final_offset n = n + lawful.local_length := by
-  simp only [circuit_norm, offset_independent]
+namespace ConstantLawfulCircuits
+theorem final_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), (circuit a).final_offset n = n + lawful.local_length := by
+  intros; apply offset_independent
+
+theorem local_length_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), (circuit a).local_length n = lawful.local_length := by
+  intros; apply LawfulCircuit.local_length_eq
+end ConstantLawfulCircuits
 
 namespace Circuit.constraints_hold
 variable {env : Environment F} {n : ℕ} {prop : Operations.Condition F}
