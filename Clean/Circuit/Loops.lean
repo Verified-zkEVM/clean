@@ -118,8 +118,8 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       simp only [Vector.mapM_push]
       let g (bs : Vector β n') := (do let b ← circuit x; pure (bs.push b))
       let bs := ((xs.mapM circuit) ops).1
-      let lawful' : LawfulCircuit (g bs) := by infer_lawful_circuit
       change (g bs ((xs.mapM circuit) ops).2).2 = _
+      let lawful' : LawfulCircuit (g bs) := by infer_lawful_circuit
       simp only [ih, lawful'.append_only, lawful', LawfulCircuit.final_offset, LawfulCircuit.operations]
       set k := lawful.local_length
       have h_offset : ops.offset + lawful.local_length * n' + lawful.local_length
@@ -175,7 +175,18 @@ instance ConstantLawfulCircuits.from_foldlM_vector [Inhabited β] {circuit : β 
 
   output init n := Fin.foldl m (fun acc i => lawful.output (acc, xs[i]) (n + lawful.local_length * i)) init
   local_length := lawful.local_length * m
-  operations init n := by sorry
+  operations init n :=
+    let k := lawful.local_length
+    let ops : OperationsFrom F n (n + k * m) := by
+      induction xs using Vector.induct_push
+      case nil => exact .empty n
+      case push xs x ops =>
+        rename_i n'
+        rw [mul_add, ←add_assoc, mul_one]
+        let acc := ((xs.foldlM circuit) init ops).1
+        let ops' := ops ++ lawful.operations (acc, x) (n + k * n')
+        exact ops'
+    ops
 
   offset_independent := from_foldlM_vector.offset_independent xs lawful
 
@@ -201,7 +212,33 @@ instance ConstantLawfulCircuits.from_foldlM_vector [Inhabited β] {circuit : β 
         rfl
       rw [←lawful.output_independent]
 
-  append_only init ops := by sorry
+  append_only init ops := by
+    simp only [eq_mpr_eq_cast, cast_cast, cast_eq]
+    induction xs using Vector.induct_push
+    case nil =>
+      simp [pure, StateT.pure, Vector.induct_push, Operations.append_empty]
+    case push xs x ih =>
+      rename_i n'
+      rcases ops with ⟨ offset, ops ⟩
+      simp only [Vector.foldlM_push] at ih ⊢
+      let prod_circuit := fun (t : β × α) => circuit t.1 t.2
+      have h_offset : offset + (local_length prod_circuit) * n' + local_length prod_circuit
+        = offset + (local_length prod_circuit) * (n' + 1) := by ring
+      let acc := ((xs.foldlM circuit) init ops).1
+      change (prod_circuit (acc, x) ((xs.foldlM circuit) init ops).2).2 = _
+      rw [ConstantLawfulCircuits.append_only, ih]
+      simp only
+      simp +arith only [Nat.mul_zero, OperationsList.mk.injEq,
+        prod_circuit, h_offset, true_and]
+      rw [Operations.append_assoc]
+      simp only [Vector.induct_push_push, acc]
+      congr
+      rw [heq_cast_iff_heq]
+      simp only [heq_eq_eq, prod_circuit, acc]
+      -- TODO
+      -- conv => rhs; simp
+      congr 1
+      congr
 
 namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
