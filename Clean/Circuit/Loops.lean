@@ -129,7 +129,8 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       congr
       simp [Vector.induct_push_push]
 
-instance ConstantLawfulCircuit.from_foldlM_vector {circuit : β → α → Circuit F β} [Inhabited β]
+
+instance ConstantLawfulCircuits.from_foldlM_vector' [Inhabited β] {circuit : β → α → Circuit F β}
   (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (z, x) => circuit z x) :
     ConstantLawfulCircuits (xs.foldlM circuit) := by
   apply ConstantLawfulCircuits.from_constant_length (.from_foldlM_vector (fun z x =>
@@ -150,6 +151,57 @@ instance ConstantLawfulCircuit.from_foldlM_vector {circuit : β → α → Circu
     show (prod_circuit (init, x) _).2.offset + _ = ops.offset + ((prod_circuit (default, x) _).2.offset + _)
     simp only [ConstantLawfulCircuits.offset_independent]
     ac_rfl
+
+lemma ConstantLawfulCircuits.from_foldlM_vector.offset_independent {circuit : β → α → Circuit F β} [Inhabited β]
+  (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (acc, x) => circuit acc x) (init : β) (ops : OperationsList F) :
+    (xs.foldlM circuit init ops).2.offset = ops.offset + lawful.local_length * m := by
+  simp only
+  set k := lawful.local_length
+  induction xs using Vector.induct generalizing init ops
+  case nil => rfl
+  case cons x xs ih =>
+    rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+    simp only [←Vector.foldlM_toList]
+    show (xs.foldlM circuit ..).2.offset = _
+    rw [ih]
+    let prod_circuit := fun (z, x) => circuit z x
+    show (prod_circuit (init, x) _).2.offset + _ = _
+    simp only [ConstantLawfulCircuits.offset_independent]
+    ring
+
+instance ConstantLawfulCircuits.from_foldlM_vector [Inhabited β] {circuit : β → α → Circuit F β}
+  (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (acc, x) => circuit acc x) :
+    ConstantLawfulCircuits (xs.foldlM circuit) where
+
+  output init n := Fin.foldl m (fun acc i => lawful.output (acc, xs[i]) (n + lawful.local_length * i)) init
+  local_length := lawful.local_length * m
+  operations init n := by sorry
+
+  offset_independent := from_foldlM_vector.offset_independent xs lawful
+
+  output_independent init ops := by
+    simp only
+    induction xs using Vector.induct generalizing init ops
+    case nil => rfl
+    case cons x xs ih =>
+      rename_i n
+      rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+      simp only [←Vector.foldlM_toList]
+      show (xs.foldlM circuit ..).1 = _
+      rw [ih, Fin.foldl_succ]
+      simp only [Fin.getElem_fin, Fin.val_succ, Vector.getElem_mk, List.getElem_toArray,
+        List.getElem_cons_succ, Array.getElem_toList, Vector.getElem_toArray, Fin.val_zero,
+        List.getElem_cons_zero, mul_zero, add_zero]
+      congr
+      · funext acc i
+        let prod_circuit := fun (t : β × α) => circuit t.1 t.2
+        show output prod_circuit (acc, xs[i.val]) ((prod_circuit (init, x) _).2.offset + _) = _
+        rw [ConstantLawfulCircuits.offset_independent]
+        ring_nf
+        rfl
+      rw [←lawful.output_independent]
+
+  append_only init ops := by sorry
 
 namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
@@ -363,10 +415,10 @@ def map {m : ℕ} [Nonempty β] (xs : Vector α m) (body : α → Circuit F β)
     (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
   xs.mapM body
 
-def foldl {m : ℕ} [Nonempty β] (xs : Vector α m) (initial : β) (body : β → α → Circuit F β)
-  (_lawful : ConstantLawfulCircuits (fun (s, a) => body s a : β × α → Circuit F β) := by infer_constant_lawful_circuits) :
+def foldl {m : ℕ} [Nonempty β] (xs : Vector α m) (init : β) (body : β → α → Circuit F β)
+  (_lawful : ConstantLawfulCircuits (fun (s, a) => body s a) := by infer_constant_lawful_circuits) :
     Circuit F β :=
-  xs.foldlM body initial
+  xs.foldlM body init
 
 section
 variable {env : Environment F} {m n : ℕ} [NeZero m] [Nonempty β] {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body}
@@ -477,6 +529,12 @@ lemma map.output_eq :
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_mapIdx, LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
   ac_rfl
+end
+
+section
+variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+  {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
+
 end
 
 end Circuit
