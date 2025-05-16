@@ -62,7 +62,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   -- inductive proof
   have h_norm (i : ℕ) (hi : i < 24) :
     (state i).is_normalized ∧ (state i).value =
-        Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[↑j]) initial_state.value := by
+      Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[↑j]) initial_state.value := by
     induction i with
     | zero => simp [Fin.foldl_succ, h_init]
     | succ i ih =>
