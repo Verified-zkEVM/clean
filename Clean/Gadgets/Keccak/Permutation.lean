@@ -60,7 +60,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   at h_succ
 
   -- inductive proof
-  have h_norm (i : ℕ) (hi : i < 24) :
+  have h_inductive (i : ℕ) (hi : i < 24) :
     (state i).is_normalized ∧ (state i).value =
       Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[↑j]) initial_state.value := by
     induction i with
@@ -72,6 +72,54 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
       use h_succ.left
       rw [h_succ.right, Fin.foldl_succ_last, ih.right]
       simp
-  exact h_norm 23 (by norm_num)
+  exact h_inductive 23 (by norm_num)
+
+theorem completeness : Completeness (F p) elaborated assumptions := by
+  intro n env initial_state_var h_env initial_state h_input h_assumptions
+
+  dsimp only [elaborated, main, assumptions] at h_assumptions h_env ⊢
+  rw [Circuit.foldl.completeness]
+  rw [Circuit.foldl.uses_local_witnesses] at h_env
+
+  simp only [h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
+    KeccakRound.circuit, KeccakRound.elaborated,
+    KeccakRound.spec, KeccakRound.assumptions, zero_add, forall_const, true_and] at h_env ⊢
+
+  obtain ⟨ ⟨ h_init, _ ⟩, h_succ ⟩ := h_env
+  intro i hi
+  have hi' : i < 24 := Nat.lt_of_succ_lt hi
+
+  -- clean up formulation
+  let state (i : ℕ) : KeccakState (F p) := eval env (state_var n i)
+
+  change (state 0).is_normalized at h_init
+
+  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).is_normalized → (state (i + 1)).is_normalized ∧
+    (state (i + 1)).value = keccak_round (state i).value roundConstants[i + 1]
+  at h_succ
+
+  change (state i).is_normalized
+
+  -- inductive proof
+  have h_norm (i : ℕ) (hi : i < 24) : (state i).is_normalized := by
+    induction i with
+    | zero => exact h_init
+    | succ i ih =>
+      have hi' : i < 24 := Nat.lt_of_succ_lt hi
+      specialize ih hi'
+      specialize h_succ i hi ih
+      exact h_succ.left
+  exact h_norm i hi'
+
+-- TODO
+-- set_option maxHeartbeats 800000
+
+def circuit : FormalCircuit (F p) KeccakState KeccakState where
+  assumptions
+  spec
+  soundness
+  -- TODO why does this time out??
+  -- completeness
+  completeness := by sorry
 
 end Gadgets.Keccak256.Permutation
