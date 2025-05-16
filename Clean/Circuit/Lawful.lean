@@ -209,8 +209,8 @@ lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} 
 namespace LawfulCircuit
 -- slightly different way to state the append-only principle, which deals with the type dependency
 lemma append_only' {circuit : Circuit F α} [lawful : LawfulCircuit circuit] :
-    ∀ ops: OperationsList F,
-      (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
+  ∀ ops: OperationsList F,
+    (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
   intro ops
   apply OperationsList.withLength_eq
   simp only [append_only ops]
