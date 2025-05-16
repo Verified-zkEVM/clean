@@ -24,13 +24,13 @@ def bits2bytes (x : Nat) : Nat :=
   (x + 7) / 8
 
 def theta_c (state : Vector ℕ 25) : Vector ℕ 5 :=
-    #v[
-      state[0] ^^^ state[1] ^^^ state[2] ^^^ state[3] ^^^ state[4],
-      state[5] ^^^ state[6] ^^^ state[7] ^^^ state[8] ^^^ state[9],
-      state[10] ^^^ state[11] ^^^ state[12] ^^^ state[13] ^^^ state[14],
-      state[15] ^^^ state[16] ^^^ state[17] ^^^ state[18] ^^^ state[19],
-      state[20] ^^^ state[21] ^^^ state[22] ^^^ state[23] ^^^ state[24]
-    ]
+  #v[
+    state[0] ^^^ state[1] ^^^ state[2] ^^^ state[3] ^^^ state[4],
+    state[5] ^^^ state[6] ^^^ state[7] ^^^ state[8] ^^^ state[9],
+    state[10] ^^^ state[11] ^^^ state[12] ^^^ state[13] ^^^ state[14],
+    state[15] ^^^ state[16] ^^^ state[17] ^^^ state[18] ^^^ state[19],
+    state[20] ^^^ state[21] ^^^ state[22] ^^^ state[23] ^^^ state[24]
+  ]
 
 def theta_d (c : Vector ℕ 5) : Vector ℕ 5 :=
   #v[
@@ -40,7 +40,6 @@ def theta_d (c : Vector ℕ 5) : Vector ℕ 5 :=
     c[2] ^^^ (rot_left64 c[4] 1),
     c[3] ^^^ (rot_left64 c[0] 1)
   ]
-
 
 def theta_xor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
   #v[
@@ -136,7 +135,6 @@ def chi (b : Vector ℕ 25) : Vector ℕ 25 :=
 
 def iota (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   state.set 0 ((state.get 0) ^^^ rc.val)
-
 
 def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   let theta_state := theta state

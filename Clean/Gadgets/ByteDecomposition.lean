@@ -70,7 +70,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   intro i0 env x_var x h_input x_byte h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp [circuit_norm, elaborated, byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
-  simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
+  simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input, Vector.mapRange]
   obtain ⟨⟨low_byte, high_byte⟩, c⟩ := h_holds
 
   have pow_val_field : ZMod.val (2 : F p) ^ offset.val < 256 := by
