@@ -143,7 +143,7 @@ def u64_byte_decomposition (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) 
 
   return ⟨ low, high ⟩
 
-def assumptions (x : U64 (F p)) := x.is_normalized
+def assumptions (offset : Fin 8) (x : U64 (F p)) := x.is_normalized ∧ offset.val > 0
 
 def spec (offset : Fin 8) (input : U64 (F p)) (out: Outputs (F p)) :=
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
@@ -168,11 +168,11 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U64 Outputs where
     high := ⟨var ⟨i0 + 1⟩, var ⟨i0 + 3⟩, var ⟨i0 + 5⟩, var ⟨i0 + 7⟩, var ⟨i0 + 9⟩, var ⟨i0 + 11⟩, var ⟨i0 + 13⟩, var ⟨i0 + 15⟩⟩
   }
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
-  intro i0 env x_var ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_byte h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) (assumptions offset) (spec offset) := by
+  intro i0 env x_var ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input ⟨x_byte, offset_positive⟩ h_holds
   simp [circuit_norm, elaborated, u64_byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
   simp [subcircuit_norm, ByteDecomposition.circuit, ByteDecomposition.elaborated,
-    ByteDecomposition.assumptions, ByteDecomposition.spec, eval, circuit_norm] at h_holds
+    ByteDecomposition.assumptions, ByteDecomposition.spec, eval, circuit_norm, var_from_offset] at h_holds
 
   simp [assumptions, U64.is_normalized] at x_byte
   simp [eval, circuit_norm] at h_input
@@ -182,15 +182,14 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     ElaboratedCircuit.output, Vector.map_mk, List.map_toArray, List.map_cons, Expression.eval,
     List.map_nil]
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ := h_input
-  simp [h0, h1, h2, h3, h4, h5, h6, h7, and_assoc] at h_holds
+  simp [h0, h1, h2, h3, h4, h5, h6, h7, and_assoc, var_from_offset] at h_holds
   clear h0 h1 h2 h3 h4 h5 h6 h7
 
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := h_holds
-  simp_all only [Nat.reducePow, Nat.reduceAdd, gt_iff_lt, forall_const]
-  sorry
+  simp_all only [gt_iff_lt, Fin.val_pos_iff, forall_const, and_self]
 
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) (assumptions offset) := by
   rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ henv ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval as
   simp only [assumptions] at as
   sorry
@@ -198,7 +197,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 Outputs := {
   elaborated offset with
   main := u64_byte_decomposition offset
-  assumptions
+  assumptions := assumptions offset
   spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
