@@ -578,6 +578,27 @@ variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : V
   {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
 
 @[circuit_norm]
+lemma foldl.soundness :
+  constraints_hold.soundness env (foldl xs init body lawful |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.soundness env (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
+  rw [lawful.local_length_eq (default, default) 0]
+  simp only [constraints_hold.soundness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
+
+@[circuit_norm]
+lemma foldl.completeness :
+  constraints_hold.completeness env (foldl xs init body lawful |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.completeness env (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
+  rw [lawful.local_length_eq (default, default) 0]
+  simp only [constraints_hold.completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
+
+@[circuit_norm]
+lemma foldl.uses_local_witnesses :
+  env.uses_local_witnesses_completeness (foldl xs init body lawful |>.operations n) ↔
+    ∀ i : Fin m, env.uses_local_witnesses_completeness (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
+  rw [lawful.local_length_eq (default, default) 0]
+  simp only [env.uses_local_witnesses_completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
+
+@[circuit_norm]
 lemma foldl.local_length_eq :
     (foldl xs init body lawful).local_length n = m * (body default default).local_length := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful) := .from_foldlM_vector xs lawful
