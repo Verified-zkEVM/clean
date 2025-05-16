@@ -198,6 +198,9 @@ example :
   ConstantLawfulCircuits add := by infer_constant_lawful_circuits
 end
 
+def ConstantLawfulCircuits.constant_output {circuit : α → Circuit F β} [Inhabited α] (lawful : ConstantLawfulCircuits circuit) :=
+  ∀ (x : α) (n : ℕ), output circuit x n = output circuit default n
+
 -- characterize various properties of lawful circuits
 
 -- helper lemma needed right below

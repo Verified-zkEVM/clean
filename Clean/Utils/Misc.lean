@@ -2,8 +2,9 @@
 Miscellaneous utility lemmas/methods that don't fit anywhere else.
 -/
 import Mathlib.Tactic
+variable {α : Type}
 
-theorem Fin.foldl_const {α : Type} (n : ℕ) (f : Fin (n + 1) → α) (init : α) :
+theorem Fin.foldl_const_succ (n : ℕ) (f : Fin (n + 1) → α) (init : α) :
     Fin.foldl (n + 1) (fun _ i => f i) init = f n := by
   induction n generalizing init with
   | zero => rfl
@@ -14,3 +15,13 @@ theorem Fin.foldl_const {α : Type} (n : ℕ) (f : Fin (n + 1) → α) (init : �
     rw [ih]
     simp only [f']
     rw [Fin.natCast_eq_last, Fin.succ_last, ←Fin.natCast_eq_last]
+
+theorem Fin.foldl_const_zero (f : Fin 0 → α) (init : α) :
+    Fin.foldl 0 (fun _ i => f i) init = init := by
+  rfl
+
+theorem Fin.foldl_const (n : ℕ) (f : Fin n → α) (init : α) :
+  Fin.foldl n (fun _ i => f i) init = match n with
+    | 0 => init
+    | n + 1 => f n := by
+  split <;> simp [foldl_const_succ]

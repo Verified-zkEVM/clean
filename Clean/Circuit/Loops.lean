@@ -1,4 +1,5 @@
 import Clean.Circuit.Lawful
+import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
 -- we prove a few properties about the circuit `forM xs circuit`, where `circuit : α → Circuit F Unit`
@@ -415,9 +416,10 @@ lemma foldlAcc_cons_succ (i : Fin n) (x : α) [lawful : ConstantLawfulCircuits f
     Fin.val_zero, List.getElem_cons_zero, zero_mul, add_zero]
   ac_rfl
 
-theorem constraints_hold.foldM_vector_forAll {xs : Vector α n} :
+theorem constraints_hold.foldM_vector_forAll {xs : Vector α n} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2} :
   (xs.foldlM body init |>.operations m).forAll prop ↔
-    ∀ i : Fin n, (body (foldlAcc m xs body init i) xs[i.val] |>.operations (m + i*lawful.local_length)).forAll prop := by
+    ∀ i : Fin n, (body (foldlAcc m xs body init i) xs[i.val] |>.operations (m + i*(body default default).local_length)).forAll prop := by
+
   induction xs using Vector.induct generalizing m init with
   | nil => simp; trivial
   | cons x xs ih =>
@@ -440,11 +442,58 @@ theorem constraints_hold.foldM_vector_forAll {xs : Vector α n} :
     intro i
     simp only [Fin.val_succ, List.getElem_cons_succ]
     rw [Vector.getElem_toList]
-    rw [add_mul, one_mul, add_comm _ lawful.local_length, ←add_assoc m]
+    rw [add_mul, one_mul, add_comm _ (body default default).local_length, ←add_assoc m]
     have : LawfulCircuit.final_offset (body init x) m = m + lawful.local_length := by simp [lawful_body, lawful_norm]
-    rw [←this]
+    rw [lawful.local_length_eq (default, default), ←this]
     change _ ↔ Operations.forAll prop (body (foldlAcc m (Vector.cons x xs) body init i.succ) _ |>.operations _)
     rw [←LawfulCircuit.output_eq, ←LawfulCircuit.final_offset_eq, ←foldlAcc_cons_succ]
+
+-- we can massively simplify the theory above when assuming the body's output is independent of the input
+
+theorem foldlAcc_const_succ (h_const_out : lawful.constant_output) (i : ℕ) (hi : i + 1 < n) :
+  foldlAcc m xs body init ⟨ i + 1, hi ⟩ =
+    (body default xs[i]).output (m + i*(body default default).local_length) := by
+  simp only [foldlAcc]
+  rw [lawful.output_eq (_, xs[i]), h_const_out, ←lawful.output_eq]
+  conv => lhs; lhs; intro acc i; rw [lawful.output_eq (acc, _), h_const_out, ←lawful.output_eq]
+  simp [Fin.foldl_const]
+
+theorem foldlAcc_const (h_const_out : lawful.constant_output) (i : ℕ) (hi : i < n) :
+  foldlAcc m xs body init ⟨ i, hi ⟩ = match i with
+    | 0 => init
+    | i + 1 => (body default xs[i]).output (m + i*(body default default).local_length) := by
+  rcases i with _ | i
+  · simp [foldlAcc]
+  · rw [foldlAcc_const_succ h_const_out]
+
+theorem constraints_hold.foldM_vector_forAll_const (h_const_out : lawful.constant_output) [NeZero n] :
+  (xs.foldlM body init |>.operations m).forAll prop ↔
+  (body init (xs[0]'(NeZero.pos n)) |>.operations m).forAll prop ∧
+  ∀ (i : ℕ) (hi : i + 1 < n),
+    let acc := (body default xs[i]).output (m + i*(body default default).local_length);
+    (body acc xs[i + 1] |>.operations (m + (i + 1)*(body default default).local_length)).forAll prop := by
+  rw [constraints_hold.foldM_vector_forAll (lawful:=lawful)]
+  set k := (body default default).local_length
+  simp only
+  constructor
+  · intro h
+    constructor
+    · specialize h 0
+      simp only [Fin.val_zero] at h
+      rw [foldlAcc_zero, zero_mul, add_zero] at h
+      exact h
+    · intro i hi
+      specialize h ⟨ i + 1, hi ⟩
+      rw [foldlAcc_const_succ h_const_out] at h
+      exact h
+  intro h i
+  rcases i with ⟨ _ | i, hi ⟩
+  · simp only [Fin.mk_zero', Fin.val_zero]
+    rw [foldlAcc_zero, zero_mul, add_zero]
+    exact h.left
+  · rw [foldlAcc_const_succ h_const_out]
+    exact h.right i hi
+
 end
 
 -- Loop constructs designed to simplify under `circuit_norm`
@@ -577,21 +626,21 @@ section
 variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
 
-@[circuit_norm]
+-- @[circuit_norm]
 lemma foldl.soundness :
   constraints_hold.soundness env (foldl xs init body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
   rw [lawful.local_length_eq (default, default) 0]
   simp only [constraints_hold.soundness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
 
-@[circuit_norm]
+-- @[circuit_norm]
 lemma foldl.completeness :
   constraints_hold.completeness env (foldl xs init body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
   rw [lawful.local_length_eq (default, default) 0]
   simp only [constraints_hold.completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
 
-@[circuit_norm]
+-- @[circuit_norm]
 lemma foldl.uses_local_witnesses :
   env.uses_local_witnesses_completeness (foldl xs init body lawful |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
