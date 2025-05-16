@@ -630,7 +630,7 @@ variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : V
   {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
   {const_out : lawful.constant_output}
 
--- @[circuit_norm]
+@[circuit_norm]
 lemma foldl.soundness [NeZero m] :
   constraints_hold.soundness env (foldl xs init body lawful const_out |>.operations n) ↔
     constraints_hold.soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
@@ -651,7 +651,7 @@ lemma foldl.uses_local_witnesses :
     ∀ i : Fin m, env.uses_local_witnesses_completeness (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
   simp only [env.uses_local_witnesses_completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
 
--- @[circuit_norm]
+@[circuit_norm]
 lemma foldl.local_length_eq :
     (foldl xs init body lawful const_out).local_length n = m * (body default default).local_length := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
@@ -660,20 +660,26 @@ lemma foldl.local_length_eq :
   rw [←lawful.local_length_eq (default, default) 0]
   ac_rfl
 
--- @[circuit_norm]
+@[circuit_norm]
 lemma foldl.initial_offset_eq :
     (foldl xs init body lawful const_out |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
   apply lawful_loop.initial_offset_eq
 
--- @[circuit_norm]
-lemma foldl.output_eq :
+@[circuit_norm]
+lemma foldl.output_eq [NeZero m] :
   (foldl xs init body lawful const_out).output n =
-    Fin.foldl m (fun acc i => (body acc xs[i.val]).output (n + i*(body default default).local_length)) init := by
+    (body default (xs[m-1]'(Nat.pred_lt (NeZero.ne m)))).output (n + (m - 1)*(body default default).local_length) := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
   rw [lawful_loop.output_eq]
   simp only [lawful_loop, lawful_norm, ←lawful.output_eq]
   rw [lawful.local_length_eq (default, default) 0]
+  have : m-1 < m := Nat.pred_lt (NeZero.ne m)
+  rw [lawful.output_eq (_, xs[m-1]), const_out, ←lawful.output_eq]
+  conv => lhs; lhs; intro acc i; rw [lawful.output_eq (acc, _), const_out, ←lawful.output_eq]
+  rcases m with _ | m
+  · simp at this
+  simp only [Fin.foldl_const, add_tsub_cancel_right, Fin.natCast_eq_last, Fin.val_last]
   ac_rfl
 end
 

@@ -1,6 +1,5 @@
 import Clean.Gadgets.Keccak.KeccakRound
 import Clean.Specs.Keccak256
-import Clean.Utils.Misc
 
 namespace Gadgets.Keccak256.Permutation
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
@@ -29,21 +28,19 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := state_var i0 23
 
   local_length_eq state i0 := by
-    simp only [main, Circuit.foldl.local_length_eq]
+    rw [main, Circuit.foldl.local_length_eq]
     simp only [circuit_norm, KeccakRound.circuit]
   initial_offset_eq state i0 := by
-    simp only [main, Circuit.foldl.initial_offset_eq]
+    rw [main, Circuit.foldl.initial_offset_eq]
   output_eq state i0 := by
-    simp only [main, state_var, Circuit.foldl.output_eq, circuit_norm, KeccakRound.circuit]
-    rw [Fin.foldl_const_succ]
-    simp +arith only [Nat.cast_ofNat, Fin.coe_ofNat_eq_mod]
+    simp only [main, state_var, circuit_norm, KeccakRound.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
   dsimp only [elaborated, main] at h_holds
-  simp only [Circuit.foldl.soundness] at h_holds
+  rw [Circuit.foldl.soundness] at h_holds
   simp only [circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.spec, KeccakRound.assumptions] at h_holds ⊢
