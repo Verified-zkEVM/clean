@@ -70,6 +70,8 @@ def fib32_table : List (TableOperation RowType (F p)) := [
   EveryRowExceptLast recursive_relation,
 ]
 
+#eval fib32_table (p:=p_babybear)
+
 /--
   Specification for fibonacci32: for each row with index i
   - the first U32 value is the i-th fibonacci number
@@ -98,10 +100,8 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [recursive_relation, table_assignment_norm, circuit_norm,
-    Gadgets.Addition32Full.circuit, assign_U32]
-  simp only [circuit_norm, table_norm]
-  rfl
+  simp only [recursive_relation, table_assignment_norm, circuit_norm,
+    Gadgets.Addition32Full.circuit, assign_U32, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -115,7 +115,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   have h_offset : (recursive_relation (p:=p)).final_assignment.offset = 24 := rfl
   simp only [h_offset]
   rw [fib_assignment]
-  simp only [circuit_norm, eval, OfNat.ofNat, reduceDIte, Nat.reduceLT, var_from_offset, Vector.natInit, Nat.reduceAdd]
+  simp only [circuit_norm, eval, OfNat.ofNat, reduceDIte, Nat.reduceLT, var_from_offset, Vector.mapRange, Nat.reduceAdd]
   simp only [PNat.mk_ofNat, PNat.val_ofNat, Fin.ofNat'_eq_cast, Nat.cast_zero, Fin.isValue,
     Nat.cast_one, Nat.cast_ofNat]
   and_intros <;> rfl

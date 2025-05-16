@@ -29,7 +29,7 @@ instance : ProvableStruct Outputs where
   to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
   from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
-open Gadgets.Addition8FullCarry (add8_full_carry)
+open Addition8FullCarry (add8_full_carry)
 
 def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
@@ -58,7 +58,7 @@ def c := add32_full (p:=p_babybear) default
 #eval c.output
 ```
 -/
-instance elaboratedCircuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main := add32_full
   local_length _ := 8
   output _ i0 := {
@@ -66,42 +66,24 @@ instance elaboratedCircuit : ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) 
     carry_out := var ⟨i0 + 7⟩
   }
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  simp only [circuit_norm, eval] at h_inputs
-  have : x0_var.eval env = x0 := by injections h_inputs
-  have : x1_var.eval env = x1 := by injections h_inputs
-  have : x2_var.eval env = x2 := by injections h_inputs
-  have : x3_var.eval env = x3 := by injections h_inputs
-  have : y0_var.eval env = y0 := by injections h_inputs
-  have : y1_var.eval env = y1 := by injections h_inputs
-  have : y2_var.eval env = y2 := by injections h_inputs
-  have : y3_var.eval env = y3 := by injections h_inputs
-  have : carry_in_var.eval env = carry_in := by injection h_inputs
-  clear h_inputs
+  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
   dsimp only [assumptions, U32.is_normalized] at as
-
-  have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
-  clear as
-  have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
-  have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
-  clear x_norm y_norm
+  obtain ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
+  obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
+  obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  simp only [Boolean.spec, true_and, true_implies, and_assoc, add_zero] at h
-  rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›] at h
-  rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›] at h
-  rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›] at h
-  rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at h
-  repeat clear this
+  simp only [Boolean.spec, true_and, true_implies, and_assoc, add_zero, h_inputs] at h
   rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
@@ -116,7 +98,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   clear h
 
   -- simplify output and spec
-  set output := eval env (elaboratedCircuit.output _ i0)
+  set output := eval env (elaborated.output _ i0)
   have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
     simp only [output, circuit_norm, eval]; rfl
   rw [h_output]
@@ -127,7 +109,7 @@ theorem soundness : Soundness (F p) assumptions spec := by
   rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 
   -- apply the main soundness theorem
-  apply Gadgets.Addition32.Theorems.add32_soundness
+  apply Addition32.Theorems.add32_soundness
     x0_byte x1_byte x2_byte x3_byte
     y0_byte y1_byte y2_byte y3_byte
     z0_byte z1_byte z2_byte z3_byte
@@ -135,22 +117,13 @@ theorem soundness : Soundness (F p) assumptions spec := by
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) Outputs assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  simp only [circuit_norm, eval] at h_inputs
-  have : x0_var.eval env = x0 := by injections
-  have : x1_var.eval env = x1 := by injections
-  have : x2_var.eval env = x2 := by injections
-  have : x3_var.eval env = x3 := by injections
-  have : y0_var.eval env = y0 := by injections
-  have : y1_var.eval env = y1 := by injections
-  have : y2_var.eval env = y2 := by injections
-  have : y3_var.eval env = y3 := by injections
-  have : carry_in_var.eval env = carry_in := by injections
+  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
   dsimp [assumptions, U32.is_normalized] at as
@@ -160,20 +133,13 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, Boolean.circuit
+    add32_full, add8_full_carry, Boolean.circuit,
+    h_inputs
   ] at henv ⊢
   simp only [true_and, and_assoc]
-  rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›]
-  rw [‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›]
-  rw [‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›]
-  rw [‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›]
 
   -- characterize local witnesses
   simp only [forall_const, true_and, and_true, and_assoc] at henv
-  rw [‹x0_var.eval env = x0›, ‹y0_var.eval env = y0›, ‹carry_in_var.eval env = carry_in›,
-      ‹x1_var.eval env = x1›, ‹y1_var.eval env = y1›, ‹x2_var.eval env = x2›, ‹y2_var.eval env = y2›,
-      ‹x3_var.eval env = x3›, ‹y3_var.eval env = y3›] at henv
-  repeat clear this
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := henv
 
   set z0 := env.get i0
@@ -209,9 +175,8 @@ theorem completeness : Completeness (F p) Outputs assumptions := by
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := add32_full
-  assumptions := assumptions
-  spec := spec
-  soundness := soundness
-  completeness := completeness
+  assumptions
+  spec
+  soundness
+  completeness
 end Gadgets.Addition32Full

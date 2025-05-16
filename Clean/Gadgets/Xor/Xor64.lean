@@ -53,7 +53,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.is_normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main := xor_u64
   local_length _ := 8
   output _ i0 := var_from_offset U64 i0
@@ -85,7 +85,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, Bitwise.xor_mul_two_pow]
   ac_rfl
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env input_var input h_input h_as h_holds
 
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
@@ -94,22 +94,16 @@ theorem soundness : Soundness (F p) assumptions spec := by
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
 
   simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
-  obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
 
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
-  dsimp only [circuit_norm, xor_u64, ByteXorLookup] at h_holds
-  simp only [circuit_norm, add_zero, List.push_toArray, List.nil_append, List.cons_append,
-    List.map_toArray, List.map_cons, List.map_nil] at h_holds
-  simp only [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
-    h_x6, h_y6, h_x7, h_y7] at h_holds
+  simp only [h_input, circuit_norm, xor_u64, ByteXorLookup,
+    var_from_offset, Vector.mapRange] at h_holds
   repeat rw [ByteXorTable.equiv] at h_holds
 
   apply soundness_to_u64 x_norm y_norm
-  simp only [circuit_norm, var_from_offset, eval]
+  simp only [circuit_norm, var_from_offset, Vector.mapRange, eval]
   simp [h_holds]
 
 lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
@@ -118,29 +112,21 @@ lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness : Completeness (F p) U64 assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  obtain ⟨ h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7 ⟩ := hx
-  obtain ⟨ h_y0, h_y1, h_y2, h_y3, h_y4, h_y5, h_y6, h_y7 ⟩ := hy
 
   simp only [assumptions, circuit_norm, U64.is_normalized] at as
   obtain ⟨ x_bytes, y_bytes ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte, x4_byte, x5_byte, x6_byte, x7_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_bytes
 
-  dsimp only [circuit_norm, xor_u64, ByteXorLookup] at h_env
-  simp [circuit_norm] at h_env
-  dsimp only [circuit_norm, xor_u64, ByteXorLookup]
-  simp only [circuit_norm, add_zero, List.push_toArray, List.nil_append, List.cons_append,
-    List.map_toArray, List.map_cons, List.map_nil]
-  simp only [h_x0, h_y0, h_x1, h_y1, h_x2, h_y2, h_x3, h_y3, h_x4, h_y4, h_x5, h_y5,
-    h_x6, h_y6, h_x7, h_y7] at h_env ⊢
+  simp only [h_input, circuit_norm, xor_u64, ByteXorLookup,
+    var_from_offset, Vector.mapRange, true_and] at h_env ⊢
   repeat rw [ByteXorTable.equiv]
   have h_env0 := by let h := h_env 0; simp at h; exact h
   have h_env1 := by let h := h_env 1; simp at h; exact h

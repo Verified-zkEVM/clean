@@ -120,7 +120,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   local_length_eq : local_length = FlatOperation.witness_length ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env := sc.local_length_eq ▸ FlatOperation.witnesses env sc.ops
+def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -247,6 +247,10 @@ def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.fin
 def output (circuit: Circuit F α) (offset := 0) : α :=
   circuit offset |>.fst
 
+@[reducible, circuit_norm]
+def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
+  (circuit.operations offset).local_length
+
 -- core operations we can do in a circuit
 
 /-- Create a new variable -/
@@ -265,7 +269,7 @@ def witness (compute : Environment F → F) := do
 @[circuit_norm]
 def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Variable F) n) :=
   modifyGet fun ops =>
-    let vars := Vector.natInit n fun i => ⟨ ops.offset + i ⟩
+    let vars := Vector.mapRange n fun i => ⟨ ops.offset + i ⟩
     ⟨vars, .witness ops n compute⟩
 
 /-- Add a constraint. -/
@@ -279,6 +283,12 @@ def lookup (l: Lookup F) : Circuit F Unit :=
   modify fun ops => .lookup ops l
 
 end Circuit
+
+@[circuit_norm]
+def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+  modifyGet fun ops =>
+    let var := var_from_offset α ops.offset
+    ⟨var, .witness ops (size α) (fun env => compute env |> to_elements)⟩
 
 /--
 If an environment "uses local witnesses" it means that the environment's evaluation
@@ -370,18 +380,18 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F: Type) [Field F] (β: TypeMap) [ProvableType β] (Output: Type) where
-  main: Var β F → Circuit F Output
+class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [ProvableType α] where
+  main: Var β F → Circuit F (Var α F)
 
   /-- how many local witnesses this circuit introduces -/
   local_length: Var β F → ℕ
 
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
-  local_length_eq : ∀ var offset, (main var |>.operations offset).local_length = local_length var
+  local_length_eq : ∀ var offset, (main var).local_length offset = local_length var
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
-  output : Var β F → ℕ → Output
+  output : Var β F → ℕ → Var α F
 
   /-- correctness of `output` -/
   output_eq : ∀ var offset, (main var).output offset = output var offset
@@ -396,22 +406,21 @@ class ElaboratedCircuit (F: Type) [Field F] (β: TypeMap) [ProvableType β] (Out
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.local_length ElaboratedCircuit.output
 
-def Soundness (F: Type) [Field F] [circuit : ElaboratedCircuit F β (Var α F)]
-  (assumptions: β F → Prop)
-  (spec: β F → α F → Prop) :=
+def Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
+    (assumptions: β F → Prop) (spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
-    ∀ offset : ℕ, ∀ env,
-    -- for all inputs that satisfy the assumptions
-    ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
-    assumptions b →
-    -- if the constraints hold
-    constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
-    -- the spec holds on the input and output
-    let a := eval env (circuit.output b_var offset)
-    spec b a
+  ∀ offset : ℕ, ∀ env,
+  -- for all inputs that satisfy the assumptions
+  ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
+  assumptions b →
+  -- if the constraints hold
+  constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let a := eval env (circuit.output b_var offset)
+  spec b a
 
-def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit F β (Var α F)]
-  (assumptions: β F → Prop) :=
+def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
+    (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
   env.uses_local_witnesses_completeness (circuit.main b_var |>.operations offset) →
@@ -421,13 +430,12 @@ def Completeness (F: Type) [Field F] (α: TypeMap) [circuit : ElaboratedCircuit 
   -- the constraints hold
   constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-extends ElaboratedCircuit F β (Var α F) where
+structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β] extends ElaboratedCircuit F β α where
   -- β = inputs, α = outputs
   assumptions: β F → Prop
   spec: β F → α F → Prop
-  soundness: Soundness F assumptions spec
-  completeness: Completeness F α assumptions
+  soundness: Soundness F inferInstance assumptions spec
+  completeness: Completeness F (α:=α) inferInstance assumptions
 
 namespace Circuit
 @[circuit_norm]
@@ -457,7 +465,7 @@ In other words, for `FormalAssertion`s the spec must be an equivalent reformulat
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
 structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
-extends ElaboratedCircuit F β Unit where
+extends ElaboratedCircuit F β unit where
   assumptions: β F → Prop
   spec: β F → Prop
 
@@ -525,8 +533,8 @@ def added_witness : Operation F → ℕ
   | subcircuit s => s.local_length
   | _ => 0
 
-instance [Repr F] : ToString (Operation F) where
-  toString
+instance [Repr F] : Repr (Operation F) where
+  reprPrec op _ := match op with
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
@@ -546,6 +554,9 @@ def OperationsList.toList : OperationsList F → List (Operation F)
 def Circuit.operation_list (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
   (circuit |>.operations offset).toList
 
+instance [Repr F] : Repr (OperationsList F) where
+  reprPrec ops _ := reprStr ops.toList
+
 -- witness generation
 
 def WitnessGenerators (F: Type) (n: ℕ) := Vector (Environment F → F) n
@@ -556,14 +567,14 @@ def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (E
     let ws := witness_generators ops
     match op with
     | witness m compute =>
-      ⟨ (Vector.init (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
+      ⟨ (Vector.mapFinRange m (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
         simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
     | assert _ | lookup _ =>
       ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 
 def Operations.witness_generators {n: ℕ} : (ops: Operations F n) → Vector (Environment F → F) ops.local_length
   | .empty _ => #v[]
-  | .witness ops _ c => witness_generators ops ++ Vector.init (fun i env => (c env).get i)
+  | .witness ops m c => witness_generators ops ++ Vector.mapFinRange m (fun i env => (c env).get i)
   | .assert ops _ => witness_generators ops
   | .lookup ops _ => witness_generators ops
   | .subcircuit ops s => witness_generators ops ++ (s.local_length_eq ▸ FlatOperation.witness_generators s.ops)
@@ -575,6 +586,23 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
     let env i := acc.getD i 0
     acc.push (compute ⟨ env ⟩))
   #[]
+
+-- generic folding over `Operations` resulting in a proposition
+
+structure Operations.Condition (F: Type) [Field F] where
+  witness (n: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop
+  assert (n: ℕ) : Expression F → Prop
+  lookup (n: ℕ) : Lookup F → Prop
+  subcircuit (n: ℕ) : SubCircuit F n → Prop
+
+def Operations.forAll (condition : Operations.Condition F) : {n : ℕ} → Operations F n → Prop
+  | _, .empty _ => True
+  | n + .(m), .witness ops m c => ops.forAll condition ∧ condition.witness n m c
+  | n, .assert ops e => ops.forAll condition ∧ condition.assert n e
+  | n, .lookup ops l => ops.forAll condition ∧ condition.lookup n l
+  | n + _, .subcircuit ops s => ops.forAll condition ∧ condition.subcircuit n s
+
+-- `circuit_norm` attributes
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
 attribute [circuit_norm] bind StateT.bind
@@ -594,15 +622,32 @@ attribute [circuit_norm] Vector.map_mk List.map_toArray List.map_cons List.map_n
 attribute [circuit_norm] Vector.append_singleton Vector.mk_append_mk Vector.push_mk
   Array.append_singleton Array.append_empty List.push_toArray
   List.nil_append List.cons_append List.append_toArray
-  Vector.init Vector.natInit Vector.toArray_push Array.push_toList List.append_assoc
+  Vector.toArray_push Array.push_toList List.append_assoc
   Vector.eq_mk Vector.mk_eq
 
--- simplify `vector.get 0` (which occurs in ProvableType definitions)
--- TODO handle other small indices as well
-attribute [circuit_norm] Vector.get Fin.val_eq_zero List.getElem_toArray
-  List.getElem_cons_zero Fin.cast_eq_self List.getElem_cons_succ
-  Vector.getElem_mk Vector.getElem_toArray Vector.getElem_map Fin.getElem_fin
-  Fin.coe_cast Fin.isValue
+-- `getElem` lemmas should be tried before expanding Vectors/Lists
+attribute [circuit_norm ↓] Fin.getElem_fin
+  Vector.getElem_map Vector.getElem_mapFinRange Vector.getElem_mapRange Vector.getElem_finRange
+  Vector.getElem_push Vector.getElem_set Vector.getElem_cast
+  Vector.getElem_mk Vector.getElem_toArray
+  List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
+
+/-
+lemmas that would expand `Vector.{mapRange, mapFinRange}` are not added to the simp set,
+because they would sometimes be applied too eagerly where using the corresponding `getElem` lemma is much better
+-/
+-- attribute [circuit_norm] Vector.mapRange_zero Vector.mapRange_succ Vector.mapFinRange_succ Vector.mapFinRange_zero
+
+-- simplify Vector.mapFinRange
+attribute [circuit_norm]
+    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
+
+-- simplify stuff like (3 : Fin 8).val = 3 % 8
+attribute [circuit_norm] Fin.coe_ofNat_eq_mod
+
+-- simplify `vector.get i` (which occurs in ProvableType definitions) and similar
+attribute [circuit_norm] Vector.get Fin.val_eq_zero
+  Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero

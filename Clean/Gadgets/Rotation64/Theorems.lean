@@ -1,9 +1,11 @@
 import Clean.Utils.Field
+import Clean.Utils.Bitwise
 import Clean.Types.U64
 
 variable {p : ℕ} [Fact p.Prime]
 
 namespace Gadgets.Rotation64.Theorems
+open Bitwise (rot_right64)
 
 def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
@@ -14,12 +16,6 @@ def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^(8 - offset.val))
   let high := x / (2^(8 - offset.val))
   low * (2^offset.val) + high
-
-def rot_right64 (x : ℕ) (offset : ℕ) : ℕ :=
-  let offset := offset % 64
-  let low := x % (2^offset)
-  let high := x / (2^offset)
-  low * (2^(64 - offset)) + high
 
 def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     rot_right64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by

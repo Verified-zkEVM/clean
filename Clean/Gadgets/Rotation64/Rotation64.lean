@@ -14,9 +14,7 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Gadgets.Rotation64.Theorems (rot_right64)
-open Gadgets.Rotation64 (byte_rotation_lookup)
-
+open Bitwise (rot_right64)
 
 /--
   Rotate the 64-bit integer by `offset` bits

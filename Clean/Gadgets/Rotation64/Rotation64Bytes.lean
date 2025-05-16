@@ -5,8 +5,8 @@ import Clean.Utils.Primes
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 
-open Gadgets.Rotation64.Theorems (rot_right64)
-open Gadgets.Rotation64.Theorems (soundnessCase1 soundnessCase2 soundnessCase3 soundnessCase4 soundnessCase5 soundnessCase6 soundnessCase7)
+open Bitwise (rot_right64)
+open Rotation64.Theorems (soundnessCase1 soundnessCase2 soundnessCase3 soundnessCase4 soundnessCase5 soundnessCase6 soundnessCase7)
 
 @[reducible]
 def Inputs (F : Type) :=  U64 F
@@ -44,7 +44,7 @@ def assumptions (input : Inputs (F p)) := input.is_normalized
 def spec (offset : Fin 8) (x : Inputs (F p)) (y: Outputs (F p)) :=
   y.value = rot_right64 x.value (offset.val * 8) ∧ y.is_normalized
 
-instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Outputs (F p)) where
+instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs Outputs where
   main := rot64_bytes off
   local_length _ := 0
   output input i0 :=
@@ -72,7 +72,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs (Var Outputs (
     repeat rfl
 
 
-theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circuit:=elaborated off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -143,7 +143,7 @@ theorem soundness (off : Fin 8) : Soundness (F p) assumptions (spec off) (circui
     · simp [U64.is_normalized]
       tauto
 
-theorem completeness (off : Fin 8) : Completeness (F p) Outputs assumptions (circuit := elaborated off) := by
+theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _
   fin_cases off
   repeat

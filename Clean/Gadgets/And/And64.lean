@@ -36,7 +36,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.is_normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (Var U64 (F p)) where
+instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main
   local_length _ := 8
   output _ i := var_from_offset U64 i
@@ -69,16 +69,16 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat rw [Bitwise.and_xor_sum]
   repeat assumption
 
-theorem soundness : Soundness (F p) assumptions spec := by
+theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
   cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
-  simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,
+  simp only [circuit_norm, subcircuit_norm, eval, var_from_offset, Vector.mapRange,
     main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
     U64.is_normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness : Completeness (F p) U64 assumptions := by
+theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, subcircuit_norm, eval, var_from_offset,

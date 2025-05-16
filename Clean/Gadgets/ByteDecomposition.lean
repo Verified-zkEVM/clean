@@ -58,7 +58,7 @@ def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   low.val = x.val % (2^offset.val) ∧
   high.val = x.val / (2^offset.val)
 
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field (Var Outputs (F p)) where
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := byte_decomposition offset
   local_length _ := 2
   output _ i0 := var_from_offset Outputs i0
@@ -209,8 +209,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
     assumption
 
 
-
-theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv x h_eval as
   simp only [assumptions] at as
   simp [circuit_norm, byte_decomposition, elaborated] at henv

@@ -36,6 +36,8 @@ instance (T: Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 
 namespace U64
+def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
+  ⟨ f x.x0, f x.x1, f x.x2, f x.x3, f x.x4, f x.x5, f x.x6, f x.x7 ⟩
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
@@ -74,7 +76,6 @@ def value (x: U64 (F p)) :=
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem value_lt_of_normalized {x : U64 (F p)} (hx: x.is_normalized) : x.value < 2^64 := by
-  let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
   simp_all only [value, is_normalized]
   linarith
 
@@ -104,14 +105,14 @@ def value_nat (x: U64 ℕ) :=
   it into four limbs of 8 bits each.
 -/
 def decompose_nat (x: ℕ) : U64 (F p) :=
-  let x0 := FieldUtils.mod x 256 (by linarith [p_large_enough.elim])
-  let x1 := FieldUtils.mod (FieldUtils.floordiv x 256) 256 (by linarith [p_large_enough.elim])
-  let x2 := FieldUtils.mod (FieldUtils.floordiv x 256^2) 256 (by linarith [p_large_enough.elim])
-  let x3 := FieldUtils.mod (FieldUtils.floordiv x 256^3) 256 (by linarith [p_large_enough.elim])
-  let x4 := FieldUtils.mod (FieldUtils.floordiv x 256^4) 256 (by linarith [p_large_enough.elim])
-  let x5 := FieldUtils.mod (FieldUtils.floordiv x 256^5) 256 (by linarith [p_large_enough.elim])
-  let x6 := FieldUtils.mod (FieldUtils.floordiv x 256^6) 256 (by linarith [p_large_enough.elim])
-  let x7 := FieldUtils.mod (FieldUtils.floordiv x 256^7) 256 (by linarith [p_large_enough.elim])
+  let x0 := x % 256
+  let x1 : ℕ := (x / 256) % 256
+  let x2 : ℕ := (x / 256^2) % 256
+  let x3 : ℕ := (x / 256^3) % 256
+  let x4 : ℕ := (x / 256^4) % 256
+  let x5 : ℕ := (x / 256^5) % 256
+  let x6 : ℕ := (x / 256^6) % 256
+  let x7 : ℕ := (x / 256^7) % 256
   ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
 
 /--
@@ -143,13 +144,43 @@ lemma normalized_u64 (x : U64 (F p)) : x.is_normalized → x.value < 2^64 := by
   intros
   linarith
 
+def from_u64 (x : UInt64) : U64 (F p) :=
+  decompose_nat x.val
+
 def value_u64 (x : U64 (F p)) (h : x.is_normalized) : UInt64 :=
   UInt64.ofNatCore x.value (normalized_u64 x h)
 
+lemma from_u64_normalized (x : UInt64) : (from_u64 (p:=p) x).is_normalized := by
+  simp only [is_normalized, from_u64, decompose_nat]
+  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
+    have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
+    rw [FieldUtils.val_lt_p]
+    assumption
+    linarith [p_large_enough.elim]
+  simp [h]
 
+theorem value_from_u64_eq (x : UInt64) : value (from_u64 (p:=p) x) = x.toNat := by
+  simp only [value_u64, value_horner, from_u64, decompose_nat, UInt64.val_val_eq_toNat]
+  set x := x.toNat
+  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
+    rw [ZMod.val_cast_of_lt]
+    have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
+    linarith [p_large_enough.elim]
+  simp only [h]
+  have : 2^8 = 256 := rfl
+  simp only [this]
+  have : x < 256^8 := by simp [x, UInt64.toNat_lt_size]
+  have : x / 256^7 % 256 = x / 256^7 := by rw [Nat.mod_eq_of_lt]; omega
+  rw [this]
+  have div_succ_pow (n : ℕ) : x / 256^(n + 1) = (x / 256^n) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
+  have mod_add_div (n : ℕ) : x / 256^n % 256 + 256 * (x / 256^(n + 1)) = x / 256^n := by
+    rw [div_succ_pow n, Nat.mod_add_div]
+  simp only [mod_add_div]
+  rw [div_succ_pow 1, Nat.pow_one, Nat.mod_add_div, Nat.mod_add_div]
 end U64
 
 namespace U64.AssertNormalized
+open Gadgets (ByteLookup ByteTable)
 
 /--
   Assert that a 64-bit unsigned integer is normalized.
@@ -157,14 +188,14 @@ namespace U64.AssertNormalized
 -/
 def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
-  lookup (Gadgets.ByteLookup x0)
-  lookup (Gadgets.ByteLookup x1)
-  lookup (Gadgets.ByteLookup x2)
-  lookup (Gadgets.ByteLookup x3)
-  lookup (Gadgets.ByteLookup x4)
-  lookup (Gadgets.ByteLookup x5)
-  lookup (Gadgets.ByteLookup x6)
-  lookup (Gadgets.ByteLookup x7)
+  lookup (ByteLookup x0)
+  lookup (ByteLookup x1)
+  lookup (ByteLookup x2)
+  lookup (ByteLookup x3)
+  lookup (ByteLookup x4)
+  lookup (ByteLookup x5)
+  lookup (ByteLookup x6)
+  lookup (ByteLookup x7)
 
 def assumptions (_input : U64 (F p)) := True
 
@@ -177,15 +208,15 @@ def circuit : FormalAssertion (F p) U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
-    repeat rw [Gadgets.ByteTable.equiv]
+    simp [spec, circuit_norm, u64_assert_normalized, ByteLookup, is_normalized]
+    repeat rw [ByteTable.equiv]
     simp_all [circuit_norm, eval]
 
   completeness := by
     rintro i0 env x_var
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [spec, circuit_norm, u64_assert_normalized, Gadgets.ByteLookup, is_normalized]
-    repeat rw [Gadgets.ByteTable.equiv]
+    simp [spec, circuit_norm, u64_assert_normalized, ByteLookup, is_normalized]
+    repeat rw [ByteTable.equiv]
     simp_all [circuit_norm, eval]
 
 end U64.AssertNormalized
