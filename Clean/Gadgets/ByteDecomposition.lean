@@ -139,6 +139,23 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have high_byte : high.val < 256 := by linarith
   have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
 
+  have low_b := low.val.toUInt32
+  have high_b := high.val.toUInt32
+  have x_b := x.val.toUInt32
+
+  -- The heavy lifting is done by using a SAT solver
+  have h_decomposition_bv (offset : UInt32) :
+      offset < 256 →
+      low_b < offset →
+      high_b < 256 - offset →
+      x_b < 256 → x_b = low_b + high_b * offset →
+      low_b = x_b % offset ∧ high_b = x_b / offset := by
+    bv_decide
+
+  -- now it is left to prove that the bv variant is equivalent
+  -- to the field variant of the theorem
+
+
   sorry
 
 
