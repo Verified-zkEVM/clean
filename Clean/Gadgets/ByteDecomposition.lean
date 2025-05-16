@@ -131,6 +131,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
   obtain ⟨⟨low_lt, high_lt⟩, c⟩ := h_holds
   simp_all [h_input]
+  simp only [assumptions] at x_byte
   set low := env.get i0
   set high := env.get (i0 + 1)
   have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
@@ -139,24 +140,71 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have high_byte : high.val < 256 := by linarith
   have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
 
-  have low_b := low.val.toUInt32
-  have high_b := high.val.toUInt32
-  have x_b := x.val.toUInt32
+  set low_b := UInt32.ofNat low.val
+  set high_b := UInt32.ofNat high.val
+  set x_b := UInt32.ofNat x.val
 
   -- The heavy lifting is done by using a SAT solver
-  have h_decomposition_bv (offset : UInt32) :
-      offset < 256 →
-      low_b < offset →
-      high_b < 256 - offset →
-      x_b < 256 → x_b = low_b + high_b * offset →
-      low_b = x_b % offset ∧ high_b = x_b / offset := by
-    bv_decide
+  have h_decomposition_bv (base : UInt32) :
+      base < 256 →
+      low_b < base →
+      high_b < 256 - base →
+      x_b < 256 → x_b = low_b + high_b * base →
+      low_b = x_b % base ∧ high_b = x_b / base := by
+    bv_check "ByteDecomposition.lean-Gadgets.ByteDecomposition.soundness-153-4.lrat"
 
   -- now it is left to prove that the bv variant is equivalent
   -- to the field variant of the theorem
+  have two_power_lt_bv : UInt32.ofNat (2^offset.val) < 256 := by
+    apply Nat.mod_lt_of_lt
+    have : (UInt32.toBitVec 256).toNat = 256 := by simp only [UInt32.toBitVec_ofNat,
+      BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
+    linarith
 
+  have low_b_lt : low_b < UInt32.ofNat (2 ^ offset.val) := by
+    sorry
 
-  sorry
+  have high_b_lt : high_b < 256 - UInt32.ofNat (2^offset.val) := by
+    sorry
+
+  have x_lt : x_b < 256 := by sorry
+
+  have eq_holds_bv : x_b = low_b + high_b * UInt32.ofNat (2^offset.val) := by sorry
+
+  specialize h_decomposition_bv (UInt32.ofNat (2^offset.val))
+    two_power_lt_bv low_b_lt high_b_lt x_lt eq_holds_bv
+
+  obtain ⟨h1, h2⟩ := h_decomposition_bv
+
+  have two_power_mod : (2^offset.val % 2 ^ 32) = 2^offset.val := by
+    rw [Nat.mod_eq_iff_lt]
+    linarith
+    simp only [Nat.reducePow, ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, low_b, x_b]
+
+  have low_mod : low.val % 2^32 = low.val := by
+    rw [Nat.mod_eq_iff_lt]
+    linarith
+    simp only [Nat.reducePow, ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, low_b, x_b]
+
+  have high_mod : high.val % 2^32 = high.val := by
+    rw [Nat.mod_eq_iff_lt]
+    linarith
+    simp only [Nat.reducePow, ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, low_b, x_b]
+
+  have x_mod : x.val % 2^32 = x.val := by
+    rw [Nat.mod_eq_iff_lt]
+    linarith
+    simp only [Nat.reducePow, ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, low_b, x_b]
+
+  constructor
+  · apply_fun UInt32.toNat at h1
+    simp only [UInt32.toNat_ofNat, UInt32.toNat_mod, low_b, x_b] at h1
+    rw [low_mod, x_mod, two_power_mod] at h1
+    assumption
+  · apply_fun UInt32.toNat at h2
+    simp only [UInt32.toNat_ofNat, UInt32.toNat_div, high_b, x_b, low_b] at h2
+    rw [high_mod, x_mod, two_power_mod] at h2
+    assumption
 
 
 
