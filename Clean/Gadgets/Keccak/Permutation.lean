@@ -20,6 +20,7 @@ def state_var (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   Vector.mapRange 25 (fun j => var_from_offset U64 (n + i * 1528 + j * 16 + 1128))
   |>.set 0 (var_from_offset U64 (n + i * 1528 + 1520))
 
+-- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
