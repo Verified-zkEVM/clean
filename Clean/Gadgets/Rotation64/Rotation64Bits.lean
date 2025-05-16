@@ -68,21 +68,29 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
       x0_l x1_l x2_l x3_l x4_l x5_l x6_l x7_l
       x0_h x1_h x2_h x3_h x4_h x5_h x6_h x7_h : F p
     }
-    (h_x0 : ZMod.val x0 = ZMod.val x0_l + ZMod.val x1_l * 2 ^ offset.val)
-    (h_x1 : ZMod.val x1 = ZMod.val x2_l + ZMod.val x3_l * 2 ^ offset.val)
-    (h_x2 : ZMod.val x2 = ZMod.val x4_l + ZMod.val x5_l * 2 ^ offset.val)
-    (h_x3 : ZMod.val x3 = ZMod.val x6_l + ZMod.val x7_l * 2 ^ offset.val)
-    (h_x4 : ZMod.val x4 = ZMod.val x0_h + ZMod.val x1_h * 2 ^ offset.val)
-    (h_x5 : ZMod.val x5 = ZMod.val x2_h + ZMod.val x3_h * 2 ^ offset.val)
-    (h_x6 : ZMod.val x6 = ZMod.val x4_h + ZMod.val x5_h * 2 ^ offset.val)
-    (h_x7 : ZMod.val x7 = ZMod.val x6_h + ZMod.val x7_h * 2 ^ offset.val)
-    (eq0 : x2_l * 2 ^ offset.val + (x1_l - y0) = 0)
-    (eq1 : x4_l * 2 ^ offset.val + (x3_l - y1) = 0)
-    (eq2 : x6_l * 2 ^ offset.val + (x5_l - y2) = 0)
-    (eq3 : x0_h * 2 ^ offset.val + (x7_l - y3) = 0)
-    (eq4 : x2_h * 2 ^ offset.val + (x1_h - y4) = 0)
-    (eq5 : x4_h * 2 ^ offset.val + (x3_h - y5) = 0)
-    (eq6 : x6_h * 2 ^ offset.val + (x5_h - y6) = 0)
+    (h_x0_l : x0_l.val = x0.val % 2 ^ offset.val)
+    (h_x0_h : x0_h.val = x0.val / 2 ^ offset.val)
+    (h_x1_l : x1_l.val = x1.val % 2 ^ offset.val)
+    (h_x1_h : x1_h.val = x1.val / 2 ^ offset.val)
+    (h_x2_l : x2_l.val = x2.val % 2 ^ offset.val)
+    (h_x2_h : x2_h.val = x2.val / 2 ^ offset.val)
+    (h_x3_l : x3_l.val = x3.val % 2 ^ offset.val)
+    (h_x3_h : x3_h.val = x3.val / 2 ^ offset.val)
+    (h_x4_l : x4_l.val = x4.val % 2 ^ offset.val)
+    (h_x4_h : x4_h.val = x4.val / 2 ^ offset.val)
+    (h_x5_l : x5_l.val = x5.val % 2 ^ offset.val)
+    (h_x5_h : x5_h.val = x5.val / 2 ^ offset.val)
+    (h_x6_l : x6_l.val = x6.val % 2 ^ offset.val)
+    (h_x6_h : x6_h.val = x6.val / 2 ^ offset.val)
+    (h_x7_l : x7_l.val = x7.val % 2 ^ offset.val)
+    (h_x7_h : x7_h.val = x7.val / 2 ^ offset.val)
+    (eq0 : x1_l * 2 ^ offset.val + (x0_h - y0) = 0)
+    (eq1 : x2_l * 2 ^ offset.val + (x1_h - y1) = 0)
+    (eq2 : x3_l * 2 ^ offset.val + (x2_h - y2) = 0)
+    (eq3 : x4_l * 2 ^ offset.val + (x3_h - y3) = 0)
+    (eq4 : x5_l * 2 ^ offset.val + (x4_h - y4) = 0)
+    (eq5 : x6_l * 2 ^ offset.val + (x5_h - y5) = 0)
+    (eq6 : x7_l * 2 ^ offset.val + (x6_h - y6) = 0)
     (eq7 : x0_l * 2 ^ offset.val + (x7_h - y7) = 0):
     let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3 + x4.val * 256 ^ 4 +
       x5.val * 256 ^ 5 + x6.val * 256 ^ 6 + x7.val * 256 ^ 7
@@ -121,10 +129,14 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   simp [and_assoc] at h_holds
   obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
   specialize h_decomposition x_normalized
-  obtain ⟨h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7⟩ := h_decomposition
+  obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,
+    h_x4_l, h_x4_h, h_x5_l, h_x5_h, h_x6_l, h_x6_h, h_x7_l, h_x7_h⟩ := h_decomposition
   simp only [U64.value, y_normalized, and_true]
+  rw [rotation64_bits_soundness offset
+    h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
+    h_x4_l h_x4_h h_x5_l h_x5_h h_x6_l h_x6_h h_x7_l h_x7_h
+    eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7]
 
-  rw [rotation64_bits_soundness offset h_x0 h_x1 h_x2 h_x3 h_x4 h_x5 h_x6 h_x7 eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
   sorry
