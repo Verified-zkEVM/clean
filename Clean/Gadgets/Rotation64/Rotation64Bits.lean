@@ -3,7 +3,7 @@ import Clean.Circuit.SubCircuit
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Gadgets.Rotation64.Rotation64Bytes
 import Clean.Gadgets.Rotation64.ByteRotationTable
-import Clean.Gadgets.ByteDecomposition
+import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 import Clean.Circuit.Provable
 
 namespace Gadgets.Rotation64Bits
@@ -99,7 +99,6 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     y_val = (x_val) % 2 ^ (offset.val % 64) * 2 ^ (64 - offset.val % 64) + (x_val) / 2 ^ (offset.val % 64) := by
 
   rw [←add_sub_assoc, sub_eq_add_neg] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
-  have h := ByteDecomposition.byte_decomposition_lift offset y0 x2_l x1_l
   sorry
 
 set_option maxHeartbeats 10000000

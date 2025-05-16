@@ -3,7 +3,6 @@ import Clean.Circuit.SubCircuit
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Gadgets.Rotation64.Rotation64Bytes
 import Clean.Gadgets.Rotation64.Rotation64Bits
-import Clean.Gadgets.ByteDecomposition
 import Clean.Circuit.Provable
 
 namespace Gadgets.Rotation64
