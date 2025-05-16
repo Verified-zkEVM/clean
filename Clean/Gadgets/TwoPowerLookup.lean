@@ -5,9 +5,9 @@ namespace Gadgets.TwoPowerLookup
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-def from_byte_limb {two_power : Fin 8} (x: Fin (2 ^ two_power.val)) : F p :=
+def from_byte_limb {two_power : Fin 9} (x: Fin (2 ^ two_power.val)) : F p :=
   FieldUtils.nat_to_field x.val (by
-    have two_power_small : 2^two_power.val < 2 ^ 8 := by
+    have two_power_small : 2^two_power.val < 2 ^ 9 := by
       apply Nat.pow_lt_pow_of_lt
       · simp only [Nat.one_lt_ofNat]
       · exact two_power.is_lt
@@ -16,14 +16,15 @@ def from_byte_limb {two_power : Fin 8} (x: Fin (2 ^ two_power.val)) : F p :=
 /--
   Family of tables that contains all the values of `F p` that are less than `2^two_power`
   where `two_power` is a (compile-time) parameter of the table.
+  Supports `two_power` values from `0` to `8` included.
 -/
-def ByteLessThanTwoPower (two_power : Fin 8) : Table (F p) where
+def ByteLessThanTwoPower (two_power : Fin 9) : Table (F p) where
   name := "ByteLessThanTwoPower"
   length := 2^two_power.val
   arity := 1
   row i := #v[from_byte_limb i]
 
-def soundness (two_power : Fin 8) (x: F p) :
+def soundness (two_power : Fin 9) (x: F p) :
     (ByteLessThanTwoPower two_power).contains (#v[x]) → x.val < 2^two_power.val := by
   dsimp only [ByteLessThanTwoPower, Table.contains]
   rintro ⟨ i, h: #v[x] = #v[from_byte_limb i] ⟩
@@ -31,7 +32,7 @@ def soundness (two_power : Fin 8) (x: F p) :
   rw [FieldUtils.nat_to_field_eq x h']
   exact i.is_lt
 
-def completeness (two_power : Fin 8) (x: F p) :
+def completeness (two_power : Fin 9) (x: F p) :
     x.val < 2^two_power.val → (ByteLessThanTwoPower two_power).contains (#v[x]) := by
   intro h
   dsimp only [ByteLessThanTwoPower, Table.contains]
@@ -43,11 +44,11 @@ def completeness (two_power : Fin 8) (x: F p) :
   simp only [h', List.cons.injEq, and_true]
   simp [FieldUtils.nat_to_field_of_val_eq_iff]
 
-def equiv (two_power : Fin 8) (x: F p) :
+def equiv (two_power : Fin 9) (x: F p) :
     (ByteLessThanTwoPower two_power).contains (#v[x]) ↔ x.val < 2^two_power.val :=
   ⟨soundness two_power x, completeness two_power x⟩
 
-def lookup (two_power : Fin 8) (x: Expression (F p)) : Lookup (F p) := {
+def lookup (two_power : Fin 9) (x: Expression (F p)) : Lookup (F p) := {
   table := ByteLessThanTwoPower two_power
   entry := #v[x]
   index := fun env =>
