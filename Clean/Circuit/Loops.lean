@@ -129,29 +129,6 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       congr
       simp [Vector.induct_push_push]
 
-
-instance ConstantLawfulCircuits.from_foldlM_vector' [Inhabited β] {circuit : β → α → Circuit F β}
-  (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (z, x) => circuit z x) :
-    ConstantLawfulCircuits (xs.foldlM circuit) := by
-  apply ConstantLawfulCircuits.from_constant_length (.from_foldlM_vector (fun z x =>
-    lawful.to_single _ (z, x) |>.toLawfulCircuit) xs)
-  intro init n
-  simp only [←LawfulCircuit.final_offset_eq, Circuit.final_offset]
-  suffices h : ∀ ops init,
-    (xs.foldlM circuit init ops).2.offset = ops.offset + ((xs.foldlM circuit default).final_offset 0) by rw [h]
-  induction xs using Vector.induct
-  case nil => intros; rfl
-  case cons x xs ih =>
-    intro ops init
-    rw [Vector.foldlM_toList, Vector.foldlM_toList, Vector.cons, List.foldlM_cons, List.foldlM_cons]
-    simp only [←Vector.foldlM_toList]
-    show (xs.foldlM circuit ..).2.offset = _ + (xs.foldlM circuit ..).2.offset
-    rw [ih, ih]
-    let prod_circuit := fun (z, x) => circuit z x
-    show (prod_circuit (init, x) _).2.offset + _ = ops.offset + ((prod_circuit (default, x) _).2.offset + _)
-    simp only [ConstantLawfulCircuits.offset_independent]
-    ac_rfl
-
 lemma ConstantLawfulCircuits.from_foldlM_vector.offset_independent {circuit : β → α → Circuit F β} [Inhabited β]
   (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (acc, x) => circuit acc x) (init : β) (ops : OperationsList F) :
     (xs.foldlM circuit init ops).2.offset = ops.offset + lawful.local_length * m := by
