@@ -69,21 +69,40 @@ theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
 
 theorem soundness (offset : Fin 8) (x low high : F p)
     (x_byte : ZMod.val x < 256)
-    (offset_positive : 0 < offset)
     (low_lt : ZMod.val low < 2 ^ offset.val)
-    (high_lt : ZMod.val high < 2 ^ (-offset).val)
+    (high_lt : ZMod.val high < 2 ^ (8-offset.castSucc).val)
     (c : low + high * 2^offset.val + -x = 0) :
     low.val = x.val % 2^offset.val ∧ high.val = x.val / 2^offset.val := by
 
   have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
-  have two_power_lt' : 2^(-offset).val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) (by simp only [Fin.is_lt])
+  have two_power_lt' : 2^(8-offset.castSucc).val ≤ 2^8 := by
+    apply Nat.pow_le_pow_of_le
+    linarith
+    rw [Fin.sub_val_of_le]
+    · rw [show @Fin.val 9 8 = 8 by rfl]
+      simp only [Nat.reduceAdd, Fin.coe_castSucc, tsub_le_iff_right, le_add_iff_nonneg_right,
+        zero_le]
+    · rw [Fin.le_def]
+      simp only [Nat.reduceAdd, Fin.coe_castSucc, Fin.isValue]
+      rw [show @Fin.val 9 8 = 8 by rfl]
+      linarith [offset.is_lt]
+
   have low_byte : low.val < 256 := by linarith
   have high_byte : high.val < 256 := by linarith
   have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
 
-  simp only [Fin.coe_neg] at high_lt
-  rw [Nat.mod_eq_of_lt (by apply Nat.sub_lt; linarith; assumption)] at high_lt
-
+  have high_lt' : high.val < 2^(8 - offset.val) := by
+    have eq : 2^(8 - offset.castSucc).val = 2^(8 - offset.val) := by
+      congr
+      rw [Fin.sub_val_of_le]
+      · rw [show @Fin.val 9 8 = 8 by rfl]
+        simp only [Nat.reduceAdd, Fin.coe_castSucc]
+      · rw [Fin.le_def]
+        simp only [Nat.reduceAdd, Fin.coe_castSucc, Fin.isValue]
+        rw [show @Fin.val 9 8 = 8 by rfl]
+        linarith [offset.is_lt]
+    rw [eq] at high_lt
+    assumption
 
   set low_b := UInt32.ofNat low.val
   set high_b := UInt32.ofNat high.val

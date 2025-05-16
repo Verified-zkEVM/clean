@@ -47,14 +47,14 @@ def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (V
 
   let high ← witness fun env => FieldUtils.floordiv (env x) (2^offset.val)
 
-  lookup (TwoPowerLookup.lookup (offset) low)
-  lookup (TwoPowerLookup.lookup (8 - offset) high)
+  lookup (TwoPowerLookup.lookup (offset.castSucc) low)
+  lookup (TwoPowerLookup.lookup (8 - offset.castSucc) high)
 
   assert_zero (low + high * ((2 : ℕ)^offset.val : F p) - x)
 
   return ⟨ low, high ⟩
 
-def assumptions (offset : Fin 8) (x : field (F p)) := x.val < 256 ∧ offset > 0
+def assumptions (x : field (F p)) := x.val < 256
 
 def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
@@ -67,8 +67,8 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   output _ i0 := var_from_offset Outputs i0
 
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) (assumptions offset) (spec offset) := by
-  intro i0 env x_var x h_input ⟨x_byte, offset_positive⟩ h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+  intro i0 env x_var x h_input x_byte h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp [circuit_norm, elaborated, byte_decomposition, TwoPowerLookup.lookup, TwoPowerLookup.equiv, h_input] at h_holds
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
@@ -77,11 +77,11 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   set low := env.get i0
   set high := env.get (i0 + 1)
 
-  exact Theorems.soundness offset x low high x_byte offset_positive low_lt high_lt c
+  exact Theorems.soundness offset x low high x_byte low_lt high_lt c
 
 
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) (assumptions offset) := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv x h_eval as
   simp only [assumptions] at as
   simp [circuit_norm, byte_decomposition, elaborated] at henv
@@ -98,7 +98,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) (
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
   main := byte_decomposition offset
-  assumptions:= assumptions offset
+  assumptions
   spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
@@ -143,7 +143,7 @@ def u64_byte_decomposition (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) 
 
   return ⟨ low, high ⟩
 
-def assumptions (offset : Fin 8) (x : U64 (F p)) := x.is_normalized ∧ offset.val > 0
+def assumptions (x : U64 (F p)) := x.is_normalized
 
 def spec (offset : Fin 8) (input : U64 (F p)) (out: Outputs (F p)) :=
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
@@ -168,7 +168,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U64 Outputs where
     high := ⟨var ⟨i0 + 1⟩, var ⟨i0 + 3⟩, var ⟨i0 + 5⟩, var ⟨i0 + 7⟩, var ⟨i0 + 9⟩, var ⟨i0 + 11⟩, var ⟨i0 + 13⟩, var ⟨i0 + 15⟩⟩
   }
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) (assumptions offset) (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input ⟨x_byte, offset_positive⟩ h_holds
   simp [circuit_norm, elaborated, u64_byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
   simp [subcircuit_norm, ByteDecomposition.circuit, ByteDecomposition.elaborated,
@@ -189,7 +189,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) (assump
   simp_all only [gt_iff_lt, Fin.val_pos_iff, forall_const, and_self]
 
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) (assumptions offset) := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ henv ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval as
   simp only [assumptions] at as
   sorry
@@ -197,7 +197,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) (
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 Outputs := {
   elaborated offset with
   main := u64_byte_decomposition offset
-  assumptions := assumptions offset
+  assumptions
   spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
