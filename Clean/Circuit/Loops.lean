@@ -639,17 +639,23 @@ lemma foldl.soundness [NeZero m] :
       constraints_hold.soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
   simp only [constraints_hold.soundness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
 
--- @[circuit_norm]
-lemma foldl.completeness :
+@[circuit_norm]
+lemma foldl.completeness [NeZero m] :
   constraints_hold.completeness env (foldl xs init body lawful const_out |>.operations n) ↔
-    ∀ i : Fin m, constraints_hold.completeness env (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
-  simp only [constraints_hold.completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
+    constraints_hold.completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      constraints_hold.completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [constraints_hold.completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
 
--- @[circuit_norm]
-lemma foldl.uses_local_witnesses :
+@[circuit_norm]
+lemma foldl.uses_local_witnesses [NeZero m] :
   env.uses_local_witnesses_completeness (foldl xs init body lawful const_out |>.operations n) ↔
-    ∀ i : Fin m, env.uses_local_witnesses_completeness (body (foldlAcc n xs body init i) xs[i.val] |>.operations (n + i*(body default default).local_length)) := by
-  simp only [env.uses_local_witnesses_completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll]
+    env.uses_local_witnesses_completeness (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      env.uses_local_witnesses_completeness (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [env.uses_local_witnesses_completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
 
 @[circuit_norm]
 lemma foldl.local_length_eq :
