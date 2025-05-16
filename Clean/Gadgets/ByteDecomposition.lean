@@ -288,7 +288,7 @@ def spec (offset : Fin 8) (input : U64 (F p)) (out: Outputs (F p)) :=
 
 -- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.output
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U64 (Var Outputs (F p)) where
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U64 Outputs where
   main := u64_byte_decomposition offset
   local_length _ := 16
   output _ i0 := {
@@ -296,7 +296,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U64 (Var Outputs (F p)
     high := ⟨var ⟨i0 + 1⟩, var ⟨i0 + 3⟩, var ⟨i0 + 5⟩, var ⟨i0 + 7⟩, var ⟨i0 + 9⟩, var ⟨i0 + 11⟩, var ⟨i0 + 13⟩, var ⟨i0 + 15⟩⟩
   }
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_byte h_holds
   simp [circuit_norm, elaborated, u64_byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
   simp [subcircuit_norm, ByteDecomposition.circuit, ByteDecomposition.elaborated,
@@ -318,7 +318,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   sorry
 
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) Outputs assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ henv ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval as
   simp only [assumptions] at as
   sorry

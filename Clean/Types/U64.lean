@@ -263,7 +263,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
     simp [circuit_norm, u64_copy, spec, h_eval]
     simp [circuit_norm, u64_copy, Gadgets.Equality.elaborated] at h
     simp [subcircuit_norm, eval] at h
-    simp_all [eval, Expression.eval, circuit_norm, h]
+    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset]
     have h0 := h 0
     have h1 := h 1
     have h2 := h 2
@@ -286,7 +286,6 @@ def circuit : FormalCircuit (F p) U64 U64 where
     simp only [Fin.isValue, show @Fin.val 8 7 = 7 by rfl, List.getElem_cons_succ,
       List.getElem_cons_zero] at h7
     simp_all
-
 
 end U64.Copy
 

@@ -37,7 +37,7 @@ def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
 
 -- #eval! (rot64 (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (rot64 (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) where
+def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64 off
   local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
@@ -81,14 +81,13 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   -- reason about rotation
   rw [Theorems.rot_right_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
   rw [hy]
-  rw [show @Fin.val 64 8 = 8 by rfl, Nat.mod_mod]
   rw [show(offset.val / 8) % 8 = offset.val / 8 by
     apply Nat.mod_eq_of_lt
     apply Nat.div_lt_of_lt_mul
     exact offset.is_lt]
   rw [Nat.div_add_mod']
 
-theorem completeness (offset : Fin 64) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
+theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
   simp [circuit_norm, rot64, elaborated, subcircuit_norm,

@@ -14,7 +14,7 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Gadgets.Rotation64.Theorems (rot_right64)
+open Bitwise (rot_right64)
 
 /--
   Rotate the 64-bit integer by `offset` bits
@@ -49,7 +49,7 @@ def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
 
 -- #eval! (rot64_bits (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (rot64_bits (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 (Var U64 (F p)) where
+def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bits off
   local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
@@ -103,11 +103,11 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   sorry
 
 set_option maxHeartbeats 10000000
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
 
   -- TODO: this simplification is slow
-  simp [circuit_norm, elaborated, rot64_bits, U64.witness] at h_holds
+  simp [circuit_norm, elaborated, rot64_bits, U64.witness, var_from_offset] at h_holds
   simp [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.circuit, circuit_norm] at h_holds
   simp [U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, U64ByteDecomposition.spec,
     U64ByteDecomposition.assumptions, U64.AssertNormalized.spec, circuit_norm, eval] at h_holds
@@ -138,7 +138,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
     eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7]
 
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (circuit := elaborated offset) U64 assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   sorry
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
