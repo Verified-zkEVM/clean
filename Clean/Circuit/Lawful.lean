@@ -121,6 +121,9 @@ instance ConstantLawfulCircuits.to_single (circuit : α → Circuit F β) (a : �
   offset_independent := offset_independent a
   append_only := append_only a
 
+instance LawfulCircuit.from_constants {circuit : α → Circuit F β} (lawful : ConstantLawfulCircuits circuit) (a : α) :
+    LawfulCircuit (circuit a) := ConstantLawfulCircuits.to_single circuit a |>.toLawfulCircuit
+
 syntax "infer_lawful_circuit" : tactic
 
 macro_rules
