@@ -51,7 +51,7 @@ def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (V
 
   return ⟨ low, high ⟩
 
-def assumptions (x : field (F p)) := x.val < 256
+def assumptions (offset : Fin 8) (x : field (F p)) := x.val < 256 ∧ offset > 0
 
 def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
@@ -124,14 +124,13 @@ theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
   rw [Nat.mod_eq_of_lt sum_val'] at h
   simp only [h]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
-  intro i0 env x_var x h_input x_byte h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) (assumptions offset) (spec offset) := by
+  intro i0 env x_var x h_input ⟨x_byte, offset_positive⟩ h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp [circuit_norm, elaborated, byte_decomposition, TwoPowerLookup.lookup, TwoPowerLookup.equiv, h_input] at h_holds
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
   obtain ⟨⟨low_lt, high_lt⟩, c⟩ := h_holds
   simp_all [h_input]
-  simp only [assumptions] at x_byte
   set low := env.get i0
   set high := env.get (i0 + 1)
   have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
@@ -139,6 +138,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have low_byte : low.val < 256 := by linarith
   have high_byte : high.val < 256 := by linarith
   have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
+
+  simp only [Fin.coe_neg] at high_lt
+  rw [Nat.mod_eq_of_lt (by apply Nat.sub_lt; linarith; assumption)] at high_lt
 
   set low_b := UInt32.ofNat low.val
   set high_b := UInt32.ofNat high.val
@@ -161,23 +163,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
       BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     linarith
 
-  have low_b_lt : low_b < UInt32.ofNat (2^offset.val) := by
-    simp [low_b]
-    simp [UInt32.ofNat]
-    sorry
-
-  have high_b_lt : high_b < 256 / UInt32.ofNat (2^offset.val) := by
-    sorry
-
-  have x_lt : x_b < 256 := by sorry
-
-  have eq_holds_bv : x_b = low_b + high_b * UInt32.ofNat (2^offset.val) := by sorry
-
-  specialize h_decomposition_bv (UInt32.ofNat (2^offset.val))
-    two_power_lt_bv low_b_lt high_b_lt x_lt eq_holds_bv
-
-  obtain ⟨h1, h2⟩ := h_decomposition_bv
-
   have two_power_mod : (2^offset.val % 2 ^ 32) = 2^offset.val := by
     rw [Nat.mod_eq_iff_lt]
     linarith
@@ -198,6 +183,45 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
     linarith
     simp only [Nat.reducePow, ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, low_b, x_b]
 
+  have low_b_lt : low_b < UInt32.ofNat (2^offset.val) := by
+    simp only [low_b]
+    rw [UInt32.lt_iff_toNat_lt]
+    simp only [UInt32.toNat_ofNat, low_b]
+    rw [low_mod, two_power_mod]
+    assumption
+
+  have high_b_lt : high_b < 256 / UInt32.ofNat (2^offset.val) := by
+    simp only [high_b]
+    rw [UInt32.lt_iff_toNat_lt]
+    simp only [UInt32.toNat_ofNat, UInt32.toNat_div, UInt32.reduceToNat, low_b, high_b]
+    rw [high_mod, two_power_mod]
+    rw [show 256 = 2^8 by rfl, Nat.pow_div (by linarith [offset.is_lt]) (by linarith [offset.is_lt])]
+    assumption
+
+  have x_lt : x_b < 256 := by
+    simp only [x_b]
+    rw [UInt32.lt_iff_toNat_lt]
+    simp only [UInt32.toNat_ofNat, UInt32.reduceToNat, high_b, low_b, x_b]
+    rw [x_mod]
+    assumption
+
+  have eq_holds_bv : x_b = low_b + high_b * UInt32.ofNat (2^offset.val) := by
+    simp only [x_b, low_b, high_b]
+    rw [←UInt32.toNat_inj]
+    simp only [UInt32.toNat_ofNat, UInt32.toNat_add, UInt32.toNat_mul,
+      Nat.mul_mod_mod, Nat.mod_mul_mod, Nat.add_mod_mod, Nat.mod_add_mod, high_b, low_b, x_b]
+    rw [x_mod]
+    have h : (low.val + high.val * (2^offset.val)) % 2^32 = low.val + high.val * (2^offset.val) := by
+      apply Nat.mod_eq_of_lt
+      linarith [p_large_enough.elim]
+    rw [h]
+    assumption
+
+  specialize h_decomposition_bv (UInt32.ofNat (2^offset.val))
+    two_power_lt_bv low_b_lt high_b_lt x_lt eq_holds_bv
+
+  obtain ⟨h1, h2⟩ := h_decomposition_bv
+
   constructor
   · apply_fun UInt32.toNat at h1
     simp only [UInt32.toNat_ofNat, UInt32.toNat_mod, low_b, x_b] at h1
@@ -209,7 +233,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
     assumption
 
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) (assumptions offset) := by
   rintro i0 env x_var henv x h_eval as
   simp only [assumptions] at as
   simp [circuit_norm, byte_decomposition, elaborated] at henv
@@ -226,7 +250,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
   main := byte_decomposition offset
-  assumptions
+  assumptions:= assumptions offset
   spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
