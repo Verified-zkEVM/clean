@@ -148,10 +148,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have h_decomposition_bv (base : UInt32) :
       base < 256 →
       low_b < base →
-      high_b < 256 - base →
+      high_b < 256 / base →
       x_b < 256 → x_b = low_b + high_b * base →
       low_b = x_b % base ∧ high_b = x_b / base := by
-    bv_check "ByteDecomposition.lean-Gadgets.ByteDecomposition.soundness-153-4.lrat"
+    bv_decide
 
   -- now it is left to prove that the bv variant is equivalent
   -- to the field variant of the theorem
@@ -161,10 +161,12 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
       BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
     linarith
 
-  have low_b_lt : low_b < UInt32.ofNat (2 ^ offset.val) := by
+  have low_b_lt : low_b < UInt32.ofNat (2^offset.val) := by
+    simp [low_b]
+    simp [UInt32.ofNat]
     sorry
 
-  have high_b_lt : high_b < 256 - UInt32.ofNat (2^offset.val) := by
+  have high_b_lt : high_b < 256 / UInt32.ofNat (2^offset.val) := by
     sorry
 
   have x_lt : x_b < 256 := by sorry
