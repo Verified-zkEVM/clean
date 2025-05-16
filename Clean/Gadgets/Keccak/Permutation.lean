@@ -119,6 +119,7 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   spec
   soundness
   -- TODO why does this time out??
+  -- TODO: `inferInstance` in `FormalCircuit` might be slow, shouldn't be necessary in latest Lean
   -- completeness
   completeness := by sorry
 
