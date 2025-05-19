@@ -237,19 +237,19 @@ def Circuit (F : Type) [Field F] := StateM (OperationsList F)
 namespace Circuit
 @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  circuit offset |>.snd.offset
+  circuit ⟨ offset, .empty offset ⟩ |>.snd.offset
 
 @[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F (circuit.final_offset offset) :=
-  circuit offset |>.snd.withLength
+  circuit ⟨ offset, .empty offset ⟩ |>.snd.withLength
 
 @[reducible, circuit_norm]
 def output (circuit: Circuit F α) (offset := 0) : α :=
-  circuit offset |>.fst
+  circuit ⟨ offset, .empty offset ⟩ |>.fst
 
 @[reducible, circuit_norm]
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
-  (circuit.operations offset).local_length
+  circuit ⟨ offset, .empty offset ⟩ |>.snd.withLength.local_length
 
 -- core operations we can do in a circuit
 
