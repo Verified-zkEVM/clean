@@ -180,10 +180,8 @@ def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=
   | 0 => #v[]
   | k + 1 => mapRange k create |>.push (create k)
 
-@[simp]
 theorem mapRange_zero {create: ℕ → α} : mapRange 0 create = #v[] := rfl
 
-@[simp]
 theorem mapRange_succ {n} {create: ℕ → α} :
     mapRange (n + 1) create = (mapRange n create).push (create n) := rfl
 

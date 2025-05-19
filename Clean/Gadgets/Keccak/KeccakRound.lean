@@ -4,9 +4,8 @@ import Clean.Gadgets.Keccak.Chi
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Specs.Keccak256
 
-namespace Gadgets.Keccak256.RoundFunction
+namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
-instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
 open Specs.Keccak256
 
 def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
@@ -106,4 +105,4 @@ def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
   soundness := soundness rc,
   completeness := completeness rc,
 }
-end Gadgets.Keccak256.RoundFunction
+end Gadgets.Keccak256.KeccakRound
