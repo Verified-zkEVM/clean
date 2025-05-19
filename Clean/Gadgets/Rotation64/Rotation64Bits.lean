@@ -101,19 +101,22 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   rw [←add_sub_assoc, sub_eq_add_neg] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
   sorry
 
-set_option maxHeartbeats 10000000
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
 
-  -- TODO: this simplification is slow
-  simp [circuit_norm, elaborated, rot64_bits, U64.witness, var_from_offset] at h_holds
-  simp [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.circuit, circuit_norm] at h_holds
-  simp [U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, U64ByteDecomposition.spec,
-    U64ByteDecomposition.assumptions, U64.AssertNormalized.spec, circuit_norm, eval] at h_holds
+  dsimp only [circuit_norm, elaborated, rot64_bits, U64.witness, var_from_offset] at h_holds
+  simp only [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.circuit, circuit_norm] at h_holds
+  simp only [U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, add_zero,
+    ElaboratedCircuit.local_length, ElaboratedCircuit.output, eval, from_elements, size, to_vars,
+    to_elements, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    U64ByteDecomposition.assumptions, Expression.eval, U64ByteDecomposition.spec,
+    U64.AssertNormalized.spec, Vector.mapRange_succ, Vector.mapRange_zero, Vector.push_mk,
+    Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append, forall_const,
+    Expression.eval.eq_1] at h_holds
 
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset]
-  ring_nf at *
+  ring_nf at h_input h_holds ⊢
 
   rw [
     show Expression.eval env x0_var = x0 by injections h_input,
@@ -125,7 +128,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     show Expression.eval env x6_var = x6 by injections h_input,
     show Expression.eval env x7_var = x7 by injections h_input,
   ] at h_holds
-  simp [and_assoc] at h_holds
+  simp only [and_assoc] at h_holds
   obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,
