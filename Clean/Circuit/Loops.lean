@@ -517,7 +517,7 @@ def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β)
 section
 variable {env : Environment F} {m n : ℕ} [NeZero m] [Nonempty β] {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.soundness :
   constraints_hold.soundness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*(body 0).local_length)) := by
@@ -525,7 +525,7 @@ lemma mapFinRange.soundness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.completeness :
   constraints_hold.completeness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*(body 0).local_length)) := by
@@ -533,7 +533,7 @@ lemma mapFinRange.completeness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.uses_local_witnesses :
   env.uses_local_witnesses_completeness (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (body i |>.operations (n + i*(body 0).local_length)) := by
@@ -541,7 +541,7 @@ lemma mapFinRange.uses_local_witnesses :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.local_length_eq :
     (mapFinRange m body lawful).local_length n = m * (body 0).local_length := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
@@ -550,13 +550,13 @@ lemma mapFinRange.local_length_eq :
   rw [LawfulCircuit.local_length_eq]
   ac_rfl
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.initial_offset_eq :
     (mapFinRange m body lawful |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.initial_offset_eq]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.output_eq :
   (mapFinRange m body lawful).output n =
     Vector.mapFinRange m fun i => (body i).output (n + i*(body 0).local_length) := by
@@ -573,7 +573,7 @@ section
 variable {env : Environment F} {m n : ℕ} [Inhabited α] [Nonempty β] {xs : Vector α m}
   {body : α → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.soundness :
   constraints_hold.soundness env (map xs body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
@@ -581,7 +581,7 @@ lemma map.soundness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.completeness :
   constraints_hold.completeness env (map xs body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
@@ -589,7 +589,7 @@ lemma map.completeness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.uses_local_witnesses :
   env.uses_local_witnesses_completeness (map xs body lawful |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
@@ -597,7 +597,7 @@ lemma map.uses_local_witnesses :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.local_length_eq :
     (map xs body lawful).local_length n = m * (body default).local_length := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
@@ -607,13 +607,13 @@ lemma map.local_length_eq :
   ac_rfl
 
 omit [Inhabited α] in
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.initial_offset_eq :
     (map xs body lawful |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.initial_offset_eq]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.output_eq :
   (map xs body lawful).output n =
     xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
@@ -630,7 +630,7 @@ variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : V
   {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
   {const_out : lawful.constant_output}
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma foldl.soundness [NeZero m] :
   constraints_hold.soundness env (foldl xs init body lawful const_out |>.operations n) ↔
     constraints_hold.soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
@@ -639,7 +639,7 @@ lemma foldl.soundness [NeZero m] :
       constraints_hold.soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
   simp only [constraints_hold.soundness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma foldl.completeness [NeZero m] :
   constraints_hold.completeness env (foldl xs init body lawful const_out |>.operations n) ↔
     constraints_hold.completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
@@ -648,7 +648,7 @@ lemma foldl.completeness [NeZero m] :
       constraints_hold.completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
   simp only [constraints_hold.completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma foldl.uses_local_witnesses [NeZero m] :
   env.uses_local_witnesses_completeness (foldl xs init body lawful const_out |>.operations n) ↔
     env.uses_local_witnesses_completeness (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
@@ -657,7 +657,7 @@ lemma foldl.uses_local_witnesses [NeZero m] :
       env.uses_local_witnesses_completeness (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
   simp only [env.uses_local_witnesses_completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma foldl.local_length_eq :
     (foldl xs init body lawful const_out).local_length n = m * (body default default).local_length := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
@@ -666,13 +666,13 @@ lemma foldl.local_length_eq :
   rw [←lawful.local_length_eq (default, default) 0]
   ac_rfl
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma foldl.initial_offset_eq :
     (foldl xs init body lawful const_out |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
   apply lawful_loop.initial_offset_eq
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma foldl.output_eq [NeZero m] :
   (foldl xs init body lawful const_out).output n =
     (body default (xs[m-1]'(Nat.pred_lt (NeZero.ne m)))).output (n + (m - 1)*(body default default).local_length) := by
