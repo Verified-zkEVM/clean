@@ -28,20 +28,15 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   local_length _ := 36672
   output _ i0 := state_var i0 23
 
-  local_length_eq state i0 := by
-    rw [main, Circuit.foldl.local_length_eq]
-    simp only [circuit_norm, KeccakRound.circuit]
-  initial_offset_eq state i0 := by
-    rw [main, Circuit.foldl.initial_offset_eq]
-  output_eq state i0 := by
-    simp only [main, state_var, circuit_norm, KeccakRound.circuit]
+  local_length_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
+  initial_offset_eq state i0 := by simp only [main, circuit_norm]
+  output_eq state i0 := by simp only [main, state_var, circuit_norm, KeccakRound.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
   dsimp only [elaborated, main] at h_holds
-  rw [Circuit.foldl.soundness] at h_holds
   simp only [circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.spec, KeccakRound.assumptions] at h_holds ⊢
@@ -79,9 +74,6 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
   dsimp only [elaborated, main, assumptions] at h_assumptions h_env ⊢
-  rw [Circuit.foldl.completeness]
-  rw [Circuit.foldl.uses_local_witnesses] at h_env
-
   simp only [h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.spec, KeccakRound.assumptions, zero_add, forall_const, true_and] at h_env ⊢
@@ -112,9 +104,6 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
       exact h_succ.left
   exact h_norm i hi'
 
--- TODO
--- set_option maxHeartbeats 800000
-
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   assumptions
   spec
@@ -122,6 +111,6 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   -- TODO why does this time out??
   -- TODO: `inferInstance` in `FormalCircuit` might be slow, shouldn't be necessary in latest Lean
   -- completeness
-  completeness := by sorry
+  completeness := by simp only [completeness]
 
 end Gadgets.Keccak256.Permutation
