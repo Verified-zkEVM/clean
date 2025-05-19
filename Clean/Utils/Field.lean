@@ -115,6 +115,30 @@ def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
 def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
+theorem mul_val_of_multiple (x: F p) (c: ℕ) (c_pos : c > 0) (c_lt : c < p) (x' : ℕ)
+    (h_eq: (c * x).val = c * x') (h_lt : c * x' < p) : (c * x).val = c * x.val := by
+  have x'_lt : x' < p := calc x'
+    _ = 1 * x' := by ring
+    _ ≤ c * x' := by apply Nat.mul_le_mul_right x' (Nat.succ_le_of_lt c_pos)
+    _ < p := h_lt
+  let x'_f : F p := nat_to_field x' x'_lt
+  have x'_val_eq : x'_f.val = x' := nat_to_field_eq x'_f rfl
+  have cx_val_eq : (c * x'_f).val = c * x' := by
+    rw [←x'_val_eq]
+    nth_rewrite 2 [←ZMod.val_cast_of_lt c_lt]
+    apply ZMod.val_mul_of_lt
+    rw [x'_val_eq, ZMod.val_cast_of_lt c_lt]
+    exact h_lt
+  rw [←cx_val_eq] at h_eq
+  obtain h_eq := ext h_eq
+  have c_pos_f : (c : F p) ≠ 0 := by
+    intro c_eq_zero
+    have c_val_eq_zero := congrArg ZMod.val c_eq_zero
+    rw [ZMod.val_zero, ZMod.val_cast_of_lt c_lt] at c_val_eq_zero
+    linarith
+  rw [mul_right_inj' c_pos_f] at h_eq
+  rw [h_eq, x'_val_eq, cx_val_eq]
+
 end FieldUtils
 
 -- utils related to bytes, and specifically field elements that are bytes (< 256)
