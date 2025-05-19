@@ -17,9 +17,95 @@ def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let high := x / (2^(8 - offset.val))
   low * (2^offset.val) + high
 
+
+-- TODO: remove when updating to new mathlib
+theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
+  Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
+
+theorem Nat.mod_mod_eq_mod_of_lt_right {a b c : Nat} (ha : a < c) : (a % b) % c = a % b :=
+  Nat.mod_eq_of_lt (Nat.lt_of_le_of_lt (Nat.mod_le _ _) ha)
+
+
 def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     rot_right64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
-  sorry
+  simp only [rot_right64]
+  simp only [BitVec.toNat_rotateRight]
+  simp only [Nat.shiftLeft_eq, Nat.mul_mod, dvd_refl, Nat.mod_mod_of_dvd]
+  simp only [Nat.mod_mod, UInt64.toNat_toBitVec_eq_toNat, UInt64.toNat_ofNat]
+  simp only [Nat.mod_eq_of_lt h]
+
+  by_cases cond : (offset % 64 = 0)
+  · simp only [cond, pow_zero, Nat.mod_one, tsub_zero, Nat.reducePow, zero_mul, Nat.div_one,
+    zero_add, Nat.shiftRight_zero, Nat.mod_self, mul_zero, Nat.zero_mod, Nat.or_zero]
+  · have h1 : 2^(64 - offset%64) < 2^64 := by
+      apply Nat.pow_lt_pow_of_lt
+      · linarith
+      · simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
+        simp [Nat.ne_zero_iff_zero_lt] at cond
+        assumption
+    rw [Nat.mod_eq_of_lt h1, Nat.shiftRight_eq_div_pow]
+    have low_lt : x / 2 ^ (offset % 64) < 2 ^ (64 - offset % 64) := by
+      rw [Nat.div_lt_iff_lt_mul (by apply Nat.two_pow_pos)]
+      rw [←Nat.pow_add, Nat.sub_add_cancel (by
+        have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
+        linarith)]
+      linarith
+    rw [mul_comm, Nat.mul_add_lt_is_or low_lt, Nat.or_comm]
+    congr
+    rw [Nat.mul_comm]
+    rw [←Nat.shiftLeft_eq, ←Nat.shiftLeft_eq, ←Nat.one_shiftLeft]
+
+    let x_bv := x.toUInt64
+    let offset_bv := (offset % 64).toUInt64
+    have h_sat : offset_bv < 64 → offset_bv > 0 →
+        (x_bv % 1<<<offset_bv) <<< (64 - offset_bv) = x_bv <<< (64 - offset_bv) := by
+      bv_check "Theorems.lean-Gadgets.Rotation64.Theorems.rot_right64_eq_bv_rotate-58-6.lrat"
+
+    have offset_bv_lt : offset_bv < 64 := by
+      simp only [offset_bv]
+      simp only [UInt64.lt_iff_toNat_lt, UInt64.toNat_ofNat, UInt64.reduceToNat]
+      apply Nat.mod_lt_of_lt
+      apply Nat.mod_lt offset (by linarith)
+
+    have offset_bv_pos : offset_bv > 0 := by
+      simp only [offset_bv] at offset_bv_lt ⊢
+      simp only [UInt64.lt_iff_toNat_lt, UInt64.toNat_ofNat, UInt64.reduceToNat] at offset_bv_lt ⊢
+      sorry
+
+    specialize h_sat offset_bv_lt offset_bv_pos
+    apply_fun UInt64.toNat at h_sat
+
+    simp only [UInt64.toNat_shiftLeft, UInt64.toNat_mod, UInt64.toNat_ofNat,
+      UInt64.reduceToNat, x_bv, offset_bv] at h_sat
+
+    rw [Nat.mod_eq_of_lt h] at h_sat
+    have h1 : (offset % 64 % 2 ^ 64 % 64) = offset % 64 := by
+      rw [Nat.mod_mod_eq_mod_of_lt_right (by apply Nat.mod_lt offset (by linarith))]
+      apply Nat.mod_eq_of_lt
+      have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
+      linarith
+
+    have h2 : (1 <<< (offset % 64) % 2 ^ 64) = 1 <<< (offset % 64) := by
+      apply Nat.mod_eq_of_lt
+      have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
+      rw [Nat.one_shiftLeft]
+      apply Nat.pow_lt_pow_of_lt
+      · linarith
+      · linarith
+
+    have h3 : (offset % 64).toUInt64 ≤ 64 := by
+      apply Nat.le_of_lt
+      simp only [UInt64.toNat_toBitVec_eq_toNat, UInt64.toNat_ofNat,
+        UInt64.toBitVec_ofNat, BitVec.toNat_ofNat, Nat.reduceMod, offset_bv]
+      have : offset % 64 < 64 := Nat.mod_lt offset (by linarith)
+      rw [Nat.mod_eq_of_lt (by linarith)]
+      simp only [Nat.reducePow, Nat.reduceMod, gt_iff_lt, offset_bv]
+      exact this
+
+    rw [h1, h2] at h_sat
+    rw [UInt64.toNat_sub_of_le _ _ h3] at h_sat
+    simp only [UInt64.reduceToNat, UInt64.toNat_ofNat, offset_bv, x_bv] at h_sat
+    sorry
 
 lemma rot_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
     rot_right64 x off1 = rot_right64 x off2 := by
