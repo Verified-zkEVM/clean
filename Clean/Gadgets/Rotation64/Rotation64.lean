@@ -61,7 +61,8 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
 
   simp [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.spec, Rotation64Bytes.assumptions,
-    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.spec, Rotation64Bits.assumptions] at h_holds
+    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.spec, Rotation64Bits.assumptions,
+    Vector.finRange] at h_holds
 
   simp [circuit_norm, spec, h_holds, elaborated]
   set y := eval env (var_from_offset U64 (i0 + 16))

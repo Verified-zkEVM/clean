@@ -172,7 +172,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   intro i0 env x_var ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input ⟨x_byte, offset_positive⟩ h_holds
   simp [circuit_norm, elaborated, u64_byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
   simp [subcircuit_norm, ByteDecomposition.circuit, ByteDecomposition.elaborated,
-    ByteDecomposition.assumptions, ByteDecomposition.spec, eval, circuit_norm, var_from_offset] at h_holds
+    ByteDecomposition.assumptions, ByteDecomposition.spec, eval, circuit_norm, var_from_offset, Vector.mapRange] at h_holds
 
   simp [assumptions, U64.is_normalized] at x_byte
   simp [eval, circuit_norm] at h_input
@@ -180,7 +180,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   simp only [spec, ↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
     ProvableStruct.eval.go, eval, from_elements, size, to_vars, to_elements, elaborated, add_zero,
     ElaboratedCircuit.output, Vector.map_mk, List.map_toArray, List.map_cons, Expression.eval,
-    List.map_nil]
+    List.map_nil, Vector.mapRange]
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ := h_input
   simp [h0, h1, h2, h3, h4, h5, h6, h7, and_assoc, var_from_offset] at h_holds
   clear h0 h1 h2 h3 h4 h5 h6 h7

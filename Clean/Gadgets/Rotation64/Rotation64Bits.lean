@@ -115,7 +115,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     Expression.eval.eq_1] at h_holds
 
   simp only [assumptions] at x_normalized
-  simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset]
+  simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
   ring_nf at h_input h_holds ⊢
 
   rw [
