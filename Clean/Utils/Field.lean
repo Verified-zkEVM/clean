@@ -115,12 +115,15 @@ def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
 def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
-theorem mul_val_of_dvd (x c : F p) (c_pos : c.val > 0) (h_dvd: c.val ∣ (c * x).val) :
-    (c * x).val = c.val * x.val := by
-  obtain ⟨x', h_eq⟩ := h_dvd
+theorem mul_val_of_dvd {x c : F p} :
+    c.val ∣ (c * x).val → (c * x).val = c.val * x.val := by
+  by_cases c_pos? : c = 0
+  · subst c_pos?; simp
+  intro ⟨x', h_eq⟩
   have h_lt : c.val * x' < p := by
     rw [←h_eq]
     apply ZMod.val_lt
+  have c_pos : c.val > 0 := ZMod.val_pos.mpr c_pos?
   have x'_lt : x' < p := calc x'
     _ = 1 * x' := by ring
     _ ≤ c.val * x' := by apply Nat.mul_le_mul_right x' (Nat.succ_le_of_lt c_pos)
@@ -134,15 +137,14 @@ theorem mul_val_of_dvd (x c : F p) (c_pos : c.val > 0) (h_dvd: c.val ∣ (c * x)
     exact h_lt
   rw [←cx_val_eq] at h_eq
   obtain h_eq := ext h_eq
-  have c_pos' : c ≠ 0 := ZMod.val_pos.mp c_pos
-  rw [mul_right_inj' c_pos'] at h_eq
+  rw [mul_right_inj' c_pos?] at h_eq
   rw [h_eq, x'_val_eq, cx_val_eq]
 
-theorem mul_nat_val_of_dvd (x: F p) (c: ℕ) (c_pos : c > 0) (c_lt : c < p)
+theorem mul_nat_val_of_dvd (x: F p) (c: ℕ) (c_lt : c < p)
     (h_dvd: ∃ x', (c * x).val = c * x') : (c * x).val = c * x.val := by
   have c_val_eq : c = (c : F p).val := by rw [ZMod.val_cast_of_lt c_lt]
   rw (occs := .pos [2]) [c_val_eq]
-  exact mul_val_of_dvd x (c : F p) (c_val_eq ▸ c_pos) (c_val_eq ▸ h_dvd)
+  exact mul_val_of_dvd (c_val_eq ▸ h_dvd)
 
 end FieldUtils
 
