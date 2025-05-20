@@ -109,7 +109,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   clear two_and_field x_y_val x_y_z_val h_xor z_lt
 
   -- crucial step: since 2 divides (2 * w).val, we can actually pull in .val
-  have two_mul_val : (2 * w).val = 2 * w.val := FieldUtils.mul_nat_val_of_dvd w 2
+  have two_mul_val : (2 * w).val = 2 * w.val := FieldUtils.mul_nat_val_of_dvd 2
     (by linarith [p_large_enough.elim]) two_and
 
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
