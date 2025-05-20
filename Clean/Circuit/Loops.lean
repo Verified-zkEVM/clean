@@ -1,4 +1,5 @@
 import Clean.Circuit.Lawful
+import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
 -- we prove a few properties about the circuit `forM xs circuit`, where `circuit : α → Circuit F Unit`
@@ -16,6 +17,13 @@ instance LawfulCircuit.from_mapM {circuit : α → Circuit F β} [∀ x : α, La
   case nil => rw [List.mapM_nil]; infer_instance
   case cons x xs ih =>  rw [List.mapM_cons]; infer_lawful_circuit
 
+instance LawfulCircuit.from_foldlM {circuit : β → α → Circuit F β}
+  (lawful : ∀ x z, LawfulCircuit (circuit z x)) (xs : List α) (init : β) :
+    LawfulCircuit (xs.foldlM circuit init) := by
+  induction xs generalizing init
+  case nil => rw [List.foldlM_nil]; infer_instance
+  case cons x xs ih => rw [List.foldlM_cons]; exact from_bind inferInstance inferInstance
+
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     forM xs body = forM xs.toList body := by
   rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
@@ -24,10 +32,19 @@ lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m]
     (fun v => v.toArray.toList) <$> (xs.mapM body) = xs.toList.mapM body := by
   rw [←Array.toList_mapM, ←Vector.toArray_mapM, Functor.map_map]
 
+lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : β → α → m β) (init : β) :
+    xs.foldlM body init = xs.toList.foldlM body init := by
+  rw [Vector.foldlM_mk, List.foldlM_toArray]
+
 instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
     LawfulCircuit (forM xs circuit) := by
   rw [Vector.forM_toList]
   apply from_forM
+
+instance LawfulCircuit.from_foldlM_vector {circuit : β → α → Circuit F β} (lawful : ∀ x z, LawfulCircuit (circuit z x)) {n : ℕ} (xs : Vector α n) (init : β) :
+    LawfulCircuit (xs.foldlM circuit init) := by
+  rw [Vector.foldlM_toList]
+  apply from_foldlM inferInstance
 
 namespace Circuit
 theorem forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
@@ -47,16 +64,16 @@ end Circuit
 
 lemma ConstantLawfulCircuit.from_mapM_vector.offset_independent {circuit : α → Circuit F β} [Nonempty β]
   {xs : Vector α m} [lawful: ConstantLawfulCircuits circuit] (ops : OperationsList F) :
-      (Vector.mapM circuit xs ops).2.offset = ops.offset + lawful.local_length * m := by
-    induction xs using Vector.induct_push
-    case nil => simp only [Vector.mapM_mk_empty, pure, StateT.pure, mul_zero, add_zero]
-    case push xs x ih =>
-      rename_i n'
-      rw [Vector.mapM_push]
-      simp only [bind_pure_comp] at ih ⊢
-      show (circuit x (xs.mapM circuit ops).2).2.offset = _
-      rw [lawful.offset_independent x (Vector.mapM circuit xs ops).2, ih]
-      ring
+    (Vector.mapM circuit xs ops).2.offset = ops.offset + lawful.local_length * m := by
+  induction xs using Vector.induct_push
+  case nil => simp only [Vector.mapM_mk_empty, pure, StateT.pure, mul_zero, add_zero]
+  case push xs x ih =>
+    rename_i n'
+    rw [Vector.mapM_push]
+    simp only [bind_pure_comp] at ih ⊢
+    show (circuit x (xs.mapM circuit ops).2).2.offset = _
+    rw [lawful.offset_independent x (Vector.mapM circuit xs ops).2, ih]
+    ring
 
 instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} [Nonempty β]
   (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) :
@@ -102,8 +119,8 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       simp only [Vector.mapM_push]
       let g (bs : Vector β n') := (do let b ← circuit x; pure (bs.push b))
       let bs := ((xs.mapM circuit) ops).1
-      let lawful' : LawfulCircuit (g bs) := by infer_lawful_circuit
       change (g bs ((xs.mapM circuit) ops).2).2 = _
+      let lawful' : LawfulCircuit (g bs) := by infer_lawful_circuit
       simp only [ih, lawful'.append_only, lawful', LawfulCircuit.final_offset, LawfulCircuit.operations]
       set k := lawful.local_length
       have h_offset : ops.offset + lawful.local_length * n' + lawful.local_length
@@ -112,6 +129,70 @@ instance ConstantLawfulCircuit.from_mapM_vector {circuit : α → Circuit F β} 
       rw [Operations.append_assoc]
       congr
       simp [Vector.induct_push_push]
+
+lemma ConstantLawfulCircuits.from_foldlM_vector.offset_independent {circuit : β → α → Circuit F β} [Inhabited β]
+  (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (acc, x) => circuit acc x) (init : β) (ops : OperationsList F) :
+    (xs.foldlM circuit init ops).2.offset = ops.offset + lawful.local_length * m := by
+  simp only
+  set k := lawful.local_length
+  induction xs using Vector.induct generalizing init ops
+  case nil => rfl
+  case cons x xs ih =>
+    rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+    simp only [←Vector.foldlM_toList]
+    show (xs.foldlM circuit ..).2.offset = _
+    rw [ih]
+    let prod_circuit := fun (z, x) => circuit z x
+    show (prod_circuit (init, x) _).2.offset + _ = _
+    simp only [ConstantLawfulCircuits.offset_independent]
+    ring
+
+instance ConstantLawfulCircuits.from_foldlM_vector [Inhabited β] {circuit : β → α → Circuit F β}
+  (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (acc, x) => circuit acc x) :
+    ConstantLawfulCircuits (xs.foldlM circuit) where
+
+  output init n := Fin.foldl m (fun acc i => lawful.output (acc, xs[i]) (n + lawful.local_length * i)) init
+  local_length := lawful.local_length * m
+  operations init n :=
+    let k := lawful.local_length
+    let lawful_loop := LawfulCircuit.from_foldlM_vector (fun x z => .from_constants lawful (z, x)) xs
+    cast (by rw [←LawfulCircuit.final_offset_eq, Circuit.final_offset, from_foldlM_vector.offset_independent])
+      ((lawful_loop init).operations n)
+
+  offset_independent := from_foldlM_vector.offset_independent xs lawful
+
+  output_independent init ops := by
+    simp only
+    induction xs using Vector.induct generalizing init ops
+    case nil => rfl
+    case cons x xs ih =>
+      rename_i n
+      rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+      simp only [←Vector.foldlM_toList]
+      show (xs.foldlM circuit ..).1 = _
+      rw [ih, Fin.foldl_succ]
+      simp only [Fin.getElem_fin, Fin.val_succ, Vector.getElem_mk, List.getElem_toArray,
+        List.getElem_cons_succ, Array.getElem_toList, Vector.getElem_toArray, Fin.val_zero,
+        List.getElem_cons_zero, mul_zero, add_zero]
+      congr
+      · funext acc i
+        let prod_circuit := fun (t : β × α) => circuit t.1 t.2
+        show output prod_circuit (acc, xs[i.val]) ((prod_circuit (init, x) _).2.offset + _) = _
+        rw [ConstantLawfulCircuits.offset_independent]
+        ring_nf
+        rfl
+      rw [←lawful.output_independent]
+
+  append_only init ops := by
+    let k := lawful.local_length
+    let lawful_loop := LawfulCircuit.from_foldlM_vector (fun x z => .from_constants lawful (z, x)) xs
+    simp only [LawfulCircuit.append_only, OperationsList.mk.injEq]
+    have h_offset : LawfulCircuit.final_offset (Vector.foldlM circuit init xs) ops.offset = ops.offset + lawful.local_length * m := by
+      rw [←LawfulCircuit.final_offset_eq, Circuit.final_offset, from_foldlM_vector.offset_independent]
+    constructor
+    · exact h_offset
+    congr
+    simp
 
 namespace Circuit.constraints_hold
 -- characterize `constraints_hold` for variants of `forM`
@@ -312,8 +393,108 @@ theorem mapFinRangeM_forAll {n : ℕ} {circuit : Fin m → Circuit F β} [lawful
   · intro h i
     rw [Vector.getElem_finRange]
     exact h i
-
 end constraints_hold
+
+section
+variable {env : Environment F} {prop : Operations.Condition F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α n}
+  {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
+
+def foldlAcc (m : ℕ) (xs : Vector α n) (body : β → α → Circuit F β) (init : β) (j : Fin n) : β :=
+  Fin.foldl j (fun acc i => (body acc xs[i.val]).output (m + i*(body default default).local_length)) init
+
+lemma foldlAcc_zero [NeZero n] : foldlAcc m xs body init 0 = init := by
+  simp [foldlAcc, Fin.foldl_zero]
+
+lemma foldlAcc_cons_succ (i : Fin n) (x : α) [lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2] :
+  foldlAcc m (Vector.cons x xs) body init i.succ =
+    foldlAcc ((body init x).final_offset m) xs body ((body init x).output m) i := by
+  let lawful_body : LawfulCircuit (body init x) := .from_constants lawful (init, x)
+  rw [lawful.final_offset_eq (init,x), ←lawful.local_length_eq (default, default) 0]
+  simp only [foldlAcc]
+  simp only [Fin.val_succ, Vector.cons, Vector.getElem_mk, List.getElem_toArray, Fin.foldl_succ,
+    List.getElem_cons_succ, Array.getElem_toList, Vector.getElem_toArray, add_mul, one_mul,
+    Fin.val_zero, List.getElem_cons_zero, zero_mul, add_zero]
+  ac_rfl
+
+theorem constraints_hold.foldM_vector_forAll {xs : Vector α n} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2} :
+  (xs.foldlM body init |>.operations m).forAll prop ↔
+    ∀ i : Fin n, (body (foldlAcc m xs body init i) xs[i.val] |>.operations (m + i*(body default default).local_length)).forAll prop := by
+
+  induction xs using Vector.induct generalizing m init with
+  | nil => simp; trivial
+  | cons x xs ih =>
+    rename_i n
+    let lawful_body (x : α) (acc : β) : LawfulCircuit (body acc x) := .from_constants lawful (acc, x)
+    let lawful_list (acc : β) : LawfulCircuit (List.foldlM body acc xs.toList) := by
+      apply LawfulCircuit.from_foldlM lawful_body
+    rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons, bind_forAll inferInstance inferInstance]
+    specialize ih (m:=(LawfulCircuit.final_offset (body init x) m)) (init:=(LawfulCircuit.output (body init x) m))
+    rw [Vector.foldlM_toList] at ih
+    rw [ih]
+    clear ih
+    rw [Fin.forall_fin_succ, foldlAcc_zero]
+    simp only [Fin.val_zero, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
+    rw [zero_mul, add_zero]
+    have h {p q r : Prop} : (q ↔ r) → (p ∧ q ↔ p ∧ r) := by tauto
+    apply h; clear h
+    have h {q r : Fin n → Prop} : (∀ i, (q i ↔ r i)) → ((∀ i, q i) ↔ (∀ i, r i)) := by simp_all
+    apply h; clear h
+    intro i
+    simp only [Fin.val_succ, List.getElem_cons_succ]
+    rw [Vector.getElem_toList]
+    rw [add_mul, one_mul, add_comm _ (body default default).local_length, ←add_assoc m]
+    have : LawfulCircuit.final_offset (body init x) m = m + lawful.local_length := by simp [lawful_body, lawful_norm]
+    rw [lawful.local_length_eq (default, default), ←this]
+    change _ ↔ Operations.forAll prop (body (foldlAcc m (Vector.cons x xs) body init i.succ) _ |>.operations _)
+    rw [←LawfulCircuit.output_eq, ←LawfulCircuit.final_offset_eq, ←foldlAcc_cons_succ]
+
+-- we can massively simplify the theory above when assuming the body's output is independent of the input
+
+theorem foldlAcc_const_succ (h_const_out : lawful.constant_output) (i : ℕ) (hi : i + 1 < n) :
+  foldlAcc m xs body init ⟨ i + 1, hi ⟩ =
+    (body default xs[i]).output (m + i*(body default default).local_length) := by
+  simp only [foldlAcc]
+  rw [lawful.output_eq (_, xs[i]), h_const_out, ←lawful.output_eq]
+  conv => lhs; lhs; intro acc i; rw [lawful.output_eq (acc, _), h_const_out, ←lawful.output_eq]
+  simp [Fin.foldl_const]
+
+theorem foldlAcc_const (h_const_out : lawful.constant_output) (i : ℕ) (hi : i < n) :
+  foldlAcc m xs body init ⟨ i, hi ⟩ = match i with
+    | 0 => init
+    | i + 1 => (body default xs[i]).output (m + i*(body default default).local_length) := by
+  rcases i with _ | i
+  · simp [foldlAcc]
+  · rw [foldlAcc_const_succ h_const_out]
+
+theorem constraints_hold.foldM_vector_forAll_const (h_const_out : lawful.constant_output) [NeZero n] :
+  (xs.foldlM body init |>.operations m).forAll prop ↔
+  (body init (xs[0]'(NeZero.pos n)) |>.operations m).forAll prop ∧
+  ∀ (i : ℕ) (hi : i + 1 < n),
+    let acc := (body default xs[i]).output (m + i*(body default default).local_length);
+    (body acc xs[i + 1] |>.operations (m + (i + 1)*(body default default).local_length)).forAll prop := by
+  rw [constraints_hold.foldM_vector_forAll (lawful:=lawful)]
+  set k := (body default default).local_length
+  simp only
+  constructor
+  · intro h
+    constructor
+    · specialize h 0
+      simp only [Fin.val_zero] at h
+      rw [foldlAcc_zero, zero_mul, add_zero] at h
+      exact h
+    · intro i hi
+      specialize h ⟨ i + 1, hi ⟩
+      rw [foldlAcc_const_succ h_const_out] at h
+      exact h
+  intro h i
+  rcases i with ⟨ _ | i, hi ⟩
+  · simp only [Fin.mk_zero', Fin.val_zero]
+    rw [foldlAcc_zero, zero_mul, add_zero]
+    exact h.left
+  · rw [foldlAcc_const_succ h_const_out]
+    exact h.right i hi
+
+end
 
 -- Loop constructs designed to simplify under `circuit_norm`
 
@@ -321,10 +502,22 @@ def mapFinRange (m : ℕ) [NeZero m] [Nonempty β] (body : Fin m → Circuit F �
     (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
   Vector.mapFinRangeM m body
 
+def map {m : ℕ} [Nonempty β] (xs : Vector α m) (body : α → Circuit F β)
+    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
+  xs.mapM body
+
+def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β) (body : β → α → Circuit F β)
+  (lawful : ConstantLawfulCircuits (fun (s, a) => body s a) := by infer_constant_lawful_circuits)
+  (_h_const_out : lawful.constant_output := by
+      simp only [lawful_norm, ConstantLawfulCircuits.constant_output]
+      intros
+      rfl) : Circuit F β :=
+  xs.foldlM body init
+
 section
 variable {env : Environment F} {m n : ℕ} [NeZero m] [Nonempty β] {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.soundness :
   constraints_hold.soundness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*(body 0).local_length)) := by
@@ -332,7 +525,7 @@ lemma mapFinRange.soundness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.completeness :
   constraints_hold.completeness env (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*(body 0).local_length)) := by
@@ -340,7 +533,7 @@ lemma mapFinRange.completeness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.uses_local_witnesses :
   env.uses_local_witnesses_completeness (mapFinRange m body lawful |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (body i |>.operations (n + i*(body 0).local_length)) := by
@@ -348,7 +541,7 @@ lemma mapFinRange.uses_local_witnesses :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.local_length_eq :
     (mapFinRange m body lawful).local_length n = m * (body 0).local_length := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
@@ -357,13 +550,13 @@ lemma mapFinRange.local_length_eq :
   rw [LawfulCircuit.local_length_eq]
   ac_rfl
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.initial_offset_eq :
     (mapFinRange m body lawful |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.initial_offset_eq]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma mapFinRange.output_eq :
   (mapFinRange m body lawful).output n =
     Vector.mapFinRange m fun i => (body i).output (n + i*(body 0).local_length) := by
@@ -376,15 +569,11 @@ lemma mapFinRange.output_eq :
   ac_rfl
 end
 
-def map {m : ℕ} [Nonempty β] (xs : Vector α m) (body : α → Circuit F β)
-    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
-  xs.mapM body
-
 section
 variable {env : Environment F} {m n : ℕ} [Inhabited α] [Nonempty β] {xs : Vector α m}
   {body : α → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.soundness :
   constraints_hold.soundness env (map xs body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.soundness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
@@ -392,7 +581,7 @@ lemma map.soundness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.completeness :
   constraints_hold.completeness env (map xs body lawful |>.operations n) ↔
     ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
@@ -400,7 +589,7 @@ lemma map.completeness :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.uses_local_witnesses :
   env.uses_local_witnesses_completeness (map xs body lawful |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
@@ -408,7 +597,7 @@ lemma map.uses_local_witnesses :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.local_length_eq :
     (map xs body lawful).local_length n = m * (body default).local_length := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
@@ -418,13 +607,13 @@ lemma map.local_length_eq :
   ac_rfl
 
 omit [Inhabited α] in
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.initial_offset_eq :
     (map xs body lawful |>.operations n).initial_offset = n := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.initial_offset_eq]
 
-@[circuit_norm]
+@[circuit_norm ↓]
 lemma map.output_eq :
   (map xs body lawful).output n =
     xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
@@ -433,6 +622,70 @@ lemma map.output_eq :
   simp only [lawful_loop, lawful_norm]
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_mapIdx, LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
+  ac_rfl
+end
+
+section
+variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+  {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
+  {const_out : lawful.constant_output}
+
+@[circuit_norm ↓]
+lemma foldl.soundness [NeZero m] :
+  constraints_hold.soundness env (foldl xs init body lawful const_out |>.operations n) ↔
+    constraints_hold.soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      constraints_hold.soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [constraints_hold.soundness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
+
+@[circuit_norm ↓]
+lemma foldl.completeness [NeZero m] :
+  constraints_hold.completeness env (foldl xs init body lawful const_out |>.operations n) ↔
+    constraints_hold.completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      constraints_hold.completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [constraints_hold.completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
+
+@[circuit_norm ↓]
+lemma foldl.uses_local_witnesses [NeZero m] :
+  env.uses_local_witnesses_completeness (foldl xs init body lawful const_out |>.operations n) ↔
+    env.uses_local_witnesses_completeness (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      env.uses_local_witnesses_completeness (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [env.uses_local_witnesses_completeness_iff_forAll, foldl, constraints_hold.foldM_vector_forAll_const const_out]
+
+@[circuit_norm ↓]
+lemma foldl.local_length_eq :
+    (foldl xs init body lawful const_out).local_length n = m * (body default default).local_length := by
+  let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
+  rw [lawful_loop.local_length_eq]
+  simp only [lawful_loop, lawful_norm]
+  rw [←lawful.local_length_eq (default, default) 0]
+  ac_rfl
+
+@[circuit_norm ↓]
+lemma foldl.initial_offset_eq :
+    (foldl xs init body lawful const_out |>.operations n).initial_offset = n := by
+  let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
+  apply lawful_loop.initial_offset_eq
+
+@[circuit_norm ↓]
+lemma foldl.output_eq [NeZero m] :
+  (foldl xs init body lawful const_out).output n =
+    (body default (xs[m-1]'(Nat.pred_lt (NeZero.ne m)))).output (n + (m - 1)*(body default default).local_length) := by
+  let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
+  rw [lawful_loop.output_eq]
+  simp only [lawful_loop, lawful_norm, ←lawful.output_eq]
+  rw [lawful.local_length_eq (default, default) 0]
+  have : m-1 < m := Nat.pred_lt (NeZero.ne m)
+  rw [lawful.output_eq (_, xs[m-1]), const_out, ←lawful.output_eq]
+  conv => lhs; lhs; intro acc i; rw [lawful.output_eq (acc, _), const_out, ←lawful.output_eq]
+  rcases m with _ | m
+  · simp at this
+  simp only [Fin.foldl_const, add_tsub_cancel_right, Fin.natCast_eq_last, Fin.val_last]
   ac_rfl
 end
 
