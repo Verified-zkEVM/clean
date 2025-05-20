@@ -115,6 +115,38 @@ def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
 def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
+theorem mul_val_of_dvd {x c : F p} :
+    c.val ∣ (c * x).val → (c * x).val = c.val * x.val := by
+  by_cases c_pos? : c = 0
+  · subst c_pos?; simp
+  intro ⟨x', h_eq⟩
+  have h_lt : c.val * x' < p := by
+    rw [←h_eq]
+    apply ZMod.val_lt
+  have c_pos : c.val > 0 := ZMod.val_pos.mpr c_pos?
+  have x'_lt : x' < p := calc x'
+    _ = 1 * x' := by ring
+    _ ≤ c.val * x' := by apply Nat.mul_le_mul_right x' (Nat.succ_le_of_lt c_pos)
+    _ < p := h_lt
+  let x'_f : F p := nat_to_field x' x'_lt
+  have x'_val_eq : x'_f.val = x' := nat_to_field_eq x'_f rfl
+  have cx_val_eq : (c * x'_f).val = c.val * x' := by
+    rw [←x'_val_eq]
+    apply ZMod.val_mul_of_lt
+    rw [x'_val_eq]
+    exact h_lt
+  rw [←cx_val_eq] at h_eq
+  obtain h_eq := ext h_eq
+  rw [mul_right_inj' c_pos?] at h_eq
+  rw [h_eq, x'_val_eq, cx_val_eq]
+
+theorem mul_nat_val_of_dvd {x: F p} (c: ℕ) (c_lt : c < p) {z : ℕ} :
+    (c * x).val = c * z → (c * x).val = c * x.val := by
+  have c_val_eq : c = (c : F p).val := by rw [ZMod.val_cast_of_lt c_lt]
+  rw (occs := .pos [2, 4]) [c_val_eq]
+  intro h_dvd
+  exact mul_val_of_dvd ⟨ z, h_dvd ⟩
+
 end FieldUtils
 
 -- utils related to bytes, and specifically field elements that are bytes (< 256)
