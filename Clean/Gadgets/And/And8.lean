@@ -110,7 +110,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- crucial step: since 2 divides (2 * w).val, we can actually pull in .val
   have two_mul_val : (2 * w).val = 2 * w.val := FieldUtils.mul_nat_val_of_dvd w 2
-    (by linarith [p_large_enough.elim]) ⟨ _, two_and ⟩
+    (by linarith [p_large_enough.elim]) two_and
 
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
   exact two_and

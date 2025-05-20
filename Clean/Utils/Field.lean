@@ -141,10 +141,10 @@ theorem mul_val_of_dvd {x c : F p} :
   rw [h_eq, x'_val_eq, cx_val_eq]
 
 theorem mul_nat_val_of_dvd (x: F p) (c: ℕ) (c_lt : c < p)
-    (h_dvd: ∃ x', (c * x).val = c * x') : (c * x).val = c * x.val := by
+    {z} (h_dvd: (c * x).val = c * z) : (c * x).val = c * x.val := by
   have c_val_eq : c = (c : F p).val := by rw [ZMod.val_cast_of_lt c_lt]
   rw (occs := .pos [2]) [c_val_eq]
-  exact mul_val_of_dvd (c_val_eq ▸ h_dvd)
+  exact mul_val_of_dvd (c_val_eq ▸ ⟨ z, h_dvd ⟩)
 
 end FieldUtils
 
