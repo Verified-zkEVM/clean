@@ -1,5 +1,6 @@
 import Lean
 import Clean.Tables.Fibonacci8
+import Clean.Table.WitnessGeneration
 import Clean.Table.Json
 
 open Tables.Fibonacci8Table
