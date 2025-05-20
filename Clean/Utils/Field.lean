@@ -138,7 +138,7 @@ theorem mul_val_of_dvd (x c : F p) (c_pos : c.val > 0) (h_dvd: c.val ∣ (c * x)
   rw [mul_right_inj' c_pos'] at h_eq
   rw [h_eq, x'_val_eq, cx_val_eq]
 
-theorem mul_val_nat_of_dvd (x: F p) (c: ℕ) (c_pos : c > 0) (c_lt : c < p)
+theorem mul_nat_val_of_dvd (x: F p) (c: ℕ) (c_pos : c > 0) (c_lt : c < p)
     (h_dvd: ∃ x', (c * x).val = c * x') : (c * x).val = c * x.val := by
   have c_val_eq : c = (c : F p).val := by rw [ZMod.val_cast_of_lt c_lt]
   rw (occs := .pos [2]) [c_val_eq]
