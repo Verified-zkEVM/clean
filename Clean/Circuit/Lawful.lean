@@ -71,6 +71,25 @@ instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
     show (g _ _).2 = _
     rw [append_only, output_independent, append_only, Operations.append_assoc]
 
+
+instance LawfulCircuit.from_map {f : α → β} {g : Circuit F α}
+    (g_lawful : LawfulCircuit g) : LawfulCircuit (f <$> g) where
+  output n := output g n |> f
+  final_offset n := final_offset g n
+  operations n := g_lawful.operations n
+
+  output_independent ops := by
+    simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq, output_independent]
+
+  offset_independent ops := by
+    simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq, output_independent,
+      offset_independent]
+
+  append_only ops := by
+    simp only [Functor.map, StateT.map, Id.pure_eq, Id.bind_eq, output_independent,
+      g_lawful.append_only]
+
+
 -- basic operations are (constant) lawful circuits
 
 instance : ConstantLawfulCircuits (F:=F) witness_var where
@@ -132,7 +151,9 @@ macro_rules
     try repeat infer_instance
     repeat (
       try intros
-      apply LawfulCircuit.from_bind
+      first
+        | apply LawfulCircuit.from_bind
+        | apply LawfulCircuit.from_map
       repeat infer_instance
     )))
 

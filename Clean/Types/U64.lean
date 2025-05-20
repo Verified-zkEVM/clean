@@ -4,6 +4,7 @@ import Clean.Utils.Bitwise
 import Clean.Circuit.Provable
 import Clean.Utils.Primes
 import Clean.Circuit.SubCircuit
+import Clean.Gadgets.Equality
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -228,5 +229,68 @@ def U64.witness (compute : Environment (F p) → U64 (F p)) := do
   let x ← ProvableType.witness compute
   assertion U64.AssertNormalized.circuit x
   return x
+
+
+namespace U64.Copy
+
+def u64_copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p))  := do
+  let y ← ProvableType.witness fun env =>
+    U64.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3) (env x.x4) (env x.x5) (env x.x6) (env x.x7)
+  assert_equals x y
+  return y
+
+def assumptions (_input : U64 (F p)) := True
+
+def spec (x y : U64 (F p)) := x = y
+
+def circuit : FormalCircuit (F p) U64 U64 where
+  main := u64_copy
+  assumptions := assumptions
+  spec := spec
+  local_length := 8
+  output inputs i0 := var_from_offset U64 i0
+  soundness := by
+    rintro i0 env x_var
+    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    simp [circuit_norm, u64_copy, spec, h_eval, eval, var_from_offset]
+    injections h_eval
+    intros h0 h1 h2 h3 h4 h5 h6 h7
+    aesop
+
+  completeness := by
+    rintro i0 env x_var
+    rintro h ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    simp [circuit_norm, u64_copy, spec, h_eval]
+    simp [circuit_norm, u64_copy, Gadgets.Equality.elaborated] at h
+    simp [subcircuit_norm, eval] at h
+    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
+    have h0 := h 0
+    have h1 := h 1
+    have h2 := h 2
+    have h3 := h 3
+    have h4 := h 4
+    have h5 := h 5
+    have h6 := h 6
+    have h7 := h 7
+    simp only [Fin.isValue, Fin.val_zero, add_zero, List.getElem_cons_zero] at h0
+    simp only [Fin.isValue, Fin.val_one, List.getElem_cons_succ, List.getElem_cons_zero] at h1
+    simp only [Fin.isValue, Fin.val_two, List.getElem_cons_succ, List.getElem_cons_zero] at h2
+    simp only [Fin.isValue, show @Fin.val 8 3 = 3 by rfl, List.getElem_cons_succ,
+      List.getElem_cons_zero] at h3
+    simp only [Fin.isValue, show @Fin.val 8 4 = 4 by rfl, List.getElem_cons_succ,
+      List.getElem_cons_zero] at h4
+    simp only [Fin.isValue, show @Fin.val 8 5 = 5 by rfl, List.getElem_cons_succ,
+      List.getElem_cons_zero] at h5
+    simp only [Fin.isValue, show @Fin.val 8 6 = 6 by rfl, List.getElem_cons_succ,
+      List.getElem_cons_zero] at h6
+    simp only [Fin.isValue, show @Fin.val 8 7 = 7 by rfl, List.getElem_cons_succ,
+      List.getElem_cons_zero] at h7
+    simp_all
+
+end U64.Copy
+
+@[reducible]
+def U64.copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+  subcircuit U64.Copy.circuit x
 
 end

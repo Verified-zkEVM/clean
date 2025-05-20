@@ -31,10 +31,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   local_length _ := 600
   output _ i0 := .mapRange 25 fun i => var_from_offset U64 (i0 + i*24 + 16)
 
-  local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit]
+  local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
   initial_offset_eq _ _ := by simp only [main, circuit_norm]
   output_eq state i0 := by
-    simp only [main, circuit_norm, Rotation64.circuit, Vector.mapRange]
+    simp only [main, circuit_norm, Rotation64.circuit, Vector.mapRange, Rotation64.elaborated]
     simp only [rhoPiConstants, rhoPiIndices, rhoPiShifts, Vector.mk_zip_mk, List.zip_toArray, Vector.mapIdx_mk, List.mapIdx_toArray]
     simp only [List.zip_cons_cons, List.zip_nil_right]
     simp only [List.mapIdx_cons, List.mapIdx_nil]
@@ -61,7 +61,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [assumptions, KeccakState.is_normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
-    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec] at h_holds
+    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated] at h_holds
   simp_all [Bitwise.rot_left_eq_rot_right]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
