@@ -71,7 +71,7 @@ lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
   (assignment.push_vars_aux n).offset = assignment.offset + n := by
   induction n with
   | zero => rfl
-  | succ n ih => simp_arith [push_vars_aux, push_var_aux, ih]
+  | succ n ih => simp +arith [push_vars_aux, push_var_aux, ih]
 
 def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
   (assignment.push_var_input off).offset = assignment.offset + 1 := by
