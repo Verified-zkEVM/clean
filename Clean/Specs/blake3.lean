@@ -1,3 +1,7 @@
+import Clean.Utils.Bitwise
+
+namespace Specs.blake3
+open Bitwise (add32 rot_right32)
 /--
 CONSTANTS
 -/
@@ -20,6 +24,9 @@ as the leaves of a binary tree.
 -/
 def chunkLen : Nat := 1024
 
+-- q Compression function doesn't seem to have an input 'd'.
+-- Only the mixing function G has an input 'd'.
+-- Was 'd' renamed to 'flags' in the reference implementation?
 /--
 The compression function input 'd' is a bitfield, with each
 individual flag consisting of a power of 2. The value of 'd'
@@ -59,3 +66,36 @@ permutational key schedule for BLAKE3's keyed permutation.
 def msgPermutation : Vector Nat 16 :=
 --   0  1  2   3  4  5  6   7  8   9  10 11 12  13  14 15
   #v[2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8]
+
+-- The mixing function, G, which mixes either a column or a diagonal.
+def g(state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
+  let state_a := add32 (state[a]) (add32 state[b] mx)
+  let state_d := rot_right32 (state[d] ^^^ state_a) 16
+  let state_c := add32 (state[c]) state_d
+  let state_b := rot_right32 (state[b] ^^^ state_c) 12
+
+  let state_a := add32 state_a (add32 state_b my)
+  let state_d := rot_right32 (state_d ^^^ state_a) 8
+  let state_c := add32 state_c state_d
+  let state_b := rot_right32 (state_b ^^^ state_c) 7
+
+  state.set a state_a
+        |>.set b state_b
+        |>.set c state_c
+        |>.set d state_d
+
+
+/--
+TESTS
+
+
+Test g function.
+According to the reference (Python) implementation, the following should
+yield the new state:
+[3279123572, 367480655, 3947042124, 3663589532, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
+-/
+def stateInit : Vector Nat 16 := #v[1321565287, 1539917118, 1918974978, 1109417770, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
+#eval g stateInit 0 1 2 3 4 5
+
+
+end Specs.blake3
