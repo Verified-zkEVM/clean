@@ -2,9 +2,10 @@ import Clean.Utils.Bitwise
 
 namespace Specs.blake3
 open Bitwise (add32 rot_right32)
-/--
-CONSTANTS
--/
+
+------------
+-- CONSTANTS
+------------
 
 -- Default ouput length is 256 bits (32 bytes)
 def outLen : Nat := 32
@@ -67,6 +68,10 @@ def msgPermutation : Vector Nat 16 :=
 --   0  1  2   3  4  5  6   7  8   9  10 11 12  13  14 15
   #v[2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8]
 
+------------
+-- FUNCTIONS
+------------
+
 -- The mixing function, G, which mixes either a column or a diagonal.
 def g(state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
   let state_a := add32 (state[a]) (add32 state[b] mx)
@@ -84,18 +89,47 @@ def g(state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
         |>.set c state_c
         |>.set d state_d
 
+-- q Nat type okay for m/state?
+/--
+The round function, which applies the mixing function G
+to mix the state's columns and diagonals.
+-/
+def round(state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
+  let state := g state 0 4 8 12 m[0] m[1]
+  let state := g state 1 5 9 13 m[2] m[3]
+  let state := g state 2 6 10 14 m[4] m[5]
+  let state := g state 3 7 11 15 m[6] m[7]
+
+  let state := g state 0 5 10 15 m[8] m[9]
+  let state := g state 1 6 11 12 m[10] m[11]
+  let state := g state 2 7 8 13 m[12] m[13]
+  let state := g state 3 4 9 14 m[14] m[15]
+  state
+
+end Specs.blake3
+
+--------
+-- TESTS
+--------
+namespace Specs.blake3.Tests
 
 /--
-TESTS
-
-
 Test g function.
 According to the reference (Python) implementation, the following should
 yield the new state:
 [3279123572, 367480655, 3947042124, 3663589532, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
 -/
-def stateInit : Vector Nat 16 := #v[1321565287, 1539917118, 1918974978, 1109417770, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
-#eval g stateInit 0 1 2 3 4 5
+def stateInitG : Vector Nat 16 := #v[1321565287, 1539917118, 1918974978, 1109417770, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
+#eval g stateInitG 0 1 2 3 4 5
 
+/--
+Test round function.
+According to the reference (Python) implementation, the following should
+yield the new state:
+[2183394319, 368400627, 2705018986, 1532359963, 184541119, 4093912516, 344508834, 154001542, 2580533130, 866577463, 1629990543, 2086044263, 618301763, 3154665623, 3243728413, 699478374]
+-/
+def stateInitRound : Vector Nat 16 := #v[1048429017, 869689525, 3373747814, 3881173978, 867318181, 93804160, 1095841330, 3806666906, 1528071400, 2951122214, 4271188711, 3509256835, 40453064, 3578515354, 1456976626, 243768026]
+def m : Vector Nat 16 := #v[3959934058, 3329161910, 3688806782, 3025089236, 897128991, 1111177342, 4132823147, 2420086736, 1951041921, 2483382132, 1478626316, 2397174491, 1858261849, 1494602388, 4275385857, 3719915132]
+#eval round stateInitRound m
 
-end Specs.blake3
+end Specs.blake3.Tests
