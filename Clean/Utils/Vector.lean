@@ -76,7 +76,7 @@ structure ToPush (v : Vector α (n + 1)) where
   eq : v = as.push a
 
 def to_push (v : Vector α (n + 1)) : ToPush v where
-  as := v.take n |>.cast Nat.min_add_right
+  as := v.take n |>.cast Nat.min_add_right_self
   a := v[n]
   eq := by
     rcases v with ⟨ xs, h ⟩
@@ -141,7 +141,7 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
   case nil =>
     suffices induct_push nil push #v[a] = push #v[] a (induct_push nil push #v[]) by congr
     simp only [induct_push, List.length_nil, Nat.reduceAdd, to_push, take_eq_extract, extract_mk,
-      Nat.sub_zero, cast_mk, getElem_mk, id_eq, Int.reduceNeg, Int.Nat.cast_ofNat_Int,
+      Nat.sub_zero, cast_mk, getElem_mk, id_eq, Int.reduceNeg,
       Int.reduceAdd, Int.reduceSub, List.getElem_toArray, List.length_cons, eq_mp_eq_cast, cast_eq,
       List.getElem_cons_zero, push_mk, eq_mpr_eq_cast]
     congr
@@ -220,10 +220,10 @@ instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
 
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
 theorem cast_take_append_of_eq_length {v : Vector α n} {w : Vector α m} :
-    (v ++ w |>.take n |>.cast Nat.min_add_right) = v := by
+    (v ++ w |>.take n |>.cast Nat.min_add_right_self) = v := by
   have hv_length : v.toList.length = n := by rw [Array.length_toList, size_toArray]
   rw [cast_mk, ←toArray_inj, take_eq_extract, toArray_extract, toArray_append,
-    ← Array.toArray_toList (_ ++ _), List.extract_toArray, Array.toList_append,
+    List.extract_toArray, Array.toList_append,
     List.extract_eq_drop_take, List.drop_zero, Nat.sub_zero,
     List.take_append_of_le_length (Nat.le_of_eq hv_length.symm),
     List.take_of_length_le (Nat.le_of_eq hv_length), Array.toArray_toList]
@@ -233,7 +233,7 @@ theorem cast_drop_append_of_eq_length {v : Vector α n} {w : Vector α m} :
   have hv_length : v.toList.length = n := by rw [Array.length_toList, size_toArray]
   have hw_length : w.toList.length = m := by rw [Array.length_toList, size_toArray]
   rw [drop_eq_cast_extract, cast_cast, cast_mk, ←toArray_inj, toArray_extract, toArray_append,
-    ← Array.toArray_toList (_ ++ _), List.extract_toArray, Array.toList_append,
+    List.extract_toArray, Array.toList_append,
     List.extract_eq_drop_take, Nat.add_sub_self_left,
     List.drop_append_of_le_length (Nat.le_of_eq hv_length.symm),
     List.drop_of_length_le (Nat.le_of_eq hv_length), List.nil_append,
@@ -248,7 +248,7 @@ The composition `n * m = m + ... + m` (where `m > 0`)
 def Composition.ofProductLength (m: ℕ+) {α : Type} {l : List α} (hl : l.length = n * m.val) : Composition l.length := {
   blocks := List.replicate n m.val
   blocks_pos hi := (List.mem_replicate.mp hi).right ▸ m.pos
-  blocks_sum := hl ▸ List.sum_replicate_nat _ _
+  blocks_sum := hl ▸ List.sum_replicate_nat
 }
 
 theorem Composition.ofProductLength_mem_length {m: ℕ+} {α : Type} {l : List α} {hl : l.length = n * m.val}
@@ -256,7 +256,7 @@ theorem Composition.ofProductLength_mem_length {m: ℕ+} {α : Type} {l : List �
   ∀ li ∈ l.splitWrtComposition comp, li.length = m := by
   intro li hli
   let l_split := l.splitWrtComposition comp
-  have hli_length : li.length ∈ l_split.map List.length := List.mem_map_of_mem _ hli
+  have hli_length : li.length ∈ l_split.map List.length := List.mem_map_of_mem hli
   have hli_length_replicate : li.length ∈ List.replicate n m.val := by
     have map_length := List.map_length_splitWrtComposition l comp
     rw [map_length, hcomp, Composition.ofProductLength] at hli_length

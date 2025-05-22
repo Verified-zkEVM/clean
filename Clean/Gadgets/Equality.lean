@@ -36,7 +36,6 @@ instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F
   output _ _ := ()
 
   local_length_eq _ n := by
-    simp only
     rw [main, Vector.forM_toList, Circuit.forM_local_length]
     simp only [ConstantLawfulCircuits.local_length, zero_mul]
 
