@@ -140,6 +140,9 @@ instance ConstantLawfulCircuits.to_single (circuit : α → Circuit F β) (a : �
   offset_independent := offset_independent a
   append_only := append_only a
 
+instance LawfulCircuit.from_constants {circuit : α → Circuit F β} (lawful : ConstantLawfulCircuits circuit) (a : α) :
+    LawfulCircuit (circuit a) := ConstantLawfulCircuits.to_single circuit a |>.toLawfulCircuit
+
 syntax "infer_lawful_circuit" : tactic
 
 macro_rules
@@ -216,6 +219,9 @@ example :
   ConstantLawfulCircuits add := by infer_constant_lawful_circuits
 end
 
+def ConstantLawfulCircuits.constant_output {circuit : α → Circuit F β} [Inhabited α] (lawful : ConstantLawfulCircuits circuit) :=
+  ∀ (x : α) (n : ℕ), output circuit x n = output circuit default n
+
 -- characterize various properties of lawful circuits
 
 -- helper lemma needed right below
@@ -230,8 +236,8 @@ lemma OperationsList.withLength_eq {F: Type} [Field F] {ops : OperationsList F} 
 namespace LawfulCircuit
 -- slightly different way to state the append-only principle, which deals with the type dependency
 lemma append_only' {circuit : Circuit F α} [lawful : LawfulCircuit circuit] :
-    ∀ ops: OperationsList F,
-      (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
+  ∀ ops: OperationsList F,
+    (circuit ops).snd.withLength = ops.withLength ++ (lawful.offset_independent ops ▸ operations ops.offset) := by
   intro ops
   apply OperationsList.withLength_eq
   simp only [append_only ops]
@@ -294,6 +300,26 @@ theorem completeness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit
     Circuit.constraints_hold.completeness env (circuit.operations n) ↔ Circuit.constraints_hold.completeness env (lawful.operations n).val :=
   LawfulCircuit.operations_eq' (Circuit.constraints_hold.completeness env)
 end LawfulCircuit
+
+namespace ConstantLawfulCircuits
+theorem output_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), (circuit a).output n = lawful.output a n := by
+  intros; apply output_independent
+
+theorem final_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), (circuit a).final_offset n = n + lawful.local_length := by
+  intros; apply offset_independent
+
+theorem initial_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), ((circuit a).operations n).initial_offset = n := by
+  intro a n
+  have : LawfulCircuit (circuit a) := lawful.to_single _ _ |>.toLawfulCircuit
+  apply LawfulCircuit.initial_offset_eq
+
+theorem local_length_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
+    ∀ (a : α) (n : ℕ), (circuit a).local_length n = lawful.local_length := by
+  intros; apply LawfulCircuit.local_length_eq
+end ConstantLawfulCircuits
 
 namespace Circuit.constraints_hold
 variable {env : Environment F} {n : ℕ} {prop : Operations.Condition F}

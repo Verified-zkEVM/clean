@@ -129,7 +129,8 @@ theorem soundness (offset : Fin 8) (x low high : F p)
 
   have two_power_lt_bv : UInt32.ofNat (2^offset.val) < 256 := by
     rw [UInt32.lt_iff_toNat_lt]
-    simp only [UInt32.toNat_ofNat, UInt32.reduceToNat]
+    simp only [UInt32.toNat_ofNat', Nat.reducePow, UInt32.toNat_ofNat, Nat.reduceMod]
+    rw [Nat.mod_eq_of_lt (by linarith)]
     linarith
 
   have low_mod : low.val % 2^32 = low.val := by
@@ -150,14 +151,14 @@ theorem soundness (offset : Fin 8) (x low high : F p)
   have low_b_lt : low_b < UInt32.ofNat (2^offset.val) := by
     simp only [low_b]
     rw [UInt32.lt_iff_toNat_lt]
-    simp only [UInt32.toNat_ofNat, low_b]
+    simp only [UInt32.toNat_ofNat', low_b]
     rw [low_mod, two_power_mod]
     assumption
 
   have high_b_lt : high_b < 256 / UInt32.ofNat (2^offset.val) := by
     simp only [high_b]
     rw [UInt32.lt_iff_toNat_lt]
-    simp only [UInt32.toNat_ofNat, UInt32.toNat_div, UInt32.reduceToNat, low_b, high_b]
+    simp only [UInt32.toNat_ofNat', UInt32.toNat_div, UInt32.reduceToNat, low_b, high_b]
     rw [high_mod, two_power_mod]
     rw [show 256 = 2^8 by rfl, Nat.pow_div (by linarith [offset.is_lt]) (by linarith [offset.is_lt])]
     assumption
@@ -165,14 +166,14 @@ theorem soundness (offset : Fin 8) (x low high : F p)
   have x_lt : x_b < 256 := by
     simp only [x_b]
     rw [UInt32.lt_iff_toNat_lt]
-    simp only [UInt32.toNat_ofNat, UInt32.reduceToNat, high_b, low_b, x_b]
+    simp only [UInt32.toNat_ofNat', UInt32.reduceToNat, high_b, low_b, x_b]
     rw [x_mod]
     assumption
 
   have eq_holds_bv : x_b = low_b + high_b * UInt32.ofNat (2^offset.val) := by
     simp only [x_b, low_b, high_b]
     rw [←UInt32.toNat_inj]
-    simp only [UInt32.toNat_ofNat, UInt32.toNat_add, UInt32.toNat_mul,
+    simp only [UInt32.toNat_ofNat', UInt32.toNat_add, UInt32.toNat_mul,
       Nat.mul_mod_mod, Nat.mod_mul_mod, Nat.add_mod_mod, Nat.mod_add_mod, high_b, low_b, x_b]
     rw [x_mod]
     have h : (low.val + high.val * (2^offset.val)) % 2^32 = low.val + high.val * (2^offset.val) := by
@@ -188,11 +189,11 @@ theorem soundness (offset : Fin 8) (x low high : F p)
 
   constructor
   · apply_fun UInt32.toNat at h1
-    simp only [UInt32.toNat_ofNat, UInt32.toNat_mod, low_b, x_b] at h1
+    simp only [UInt32.toNat_ofNat', UInt32.toNat_mod, low_b, x_b] at h1
     rw [low_mod, x_mod, two_power_mod] at h1
     assumption
   · apply_fun UInt32.toNat at h2
-    simp only [UInt32.toNat_ofNat, UInt32.toNat_div, high_b, x_b, low_b] at h2
+    simp only [UInt32.toNat_ofNat', UInt32.toNat_div, high_b, x_b, low_b] at h2
     rw [high_mod, x_mod, two_power_mod] at h2
     assumption
 

@@ -35,7 +35,7 @@ theorem eq_of_mod_eq_and_div_eq (m : ℕ) {x y : ℕ} (mod : x % m = y % m) (div
 theorem xor_eq_add {x : ℕ} (n : ℕ) (hx : x < 2^n) (y : ℕ) : x + 2^n * y = x ^^^ 2^n * y := by
   apply Nat.eq_of_testBit_eq
   intro i
-  rw [add_comm, Nat.testBit_mul_pow_two_add _ hx, Nat.testBit_xor, Nat.testBit_mul_pow_two]
+  rw [add_comm, Nat.testBit_two_pow_mul_add _ hx, Nat.testBit_xor, Nat.testBit_two_pow_mul]
   by_cases hi : i < n
   · have : ¬(n ≤ i) := by linarith
     simp [this]
@@ -57,7 +57,7 @@ theorem xor_mul_two_pow {x y n : Nat} : 2 ^ n * (x ^^^ y) =  2 ^ n * x ^^^  2 ^ 
 lemma and_mul_pow_two_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^n * y = 0 := by
   apply Nat.eq_of_testBit_eq
   intro i
-  rw [Nat.testBit_and, Nat.zero_testBit, Nat.testBit_mul_pow_two]
+  rw [Nat.testBit_and, Nat.zero_testBit, Nat.testBit_two_pow_mul]
   by_cases h : i < n
   · simp [h]
   · have : n ≤ i := by linarith
@@ -83,8 +83,8 @@ theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
   have h_u64 : (x.toUInt64 ^^^ 0xffffffffffffffff).toNat = (0xffffffffffffffff - x.toUInt64).toNat := by
     apply congrArg UInt64.toNat
     bv_decide
-  rw [UInt64.toNat_xor, UInt64.toNat_sub_of_le, UInt64.toNat_ofNat_of_lt x_lt] at h_u64
+  rw [UInt64.toNat_xor, UInt64.toNat_sub_of_le, Nat.toUInt64, UInt64.toNat_ofNat_of_lt' x_lt] at h_u64
   exact h_u64
-  rw [UInt64.le_iff_toNat_le, UInt64.toNat_ofNat_of_lt x_lt]
+  rw [UInt64.le_iff_toNat_le, UInt64.toNat_ofNat_of_lt' x_lt]
   exact Nat.le_pred_of_lt x_lt
 end Bitwise

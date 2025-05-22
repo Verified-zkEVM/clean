@@ -145,10 +145,10 @@ lemma normalized_u64 (x : U64 (F p)) : x.is_normalized → x.value < 2^64 := by
   linarith
 
 def from_u64 (x : UInt64) : U64 (F p) :=
-  decompose_nat x.val
+  decompose_nat x.toFin
 
 def value_u64 (x : U64 (F p)) (h : x.is_normalized) : UInt64 :=
-  UInt64.ofNatCore x.value (normalized_u64 x h)
+  UInt64.ofNatLT x.value (normalized_u64 x h)
 
 lemma from_u64_normalized (x : UInt64) : (from_u64 (p:=p) x).is_normalized := by
   simp only [is_normalized, from_u64, decompose_nat]
@@ -160,7 +160,7 @@ lemma from_u64_normalized (x : UInt64) : (from_u64 (p:=p) x).is_normalized := by
   simp [h]
 
 theorem value_from_u64_eq (x : UInt64) : value (from_u64 (p:=p) x) = x.toNat := by
-  simp only [value_u64, value_horner, from_u64, decompose_nat, UInt64.val_val_eq_toNat]
+  simp only [value_u64, value_horner, from_u64, decompose_nat, UInt64.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
     rw [ZMod.val_cast_of_lt]
@@ -263,7 +263,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
     simp [circuit_norm, u64_copy, spec, h_eval]
     simp [circuit_norm, u64_copy, Gadgets.Equality.elaborated] at h
     simp [subcircuit_norm, eval] at h
-    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset]
+    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
     have h0 := h 0
     have h1 := h 1
     have h2 := h 2
