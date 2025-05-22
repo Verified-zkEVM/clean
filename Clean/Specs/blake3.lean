@@ -64,7 +64,7 @@ the message words are permuted according to the following
 permutational key schedule for BLAKE3's keyed permutation.
 (See Table 2 in the BLAKE3 paper.)
 -/
-def msgPermutation : Vector Nat 16 :=
+def msgPermutation : Vector (Fin 16) 16 :=
 --   0  1  2   3  4  5  6   7  8   9  10 11 12  13  14 15
   #v[2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8]
 
@@ -106,6 +106,14 @@ def round(state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
   let state := g state 3 4 9 14 m[14] m[15]
   state
 
+
+/--
+The permutation function, which permutes the message words after each
+round (except the last one where it would be useless).
+-/
+def permute(state: Vector Nat 16) : Vector Nat 16 :=
+  Vector.ofFn (fun i => state[msgPermutation[i]])
+
 end Specs.blake3
 
 --------
@@ -131,5 +139,14 @@ yield the new state:
 def stateInitRound : Vector Nat 16 := #v[1048429017, 869689525, 3373747814, 3881173978, 867318181, 93804160, 1095841330, 3806666906, 1528071400, 2951122214, 4271188711, 3509256835, 40453064, 3578515354, 1456976626, 243768026]
 def m : Vector Nat 16 := #v[3959934058, 3329161910, 3688806782, 3025089236, 897128991, 1111177342, 4132823147, 2420086736, 1951041921, 2483382132, 1478626316, 2397174491, 1858261849, 1494602388, 4275385857, 3719915132]
 #eval round stateInitRound m
+
+/--
+Test permutation function.
+According to the reference (Python) implementation, the following should
+yield the new state:
+[2003572531, 3844308220, 1426274751, 3284326898, 2585707362, 3383581781, 826242452, 3963897632, 3743774256, 338750343, 4278730886, 1591270934, 142878727, 4264855050, 15597940, 2245261223]
+-/
+def stateInitPermute : Vector Nat 16 := #v[3383581781, 3743774256, 2003572531, 1426274751, 826242452, 1591270934, 3844308220, 2585707362, 2245261223, 142878727, 3284326898, 338750343, 4278730886, 3963897632, 4264855050, 15597940]
+#eval permute stateInitPermute
 
 end Specs.blake3.Tests
