@@ -21,9 +21,9 @@ theorem ext {x y : F p} (h : x.val = y.val) : x = y := by
 
 theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
   intro x_lt_p
-  have p_neq_zero : p ≠ 0 := Nat.not_eq_zero_of_lt x_lt_p
+  have p_neq_zero : p ≠ 0 := Nat.ne_zero_of_lt x_lt_p
   have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt p_neq_zero).mpr x_lt_p
-  rw [ZMod.val_natCast x, x_mod_is_x]
+  rw [ZMod.val_natCast, x_mod_is_x]
 
 lemma val_eq_256 [p_large_enough: Fact (p > 512)] : (256 : F p).val = 256 := val_lt_p 256 (by linarith [p_large_enough.elim])
 

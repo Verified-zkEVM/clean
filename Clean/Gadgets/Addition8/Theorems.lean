@@ -179,7 +179,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     rw [T_not_wrap]
 
     -- now we just need to prove a simple result about euclidean division over T
-    have obv : (256 : F p).val = 256 % p := ZMod.val_natCast _
+    have obv : (256 : F p).val = 256 % p := by apply ZMod.val_natCast
     have h : T / 256 * (ZMod.val (256 : F p)) + T % 256 = T := by
       rw [mul_comm, obv]
       rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.out).mpr

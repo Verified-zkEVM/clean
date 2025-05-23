@@ -59,9 +59,6 @@ def ByteXorTable.completeness (x y z: F p) :
   simp [from_byte_eq, true_and, from_byte, FieldUtils.nat_to_field_of_val_eq_iff]
   apply FieldUtils.ext
   simp only [h, HXor.hXor, Xor.xor, Fin.xor, from_byte, FieldUtils.val_of_nat_to_field_eq]
-  symm
-  rw [Nat.mod_eq_iff_lt (by norm_num)]
-  exact Nat.xor_lt_two_pow (n:=8) hx hy
 
 def ByteXorTable.equiv (x y z: F p) :
     ByteXorTable.contains #v[x, y, z] ↔

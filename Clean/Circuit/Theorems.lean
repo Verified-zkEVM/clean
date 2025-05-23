@@ -65,7 +65,7 @@ lemma flat_witness_length_eq {n: ℕ} {ops: Operations F n} :
     generalize to_flat_operations ops = flat_ops at *
     generalize ops.local_length = n at *
     induction flat_ops using FlatOperation.witness_length.induct generalizing n with
-    | case1 =>  simp_all only [witness_length, List.nil_append, self_eq_add_left, SubCircuit.local_length_eq]
+    | case1 =>  simp_all only [witness_length, List.nil_append, right_eq_add, SubCircuit.local_length_eq]
     | case2 ops m' _ ih' =>
       dsimp only [witness_length] at *
       specialize ih' (n - m') (by rw [←ih]; omega)

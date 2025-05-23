@@ -165,8 +165,8 @@ end ProvableStruct
 open ProvableStruct in
 class ProvableStruct (α : TypeMap) where
   components : List WithProvableType
-  to_components {F} : α F → ProvableTypeList F components
-  from_components {F} : ProvableTypeList F components → α F
+  to_components {F : Type} : α F → ProvableTypeList F components
+  from_components {F : Type} : ProvableTypeList F components → α F
 
   combined_size : ℕ := combined_size' components
   combined_size_eq : combined_size = combined_size' components := by rfl
@@ -190,7 +190,7 @@ def components_from_elements {F : Type} : (cs: List WithProvableType) → Vector
     | c :: cs, (v : Vector F (size c.type + combined_size' cs)) =>
       let head_size := size c.type
       let tail_size := combined_size' cs
-      have h_head : head_size ⊓ (head_size + tail_size) = head_size := Nat.min_add_right
+      have h_head : head_size ⊓ (head_size + tail_size) = head_size := Nat.min_add_right_self
       have h_tail : head_size + tail_size - head_size = tail_size := Nat.add_sub_self_left _ _
       let head : Vector F head_size := (v.take head_size).cast h_head
       let tail : Vector F tail_size := (v.drop head_size).cast h_tail
@@ -346,7 +346,7 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
   size := size α + size β
   to_elements := fun (a, b) => to_elements a ++ to_elements b
   from_elements {F} v :=
-    let a : α F := v.take (size α) |>.cast Nat.min_add_right |> from_elements
+    let a : α F := v.take (size α) |>.cast Nat.min_add_right_self |> from_elements
     let b : β F := v.drop (size α) |>.cast (Nat.add_sub_self_left _ _) |> from_elements
     (a, b)
 
