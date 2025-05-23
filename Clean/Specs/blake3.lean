@@ -47,7 +47,7 @@ def deriveKeyMaterial : Nat := 2^6
 The initialization constants for BLAKE3.
 (Same as in BLAKE2s. See Table 1 in the BLAKE3 paper.)
 -/
-def iv : Vector UInt32 8 := #v[
+def iv : Vector Nat 8 := #v[
   0x6a09e667,
   0xbb67ae85,
   0x3c6ef372,
@@ -73,7 +73,7 @@ def msgPermutation : Vector (Fin 16) 16 :=
 ------------
 
 -- The mixing function, G, which mixes either a column or a diagonal.
-def g(state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
+def g (state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
   let state_a := add32 (state[a]) (add32 state[b] mx)
   let state_d := rot_right32 (state[d] ^^^ state_a) 16
   let state_c := add32 (state[c]) state_d
@@ -94,7 +94,7 @@ def g(state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
 The round function, which applies the mixing function G
 to mix the state's columns and diagonals.
 -/
-def round(state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
+def round (state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
   let state := g state 0 4 8 12 m[0] m[1]
   let state := g state 1 5 9 13 m[2] m[3]
   let state := g state 2 6 10 14 m[4] m[5]
@@ -111,8 +111,60 @@ def round(state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
 The permutation function, which permutes the message words after each
 round (except the last one where it would be useless).
 -/
-def permute(state: Vector Nat 16) : Vector Nat 16 :=
+def permute (state: Vector Nat 16) : Vector Nat 16 :=
   Vector.ofFn (fun i => state[msgPermutation[i]])
+
+/--
+The compression function, which takes a chaining value, block words, counter,
+block length, and flags as input and produces a new state vector.
+This is the core function of BLAKE3.
+-/
+def compress (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector Nat 16 :=
+  -- Split counter into low and high parts
+  let counter_low := counter % 2^32
+  let counter_high := counter / 2^32
+
+  -- Initialize state with chaining value, IV, counter, block length and flags
+  let state := #v[
+    chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
+    chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
+    iv[0], iv[1], iv[2], iv[3],
+    counter_low, counter_high, block_len, flags
+  ]
+
+  -- Apply 7 rounds of mixing with message permutation
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+
+  -- Final state update
+  let state := state.set 0 (state[0] ^^^ state[8])
+  let state := state.set 1 (state[1] ^^^ state[9])
+  let state := state.set 2 (state[2] ^^^ state[10])
+  let state := state.set 3 (state[3] ^^^ state[11])
+  let state := state.set 4 (state[4] ^^^ state[12])
+  let state := state.set 5 (state[5] ^^^ state[13])
+  let state := state.set 6 (state[6] ^^^ state[14])
+  let state := state.set 7 (state[7] ^^^ state[15])
+  let state := state.set 8 (state[8] ^^^ chaining_value[0])
+  let state := state.set 9 (state[9] ^^^ chaining_value[1])
+  let state := state.set 10 (state[10] ^^^ chaining_value[2])
+  let state := state.set 11 (state[11] ^^^ chaining_value[3])
+  let state := state.set 12 (state[12] ^^^ chaining_value[4])
+  let state := state.set 13 (state[13] ^^^ chaining_value[5])
+  let state := state.set 14 (state[14] ^^^ chaining_value[6])
+  let state := state.set 15 (state[15] ^^^ chaining_value[7])
+  state
 
 end Specs.blake3
 
@@ -148,5 +200,18 @@ yield the new state:
 -/
 def stateInitPermute : Vector Nat 16 := #v[3383581781, 3743774256, 2003572531, 1426274751, 826242452, 1591270934, 3844308220, 2585707362, 2245261223, 142878727, 3284326898, 338750343, 4278730886, 3963897632, 4264855050, 15597940]
 #eval permute stateInitPermute
+
+/--
+Test compress function.
+According to the reference (Python) implementation, the following should
+yield the new state:
+[2723421452, 2900812491, 409287158, 2844031487, 1256578214, 2677699013, 2070649829, 3853882973, 2869165109, 1080268436, 1942754410, 576800287, 963977849, 584425189, 1029827681, 3685994844]
+-/
+def chainingValue : Vector Nat 8 := #v[671114869, 2251103971, 1125212539, 2996205183, 1286164105, 2483632496, 367841012, 3199388477]
+def blockWords : Vector Nat 16 := #v[1260152445, 449952550, 2837099038, 716667674, 3544843723, 387900774, 3257147430, 2088822348, 4202301432, 2249467574, 1521610824, 186847680, 2726995727, 3572868764, 1936257617, 3338044720]
+def counter : Nat := 953581910
+def blockLen : Nat := 2437728858
+def flags : Nat := 2498436276
+#eval compress chainingValue blockWords counter blockLen flags
 
 end Specs.blake3.Tests
