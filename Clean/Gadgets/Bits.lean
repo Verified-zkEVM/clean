@@ -37,17 +37,13 @@ def circuit (n : ℕ) : FormalCircuit (F p) field (BitVector n) where
   local_length _ := n
   output _ i := var_from_offset (ProvableVector field n) i
 
-  local_length_eq _ _ := by
-    simp only [main, circuit_norm, Boolean.circuit]
-    sorry
+  initial_offset_eq _ _ := by simp only [main, circuit_norm]
+  local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
 
   output_eq _ _ := by
     simp only [main, circuit_norm, Boolean.circuit]
     sorry
 
-  initial_offset_eq _ _ := by
-    simp only [main, circuit_norm, Boolean.circuit]
-    sorry
 
   assumptions (x : F p) := x.val < 2^n
 

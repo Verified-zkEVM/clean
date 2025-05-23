@@ -613,7 +613,7 @@ end map
 
 section forEach
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
-  {body : α → Circuit F Unit} {lawful : ConstantLawfulCircuits body}
+  {body : α → Circuit F Unit} {lawful : ConstantLawfulCircuits body} {ops : OperationsList F}
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
@@ -624,7 +624,7 @@ lemma forEach.soundness :
   trivial
 
 omit [Inhabited α] in
-/-- variant of `forEach.soundness'`, for when the constraints don't depend on the input offset -/
+/-- variant of `forEach.soundness`, for when the constraints don't depend on the input offset -/
 lemma forEach.soundness' :
   constraints_hold.soundness env (forEach xs body lawful |>.operations n) →
     ∀ x ∈ xs, ∃ k : ℕ, constraints_hold.soundness env (body x |>.operations k) := by
@@ -651,17 +651,17 @@ lemma forEach.uses_local_witnesses :
 
 @[circuit_norm ↓]
 lemma forEach.local_length_eq :
-    (forEach xs body lawful).local_length n = m * (body default).local_length := by
+    (forEach xs body lawful ops).2.withLength.local_length = ops.withLength.local_length + m * (body default).local_length := by
   let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [LawfulCircuit.local_length_eq, LawfulCircuit.local_length_eq, mul_comm]
+  rw [LawfulCircuit.local_length_eq', LawfulCircuit.local_length_eq, mul_comm]
   rfl
 
 omit [Inhabited α] in
 @[circuit_norm ↓]
 lemma forEach.initial_offset_eq :
-    (forEach xs body lawful |>.operations n).initial_offset = n := by
+    (forEach xs body lawful ops).2.withLength.initial_offset = ops.withLength.initial_offset := by
   let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [LawfulCircuit.initial_offset_eq]
+  rw [LawfulCircuit.initial_offset_eq']
 
 omit [Inhabited α] in
 @[circuit_norm ↓]
