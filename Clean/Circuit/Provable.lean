@@ -26,7 +26,7 @@ class ProvableType (M : TypeMap) where
   from_elements {F: Type} : Vector F size -> M F
 
 class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
-  nonempty : size > 0 := by norm_num
+  nonempty : size > 0 := by try simp only [size]; try norm_num
 
 export ProvableType (size to_elements from_elements)
 
@@ -116,6 +116,7 @@ instance : LawfulProvableType field where
   size := 1
   to_elements x := #v[x]
   from_elements v := v.get 0
+instance : NonEmptyProvableType field where
 
 @[reducible]
 def ProvablePair (α β : TypeMap) := fun F => α F × β F
@@ -289,6 +290,11 @@ end ProvableStruct
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
   ProvableType.eval env x = Expression.eval env x := by rfl
+
+omit [Field F] in
+@[circuit_norm ↓]
+theorem var_from_offset_field (offset : Nat) :
+  ProvableType.var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
 
 namespace LawfulProvableType
 @[circuit_norm]
