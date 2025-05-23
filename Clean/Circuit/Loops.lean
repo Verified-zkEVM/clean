@@ -666,7 +666,7 @@ lemma forEach.initial_offset_eq :
 omit [Inhabited α] in
 @[circuit_norm ↓]
 lemma forEach.output_eq :
-  (forEach xs body lawful).output n = () := rfl
+  (forEach xs body lawful ops).1 = () := rfl
 end forEach
 
 section foldl

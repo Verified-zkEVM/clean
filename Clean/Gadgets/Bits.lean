@@ -41,9 +41,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) field (BitVector n) where
   local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
 
   output_eq _ _ := by
-    simp only [main, circuit_norm, Boolean.circuit]
-    sorry
-
+    simp only [main, circuit_norm, Boolean.circuit, var_from_offset_vector]
+    rfl
 
   assumptions (x : F p) := x.val < 2^n
 
