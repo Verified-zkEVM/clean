@@ -70,8 +70,6 @@ def fib32_table : List (TableOperation RowType (F p)) := [
   EveryRowExceptLast recursive_relation,
 ]
 
-#eval fib32_table (p:=p_babybear)
-
 /--
   Specification for fibonacci32: for each row with index i
   - the first U32 value is the i-th fibonacci number
