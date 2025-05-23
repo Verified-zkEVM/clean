@@ -50,22 +50,6 @@ instance LawfulCircuit.from_foldlM_vector {circuit : β → α → Circuit F β}
   rw [Vector.foldlM_toList]
   apply from_foldlM inferInstance
 
-namespace Circuit
-theorem forM_local_length {circuit : α → Circuit F Unit} [lawful : ConstantLawfulCircuits circuit]
-  {xs : List α} {n : ℕ} :
-    (forM xs circuit).local_length n = lawful.local_length * xs.length := by
-  set k := lawful.local_length
-  induction xs generalizing n with
-  | nil =>
-    rw [List.forM_nil, LawfulCircuit.local_length_eq]
-    rfl
-  | cons x xs ih =>
-    rw [List.forM_cons, LawfulCircuit.bind_local_length, LawfulCircuit.local_length_eq, ih]
-    rw [List.length_cons, mul_add, mul_one, add_comm _ k]
-    rfl
-    all_goals infer_instance
-end Circuit
-
 lemma ConstantLawfulCircuit.from_mapM_vector.offset_independent {circuit : α → Circuit F β} [Nonempty β]
   {xs : Vector α m} [lawful: ConstantLawfulCircuits circuit] (ops : OperationsList F) :
     (Vector.mapM circuit xs ops).2.offset = ops.offset + lawful.local_length * m := by
@@ -309,27 +293,6 @@ theorem forM_completeness {xs : List α} :
   completeness env (forM xs circuit |>.operations n) ↔
     xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
   simp only [completeness_iff_forAll, forM_forAll]
-
-theorem forM_vector_soundness {xs : Vector α n} :
-  soundness env (xs.forM circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [soundness_iff_forAll, forM_vector_forAll]
-
-theorem forM_vector_completeness {xs : Vector α n} :
-  completeness env (xs.forM circuit |>.operations m) ↔
-    ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
-  simp only [completeness_iff_forAll, forM_vector_forAll]
-
-/-- simpler version for when the constraints don't depend on the input offset -/
-theorem forM_vector_soundness' {xs : Vector α n} :
-    soundness env (forM xs circuit |>.operations m) → ∀ x ∈ xs, ∃ k : ℕ, soundness env (circuit x |>.operations k) := by
-  intro h
-  replace h := forM_vector_soundness.mp h
-  intro x hx
-  obtain ⟨ i, hxi ⟩ := Vector.mem_iff_getElem?.mp hx
-  rw [←Vector.mem_zipIdx_iff_getElem? (x:=(x, i))] at hxi
-  specialize h x hx i hxi
-  use m + i * lawful.local_length
 end
 
 end Circuit.constraints_hold
@@ -682,6 +645,16 @@ lemma forEach.soundness :
   simp only [forEach, constraints_hold.soundness_iff_forAll, constraints_hold.forM_vector_forAll']
   rw [LawfulCircuit.local_length_eq]
   trivial
+
+omit [Inhabited α] in
+/-- variant of `forEach.soundness'`, for when the constraints don't depend on the input offset -/
+lemma forEach.soundness' :
+  constraints_hold.soundness env (forEach xs body lawful |>.operations n) →
+    ∀ x ∈ xs, ∃ k : ℕ, constraints_hold.soundness env (body x |>.operations k) := by
+  simp only [forEach, constraints_hold.soundness_iff_forAll, constraints_hold.forM_vector_forAll']
+  intro h x hx
+  obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
+  exact ⟨ _ , h ⟨i, hi⟩ ⟩
 
 @[circuit_norm ↓]
 lemma forEach.completeness :
