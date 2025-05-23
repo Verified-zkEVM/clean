@@ -649,6 +649,13 @@ lemma forEach.uses_local_witnesses :
   rw [LawfulCircuit.local_length_eq]
   trivial
 
+@[circuit_norm]
+lemma forEach.final_offset_eq :
+    (forEach xs body lawful ops).2.offset = ops.offset + m * (body default).local_length := by
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [LawfulCircuit.offset_independent, LawfulCircuit.local_length_eq, mul_comm]
+  rfl
+
 @[circuit_norm ↓]
 lemma forEach.local_length_eq :
     (forEach xs body lawful ops).2.withLength.local_length = ops.withLength.local_length + m * (body default).local_length := by
