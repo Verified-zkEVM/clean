@@ -1,9 +1,13 @@
+/-
+This file proves some properties about `forM`, `mapM`, and `foldlM` monad loops when used in a `Circuit`,
+typically leveraging a `ConstantLawfulCircuits` assumption on the loop body.
+
+The end result are loop methods `Circuit.{mapFinRange, map, for, foldl}` that simplify
+under `circuit_norm` in every way we need them to.
+-/
 import Clean.Circuit.Lawful
 import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
-
--- we prove a few properties about the circuit `forM xs circuit`, where `circuit : α → Circuit F Unit`
--- TODO handle more general loops
 
 instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
     LawfulCircuit (forM xs circuit) := by
