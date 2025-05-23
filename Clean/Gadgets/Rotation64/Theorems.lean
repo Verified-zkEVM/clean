@@ -155,6 +155,38 @@ lemma rot_right64_fin (x : ℕ) (offset : Fin 64) :
   simp only [rot_right64]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
+lemma rotateRight_rotateRight {w : ℕ} (x : BitVec w) (n m : ℕ):
+    (x.rotateRight n).rotateRight m = x.rotateRight (n + m) := by
+  nth_rw 1 [←BitVec.rotateRight_mod_eq_rotateRight]
+  nth_rw 2 [←BitVec.rotateRight_mod_eq_rotateRight]
+  nth_rw 3 [←BitVec.rotateRight_mod_eq_rotateRight]
+  apply BitVec.eq_of_getLsbD_eq
+  intros i hi
+  repeat rw [BitVec.getLsbD_rotateRight_of_lt (by apply Nat.mod_lt; linarith)]
+  simp [hi]
+
+  by_cases h1 : (i < w - (n + m) % w)
+  · simp [h1]
+    by_cases h2 : (i < w - m % w)
+    · simp [h1, h2]
+      by_cases h3 : (m % w + i < w - n % w)
+      · simp [h1, h2, h3]
+        congr 1
+        rw [←add_assoc, Nat.add_mod]
+        simp only [Nat.add_left_inj]
+        symm
+        apply Nat.mod_eq_of_lt
+        omega
+      · simp [h1, h2, h3]
+        sorry
+    · simp [h1, h2]
+      by_cases h3 : i - (w - m % w) < w - n % w
+      · simp [h1, h2, h3]
+        sorry
+      · simp [h1, h2, h3]
+        sorry
+  repeat sorry
+
 theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
     rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
   rw [rot_right64_eq_bv_rotate _ h,
@@ -163,12 +195,7 @@ theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
 
   refine BitVec.toNat_eq.mp ?_
   simp only [Nat.toUInt64, UInt64.ofNat_bitVecToNat, UInt64.toBitVec_ofNat']
-  set x' := (BitVec.ofNat 64 x)
-  apply BitVec.eq_of_getLsbD_eq
-  intros i hi
-  rw [BitVec.getLsbD_rotateRight]
-
-  sorry
+  apply rotateRight_rotateRight
 
 omit [Fact (Nat.Prime p)] in
 lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x4, x4 := x5, x5 := x6, x6 := x7, x7 := x0 : U64 _}.value =
