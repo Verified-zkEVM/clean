@@ -282,17 +282,6 @@ theorem forM_vector_forAll' {xs : Vector α n} :
     simp only [Vector.mem_zipIdx_iff_getElem?, Vector.getElem?_eq_some_iff] at hxi
     have ⟨ i_lt, x_eq ⟩ := hxi
     exact x_eq ▸ h ⟨ i, i_lt ⟩
-
--- specialization to soundness / completeness
-theorem forM_soundness {xs : List α} :
-  soundness env (forM xs circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [soundness_iff_forAll, forM_forAll]
-
-theorem forM_completeness {xs : List α} :
-  completeness env (forM xs circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [completeness_iff_forAll, forM_forAll]
 end
 
 end Circuit.constraints_hold
@@ -371,18 +360,6 @@ theorem mapM_vector_forAll {xs : Vector α n} :
   rw [mapM_forAll_vector_iff_list, mapM_forAll_iff_forM, ←Vector.forM_toList, forM_vector_forAll']
   simp only [operations_ignore]
   trivial
-
--- specialization to soundness / completeness
-
-theorem mapM_soundness {xs : List α} :
-  soundness env (xs.mapM circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => soundness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [soundness_iff_forAll, mapM_forAll]
-
-theorem mapM_completeness {xs : List α} :
-  completeness env (xs.mapM circuit |>.operations n) ↔
-    xs.zipIdx.Forall fun (x, i) => completeness env (circuit x |>.operations (n + i*lawful.local_length)) := by
-  simp only [completeness_iff_forAll, mapM_forAll]
 end
 
 -- specialization to mapFinRangeM
