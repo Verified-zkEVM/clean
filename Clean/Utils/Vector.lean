@@ -3,6 +3,8 @@ import Init.Data.List.Find
 
 variable {α β : Type} {n m : ℕ}
 
+open Vector (finRange)
+
 def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 namespace Vector
@@ -150,16 +152,16 @@ theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
     simp only [cons_push]
     rw [induct_push_cons_push]
 
-theorem getElemFin_finRange {n} (i : Fin n) : (Vector.finRange n)[i] = i := by
+theorem getElemFin_finRange {n} (i : Fin n) : (finRange n)[i] = i := by
   simp only [Fin.getElem_fin, getElem_finRange, Fin.eta]
 
-def mapFinRange (n: ℕ) (create: Fin n → α) : Vector α n := Vector.finRange n |>.map create
+def mapFinRange (n: ℕ) (create: Fin n → α) : Vector α n := finRange n |>.map create
 
 theorem mapFinRange_zero {create: Fin 0 → α} : mapFinRange 0 create = #v[] := rfl
 
 theorem mapFinRange_succ {n} {create: Fin (n + 1) → α} :
     mapFinRange (n + 1) create = (mapFinRange n (fun i => create i)).push (create n) := by
-  rw [mapFinRange, mapFinRange, Vector.finRange_succ_last]
+  rw [mapFinRange, mapFinRange, finRange_succ_last]
   simp only [append_singleton, map_push, map_map, Fin.coe_eq_castSucc, Fin.natCast_eq_last]
   rfl
 
@@ -169,11 +171,11 @@ theorem cast_mapFinRange {n} {create: Fin n → α} (h : n = m) :
 
 theorem getElemFin_mapFinRange {n} {create: Fin n → α} :
     ∀ i : Fin n, (mapFinRange n create)[i] = create i := by
-  simp [mapFinRange, Vector.finRange]
+  simp [mapFinRange, finRange]
 
 theorem getElem_mapFinRange {n} {create: Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
-  simp [mapFinRange, Vector.finRange]
+  simp [mapFinRange, finRange]
 
 def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=
   match n with
@@ -329,5 +331,5 @@ theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad 
 
 def mapRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : ℕ → m β) : m (Vector β n) := (range n).mapM f
 
-def mapFinRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : Fin n → m β) : m (Vector β n) := (Vector.finRange n).mapM f
+def mapFinRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : Fin n → m β) : m (Vector β n) := (finRange n).mapM f
 end Vector
