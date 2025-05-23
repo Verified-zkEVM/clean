@@ -2,7 +2,7 @@
 This file proves some properties about `forM`, `mapM`, and `foldlM` monad loops when used in a `Circuit`,
 typically leveraging a `ConstantLawfulCircuits` assumption on the loop body.
 
-The end result are loop methods `Circuit.{mapFinRange, map, for, foldl}` that simplify
+The end result are loop methods `Circuit.{mapFinRange, map, forEach, foldl}` that simplify
 under `circuit_norm` in every way we need them to.
 -/
 import Clean.Circuit.Lawful
@@ -29,8 +29,8 @@ instance LawfulCircuit.from_foldlM {circuit : β → α → Circuit F β}
   case cons x xs ih => rw [List.foldlM_cons]; exact from_bind inferInstance inferInstance
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
-    forM xs body = forM xs.toList body := by
-  rw [Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+    xs.forM body = forM xs.toList body := by
+  rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
 
 lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m β) :
     (fun v => v.toArray.toList) <$> (xs.mapM body) = xs.toList.mapM body := by
@@ -41,7 +41,7 @@ lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (bod
   rw [Vector.foldlM_mk, List.foldlM_toArray]
 
 instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] {n : ℕ} (xs : Vector α n) :
-    LawfulCircuit (forM xs circuit) := by
+    LawfulCircuit (xs.forM circuit) := by
   rw [Vector.forM_toList]
   apply from_forM
 
@@ -233,7 +233,7 @@ theorem forM_forAll {xs : List α} :
     exact Iff.intro id id
 
 theorem forM_vector_forAll {xs : Vector α n} :
-  (forM xs circuit |>.operations m).forAll prop ↔
+  (xs.forM circuit |>.operations m).forAll prop ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), (circuit x |>.operations (m + i*lawful.local_length)).forAll prop := by
   rw [Vector.forM_toList, forM_forAll, List.forall_iff_forall_mem, Prod.forall]
   have h_elem_iff : ∀ {t}, (t ∈ xs.zipIdx ↔ t ∈ xs.toList.zipIdx) := by
@@ -250,7 +250,7 @@ theorem forM_vector_forAll {xs : Vector α n} :
     exact h x hx i hxi
 
 theorem forM_vector_forAll' {xs : Vector α n} :
-  (forM xs circuit |>.operations m).forAll prop ↔
+  (xs.forM circuit |>.operations m).forAll prop ↔
     ∀ (i : Fin n), (circuit xs[i.val] |>.operations (m + i*lawful.local_length)).forAll prop := by
   rw [forM_vector_forAll]
   constructor
@@ -273,12 +273,12 @@ theorem forM_completeness {xs : List α} :
   simp only [completeness_iff_forAll, forM_forAll]
 
 theorem forM_vector_soundness {xs : Vector α n} :
-  soundness env (forM xs circuit |>.operations m) ↔
+  soundness env (xs.forM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), soundness env (circuit x |>.operations (m + i*lawful.local_length)) := by
   simp only [soundness_iff_forAll, forM_vector_forAll]
 
 theorem forM_vector_completeness {xs : Vector α n} :
-  completeness env (forM xs circuit |>.operations m) ↔
+  completeness env (xs.forM circuit |>.operations m) ↔
     ∀ x ∈ xs, ∀ (i : ℕ) (_ : (x, i) ∈ xs.zipIdx), completeness env (circuit x |>.operations (m + i*lawful.local_length)) := by
   simp only [completeness_iff_forAll, forM_vector_forAll]
 
@@ -510,6 +510,10 @@ def map {m : ℕ} [Nonempty β] (xs : Vector α m) (body : α → Circuit F β)
     (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F (Vector β m) :=
   xs.mapM body
 
+def forEach {m : ℕ} (xs : Vector α m) (body : α → Circuit F Unit)
+    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F Unit :=
+  xs.forM body
+
 def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β) (body : β → α → Circuit F β)
   (lawful : ConstantLawfulCircuits (fun (s, a) => body s a) := by infer_constant_lawful_circuits)
   (_h_const_out : lawful.constant_output := by
@@ -518,7 +522,7 @@ def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β)
       rfl) : Circuit F β :=
   xs.foldlM body init
 
-section
+section mapFinRange
 variable {env : Environment F} {m n : ℕ} [NeZero m] [Nonempty β] {body : Fin m → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
 @[circuit_norm ↓]
@@ -571,9 +575,9 @@ lemma mapFinRange.output_eq :
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange,
     LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
   ac_rfl
-end
+end mapFinRange
 
-section
+section map
 variable {env : Environment F} {m n : ℕ} [Inhabited α] [Nonempty β] {xs : Vector α m}
   {body : α → Circuit F β} {lawful : ConstantLawfulCircuits body}
 
@@ -627,9 +631,9 @@ lemma map.output_eq :
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_mapIdx, LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
   ac_rfl
-end
+end map
 
-section
+section foldl
 variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {lawful : ConstantLawfulCircuits fun (t : β × α) => body t.1 t.2}
   {const_out : lawful.constant_output}
@@ -691,7 +695,7 @@ lemma foldl.output_eq [NeZero m] :
   · simp at this
   simp only [Fin.foldl_const, add_tsub_cancel_right, Fin.natCast_eq_last, Fin.val_last]
   ac_rfl
-end
+end foldl
 
 end Circuit
 end
