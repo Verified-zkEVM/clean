@@ -159,7 +159,14 @@ theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
     rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
   rw [rot_right64_eq_bv_rotate _ h,
     rot_right64_eq_bv_rotate _ h,
-    rot_right64_eq_bv_rotate _ (by sorry)]
+    rot_right64_eq_bv_rotate _ (by apply BitVec.isLt)]
+
+  refine BitVec.toNat_eq.mp ?_
+  simp only [Nat.toUInt64, UInt64.ofNat_bitVecToNat, UInt64.toBitVec_ofNat']
+  set x' := (BitVec.ofNat 64 x)
+  apply BitVec.eq_of_getLsbD_eq
+  intros i hi
+  rw [BitVec.getLsbD_rotateRight]
 
   sorry
 
