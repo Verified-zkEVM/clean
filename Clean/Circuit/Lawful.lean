@@ -347,6 +347,20 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} (f_lawful: Lawf
     simp only [fg_lawful, from_bind]
   rw [h_ops, OperationsFrom.append_val, append_forAll]
 
+theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a))
+  (ops : OperationsList F) :
+  ((f >>= g) ops).2.withLength.forAll prop ↔
+    (f ops).2.withLength.forAll prop ∧
+      ((g (LawfulCircuit.output f ops.offset)).operations (f ops).2.offset).forAll prop := by
+  open LawfulCircuit in
+  let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
+  rw [append_only, append_only]
+  simp only
+  rw [append_forAll, append_forAll]
+  simp only [←LawfulCircuit.operations_eq' (Operations.forAll prop)]
+  simp only [bind_forAll]
+  simp only [and_assoc, and_assoc]
+
 -- specializations to soundness / completeness
 
 theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a)) :
