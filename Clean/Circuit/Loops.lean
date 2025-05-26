@@ -674,6 +674,23 @@ omit [Inhabited α] in
 @[circuit_norm ↓]
 lemma forEach.output_eq :
   (forEach xs body lawful ops).1 = () := rfl
+
+-- @[circuit_norm ↓]
+lemma forEach.apply_eq :
+  forEach xs body lawful ops = ((), {
+    offset := ((forEach xs body lawful).final_offset ops.offset)
+    withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
+      : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
+  }) := by
+  sorry
+
+lemma forEach.apply_eq_snd :
+  (forEach xs body lawful ops).2 = {
+    offset := ((forEach xs body lawful).final_offset ops.offset)
+    withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
+      : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
+  } := by
+  sorry
 end forEach
 
 section foldl

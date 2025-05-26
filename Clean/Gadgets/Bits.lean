@@ -37,11 +37,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) field (BitVector n) where
   local_length _ := n
   output _ i := var_from_offset (ProvableVector field n) i
 
-  initial_offset_eq _ _ := by simp only [main, circuit_norm]
+  initial_offset_eq _ n := by simp only [main, circuit_norm]
   local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
   output_eq _ _ := by
-    simp only [main, circuit_norm, Boolean.circuit, var_from_offset_vector]
-    rfl
+    simp only [main, circuit_norm, Boolean.circuit, Circuit.forEach.apply_eq, var_from_offset_vector]
+    -- rfl
 
   assumptions (x : F p) := x.val < 2^n
 
@@ -51,7 +51,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) field (BitVector n) where
   soundness := by
     intro k env x_var x h_input h_assumptions h_holds
     dsimp only [main] at *
-    simp only [main, circuit_norm, eval_vector, var_from_offset_vector] at *
+    simp only [main, circuit_norm, eval_vector, var_from_offset_vector, Circuit.forEach.apply_eq, Circuit.forEach.apply_eq_snd] at *
     -- rw [Circuit.forEach.final_offset_eq] at h_holds
     -- intro i hi
     sorry
