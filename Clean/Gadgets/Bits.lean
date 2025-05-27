@@ -160,16 +160,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
     intro k eval x_var x h_input h_assumptions h_holds
     dsimp only [main] at *
     simp only [main, circuit_norm, Boolean.circuit, true_and, eval_vector, var_from_offset_vector] at *
-    -- TODO: simp [circuit_norm] is not able to exclude the case that `forEach` results in empty operations
-    -- which leads to this case split and hard-to-discover proof that dicharges the empty case
-    split at h_holds
-    · rename_i h_eq
-      rcases (Circuit.forEach.no_empty h_eq) with h|h
-      · obtain rfl : n = 0 := h
-        simp [Vector.mapRange_zero]
-      obtain ⟨_, _, h⟩ := h
-      exact Operations.noConfusion h
-    rename_i h_eq; clear h_eq
     simp only [h_input, circuit_norm, subcircuit_norm, true_implies] at h_holds
     clear h_input
 
@@ -193,17 +183,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
     simp only [main, circuit_norm, Boolean.circuit, eval_vector, var_from_offset_vector] at *
-    -- TODO: simp [circuit_norm] is not able to exclude the case that `forEach` results in empty operations
-    -- which leads to this case split and hard-to-discover proof that dicharges the empty case
-    split
-    · rename_i h_eq
-      rcases (Circuit.forEach.no_empty h_eq) with h|h
-      · obtain rfl : n = 0 := h
-        simp_all [Expression.eval, from_bits_expr]
-      obtain ⟨_, _, h⟩ := h
-      exact Operations.noConfusion h
-    rename_i h_eq; clear h_eq
-    simp only [h_input, circuit_norm, subcircuit_norm, true_implies, true_and, and_true] at h_env ⊢
+    simp only [h_input, circuit_norm, subcircuit_norm] at h_env ⊢
     obtain ⟨ h_bits, right ⟩ := h_env; clear right;
 
     constructor
