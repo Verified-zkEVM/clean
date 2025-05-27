@@ -535,11 +535,6 @@ inductive Operation (F : Type) [Field F] where
   | subcircuit : {n : ℕ} → SubCircuit F n → Operation F
 
 namespace Operation
-def added_witness : Operation F → ℕ
-  | witness m _ => m
-  | subcircuit s => s.local_length
-  | _ => 0
-
 instance [Repr F] : Repr (Operation F) where
   reprPrec op _ := match op with
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
