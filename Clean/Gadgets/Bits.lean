@@ -31,27 +31,18 @@ def main (n: ℕ) (x : Expression (F p)) := do
 -- theorems about to/from bits that we need
 
 omit p_large_enough in
-theorem from_bits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n)
-  (h_bits : ∀ (i : ℕ) (hi : i < n), eval bits[i] = 0 ∨ eval bits[i] = 1) :
+/-- evaluation commutes with bits accumulation -/
+theorem from_bits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
     eval (from_bits_expr bits) = from_bits (bits.map eval) := by
-  simp only [from_bits_expr]
+  simp only [from_bits_expr, from_bits]
   induction n with
-  | zero => simp only [Fin.foldl_zero, Expression.eval, from_bits]
+  | zero => simp only [Fin.foldl_zero, Expression.eval]
   | succ n ih =>
-    simp only [Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last, Expression.eval, from_bits,
-      Vector.getElem_map]
-    simp only [from_bits, Vector.getElem_map] at ih
+    obtain ih := ih bits.pop
+    simp only [Vector.getElem_pop'] at ih
+    simp [Fin.foldl_succ_last, ih, Expression.eval]
 
-    -- now the goal easily follows from the induction hypothesis
-    let bits' : Vector (Expression (F p)) n := bits.pop
-    have h_bits' : ∀ j (hj : j < n), eval bits'[j] = 0 ∨ eval bits'[j] = 1
-      | j, hj => by
-        simp only [Vector.getElem_pop', bits']
-        exact h_bits j (Nat.lt_succ_of_lt hj)
-    obtain ih := ih bits' h_bits'
-    simp only [Vector.getElem_pop', bits'] at ih
-    rw [ih]
-
+/-- main lemma which establishes the behaviour of `from_bits` and `to_bits` by induction -/
 lemma to_bits_from_bits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (from_bits bits).val < 2^n ∧ to_bits n (from_bits bits) = bits := by
@@ -107,10 +98,12 @@ lemma to_bits_from_bits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
     subst this
     rcases h_bits_n <;> simp [*, ZMod.val_one]
 
+/-- the result of `from_bits` is less than 2^n -/
 theorem from_bits_lt {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (from_bits bits).val < 2^n := (to_bits_from_bits_aux hn bits h_bits).left
 
+/-- `to_bits` is a left-inverse of `from_bits` -/
 theorem to_bits_from_bits {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     to_bits n (from_bits bits) = bits := (to_bits_from_bits_aux hn bits h_bits).right
@@ -138,6 +131,7 @@ theorem to_bits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2^n →
   replace hy : y.val < 2^i := by linarith
   rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
+/-- on numbers less than `2^n`, `to_bits` is a right-inverse of `from_bits` -/
 theorem from_bits_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
     from_bits (to_bits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (to_bits n x)[i] = 0 ∨ (to_bits n x)[i] = 1 := by
@@ -179,18 +173,13 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
     let bit_vars : Vector (Expression (F p)) n := .mapRange n fun i => var ⟨k + i⟩
     let bits : Vector (F p) n := bit_vars.map eval
 
-    have h_bit_vars : ∀ (i : ℕ) (hi : i < n), eval bit_vars[i] = 0 ∨ eval bit_vars[i] = 1
-      | i, hi => by
-        simp only [Vector.getElem_mapRange, bit_vars]
-        exact h_bits ⟨ i, hi ⟩
-
     replace h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1
       | i, hi => by
-        simp only [Vector.getElem_map, bits]
-        exact h_bit_vars i hi
+        simp only [Vector.getElem_map, bits, Vector.getElem_mapRange, bit_vars]
+        exact h_bits ⟨ i, hi ⟩
 
     change x = eval (from_bits_expr bit_vars) at h_eq
-    rw [h_eq, from_bits_eval bit_vars h_bit_vars]
+    rw [h_eq, from_bits_eval bit_vars]
 
     show _ = to_bits n (from_bits bits)
     rw [to_bits_from_bits hn bits h_bits]
@@ -207,30 +196,21 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
     simp only [h_input, circuit_norm, subcircuit_norm, true_implies, true_and, and_true] at h_env ⊢
     obtain ⟨ h_bits, right ⟩ := h_env; clear right;
 
-    let bit_vars : Vector (Expression (F p)) n := .mapRange n fun i => var ⟨k + i⟩
-    let bits := to_bits n x
+    constructor
+    · intro i
+      rw [h_bits i]
+      simp [to_bits]
 
-    have h_bits_eq : bit_vars.map eval = bits := by
+    let bit_vars : Vector (Expression (F p)) n := .mapRange n fun i => var ⟨k + i⟩
+
+    have h_bits_eq : bit_vars.map eval = to_bits n x := by
       rw [Vector.ext_iff]
       intro i hi
       simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval, bit_vars]
       exact h_bits ⟨ i, hi ⟩
 
-    have h_bit_vars' : (∀ (i : Fin n), eval.get (k + i) = 0 ∨ eval.get (k + i) = 1)
-      | ⟨i, hi⟩ => by
-        rw [h_bits ⟨ i, hi ⟩]
-        simp [to_bits]
-    use h_bit_vars'
-
-    have h_bit_vars : ∀ (i : ℕ) (hi : i < n), eval bit_vars[i] = 0 ∨ eval bit_vars[i] = 1
-      | i, hi => by
-        simp only [Vector.getElem_mapRange, bit_vars, Expression.eval]
-        exact h_bit_vars' ⟨i, hi⟩
-
     show x = eval (from_bits_expr bit_vars)
-    rw [from_bits_eval bit_vars h_bit_vars, h_bits_eq]
-    show x = from_bits (to_bits n x)
-    rw [from_bits_to_bits hn h_assumptions]
+    rw [from_bits_eval bit_vars, h_bits_eq, from_bits_to_bits hn h_assumptions]
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
