@@ -7,14 +7,10 @@ variable {α : Type}
 theorem funext_heq {α α' β : Type} (h : α = α') {f : α → β} {g : α' → β} :
     (∀ x : α, f x = g (cast h x)) → HEq f g := by
   subst h
-  intro h
+  intro hfg
   apply heq_of_eq
   funext x
-  exact h x
-
-theorem fun_cast_heq {α α' β : Type} (h : α' = α) (f : α → β) : HEq (fun x => f (cast h x)) f := by
-  subst h
-  exact heq_of_eq rfl
+  exact hfg x
 
 theorem Fin.foldl_const_succ (n : ℕ) (f : Fin (n + 1) → α) (init : α) :
     Fin.foldl (n + 1) (fun _ i => f i) init = f n := by

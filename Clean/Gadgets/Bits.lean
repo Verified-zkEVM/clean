@@ -160,6 +160,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
     intro k eval x_var x h_input h_assumptions h_holds
     dsimp only [main] at *
     simp only [main, circuit_norm, Boolean.circuit, true_and, eval_vector, var_from_offset_vector] at *
+    -- TODO: simp [circuit_norm] is not able to exclude the case that `forEach` results in empty operations
+    -- which leads to this case split and hard-to-discover proof that dicharges the empty case
     split at h_holds
     · rename_i h_eq
       rcases (Circuit.forEach.no_empty h_eq) with h|h
@@ -191,6 +193,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
     simp only [main, circuit_norm, Boolean.circuit, eval_vector, var_from_offset_vector] at *
+    -- TODO: simp [circuit_norm] is not able to exclude the case that `forEach` results in empty operations
+    -- which leads to this case split and hard-to-discover proof that dicharges the empty case
     split
     · rename_i h_eq
       rcases (Circuit.forEach.no_empty h_eq) with h|h
