@@ -19,7 +19,7 @@ theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector
 
 theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → constraints_hold.completeness env ((all_zero xs).operations offset) := by
-  simp only [all_zero, circuit_norm]
+  simp only [all_zero, circuit_norm, true_and]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 

@@ -694,17 +694,21 @@ lemma forEach.soundness' :
 
 @[circuit_norm ↓]
 lemma forEach.completeness :
-  constraints_hold.completeness env (forEach xs body lawful |>.operations n) ↔
-    ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
-  simp only [forEach, constraints_hold.completeness_iff_forAll, constraints_hold.forM_vector_forAll']
+  constraints_hold.completeness env (forEach xs body lawful ops).2.withLength ↔
+    (constraints_hold.completeness env ops.withLength)
+    ∧ ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (ops.offset + i*(body default).local_length)) := by
+  simp only [forEach, constraints_hold.completeness_iff_forAll]
+  rw [constraints_hold.forM_vector_forAll_general]
   rw [LawfulCircuit.local_length_eq]
   trivial
 
 @[circuit_norm ↓]
 lemma forEach.uses_local_witnesses :
-  env.uses_local_witnesses_completeness (forEach xs body lawful |>.operations n) ↔
-    ∀ i : Fin m, env.uses_local_witnesses_completeness (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
-  simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll, constraints_hold.forM_vector_forAll']
+  env.uses_local_witnesses_completeness (forEach xs body lawful ops).2.withLength ↔
+    (env.uses_local_witnesses_completeness ops.withLength)
+    ∧ ∀ i : Fin m, env.uses_local_witnesses_completeness (body xs[i.val] |>.operations (ops.offset + i*(body default).local_length)) := by
+  simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll]
+  rw [constraints_hold.forM_vector_forAll_general]
   rw [LawfulCircuit.local_length_eq]
   trivial
 
