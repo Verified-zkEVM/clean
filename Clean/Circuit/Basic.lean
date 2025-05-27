@@ -347,15 +347,11 @@ Version of `constraints_hold` that replaces the statement of subcircuits with th
 def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold.soundness eval ops
-  | .assert ops e =>
-    let constraint := eval e = 0
-    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
+  | .assert ops e => constraints_hold.soundness eval ops ∧ eval e = 0
   | .lookup ops { table, entry, .. } =>
-    let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
+    constraints_hold.soundness eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    let constraint := s.soundness eval
-    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
+    constraints_hold.soundness eval ops ∧ s.soundness eval
 
 /--
 Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
@@ -364,16 +360,11 @@ Version of `constraints_hold` that replaces the statement of subcircuits with th
 def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold.completeness eval ops
-  | .assert ops e =>
-    let constraint := eval e = 0
-    -- avoid a leading `True ∧` if ops is empty
-    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+  | .assert ops e => constraints_hold.completeness eval ops ∧ eval e = 0
   | .lookup ops { table, entry, .. } =>
-    let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+    constraints_hold.completeness eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    let constraint := s.completeness eval
-    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+    constraints_hold.completeness eval ops ∧ s.completeness eval
 end Circuit
 
 section
@@ -614,6 +605,9 @@ attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
+
+-- basic logical simplifcations
+attribute [circuit_norm] true_and and_true true_implies
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
