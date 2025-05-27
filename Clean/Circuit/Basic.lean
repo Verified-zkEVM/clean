@@ -609,6 +609,9 @@ def Operations.forAll (condition : Operations.Condition F) : {n : ℕ} → Opera
   | n, .lookup ops l => ops.forAll condition ∧ condition.lookup n l
   | n + _, .subcircuit ops s => ops.forAll condition ∧ condition.subcircuit n s
 
+theorem Operations.forAll_empty {condition : Operations.Condition F} {n: ℕ} :
+    Operations.forAll condition (.empty n) = True := rfl
+
 -- `circuit_norm` attributes
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
