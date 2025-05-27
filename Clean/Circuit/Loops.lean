@@ -736,26 +736,42 @@ lemma forEach.initial_offset_eq :
 lemma forEach.output_eq :
   (forEach xs body lawful ops).1 = () := rfl
 
--- @[circuit_norm ↓]
+@[circuit_norm ↓]
 lemma forEach.apply_eq :
   forEach xs body lawful ops = ((), {
     offset := ((forEach xs body lawful).final_offset ops.offset)
     withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
       : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
   }) := by
-  sorry
+  apply Prod.ext
+  · rfl
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [LawfulCircuit.append_only]
+  rcases ops with ⟨ n, ops ⟩
+  simp only [OperationsList.mk.injEq]
+  have h_offset : LawfulCircuit.final_offset (forEach xs body lawful) n = (forEach xs body lawful).final_offset n := by
+    rw [LawfulCircuit.final_offset_eq]
+  use h_offset
+  congr
+  simp only [LawfulCircuit.operations_eq, Subtype.coe_eta, heq_eqRec_iff_heq, heq_eq_eq]
 
+-- TODO either prove or get rid of this lemma
 lemma forEach.no_empty :
-  (forEach xs body lawful ops).2.withLength = .empty (forEach xs body lawful ops).2.offset → m = 0 := by
+  (forEach xs body lawful ops).2.withLength = .empty (forEach xs body lawful ops).2.offset
+    → m = 0 ∨ ∃ (_ : m > 0) (ops : OperationsList F) (n : ℕ), (body xs[m-1] ops).2 = .from_offset n := by
+  rcases ops with ⟨ n, ops ⟩
+  rw [forEach.apply_eq]
+  simp only
+  intro h_empty
+  obtain ⟨ h_eq, _, empty2 ⟩  := Operations.empty_of_append_empty _ _ h_empty
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [Circuit.final_offset, LawfulCircuit.offset_independent, ConstantLawfulCircuit.local_length_eq] at h_eq
+  simp only [ConstantLawfulCircuit.local_length, Nat.add_eq_left, mul_eq_zero, lawful_loop] at h_eq
+  simp only at empty2
+  -- the idea is that `forEach` operations are just concatenated body's operations
+  -- so if `empty2` is true (forEach results in empty operations), then the body (on the final input element) must result in empty operations
   sorry
 
-lemma forEach.apply_eq_snd :
-  (forEach xs body lawful ops).2 = {
-    offset := ((forEach xs body lawful).final_offset ops.offset)
-    withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
-      : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
-  } := by
-  sorry
 end forEach
 
 section foldl
