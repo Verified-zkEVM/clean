@@ -607,7 +607,7 @@ attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
 
 -- basic logical simplifcations
-attribute [circuit_norm] true_and and_true true_implies
+attribute [circuit_norm] true_and and_true true_implies forall_const
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
