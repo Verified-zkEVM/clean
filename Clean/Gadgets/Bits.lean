@@ -17,11 +17,14 @@ def from_bits_expr {n: ℕ} (bits : Vector (Expression (F p)) n) : Expression (F
 @[reducible] def BitVector (n : ℕ) := ProvableVector field n
 
 namespace ToBits
-def main {n: ℕ} (x : Expression (F p)) := do
+def main (n: ℕ) (x : Expression (F p)) := do
+  -- witness the bits of `x`
   let bits ← witness_vector n fun env => to_bits n (x.eval env)
 
+  -- add boolean constraints on all bits
   Circuit.forEach bits fun bit => assertion Boolean.circuit bit
 
+  -- check that the bits correctly sum to `x`
   x.assert_equals (from_bits_expr bits)
   return bits
 
@@ -142,8 +145,10 @@ theorem from_bits_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
   apply to_bits_injective n (from_bits_lt hn _ h_bits) hx
   rw [to_bits_from_bits hn _ h_bits]
 
+-- formal circuit that implements `to_bits` like a function, assuming `x.val < 2^n`
+
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) where
-  main
+  main := main n
   local_length _ := n
   output _ i := var_from_offset (BitVector n) i
 
@@ -227,4 +232,21 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
     show x = from_bits (to_bits n x)
     rw [from_bits_to_bits hn h_assumptions]
 
+-- formal assertion that uses the same circuit to implement a range check. without input assumption
+
+def range_check (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
+  main x := do _ ← main n x -- discard the output
+  local_length _ := n
+
+  initial_offset_eq _ n := by simp only [main, circuit_norm]
+  local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
+
+  assumptions _ := True
+  spec (x : F p) := x.val < 2^n
+
+  soundness := by
+    sorry
+
+  completeness := by
+    sorry
 end Gadgets.ToBits
