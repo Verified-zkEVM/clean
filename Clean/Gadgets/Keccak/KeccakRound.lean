@@ -45,7 +45,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
     Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
     Chi.assumptions, Chi.spec, Xor.assumptions, Xor.spec
   ] at h_holds
-  simp only [forall_const, and_assoc, zero_mul, add_zero, and_imp] at h_holds
+  simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
   obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
   have ⟨ rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
@@ -90,7 +90,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumpti
   ] at h_env ⊢
   simp only [and_assoc] at h_env
   simp_all only [main, h_input, state_norm, circuit_norm,
-    U64.from_u64_normalized, and_true, true_and, true_implies]
+    U64.from_u64_normalized]
 
   -- `simp_all` left one goal to pull out of hypotheses
   obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env

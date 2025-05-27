@@ -83,7 +83,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  simp only [Boolean.spec, true_and, true_implies, and_assoc, add_zero, h_inputs] at h
+  simp only [Boolean.spec, and_assoc, add_zero, h_inputs] at h
   rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
@@ -134,12 +134,10 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm,
     add32_full, add8_full_carry, Boolean.circuit,
-    h_inputs
+    h_inputs, and_assoc
   ] at henv ⊢
-  simp only [true_and, and_assoc]
 
   -- characterize local witnesses
-  simp only [forall_const, true_and, and_true, and_assoc] at henv
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := henv
 
   set z0 := env.get i0
