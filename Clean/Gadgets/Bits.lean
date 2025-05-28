@@ -14,15 +14,13 @@ def from_bits {n : ℕ} (bits : Vector (F p) n) : F p :=
 def from_bits_expr {n: ℕ} (bits : Vector (Expression (F p)) n) : Expression (F p) :=
   Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2^i : F p)) 0
 
-@[reducible] def BitVector (n : ℕ) := ProvableVector field n
-
 namespace ToBits
 def main (n: ℕ) (x : Expression (F p)) := do
   -- witness the bits of `x`
   let bits ← witness_vector n fun env => to_bits n (x.eval env)
 
   -- add boolean constraints on all bits
-  Circuit.forEach bits fun bit => assertion Boolean.circuit bit
+  Circuit.forEach bits (assertion Boolean.circuit)
 
   -- check that the bits correctly sum to `x`
   x.assert_equals (from_bits_expr bits)
@@ -141,15 +139,14 @@ theorem from_bits_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
 
 -- formal circuit that implements `to_bits` like a function, assuming `x.val < 2^n`
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) where
+def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
   local_length _ := n
-  output _ i := var_from_offset (BitVector n) i
+  output _ i := var_from_offset (fields n) i
 
   initial_offset_eq _ n := by simp only [main, circuit_norm]
   local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
-  output_eq _ _ := by
-    simp only [main, circuit_norm, Boolean.circuit, var_from_offset_vector]
+  output_eq _ _ := by simp only [main, circuit_norm]
 
   assumptions (x : F p) := x.val < 2^n
 
@@ -159,30 +156,26 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
   soundness := by
     intro k eval x_var x h_input h_assumptions h_holds
     dsimp only [main] at *
-    simp only [main, circuit_norm, Boolean.circuit, true_and, eval_vector, var_from_offset_vector] at *
+    simp only [main, circuit_norm, Boolean.circuit, true_and] at *
     simp only [h_input, circuit_norm, subcircuit_norm, true_implies] at h_holds
     clear h_input
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
 
-    let bit_vars : Vector (Expression (F p)) n := .mapRange n fun i => var ⟨k + i⟩
+    let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
     let bits : Vector (F p) n := bit_vars.map eval
 
     replace h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1
       | i, hi => by
-        simp only [Vector.getElem_map, bits, Vector.getElem_mapRange, bit_vars]
+        simp only [circuit_norm, bits, bit_vars]
         exact h_bits ⟨ i, hi ⟩
 
     change x = eval (from_bits_expr bit_vars) at h_eq
-    rw [h_eq, from_bits_eval bit_vars]
-
-    show _ = to_bits n (from_bits bits)
-    rw [to_bits_from_bits hn bits h_bits]
-    simp [bits, bit_vars, eval_field]
+    rw [h_eq, from_bits_eval bit_vars, to_bits_from_bits hn bits h_bits]
 
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
-    simp only [main, circuit_norm, Boolean.circuit, eval_vector, var_from_offset_vector] at *
+    simp only [main, circuit_norm, Boolean.circuit] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_env ⊢
     obtain ⟨ h_bits, right ⟩ := h_env; clear right;
 
@@ -191,12 +184,12 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (BitVector n) w
       rw [h_bits i]
       simp [to_bits]
 
-    let bit_vars : Vector (Expression (F p)) n := .mapRange n fun i => var ⟨k + i⟩
+    let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
 
     have h_bits_eq : bit_vars.map eval = to_bits n x := by
       rw [Vector.ext_iff]
       intro i hi
-      simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval, bit_vars]
+      simp only [circuit_norm, bit_vars]
       exact h_bits ⟨ i, hi ⟩
 
     show x = eval (from_bits_expr bit_vars)

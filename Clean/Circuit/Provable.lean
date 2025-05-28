@@ -135,7 +135,7 @@ variable {n: ℕ}
 def ProvableVector (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
 
 @[reducible]
-def fields (n: ℕ) := ProvableVector field n
+def fields (n: ℕ) := fun F => Vector F n
 
 @[circuit_norm]
 instance : LawfulProvableType (fields n) where
@@ -294,7 +294,16 @@ theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) 
 omit [Field F] in
 @[circuit_norm ↓]
 theorem var_from_offset_field (offset : Nat) :
-  ProvableType.var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
+  var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
+
+@[circuit_norm ↓]
+theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
+  ProvableType.eval env x = x.map (Expression.eval env) := rfl
+
+omit [Field F] in
+@[circuit_norm ↓]
+theorem var_from_offset_fields (offset : Nat) :
+  var_from_offset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
 namespace LawfulProvableType
 @[circuit_norm]

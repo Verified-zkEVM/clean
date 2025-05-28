@@ -275,7 +275,7 @@ def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (
 @[circuit_norm]
 def witness_vector (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Expression F) n) :=
   modifyGet fun ops =>
-    let vars := Vector.mapRange n fun i => var ⟨ ops.offset + i ⟩
+    let vars := var_from_offset (fields n) ops.offset
     ⟨vars, .witness ops n compute⟩
 
 /-- Add a constraint. -/
