@@ -76,7 +76,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   dsimp only [elaborated, main, assumptions] at h_assumptions h_env ⊢
   simp only [h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.spec, KeccakRound.assumptions, zero_add, forall_const, true_and] at h_env ⊢
+    KeccakRound.spec, KeccakRound.assumptions, zero_add] at h_env ⊢
 
   obtain ⟨ ⟨ h_init, _ ⟩, h_succ ⟩ := h_env
   intro i hi

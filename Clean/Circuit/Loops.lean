@@ -755,23 +755,6 @@ lemma forEach.apply_eq :
   congr
   simp only [LawfulCircuit.operations_eq, Subtype.coe_eta, heq_eqRec_iff_heq, heq_eq_eq]
 
--- TODO either prove or get rid of this lemma
-lemma forEach.no_empty :
-  (forEach xs body lawful ops).2.withLength = .empty (forEach xs body lawful ops).2.offset
-    → m = 0 ∨ ∃ (_ : m > 0) (ops : OperationsList F), (body xs[m-1] ops).2.withLength = .empty _ := by
-  rcases ops with ⟨ n, ops ⟩
-  rw [forEach.apply_eq]
-  simp only
-  intro h_empty
-  obtain ⟨ h_eq, _, empty2 ⟩  := Operations.empty_of_append_empty _ _ h_empty
-  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [Circuit.final_offset, LawfulCircuit.offset_independent, ConstantLawfulCircuit.local_length_eq] at h_eq
-  simp only [ConstantLawfulCircuit.local_length, Nat.add_eq_left, mul_eq_zero, lawful_loop] at h_eq
-  simp only at empty2
-  -- the idea is that `forEach` operations are just concatenated body's operations
-  -- so if `empty2` is true (forEach results in empty operations), then the body (on the final input element) must result in empty operations
-  sorry
-
 end forEach
 
 section foldl

@@ -35,7 +35,7 @@ example (input : Var Inputs (F p)) (env) (i0 : ℕ) :
 
   -- first version: using `circuit_norm`
   -- dsimp only [circuit_norm, circuit32, add32_full, add8_full_carry, Boolean.circuit]
-  -- simp only [true_and, and_true, subcircuit_norm, circuit_norm]
+  -- simp only [subcircuit_norm, circuit_norm]
 
   -- second version: using `LawfulCircuit`
   rw [LawfulCircuit.soundness_eq]
@@ -44,5 +44,5 @@ example (input : Var Inputs (F p)) (env) (i0 : ℕ) :
   -- simp constraints hold expression
   simp only [append_empty, empty_append, append_assoc, append_val, Circuit.constraints_hold.append_soundness, Circuit.constraints_hold.soundness]
   -- simp `eval` and boolean subcircuit soundness
-  simp only [true_and, and_true, subcircuit_norm, circuit_norm]
+  simp only [subcircuit_norm, circuit_norm]
   sorry

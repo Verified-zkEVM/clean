@@ -88,7 +88,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ hx, hy ⟩ := h_input
   rw [ByteXorTable.equiv, hx, hy] at h_holds
   clear hx hy
-  obtain ⟨ _, hx_byte, hy_byte, h_xor ⟩ := h_holds
+  obtain ⟨ hx_byte, hy_byte, h_xor ⟩ := h_holds
   set w := env.get i
   set z := x + y + -(2 * w)
   show w.val = x.val &&& y.val
@@ -118,23 +118,23 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
+  clear h_env
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
   rw [ByteXorTable.equiv, hx, hy]
-  set w := env.get i
+  set w : F p := ZMod.val x &&& ZMod.val y
+  have hw : w = ZMod.val x &&& ZMod.val y := rfl
   let z := x + y + -(2 * w)
 
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  suffices h_xor : (x + y + -(2 * w)).val = x.val ^^^ y.val from ⟨ trivial, hx_byte, hy_byte, h_xor ⟩
+  suffices h_xor : (x + y + -(2 * w)).val = x.val ^^^ y.val from ⟨ hx_byte, hy_byte, h_xor ⟩
 
   -- now it's pretty much the soundness proof in reverse
-  simp only [forall_const, true_and] at h_env
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
   have p_large := p_large_enough.elim
   have and_lt : x.val &&& y.val < p := by linarith
-  rw [hx, hy, nat_to_field_eq_natcast and_lt] at h_env
-  have h_and : w.val = x.val &&& y.val := nat_to_field_eq w h_env
-  clear h_env
+  rw [nat_to_field_eq_natcast and_lt] at hw
+  have h_and : w.val = x.val &&& y.val := nat_to_field_eq w hw
 
   have two_and_val : (2 * w).val = 2 * (x.val &&& y.val) := by
     rw [ZMod.val_mul_of_lt, val_two, h_and]

@@ -126,7 +126,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_bytes
 
   simp only [h_input, circuit_norm, xor_u64, ByteXorLookup,
-    var_from_offset, Vector.mapRange, true_and] at h_env ⊢
+    var_from_offset, Vector.mapRange] at h_env ⊢
   repeat rw [ByteXorTable.equiv]
   have h_env0 := by let h := h_env 0; simp at h; exact h
   have h_env1 := by let h := h_env 1; simp at h; exact h
