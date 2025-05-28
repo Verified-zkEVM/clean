@@ -154,11 +154,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     bits = to_bits n x
 
   soundness := by
-    intro k eval x_var x h_input h_assumptions h_holds
-    dsimp only [main] at *
-    simp only [main, circuit_norm, Boolean.circuit, true_and] at *
-    simp only [h_input, circuit_norm, subcircuit_norm, true_implies] at h_holds
-    clear h_input
+    intro k eval x_var x h_input _h_assumptions h_holds
+    simp only [main, circuit_norm, Boolean.circuit] at *
+    simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
+    clear h_input _h_assumptions
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
 
