@@ -1,6 +1,7 @@
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
-import Clean.Circuit.Append
+import Clean.Circuit.Operations
+-- import Clean.Circuit.Append
 import Clean.Circuit.SimpGadget
 import Mathlib.Control.Monad.Writer
 
@@ -37,7 +38,7 @@ def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   circuit offset |>.snd
 
 @[reducible, circuit_norm]
-def operations (circuit: Circuit F α) (offset := 0) : List (Operation F) :=
+def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
   circuit offset |>.fst.snd
 
 @[reducible, circuit_norm]
@@ -46,7 +47,7 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 
 @[reducible, circuit_norm]
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
-  Operation.local_length (circuit offset |>.fst.snd)
+  Operations.local_length (circuit offset |>.fst.snd)
 
 -- core operations we can do in a circuit
 
@@ -310,9 +311,6 @@ end
 
 export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
 
-instance [Repr F] : Repr (OperationsList F) where
-  reprPrec ops _ := reprStr ops.toList
-
 -- witness generation
 
 def WitnessGenerators (F: Type) (n: ℕ) := Vector (Environment F → F) n
@@ -328,7 +326,7 @@ def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (E
     | assert _ | lookup _ =>
       ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
 
-def Operation.witness_generators : (ops: List (Operation F)) → Vector (Environment F → F) (Operation.local_length ops)
+def Operations.witness_generators : (ops: Operations F) → Vector (Environment F → F) ops.local_length
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
   | .assert _ :: ops => witness_generators ops
@@ -337,7 +335,7 @@ def Operation.witness_generators : (ops: List (Operation F)) → Vector (Environ
 
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := Operation.witness_generators (circuit.operations offset)
+  let generators := (circuit.operations offset).witness_generators
   generators.foldl (fun acc compute =>
     let env i := acc.getD i 0
     acc.push (compute ⟨ env ⟩))
@@ -351,7 +349,7 @@ structure Operations.Condition (F: Type) [Field F] where
   lookup (n: ℕ) : Lookup F → Prop
   subcircuit (n: ℕ) : {m : ℕ} → SubCircuit F m → Prop
 
-def Operations.forAll (condition : Operations.Condition F) (n : ℕ) : List (Operation F) → Prop
+def Operations.forAll (condition : Operations.Condition F) (n : ℕ) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness n m c ∧ forAll condition (n + m) ops
   | .assert e :: ops => condition.assert n e ∧ forAll condition n ops
@@ -359,7 +357,7 @@ def Operations.forAll (condition : Operations.Condition F) (n : ℕ) : List (Ope
   | .subcircuit s :: ops => condition.subcircuit n s ∧ forAll condition (n + s.local_length) ops
 
 theorem Operations.forAll_empty {condition : Operations.Condition F} {n: ℕ} :
-    Operations.forAll condition n [] = True := rfl
+  Operations.forAll condition n [] = True := rfl
 
 -- `circuit_norm` attributes
 

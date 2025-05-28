@@ -121,100 +121,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 @[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
 
-/--
-Core type representing the result of a circuit: a sequence of operations.
 
-Operations are indexed by a natural number which is the offset at which new variables are created.
-We use a custom inductive type, rather than a list, so that we can require the offset of subcircuits to be consistent.
--/
-inductive Operations (F : Type) [Field F] : ℕ → Type where
-  | empty : (n : ℕ) → Operations F n
-  | witness : {n : ℕ} → Operations F n → (m: ℕ) → (compute : Environment F → Vector F m) → Operations F (n + m)
-  | assert : {n : ℕ} → Operations F n → Expression F → Operations F n
-  | lookup : {n : ℕ} → Operations F n → Lookup F → Operations F n
-  | subcircuit : {n : ℕ} → Operations F n → (s : SubCircuit F n) → Operations F (n + s.local_length)
-
-namespace Operations
-@[reducible, circuit_norm]
-def initial_offset {n: ℕ} : Operations F n → ℕ
-  | .empty n => n
-  | .witness ops _ _ => initial_offset ops
-  | .assert ops _ => initial_offset ops
-  | .lookup ops _ => initial_offset ops
-  | .subcircuit ops _ => initial_offset ops
-
-@[circuit_norm]
-def local_length {n: ℕ} : Operations F n → ℕ
-  | .empty _ => 0
-  | .witness ops m _ => local_length ops + m
-  | .assert ops _ => local_length ops
-  | .lookup ops _ => local_length ops
-  | .subcircuit ops s => local_length ops + s.local_length
-
-@[circuit_norm]
-def local_witnesses {n: ℕ} (env: Environment F) : (ops: Operations F n) → Vector F ops.local_length
-  | .empty _ => #v[]
-  | .witness ops _ c => local_witnesses env ops ++ c env
-  | .assert ops _ => local_witnesses env ops
-  | .lookup ops _ => local_witnesses env ops
-  | .subcircuit ops s => local_witnesses env ops ++ s.witnesses env
-end Operations
-
-/--
-Helper type to remove the dependent type argument from `Operations`,
-similar to converting a `Vector` to a plain `List`.
--/
-structure OperationsList (F : Type) [Field F] where
-  offset: ℕ
-  withLength: Operations F offset
-
-namespace OperationsList
-@[reducible, circuit_norm]
-def from_offset (offset: ℕ) : OperationsList F := ⟨ offset, .empty offset ⟩
-
--- constructors matching `Operations`
-@[reducible, circuit_norm]
-def witness (ops: OperationsList F) (m: ℕ) (compute : Environment F → Vector F m) : OperationsList F :=
-  ⟨ ops.offset + m, .witness ops.withLength m compute ⟩
-
-@[reducible, circuit_norm]
-def assert (ops: OperationsList F) (e: Expression F) : OperationsList F :=
-  ⟨ ops.offset, .assert ops.withLength e ⟩
-
-@[reducible, circuit_norm]
-def lookup (ops: OperationsList F) (l: Lookup F) : OperationsList F :=
-  ⟨ ops.offset, .lookup ops.withLength l ⟩
-
-@[reducible, circuit_norm]
-def subcircuit (ops: OperationsList F) (s: SubCircuit F ops.offset) : OperationsList F :=
-  ⟨ ops.offset + s.local_length, .subcircuit ops.withLength s ⟩
-
-/--
-`Operations` and `OperationsList` are basically the same so we want easy coercions between them.
--/
-
-instance : CoeOut (Operations F n) (OperationsList F) where
-  coe ops := ⟨ n, ops ⟩
-
-instance (ops) : CoeDep (OperationsList F) ops (Operations F ops.offset) where
-  coe := ops.withLength
-
-/--
-The canonical way to create an empty `OperationsList` is to just pass in the offset
--/
-@[reducible, circuit_norm]
-instance : Coe ℕ (OperationsList F) where
-  coe offset := .from_offset offset
-
-end OperationsList
-
-/-- move from inductive (nested) operations back to flat operations -/
-def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
-  | .empty _ => []
-  | .witness ops m c => to_flat_operations ops ++ [.witness m c]
-  | .assert ops c => to_flat_operations ops ++ [.assert c]
-  | .lookup ops l => to_flat_operations ops ++ [.lookup l]
-  | .subcircuit ops circuit => to_flat_operations ops ++ circuit.ops
 
 /--
 Singleton `Operations`, that can be collected in a plain list, for easier processing.
@@ -234,19 +141,63 @@ instance [Repr F] : Repr (Operation F) where
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 end Operation
 
-def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
-  | .empty _ => []
-  | .witness ops m c => toList ops ++ [.witness m c]
-  | .assert ops e => toList ops ++ [.assert e]
-  | .lookup ops l => toList ops ++ [.lookup l]
-  | .subcircuit ops s => toList ops ++ [.subcircuit s]
+@[reducible, circuit_norm]
+def Operations (F : Type) [Field F] := List (Operation F)
 
-def OperationsList.toList : OperationsList F → List (Operation F)
-  | ⟨ _, ops ⟩ => ops.toList
+def Operations.toList : Operations F → List (Operation F)
+  | ops => ops
 
-def Operation.local_length : List (Operation F) → ℕ
+/-- move from nested operations back to flat operations -/
+def to_flat_operations : Operations F → List (FlatOperation F)
+  | [] => []
+  | .witness m c :: ops => .witness m c :: to_flat_operations ops
+  | .assert e :: ops => .assert e :: to_flat_operations ops
+  | .lookup l :: ops => .lookup l :: to_flat_operations ops
+  | .subcircuit s :: ops => s.ops ++ to_flat_operations ops
+
+namespace Operations
+-- @[reducible, circuit_norm]
+-- def initial_offset (n) : Operations F n → ℕ
+--   | .empty n => n
+--   | .witness ops _ _ => initial_offset ops
+--   | .assert ops _ => initial_offset ops
+--   | .lookup ops _ => initial_offset ops
+--   | .subcircuit ops _ => initial_offset ops
+
+@[circuit_norm]
+def local_length : Operations F → ℕ
   | [] => 0
-  | witness m _ :: ops => m + local_length ops
-  | assert _ :: ops => local_length ops
-  | lookup _ :: ops => local_length ops
-  | subcircuit s :: ops => s.local_length + local_length ops
+  | .witness m _ :: ops => m + local_length ops
+  | .assert _ :: ops => local_length ops
+  | .lookup _ :: ops => local_length ops
+  | .subcircuit s :: ops => s.local_length + local_length ops
+
+@[circuit_norm]
+def local_witnesses (env: Environment F) : (ops: Operations F) → Vector F ops.local_length
+  | [] => #v[]
+  | .witness _ c :: ops => c env ++ local_witnesses env ops
+  | .assert _ :: ops => local_witnesses env ops
+  | .lookup _ :: ops => local_witnesses env ops
+  | .subcircuit s :: ops => s.witnesses env ++ local_witnesses env ops
+end Operations
+
+namespace Operations
+-- constructors matching `Operation`
+@[reducible, circuit_norm]
+def empty : Operations F := []
+
+@[reducible, circuit_norm]
+def witness (ops: Operations F) (m: ℕ) (compute : Environment F → Vector F m) : Operations F :=
+  ops ++ [.witness m compute]
+
+@[reducible, circuit_norm]
+def assert (ops: Operations F) (e: Expression F) : Operations F :=
+  ops ++ [.assert e]
+
+@[reducible, circuit_norm]
+def lookup (ops: Operations F) (l: Lookup F) : Operations F :=
+  ops ++ [.lookup l]
+
+@[reducible, circuit_norm]
+def subcircuit (ops: Operations F) (s: SubCircuit F n) : Operations F :=
+  ops ++ [.subcircuit s]
