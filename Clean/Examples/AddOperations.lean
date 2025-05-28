@@ -11,11 +11,11 @@ def circuit := do
   let z ← Gadgets.Addition8.add8 { x, y }
   Gadgets.Addition8.add8 { x, y := z }
 
-#eval circuit.operation_list
+#eval! circuit.operations
 
-#eval circuit.witnesses
+#eval! circuit.witnesses
 
-#eval Gadgets.Addition32Full.circuit (p:=p) |>.local_length default
+#eval! Gadgets.Addition32Full.circuit (p:=p) |>.local_length default
 
-#eval (do Gadgets.Addition32Full.add32_full (p:=p) (← default)).operation_list
+#eval! (do Gadgets.Addition32Full.add32_full (p:=p) (← default)).operations
 end

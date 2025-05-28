@@ -27,10 +27,21 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-@[reducible]
 def Circuit (F : Type) [Field F] := WriterT (List (Operation F)) (StateM ℕ)
 
-instance : Monad (Circuit F) := inferInstance
+-- instance Circuit.lift : MonadLift (StateM ℕ) (Circuit F) where
+--   monadLift {α} (m : StateM ℕ α) : StateM ℕ (α × List (Operation F)) :=
+--     fun (n : ℕ) => let (a, n') := m n; ((a, []), n')
+
+instance : Monad (Circuit F) where
+  map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
+    let ((a, ops), n') := circuit n
+    ((f a, ops), n')
+  pure {α} (a : α) := fun (n : ℕ) => ((a, []), n)
+  bind {α β} (f : Circuit F α) (g : α → Circuit F β) := fun (n : ℕ) =>
+    let ((a, ops), n') := f n
+    let ((b, ops'), n'') := g a n'
+    ((b, ops ++ ops'), n'')
 
 namespace Circuit
 @[reducible, circuit_norm]
@@ -53,11 +64,10 @@ def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
 
 /-- Create a new variable -/
 @[circuit_norm]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) := do
-  tell [.witness 1 fun env => #v[compute env]]
-  modifyGet fun offset =>
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
+  fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
-    (var, offset + 1)
+    ((var, [.witness 1 fun env => #v[compute env]]), offset + 1)
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
@@ -66,37 +76,34 @@ def witness (compute : Environment F → F) := do
   return var v
 
 @[circuit_norm]
-def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) := do
-  tell [.witness m compute]
-  modifyGet fun offset =>
+def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+  fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, offset + m)
+    ((vars, [.witness m compute]), offset + m)
 
 @[circuit_norm]
-def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) := do
-  tell [.witness m compute]
-  modifyGet fun offset =>
+def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+  fun (offset : ℕ) =>
     let vars := var_from_offset (fields m) offset
-    (vars, offset + m)
+    ((vars, [.witness m compute]), offset + m)
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assert_zero (e: Expression F) : Circuit F Unit :=
-  tell [.assert e]
+def assert_zero (e: Expression F) : Circuit F Unit := fun (offset : ℕ) =>
+  (((), [.assert e]), offset)
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup (l: Lookup F) : Circuit F Unit :=
-  tell [.lookup l]
+def lookup (l: Lookup F) : Circuit F Unit := fun (offset : ℕ) =>
+  (((), [.lookup l]), offset)
 
 end Circuit
 
 @[circuit_norm]
-def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) := do
-  tell [.witness (size α) (fun env => compute env |> to_elements)]
-  modifyGet fun offset =>
+def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+  fun (offset : ℕ) =>
     let var := var_from_offset α offset
-    ⟨var, offset + size α⟩
+    ⟨(var, [.witness (size α) (fun env => compute env |> to_elements)]), offset + size α⟩
 
 /--
 If an environment "uses local witnesses" it means that the environment's evaluation
@@ -366,10 +373,10 @@ attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
-attribute [circuit_norm] monadLift MonadLift.monadLift
-  tell WriterT.mk WriterT.instMonadLiftOfEmptyCollection WriterT.liftTell
-  EmptyCollection.emptyCollection
-  Functor.map StateT.map
+-- attribute [circuit_norm] monadLift MonadLift.monadLift
+--   tell WriterT.mk WriterT.monad WriterT.liftTell
+--   EmptyCollection.emptyCollection
+--   Functor.map StateT.map
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies forall_const
