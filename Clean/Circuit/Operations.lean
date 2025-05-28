@@ -207,3 +207,46 @@ instance : Coe ℕ (OperationsList F) where
   coe offset := .from_offset offset
 
 end OperationsList
+
+/-- move from inductive (nested) operations back to flat operations -/
+def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
+  | .empty _ => []
+  | .witness ops m c => to_flat_operations ops ++ [.witness m c]
+  | .assert ops c => to_flat_operations ops ++ [.assert c]
+  | .lookup ops l => to_flat_operations ops ++ [.lookup l]
+  | .subcircuit ops circuit => to_flat_operations ops ++ circuit.ops
+
+/--
+Singleton `Operations`, that can be collected in a plain list, for easier processing.
+-/
+inductive Operation (F : Type) [Field F] where
+  | witness : (m: ℕ) → (compute : Environment F → Vector F m) → Operation F
+  | assert : Expression F → Operation F
+  | lookup : Lookup F → Operation F
+  | subcircuit : {n : ℕ} → SubCircuit F n → Operation F
+
+namespace Operation
+instance [Repr F] : Repr (Operation F) where
+  reprPrec op _ := match op with
+    | witness m _ => "(Witness " ++ reprStr m ++ ")"
+    | assert e => "(Assert " ++ reprStr e ++ " == 0)"
+    | lookup l => reprStr l
+    | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
+end Operation
+
+def Operations.toList {n: ℕ} : Operations F n → List (Operation F)
+  | .empty _ => []
+  | .witness ops m c => toList ops ++ [.witness m c]
+  | .assert ops e => toList ops ++ [.assert e]
+  | .lookup ops l => toList ops ++ [.lookup l]
+  | .subcircuit ops s => toList ops ++ [.subcircuit s]
+
+def OperationsList.toList : OperationsList F → List (Operation F)
+  | ⟨ _, ops ⟩ => ops.toList
+
+def Operation.local_length : List (Operation F) → ℕ
+  | [] => 0
+  | witness m _ :: ops => m + local_length ops
+  | assert _ :: ops => local_length ops
+  | lookup _ :: ops => local_length ops
+  | subcircuit s :: ops => s.local_length + local_length ops
