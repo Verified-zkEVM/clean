@@ -37,24 +37,25 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 section
 open Circuit
-open FlatOperation (constraints_hold_append)
+open FlatOperation (constraints_hold_cons constraints_hold_append)
 open Environment (env_extends_of_flat)
 
 /--
 Consistency theorem which proves that flattened constraints are equivalent to the
 constraints created from the inductive `Operations` type, using flat constraints for subcircuits.
 -/
-theorem Circuit.can_replace_subcircuits {n: ℕ} : ∀ {ops : Operations F n}, ∀ {env : Environment F},
+theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : Environment F},
   constraints_hold env ops ↔ constraints_hold_flat env (to_flat_operations ops)
 := by
   intro ops env
-  induction ops with
+  induction ops using Operations.induct with
   | empty => trivial
   -- we can handle all non-empty cases at once
-  | witness ops _ ih | assert ops _ ih | lookup ops _ ih | subcircuit ops _ ih =>
+  | witness | assert | lookup | subcircuit =>
     dsimp only [to_flat_operations]
-    rw [constraints_hold_append]
-    simp_all only [constraints_hold, constraints_hold_flat, and_true]
+    try rw [constraints_hold_cons]
+    try rw [constraints_hold_append]
+    simp_all only [constraints_hold, constraints_hold_flat, and_true, true_and]
 
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
@@ -92,20 +93,18 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     let b := eval env b_var
     intro (as : circuit.assumptions b)
 
-    have h_env : env.uses_local_witnesses ops := by
+    have h_env : env.uses_local_witnesses n ops := by
       guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-      have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
-      rw [←hn] at h_env
       apply env.can_replace_local_witnesses
       exact env_extends_of_flat h_env
-    have h_env_completeness := env.can_replace_local_witnesses_completeness h_env
+    have h_env_completeness := env.can_replace_local_witnesses_completeness _ h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
     have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
 
     -- so we just need to go from constraints to flattened constraints
     apply can_replace_subcircuits.mp
-    exact can_replace_completeness h_env h_holds
+    exact can_replace_completeness _ h_env h_holds
 
   {
     ops := flat_ops,
@@ -167,20 +166,18 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       let b := eval env b_var
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
-      have h_env : env.uses_local_witnesses ops := by
+      have h_env : env.uses_local_witnesses n ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        have hn : ops.initial_offset = n := by apply circuit.initial_offset_eq
-        rw [←hn] at h_env
         apply env.can_replace_local_witnesses
         exact env_extends_of_flat h_env
-      have h_env_completeness := env.can_replace_local_witnesses_completeness h_env
+      have h_env_completeness := env.can_replace_local_witnesses_completeness _ h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
       have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
       apply can_replace_subcircuits.mp
-      exact can_replace_completeness h_env h_holds
+      exact can_replace_completeness _ h_env h_holds
 
     implied_by_local_witnesses := by intros; exact trivial
 
@@ -192,20 +189,18 @@ end
 
 /-- Include a subcircuit. -/
 @[circuit_norm]
-def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var α F) := do
-  modifyGet (fun ops =>
-    let a := circuit.output b ops.offset
-    let subcircuit := circuit.to_subcircuit ops.offset b
-    (a, .subcircuit ops subcircuit)
-  )
+def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var α F) :=
+  StateT.modifyGet fun offset =>
+    let a := circuit.output b offset
+    let subcircuit := circuit.to_subcircuit offset b
+    ((a, [.subcircuit subcircuit]), offset + subcircuit.local_length)
 
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
-def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit := do
-  modify (fun ops =>
-    let subcircuit := circuit.to_subcircuit ops.offset b
-    .subcircuit ops subcircuit
-  )
+def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit :=
+  StateT.modifyGet fun offset =>
+    let subcircuit := circuit.to_subcircuit offset b
+    (((), [.subcircuit subcircuit]), offset + subcircuit.local_length)
 
 namespace Circuit
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
