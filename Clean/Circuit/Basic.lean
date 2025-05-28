@@ -348,24 +348,6 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
     acc.push (compute ⟨ env ⟩))
   #[]
 
--- generic folding over `Operations` resulting in a proposition
-
-structure Operations.Condition (F: Type) [Field F] where
-  witness (n: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop
-  assert (n: ℕ) : Expression F → Prop
-  lookup (n: ℕ) : Lookup F → Prop
-  subcircuit (n: ℕ) : {m : ℕ} → SubCircuit F m → Prop
-
-def Operations.forAll (condition : Operations.Condition F) (n : ℕ := 0) : Operations F → Prop
-  | [] => True
-  | .witness m c :: ops => condition.witness n m c ∧ forAll condition (n + m) ops
-  | .assert e :: ops => condition.assert n e ∧ forAll condition n ops
-  | .lookup l :: ops => condition.lookup n l ∧ forAll condition n ops
-  | .subcircuit s :: ops => condition.subcircuit n s ∧ forAll condition (n + s.local_length) ops
-
-theorem Operations.forAll_empty {condition : Operations.Condition F} {n: ℕ} :
-  Operations.forAll condition n [] = True := rfl
-
 -- `circuit_norm` attributes
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set

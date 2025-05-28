@@ -121,6 +121,8 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 @[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
 
+def SubCircuit.offset (_: SubCircuit F n) : ℕ := n
+
 /--
 Singleton `Operations`, that can be collected in a plain list, for easier processing.
 -/
@@ -137,6 +139,12 @@ instance [Repr F] : Repr (Operation F) where
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
+
+def local_length : Operation F → ℕ
+  | .witness m _ => m
+  | .assert _ => 0
+  | .lookup _ => 0
+  | .subcircuit s => s.local_length
 end Operation
 
 @[reducible, circuit_norm]
@@ -178,8 +186,15 @@ def local_witnesses (env: Environment F) : (ops: Operations F) → Vector F ops.
   | .lookup _ :: ops => local_witnesses env ops
   | .subcircuit s :: ops => s.witnesses env ++ local_witnesses env ops
 
+def offset (initial_offset : ℕ) : Operations F → ℕ
+  | [] => initial_offset
+  | .witness m _ :: ops => offset (initial_offset + m) ops
+  | .assert _ :: ops => offset initial_offset ops
+  | .lookup _ :: ops => offset initial_offset ops
+  | .subcircuit s :: ops => offset (initial_offset + s.local_length) ops
+
 /-- induction principle -/
-def induct {F: Type} [Field F] {motive : Operations F → Sort*}
+def induct {motive : Operations F → Sort*}
   (empty : motive [])
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
@@ -192,25 +207,99 @@ def induct {F: Type} [Field F] {motive : Operations F → Sort*}
   | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit ops)
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit ops)
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit ops)
+
+-- generic folding over `Operations` resulting in a proposition
+
+structure Condition (F: Type) [Field F] where
+  witness (offset: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
+  assert (offset: ℕ) : Expression F → Prop := fun _ => True
+  lookup (offset: ℕ) : Lookup F → Prop := fun _ => True
+  subcircuit (offset: ℕ) : {m : ℕ} → SubCircuit F m → Prop := fun _ => True
+
+def forAll (offset : ℕ) (condition : Operations.Condition F) : Operations F → Prop
+  | [] => True
+  | .witness m c :: ops => condition.witness offset m c ∧ forAll (offset + m) condition ops
+  | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
+  | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
+  | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (offset + s.local_length) condition ops
+
+theorem forAll_empty {condition : Operations.Condition F} {n: ℕ} :
+  Operations.forAll n condition [] = True := rfl
+
+theorem forAll_cons {condition : Operations.Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
+  forAll offset condition (op :: ops) ↔
+    forAll offset condition [op] ∧ forAll (offset + op.local_length) condition ops := by
+  cases op <;> simp [forAll, Operation.local_length]
+
+theorem forAll_append {condition : Operations.Condition F} {offset: ℕ} {as bs: Operations F} :
+  forAll offset condition (as ++ bs) ↔
+    forAll offset condition as ∧ forAll (offset + as.local_length) condition bs := by
+  induction as using induct generalizing offset with
+  | empty => simp [forAll_empty, local_length]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp +arith only [List.cons_append, forAll, local_length, ih, and_assoc]
+
+/--
+Subcircuits start at the same variable offset that the circuit currently is.
+In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
+ -/
+def subcircuits_consistent (offset : ℕ) (ops : Operations F) := ops.forAll offset {
+  subcircuit offset _ s := s.offset = offset
+}
 end Operations
 
-namespace Operations
--- constructors matching `Operation`
-@[reducible, circuit_norm]
-def empty : Operations F := []
+structure ConsistentOperations (F : Type) [Field F] where
+  ops: Operations F
+  initial_offset: ℕ
+  subcircuits_consistent : ops.subcircuits_consistent initial_offset
 
-@[reducible, circuit_norm]
-def witness (ops: Operations F) (m: ℕ) (compute : Environment F → Vector F m) : Operations F :=
-  ops ++ [.witness m compute]
+namespace ConsistentOperations
+open Operations
+def offset (ops: ConsistentOperations F) : ℕ := ops.ops.offset ops.initial_offset
 
-@[reducible, circuit_norm]
-def assert (ops: Operations F) (e: Expression F) : Operations F :=
-  ops ++ [.assert e]
+/-- matching constructors -/
+def empty (n : ℕ) : ConsistentOperations F :=
+  { ops := [], initial_offset := n, subcircuits_consistent := trivial }
 
-@[reducible, circuit_norm]
-def lookup (ops: Operations F) (l: Lookup F) : Operations F :=
-  ops ++ [.lookup l]
+def witness (ops: ConsistentOperations F) (m: ℕ) (c : Environment F → Vector F m) : ConsistentOperations F where
+  ops := ops.ops ++ [.witness m c]
+  initial_offset := ops.initial_offset
+  subcircuits_consistent := by
+    simp only [Operations.subcircuits_consistent, forAll_append, forAll, and_true]
+    exact ops.subcircuits_consistent
 
-@[reducible, circuit_norm]
-def subcircuit (ops: Operations F) (s: SubCircuit F n) : Operations F :=
-  ops ++ [.subcircuit s]
+def assert (ops: ConsistentOperations F) (e: Expression F) : ConsistentOperations F where
+  ops := ops.ops ++ [.assert e]
+  initial_offset := ops.initial_offset
+  subcircuits_consistent := by
+    simp only [Operations.subcircuits_consistent, forAll_append, forAll, and_true]
+    exact ops.subcircuits_consistent
+
+def lookup (ops: ConsistentOperations F) (l: Lookup F) : ConsistentOperations F where
+  ops := ops.ops ++ [.lookup l]
+  initial_offset := ops.initial_offset
+  subcircuits_consistent := by
+    simp only [Operations.subcircuits_consistent, forAll_append, forAll, and_true]
+    exact ops.subcircuits_consistent
+
+def subcircuit (ops: ConsistentOperations F) (s: SubCircuit F n) (h_offset : ops.offset = n) : ConsistentOperations F where
+  ops := ops.ops ++ [.subcircuit s]
+  initial_offset := ops.initial_offset
+  subcircuits_consistent := by
+    simp only [Operations.subcircuits_consistent, forAll_append, forAll, and_true]
+    sorry
+    -- exact by
+    --   dsimp only [SubCircuit.offset, SubCircuit.local_length]
+    --   rw [s.local_length_eq]
+    --   exact s.subcircuits_consistent
+
+/-- induction principle -/
+def ConsistentOperations.induct {motive : ConsistentOperations F → Sort*}
+  (empty : ∀ n, motive (empty n))
+  (witness : ∀ m c ops, motive ops → motive (witness ops m c))
+  (assert : ∀ e ops, motive ops → motive (assert ops e))
+  (lookup : ∀ l ops, motive ops → motive (lookup ops l))
+  (subcircuit : ∀ {n} (s: SubCircuit F n) ops h_offset, motive ops → motive (subcircuit ops s h_offset))
+    (ops: ConsistentOperations F) : motive ops :=
+  sorry
+end ConsistentOperations
