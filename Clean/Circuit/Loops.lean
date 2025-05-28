@@ -758,7 +758,7 @@ lemma forEach.apply_eq :
 -- TODO either prove or get rid of this lemma
 lemma forEach.no_empty :
   (forEach xs body lawful ops).2.withLength = .empty (forEach xs body lawful ops).2.offset
-    → m = 0 ∨ ∃ (_ : m > 0) (ops : OperationsList F) (n : ℕ), (body xs[m-1] ops).2 = .from_offset n := by
+    → m = 0 ∨ ∃ (_ : m > 0) (ops : OperationsList F), (body xs[m-1] ops).2.withLength = .empty _ := by
   rcases ops with ⟨ n, ops ⟩
   rw [forEach.apply_eq]
   simp only
