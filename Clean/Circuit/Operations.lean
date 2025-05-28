@@ -121,8 +121,6 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 @[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
 
-
-
 /--
 Singleton `Operations`, that can be collected in a plain list, for easier processing.
 -/
@@ -179,6 +177,21 @@ def local_witnesses (env: Environment F) : (ops: Operations F) → Vector F ops.
   | .assert _ :: ops => local_witnesses env ops
   | .lookup _ :: ops => local_witnesses env ops
   | .subcircuit s :: ops => s.witnesses env ++ local_witnesses env ops
+
+/-- induction principle -/
+def induct {F: Type} [Field F] {motive : Operations F → Sort*}
+  (empty : motive [])
+  (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
+  (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
+  (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
+  (subcircuit : ∀ {n} (s: SubCircuit F n) ops, motive ops → motive (.subcircuit s :: ops))
+    (ops: Operations F) : motive ops :=
+  match ops with
+  | [] => empty
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup subcircuit ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit ops)
+  | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit ops)
 end Operations
 
 namespace Operations

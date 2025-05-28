@@ -4,7 +4,7 @@ variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 -- we can define an append operation on `Operations`,
 -- if the initial offset of the second matches the final offset of the first
 
-def Operations.append {m n: ℕ} (as : Operations F m) : (bs : Operations F n) → bs.initial_offset = m → Operations F n
+def Operations.append {m n: ℕ} (as : Operations F) : (bs : Operations F) → bs.initial_offset = m → Operations F n
   | empty n, (heq : n = _) => heq ▸ as
   | witness bs k c, heq => witness (append as bs heq) k c
   | assert bs e, heq => assert (append as bs heq) e
@@ -146,3 +146,28 @@ theorem Operations.append_local_length (as : Operations F m) (bs : OperationsFro
     simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
     simp only [local_length, ih]
     try ac_rfl
+
+-- append behaves as expected with `constraints_hold`
+
+namespace Circuit.constraints_hold
+variable {env : Environment F} {n : ℕ} {prop : Operations.Condition F}
+
+theorem append_forAll (as : Operations F m) (bs : OperationsFrom F m n) :
+  (as ++ bs).forAll prop ↔ as.forAll prop ∧ bs.val.forAll prop := by
+  induction bs using OperationsFrom.induct with
+  | empty n => rw [Operations.append_empty]; tauto
+  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
+    specialize ih as
+    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
+    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
+    simp only [Operations.forAll, ih, and_assoc]
+
+theorem append_soundness (as : Operations F m) (bs : OperationsFrom F m n) :
+    soundness env (as ++ bs) ↔ soundness env as ∧ soundness env bs.val := by
+  simp only [soundness_iff_forAll, append_forAll]
+
+theorem append_completeness (as : Operations F m) (bs : OperationsFrom F m n) :
+  completeness env (as ++ bs) ↔ completeness env as ∧ completeness env bs.val := by
+  simp only [completeness_iff_forAll, append_forAll]
+
+end Circuit.constraints_hold

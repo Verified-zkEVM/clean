@@ -110,7 +110,7 @@ def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List 
   | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (offset + m) ops
   | .assert _ :: ops => env.uses_local_witnesses offset ops
   | .lookup _ :: ops => env.uses_local_witnesses offset ops
-  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) n ∧ env.uses_local_witnesses (offset + s.local_length) ops
+  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (offset + s.local_length) ops
 
 /--
 Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
@@ -349,7 +349,7 @@ structure Operations.Condition (F: Type) [Field F] where
   lookup (n: ℕ) : Lookup F → Prop
   subcircuit (n: ℕ) : {m : ℕ} → SubCircuit F m → Prop
 
-def Operations.forAll (condition : Operations.Condition F) (n : ℕ) : Operations F → Prop
+def Operations.forAll (condition : Operations.Condition F) (n : ℕ := 0) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness n m c ∧ forAll condition (n + m) ops
   | .assert e :: ops => condition.assert n e ∧ forAll condition n ops
