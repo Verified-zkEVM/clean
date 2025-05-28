@@ -1,5 +1,4 @@
 import Clean.Circuit.Basic
-import Clean.Types.U64
 import Clean.Gadgets.Xor.ByteXorTable
 import Clean.Utils.Primes
 

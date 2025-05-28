@@ -366,6 +366,10 @@ attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
+attribute [circuit_norm] monadLift MonadLift.monadLift
+  tell WriterT.mk WriterT.instMonadLiftOfEmptyCollection WriterT.liftTell
+  EmptyCollection.emptyCollection
+  Functor.map StateT.map
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies forall_const

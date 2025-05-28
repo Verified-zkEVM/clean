@@ -1,6 +1,5 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
-import Clean.Circuit.Lawful
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
@@ -83,7 +82,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify circuit
   simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  simp only [Boolean.spec, and_assoc, add_zero, h_inputs] at h
+  simp only [h_inputs] at h
   rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
@@ -132,10 +131,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, Boolean.circuit,
-    h_inputs, and_assoc
-  ] at henv ⊢
+  simp only [h_inputs, circuit_norm, subcircuit_norm,
+    add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
 
   -- characterize local witnesses
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := henv
