@@ -86,6 +86,16 @@ theorem append_lookup (as : Operations F m) (bs : OperationsFrom F m n) (l : Loo
 theorem append_subcircuit (as : Operations F m) (bs : OperationsFrom F m n) (s : SubCircuit F n) :
   as ++ (OperationsFrom.subcircuit bs s) = .subcircuit (as ++ bs) s := by rfl
 
+theorem empty_of_append_empty {m n: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) :
+    as ++ bs = .empty n → n = m ∧ as = .empty m ∧ bs.val = .empty n := by
+  intro h_append_empty
+  induction bs using OperationsFrom.induct with
+  | empty n =>
+    rw [Operations.append_empty] at h_append_empty
+    exact ⟨ rfl, h_append_empty, rfl ⟩
+  | witness bs _ _ ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
+    simp only [append_witness, append_assert, append_lookup, append_subcircuit, reduceCtorEq] at h_append_empty
+
 theorem append_initial_offset {m n: ℕ} (as : Operations F m) (bs : OperationsFrom F m n) :
     (as ++ bs).initial_offset = as.initial_offset := by
   induction bs using OperationsFrom.induct with

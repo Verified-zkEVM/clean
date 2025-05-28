@@ -272,6 +272,12 @@ def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (
     let vars := Vector.mapRange n fun i => ⟨ ops.offset + i ⟩
     ⟨vars, .witness ops n compute⟩
 
+@[circuit_norm]
+def witness_vector (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Expression F) n) :=
+  modifyGet fun ops =>
+    let vars := var_from_offset (fields n) ops.offset
+    ⟨vars, .witness ops n compute⟩
+
 /-- Add a constraint. -/
 @[circuit_norm]
 def assert_zero (e: Expression F) : Circuit F Unit :=
@@ -509,7 +515,7 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F)
 end Circuit
 end
 
-export Circuit (witness_var witness witness_vars assert_zero lookup)
+export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
 
 /-- move from inductive (nested) operations back to flat operations -/
 def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
@@ -602,6 +608,9 @@ def Operations.forAll (condition : Operations.Condition F) : {n : ℕ} → Opera
   | n, .assert ops e => ops.forAll condition ∧ condition.assert n e
   | n, .lookup ops l => ops.forAll condition ∧ condition.lookup n l
   | n + _, .subcircuit ops s => ops.forAll condition ∧ condition.subcircuit n s
+
+theorem Operations.forAll_empty {condition : Operations.Condition F} {n: ℕ} :
+    Operations.forAll condition (.empty n) = True := rfl
 
 -- `circuit_norm` attributes
 

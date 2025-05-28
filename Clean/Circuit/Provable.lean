@@ -26,7 +26,7 @@ class ProvableType (M : TypeMap) where
   from_elements {F: Type} : Vector F size -> M F
 
 class NonEmptyProvableType (M : TypeMap) extends ProvableType M where
-  nonempty : size > 0 := by norm_num
+  nonempty : size > 0 := by try simp only [size]; try norm_num
 
 export ProvableType (size to_elements from_elements)
 
@@ -116,6 +116,7 @@ instance : LawfulProvableType field where
   size := 1
   to_elements x := #v[x]
   from_elements v := v.get 0
+instance : NonEmptyProvableType field where
 
 @[reducible]
 def ProvablePair (α β : TypeMap) := fun F => α F × β F
@@ -134,7 +135,7 @@ variable {n: ℕ}
 def ProvableVector (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
 
 @[reducible]
-def fields (n: ℕ) := ProvableVector field n
+def fields (n: ℕ) := fun F => Vector F n
 
 @[circuit_norm]
 instance : LawfulProvableType (fields n) where
@@ -289,6 +290,20 @@ end ProvableStruct
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
   ProvableType.eval env x = Expression.eval env x := by rfl
+
+omit [Field F] in
+@[circuit_norm ↓]
+theorem var_from_offset_field (offset : Nat) :
+  var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
+
+@[circuit_norm ↓]
+theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
+  ProvableType.eval env x = x.map (Expression.eval env) := rfl
+
+omit [Field F] in
+@[circuit_norm ↓]
+theorem var_from_offset_fields (offset : Nat) :
+  var_from_offset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
 namespace LawfulProvableType
 @[circuit_norm]
