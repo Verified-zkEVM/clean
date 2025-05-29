@@ -39,6 +39,9 @@ instance : Monad (Circuit F) where
     let ((b, ops'), n'') := g a n'
     ((b, ops ++ ops'), n'')
 
+instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
+instance : LawfulMonad (Circuit F) := inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
+
 namespace Circuit
 @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=

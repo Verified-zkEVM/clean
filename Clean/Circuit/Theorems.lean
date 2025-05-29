@@ -239,8 +239,8 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
     exact h_env.left
 end Circuit
 
+-- some theorems about offset / local_length
 namespace Operations
--- some theorems about `Operations.offset` / `Operations.local_length`
 
 /-- this shows that we didn't really need the `offset` definition -/
 theorem offset_eq {a : Operations F} {n: ℕ} :
@@ -257,3 +257,15 @@ theorem local_length_append {a b: Operations F} :
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all +arith [local_length, ih]
 end Operations
+
+namespace Circuit
+variable {α β : Type}
+
+theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (f.final_offset n) := by
+  show (f.operations n ++ (g _).operations _).local_length = _
+  rw [Operations.local_length_append]
+
+theorem pure_local_length (a : α) (n : ℕ) :
+    (pure a : Circuit F α).local_length n = 0 := rfl
+end Circuit

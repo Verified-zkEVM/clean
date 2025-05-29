@@ -11,10 +11,14 @@ class LawfulCircuit (circuit : Circuit F α) where
   /-- the offset derived from operations is the same as the state offset -/
   offset_consistent : ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
 
--- slightly stronger variant: LawfulCircuit with a _fixed_ local length
-class ConstantLawfulCircuit (circuit : Circuit F α) extends LawfulCircuit circuit where
+-- a constant circuit is one where the local length is constant for all inputs
+class ConstantCircuit (circuit : Circuit F α) where
   local_length : ℕ
   local_length_eq : ∀ n : ℕ, circuit.local_length n = local_length := by intro _; rfl
+
+-- combination
+class ConstantLawfulCircuit (circuit : Circuit F α)
+  extends LawfulCircuit circuit, ConstantCircuit circuit
 
 -- even stronger (and still the typical case): an indexed family of lawful circuits that all share the same local length
 class ConstantLawfulCircuits (circuit : α → Circuit F β) where
@@ -30,11 +34,6 @@ instance ConstantLawfulCircuits.from_pure {f : α → β} : ConstantLawfulCircui
   local_length := 0
 
 -- `bind` and `map` of two lawful circuits yields a lawful circuit
-
-theorem Circuit.bind_local_length (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (f.final_offset n) := by
-  show (f.operations n ++ (g _).operations _).local_length = _
-  rw [Operations.local_length_append]
 
 instance LawfulCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
     (f_lawful : LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) : LawfulCircuit (f >>= g) where
