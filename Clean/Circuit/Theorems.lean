@@ -165,10 +165,7 @@ theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operatio
 
 theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Operations F} {n: ℕ} (h: ops.subcircuits_consistent n) :
     env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
-  let ops : ConsistentOperations F := ⟨ops, n, h⟩
-  show env.uses_local_witnesses ops.initial_offset ops.ops →
-    env.uses_local_witnesses_completeness ops.initial_offset ops.ops
-  induction ops using ConsistentOperations.induct with
+  induction ops, n, h using Operations.induct_consistent with
   | empty => intros; trivial
   | witness | assert | lookup =>
     simp_all +arith [uses_local_witnesses, uses_local_witnesses_completeness]
@@ -230,10 +227,7 @@ because it already implies the flat version.
 -/
 theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) : env.uses_local_witnesses n ops →
     constraints_hold.completeness env ops → constraints_hold env ops := by
-  let ops : ConsistentOperations F := ⟨ops, n, h⟩
-  show env.uses_local_witnesses ops.initial_offset ops.ops →
-    constraints_hold.completeness env ops.ops → constraints_hold env ops.ops
-  induction ops using ConsistentOperations.induct with
+  induction ops, n, h using Operations.induct_consistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
     simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll]
