@@ -178,53 +178,50 @@ theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operatio
   | nil => trivial
   | cons op ops ih => induction op with
     | witness m c =>
-      rw [uses_local_witnesses, add_comm]
+      rw [uses_local_witnesses]
       exact ⟨ env_extends_witness_inner h, ih _ (env_extends_witness h) ⟩
     | assert e | lookup _ =>
       simp_all [uses_local_witnesses', uses_local_witnesses, circuit_norm]
     | subcircuit circuit =>
-      rw [uses_local_witnesses, add_comm, extends_vector_subcircuit]
+      rw [uses_local_witnesses, extends_vector_subcircuit]
       exact ⟨ env_extends_subcircuit_inner h, ih _ (env_extends_subcircuit h) ⟩
 
-theorem can_replace_local_witnesses_completeness {env: Environment F} (n: ℕ) {ops: Operations F}  :
-  env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
-  intro h
-  induction ops generalizing n with
-  | nil => trivial
-  | cons op ops ih => induction op with
-    | witness | assert | lookup =>
-      simp_all [uses_local_witnesses, uses_local_witnesses_completeness]
-    | subcircuit circuit =>
-      simp_all only [uses_local_witnesses, uses_local_witnesses_completeness, and_true]
-      apply circuit.implied_by_local_witnesses
-      rw [←extends_vector_subcircuit]
-      -- TODO needs subcircuit consistency
-      -- exact h.left
-      sorry
+theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: ConsistentOperations F}  :
+  env.uses_local_witnesses ops.initial_offset ops.ops → env.uses_local_witnesses_completeness ops.initial_offset ops.ops := by
+  induction ops.initial_offset, ops.ops, ops.subcircuits_consistent using ConsistentOperations.induct with
+  | empty => intros; trivial
+  | witness | assert | lookup =>
+    simp_all +arith [uses_local_witnesses, uses_local_witnesses_completeness]
+  | subcircuit n circuit ops _ ih =>
+    simp only [uses_local_witnesses, uses_local_witnesses_completeness]
+    intro h
+    apply And.intro ?_ (ih h.right)
+    apply circuit.implied_by_local_witnesses
+    rw [←extends_vector_subcircuit]
+    exact h.left
 
 theorem uses_local_witnesses_completeness_iff_forAll {env: Environment F} {n: ℕ} {ops: Operations F} :
   env.uses_local_witnesses_completeness n ops ↔
-    ops.forAll {
+    ops.forAll n {
       witness m _ c := env.extends_vector (c env) m,
-      assert _ _ := True,
-      lookup _ _ := True,
       subcircuit _ _ s := s.uses_local_witnesses env
-    } n := by
+    } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
     simp_all [uses_local_witnesses_completeness, Operations.forAll]
+    -- TODO
+    try sorry
 end Environment
 
 namespace Circuit
 
 theorem constraints_hold.soundness_iff_forAll (env : Environment F) (ops : Operations F) (n : ℕ := 0) :
-  soundness env ops ↔ ops.forAll {
-    witness _ _ _ := True,
+  soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.contains (l.entry.map env),
     subcircuit _ _ s := s.soundness env
-  } n := by
+  } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
@@ -233,12 +230,11 @@ theorem constraints_hold.soundness_iff_forAll (env : Environment F) (ops : Opera
     apply ih
 
 theorem constraints_hold.completeness_iff_forAll (env : Environment F) (ops : Operations F) (n : ℕ := 0) :
-  completeness env ops ↔ ops.forAll {
-    witness _ _ _ := True,
+  completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.contains (l.entry.map env),
     subcircuit _ _ s := s.completeness env
-  } n := by
+  } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>

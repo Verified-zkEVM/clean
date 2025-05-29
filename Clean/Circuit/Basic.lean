@@ -114,10 +114,10 @@ This is the condition needed to prove completeness of a circuit.
 -/
 def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (offset + m) ops
+  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (m + offset) ops
   | .assert _ :: ops => env.uses_local_witnesses offset ops
   | .lookup _ :: ops => env.uses_local_witnesses offset ops
-  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (offset + s.local_length) ops
+  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
 
 /--
 Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
@@ -125,10 +125,10 @@ Modification of `uses_local_witnesses` where subcircuits replace the condition w
 @[circuit_norm]
 def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
+  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (m + offset) ops
   | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
+  | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (s.local_length + offset) ops
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
