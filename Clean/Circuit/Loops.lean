@@ -80,43 +80,20 @@ theorem output_eq : (Vector.mapM circuit xs).output n =
       apply from_mapM_vector.offset_independent
 end Circuit.MapM
 
-lemma ConstantLawfulCircuit.from_forM_vector.offset_independent {circuit : α → Circuit F Unit}
-  (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) (n : ℕ) :
-    (xs.forM circuit n).2 = n + lawful.local_length * m := by
+namespace Circuit.ForM
+variable {circuit : α → Circuit F Unit} (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) (n : ℕ)
+
+theorem local_length_eq : (xs.forM circuit).local_length n = lawful.local_length * m := by
   set k := lawful.local_length
-  induction xs using Vector.induct generalizing ops
+  induction xs using Vector.induct generalizing n
   case nil => rfl
   case cons x xs ih =>
-    rw [Vector.forM_toList, Vector.cons, List.forM_cons, ←Vector.forM_toList]
-    show (xs.forM circuit ..).2.offset = _
-    rw [ih, ConstantLawfulCircuits.offset_independent]
+    rw [Vector.forM_toList, Vector.cons, List.forM_cons, ←Vector.forM_toList,
+      bind_local_length, ih, lawful.local_length_eq]
     ring
 
-instance ConstantLawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit}
-  (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) :
-    ConstantLawfulCircuit (xs.forM circuit) where
-
-  output _ := ()
-  local_length := lawful.local_length * m
-  final_offset n := n + lawful.local_length * m
-
-  operations n :=
-    let lawful_loop := LawfulCircuit.from_forM_vector (.from_constants lawful) xs
-    cast (by rw [←LawfulCircuit.final_offset_eq, Circuit.final_offset, from_forM_vector.offset_independent])
-      (lawful_loop.operations n)
-
-  offset_independent := from_forM_vector.offset_independent xs lawful
-
-  append_only ops := by
-    let k := lawful.local_length
-    let lawful_loop := LawfulCircuit.from_forM_vector (.from_constants lawful) xs
-    simp only [LawfulCircuit.append_only, OperationsList.mk.injEq]
-    have h_offset : LawfulCircuit.final_offset (xs.forM circuit) ops.offset = ops.offset + lawful.local_length * m := by
-      rw [←LawfulCircuit.final_offset_eq, Circuit.final_offset, from_forM_vector.offset_independent]
-    constructor
-    · exact h_offset
-    congr
-    simp
+theorem output_eq : (xs.forM circuit).output n = () := rfl
+end Circuit.ForM
 
 lemma ConstantLawfulCircuits.from_foldlM_vector.offset_independent {circuit : β → α → Circuit F β} [Inhabited β]
   (xs : Vector α m) (lawful : ConstantLawfulCircuits fun (acc, x) => circuit acc x) (init : β) (ops : OperationsList F) :

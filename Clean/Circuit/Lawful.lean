@@ -155,14 +155,19 @@ def Circuit.constant_output (circuit : α → Circuit F β) [Inhabited α] :=
 namespace Circuit
 variable {env : Environment F} {n : ℕ} {prop : Operations.Condition F}
 
+@[reducible, circuit_norm]
+def forAll (circuit : Circuit F α) (prop : Operations.Condition F) (n : ℕ) :=
+  (circuit.operations n).forAll n prop
+
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
-  ((f >>= g).operations n).forAll n prop ↔
-    (f.operations n).forAll n prop ∧ ((g (f.output n)).operations (f.final_offset n)).forAll (n + f.local_length n) prop := by
+  (f >>= g).forAll prop n ↔
+    f.forAll prop n ∧ ((g (f.output n)).operations (f.final_offset n)).forAll (n + f.local_length n) prop := by
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
+  simp only [forAll]
   rw [h_ops, Operations.forAll_append, add_comm n]
 
 theorem bind_forAll_lawful {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) :
-  let n' := f.final_offset n;
-  ((f >>= g).operations n).forAll n prop ↔
-    (f.operations n).forAll n prop ∧ ((g (f.output n)).operations n').forAll n' prop := by
+  (f >>= g).forAll prop n ↔ f.forAll prop n ∧ (g (f.output n)).forAll prop (n + f.local_length n) := by
   rw [bind_forAll, ←f_lawful.offset_consistent]
+
+end Circuit
