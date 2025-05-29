@@ -210,8 +210,6 @@ theorem uses_local_witnesses_completeness_iff_forAll {env: Environment F} {n: �
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
     simp_all [uses_local_witnesses_completeness, Operations.forAll]
-    -- TODO
-    try sorry
 end Environment
 
 namespace Circuit
@@ -250,26 +248,17 @@ Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only pr
 `constraints_hold.completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness (n: ℕ) {ops : Operations F} {env} : env.uses_local_witnesses n ops →
-  constraints_hold.completeness env ops → constraints_hold env ops := by
-  intro h_env h
-  induction ops using Operations.induct generalizing n with
-  | empty => trivial
-  | witness m c ops ih =>
-    specialize ih (n + m)
+theorem can_replace_completeness {ops : ConsistentOperations F} {env} : env.uses_local_witnesses ops.initial_offset ops.ops →
+  constraints_hold.completeness env ops.ops → constraints_hold env ops.ops := by
+  induction ops.initial_offset, ops.ops, ops.subcircuits_consistent using ConsistentOperations.induct with
+  | empty => intros; exact trivial
+  | witness _ m c ops _ ih | assert _ _ ih | lookup _ _ ih =>
     simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll]
-  | assert _ _ ih | lookup _ _ ih =>
-    specialize ih n
-    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll]
-  | subcircuit circuit ops ih =>
-    have ih1 := ih (n + circuit.local_length)
-    have ih2 := ih n
+  | subcircuit n circuit ops _ ih =>
     simp_all only [constraints_hold, constraints_hold.completeness, Environment.uses_local_witnesses, and_true]
-    apply circuit.implied_by_completeness env ?_ h.left
-    -- TODO needs subcircuit consistency
+    intro h_env h_compl
+    apply circuit.implied_by_completeness env ?_ h_compl.left
     rw [←env.extends_vector_subcircuit]
-    have h_env' := h_env.left
-    -- exact h_env'
-    sorry
+    exact h_env.left
 
 end Circuit
