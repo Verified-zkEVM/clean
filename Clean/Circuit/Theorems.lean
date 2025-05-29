@@ -186,7 +186,7 @@ theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operatio
       rw [uses_local_witnesses, extends_vector_subcircuit]
       exact ⟨ env_extends_subcircuit_inner h, ih _ (env_extends_subcircuit h) ⟩
 
-theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: ConsistentOperations F}  :
+theorem can_replace_local_witnesses_completeness {env: Environment F} (ops: ConsistentOperations F) :
   env.uses_local_witnesses ops.initial_offset ops.ops → env.uses_local_witnesses_completeness ops.initial_offset ops.ops := by
   induction ops using ConsistentOperations.induct with
   | empty => intros; trivial
@@ -248,7 +248,7 @@ Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only pr
 `constraints_hold.completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness {ops : ConsistentOperations F} {env} : env.uses_local_witnesses ops.initial_offset ops.ops →
+theorem can_replace_completeness {env} (ops : ConsistentOperations F) : env.uses_local_witnesses ops.initial_offset ops.ops →
   constraints_hold.completeness env ops.ops → constraints_hold env ops.ops := by
   induction ops using ConsistentOperations.induct with
   | empty => intros; exact trivial

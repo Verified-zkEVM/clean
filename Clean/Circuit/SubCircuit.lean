@@ -64,6 +64,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := to_flat_operations ops
+  have h_consistent : ops.subcircuits_consistent n := by sorry
 
   have imply_soundness : ∀ env : Environment F,
       constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
@@ -97,14 +98,14 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
       guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
       apply env.can_replace_local_witnesses
       exact env_extends_of_flat h_env
-    have h_env_completeness := env.can_replace_local_witnesses_completeness _ h_env
+    have h_env_completeness := env.can_replace_local_witnesses_completeness ⟨ops, n, h_consistent⟩ h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
     have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
 
     -- so we just need to go from constraints to flattened constraints
     apply can_replace_subcircuits.mp
-    exact can_replace_completeness _ h_env h_holds
+    exact can_replace_completeness ⟨ops, n, h_consistent⟩ h_env h_holds
 
   {
     ops := flat_ops,
@@ -134,6 +135,8 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := to_flat_operations ops
+  have h_consistent : ops.subcircuits_consistent n := by sorry
+
   {
     ops := flat_ops,
     soundness := subassertion_soundness circuit b_var,
@@ -170,14 +173,14 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
         apply env.can_replace_local_witnesses
         exact env_extends_of_flat h_env
-      have h_env_completeness := env.can_replace_local_witnesses_completeness _ h_env
+      have h_env_completeness := env.can_replace_local_witnesses_completeness ⟨ops, n, h_consistent⟩ h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
       have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
       apply can_replace_subcircuits.mp
-      exact can_replace_completeness _ h_env h_holds
+      exact can_replace_completeness ⟨ops, n, h_consistent⟩ h_env h_holds
 
     implied_by_local_witnesses := by intros; exact trivial
 
