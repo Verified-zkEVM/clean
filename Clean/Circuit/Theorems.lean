@@ -237,5 +237,23 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
     apply circuit.implied_by_completeness env ?_ h_compl.left
     rw [←env.extends_vector_subcircuit]
     exact h_env.left
-
 end Circuit
+
+namespace Operations
+-- some theorems about `Operations.offset` / `Operations.local_length`
+
+/-- this shows that we didn't really need the `offset` definition -/
+theorem offset_eq {a : Operations F} {n: ℕ} :
+    a.offset n = n + a.local_length := by
+  induction a using induct generalizing n with
+  | empty => rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all +arith only [offset, local_length, ih]
+
+theorem local_length_append {a b: Operations F} :
+    (a ++ b).local_length = a.local_length + b.local_length := by
+  induction a using induct with
+  | empty => ac_rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all +arith [local_length, ih]
+end Operations
