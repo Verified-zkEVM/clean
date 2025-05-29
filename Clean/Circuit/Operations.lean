@@ -140,6 +140,7 @@ instance [Repr F] : Repr (Operation F) where
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 
+@[circuit_norm]
 def local_length : Operation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
@@ -162,14 +163,6 @@ def to_flat_operations : Operations F → List (FlatOperation F)
   | .subcircuit s :: ops => s.ops ++ to_flat_operations ops
 
 namespace Operations
--- @[reducible, circuit_norm]
--- def initial_offset (n) : Operations F n → ℕ
---   | .empty n => n
---   | .witness ops _ _ => initial_offset ops
---   | .assert ops _ => initial_offset ops
---   | .lookup ops _ => initial_offset ops
---   | .subcircuit ops _ => initial_offset ops
-
 @[circuit_norm]
 def local_length : Operations F → ℕ
   | [] => 0
@@ -216,6 +209,13 @@ structure Condition (F: Type) [Field F] where
   lookup (offset: ℕ) : Lookup F → Prop := fun _ => True
   subcircuit (offset: ℕ) : {m : ℕ} → SubCircuit F m → Prop := fun _ => True
 
+@[circuit_norm]
+def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Prop
+  | .witness m c => condition.witness offset m c
+  | .assert e => condition.assert offset e
+  | .lookup l => condition.lookup offset l
+  | .subcircuit s => condition.subcircuit offset s
+
 def forAll (offset : ℕ) (condition : Operations.Condition F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
@@ -223,17 +223,20 @@ def forAll (offset : ℕ) (condition : Operations.Condition F) : Operations F �
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.local_length + offset) condition ops
 
+@[circuit_norm]
 theorem forAll_empty {condition : Operations.Condition F} {n: ℕ} :
   Operations.forAll n condition [] = True := rfl
 
+@[circuit_norm]
 theorem forAll_cons {condition : Operations.Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
   forAll offset condition (op :: ops) ↔
-    forAll offset condition [op] ∧ forAll (op.local_length + offset) condition ops := by
-  cases op <;> simp [forAll, Operation.local_length]
+    condition.apply offset op ∧ forAll (op.local_length + offset) condition ops := by
+  cases op <;> simp [forAll, Operation.local_length, Condition.apply]
 
+@[circuit_norm]
 theorem forAll_append {condition : Operations.Condition F} {offset: ℕ} {as bs: Operations F} :
   forAll offset condition (as ++ bs) ↔
-    forAll offset condition as ∧ forAll (offset + as.local_length) condition bs := by
+    forAll offset condition as ∧ forAll (as.local_length + offset) condition bs := by
   induction as using induct generalizing offset with
   | empty => simp [forAll_empty, local_length]
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
@@ -243,6 +246,7 @@ theorem forAll_append {condition : Operations.Condition F} {offset: ℕ} {as bs:
 Subcircuits start at the same variable offset that the circuit currently is.
 In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
  -/
+ @[circuit_norm]
 def subcircuits_consistent (offset : ℕ) (ops : Operations F) := ops.forAll offset {
   subcircuit offset {n} _ := n = offset
 }

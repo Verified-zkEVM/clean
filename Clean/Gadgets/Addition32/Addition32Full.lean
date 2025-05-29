@@ -64,10 +64,12 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
     z := { x0 := var ⟨i0⟩, x1 := var ⟨i0 + 2⟩, x2 := var ⟨i0 + 4⟩, x3 := var ⟨i0 + 6⟩ },
     carry_out := var ⟨i0 + 7⟩
   }
-  -- local_length_eq _ i0 := by
-  --   simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
-  -- output_eq _ i0 := by
-  --   simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
+  local_length_eq _ i0 := by
+    simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
+  output_eq _ i0 := by
+    simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
+  subcircuits_consistent _ i0 := by
+    simp +arith only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
