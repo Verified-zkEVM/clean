@@ -260,30 +260,35 @@ def offset (ops: ConsistentOperations F) : ℕ := ops.ops.offset ops.initial_off
 def empty (n : ℕ) : ConsistentOperations F :=
   { ops := [], initial_offset := n, subcircuits_consistent := trivial }
 
--- /-- induction principle -/
-def induct {motive : (n : ℕ) → (ops: Operations F) → ops.subcircuits_consistent n → Prop}
-  (empty : ∀ n, motive n [] trivial)
-  (witness : ∀ n m c ops h, motive (m + n) ops h →
-    motive n (.witness m c :: ops) (by simp_all [Operations.subcircuits_consistent, forAll]))
-  (assert : ∀ n e ops h, motive n ops h →
-    motive n (.assert e :: ops) (by simp_all [Operations.subcircuits_consistent, forAll]))
-  (lookup : ∀ n l ops h, motive n ops h →
-    motive n (.lookup l :: ops) (by simp_all [Operations.subcircuits_consistent, forAll]))
-  (subcircuit : ∀ n (s: SubCircuit F n) ops h, motive (s.local_length + n) ops h →
-    motive n (.subcircuit s :: ops) (by simp_all [Operations.subcircuits_consistent, forAll]))
-    (n : ℕ) (ops: Operations F) (h : ops.subcircuits_consistent n) : motive n ops h := by
-  match ops, n, h with
-  | [], n, _ => exact empty n
-  | .witness m c :: ops, n, h | .assert e :: ops, n, h | .lookup e :: ops, n, h =>
+/--
+induction principle for _consistent_ operations.
+the special part is that in the subcircuit case,
+you get a subcircuit that matches the current (initial) offset at the type level.
+-/
+def induct {motive : ConsistentOperations F → Prop}
+  (empty : ∀ n, motive ⟨[], n, trivial⟩)
+  (witness : ∀ n m c ops {h}, motive ⟨ops, (m + n), h⟩ →
+    motive ⟨.witness m c :: ops, n, by simp_all [Operations.subcircuits_consistent, forAll]⟩)
+  (assert : ∀ n e ops {h}, motive ⟨ops, n, h⟩ →
+    motive ⟨.assert e :: ops, n, by simp_all [Operations.subcircuits_consistent, forAll]⟩)
+  (lookup : ∀ n l ops {h}, motive ⟨ops, n, h⟩ →
+    motive ⟨.lookup l :: ops, n, by simp_all [Operations.subcircuits_consistent, forAll]⟩)
+  (subcircuit : ∀ n (s: SubCircuit F n) ops {h}, motive ⟨ops, s.local_length + n, h⟩ →
+    motive ⟨.subcircuit s :: ops, n, by simp_all [Operations.subcircuits_consistent, forAll]⟩)
+    (ops: ConsistentOperations F) : motive ops :=
+  motive' ops.ops ops.initial_offset ops.subcircuits_consistent
+where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consistent n) → motive ⟨ops, n, h⟩
+  | [], n, _ => empty n
+  | .witness m c :: ops, n, h | .assert e :: ops, n, h | .lookup e :: ops, n, h => by
     rw [Operations.subcircuits_consistent, forAll] at h
     first
-    | exact witness _ _ _ _ _ (induct empty witness assert lookup subcircuit _ ops h.right)
-    | exact assert _ _ _ _ (induct empty witness assert lookup subcircuit _ ops h.right)
-    | exact lookup _ _ _ _ (induct empty witness assert lookup subcircuit _ ops h.right)
-  | .subcircuit s :: ops, n', h =>
+    | exact witness _ _ _ _ (motive' ops _ h.right)
+    | exact assert _ _ _ (motive' ops _ h.right)
+    | exact lookup _ _ _ (motive' ops _ h.right)
+  | .subcircuit s :: ops, n', h => by
     rename_i n
     rw [Operations.subcircuits_consistent, forAll] at h
     have n_eq : n = n' := h.left
     subst n_eq
-    exact subcircuit n s ops _ (induct empty witness assert lookup subcircuit _ ops h.right)
+    exact subcircuit n s ops (motive' ops _ h.right)
 end ConsistentOperations

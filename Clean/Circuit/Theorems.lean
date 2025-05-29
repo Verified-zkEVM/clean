@@ -188,11 +188,11 @@ theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operatio
 
 theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: ConsistentOperations F}  :
   env.uses_local_witnesses ops.initial_offset ops.ops → env.uses_local_witnesses_completeness ops.initial_offset ops.ops := by
-  induction ops.initial_offset, ops.ops, ops.subcircuits_consistent using ConsistentOperations.induct with
+  induction ops using ConsistentOperations.induct with
   | empty => intros; trivial
   | witness | assert | lookup =>
     simp_all +arith [uses_local_witnesses, uses_local_witnesses_completeness]
-  | subcircuit n circuit ops _ ih =>
+  | subcircuit n circuit ops ih =>
     simp only [uses_local_witnesses, uses_local_witnesses_completeness]
     intro h
     apply And.intro ?_ (ih h.right)
@@ -250,11 +250,11 @@ because it already implies the flat version.
 -/
 theorem can_replace_completeness {ops : ConsistentOperations F} {env} : env.uses_local_witnesses ops.initial_offset ops.ops →
   constraints_hold.completeness env ops.ops → constraints_hold env ops.ops := by
-  induction ops.initial_offset, ops.ops, ops.subcircuits_consistent using ConsistentOperations.induct with
+  induction ops using ConsistentOperations.induct with
   | empty => intros; exact trivial
-  | witness _ m c ops _ ih | assert _ _ ih | lookup _ _ ih =>
+  | witness | assert | lookup =>
     simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll]
-  | subcircuit n circuit ops _ ih =>
+  | subcircuit n circuit ops ih =>
     simp_all only [constraints_hold, constraints_hold.completeness, Environment.uses_local_witnesses, and_true]
     intro h_env h_compl
     apply circuit.implied_by_completeness env ?_ h_compl.left
