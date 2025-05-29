@@ -25,7 +25,7 @@ theorem output_eq : (xs.forM circuit).output n = () := rfl
 
 variable {env : Environment F} {prop : Operations.Condition F}
 
-theorem forAll_iff {xs : List α} :
+theorem forAll_iff_list {xs : List α} :
   (forM xs circuit).forAll prop n ↔
     xs.zipIdx.Forall fun (x, i) => (circuit x).forAll prop (n + i*lawful.local_length) := by
   set k := lawful.local_length
@@ -51,4 +51,21 @@ theorem forAll_iff {xs : List α} :
     rw [←h_zip, ←ih]
     clear h_zip ih
     rw [bind_forAll_lawful inferInstance, lawful.local_length_eq]
+
+theorem forAll_iff :
+  (xs.forM circuit).forAll prop n ↔
+    ∀ (i : Fin m), (circuit xs[i.val]).forAll prop (n + i*lawful.local_length) := by
+  rw [Vector.forM_toList, forAll_iff_list, List.forall_iff_forall_mem, Prod.forall]
+  simp only
+  have h_elem_iff {t} :(t ∈ xs.toList.zipIdx ↔ t ∈ xs.zipIdx) := by
+    rw [←Array.toList_zipIdx, ←Vector.mem_toList_iff]
+    trivial
+  constructor
+  · intro h i
+    apply h xs[i]
+    simp [h_elem_iff, Vector.mem_zipIdx_iff_getElem?]
+  · intro h x i hxi
+    simp only [h_elem_iff, Vector.mem_zipIdx_iff_getElem?, Vector.getElem?_eq_some_iff] at hxi
+    have ⟨ i_lt, x_eq ⟩ := hxi
+    exact x_eq ▸ h ⟨ i, i_lt ⟩
 end Circuit.ForM
