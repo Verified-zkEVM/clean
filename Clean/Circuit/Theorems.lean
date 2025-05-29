@@ -195,6 +195,7 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} (ops: Cons
   | subcircuit n circuit ops ih =>
     simp only [uses_local_witnesses, uses_local_witnesses_completeness]
     intro h
+    rw [add_comm]
     apply And.intro ?_ (ih h.right)
     apply circuit.implied_by_local_witnesses
     rw [â†extends_vector_subcircuit]
@@ -209,7 +210,7 @@ theorem uses_local_witnesses_completeness_iff_forAll {env: Environment F} {n: â„
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
-    simp_all [uses_local_witnesses_completeness, Operations.forAll]
+    simp_all +arith [uses_local_witnesses_completeness, Operations.forAll]
 end Environment
 
 namespace Circuit

@@ -64,7 +64,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := to_flat_operations ops
-  have h_consistent : ops.subcircuits_consistent n := by sorry
+  have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
   have imply_soundness : ∀ env : Environment F,
       constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
@@ -135,7 +135,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := to_flat_operations ops
-  have h_consistent : ops.subcircuits_consistent n := by sorry
+  have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
   {
     ops := flat_ops,
