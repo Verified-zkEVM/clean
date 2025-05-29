@@ -28,9 +28,9 @@ def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: �
 /--
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
 
-This is an intermediary type on the way to defining the full inductive `Operations` type.
+This is an intermediary type on the way to defining the full inductive `Operation` type.
 It is needed because we already need to talk about operations in the `SubCircuit` definition,
-which in turn is needed to define `Operations`.
+which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
   | witness : (m: ℕ) → (Environment F → Vector F m) → FlatOperation F
@@ -121,10 +121,11 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 @[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
 
-def SubCircuit.offset (_: SubCircuit F n) : ℕ := n
-
 /--
-Singleton `Operations`, that can be collected in a plain list, for easier processing.
+Core type representing the result of a circuit: a sequence of operations.
+
+In addition to `witness`, `assert` and `lookup`,
+`Operation` can also be a `subcircuit`, which itself is essentially a list of operations.
 -/
 inductive Operation (F : Type) [Field F] where
   | witness : (m: ℕ) → (compute : Environment F → Vector F m) → Operation F
@@ -140,6 +141,9 @@ instance [Repr F] : Repr (Operation F) where
     | lookup l => reprStr l
     | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
 
+/--
+The number of witness variables introduced by this operation.
+-/
 @[circuit_norm]
 def local_length : Operation F → ℕ
   | .witness m _ => m
@@ -148,11 +152,14 @@ def local_length : Operation F → ℕ
   | .subcircuit s => s.local_length
 end Operation
 
+/--
+`Operations F` is an alias for `List (Operation F)`, so that we can define
+methods on operations that take a self argument.
+-/
 @[reducible, circuit_norm]
 def Operations (F : Type) [Field F] := List (Operation F)
 
-def Operations.toList : Operations F → List (Operation F)
-  | ops => ops
+def Operations.toList : Operations F → List (Operation F) := id
 
 /-- move from nested operations back to flat operations -/
 def to_flat_operations : Operations F → List (FlatOperation F)
@@ -163,6 +170,9 @@ def to_flat_operations : Operations F → List (FlatOperation F)
   | .subcircuit s :: ops => s.ops ++ to_flat_operations ops
 
 namespace Operations
+/--
+The number of witness variables introduced by these operations.
+-/
 @[circuit_norm]
 def local_length : Operations F → ℕ
   | [] => 0
@@ -171,6 +181,9 @@ def local_length : Operations F → ℕ
   | .lookup _ :: ops => local_length ops
   | .subcircuit s :: ops => s.local_length + local_length ops
 
+/--
+The actual vector of witnesses created by these operations in the given environment.
+-/
 @[circuit_norm]
 def local_witnesses (env: Environment F) : (ops: Operations F) → Vector F ops.local_length
   | [] => #v[]
@@ -179,6 +192,12 @@ def local_witnesses (env: Environment F) : (ops: Operations F) → Vector F ops.
   | .lookup _ :: ops => local_witnesses env ops
   | .subcircuit s :: ops => s.witnesses env ++ local_witnesses env ops
 
+/--
+In a circuit, we track the offset (a natural number) of the next variable.
+When creating a variable, its index becomes the offset and the offset is incremented.
+
+This method computes the offset after running all operations, given an initial offset.
+-/
 def offset (initial_offset : ℕ) : Operations F → ℕ
   | [] => initial_offset
   | .witness m _ :: ops => offset (initial_offset + m) ops
@@ -186,7 +205,7 @@ def offset (initial_offset : ℕ) : Operations F → ℕ
   | .lookup _ :: ops => offset initial_offset ops
   | .subcircuit s :: ops => offset (initial_offset + s.local_length) ops
 
-/-- induction principle -/
+/-- Induction principle for `Operations`. -/
 def induct {motive : Operations F → Sort*}
   (empty : motive [])
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
@@ -203,6 +222,10 @@ def induct {motive : Operations F → Sort*}
 
 -- generic folding over `Operations` resulting in a proposition
 
+/--
+A `Condition` lets you define a predicate on operations, given the type and content of the
+current operation as well as the current offset.
+-/
 structure Condition (F: Type) [Field F] where
   witness (offset: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
   assert (offset: ℕ) : Expression F → Prop := fun _ => True
@@ -216,6 +239,10 @@ def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Pro
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
 
+/--
+Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
+The function expects the initial offset as an argument.
+-/
 def forAll (offset : ℕ) (condition : Operations.Condition F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
@@ -252,13 +279,13 @@ def subcircuits_consistent (offset : ℕ) (ops : Operations F) := ops.forAll off
 }
 
 /--
-induction principle for operations _with subcircuit consistency_.
+Induction principle for operations _with subcircuit consistency_.
 
-the differences to `induct` are:
+The differences to `induct` are:
 - in addition to the operations, we also pass along the initial offset `n`
 - in the subcircuit case, the subcircuit offset is the same as the initial offset
 -/
-def induct_consistent {motive : (ops : Operations F) → (n : ℕ) → ops.subcircuits_consistent n → Prop}
+def induct_consistent {motive : (ops : Operations F) → (n : ℕ) → ops.subcircuits_consistent n → Sort*}
   (empty : ∀ n, motive [] n trivial)
   (witness : ∀ n m c ops {h}, motive ops (m + n) h →
     motive (.witness m c :: ops) n (by simp_all [Operations.subcircuits_consistent, forAll]))
