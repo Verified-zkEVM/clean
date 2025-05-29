@@ -150,7 +150,7 @@ lemma extends_vector_subcircuit (env : Environment F) {n} {n'} {circuit : SubCir
   apply Vector.cast_heq
 
 theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operations F}  :
-  env.uses_local_witnesses' n ops → env.uses_local_witnesses n ops := by
+    env.uses_local_witnesses' n ops → env.uses_local_witnesses n ops := by
   intro h
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -164,7 +164,7 @@ theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operatio
     exact ⟨ env_extends_subcircuit_inner h, ih _ (env_extends_subcircuit h) ⟩
 
 theorem can_replace_local_witnesses_completeness {env: Environment F} (ops: ConsistentOperations F) :
-  env.uses_local_witnesses ops.initial_offset ops.ops → env.uses_local_witnesses_completeness ops.initial_offset ops.ops := by
+    env.uses_local_witnesses ops.initial_offset ops.ops → env.uses_local_witnesses_completeness ops.initial_offset ops.ops := by
   induction ops using ConsistentOperations.induct with
   | empty => intros; trivial
   | witness | assert | lookup =>
@@ -179,11 +179,10 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} (ops: Cons
     exact h.left
 
 theorem uses_local_witnesses_completeness_iff_forAll {env: Environment F} {n: ℕ} {ops: Operations F} :
-  env.uses_local_witnesses_completeness n ops ↔
-    ops.forAll n {
-      witness m _ c := env.extends_vector (c env) m,
-      subcircuit _ _ s := s.uses_local_witnesses env
-    } := by
+  env.uses_local_witnesses_completeness n ops ↔ ops.forAll n {
+    witness m _ c := env.extends_vector (c env) m,
+    subcircuit _ _ s := s.uses_local_witnesses env
+  } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
@@ -227,7 +226,7 @@ Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only pr
 because it already implies the flat version.
 -/
 theorem can_replace_completeness {env} (ops : ConsistentOperations F) : env.uses_local_witnesses ops.initial_offset ops.ops →
-  constraints_hold.completeness env ops.ops → constraints_hold env ops.ops := by
+    constraints_hold.completeness env ops.ops → constraints_hold env ops.ops := by
   induction ops using ConsistentOperations.induct with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
