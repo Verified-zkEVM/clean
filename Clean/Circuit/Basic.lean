@@ -1,8 +1,4 @@
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
 import Clean.Circuit.Operations
--- import Clean.Circuit.Append
-import Clean.Circuit.SimpGadget
 import Mathlib.Control.Monad.Writer
 
 variable {F: Type} [Field F] {α : Type} {n : ℕ}
@@ -12,8 +8,8 @@ The monad to write circuits. Lets you use `do` notation while in the background
 it builds up a list of `Operation`s that represent the circuit at a low level.
 
 Concretely, a `Circuit` is a function `(offset : ℕ) → α × List (Operation F) × offset'` for some
-return type `α`, and the monad is a state monad that keeps the `offset` around, paired with a
-writer monad that accumulates the operations.
+return type `α`. The monad is a state monad that keeps track of the `offset`, paired with a
+writer monad that accumulates the list of operations.
 
 ```
 def circuit : Circuit F Unit := do
@@ -62,7 +58,7 @@ def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
 
 -- core operations we can do in a circuit
 
-/-- Create a new variable -/
+/-- Create a new variable. -/
 @[circuit_norm]
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
@@ -75,12 +71,14 @@ def witness (compute : Environment F → F) := do
   let v ← witness_var compute
   return var v
 
+/-- Create a vector of variables. -/
 @[circuit_norm]
 def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     ((vars, [.witness m compute]), offset + m)
 
+/-- Create a vector of expressions. -/
 @[circuit_norm]
 def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
@@ -104,31 +102,6 @@ def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment 
   fun (offset : ℕ) =>
     let var := var_from_offset α offset
     ⟨(var, [.witness (size α) (fun env => compute env |> to_elements)]), offset + size α⟩
-
-/--
-If an environment "uses local witnesses" it means that the environment's evaluation
-matches the output of the witness generator passed along with a `witness` declaration,
-for all variables declared locally within the circuit.
-
-This is the condition needed to prove completeness of a circuit.
--/
-def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
-  | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (m + offset) ops
-  | .assert _ :: ops => env.uses_local_witnesses offset ops
-  | .lookup _ :: ops => env.uses_local_witnesses offset ops
-  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
-
-/--
-Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
--/
-@[circuit_norm]
-def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
-  | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
-  | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
@@ -175,6 +148,31 @@ def constraints_hold.completeness (eval : Environment F) : List (Operation F) �
   | .subcircuit s :: ops =>
     s.completeness eval ∧ constraints_hold.completeness eval ops
 end Circuit
+
+/--
+If an environment "uses local witnesses", it means that the environment's evaluation
+matches the output of the witness generator passed along with a `witness` declaration,
+for all variables declared locally within the circuit.
+
+This is the condition needed to prove completeness of a circuit.
+-/
+def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
+  | [] => True
+  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (m + offset) ops
+  | .assert _ :: ops => env.uses_local_witnesses offset ops
+  | .lookup _ :: ops => env.uses_local_witnesses offset ops
+  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
+
+/--
+Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
+-/
+@[circuit_norm]
+def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
+  | [] => True
+  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
+  | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
+  | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
+  | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
 section
 open Circuit (constraints_hold)
