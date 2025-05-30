@@ -113,9 +113,7 @@ lemma forEach.uses_local_witnesses :
 @[circuit_norm ↓]
 lemma forEach.forAll :
   Operations.forAll n prop ((forEach xs body lawful).operations n) ↔
-    ∀ i : Fin m, (body xs[i.val]
-      |>.operations (n + i*(body default).local_length)
-      |>.forAll (n + i*(body default).local_length)) prop := by
+    ∀ i : Fin m, (body xs[i.val] |>.forAll prop (n + i*(body default).local_length)) := by
   simp only [forEach, ←forAll_def]
   rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
 
@@ -125,27 +123,7 @@ lemma forEach.local_length_eq :
   rw [forEach, ForM.local_length_eq, mul_comm, lawful.local_length_eq]
 
 @[circuit_norm ↓]
-lemma forEach.local_length_eq' :
-    ((forEach xs body lawful).operations n).local_length = m * (body default).local_length := by
-  rw [←local_length_eq]; rfl
-
-@[circuit_norm]
-lemma forEach.final_offset_eq :
-    (forEach xs body lawful).final_offset n = n + m * (body default).local_length := by
-  rw [offset_consistent, local_length_eq]
-
-@[circuit_norm ↓]
 lemma forEach.output_eq :
   (forEach xs body lawful).output n = () := rfl
-
--- def opaqueOperations (circuit : Circuit F α) (n : ℕ) : Operations F :=
---   circuit.operations n
-
--- @[circuit_norm ↓]
--- lemma forEach.apply_eq :
---   forEach xs body lawful n = (((), (forEach xs body lawful).opaqueOperations n), n + m *(body default).local_length) := by
---   apply Prod.ext
---   · rfl
---   apply final_offset_eq
 
 end forEach
