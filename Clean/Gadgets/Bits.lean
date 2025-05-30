@@ -145,10 +145,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   output _ i := var_from_offset (fields n) i
 
   local_length_eq _ _ := by
-    simp only [main, circuit_norm, Boolean.circuit, Operations.local_length_append]
+    simp only [main, circuit_norm, Boolean.circuit]
     ac_rfl
   output_eq _ _ := by simp only [main, circuit_norm]
-  subcircuits_consistent x i0 := by simp +arith only [main, circuit_norm]
+  subcircuits_consistent x i0 := by
+    simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `local_length + offset` while bind passes `offset + local_length`
 
   assumptions (x : F p) := x.val < 2^n

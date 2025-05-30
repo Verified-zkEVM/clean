@@ -27,23 +27,27 @@ def circuit : Circuit F Unit := do
 -/
 def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
 
+def Circuit.pure {α} (a : α) : Circuit F α := fun _ => (a, [])
+
 def Circuit.bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
   let (b, ops') := g (f n).1 (n + Operations.local_length (f n).2)
   (b, (f n).2 ++ ops')
 
+def Circuit.map {α β} (f : α → β) (circuit : Circuit F α) : Circuit F β := fun (n : ℕ) =>
+  let (a, ops) := circuit n
+  (f a, ops)
+
 instance : Monad (Circuit F) where
-  map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
-    let (a, ops) := circuit n
-    (f a, ops)
-  pure {α} (a : α) := fun _ => (a, [])
+  pure := Circuit.pure
   bind := Circuit.bind
+  map := Circuit.map
 
 /--
 in proofs, we rewrite `bind` into a definition that is more efficient to
 reason about (because it avoids the duplicated `f n` term).
  -/
-@[circuit_norm]
+-- @[circuit_norm low]
 theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
   f >>= g = fun n =>
     let (a, ops) := f n
@@ -58,26 +62,26 @@ instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
 instance : LawfulMonad (Circuit F) := by sorry --inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
 
 namespace Circuit
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   offset + Operations.local_length (circuit offset).2
 
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
   (circuit offset).2
 
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def output (circuit: Circuit F α) (offset := 0) : α :=
   (circuit offset).1
 
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
   Operations.local_length (circuit offset).2
 
 -- core operations we can do in a circuit
 
 /-- Create a new variable. -/
-@[circuit_norm]
+-- @[circuit_norm low]
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
@@ -90,36 +94,125 @@ def witness (compute : Environment F → F) := do
   return var v
 
 /-- Create a vector of variables. -/
-@[circuit_norm]
+-- @[circuit_norm low]
 def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     (vars, [.witness m compute])
 
 /-- Create a vector of expressions. -/
-@[circuit_norm]
+-- @[circuit_norm low]
 def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := var_from_offset (fields m) offset
     (vars, [.witness m compute])
 
 /-- Add a constraint. -/
-@[circuit_norm]
+-- @[circuit_norm low]
 def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
   ((), [.assert e])
 
 /-- Add a lookup. -/
-@[circuit_norm]
+-- @[circuit_norm low]
 def lookup (l: Lookup F) : Circuit F Unit := fun _ =>
   ((), [.lookup l])
 
+-- since we keep `Circuit.output` and `Circuit.operations` opaque, we need theorems to unfold binds as well as each primitive operation
+
+-- pure
+
+@[circuit_norm] theorem pure_output {α} (a : α) (n : ℕ) :
+  (pure a : Circuit F α).output n = a := rfl
+
+@[circuit_norm] theorem pure_operations {α} (a : α) (n : ℕ) :
+  (pure a : Circuit F α).operations n = [] := rfl
+
+@[circuit_norm] theorem pure_local_length {α} (a : α) (n : ℕ) :
+  (pure a : Circuit F α).local_length n = 0 := rfl
+
+-- bind
+
+@[circuit_norm] theorem bind_output {α β} (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).output n = (g (f.output n)).output (n + f.local_length n) := rfl
+
+@[circuit_norm] theorem bind_operations {α β} (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
+
+@[circuit_norm] theorem bind_local_length {α β} (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (n + f.local_length n) := by
+  show (f.operations n ++ (g _).operations _).local_length = _
+  rw [Operations.local_length_append]; rfl
+
+-- witness_var
+
+@[circuit_norm] theorem witness_var_output (compute : Environment F → F) (offset : ℕ) :
+  (witness_var compute).output offset = ⟨offset⟩ := rfl
+
+@[circuit_norm] theorem witness_var_operations (compute : Environment F → F) (offset : ℕ) :
+  (witness_var compute).operations offset = [.witness 1 fun env => #v[compute env]] := rfl
+
+@[circuit_norm] theorem witness_var_local_length (compute : Environment F → F) (offset : ℕ) :
+  (witness_var compute).local_length offset = 1 := rfl
+
+-- witness_vars
+
+@[circuit_norm] theorem witness_vars_output (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
+  (witness_vars m compute).output offset = .mapRange m (⟨offset + ·⟩) := rfl
+
+@[circuit_norm] theorem witness_vars_operations (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
+  (witness_vars m compute).operations offset = [.witness m compute] := rfl
+
+@[circuit_norm] theorem witness_vars_local_length (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
+  (witness_vars m compute).local_length offset = m := rfl
+
+-- witness_vector
+
+@[circuit_norm] theorem witness_vector_operations (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
+  (witness_vector m compute).operations offset = [.witness m compute] := rfl
+
+@[circuit_norm] theorem witness_vector_output (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
+  (witness_vector m compute).output offset = var_from_offset (fields m) offset := rfl
+
+@[circuit_norm] theorem witness_vector_local_length (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
+  (witness_vector m compute).local_length offset = m := rfl
+
+-- assert_zero
+
+@[circuit_norm] theorem assert_zero_output (e: Expression F) (offset : ℕ) :
+  (assert_zero e).output offset = () := rfl
+
+@[circuit_norm] theorem assert_zero_operations (e: Expression F) (offset : ℕ) :
+  (assert_zero e).operations offset = [.assert e] := rfl
+
+@[circuit_norm] theorem assert_zero_local_length (e: Expression F) (offset : ℕ) :
+  (assert_zero e).local_length offset = 0 := rfl
+
+-- lookup
+
+@[circuit_norm] theorem lookup_output (l: Lookup F) (offset : ℕ) :
+  (lookup l).output offset = () := rfl
+
+@[circuit_norm] theorem lookup_operations (l: Lookup F) (offset : ℕ) :
+  (lookup l).operations offset = [.lookup l] := rfl
+
+@[circuit_norm] theorem lookup_local_length (l: Lookup F) (offset : ℕ) :
+  (lookup l).local_length offset = 0 := rfl
 end Circuit
 
-@[circuit_norm]
+-- @[circuit_norm low]
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := var_from_offset α offset
     (var, [.witness (size α) (fun env => compute env |> to_elements)])
+
+@[circuit_norm] theorem ProvableType.witness_output {α: TypeMap} [ProvableType α] (compute : Environment F → α F) (offset : ℕ) :
+  (ProvableType.witness compute).output offset = var_from_offset α offset := rfl
+
+@[circuit_norm] theorem ProvableType.witness_operations {α: TypeMap} [ProvableType α] (compute : Environment F → α F) (offset : ℕ) :
+  (ProvableType.witness compute).operations offset = [.witness (size α) (fun env => compute env |> to_elements)] := rfl
+
+@[circuit_norm] theorem ProvableType.witness_local_length {α: TypeMap} [ProvableType α] (compute : Environment F → α F) (offset : ℕ) :
+  (ProvableType.witness compute).local_length offset = size α := rfl
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit

@@ -191,7 +191,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 end
 
 /-- Include a subcircuit. -/
-@[circuit_norm]
+-- @[circuit_norm]
 def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var α F) :=
   fun offset =>
     let a := circuit.output b offset
@@ -199,21 +199,39 @@ def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var �
     (a, [.subcircuit subcircuit])
 
 /-- Include an assertion subcircuit. -/
-@[circuit_norm]
+-- @[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit :=
   fun offset =>
     let subcircuit := circuit.to_subcircuit offset b
     ((), [.subcircuit subcircuit])
 
+-- theorems to unfold subcircuit and assertion
+
 namespace Circuit
-variable {α β: TypeMap} [ProvableType α] [ProvableType β]
+@[circuit_norm]
+theorem subcircuit_output (circuit: FormalCircuit F β α) (b: Var β F) (offset: ℕ) :
+  (subcircuit circuit b).output offset = circuit.output b offset := rfl
+
+@[circuit_norm]
+theorem subcircuit_operations (circuit: FormalCircuit F β α) (b: Var β F) (offset: ℕ) :
+  (subcircuit circuit b).operations offset = [.subcircuit (circuit.to_subcircuit offset b)] := rfl
 
 /-- The local length of a subcircuit is derived from the original formal circuit -/
-lemma subcircuit_local_length_eq (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
-  (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
+@[circuit_norm]
+theorem subcircuit_local_length (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
+  (subcircuit circuit input).local_length offset = circuit.local_length input := rfl
 
-lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
-  (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
+@[circuit_norm]
+theorem assertion_output (circuit: FormalAssertion F β) (b: Var β F) (offset: ℕ) :
+  (assertion circuit b).output offset = () := rfl
+
+@[circuit_norm]
+theorem assertion_operations (circuit: FormalAssertion F β) (b: Var β F) (offset: ℕ) :
+  (assertion circuit b).operations offset = [.subcircuit (circuit.to_subcircuit offset b)] := rfl
+
+@[circuit_norm]
+theorem assertion_local_length (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
+  (assertion circuit input).local_length offset = circuit.local_length input := rfl
 end Circuit
 
 -- simp set to unfold subcircuits
@@ -223,6 +241,4 @@ attribute [subcircuit_norm]
   Circuit.subassertion_soundness Circuit.subassertion_completeness
 
 -- to just reduce offsets, it's much better to _not_ use `subcircuit_norm`
--- instead, `circuit_norm` will use these theorems to unfold subcircuits
-attribute [circuit_norm]
-  Circuit.subcircuit_local_length_eq Circuit.assertion_local_length_eq
+-- instead, `circuit_norm` will use the `local_length` theorems to unfold subcircuits

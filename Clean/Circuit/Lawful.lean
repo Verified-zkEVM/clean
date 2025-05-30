@@ -112,6 +112,7 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
   simp only [forAll]
   rw [h_ops, Operations.forAll_append, offset_consistent, add_comm n]
+  rfl
 
 theorem constraints_hold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   constraints_hold.soundness env (circuit.operations n) ↔ circuit.forAll {
