@@ -139,7 +139,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
+  simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
   simp only [h_inputs, circuit_norm, subcircuit_norm, and_assoc] at henv ⊢
 
   -- characterize local witnesses
