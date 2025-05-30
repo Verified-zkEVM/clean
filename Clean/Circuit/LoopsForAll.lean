@@ -5,9 +5,20 @@ import Clean.Circuit.Lawful
 import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
+instance LawfulCircuit.from_forM {circuit : α → Circuit F Unit} [∀ x : α, LawfulCircuit (circuit x)] (xs : List α) :
+    LawfulCircuit (forM xs circuit) := by
+  induction xs
+  case nil => rw [List.forM_nil]; infer_instance
+  case cons x xs ih => rw [List.forM_cons]; exact from_bind inferInstance inferInstance
+
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     xs.forM body = forM xs.toList body := by
   rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+
+instance LawfulCircuit.from_forM_vector {circuit : α → Circuit F Unit} (lawful: ∀ x : α, LawfulCircuit (circuit x)) {n : ℕ} (xs : Vector α n) :
+    LawfulCircuit (xs.forM circuit) := by
+  rw [Vector.forM_toList]
+  apply from_forM
 
 namespace Circuit
 namespace ForM
@@ -109,47 +120,38 @@ lemma forEach.uses_local_witnesses :
   simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLawfulCircuits.local_length_eq]
 
-@[circuit_norm]
-lemma forEach.final_offset_eq :
-    (forEach xs body lawful ops).2.offset = ops.offset + m * (body default).local_length := by
-  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [LawfulCircuit.offset_independent, LawfulCircuit.local_length_eq, mul_comm]
-  rfl
-
 @[circuit_norm ↓]
 lemma forEach.local_length_eq :
-    (forEach xs body lawful ops).2.withLength.local_length = ops.withLength.local_length + m * (body default).local_length := by
-  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [LawfulCircuit.local_length_eq', LawfulCircuit.local_length_eq, mul_comm]
-  rfl
+    (forEach xs body lawful).local_length n = m * (body default).local_length := by
+  rw [forEach, ForM.local_length_eq, mul_comm, lawful.local_length_eq]
 
-@[circuit_norm ↓]
-lemma forEach.initial_offset_eq :
-    (forEach xs body lawful ops).2.withLength.initial_offset = ops.withLength.initial_offset := by
-  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [LawfulCircuit.initial_offset_eq']
+@[circuit_norm]
+lemma forEach.final_offset_eq :
+    (forEach xs body lawful).final_offset n = n + m * (body default).local_length := by
+  let lawful_loop : LawfulCircuit (forEach xs body lawful) := .from_forM_vector inferInstance xs
+  rw [lawful_loop.offset_consistent, local_length_eq]
 
 @[circuit_norm ↓]
 lemma forEach.output_eq :
-  (forEach xs body lawful ops).1 = () := rfl
+  (forEach xs body lawful).output n = () := rfl
 
-@[circuit_norm ↓]
-lemma forEach.apply_eq :
-  forEach xs body lawful ops = ((), {
-    offset := ((forEach xs body lawful).final_offset ops.offset)
-    withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
-      : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
-  }) := by
-  apply Prod.ext
-  · rfl
-  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
-  rw [LawfulCircuit.append_only]
-  rcases ops with ⟨ n, ops ⟩
-  simp only [OperationsList.mk.injEq]
-  have h_offset : LawfulCircuit.final_offset (forEach xs body lawful) n = (forEach xs body lawful).final_offset n := by
-    rw [LawfulCircuit.final_offset_eq]
-  use h_offset
-  congr
-  simp only [LawfulCircuit.operations_eq, Subtype.coe_eta, heq_eqRec_iff_heq, heq_eq_eq]
+-- @[circuit_norm ↓]
+-- lemma forEach.apply_eq :
+--   forEach xs body lawful ops = ((), {
+--     offset := ((forEach xs body lawful).final_offset ops.offset)
+--     withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
+--       : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
+--   }) := by
+--   apply Prod.ext
+--   · rfl
+--   let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+--   rw [LawfulCircuit.append_only]
+--   rcases ops with ⟨ n, ops ⟩
+--   simp only [OperationsList.mk.injEq]
+--   have h_offset : LawfulCircuit.final_offset (forEach xs body lawful) n = (forEach xs body lawful).final_offset n := by
+--     rw [LawfulCircuit.final_offset_eq]
+--   use h_offset
+--   congr
+--   simp only [LawfulCircuit.operations_eq, Subtype.coe_eta, heq_eqRec_iff_heq, heq_eq_eq]
 
 end forEach
