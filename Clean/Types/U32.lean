@@ -1,5 +1,4 @@
 import Clean.Gadgets.ByteLookup
-import Clean.Circuit.Extensions
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]

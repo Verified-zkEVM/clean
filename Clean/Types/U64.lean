@@ -1,5 +1,4 @@
 import Clean.Gadgets.ByteLookup
-import Clean.Circuit.Extensions
 import Clean.Utils.Bitwise
 import Clean.Circuit.Provable
 import Clean.Utils.Primes

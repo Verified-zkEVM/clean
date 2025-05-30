@@ -1,10 +1,10 @@
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Operations
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 
 -- we can define an append operation on `Operations`,
 -- if the initial offset of the second matches the final offset of the first
 
-def Operations.append {m n: ℕ} (as : Operations F m) : (bs : Operations F n) → bs.initial_offset = m → Operations F n
+def Operations.append {m n: ℕ} (as : Operations F) : (bs : Operations F) → bs.initial_offset = m → Operations F n
   | empty n, (heq : n = _) => heq ▸ as
   | witness bs k c, heq => witness (append as bs heq) k c
   | assert bs e, heq => assert (append as bs heq) e
@@ -134,6 +134,19 @@ theorem append_assoc {p: ℕ} (as : OperationsFrom F m n) (bs : OperationsFrom F
   ext; simp only [append_val, Operations.append_assoc]
 end OperationsFrom
 
+-- append behaves as expected with `local_length`
+
+theorem Operations.append_local_length (as : Operations F m) (bs : OperationsFrom F m n) :
+    (as ++ bs).local_length = as.local_length + bs.val.local_length := by
+  induction bs using OperationsFrom.induct with
+  | empty n => rw [Operations.append_empty]; rfl
+  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
+    specialize ih as
+    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
+    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
+    simp only [local_length, ih]
+    try ac_rfl
+
 -- append behaves as expected with `constraints_hold`
 
 namespace Circuit.constraints_hold
@@ -158,16 +171,3 @@ theorem append_completeness (as : Operations F m) (bs : OperationsFrom F m n) :
   simp only [completeness_iff_forAll, append_forAll]
 
 end Circuit.constraints_hold
-
--- append behaves as expected with `local_length`
-
-theorem Operations.append_local_length (as : Operations F m) (bs : OperationsFrom F m n) :
-    (as ++ bs).local_length = as.local_length + bs.val.local_length := by
-  induction bs using OperationsFrom.induct with
-  | empty n => rw [Operations.append_empty]; rfl
-  | witness bs k c ih | assert bs _ ih | lookup bs _ ih | subcircuit bs _ ih =>
-    specialize ih as
-    simp only [Operations.append_lookup, Operations.append_assert, Operations.append_witness, Operations.append_subcircuit]
-    simp only [OperationsFrom.lookup, OperationsFrom.assert, OperationsFrom.witness, OperationsFrom.subcircuit]
-    simp only [local_length, ih]
-    try ac_rfl

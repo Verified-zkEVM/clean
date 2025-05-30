@@ -2,7 +2,7 @@
 This file provides the built-in `assert_equals` gadget, which works for any provable type
 and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
-import Clean.Circuit.Loops
+import Clean.Circuit.LoopsForAll
 
 variable {F : Type} [Field F]
 open Circuit (constraints_hold)
@@ -36,7 +36,7 @@ instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F
   output _ _ := ()
 
   local_length_eq _ n := by simp only [main, circuit_norm, mul_zero]
-  initial_offset_eq _ n := by simp only [main, circuit_norm]
+  subcircuits_consistent n := by simp only [main, circuit_norm]
 
 def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (ProvablePair α α) where
   assumptions _ := True
