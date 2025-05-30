@@ -25,20 +25,28 @@ def circuit : Circuit F Unit := do
 -/
 def Circuit (F : Type) [Field F] := WriterT (List (Operation F)) (StateM ℕ)
 
--- instance Circuit.lift : MonadLift (StateM ℕ) (Circuit F) where
---   monadLift {α} (m : StateM ℕ α) : StateM ℕ (α × List (Operation F)) :=
---     fun (n : ℕ) => let (a, n') := m n; ((a, []), n')
+def Circuit.bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
+  -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
+  let ((b, ops'), n'') := g (f n).1.1 (f n).2
+  ((b, (f n).1.2 ++ ops'), n'')
 
 instance : Monad (Circuit F) where
   map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
     let ((a, ops), n') := circuit n
     ((f a, ops), n')
   pure {α} (a : α) := fun (n : ℕ) => ((a, []), n)
-  bind {α β} (f : Circuit F α) (g : α → Circuit F β) := fun (n : ℕ) =>
-    -- note: empirically, unpacking the results of `f` here makes
-    -- the monad scale to much fewer operations
-    let ((b, ops'), n'') := g (f n).1.1 (f n).2
-    ((b, (f n).1.2 ++ ops'), n'')
+  bind := Circuit.bind
+
+/--
+in proofs, we rewrite `bind` into a definition that is more efficient to
+reason about (because it avoids the duplicated `f n` term).
+ -/
+@[circuit_norm]
+theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
+  Circuit.bind f g = fun n =>
+    let ((a, ops), n') := f n
+    let ((b, ops'), n'') := g a n'
+    ((b, ops ++ ops'), n'') := rfl
 
 instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
 instance : LawfulMonad (Circuit F) := inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
@@ -353,10 +361,10 @@ attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
+  Functor.map StateT.map
 -- attribute [circuit_norm] monadLift MonadLift.monadLift
 --   tell WriterT.mk WriterT.monad WriterT.liftTell
 --   EmptyCollection.emptyCollection
---   Functor.map StateT.map
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
