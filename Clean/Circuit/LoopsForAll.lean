@@ -2,6 +2,7 @@
 minimal version of Loops that only contains the forM case
 -/
 import Clean.Circuit.Lawful
+import Clean.Circuit.SimpLemmas
 import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 

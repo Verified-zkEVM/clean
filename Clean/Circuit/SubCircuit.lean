@@ -191,48 +191,22 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 end
 
 /-- Include a subcircuit. -/
--- @[circuit_norm]
+@[circuit_norm]
 def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var α F) :=
-  fun offset =>
-    let a := circuit.output b offset
-    let subcircuit := circuit.to_subcircuit offset b
-    (a, [.subcircuit subcircuit])
+  .fromElaborated {
+    output offset := circuit.output b offset,
+    local_length _ := circuit.local_length b,
+    operations offset := [.subcircuit (circuit.to_subcircuit offset b)]
+  }
 
 /-- Include an assertion subcircuit. -/
--- @[circuit_norm]
+@[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit :=
-  fun offset =>
-    let subcircuit := circuit.to_subcircuit offset b
-    ((), [.subcircuit subcircuit])
-
--- theorems to unfold subcircuit and assertion
-
-namespace Circuit
-@[circuit_norm]
-theorem subcircuit_output (circuit: FormalCircuit F β α) (b: Var β F) (offset: ℕ) :
-  (subcircuit circuit b).output offset = circuit.output b offset := rfl
-
-@[circuit_norm]
-theorem subcircuit_operations (circuit: FormalCircuit F β α) (b: Var β F) (offset: ℕ) :
-  (subcircuit circuit b).operations offset = [.subcircuit (circuit.to_subcircuit offset b)] := rfl
-
-/-- The local length of a subcircuit is derived from the original formal circuit -/
-@[circuit_norm]
-theorem subcircuit_local_length (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
-  (subcircuit circuit input).local_length offset = circuit.local_length input := rfl
-
-@[circuit_norm]
-theorem assertion_output (circuit: FormalAssertion F β) (b: Var β F) (offset: ℕ) :
-  (assertion circuit b).output offset = () := rfl
-
-@[circuit_norm]
-theorem assertion_operations (circuit: FormalAssertion F β) (b: Var β F) (offset: ℕ) :
-  (assertion circuit b).operations offset = [.subcircuit (circuit.to_subcircuit offset b)] := rfl
-
-@[circuit_norm]
-theorem assertion_local_length (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
-  (assertion circuit input).local_length offset = circuit.local_length input := rfl
-end Circuit
+  .fromElaborated {
+    output offset := circuit.output b offset,
+    local_length _ := circuit.local_length b,
+    operations offset := [.subcircuit (circuit.to_subcircuit offset b)]
+  }
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]

@@ -78,141 +78,89 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
   Operations.local_length (circuit offset).2
 
+/-- it is beneficial for simplification to have `output`, `local_length`, and `operations`
+explicitly defined as separate functions -/
+structure Elaborated (F : Type) [Field F] (α : Type) where
+  output : ℕ → α
+  local_length : ℕ → ℕ
+  operations : ℕ → Operations F
+  local_length_eq : ∀ n, (operations n).local_length = local_length n := by intros; rfl
+
+def fromElaborated {α: Type} (circuit: Elaborated F α) : Circuit F α :=
+  fun (n : ℕ) => (circuit.output n, circuit.operations n)
+
+/-- alternatively, we can define a circuit normally and derive the elaboration afterwards -/
+class IsElaborated (circuit: Circuit F α) extends elaborated : Elaborated F α where
+  output_eq : ∀ n, circuit.output n = elaborated.output n := by intros; rfl
+  operations_eq : ∀ n, circuit.operations n = elaborated.operations n := by intros; rfl
+
+theorem IsElaborated.eq {circuit: Circuit F α} [elaborated: IsElaborated circuit] :
+    circuit = fromElaborated elaborated.elaborated := by
+  funext
+  ext1
+  apply elaborated.output_eq
+  apply elaborated.operations_eq
+
 -- core operations we can do in a circuit
 
 /-- Create a new variable. -/
--- @[circuit_norm low]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
-  fun (offset : ℕ) =>
-    let var : Variable F := ⟨ offset ⟩
-    (var, [.witness 1 fun env => #v[compute env]])
+@[circuit_norm]
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) := fromElaborated {
+  output offset := ⟨ offset ⟩,
+  local_length _ := 1,
+  operations _ := [.witness 1 fun env => #v[compute env]],
+}
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witness (compute : Environment F → F) := do
-  let v ← witness_var compute
-  return var v
+def witness (compute : Environment F → F) : Circuit F (Expression F) := fromElaborated {
+    output offset := var ⟨ offset ⟩,
+    local_length _ := 1,
+    operations _ := [.witness 1 fun env => #v[compute env]],
+  }
 
 /-- Create a vector of variables. -/
--- @[circuit_norm low]
+@[circuit_norm]
 def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
-  fun (offset : ℕ) =>
-    let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, [.witness m compute])
+  fromElaborated {
+    output offset : Vector (Variable F) m := .mapRange m (fun i => ⟨offset + i⟩),
+    local_length _ := m,
+    operations _ := [.witness m compute],
+  }
 
 /-- Create a vector of expressions. -/
--- @[circuit_norm low]
+@[circuit_norm]
 def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
-  fun (offset : ℕ) =>
-    let vars := var_from_offset (fields m) offset
-    (vars, [.witness m compute])
+  fromElaborated {
+    output offset : Vector (Expression F) m := var_from_offset (fields m) offset,
+    local_length _ := m,
+    operations _ := [.witness m compute],
+  }
 
 /-- Add a constraint. -/
--- @[circuit_norm low]
-def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
-  ((), [.assert e])
+@[circuit_norm]
+def assert_zero (e: Expression F) : Circuit F Unit := fromElaborated {
+  output _ := (),
+  local_length _ := 0,
+  operations _ := [.assert e],
+}
 
 /-- Add a lookup. -/
--- @[circuit_norm low]
-def lookup (l: Lookup F) : Circuit F Unit := fun _ =>
-  ((), [.lookup l])
-
--- since we keep `Circuit.output` and `Circuit.operations` opaque, we need theorems to unfold binds as well as each primitive operation
-
--- pure
-
-@[circuit_norm] theorem pure_output {α} (a : α) (n : ℕ) :
-  (pure a : Circuit F α).output n = a := rfl
-
-@[circuit_norm] theorem pure_operations {α} (a : α) (n : ℕ) :
-  (pure a : Circuit F α).operations n = [] := rfl
-
-@[circuit_norm] theorem pure_local_length {α} (a : α) (n : ℕ) :
-  (pure a : Circuit F α).local_length n = 0 := rfl
-
--- bind
-
-@[circuit_norm] theorem bind_output {α β} (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).output n = (g (f.output n)).output (n + f.local_length n) := rfl
-
-@[circuit_norm] theorem bind_operations {α β} (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
-
-@[circuit_norm] theorem bind_local_length {α β} (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (n + f.local_length n) := by
-  show (f.operations n ++ (g _).operations _).local_length = _
-  rw [Operations.local_length_append]; rfl
-
--- witness_var
-
-@[circuit_norm] theorem witness_var_output (compute : Environment F → F) (offset : ℕ) :
-  (witness_var compute).output offset = ⟨offset⟩ := rfl
-
-@[circuit_norm] theorem witness_var_operations (compute : Environment F → F) (offset : ℕ) :
-  (witness_var compute).operations offset = [.witness 1 fun env => #v[compute env]] := rfl
-
-@[circuit_norm] theorem witness_var_local_length (compute : Environment F → F) (offset : ℕ) :
-  (witness_var compute).local_length offset = 1 := rfl
-
--- witness_vars
-
-@[circuit_norm] theorem witness_vars_output (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
-  (witness_vars m compute).output offset = .mapRange m (⟨offset + ·⟩) := rfl
-
-@[circuit_norm] theorem witness_vars_operations (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
-  (witness_vars m compute).operations offset = [.witness m compute] := rfl
-
-@[circuit_norm] theorem witness_vars_local_length (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
-  (witness_vars m compute).local_length offset = m := rfl
-
--- witness_vector
-
-@[circuit_norm] theorem witness_vector_operations (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
-  (witness_vector m compute).operations offset = [.witness m compute] := rfl
-
-@[circuit_norm] theorem witness_vector_output (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
-  (witness_vector m compute).output offset = var_from_offset (fields m) offset := rfl
-
-@[circuit_norm] theorem witness_vector_local_length (m: ℕ) (compute : Environment F → Vector F m) (offset : ℕ) :
-  (witness_vector m compute).local_length offset = m := rfl
-
--- assert_zero
-
-@[circuit_norm] theorem assert_zero_output (e: Expression F) (offset : ℕ) :
-  (assert_zero e).output offset = () := rfl
-
-@[circuit_norm] theorem assert_zero_operations (e: Expression F) (offset : ℕ) :
-  (assert_zero e).operations offset = [.assert e] := rfl
-
-@[circuit_norm] theorem assert_zero_local_length (e: Expression F) (offset : ℕ) :
-  (assert_zero e).local_length offset = 0 := rfl
-
--- lookup
-
-@[circuit_norm] theorem lookup_output (l: Lookup F) (offset : ℕ) :
-  (lookup l).output offset = () := rfl
-
-@[circuit_norm] theorem lookup_operations (l: Lookup F) (offset : ℕ) :
-  (lookup l).operations offset = [.lookup l] := rfl
-
-@[circuit_norm] theorem lookup_local_length (l: Lookup F) (offset : ℕ) :
-  (lookup l).local_length offset = 0 := rfl
+@[circuit_norm]
+def lookup (l: Lookup F) : Circuit F Unit := fromElaborated {
+  output _ := (),
+  local_length _ := 0,
+  operations _ := [.lookup l],
+}
 end Circuit
 
--- @[circuit_norm low]
+@[circuit_norm]
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
-  fun (offset : ℕ) =>
-    let var := var_from_offset α offset
-    (var, [.witness (size α) (fun env => compute env |> to_elements)])
-
-@[circuit_norm] theorem ProvableType.witness_output {α: TypeMap} [ProvableType α] (compute : Environment F → α F) (offset : ℕ) :
-  (ProvableType.witness compute).output offset = var_from_offset α offset := rfl
-
-@[circuit_norm] theorem ProvableType.witness_operations {α: TypeMap} [ProvableType α] (compute : Environment F → α F) (offset : ℕ) :
-  (ProvableType.witness compute).operations offset = [.witness (size α) (fun env => compute env |> to_elements)] := rfl
-
-@[circuit_norm] theorem ProvableType.witness_local_length {α: TypeMap} [ProvableType α] (compute : Environment F → α F) (offset : ℕ) :
-  (ProvableType.witness compute).local_length offset = size α := rfl
+  .fromElaborated {
+    output offset := var_from_offset α offset,
+    local_length _ := size α,
+    operations _ := [.witness (size α) fun env => compute env |> to_elements],
+  }
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
