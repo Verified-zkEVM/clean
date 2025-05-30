@@ -43,10 +43,14 @@ reason about (because it avoids the duplicated `f n` term).
  -/
 @[circuit_norm]
 theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
-  Circuit.bind f g = fun n =>
+  f >>= g = fun n =>
     let ((a, ops), n') := f n
     let ((b, ops'), n'') := g a n'
     ((b, ops ++ ops'), n'') := rfl
+
+-- normalize `bind` to `>>=`
+@[circuit_norm]
+theorem Circuit.bind_normal {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
 
 instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
 instance : LawfulMonad (Circuit F) := inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
@@ -357,7 +361,7 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
 -- `circuit_norm` attributes
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
-attribute [circuit_norm] bind StateT.bind
+-- attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
