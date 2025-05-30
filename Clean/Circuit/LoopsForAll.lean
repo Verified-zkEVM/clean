@@ -88,7 +88,7 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F
 
 section forEach
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
-  {body : α → Circuit F Unit} {lawful : ConstantLawfulCircuits body}
+  {body : α → Circuit F Unit} {lawful : ConstantLawfulCircuits body} {prop : Operations.Condition F}
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
@@ -118,6 +118,15 @@ lemma forEach.uses_local_witnesses :
   env.uses_local_witnesses_completeness n ((forEach xs body lawful).operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
   simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  rw [ForM.forAll_iff, ConstantLawfulCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma forEach.forAll :
+  ((forEach xs body lawful).operations n).forAll n prop ↔
+    ∀ i : Fin m, (body xs[i.val]
+      |>.operations (n + i*(body default).local_length)
+      |>.forAll (n + i*(body default).local_length)) prop := by
+  simp only [forEach, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLawfulCircuits.local_length_eq]
 
 @[circuit_norm ↓]

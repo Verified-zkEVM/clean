@@ -358,7 +358,7 @@ attribute [circuit_norm] StateT.run
 --   Functor.map StateT.map
 
 -- basic logical simplifcations
-attribute [circuit_norm] true_and and_true true_implies forall_const
+attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
