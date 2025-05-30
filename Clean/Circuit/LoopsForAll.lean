@@ -9,7 +9,8 @@ lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body 
     xs.forM body = forM xs.toList body := by
   rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
 
-namespace Circuit.ForM
+namespace Circuit
+namespace ForM
 variable {circuit : α → Circuit F Unit} (xs : Vector α m) (lawful : ConstantLawfulCircuits circuit) (n : ℕ)
 
 theorem local_length_eq : (xs.forM circuit).local_length n = lawful.local_length * m := by
@@ -68,4 +69,87 @@ theorem forAll_iff :
     simp only [h_elem_iff, Vector.mem_zipIdx_iff_getElem?, Vector.getElem?_eq_some_iff] at hxi
     have ⟨ i_lt, x_eq ⟩ := hxi
     exact x_eq ▸ h ⟨ i, i_lt ⟩
-end Circuit.ForM
+end ForM
+
+def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+    (_lawful : ConstantLawfulCircuits body := by infer_constant_lawful_circuits) : Circuit F Unit :=
+  xs.forM body
+
+section forEach
+variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+  {body : α → Circuit F Unit} {lawful : ConstantLawfulCircuits body}
+
+@[circuit_norm ↓]
+lemma forEach.soundness :
+  constraints_hold.soundness env ((forEach xs body lawful).operations n) ↔
+    ∀ i : Fin m, constraints_hold.soundness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [forEach, constraints_hold.soundness_iff_forAll']
+  rw [ForM.forAll_iff, ConstantLawfulCircuits.local_length_eq]
+
+/-- variant of `forEach.soundness`, for when the constraints don't depend on the input offset -/
+lemma forEach.soundness' :
+  constraints_hold.soundness env (forEach xs body lawful |>.operations n) →
+    ∀ x ∈ xs, ∃ k : ℕ, constraints_hold.soundness env (body x |>.operations k) := by
+  simp only [forEach, constraints_hold.soundness_iff_forAll', ForM.forAll_iff]
+  intro h x hx
+  obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
+  exact ⟨ _ , h ⟨i, hi⟩ ⟩
+
+@[circuit_norm ↓]
+lemma forEach.completeness :
+  constraints_hold.completeness env ((forEach xs body lawful).operations n) ↔
+    ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [forEach, constraints_hold.completeness_iff_forAll']
+  rw [ForM.forAll_iff, ConstantLawfulCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma forEach.uses_local_witnesses :
+  env.uses_local_witnesses_completeness n ((forEach xs body lawful).operations n) ↔
+    ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  rw [ForM.forAll_iff, ConstantLawfulCircuits.local_length_eq]
+
+@[circuit_norm]
+lemma forEach.final_offset_eq :
+    (forEach xs body lawful ops).2.offset = ops.offset + m * (body default).local_length := by
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [LawfulCircuit.offset_independent, LawfulCircuit.local_length_eq, mul_comm]
+  rfl
+
+@[circuit_norm ↓]
+lemma forEach.local_length_eq :
+    (forEach xs body lawful ops).2.withLength.local_length = ops.withLength.local_length + m * (body default).local_length := by
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [LawfulCircuit.local_length_eq', LawfulCircuit.local_length_eq, mul_comm]
+  rfl
+
+@[circuit_norm ↓]
+lemma forEach.initial_offset_eq :
+    (forEach xs body lawful ops).2.withLength.initial_offset = ops.withLength.initial_offset := by
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [LawfulCircuit.initial_offset_eq']
+
+@[circuit_norm ↓]
+lemma forEach.output_eq :
+  (forEach xs body lawful ops).1 = () := rfl
+
+@[circuit_norm ↓]
+lemma forEach.apply_eq :
+  forEach xs body lawful ops = ((), {
+    offset := ((forEach xs body lawful).final_offset ops.offset)
+    withLength := ops.withLength ++ (⟨(forEach xs body lawful).operations ops.offset, (by simp only [circuit_norm])⟩
+      : OperationsFrom F ops.offset ((forEach xs body lawful).final_offset ops.offset))
+  }) := by
+  apply Prod.ext
+  · rfl
+  let lawful_loop : ConstantLawfulCircuit (forEach xs body lawful) := .from_forM_vector xs lawful
+  rw [LawfulCircuit.append_only]
+  rcases ops with ⟨ n, ops ⟩
+  simp only [OperationsList.mk.injEq]
+  have h_offset : LawfulCircuit.final_offset (forEach xs body lawful) n = (forEach xs body lawful).final_offset n := by
+    rw [LawfulCircuit.final_offset_eq]
+  use h_offset
+  congr
+  simp only [LawfulCircuit.operations_eq, Subtype.coe_eta, heq_eqRec_iff_heq, heq_eq_eq]
+
+end forEach
