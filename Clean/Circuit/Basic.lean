@@ -35,9 +35,10 @@ instance : Monad (Circuit F) where
     ((f a, ops), n')
   pure {α} (a : α) := fun (n : ℕ) => ((a, []), n)
   bind {α β} (f : Circuit F α) (g : α → Circuit F β) := fun (n : ℕ) =>
-    let ((a, ops), n') := f n
-    let ((b, ops'), n'') := g a n'
-    ((b, ops ++ ops'), n'')
+    -- note: empirically, unpacking the results of `f` here makes
+    -- the monad scale to much fewer operations
+    let ((b, ops'), n'') := g (f n).1.1 (f n).2
+    ((b, (f n).1.2 ++ ops'), n'')
 
 instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
 instance : LawfulMonad (Circuit F) := inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
