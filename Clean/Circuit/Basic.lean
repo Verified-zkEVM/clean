@@ -86,6 +86,8 @@ structure Elaborated (F : Type) [Field F] (α : Type) where
   operations : ℕ → Operations F
   local_length_eq : ∀ n, (operations n).local_length = local_length n := by intros; rfl
 
+attribute [circuit_norm] Elaborated.output Elaborated.local_length
+
 def fromElaborated {α: Type} (circuit: Elaborated F α) : Circuit F α :=
   fun (n : ℕ) => (circuit.output n, circuit.operations n)
 
