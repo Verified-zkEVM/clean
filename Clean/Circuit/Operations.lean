@@ -242,7 +242,7 @@ def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Pro
 Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
 The function expects the initial offset as an argument.
 -/
-def forAll (offset : ℕ) (condition : Operations.Condition F) : Operations F → Prop
+def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
@@ -250,17 +250,16 @@ def forAll (offset : ℕ) (condition : Operations.Condition F) : Operations F �
   | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.local_length + offset) condition ops
 
 @[circuit_norm]
-theorem forAll_empty {condition : Operations.Condition F} {n: ℕ} :
-  Operations.forAll n condition [] = True := rfl
+theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
 
 @[circuit_norm]
-theorem forAll_cons {condition : Operations.Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
+theorem forAll_cons {condition : Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
   forAll offset condition (op :: ops) ↔
     condition.apply offset op ∧ forAll (op.local_length + offset) condition ops := by
   cases op <;> simp [forAll, Operation.local_length, Condition.apply]
 
 @[circuit_norm]
-theorem forAll_append {condition : Operations.Condition F} {offset: ℕ} {as bs: Operations F} :
+theorem forAll_append {condition : Condition F} {offset: ℕ} {as bs: Operations F} :
   forAll offset condition (as ++ bs) ↔
     forAll offset condition as ∧ forAll (as.local_length + offset) condition bs := by
   induction as using induct generalizing offset with
@@ -287,26 +286,26 @@ The differences to `induct` are:
 def induct_consistent {motive : (ops : Operations F) → (n : ℕ) → ops.subcircuits_consistent n → Sort*}
   (empty : ∀ n, motive [] n trivial)
   (witness : ∀ n m c ops {h}, motive ops (m + n) h →
-    motive (.witness m c :: ops) n (by simp_all [Operations.subcircuits_consistent, forAll]))
+    motive (.witness m c :: ops) n (by simp_all [subcircuits_consistent, forAll]))
   (assert : ∀ n e ops {h}, motive ops n h →
-    motive (.assert e :: ops) n (by simp_all [Operations.subcircuits_consistent, forAll]))
+    motive (.assert e :: ops) n (by simp_all [subcircuits_consistent, forAll]))
   (lookup : ∀ n l ops {h}, motive ops n h →
-    motive (.lookup l :: ops) n (by simp_all [Operations.subcircuits_consistent, forAll]))
+    motive (.lookup l :: ops) n (by simp_all [subcircuits_consistent, forAll]))
   (subcircuit : ∀ n (s: SubCircuit F n) ops {h}, motive ops (s.local_length + n) h →
-    motive (.subcircuit s :: ops) n (by simp_all [Operations.subcircuits_consistent, forAll]))
+    motive (.subcircuit s :: ops) n (by simp_all [subcircuits_consistent, forAll]))
     (ops : Operations F) (n : ℕ) (h: ops.subcircuits_consistent n) : motive ops n h :=
   motive' ops n h
 where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consistent n) → motive ops n h
   | [], n, _ => empty n
   | .witness m c :: ops, n, h | .assert e :: ops, n, h | .lookup e :: ops, n, h => by
-    rw [Operations.subcircuits_consistent, forAll] at h
+    rw [subcircuits_consistent, forAll] at h
     first
     | exact witness _ _ _ _ (motive' ops _ h.right)
     | exact assert _ _ _ (motive' ops _ h.right)
     | exact lookup _ _ _ (motive' ops _ h.right)
   | .subcircuit s :: ops, n', h => by
     rename_i n
-    rw [Operations.subcircuits_consistent, forAll] at h
+    rw [subcircuits_consistent, forAll] at h
     have n_eq : n = n' := h.left
     subst n_eq
     exact subcircuit n s ops (motive' ops _ h.right)
