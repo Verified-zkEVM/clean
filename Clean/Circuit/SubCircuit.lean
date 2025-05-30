@@ -196,14 +196,14 @@ def subcircuit (circuit: FormalCircuit F β α) (b: Var β F) : Circuit F (Var �
   fun offset =>
     let a := circuit.output b offset
     let subcircuit := circuit.to_subcircuit offset b
-    ((a, [.subcircuit subcircuit]), offset + subcircuit.local_length)
+    (a, [.subcircuit subcircuit])
 
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
 def assertion (circuit: FormalAssertion F β) (b: Var β F) : Circuit F Unit :=
   fun offset =>
     let subcircuit := circuit.to_subcircuit offset b
-    (((), [.subcircuit subcircuit]), offset + subcircuit.local_length)
+    ((), [.subcircuit subcircuit])
 
 namespace Circuit
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]

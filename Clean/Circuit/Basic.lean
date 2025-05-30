@@ -25,11 +25,11 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × Operations F
+def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
 
 def Circuit.bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
-  let (b, ops') := g (f n).1 (n + (f n).2.local_length)
+  let (b, ops') := g (f n).1 (n + Operations.local_length (f n).2)
   (b, (f n).2 ++ ops')
 
 instance : Monad (Circuit F) where
@@ -47,7 +47,7 @@ reason about (because it avoids the duplicated `f n` term).
 theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
   f >>= g = fun n =>
     let (a, ops) := f n
-    let (b, ops') := g a (n + ops.local_length)
+    let (b, ops') := g a (n + Operations.local_length ops)
     (b, ops ++ ops') := rfl
 
 -- normalize `bind` to `>>=`
@@ -60,7 +60,7 @@ instance : LawfulMonad (Circuit F) := by sorry --inferInstanceAs (LawfulMonad (W
 namespace Circuit
 @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  offset + (circuit offset).2.local_length
+  offset + Operations.local_length (circuit offset).2
 
 @[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
@@ -72,7 +72,7 @@ def output (circuit: Circuit F α) (offset := 0) : α :=
 
 @[reducible, circuit_norm]
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
-  (circuit offset).2.local_length
+  Operations.local_length (circuit offset).2
 
 -- core operations we can do in a circuit
 
