@@ -2,10 +2,6 @@
 import Clean.Circuit.SubCircuit
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 
-/-- the offset derived from operations is the same as the state offset -/
-lemma offset_consistent (circuit : Circuit F α) :
-  ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
-
 -- a constant circuit is one where the local length is constant for all inputs
 class ConstantCircuit (circuit : Circuit F α) where
   local_length : ℕ
@@ -98,20 +94,6 @@ def Circuit.constant_output (circuit : α → Circuit F β) [Inhabited α] :=
 
 namespace Circuit
 variable {n : ℕ} {prop : Operations.Condition F}
-
-@[reducible, circuit_norm]
-def forAll (circuit : Circuit F α) (prop : Operations.Condition F) (n : ℕ) :=
-  (circuit.operations n).forAll n prop
-
-lemma forAll_def {circuit : Circuit F α} {n : ℕ} :
-  circuit.forAll prop n ↔ (circuit.operations n).forAll n prop := by rfl
-
-theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
-  (f >>= g).forAll prop n ↔
-    f.forAll prop n ∧ ((g (f.output n)).forAll prop (n + f.local_length n)) := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
-  simp only [forAll]
-  rw [h_ops, Operations.forAll_append, offset_consistent, add_comm n]
 
 theorem constraints_hold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   constraints_hold.soundness env (circuit.operations n) ↔ circuit.forAll {

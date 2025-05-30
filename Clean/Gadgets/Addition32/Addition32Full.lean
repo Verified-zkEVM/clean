@@ -90,8 +90,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   -- simplify circuit
   dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
   simp only [circuit_norm, subcircuit_norm] at h
-  simp only [h_inputs] at h
-  rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
+  simp only [h_inputs, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
