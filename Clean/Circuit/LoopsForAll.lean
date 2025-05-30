@@ -111,7 +111,7 @@ lemma forEach.uses_local_witnesses :
 
 @[circuit_norm ↓]
 lemma forEach.forAll :
-  ((forEach xs body lawful).operations n).forAll n prop ↔
+  Operations.forAll n prop (forEach xs body lawful n).2 ↔
     ∀ i : Fin m, (body xs[i.val]
       |>.operations (n + i*(body default).local_length)
       |>.forAll (n + i*(body default).local_length)) prop := by

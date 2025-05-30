@@ -1,4 +1,3 @@
-import Clean.Circuit.Loops
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 
@@ -139,14 +138,18 @@ theorem from_bits_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
 
 -- formal circuit that implements `to_bits` like a function, assuming `x.val < 2^n`
 
+set_option trace.Meta.Tactic.simp true in
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
   local_length _ := n
   output _ i := var_from_offset (fields n) i
 
-  initial_offset_eq _ n := by simp only [main, circuit_norm]
-  local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
+  local_length_eq _ _ := by
+    simp only [main, circuit_norm, Boolean.circuit, Operations.local_length_append]
+    ac_rfl
   output_eq _ _ := by simp only [main, circuit_norm]
+  subcircuits_consistent x i0 := by simp +arith only [main, circuit_norm]
+    -- TODO arith is needed because forAll passes `local_length + offset` while bind passes `offset + local_length`
 
   assumptions (x : F p) := x.val < 2^n
 
@@ -155,6 +158,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
 
   soundness := by
     intro k eval x_var x h_input _h_assumptions h_holds
+    dsimp only [main] at h_holds
+    simp only [main, circuit_norm, Boolean.circuit] at h_holds
     simp only [main, circuit_norm, Boolean.circuit] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
     clear h_input _h_assumptions
