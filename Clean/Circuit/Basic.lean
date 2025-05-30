@@ -7,9 +7,11 @@ variable {F: Type} [Field F] {α : Type} {n : ℕ}
 The monad to write circuits. Lets you use `do` notation while in the background
 it builds up a list of `Operation`s that represent the circuit at a low level.
 
-Concretely, a `Circuit` is a function `(offset : ℕ) → α × List (Operation F) × offset'` for some
-return type `α`. The monad is a state monad that keeps track of the `offset`, paired with a
-writer monad that accumulates the list of operations.
+Concretely, a `Circuit` is a function `(offset : ℕ) → α × List (Operation F)` for some
+return type `α`. The monad is a mix of
+- a writer monad that accumulated the list of operations
+- a state monad that keeps track of the `offset`,
+  where the next offset is computed from the operations added in the previous step.
 
 ```
 def circuit : Circuit F Unit := do
@@ -23,18 +25,18 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-def Circuit (F : Type) [Field F] := WriterT (List (Operation F)) (StateM ℕ)
+def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × Operations F
 
 def Circuit.bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
-  let ((b, ops'), n'') := g (f n).1.1 (f n).2
-  ((b, (f n).1.2 ++ ops'), n'')
+  let (b, ops') := g (f n).1 (n + (f n).2.local_length)
+  (b, (f n).2 ++ ops')
 
 instance : Monad (Circuit F) where
   map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
-    let ((a, ops), n') := circuit n
-    ((f a, ops), n')
-  pure {α} (a : α) := fun (n : ℕ) => ((a, []), n)
+    let (a, ops) := circuit n
+    (f a, ops)
+  pure {α} (a : α) := fun _ => (a, [])
   bind := Circuit.bind
 
 /--
@@ -44,33 +46,33 @@ reason about (because it avoids the duplicated `f n` term).
 @[circuit_norm]
 theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
   f >>= g = fun n =>
-    let ((a, ops), n') := f n
-    let ((b, ops'), n'') := g a n'
-    ((b, ops ++ ops'), n'') := rfl
+    let (a, ops) := f n
+    let (b, ops') := g a (n + ops.local_length)
+    (b, ops ++ ops') := rfl
 
 -- normalize `bind` to `>>=`
 @[circuit_norm]
 theorem Circuit.bind_normal {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
 
 instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
-instance : LawfulMonad (Circuit F) := inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
+instance : LawfulMonad (Circuit F) := by sorry --inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
 
 namespace Circuit
 @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  circuit offset |>.snd
+  offset + (circuit offset).2.local_length
 
 @[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
-  circuit offset |>.fst.snd
+  (circuit offset).2
 
 @[reducible, circuit_norm]
 def output (circuit: Circuit F α) (offset := 0) : α :=
-  circuit offset |>.fst.fst
+  (circuit offset).1
 
 @[reducible, circuit_norm]
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
-  Operations.local_length (circuit offset |>.fst.snd)
+  (circuit offset).2.local_length
 
 -- core operations we can do in a circuit
 
@@ -79,7 +81,7 @@ def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
 def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
-    ((var, [.witness 1 fun env => #v[compute env]]), offset + 1)
+    (var, [.witness 1 fun env => #v[compute env]])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
@@ -92,24 +94,24 @@ def witness (compute : Environment F → F) := do
 def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
-    ((vars, [.witness m compute]), offset + m)
+    (vars, [.witness m compute])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
 def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := var_from_offset (fields m) offset
-    ((vars, [.witness m compute]), offset + m)
+    (vars, [.witness m compute])
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assert_zero (e: Expression F) : Circuit F Unit := fun (offset : ℕ) =>
-  (((), [.assert e]), offset)
+def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
+  ((), [.assert e])
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup (l: Lookup F) : Circuit F Unit := fun (offset : ℕ) =>
-  (((), [.lookup l]), offset)
+def lookup (l: Lookup F) : Circuit F Unit := fun _ =>
+  ((), [.lookup l])
 
 end Circuit
 
@@ -117,7 +119,7 @@ end Circuit
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := var_from_offset α offset
-    ⟨(var, [.witness (size α) (fun env => compute env |> to_elements)]), offset + size α⟩
+    (var, [.witness (size α) (fun env => compute env |> to_elements)])
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit
