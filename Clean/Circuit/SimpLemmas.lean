@@ -7,7 +7,7 @@ to their definitions, and let simp reason at the fully unfolded level.
 -/
 import Clean.Circuit.SubCircuit
 
-variable {F : Type} [Field F] {α β : Type} {n : ℕ}
+variable {F : Type} [Field F] {α β : Type} {n : ℕ} {env : Environment F}
 
 namespace Circuit
 
@@ -32,7 +32,7 @@ variable {output : ℕ → α} {operations : ℕ → Operations F} {local_length
 @[circuit_norm low] theorem bind_output (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
   (f >>= g).output n = (g (f.output n)).output (n + f.local_length n) := rfl
 
-@[circuit_norm low] theorem bind_operations (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+theorem bind_operations (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
   (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
 
 @[circuit_norm low] theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
@@ -40,19 +40,64 @@ variable {output : ℕ → α} {operations : ℕ → Operations F} {local_length
   show (f.operations n ++ (g _).operations _).local_length = _
   rw [Operations.local_length_append]; rfl
 
+@[circuit_norm low] theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  constraints_hold.soundness (env) ((f >>= g).operations n)
+  ↔ constraints_hold.soundness (env) (f.operations n) ∧
+    constraints_hold.soundness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
+  rw [constraints_hold.soundness_iff_forAll n, constraints_hold.soundness_iff_forAll n,
+    constraints_hold.soundness_iff_forAll (n + f.local_length n), bind_forAll]
+
+@[circuit_norm low] theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  constraints_hold.completeness (env) ((f >>= g).operations n)
+  ↔ constraints_hold.completeness (env) (f.operations n) ∧
+    constraints_hold.completeness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
+  rw [constraints_hold.completeness_iff_forAll n, constraints_hold.completeness_iff_forAll n,
+    constraints_hold.completeness_iff_forAll (n + f.local_length n), bind_forAll]
+
+@[circuit_norm low] theorem bind_uses_local_witnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  env.uses_local_witnesses_completeness n ((f >>= g).operations n)
+  ↔ env.uses_local_witnesses_completeness n (f.operations n) ∧
+    env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
+  rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
+    env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
+
 -- bind elaborated
 
 @[circuit_norm ↑ 1100] theorem bind_fromElaborated_output (g : α → Circuit F β) (n : ℕ) :
     ((fromElaborated {output, local_length, operations, local_length_eq} >>= g).output n = (g (output n)).output (n + local_length n)) := by
   rw [bind_output, fromElaborated_output, fromElaborated_local_length]
 
-@[circuit_norm 110] theorem bind_fromElaborated_operations (g : α → Circuit F β) (n : ℕ) :
+theorem bind_fromElaborated_operations (g : α → Circuit F β) (n : ℕ) :
     ((fromElaborated {output, local_length, operations, local_length_eq} >>= g).operations n = operations n ++ (g (output n)).operations (n + local_length n)) := by
   rw [bind_operations, fromElaborated_output, fromElaborated_local_length, fromElaborated_operations]
 
 @[circuit_norm ↑ 1100] theorem bind_fromElaborated_local_length (g : α → Circuit F β) (n : ℕ) :
     ((fromElaborated {output, local_length, operations, local_length_eq} >>= g).local_length n = local_length n + (g (output n)).local_length (n + local_length n)) := by
   rw [bind_local_length, fromElaborated_output, fromElaborated_local_length]
+
+@[circuit_norm] theorem bind_fromElaborated_soundness {g : α → Circuit F β} (n : ℕ) :
+  constraints_hold.soundness (env) ((fromElaborated {output, local_length, operations, local_length_eq} >>= g).operations n)
+  ↔ constraints_hold.soundness (env) (operations n) ∧
+    constraints_hold.soundness (env) ((g (output n)).operations (n + local_length n)) := by
+  set f : Elaborated F α := {output, local_length, operations, local_length_eq}
+  rw [show local_length n = f.local_length n from rfl, ←f.local_length_eq]
+  apply bind_soundness
+
+@[circuit_norm] theorem bind_fromElaborated_completeness {g : α → Circuit F β} (n : ℕ) :
+  constraints_hold.completeness (env) ((fromElaborated {output, local_length, operations, local_length_eq} >>= g).operations n)
+  ↔ constraints_hold.completeness (env) (operations n) ∧
+    constraints_hold.completeness (env) ((g (output n)).operations (n + local_length n)) := by
+  set f : Elaborated F α := {output, local_length, operations, local_length_eq}
+  rw [show local_length n = f.local_length n from rfl, ←f.local_length_eq]
+  apply bind_completeness
+
+@[circuit_norm] theorem bind_fromElaborated_uses_local_witnesses {g : α → Circuit F β} (n : ℕ) :
+  env.uses_local_witnesses_completeness n ((fromElaborated {output, local_length, operations, local_length_eq} >>= g).operations n)
+  ↔ env.uses_local_witnesses_completeness n (operations n) ∧
+    env.uses_local_witnesses_completeness (n + local_length n) ((g (output n)).operations (n + local_length n)) := by
+  set f : Elaborated F α := {output, local_length, operations, local_length_eq}
+  rw [show local_length n = f.local_length n from rfl, ←f.local_length_eq]
+  apply bind_uses_local_witnesses
 
 -- pure
 
