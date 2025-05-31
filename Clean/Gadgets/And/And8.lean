@@ -1,4 +1,4 @@
-import Clean.Circuit.Basic
+import Clean.Circuit.SimpLemmas
 import Clean.Gadgets.Xor.ByteXorTable
 import Clean.Utils.Primes
 

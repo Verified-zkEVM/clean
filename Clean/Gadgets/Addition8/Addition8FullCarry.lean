@@ -1,4 +1,3 @@
-import Clean.Circuit.SubCircuit
 import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems

@@ -1,4 +1,4 @@
-import Clean.Circuit.Basic
+import Clean.Circuit.SimpLemmas
 import Clean.Utils.Field
 
 section

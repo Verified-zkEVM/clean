@@ -219,6 +219,13 @@ def induct {motive : Operations F → Sort*}
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit ops)
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit ops)
 
+theorem local_length_append {a b: Operations F} :
+    (a ++ b).local_length = a.local_length + b.local_length := by
+  induction a using induct with
+  | empty => ac_rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all +arith [local_length, ih]
+
 -- generic folding over `Operations` resulting in a proposition
 
 /--

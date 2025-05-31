@@ -72,7 +72,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   simp only [id_eq, circuit_norm] at h_input
   simp [circuit_norm, elaborated, byte_decomposition, TwoPowerLookup.lookup, TwoPowerLookup.equiv, h_input] at h_holds
   simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
-  obtain ⟨⟨low_lt, high_lt⟩, c⟩ := h_holds
+  obtain ⟨low_lt, high_lt, c⟩ := h_holds
   simp_all [h_input]
   set low := env.get i0
   set high := env.get (i0 + 1)

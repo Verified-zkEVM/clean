@@ -115,7 +115,7 @@ def field : TypeMap := id
 instance : LawfulProvableType field where
   size := 1
   to_elements x := #v[x]
-  from_elements v := v.get 0
+  from_elements v := let ⟨ .mk [x], _ ⟩ := v; x
 instance : NonEmptyProvableType field where
 
 @[reducible]
