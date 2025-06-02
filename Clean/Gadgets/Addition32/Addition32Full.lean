@@ -49,6 +49,8 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
   ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
+set_option profiler true
+
 /--
 Elaborated circuit data can be found as follows:
 ```
@@ -88,10 +90,8 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  simp only [circuit_norm, subcircuit_norm] at h
-  simp only [h_inputs] at h
-  rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
+  simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
+  simp only [h_inputs, ByteTable.equiv, and_assoc] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -123,7 +123,6 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-
 theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -139,8 +138,9 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
-  simp only [h_inputs, circuit_norm, subcircuit_norm] at henv ⊢
+  dsimp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
+  simp only [circuit_norm] at henv ⊢
+  simp only [h_inputs, circuit_norm, subcircuit_norm, and_assoc] at henv ⊢
 
   -- characterize local witnesses
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := henv

@@ -27,23 +27,27 @@ def circuit : Circuit F Unit := do
 -/
 def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
 
+def Circuit.pure {α} (a : α) : Circuit F α := fun _ => (a, [])
+
 def Circuit.bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
   let (b, ops') := g (f n).1 (n + Operations.local_length (f n).2)
   (b, (f n).2 ++ ops')
 
+def Circuit.map {α β} (f : α → β) (circuit : Circuit F α) : Circuit F β := fun (n : ℕ) =>
+  let (a, ops) := circuit n
+  (f a, ops)
+
 instance : Monad (Circuit F) where
-  map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
-    let (a, ops) := circuit n
-    (f a, ops)
-  pure {α} (a : α) := fun _ => (a, [])
+  pure := Circuit.pure
   bind := Circuit.bind
+  map := Circuit.map
 
 /--
 in proofs, we rewrite `bind` into a definition that is more efficient to
 reason about (because it avoids the duplicated `f n` term).
  -/
-@[circuit_norm]
+-- @[circuit_norm low]
 theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
   f >>= g = fun n =>
     let (a, ops) := f n
@@ -58,68 +62,107 @@ instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
 instance : LawfulMonad (Circuit F) := by sorry --inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
 
 namespace Circuit
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
   offset + Operations.local_length (circuit offset).2
 
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
   (circuit offset).2
 
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def output (circuit: Circuit F α) (offset := 0) : α :=
   (circuit offset).1
 
-@[reducible, circuit_norm]
+-- @[reducible, circuit_norm]
 def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
   Operations.local_length (circuit offset).2
+
+/-- it is beneficial for simplification to have `output`, `local_length`, and `operations`
+explicitly defined as separate functions -/
+structure Elaborated (F : Type) [Field F] (α : Type) where
+  output : ℕ → α
+  local_length : ℕ → ℕ
+  operations : ℕ → Operations F
+  local_length_eq : ∀ n, (operations n).local_length = local_length n := by intros; rfl
+
+attribute [circuit_norm] Elaborated.output Elaborated.local_length
+
+def fromElaborated {α: Type} (circuit: Elaborated F α) : Circuit F α :=
+  fun (n : ℕ) => (circuit.output n, circuit.operations n)
+
+/-- alternatively, we can define a circuit normally and derive the elaboration afterwards -/
+class IsElaborated (circuit: Circuit F α) extends elaborated : Elaborated F α where
+  output_eq : ∀ n, circuit.output n = elaborated.output n := by intros; rfl
+  operations_eq : ∀ n, circuit.operations n = elaborated.operations n := by intros; rfl
+
+theorem IsElaborated.eq {circuit: Circuit F α} [elaborated: IsElaborated circuit] :
+    circuit = fromElaborated elaborated.elaborated := by
+  funext
+  ext1
+  apply elaborated.output_eq
+  apply elaborated.operations_eq
 
 -- core operations we can do in a circuit
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
-  fun (offset : ℕ) =>
-    let var : Variable F := ⟨ offset ⟩
-    (var, [.witness 1 fun env => #v[compute env]])
+def witness_var (compute : Environment F → F) : Circuit F (Variable F) := fromElaborated {
+  output offset := ⟨ offset ⟩,
+  local_length _ := 1,
+  operations _ := [.witness 1 fun env => #v[compute env]],
+}
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witness (compute : Environment F → F) := do
-  let v ← witness_var compute
-  return var v
+def witness (compute : Environment F → F) : Circuit F (Expression F) := fromElaborated {
+    output offset := var ⟨ offset ⟩,
+    local_length _ := 1,
+    operations _ := [.witness 1 fun env => #v[compute env]],
+  }
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
 def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
-  fun (offset : ℕ) =>
-    let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, [.witness m compute])
+  fromElaborated {
+    output offset : Vector (Variable F) m := .mapRange m (fun i => ⟨offset + i⟩),
+    local_length _ := m,
+    operations _ := [.witness m compute],
+  }
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
 def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
-  fun (offset : ℕ) =>
-    let vars := var_from_offset (fields m) offset
-    (vars, [.witness m compute])
+  fromElaborated {
+    output offset : Vector (Expression F) m := var_from_offset (fields m) offset,
+    local_length _ := m,
+    operations _ := [.witness m compute],
+  }
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
-  ((), [.assert e])
+def assert_zero (e: Expression F) : Circuit F Unit := fromElaborated {
+  output _ := (),
+  local_length _ := 0,
+  operations _ := [.assert e],
+}
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup (l: Lookup F) : Circuit F Unit := fun _ =>
-  ((), [.lookup l])
-
+def lookup (l: Lookup F) : Circuit F Unit := fromElaborated {
+  output _ := (),
+  local_length _ := 0,
+  operations _ := [.lookup l],
+}
 end Circuit
 
 @[circuit_norm]
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
-  fun (offset : ℕ) =>
-    let var := var_from_offset α offset
-    (var, [.witness (size α) (fun env => compute env |> to_elements)])
+  .fromElaborated {
+    output offset := var_from_offset α offset,
+    local_length _ := size α,
+    operations _ := [.witness (size α) fun env => compute env |> to_elements],
+  }
 
 namespace Circuit
 -- formal concepts of soundness and completeness of a circuit

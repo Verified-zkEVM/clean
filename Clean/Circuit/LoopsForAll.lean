@@ -2,6 +2,7 @@
 minimal version of Loops that only contains the forM case
 -/
 import Clean.Circuit.Lawful
+import Clean.Circuit.SimpLemmas
 import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
@@ -51,7 +52,7 @@ theorem forAll_iff_list {xs : List α} :
         rw [add_mul, one_mul, add_comm _ k, ←add_assoc]
     rw [←h_zip, ←ih]
     clear h_zip ih
-    rw [bind_forAll, lawful.local_length_eq]
+    rw [bind_forAll', lawful.local_length_eq]
 
 theorem forAll_iff :
   (xs.forM circuit).forAll prop n ↔
