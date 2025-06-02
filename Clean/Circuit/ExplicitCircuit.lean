@@ -21,7 +21,7 @@ class ConstantExplicitCircuit (circuit : Circuit F α) extends ConstantCircuit c
   output_eq : ∀ n: ℕ, circuit.output n = output n := by intro _; rfl
   operations_eq : ∀ n: ℕ, circuit.operations n = operations n := by intro _; rfl
 
-def ConstantExplicitCircuit.toExplicitCircuit (circuit : Circuit F α) [constant: ConstantExplicitCircuit circuit] : ExplicitCircuit circuit where
+instance ConstantExplicitCircuit.toExplicitCircuit (circuit : Circuit F α) [constant: ConstantExplicitCircuit circuit] : ExplicitCircuit circuit where
   output := constant.output
   local_length _ := constant.local_length
   operations := constant.operations
@@ -143,8 +143,8 @@ macro_rules
 
 -- this tactic is pretty good at inferring lawful circuits!
 section
-example : ExplicitCircuit (witness (fun _ => (0 : F)))
-  := by infer_explicit_circuit
+example : ExplicitCircuit (witness (fun _ => (0 : F))) := by
+  infer_explicit_circuit
 
 example :
   let add := do
