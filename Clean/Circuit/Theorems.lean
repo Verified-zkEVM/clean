@@ -33,28 +33,56 @@ namespace Circuit
 variable {α β : Type}
 
 theorem pure_operations_eq (a : α) (n : ℕ) :
-    (pure a : Circuit F α).operations n = [] := rfl
+  (pure a : Circuit F α).operations n = [] := rfl
 
 theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
   (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
 
+theorem map_operations_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
+  (g <$> f).operations n = f.operations n := rfl
+
 theorem pure_local_length_eq (a : α) (n : ℕ) :
-    (pure a : Circuit F α).local_length n = 0 := rfl
+  (pure a : Circuit F α).local_length n = 0 := rfl
 
 theorem bind_local_length_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (n + f.local_length n) := by
+    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (n + f.local_length n) := by
   show (f.operations n ++ (g _).operations _).local_length = _
   rw [Operations.local_length_append]
 
+theorem map_local_length_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
+  (g <$> f).local_length n = f.local_length n := rfl
+
 theorem pure_output_eq (a : α) (n : ℕ) :
-    (pure a : Circuit F α).output n = a := rfl
+  (pure a : Circuit F α).output n = a := rfl
 
 theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
   (f >>= g).output n = (g (f.output n)).output (n + f.local_length n) := rfl
 
+theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
+  (g <$> f).output n = g (f.output n) := rfl
+
 /-- the offset derived from operations is the same as the state offset -/
 lemma offset_consistent (circuit : Circuit F α) :
   ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
+
+/-- Extensionality theorem -/
+theorem ext_iff {circuit1 circuit2 : Circuit F α} :
+  (circuit1 = circuit2) ↔ (∀ n, (circuit1.output n = circuit2.output n) ∧ (circuit1.operations n = circuit2.operations n)) := by
+  constructor
+  · intro h; subst h; intros; trivial
+  intro h
+  funext n
+  ext1
+  · exact (h n).left
+  · exact (h n).right
+
+@[ext]
+theorem ext {circuit1 circuit2 : Circuit F α}
+  (h_output : ∀ n, circuit1.output n = circuit2.output n)
+  (h_operations : ∀ n, circuit1.operations n = circuit2.operations n) :
+    circuit1 = circuit2 := by
+  rw [ext_iff]
+  exact fun n => ⟨ h_output n, h_operations n ⟩
 
 /--
 Soundness theorem which proves that we can replace constraints in subcircuits
