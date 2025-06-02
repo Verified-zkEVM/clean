@@ -8,7 +8,53 @@ import Clean.Circuit.Basic
 
 variable {F: Type} [Field F]
 
+-- basic simp lemmas
+
+namespace Operations
+
+/-- this shows that we didn't really need the `offset` definition -/
+theorem offset_eq {a : Operations F} {n: ℕ} :
+    a.offset n = n + a.local_length := by
+  induction a using induct generalizing n with
+  | empty => rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all +arith only [offset, local_length, ih]
+
+theorem local_length_append {a b: Operations F} :
+    (a ++ b).local_length = a.local_length + b.local_length := by
+  induction a using induct with
+  | empty => ac_rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all +arith [local_length, ih]
+end Operations
+
 namespace Circuit
+variable {α β : Type}
+
+theorem pure_operations_eq (a : α) (n : ℕ) :
+    (pure a : Circuit F α).operations n = [] := rfl
+
+theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
+
+theorem pure_local_length_eq (a : α) (n : ℕ) :
+    (pure a : Circuit F α).local_length n = 0 := rfl
+
+theorem bind_local_length_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (n + f.local_length n) := by
+  show (f.operations n ++ (g _).operations _).local_length = _
+  rw [Operations.local_length_append]
+
+theorem pure_output_eq (a : α) (n : ℕ) :
+    (pure a : Circuit F α).output n = a := rfl
+
+theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
+  (f >>= g).output n = (g (f.output n)).output (n + f.local_length n) := rfl
+
+/-- the offset derived from operations is the same as the state offset -/
+lemma offset_consistent (circuit : Circuit F α) :
+  ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
+
 /--
 Soundness theorem which proves that we can replace constraints in subcircuits
 with their `soundness` statement.
@@ -239,44 +285,10 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
     exact h_env.left
 end Circuit
 
--- some theorems about offset / local_length
-
-namespace Operations
-
-/-- this shows that we didn't really need the `offset` definition -/
-theorem offset_eq {a : Operations F} {n: ℕ} :
-    a.offset n = n + a.local_length := by
-  induction a using induct generalizing n with
-  | empty => rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all +arith only [offset, local_length, ih]
-
-theorem local_length_append {a b: Operations F} :
-    (a ++ b).local_length = a.local_length + b.local_length := by
-  induction a using induct with
-  | empty => ac_rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all +arith [local_length, ih]
-end Operations
-
 namespace Circuit
-variable {α β : Type}
-
-theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-    (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (f.final_offset n) := by
-  show (f.operations n ++ (g _).operations _).local_length = _
-  rw [Operations.local_length_append]
-
-theorem pure_local_length (a : α) (n : ℕ) :
-    (pure a : Circuit F α).local_length n = 0 := rfl
-
 -- more theorems about forAll
 
 variable {α β : Type} {n : ℕ} {prop : Operations.Condition F} {env: Environment F}
-
-/-- the offset derived from operations is the same as the state offset -/
-lemma offset_consistent (circuit : Circuit F α) :
-  ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
