@@ -171,7 +171,7 @@ def ConstantExplicitCircuit.from_constant_length {circuit : Circuit F α} (expli
 
 open ExplicitCircuit in
 def ConstantExplicitCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (explicit : ∀ a, ExplicitCircuit (circuit a))
-  (h_length : ∀ a n, (circuit a).local_length n = (circuit default).local_length 0) : ConstantExplicitCircuits circuit where
+  (h_length : ∀ a n, (explicit a).local_length n = (explicit default).local_length 0) : ConstantExplicitCircuits circuit where
   output a n := ExplicitCircuit.output (circuit a) n
   local_length := (circuit default).local_length 0
   operations a n := ExplicitCircuit.operations (circuit a) n
