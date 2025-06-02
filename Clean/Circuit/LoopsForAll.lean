@@ -55,9 +55,7 @@ theorem operations_eq :
       List.getElem_zero, List.getElem_cons_succ, List.head_cons, Array.getElem_toList, Vector.getElem_toArray]
     ring_nf
 
-variable {env : Environment F} {prop : Operations.Condition F}
-
-theorem forAll_iff :
+theorem forAll_iff {prop : Operations.Condition F} :
   (xs.forM circuit).forAll prop n ↔
     ∀ (i : Fin m), (circuit xs[i.val]).forAll prop (n + i*lawful.local_length) := by
   rw [forAll_def, operations_eq, forAll_flatten]

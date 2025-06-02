@@ -20,6 +20,7 @@ theorem offset_eq {a : Operations F} {n: ℕ} :
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all +arith only [offset, local_length, ih]
 
+@[circuit_norm]
 theorem local_length_append {a b: Operations F} :
     (a ++ b).local_length = a.local_length + b.local_length := by
   induction a using induct with
@@ -224,7 +225,7 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Oper
     rw [←extends_vector_subcircuit]
     exact h.left
 
-theorem uses_local_witnesses_completeness_iff_forAll {env: Environment F} {n: ℕ} {ops: Operations F} :
+theorem uses_local_witnesses_completeness_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
   env.uses_local_witnesses_completeness n ops ↔ ops.forAll n {
     witness m _ c := env.extends_vector (c env) m,
     subcircuit _ _ s := s.uses_local_witnesses env
@@ -331,21 +332,39 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
 
 -- specializations
 
-@[circuit_norm] theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+@[circuit_norm] theorem constraints_hold.append_soundness {as bs : Operations F} :
+  constraints_hold.soundness env (as ++ bs)
+  ↔ constraints_hold.soundness env as ∧ constraints_hold.soundness env bs := by
+  rw [constraints_hold.soundness_iff_forAll 0, Operations.forAll_append,
+    ←constraints_hold.soundness_iff_forAll 0, ←constraints_hold.soundness_iff_forAll (as.local_length + 0)]
+
+@[circuit_norm] theorem constraints_hold.bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
   constraints_hold.soundness (env) ((f >>= g).operations n)
   ↔ constraints_hold.soundness (env) (f.operations n) ∧
     constraints_hold.soundness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
   rw [constraints_hold.soundness_iff_forAll n, constraints_hold.soundness_iff_forAll n,
     constraints_hold.soundness_iff_forAll (n + f.local_length n), bind_forAll]
 
-@[circuit_norm] theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+@[circuit_norm] theorem constraints_hold.append_completeness {as bs : Operations F} :
+  constraints_hold.completeness env (as ++ bs)
+  ↔ constraints_hold.completeness env as ∧ constraints_hold.completeness env bs := by
+  rw [constraints_hold.completeness_iff_forAll 0, Operations.forAll_append,
+    ←constraints_hold.completeness_iff_forAll 0, ←constraints_hold.completeness_iff_forAll (as.local_length + 0)]
+
+@[circuit_norm] theorem constraints_hold.bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
   constraints_hold.completeness (env) ((f >>= g).operations n)
   ↔ constraints_hold.completeness (env) (f.operations n) ∧
     constraints_hold.completeness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
   rw [constraints_hold.completeness_iff_forAll n, constraints_hold.completeness_iff_forAll n,
     constraints_hold.completeness_iff_forAll (n + f.local_length n), bind_forAll]
 
-@[circuit_norm] theorem bind_uses_local_witnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+@[circuit_norm] theorem constraints_hold.append_local_witnesses {as bs : Operations F} (n : ℕ) :
+  env.uses_local_witnesses_completeness n (as ++ bs)
+  ↔ env.uses_local_witnesses_completeness n as ∧ env.uses_local_witnesses_completeness (as.local_length + n) bs := by
+  rw [env.uses_local_witnesses_completeness_iff_forAll, Operations.forAll_append,
+    ←env.uses_local_witnesses_completeness_iff_forAll n, ←env.uses_local_witnesses_completeness_iff_forAll (as.local_length + n)]
+
+@[circuit_norm] theorem constraints_hold.bind_uses_local_witnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
   env.uses_local_witnesses_completeness n ((f >>= g).operations n)
   ↔ env.uses_local_witnesses_completeness n (f.operations n) ∧
     env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
