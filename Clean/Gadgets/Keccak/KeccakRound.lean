@@ -28,6 +28,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
   local_length _ := 1528
   output _ i0 := (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) ).set 0 (var_from_offset U64 (i0 + 1520))
 
+  local_length_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit]
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit, Vector.mapRange]
 
@@ -88,7 +89,6 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumpti
     Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
     Chi.assumptions, Chi.spec, Xor.assumptions, Xor.spec
   ] at h_env ⊢
-  simp only [and_assoc] at h_env
   simp_all only [main, h_input, state_norm, circuit_norm,
     U64.from_u64_normalized]
 

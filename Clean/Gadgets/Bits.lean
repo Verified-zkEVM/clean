@@ -138,7 +138,6 @@ theorem from_bits_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
 
 -- formal circuit that implements `to_bits` like a function, assuming `x.val < 2^n`
 
--- set_option trace.Meta.Tactic.simp true in
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
   local_length _ := n

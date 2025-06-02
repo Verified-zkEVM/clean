@@ -26,8 +26,6 @@ def rot64 (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) 
   let byte_rotated ← subcircuit (Rotation64Bytes.circuit byte_offset) x
   subcircuit (Rotation64Bits.circuit bit_offset) byte_rotated
 
-instance lawful (off : Fin 64) : ConstantLawfulCircuits (F := (F p)) (rot64 off) := by infer_constant_lawful_circuits
-
 def assumptions (input : U64 (F p)) := input.is_normalized
 
 def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
@@ -40,10 +38,6 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64 off
   local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
-  initial_offset_eq := by
-    intros
-    simp only [rot64]
-    rfl
   local_length_eq := by
     intros
     simp only [rot64]

@@ -32,7 +32,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := .mapRange 25 fun i => var_from_offset U64 (i0 + i*24 + 16)
 
   local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
-  initial_offset_eq _ _ := by simp only [main, circuit_norm]
+  subcircuits_consistent _ _ := by simp only [main, circuit_norm]
   output_eq state i0 := by
     simp only [main, circuit_norm, Rotation64.circuit, Vector.mapRange, Rotation64.elaborated]
     simp only [rhoPiConstants, rhoPiIndices, rhoPiShifts, Vector.mk_zip_mk, List.zip_toArray, Vector.mapIdx_mk, List.mapIdx_toArray]

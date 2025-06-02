@@ -25,7 +25,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   output _ i0 := var_from_offset KeccakState i0
 
   local_length_eq _ n := by simp only [main, circuit_norm, Xor.circuit]
-  initial_offset_eq _ i := by simp only [main, circuit_norm]
+  subcircuits_consistent _ i := by simp only [main, circuit_norm]
   output_eq _ i := by simp only [main, circuit_norm, Xor.circuit, var_from_offset_vector,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 

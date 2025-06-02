@@ -76,6 +76,7 @@ macro_rules
   | `(tactic|infer_constant_circuits) => `(tactic|(
     apply ConstantCircuits.from_constant_length
     try intros
+    try simp only [circuit_norm]
     try ac_rfl))
 
 section

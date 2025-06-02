@@ -221,7 +221,10 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuits_consistent : ∀ var offset, ((main var).operations offset).subcircuits_consistent offset
-    := by intros; and_intros <;> first | ac_rfl | trivial
+    := by intros; and_intros <;> (
+      try simp only [circuit_norm]
+      try first | ac_rfl | trivial
+    )
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.local_length ElaboratedCircuit.output
 
