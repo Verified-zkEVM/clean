@@ -1,22 +1,27 @@
--- import Clean.Circuit.Append
 import Clean.Circuit.SubCircuit
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 
--- a constant circuit is one where the local length is constant for all inputs
+/--
+A constant circuit is one where the local length is constant for all inputs.
+This is true for all circuits in practice, but unfortunately this can't be encoded in the monad definition.
+-/
 class ConstantCircuit (circuit : Circuit F α) where
   local_length : ℕ
   local_length_eq : ∀ n : ℕ, circuit.local_length n = local_length := by intro _; rfl
 
--- even stronger (and still the typical case): an indexed family of lawful circuits that all share the same local length
+/--
+Stronger variant of `ConstantCircuit` (and still the typical case):
+an indexed family of circuits that all share the same local length.
+-/
 class ConstantCircuits (circuit : α → Circuit F β) where
   local_length : ℕ
   local_length_eq : ∀ (a : α) (n : ℕ), (circuit a).local_length n = local_length := by intro _ _; rfl
 
 -- `pure` is a constant circuit
-instance LawfulCircuit.from_pure {a : α} : ConstantCircuit (pure a : Circuit F α) where
+instance ConstantCircuit.from_pure {a : α} : ConstantCircuit (pure a : Circuit F α) where
   local_length := 0
 
-instance ConstantLawfulCircuits.from_pure {f : α → β} : ConstantCircuits (fun a => pure (f a) : α → Circuit F β) where
+instance Constantircuits.from_pure {f : α → β} : ConstantCircuits (fun a => pure (f a) : α → Circuit F β) where
   local_length := 0
 
 -- basic operations are constant circuits
@@ -45,12 +50,12 @@ instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input
   local_length := circuit.local_length input
 
 -- lower `ConstantCircuits` to `ConstantCircuit`
-instance ConstantCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantCircuits circuit] :
+instance ConstantCircuits.to_single (circuit : α → Circuit F β) (a : α) [ConstantCircuits circuit] :
     ConstantCircuit (circuit a) where
   local_length := local_length circuit
   local_length_eq n := local_length_eq a n
 
-instance ConstantCircuit.from_constants {circuit : α → Circuit F β} (lawful : ConstantCircuits circuit) (a : α) :
+instance ConstantCircuit.from_constants {circuit : α → Circuit F β} (_ : ConstantCircuits circuit) (a : α) :
   ConstantCircuit (circuit a) := ConstantCircuits.to_single circuit a
 
 -- `ConstantCircuit(s)` can be proved from `Circuit` by adding the requirement that the local length is constant.
