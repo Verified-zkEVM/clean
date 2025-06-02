@@ -1,6 +1,6 @@
 /-
 This file proves some properties about `forM`, `mapM`, and `foldlM` monad loops when used in a `Circuit`,
-typically leveraging a `ConstantLawfulCircuits` assumption on the loop body.
+typically leveraging a `ConstantCircuits` assumption on the loop body.
 
 The end result are loop methods `Circuit.{mapFinRange, map, forEach, foldl}` that simplify
 under `circuit_norm` in every way we need them to.
@@ -138,6 +138,10 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F
     (_constant : ConstantCircuits body := by infer_constant_circuits) : Circuit F Unit :=
   xs.forM body
 
+def map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (_constant : ConstantCircuits body := by infer_constant_circuits) : Circuit F (Vector β m) :=
+  xs.mapM body
+
 section forEach
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantCircuits body} {prop : Operations.Condition F}
@@ -187,5 +191,49 @@ lemma forEach.local_length_eq :
 @[circuit_norm ↓]
 lemma forEach.output_eq :
   (forEach xs body constant).output n = () := rfl
-
 end forEach
+
+
+section map
+variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+  {body : α → Circuit F β} {constant : ConstantCircuits body} {prop : Operations.Condition F}
+
+@[circuit_norm ↓]
+lemma map.soundness :
+  constraints_hold.soundness env (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.soundness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, constraints_hold.soundness_iff_forAll']
+  rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.completeness :
+  constraints_hold.completeness env (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.completeness env (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, constraints_hold.completeness_iff_forAll']
+  rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.uses_local_witnesses :
+  env.uses_local_witnesses_completeness n (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
+  simp only [map, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.forAll :
+  Operations.forAll n prop (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, (body xs[i.val] |>.forAll prop (n + i*(body default).local_length)) := by
+  simp only [map, ←forAll_def]
+  rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.local_length_eq :
+    (map xs body constant).local_length n = m * (body default).local_length := by
+  rw [map, MapM.local_length_eq, constant.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.output_eq :
+  (map xs body constant).output n =
+    xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
+  rw [map, MapM.output_eq, ConstantCircuits.local_length_eq]
+end map
