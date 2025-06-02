@@ -36,7 +36,7 @@ class ConstantExplicitCircuits (circuit : α → Circuit F β) extends ConstantC
   output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
   operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
 
--- `pure` is a (constant) lawful circuit
+-- `pure` is a (constant) explicit circuit
 instance ConstantExplicitCircuit.from_pure {a : α} : ConstantExplicitCircuit (pure a : Circuit F α) where
   output _ := a
   local_length := 0
@@ -47,7 +47,7 @@ instance ConstantExplicitCircuits.from_pure {f : α → β} : ConstantExplicitCi
   local_length := 0
   operations _ _ := []
 
--- `bind` of two lawful circuits yields a lawful circuit
+-- `bind` of two explicit circuits yields a explicit circuit
 instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
     (f_lawful : ExplicitCircuit f) (g_lawful : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
@@ -76,7 +76,7 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   local_length_eq n := by rw [Circuit.map_local_length_eq, local_length_eq]
   operations_eq n := by rw [Circuit.map_operations_eq, operations_eq]
 
--- basic operations are (constant) lawful circuits
+-- basic operations are (constant) explicit circuits
 
 instance : ConstantExplicitCircuits (F:=F) witness_var where
   output _ n := ⟨ n ⟩
@@ -116,15 +116,15 @@ instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input
   operations n := [.subcircuit (circuit.to_subcircuit n input)]
 
 -- lower `ConstantExplicitCircuits` to `ConstantExplicitCircuit`
-instance ConstantExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantExplicitCircuits circuit] : ConstantExplicitCircuit (circuit a) where
+instance ConstantExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [explicit : ConstantExplicitCircuits circuit] : ConstantExplicitCircuit (circuit a) where
   output n := output circuit a n
-  local_length := lawful.local_length
+  local_length := explicit.local_length
   operations n := operations circuit a n
   output_eq := output_eq a
   local_length_eq := (ConstantCircuits.to_single circuit a).local_length_eq
   operations_eq := operations_eq a
 
-instance ExplicitCircuit.from_constants {circuit : α → Circuit F β} (lawful : ConstantExplicitCircuits circuit) (a : α) :
+instance ExplicitCircuit.from_constants {circuit : α → Circuit F β} (explicit : ConstantExplicitCircuits circuit) (a : α) :
     ExplicitCircuit (circuit a) := ConstantExplicitCircuits.to_single circuit a |>.toExplicitCircuit
 
 syntax "infer_explicit_circuit" : tactic
@@ -141,7 +141,7 @@ macro_rules
       repeat infer_instance
     )))
 
--- this tactic is pretty good at inferring lawful circuits!
+-- this tactic is pretty good at inferring explicit circuits!
 section
 example : ExplicitCircuit (witness (fun _ => (0 : F))) := by
   infer_explicit_circuit
@@ -160,17 +160,17 @@ end
 -- `ConstantExplicitCircuit(s)` can be proved from `ExplicitCircuit` by adding the requirement that `final_offset` is `n` plus a constant.
 -- the latter can usually be proved by rfl!
 open ExplicitCircuit in
-def ConstantExplicitCircuit.from_constant_length {circuit : Circuit F α} (lawful : ExplicitCircuit circuit)
+def ConstantExplicitCircuit.from_constant_length {circuit : Circuit F α} (explicit : ExplicitCircuit circuit)
   (h_length : ∀ n, circuit.local_length n = circuit.local_length 0) : ConstantExplicitCircuit circuit where
-  output n := lawful.output n
+  output n := explicit.output n
   local_length := circuit.local_length 0
-  operations n := lawful.operations n
-  output_eq n := lawful.output_eq n
+  operations n := explicit.operations n
+  output_eq n := explicit.output_eq n
   local_length_eq := h_length
-  operations_eq n := lawful.operations_eq n
+  operations_eq n := explicit.operations_eq n
 
 open ExplicitCircuit in
-def ConstantExplicitCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, ExplicitCircuit (circuit a))
+def ConstantExplicitCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (explicit : ∀ a, ExplicitCircuit (circuit a))
   (h_length : ∀ a n, (circuit a).local_length n = (circuit default).local_length 0) : ConstantExplicitCircuits circuit where
   output a n := ExplicitCircuit.output (circuit a) n
   local_length := (circuit default).local_length 0
