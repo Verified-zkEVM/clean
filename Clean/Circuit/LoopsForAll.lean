@@ -27,7 +27,7 @@ namespace Circuit
 lemma forAll_flatten (xs : Vector α m) {circuit : α → Circuit F β} (constant : ConstantCircuits circuit)
   {prop : Operations.Condition F} :
   Operations.forAll n prop (List.ofFn fun (i : Fin m) => (circuit xs[i.val]).operations (n + i * constant.local_length)).flatten
-    ↔ ∀ (i : Fin m), (circuit xs[i.val]).forAll prop (n + i * constant.local_length) := by
+    ↔ ∀ (i : Fin m), (circuit xs[i.val]).forAll (n + i * constant.local_length) prop := by
   induction m generalizing n
   case zero => simp [Operations.forAll]
   case succ m ih =>
@@ -72,14 +72,14 @@ theorem operations_eq :
       bind_operations_eq, ih, constant.local_length_eq]
 
 theorem forAll_iff {prop : Operations.Condition F} :
-  (xs.forM circuit).forAll prop n ↔
-    ∀ (i : Fin m), (circuit xs[i.val]).forAll prop (n + i * constant.local_length) := by
+  (xs.forM circuit).forAll n prop ↔
+    ∀ (i : Fin m), (circuit xs[i.val]).forAll (n + i * constant.local_length) prop := by
   rw [forAll_def, operations_eq, forAll_flatten]
 end ForM
 
 namespace MapM
-variable {circuit : α → Circuit F β}
-  {xs : Vector α m} [constant: ConstantCircuits circuit] (n : ℕ)
+variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantCircuits circuit]
+  {prop : Operations.Condition F}
 
 theorem local_length_eq : (xs.mapM circuit).local_length n = m * constant.local_length := by
   induction xs using Vector.induct_push
@@ -127,11 +127,17 @@ theorem operations_eq : (xs.mapM circuit).operations n =
     rw [mapM_cons, bind_operations_eq, bind_operations_eq, pure_operations_eq, ih,
       constant.local_length_eq, List.append_nil, ofFn_flatten_cons]
 
-theorem forAll_iff {prop : Operations.Condition F} :
-  (xs.mapM circuit).forAll prop n ↔
-    ∀ (i : Fin m), (circuit xs[i.val]).forAll prop (n + i * constant.local_length) := by
+theorem forAll_iff :
+  (xs.mapM circuit).forAll n prop ↔
+    ∀ (i : Fin m), (circuit xs[i.val]).forAll (n + i * constant.local_length) prop := by
   rw [forAll_def, operations_eq, forAll_flatten]
 
+-- specialization to mapFinRangeM
+theorem mapFinRangeM_forAll_iff {circuit : Fin m → Circuit F β} [constant : ConstantCircuits circuit] :
+  (Vector.mapFinRangeM m circuit).forAll n prop ↔
+    ∀ i : Fin m, (circuit i).forAll (n + i*constant.local_length) prop := by
+  rw [Vector.mapFinRangeM, forAll_iff]
+  simp only [Vector.getElem_finRange]
 end MapM
 
 def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
@@ -179,7 +185,7 @@ lemma forEach.uses_local_witnesses :
 @[circuit_norm ↓]
 lemma forEach.forAll :
   Operations.forAll n prop ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, (body xs[i.val] |>.forAll prop (n + i*(body default).local_length)) := by
+    ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).local_length) prop) := by
   simp only [forEach, ←forAll_def]
   rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
 
@@ -192,7 +198,6 @@ lemma forEach.local_length_eq :
 lemma forEach.output_eq :
   (forEach xs body constant).output n = () := rfl
 end forEach
-
 
 section map
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
@@ -222,7 +227,7 @@ lemma map.uses_local_witnesses :
 @[circuit_norm ↓]
 lemma map.forAll :
   Operations.forAll n prop (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, (body xs[i.val] |>.forAll prop (n + i*(body default).local_length)) := by
+    ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).local_length) prop) := by
   simp only [map, ←forAll_def]
   rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
 
