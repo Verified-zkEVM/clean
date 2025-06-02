@@ -5,7 +5,7 @@ typically leveraging a `ConstantLawfulCircuits` assumption on the loop body.
 The end result are loop methods `Circuit.{mapFinRange, map, forEach, foldl}` that simplify
 under `circuit_norm` in every way we need them to.
 -/
-import Clean.Circuit.Lawful
+import Clean.Circuit.Constant
 import Clean.Utils.Misc
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 

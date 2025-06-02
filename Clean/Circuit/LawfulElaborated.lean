@@ -1,6 +1,6 @@
 -- TODO this has most of the previous content of `Clean.Circuit.Lawful`
 -- could be useful to auto-derive the output/local_length/operations by tactic
-import Clean.Circuit.Lawful
+import Clean.Circuit.Constant
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 
 class LawfulElaboratedCircuit (circuit : Circuit F α) extends LawfulCircuit circuit where

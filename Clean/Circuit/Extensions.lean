@@ -1,5 +1,5 @@
 /- This file contains possible additions to the Circuit DSL that aren't currently used -/
-import Clean.Circuit.Lawful
+import Clean.Circuit.Constant
 
 variable {F : Type} [Field F]
 
