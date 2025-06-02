@@ -51,7 +51,7 @@ theorem forAll_iff_list {xs : List α} :
         rw [add_mul, one_mul, add_comm _ k, ←add_assoc]
     rw [←h_zip, ←ih]
     clear h_zip ih
-    rw [bind_forAll, lawful.local_length_eq]
+    rw [bind_forAll', lawful.local_length_eq]
 
 theorem forAll_iff :
   (xs.forM circuit).forAll prop n ↔

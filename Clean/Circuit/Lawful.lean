@@ -89,26 +89,3 @@ end
 
 def Circuit.constant_output (circuit : α → Circuit F β) [Inhabited α] :=
   ∀ (x : α) (n : ℕ), (circuit x).output n = (circuit default).output n
-
--- characterize various properties of (lawful) circuits
-
-namespace Circuit
-variable {n : ℕ} {prop : Operations.Condition F}
-
-theorem constraints_hold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
-  constraints_hold.soundness env (circuit.operations n) ↔ circuit.forAll {
-    assert _ e := env e = 0,
-    lookup _ l := l.table.contains (l.entry.map env),
-    subcircuit _ _ s := s.soundness env
-  } n := by
-  rw [forAll_def, constraints_hold.soundness_iff_forAll _ _ n]
-
-theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
-  constraints_hold.completeness env (circuit.operations n) ↔ circuit.forAll {
-    assert _ e := env e = 0,
-    lookup _ l := l.table.contains (l.entry.map env),
-    subcircuit _ _ s := s.completeness env
-  } n := by
-  rw [forAll_def, constraints_hold.completeness_iff_forAll _ _ n]
-
-end Circuit

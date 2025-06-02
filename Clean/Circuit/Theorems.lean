@@ -217,53 +217,6 @@ theorem constraints_hold.completeness_iff_forAll (n : ℕ) (env : Environment F)
     try intros
     apply ih
 
-variable {α β : Type} {n : ℕ} {prop : Operations.Condition F} {env: Environment F}
-
-/-- the offset derived from operations is the same as the state offset -/
-lemma offset_consistent (circuit : Circuit F α) :
-  ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
-
-@[reducible, circuit_norm]
-def forAll (circuit : Circuit F α) (prop : Operations.Condition F) (n : ℕ) :=
-  (circuit.operations n).forAll n prop
-
-lemma forAll_def {circuit : Circuit F α} {n : ℕ} :
-  circuit.forAll prop n ↔ (circuit.operations n).forAll n prop := by rfl
-
-theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
-  ((f >>= g).operations n).forAll n prop ↔
-    (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.local_length n)).forAll (n + f.local_length n)) prop := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
-  rw [h_ops, Operations.forAll_append, offset_consistent, add_comm n]
-
-theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
-  (f >>= g).forAll prop n ↔
-    f.forAll prop n ∧ ((g (f.output n)).forAll prop (n + f.local_length n)) := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
-  simp only [forAll]
-  rw [bind_forAll]
-
-@[circuit_norm] theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  constraints_hold.soundness (env) ((f >>= g).operations n)
-  ↔ constraints_hold.soundness (env) (f.operations n) ∧
-    constraints_hold.soundness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
-  rw [constraints_hold.soundness_iff_forAll n, constraints_hold.soundness_iff_forAll n,
-    constraints_hold.soundness_iff_forAll (n + f.local_length n), bind_forAll]
-
-@[circuit_norm] theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  constraints_hold.completeness (env) ((f >>= g).operations n)
-  ↔ constraints_hold.completeness (env) (f.operations n) ∧
-    constraints_hold.completeness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
-  rw [constraints_hold.completeness_iff_forAll n, constraints_hold.completeness_iff_forAll n,
-    constraints_hold.completeness_iff_forAll (n + f.local_length n), bind_forAll]
-
-@[circuit_norm] theorem bind_uses_local_witnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  env.uses_local_witnesses_completeness n ((f >>= g).operations n)
-  ↔ env.uses_local_witnesses_completeness n (f.operations n) ∧
-    env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
-  rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
-    env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
-
 /--
 Completeness theorem which proves that we can replace constraints in subcircuits
 with their `completeness` statement.
@@ -287,6 +240,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
 end Circuit
 
 -- some theorems about offset / local_length
+
 namespace Operations
 
 /-- this shows that we didn't really need the `offset` definition -/
@@ -315,4 +269,74 @@ theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β) (n : ℕ)
 
 theorem pure_local_length (a : α) (n : ℕ) :
     (pure a : Circuit F α).local_length n = 0 := rfl
+
+-- more theorems about forAll
+
+variable {α β : Type} {n : ℕ} {prop : Operations.Condition F} {env: Environment F}
+
+/-- the offset derived from operations is the same as the state offset -/
+lemma offset_consistent (circuit : Circuit F α) :
+  ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
+
+@[circuit_norm]
+theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
+  ((f >>= g).operations n).forAll n prop ↔
+    (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.local_length n)).forAll (n + f.local_length n)) prop := by
+  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
+  rw [h_ops, Operations.forAll_append, offset_consistent, add_comm n]
+
+-- definition of `forAll` for circuits which collapses uses the same offset in two places
+
+@[reducible, circuit_norm]
+def forAll (circuit : Circuit F α) (prop : Operations.Condition F) (n : ℕ) :=
+  (circuit.operations n).forAll n prop
+
+lemma forAll_def {circuit : Circuit F α} {n : ℕ} :
+  circuit.forAll prop n ↔ (circuit.operations n).forAll n prop := by rfl
+
+theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
+  (f >>= g).forAll prop n ↔
+    f.forAll prop n ∧ ((g (f.output n)).forAll prop (n + f.local_length n)) := by
+  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
+  simp only [forAll]
+  rw [bind_forAll]
+
+theorem constraints_hold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
+  constraints_hold.soundness env (circuit.operations n) ↔ circuit.forAll {
+    assert _ e := env e = 0,
+    lookup _ l := l.table.contains (l.entry.map env),
+    subcircuit _ _ s := s.soundness env
+  } n := by
+  rw [forAll_def, constraints_hold.soundness_iff_forAll n]
+
+theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
+  constraints_hold.completeness env (circuit.operations n) ↔ circuit.forAll {
+    assert _ e := env e = 0,
+    lookup _ l := l.table.contains (l.entry.map env),
+    subcircuit _ _ s := s.completeness env
+  } n := by
+  rw [forAll_def, constraints_hold.completeness_iff_forAll n]
+
+-- specializations
+
+@[circuit_norm] theorem bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  constraints_hold.soundness (env) ((f >>= g).operations n)
+  ↔ constraints_hold.soundness (env) (f.operations n) ∧
+    constraints_hold.soundness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
+  rw [constraints_hold.soundness_iff_forAll n, constraints_hold.soundness_iff_forAll n,
+    constraints_hold.soundness_iff_forAll (n + f.local_length n), bind_forAll]
+
+@[circuit_norm] theorem bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  constraints_hold.completeness (env) ((f >>= g).operations n)
+  ↔ constraints_hold.completeness (env) (f.operations n) ∧
+    constraints_hold.completeness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
+  rw [constraints_hold.completeness_iff_forAll n, constraints_hold.completeness_iff_forAll n,
+    constraints_hold.completeness_iff_forAll (n + f.local_length n), bind_forAll]
+
+@[circuit_norm] theorem bind_uses_local_witnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
+  env.uses_local_witnesses_completeness n ((f >>= g).operations n)
+  ↔ env.uses_local_witnesses_completeness n (f.operations n) ∧
+    env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
+  rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
+    env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
 end Circuit
