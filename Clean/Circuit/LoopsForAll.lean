@@ -148,9 +148,29 @@ def map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (_constant : ConstantCircuits body := by infer_constant_circuits) : Circuit F (Vector β m) :=
   xs.mapM body
 
+def mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (_constant : ConstantCircuits body := by infer_constant_circuits) : Circuit F (Vector β m) :=
+  Vector.mapFinRangeM m body
+
 section forEach
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantCircuits body} {prop : Operations.Condition F}
+
+@[circuit_norm ↓]
+lemma forEach.local_length_eq :
+    (forEach xs body constant).local_length n = m * (body default).local_length := by
+  rw [forEach, ForM.local_length_eq, constant.local_length_eq]
+
+@[circuit_norm ↓]
+lemma forEach.output_eq :
+  (forEach xs body constant).output n = () := rfl
+
+@[circuit_norm ↓]
+lemma forEach.forAll :
+  Operations.forAll n prop ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).local_length) prop) := by
+  simp only [forEach, ←forAll_def]
+  rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
@@ -181,27 +201,29 @@ lemma forEach.uses_local_witnesses :
     ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
   simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
-
-@[circuit_norm ↓]
-lemma forEach.forAll :
-  Operations.forAll n prop ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).local_length) prop) := by
-  simp only [forEach, ←forAll_def]
-  rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
-
-@[circuit_norm ↓]
-lemma forEach.local_length_eq :
-    (forEach xs body constant).local_length n = m * (body default).local_length := by
-  rw [forEach, ForM.local_length_eq, constant.local_length_eq]
-
-@[circuit_norm ↓]
-lemma forEach.output_eq :
-  (forEach xs body constant).output n = () := rfl
 end forEach
 
 section map
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantCircuits body} {prop : Operations.Condition F}
+
+@[circuit_norm ↓]
+lemma map.local_length_eq :
+    (map xs body constant).local_length n = m * (body default).local_length := by
+  rw [map, MapM.local_length_eq, constant.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.output_eq :
+  (map xs body constant).output n =
+    xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
+  rw [map, MapM.output_eq, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma map.forAll :
+  Operations.forAll n prop (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).local_length) prop) := by
+  simp only [map, ←forAll_def]
+  rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
 
 @[circuit_norm ↓]
 lemma map.soundness :
@@ -223,22 +245,51 @@ lemma map.uses_local_witnesses :
     ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
   simp only [map, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
   rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
-
-@[circuit_norm ↓]
-lemma map.forAll :
-  Operations.forAll n prop (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, (body xs[i.val] |>.forAll (n + i*(body default).local_length) prop) := by
-  simp only [map, ←forAll_def]
-  rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
-
-@[circuit_norm ↓]
-lemma map.local_length_eq :
-    (map xs body constant).local_length n = m * (body default).local_length := by
-  rw [map, MapM.local_length_eq, constant.local_length_eq]
-
-@[circuit_norm ↓]
-lemma map.output_eq :
-  (map xs body constant).output n =
-    xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
-  rw [map, MapM.output_eq, ConstantCircuits.local_length_eq]
 end map
+
+
+section mapFinRange
+variable {env : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+  {constant : ConstantCircuits body} {prop : Operations.Condition F}
+
+@[circuit_norm ↓]
+lemma mapFinRange.local_length_eq :
+    (mapFinRange m body constant).local_length n = m * (body 0).local_length := by
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.local_length_eq, constant.local_length_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.output_eq :
+  (mapFinRange m body constant).output n =
+    Vector.mapFinRange m fun i => (body i).output (n + i*(body 0).local_length) := by
+  rw [mapFinRange, Vector.mapFinRangeM, MapM.output_eq, ConstantCircuits.local_length_eq]
+  ext i hi
+  rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange]
+
+@[circuit_norm ↓]
+lemma mapFinRange.forAll :
+  Operations.forAll n prop (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, (body i |>.forAll (n + i*(body 0).local_length) prop) := by
+  simp only [mapFinRange, ←forAll_def]
+  rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.soundness :
+  constraints_hold.soundness env (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.soundness env (body i |>.operations (n + i*(body 0).local_length)) := by
+  simp only [mapFinRange, constraints_hold.soundness_iff_forAll']
+  rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.completeness :
+  constraints_hold.completeness env (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, constraints_hold.completeness env (body i |>.operations (n + i*(body 0).local_length)) := by
+  simp only [mapFinRange, constraints_hold.completeness_iff_forAll']
+  rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
+
+@[circuit_norm ↓]
+lemma mapFinRange.uses_local_witnesses :
+  env.uses_local_witnesses_completeness n (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body 0).local_length) (body i |>.operations (n + i*(body 0).local_length)) := by
+  simp only [mapFinRange, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
+end mapFinRange
