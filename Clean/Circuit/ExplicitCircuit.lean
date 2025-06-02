@@ -3,167 +3,148 @@
 import Clean.Circuit.Constant
 variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
 
-class LawfulElaboratedCircuit (circuit : Circuit F α) extends LawfulCircuit circuit where
-  /-- a proper circuit is encapsulated by three functions of the input offset -/
+class ExplicitCircuit (circuit : Circuit F α) where
+  /-- an "explicit" circuit is encapsulated by three functions of the input offset -/
   output : ℕ → α
-  final_offset : ℕ → ℕ
+  local_length : ℕ → ℕ
   operations : ℕ → Operations F
 
-  /-- the circuit's output and final offset only depend on the input offset -/
-  output_independent : ∀ offset: ℕ, (circuit offset).fst.fst = output offset := by intro _; rfl
-  offset_independent : ∀ offset: ℕ, (circuit offset).snd = final_offset offset := by intro _; rfl
+  /-- the function have to match the circuit -/
+  output_eq : ∀ n: ℕ, circuit.output n = output n := by intro _; rfl
+  local_length_eq : ∀ n: ℕ, circuit.local_length n = local_length n := by intro _; rfl
+  operations_eq : ∀ n: ℕ, circuit.operations n = operations n := by intro _; rfl
 
-  /-- the circuit acts on operations by appending its own operations; which only depend on the input offset -/
-  append_only : ∀ offset: ℕ, (circuit offset).fst.snd = operations offset := by intro _; rfl
+-- slightly stronger variant: ExplicitCircuit with a fixed local length
+class ConstantExplicitCircuit (circuit : Circuit F α) extends ConstantCircuit circuit where
+  output : ℕ → α
+  operations : ℕ → Operations F
+  output_eq : ∀ n: ℕ, circuit.output n = output n := by intro _; rfl
+  operations_eq : ∀ n: ℕ, circuit.operations n = operations n := by intro _; rfl
 
--- slightly stronger variant: LawfulCircuit with a fixed local length
-class ConstantLawfulElaboratedCircuit (circuit : Circuit F α) extends LawfulElaboratedCircuit circuit, ConstantLawfulCircuit circuit where
-  final_offset n := n + local_length
+def ConstantExplicitCircuit.toExplicitCircuit (circuit : Circuit F α) [constant: ConstantExplicitCircuit circuit] : ExplicitCircuit circuit where
+  output := constant.output
+  local_length _ := constant.local_length
+  operations := constant.operations
+  output_eq := output_eq
+  local_length_eq := constant.local_length_eq
+  operations_eq := operations_eq
 
--- even stronger (and still the typical case): an indexed family of lawful circuits that all share the same local length
-class ConstantLawfulElaboratedCircuits (circuit : α → Circuit F β) extends ConstantLawfulCircuits circuit where
+-- indexed family of explicit circuits that all share the same local length
+class ConstantExplicitCircuits (circuit : α → Circuit F β) extends ConstantCircuits circuit where
   output : α → ℕ → β
   operations : α → ℕ → Operations F
-
-  output_independent : ∀ (a : α) (offset: ℕ), (circuit a offset).fst.fst = output a offset := by intro _ _; rfl
-  offset_independent : ∀ (a : α) (offset: ℕ), (circuit a offset).snd = offset + local_length := by intro _ _; rfl
-  append_only : ∀ (a : α) (offset: ℕ), (circuit a offset).fst.snd = operations a offset := by intro _ _; rfl
+  output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
+  operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
 
 -- `pure` is a (constant) lawful circuit
-instance LawfulElaboratedCircuit.from_pure {a : α} : ConstantLawfulElaboratedCircuit (pure a : Circuit F α) where
+instance ConstantExplicitCircuit.from_pure {a : α} : ConstantExplicitCircuit (pure a : Circuit F α) where
   output _ := a
   local_length := 0
   operations _ := []
 
-instance ConstantLawfulElaboratedCircuits.from_pure {f : α → β} : ConstantLawfulElaboratedCircuits (fun a => pure (f a) : α → Circuit F β) where
+instance ConstantExplicitCircuits.from_pure {f : α → β} : ConstantExplicitCircuits (fun a => pure (f a) : α → Circuit F β) where
   output a _ := f a
   local_length := 0
   operations _ _ := []
 
 -- `bind` of two lawful circuits yields a lawful circuit
-instance LawfulElaboratedCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
-    (f_lawful : LawfulElaboratedCircuit f) (g_lawful : ∀ a : α, LawfulElaboratedCircuit (g a)) : LawfulElaboratedCircuit (f >>= g) where
+instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
+    (f_lawful : ExplicitCircuit f) (g_lawful : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
-    output (g a) (final_offset f n)
+    output (g a) (n + local_length f n)
 
-  final_offset n :=
+  local_length n :=
     let a := output f n
-    final_offset (g a) (final_offset f n)
+    local_length f n + local_length (g a) (n + local_length f n)
 
   operations n :=
     let a := output f n
-    let ops_f := f_lawful.operations n
-    let ops_g := (g_lawful a).operations (final_offset f n)
-    ops_f ++ ops_g
+    operations f n ++ operations (g a) (n + local_length f n)
 
-  output_independent n := by
-    show (g _ _).1.1 = _ -- by definition, `(f >>= g) ops = g (f ops).1 (f ops).2`
-    rw [output_independent, output_independent, offset_independent]
+  output_eq n := by rw [Circuit.bind_output_eq, output_eq, output_eq, local_length_eq]
+  local_length_eq n := by rw [Circuit.bind_local_length_eq, local_length_eq, output_eq, local_length_eq]
+  operations_eq n := by rw [Circuit.bind_operations_eq, operations_eq, output_eq, local_length_eq, operations_eq]
 
-  offset_independent n := by
-    show (g _ _).2 = _
-    rw [offset_independent, output_independent, offset_independent]
-
-  append_only n := by
-    show _ ++ (g _ _).1.2 = _
-    rw [append_only, append_only, output_independent, offset_independent]
-
-  offset_consistent n := (LawfulCircuit.from_bind inferInstance inferInstance).offset_consistent n
-
-instance LawfulElaboratedCircuit.from_map {f : α → β} {g : Circuit F α}
-    (g_lawful : LawfulElaboratedCircuit g) : LawfulElaboratedCircuit (f <$> g) where
+instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
+    (g_lawful : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
-  final_offset n := final_offset g n
-  operations n := g_lawful.operations n
+  local_length n := local_length g n
+  operations n := operations g n
 
-  output_independent n := by
-    show f _ = _
-    rw [output_independent]
-
-  offset_independent n := by
-    show (g _).2 = _
-    rw [offset_independent]
-
-  append_only n := by
-    show (g _).1.2 = _
-    rw [append_only]
-
-  offset_consistent n := (LawfulCircuit.from_map inferInstance).offset_consistent n
+  output_eq n := by rw [Circuit.map_output_eq, output_eq]
+  local_length_eq n := by rw [Circuit.map_local_length_eq, local_length_eq]
+  operations_eq n := by rw [Circuit.map_operations_eq, operations_eq]
 
 -- basic operations are (constant) lawful circuits
 
-instance : ConstantLawfulElaboratedCircuits (F:=F) witness_var where
+instance : ConstantExplicitCircuits (F:=F) witness_var where
   output _ n := ⟨ n ⟩
   local_length := 1
   operations c n := [.witness 1 fun env => #v[c env]]
 
-instance {k : ℕ} {c : Environment F → Vector F k} : ConstantLawfulElaboratedCircuit (witness_vars k c) where
+instance {k : ℕ} {c : Environment F → Vector F k} : ConstantExplicitCircuit (witness_vars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   local_length := k
   operations n := [.witness k c]
 
-instance {α: TypeMap} [ProvableType α] : ConstantLawfulElaboratedCircuits (ProvableType.witness (α:=α) (F:=F)) where
+instance {α: TypeMap} [ProvableType α] : ConstantExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := var_from_offset α n
   local_length := size α
   operations c n := [.witness (size α) (to_elements ∘ c)]
 
-instance : ConstantLawfulElaboratedCircuits (F:=F) assert_zero where
+instance : ConstantExplicitCircuits (F:=F) assert_zero where
   output _ _ := ()
   local_length := 0
   operations e n := [.assert e]
 
-instance : ConstantLawfulElaboratedCircuits (F:=F) lookup where
+instance : ConstantExplicitCircuits (F:=F) lookup where
   output _ _ := ()
   local_length := 0
   operations l n := [.lookup l]
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
-    ConstantLawfulElaboratedCircuit (subcircuit circuit input) where
+    ConstantExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   local_length := circuit.local_length input
-  final_offset n := n + circuit.local_length input
   operations n := [.subcircuit (circuit.to_subcircuit n input)]
 
 instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
-    ConstantLawfulElaboratedCircuit (assertion circuit input) where
+    ConstantExplicitCircuit (assertion circuit input) where
   output n := ()
   local_length := circuit.local_length input
-  final_offset n := n + circuit.local_length input
   operations n := [.subcircuit (circuit.to_subcircuit n input)]
 
 -- lower `ConstantLawfulCircuits` to `ConstantLawfulCircuit`
-instance ConstantLawfulElaboratedCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantLawfulElaboratedCircuits circuit] : ConstantLawfulElaboratedCircuit (circuit a) where
+instance ConstantExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [lawful : ConstantExplicitCircuits circuit] : ConstantExplicitCircuit (circuit a) where
   output n := output circuit a n
   local_length := lawful.local_length
-  local_length_eq := (ConstantLawfulCircuits.to_single circuit a).local_length_eq
   operations n := operations circuit a n
-  output_independent := output_independent a
-  offset_independent := offset_independent a
-  append_only := append_only a
-  offset_consistent := (ConstantLawfulCircuits.to_single circuit a).offset_consistent
+  output_eq := output_eq a
+  local_length_eq := (ConstantCircuits.to_single circuit a).local_length_eq
+  operations_eq := operations_eq a
 
-instance LawfulElaboratedCircuit.from_constants {circuit : α → Circuit F β} (lawful : ConstantLawfulElaboratedCircuits circuit) (a : α) :
-    LawfulElaboratedCircuit (circuit a) := ConstantLawfulElaboratedCircuits.to_single circuit a |>.toLawfulElaboratedCircuit
+instance ExplicitCircuit.from_constants {circuit : α → Circuit F β} (lawful : ConstantExplicitCircuits circuit) (a : α) :
+    ExplicitCircuit (circuit a) := ConstantExplicitCircuits.to_single circuit a |>.toExplicitCircuit
 
-syntax "infer_lawful_elaborated_circuit" : tactic
+syntax "infer_explicit_circuit" : tactic
 
 macro_rules
-  | `(tactic|infer_lawful_elaborated_circuit) => `(tactic|(
+  | `(tactic|infer_explicit_circuit) => `(tactic|(
     try intros
     try repeat infer_instance
     repeat (
       try intros
       first
-        | apply LawfulElaboratedCircuit.from_bind
-        | apply LawfulElaboratedCircuit.from_map
+        | apply ExplicitCircuit.from_bind
+        | apply ExplicitCircuit.from_map
       repeat infer_instance
     )))
 
 -- this tactic is pretty good at inferring lawful circuits!
 section
-example : LawfulElaboratedCircuit (witness (fun _ => (0 : F)))
-  := by infer_lawful_elaborated_circuit
+example : ExplicitCircuit (witness (fun _ => (0 : F)))
+  := by infer_explicit_circuit
 
 example :
   let add := do
@@ -173,30 +154,30 @@ example :
     assert_zero (x + y - z)
     pure z
 
-  LawfulElaboratedCircuit add := by infer_lawful_elaborated_circuit
+  ExplicitCircuit add := by infer_explicit_circuit
 end
 
 -- `ConstantLawfulCircuit(s)` can be proved from `LawfulCircuit` by adding the requirement that `final_offset` is `n` plus a constant.
 -- the latter can usually be proved by rfl!
-open LawfulElaboratedCircuit in
-def ConstantLawfulElaboratedCircuit.from_constant_length {circuit : Circuit F α} (lawful : LawfulElaboratedCircuit circuit)
-  (h_length : ∀ n, circuit.local_length n = circuit.local_length 0) : ConstantLawfulElaboratedCircuit circuit where
+open ExplicitCircuit in
+def ConstantExplicitCircuit.from_constant_length {circuit : Circuit F α} (lawful : ExplicitCircuit circuit)
+  (h_length : ∀ n, circuit.local_length n = circuit.local_length 0) : ConstantExplicitCircuit circuit where
   local_length := circuit.local_length 0
   local_length_eq := h_length
 
-open LawfulElaboratedCircuit in
-def ConstantLawfulElaboratedCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, LawfulElaboratedCircuit (circuit a))
-  (h_length : ∀ a n, (circuit a).local_length n = (circuit default).local_length 0) : ConstantLawfulElaboratedCircuits circuit where
+open ExplicitCircuit in
+def ConstantExplicitCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (lawful : ∀ a, ExplicitCircuit (circuit a))
+  (h_length : ∀ a n, (circuit a).local_length n = (circuit default).local_length 0) : ConstantExplicitCircuits circuit where
 
-  output a n := LawfulElaboratedCircuit.output (circuit a) n
+  output a n := ExplicitCircuit.output (circuit a) n
   local_length := (circuit default).local_length 0
-  operations a n := LawfulElaboratedCircuit.operations (circuit a) n
+  operations a n := ExplicitCircuit.operations (circuit a) n
 
-  output_independent a n := LawfulElaboratedCircuit.output_independent n
-  offset_independent a n := by
+  output_eq a n := ExplicitCircuit.output_eq n
+  local_length_eq a n := by
     show (circuit a).final_offset n = _
     rw [(lawful a).offset_consistent, h_length]
-  append_only a n := by rw [LawfulElaboratedCircuit.append_only]
+  append_only a n := by rw [ExplicitCircuit.append_only]
   offset_consistent a n := by rw [(lawful a).offset_consistent, h_length]
   local_length_eq a n := by rw [h_length]
 
@@ -204,13 +185,13 @@ syntax "infer_constant_lawful_elaborated_circuits" : tactic
 
 macro_rules
   | `(tactic|infer_constant_lawful_elaborated_circuits) => `(tactic|(
-    apply ConstantLawfulElaboratedCircuits.from_constant_length (by infer_lawful_elaborated_circuit)
+    apply ConstantExplicitCircuits.from_constant_length (by infer_lawful_elaborated_circuit)
     try intros
-    try simp only [LawfulElaboratedCircuit.final_offset]
+    try simp only [ExplicitCircuit.final_offset]
     try ac_rfl))
 
 section
-example : ConstantLawfulElaboratedCircuits (witness (F:=F))
+example : ConstantExplicitCircuits (witness (F:=F))
   := by infer_constant_lawful_elaborated_circuits
 
 example :
@@ -220,7 +201,7 @@ example :
     assert_zero (x + y - z)
     pure z
 
-  ConstantLawfulElaboratedCircuits add := by infer_constant_lawful_elaborated_circuits
+  ConstantExplicitCircuits add := by infer_constant_lawful_elaborated_circuits
 end
 
 -- characterize various properties of lawful circuits
@@ -230,11 +211,11 @@ namespace LawfulCircuit
 
 theorem output_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.output n = output circuit n := by
-  apply output_independent
+  apply output_eq
 
 theorem final_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.final_offset n = final_offset circuit n := by
-  apply offset_independent
+  apply local_length_eq
 
 lemma operations_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : ℕ) :
     circuit.operations n = operations circuit n := by
@@ -250,7 +231,7 @@ theorem local_length_eq' (circuit : Circuit F α) [lawful: ConstantLawfulCircuit
     (circuit ops).2.withLength.local_length = ops.withLength.local_length + lawful.local_length := by
   apply Nat.add_left_cancel (n:=(circuit ops).2.withLength.initial_offset)
   rw [←add_assoc, Circuit.total_length_eq, initial_offset_eq', Circuit.total_length_eq,
-    offset_independent, ←lawful.local_length_eq]
+    local_length_eq, ←lawful.local_length_eq]
 
 theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β)
   (f_lawful: LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
@@ -264,7 +245,7 @@ theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β)
   rw (occs := .pos [1]) [←(g_lawful (f.output n)).initial_offset_eq _ (final_offset f n)]
   rw [Circuit.total_length_eq, final_offset_eq]
   simp only [fg_lawful, final_offset]
-  rw [←LawfulCircuit.output_independent (.from_offset n)]
+  rw [←LawfulCircuit.output_eq (.from_offset n)]
 
 theorem soundness_eq {circuit : Circuit F α} [lawful : LawfulCircuit circuit] {env} {n : ℕ} :
     Circuit.constraints_hold.soundness env (circuit.operations n) ↔ Circuit.constraints_hold.soundness env (lawful.operations n).val :=
@@ -278,11 +259,11 @@ end LawfulCircuit
 namespace ConstantLawfulCircuits
 theorem output_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
     ∀ (a : α) (n : ℕ), (circuit a).output n = lawful.output a n := by
-  intros; apply output_independent
+  intros; apply output_eq
 
 theorem final_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
     ∀ (a : α) (n : ℕ), (circuit a).final_offset n = n + lawful.local_length := by
-  intros; apply offset_independent
+  intros; apply local_length_eq
 
 theorem initial_offset_eq {circuit : α → Circuit F β} [lawful : ConstantLawfulCircuits circuit] :
     ∀ (a : α) (n : ℕ), ((circuit a).operations n).initial_offset = n := by
