@@ -113,9 +113,11 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   have h_offset : (recursive_relation (p:=p)).final_assignment.offset = 24 := rfl
   simp only [h_offset]
   rw [fib_assignment]
-  simp only [circuit_norm, eval, OfNat.ofNat, reduceDIte, Nat.reduceLT, var_from_offset, Vector.mapRange, Nat.reduceAdd]
-  simp only [PNat.mk_ofNat, PNat.val_ofNat, Fin.ofNat'_eq_cast, Nat.cast_zero, Fin.isValue,
-    Nat.cast_one, Nat.cast_ofNat]
+  simp only [circuit_norm, eval, reduceDIte, Nat.reduceLT, var_from_offset, Vector.mapRange, Nat.reduceAdd]
+  -- TODO it's annoying that we explicitly need the GetElem instance here
+  simp only [PNat.mk_ofNat, Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
+    Fin.ofNat'_eq_cast, Nat.cast_zero, Fin.isValue, Nat.cast_one, Nat.cast_ofNat,
+    List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
   and_intros <;> rfl
 
 /--

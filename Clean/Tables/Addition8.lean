@@ -56,10 +56,11 @@ def formal_add8_table : FormalTable (F p) RowType := {
         change Circuit.constraints_hold.soundness env _ at h_holds
 
         -- this is the slowest step, but still ok
-        simp [table_norm, circuit_norm, subcircuit_norm, var_from_offset,
+        simp [table_norm, circuit_norm, subcircuit_norm, var_from_offset, Vector.mapRange,
           add8_inline, Gadgets.Addition8.circuit, ByteLookup
         ] at h_holds
-        change (_ ∧ _) ∧ (_ → _) at h_holds
+
+        change _ ∧ _ ∧ (_ → _) at h_holds
 
         -- resolve assignment
         have h_x_env : env.get 0 = row.x := by rfl
@@ -68,7 +69,7 @@ def formal_add8_table : FormalTable (F p) RowType := {
         simp only [h_x_env, h_y_env, h_z_env] at h_holds
 
         -- now we prove a local property about the current row, from the constraints
-        obtain ⟨⟨ lookup_x, lookup_y ⟩, h_add⟩ := h_holds
+        obtain ⟨ lookup_x, lookup_y, h_add⟩ := h_holds
 
         replace lookup_x := ByteTable.soundness row.x lookup_x
         replace lookup_y := ByteTable.soundness row.y lookup_y
