@@ -154,8 +154,11 @@ theorem mapFinRangeM_forAll_iff {circuit : Fin m → Circuit F β} [constant : C
 end MapM
 
 namespace FoldlM
+@[reducible]
+def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := fun t => circuit t.1 t.2
+
 variable {env : Environment F} {prop : Operations.Condition F} {xs : Vector α m}
-  {circuit : β → α → Circuit F β} {init : β} {constant : ConstantCircuits fun (t : β × α) => circuit t.1 t.2}
+  {circuit : β → α → Circuit F β} {init : β} {constant : ConstantCircuits (prod circuit)}
 
 lemma foldlM_cons (x: α) :
   (Vector.cons x xs).foldlM circuit init = (do
@@ -199,7 +202,7 @@ def foldlAcc (n : ℕ) (xs : Vector α m) (circuit : β → α → Circuit F β)
 lemma foldlAcc_zero [NeZero m] : foldlAcc n xs circuit init 0 = init := by
   simp [foldlAcc, Fin.foldl_zero]
 
-lemma foldlAcc_cons_succ (i : Fin m) (x : α) [constant : ConstantCircuits fun (t : β × α) => circuit t.1 t.2] :
+lemma foldlAcc_cons_succ (i : Fin m) (x : α) [constant : ConstantCircuits (prod circuit)] :
   foldlAcc n (Vector.cons x xs) circuit init i.succ =
     foldlAcc (n + (circuit init x).local_length n) xs circuit ((circuit init x).output n) i := by
   rw [constant.local_length_eq (init, x), ←constant.local_length_eq (default, default) 0]
@@ -229,10 +232,61 @@ lemma forAll_flatten_foldl :
     local_length_eq i n := constant.local_length_eq (_, _) _
   }
 
-theorem forAll_iff :
-  (xs.foldlM circuit init |>.operations n).forAll n prop ↔
-    ∀ i : Fin m, (circuit (foldlAcc n xs circuit init i) xs[i.val]).forAll (n + i * constant.local_length) prop := by
-  rw [operations_eq, forAll_flatten_foldl]
+theorem forAll_iff {constant : ConstantCircuits (prod circuit)} :
+  (xs.foldlM circuit init).forAll n prop ↔
+    ∀ i : Fin m, (circuit (foldlAcc n xs circuit init i) xs[i.val]).forAll (n + i * (circuit default default).local_length) prop := by
+  rw [forAll_def, operations_eq, forAll_flatten_foldl, constant.local_length_eq (_, _)]
+
+-- we can massively simplify the foldlM theory when assuming the body's output is independent of the input
+
+variable {h_const_out : Circuit.constant_output fun (t : β × α) => circuit t.1 t.2}
+
+theorem foldlAcc_const_succ (h_const_out : Circuit.constant_output fun (t : β × α) => circuit t.1 t.2)
+  (i : ℕ) (hi : i + 1 < m) :
+  foldlAcc n xs circuit init ⟨ i + 1, hi ⟩ =
+    (circuit default xs[i]).output (n + i*(circuit default default).local_length) := by
+  simp only [foldlAcc]
+  conv => lhs; lhs; intro acc i; rw [h_const_out (acc, _)]
+  rw [h_const_out (_, xs[i])]
+  simp [Fin.foldl_const]
+
+theorem foldlAcc_const (h_const_out : Circuit.constant_output fun (t : β × α) => circuit t.1 t.2)
+  (i : ℕ) (hi : i < m) :
+  foldlAcc n xs circuit init ⟨ i, hi ⟩ = match i with
+    | 0 => init
+    | i + 1 => (circuit default xs[i]).output (n + i*(circuit default default).local_length) := by
+  rcases i with _ | i
+  · simp [foldlAcc]
+  · rw [foldlAcc_const_succ h_const_out]
+
+theorem forAll_iff_const (h_const_out : Circuit.constant_output (prod circuit)) [NeZero m]
+    (constant : ConstantCircuits (prod circuit)) :
+  (xs.foldlM circuit init).forAll n prop ↔
+  (circuit init (xs[0]'(NeZero.pos m))).forAll n prop ∧
+  ∀ (i : ℕ) (hi : i + 1 < m),
+    let acc := (circuit default xs[i]).output (n + i*(circuit default default).local_length);
+    (circuit acc xs[i + 1]).forAll (n + (i + 1)*(circuit default default).local_length) prop := by
+  rw [forAll_iff (constant:=constant)]
+  set k := (circuit default default).local_length
+  simp only
+  constructor
+  · intro h
+    constructor
+    · specialize h 0
+      simp only [Fin.val_zero] at h
+      rw [foldlAcc_zero, zero_mul, add_zero] at h
+      exact h
+    · intro i hi
+      specialize h ⟨ i + 1, hi ⟩
+      rw [foldlAcc_const_succ h_const_out] at h
+      exact h
+  intro h i
+  rcases i with ⟨ _ | i, hi ⟩
+  · simp only [Fin.mk_zero', Fin.val_zero]
+    rw [foldlAcc_zero, zero_mul, add_zero]
+    exact h.left
+  · rw [foldlAcc_const_succ h_const_out]
+    exact h.right i hi
 
 end FoldlM
 
