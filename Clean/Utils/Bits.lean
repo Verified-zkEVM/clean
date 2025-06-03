@@ -7,13 +7,22 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 
 namespace Utils.Bits
-
+/--
+  Convert a natural number to a vector of bits.
+-/
 def to_bits (n : ℕ) (x : ℕ) : Vector ℕ n :=
   .mapRange n fun i => if x.testBit i then 1 else 0
 
+/--
+  Convert a vector of bits to a natural number.
+-/
 def from_bits {n : ℕ} (bits : Vector ℕ n) : ℕ :=
   Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * 2^i) 0
 
+/--
+  Main lemma which establishes the behaviour of `from_bits`
+  and `to_bits` by induction
+-/
 lemma to_bits_from_bits_aux {n: ℕ} (bits : Vector ℕ n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (from_bits bits) < 2^n ∧ to_bits n (from_bits bits) = bits := by
@@ -56,12 +65,12 @@ theorem to_bits_from_bits {n: ℕ} (bits : Vector ℕ n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     to_bits n (from_bits bits) = bits := (to_bits_from_bits_aux bits h_bits).right
 
-/-- the result of `from_bits` is less than 2^n -/
+/-- The result of `from_bits` is less than 2^n -/
 theorem from_bits_lt {n: ℕ} (bits : Vector ℕ n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (from_bits bits) < 2^n := (to_bits_from_bits_aux bits h_bits).left
 
-/-- on numbers less than `2^n`, `to_bits n` is injective -/
+/-- On numbers less than `2^n`, `to_bits n` is injective -/
 theorem to_bits_injective (n: ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
     to_bits n x = to_bits n y → x = y := by
   intro hx hy h_eq
@@ -83,7 +92,7 @@ theorem to_bits_injective (n: ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
     replace hy : y < 2^i := by linarith
     rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
-/-- on numbers less than `2^n`, `to_bits` is a right-inverse of `from_bits` -/
+/-- On numbers less than `2^n`, `to_bits` is a right-inverse of `from_bits` -/
 theorem from_bits_to_bits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
     from_bits (to_bits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (to_bits n x)[i] = 0 ∨ (to_bits n x)[i] = 1 := by
@@ -92,23 +101,25 @@ theorem from_bits_to_bits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
   rw [to_bits_from_bits _ h_bits]
 
 
-
+-- field variant of `to_bits` and `from_bits`
 variable {p : ℕ} [prime: Fact p.Prime]
 
--- definitions
-
+/--
+  Convert a field element to a vector of bits, which are themselves field elements.
+-/
 def field_to_bits (n : ℕ) (x : F p) : Vector (F p) n :=
   .map (↑) (to_bits n x.val)
 
+/--
+  Convert a vector of bits to a field element.
+-/
 def field_from_bits {n : ℕ} (bits : Vector (F p) n) : F p :=
   from_bits <| bits.map ZMod.val
 
 def field_from_bits_expr {n: ℕ} (bits : Vector (Expression (F p)) n) : Expression (F p) :=
   Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2^i : F p)) 0
 
--- theorems
-
-/-- evaluation commutes with bits accumulation -/
+/-- Evaluation commutes with bits accumulation -/
 theorem field_from_bits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
     eval (field_from_bits_expr bits) = field_from_bits (bits.map eval) := by
   simp only [field_from_bits_expr, field_from_bits, from_bits]
@@ -123,7 +134,10 @@ theorem field_from_bits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector 
     symm
     rw [ZMod.cast_id]
 
-/-- main lemma which establishes the behaviour of `field_from_bits` and `field_to_bits` by induction -/
+/--
+  Define the behaviour of `field_from_bits` and `field_to_bits` by
+  lifting `to_bits_from_bits_aux`
+-/
 lemma field_to_bits_field_from_bits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (field_from_bits bits).val < 2^n ∧ field_to_bits n (field_from_bits bits) = bits := by
@@ -154,7 +168,7 @@ lemma field_to_bits_field_from_bits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (
     rw [ZMod.cast_id]
     rfl
 
-/-- the result of `field_from_bits` is less than 2^n -/
+/-- The result of `field_from_bits` is less than 2^n -/
 theorem field_from_bits_lt {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (field_from_bits bits).val < 2^n := (field_to_bits_field_from_bits_aux hn bits h_bits).left
@@ -164,7 +178,7 @@ theorem field_to_bits_field_from_bits {n: ℕ} (hn : 2^n < p) (bits : Vector (F 
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     field_to_bits n (field_from_bits bits) = bits := (field_to_bits_field_from_bits_aux hn bits h_bits).right
 
-/-- on numbers less than `2^n`, `field_to_bits n` is injective -/
+/-- On field elements less than `2^n`, `field_to_bits n` is injective -/
 theorem field_to_bits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2^n →
     field_to_bits n x = field_to_bits n y → x = y := by
   intro hx hy h_eq
@@ -189,7 +203,7 @@ theorem field_to_bits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2
   replace hy : y.val < 2^i := by linarith
   rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
-/-- on numbers less than `2^n`, `field_to_bits` is a right-inverse of `field_from_bits` -/
+/-- On field elements less than `2^n`, `field_to_bits` is a right-inverse of `field_from_bits` -/
 theorem field_from_bits_field_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
     field_from_bits (field_to_bits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (field_to_bits n x)[i] = 0 ∨ (field_to_bits n x)[i] = 1 := by
