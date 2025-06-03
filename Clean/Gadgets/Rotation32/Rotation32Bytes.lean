@@ -64,7 +64,11 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (
   sorry
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumptions := by
-  sorry
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
+  fin_cases off
+  repeat
+    intro assumptions
+    simp [elaborated, rot32_bytes, circuit_norm]
 
 def circuit (off : Fin 4) : FormalCircuit (F p) Inputs Outputs := {
   elaborated off with
