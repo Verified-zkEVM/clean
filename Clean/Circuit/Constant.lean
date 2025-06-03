@@ -1,9 +1,11 @@
 import Clean.Circuit.SubCircuit
-variable {n m o : ℕ} {F : Type} [Field F] {α β : Type}
+variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 /--
 A constant circuit is one where the local length is constant for all inputs.
 This is true for all circuits in practice, but unfortunately this can't be encoded in the monad definition.
+
+Note also that this is a subset of the `ElaboratedCircuit` definition.
 -/
 class ConstantCircuit (circuit : Circuit F α) where
   local_length : ℕ

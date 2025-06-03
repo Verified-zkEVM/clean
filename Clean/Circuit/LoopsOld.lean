@@ -422,7 +422,7 @@ theorem constraints_hold.foldM_vector_forAll {xs : Vector α n} {lawful : Consta
     simp only [Fin.val_succ, List.getElem_cons_succ]
     rw [Vector.getElem_toList]
     rw [add_mul, one_mul, add_comm _ (body default default).local_length, ←add_assoc m]
-    have : LawfulCircuit.final_offset (body init x) m = m + lawful.local_length := by simp [lawful_body, lawful_norm]
+    have : LawfulCircuit.final_offset (body init x) m = m + lawful.local_length := by simp [lawful_body, explicit_circuit_norm]
     rw [lawful.local_length_eq (default, default), ←this]
     change _ ↔ Operations.forAll prop (body (foldlAcc m (Vector.cons x xs) body init i.succ) _ |>.operations _)
     rw [←LawfulCircuit.output_eq, ←LawfulCircuit.final_offset_eq, ←foldlAcc_cons_succ]
@@ -492,7 +492,7 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F
 def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β) (body : β → α → Circuit F β)
   (lawful : ConstantLawfulCircuits (fun (s, a) => body s a) := by infer_constant_lawful_circuits)
   (_h_const_out : lawful.constant_output := by
-      simp only [lawful_norm, ConstantLawfulCircuits.constant_output]
+      simp only [explicit_circuit_norm, ConstantLawfulCircuits.constant_output]
       intros
       rfl) : Circuit F β :=
   xs.foldlM body init
@@ -529,7 +529,7 @@ lemma mapFinRange.local_length_eq :
     (mapFinRange m body lawful).local_length n = m * (body 0).local_length := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.local_length_eq]
-  simp only [lawful_loop, lawful_norm]
+  simp only [lawful_loop, explicit_circuit_norm]
   rw [LawfulCircuit.local_length_eq]
   ac_rfl
 
@@ -545,7 +545,7 @@ lemma mapFinRange.output_eq :
     Vector.mapFinRange m fun i => (body i).output (n + i*(body 0).local_length) := by
   let lawful_loop : ConstantLawfulCircuit (mapFinRange m body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.output_eq]
-  simp only [lawful_loop, lawful_norm]
+  simp only [lawful_loop, explicit_circuit_norm]
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange,
     LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
@@ -585,7 +585,7 @@ lemma map.local_length_eq :
     (map xs body lawful).local_length n = m * (body default).local_length := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.local_length_eq]
-  simp only [lawful_loop, lawful_norm]
+  simp only [lawful_loop, explicit_circuit_norm]
   rw [LawfulCircuit.local_length_eq]
   ac_rfl
 
@@ -602,7 +602,7 @@ lemma map.output_eq :
     xs.mapIdx fun i x => (body x).output (n + i*(body default).local_length) := by
   let lawful_loop : ConstantLawfulCircuit (map xs body lawful) := .from_mapM_vector _ lawful
   rw [LawfulCircuit.output_eq]
-  simp only [lawful_loop, lawful_norm]
+  simp only [lawful_loop, explicit_circuit_norm]
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_mapIdx, LawfulCircuit.output_eq, LawfulCircuit.local_length_eq]
   ac_rfl
@@ -645,7 +645,7 @@ lemma foldl.local_length_eq :
     (foldl xs init body lawful const_out).local_length n = m * (body default default).local_length := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
   rw [lawful_loop.local_length_eq]
-  simp only [lawful_loop, lawful_norm]
+  simp only [lawful_loop, explicit_circuit_norm]
   rw [←lawful.local_length_eq (default, default) 0]
   ac_rfl
 
@@ -661,7 +661,7 @@ lemma foldl.output_eq [NeZero m] :
     (body default (xs[m-1]'(Nat.pred_lt (NeZero.ne m)))).output (n + (m - 1)*(body default default).local_length) := by
   let lawful_loop : ConstantLawfulCircuits (foldl xs · body lawful const_out) := .from_foldlM_vector xs lawful
   rw [lawful_loop.output_eq]
-  simp only [lawful_loop, lawful_norm, ←lawful.output_eq]
+  simp only [lawful_loop, explicit_circuit_norm, ←lawful.output_eq]
   rw [lawful.local_length_eq (default, default) 0]
   have : m-1 < m := Nat.pred_lt (NeZero.ne m)
   rw [lawful.output_eq (_, xs[m-1]), const_out, ←lawful.output_eq]

@@ -13,11 +13,11 @@ instance explicit : ∀ input, ExplicitCircuit (add32_full (p:=p) input) := by
 @[reducible] def circuit32 input := add32_full (p:=p) input
 
 example : ExplicitCircuit.local_length (circuit32 default) 0 = 8 := by
-  dsimp only [lawful_norm, explicit, Boolean.circuit]
+  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
 
 example : ExplicitCircuit.output (circuit32 default) 0
-    = { z := { x0 := var ⟨0⟩, x1 := var ⟨2⟩, x2 := var ⟨4⟩, x3 := var ⟨6⟩ }, carry_out := var ⟨7⟩ } := by
-  dsimp only [lawful_norm, explicit, Boolean.circuit]
+    = { z := ⟨ var ⟨0⟩, var ⟨2⟩, var ⟨4⟩, var ⟨6⟩ ⟩, carry_out := var ⟨7⟩ } := by
+  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
 
 example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
   Circuit.constraints_hold.soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩).operations i0)
@@ -46,9 +46,9 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
   -- second version: using `ExplicitCircuit`
   -- resolve explicit circuit operations
   rw [ExplicitCircuit.operations_eq]
-  dsimp only [lawful_norm, explicit, Boolean.circuit, Gadgets.ByteLookup]
+  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
   -- simp `constraints_hold` expression
-  simp only [Circuit.constraints_hold.append_soundness, Circuit.constraints_hold.soundness]
+  simp only [Circuit.constraints_hold.append_soundness, Circuit.constraints_hold.soundness, Gadgets.ByteLookup]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
   simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd]
   -- finish
