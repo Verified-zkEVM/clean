@@ -57,9 +57,9 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   local_length _ _ := 0
   operations _ _ := []
 
--- `bind` of two explicit circuits yields a explicit circuit
+-- `bind` of two explicit circuits yields an explicit circuit
 instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
-    (f_lawful : ExplicitCircuit f) (g_lawful : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
+    (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
     output (g a) (n + local_length f n)
@@ -76,8 +76,9 @@ instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
   local_length_eq n := by rw [Circuit.bind_local_length_eq, local_length_eq, output_eq, local_length_eq]
   operations_eq n := by rw [Circuit.bind_operations_eq, operations_eq, output_eq, local_length_eq, operations_eq]
 
+-- `map` of an explicit circuit yields an explicit circuit
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
-    (g_lawful : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
+    (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
   local_length n := local_length g n
   operations n := operations g n
