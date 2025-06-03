@@ -154,7 +154,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
 
   soundness := by
     intro k eval x_var x h_input _h_assumptions h_holds
-    dsimp only [main] at h_holds
     simp only [main, circuit_norm, Boolean.circuit] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
     clear h_input _h_assumptions
