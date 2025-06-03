@@ -7,8 +7,8 @@ open Gadgets.Addition8FullCarry (add8_full_carry)
 open Gadgets.Addition32Full (add32_full Inputs)
 
 -- `infer_explicit_circuit` seem to work for all circuits
-instance explicit : ConstantExplicitCircuits (add32_full (p:=p)) := by
-  infer_constant_explicit_circuits
+instance explicit : ∀ input, ExplicitCircuit (add32_full (p:=p) input) := by
+  infer_explicit_circuit
 
 @[reducible] def circuit32 input := add32_full (p:=p) input
 
