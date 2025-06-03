@@ -294,47 +294,35 @@ theorem rotateRight64_to_bits (x r : ℕ) (h : x < 2^64):
   linarith
 
 
-lemma rotateRight_rotateRight {w : ℕ} (x : BitVec w) (n m : ℕ):
-    (x.rotateRight n).rotateRight m = x.rotateRight (n + m) := by
-  nth_rw 1 [←BitVec.rotateRight_mod_eq_rotateRight]
-  nth_rw 2 [←BitVec.rotateRight_mod_eq_rotateRight]
-  nth_rw 3 [←BitVec.rotateRight_mod_eq_rotateRight]
-  apply BitVec.eq_of_getLsbD_eq
-  intros i hi
-  repeat rw [BitVec.getLsbD_rotateRight_of_lt (by apply Nat.mod_lt; linarith)]
-  simp [hi]
+theorem rot_right64_lt (x r : ℕ) (h : x < 2^64) :
+    rot_right64 x r < 2^64 := by
+  rw [rot_right64_def _ _ h]
+  have := Nat.shiftRight_le x (r % 64)
+  apply Nat.or_lt_two_pow <;> omega
 
-  by_cases h1 : (i < w - (n + m) % w)
-  · simp [h1]
-    by_cases h2 : (i < w - m % w)
-    · simp [h1, h2]
-      by_cases h3 : (m % w + i < w - n % w)
-      · simp [h1, h2, h3]
-        congr 1
-        rw [←add_assoc, Nat.add_mod]
-        simp only [Nat.add_left_inj]
-        symm
-        apply Nat.mod_eq_of_lt
-        omega
-      · simp [h1, h2, h3]
-        sorry
-    · simp [h1, h2]
-      by_cases h3 : i - (w - m % w) < w - n % w
-      · simp [h1, h2, h3]
-        sorry
-      · simp [h1, h2, h3]
-        sorry
-  repeat sorry
 
 theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
     rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
-  rw [rot_right64_eq_bv_rotate _ h,
-    rot_right64_eq_bv_rotate _ h,
-    rot_right64_eq_bv_rotate _ (by apply BitVec.isLt)]
+  have h1 : (rot_right64 (rot_right64 x n) m) < 2^64 := by
+    repeat apply rot_right64_lt
+    assumption
 
-  refine BitVec.toNat_eq.mp ?_
-  simp only [Nat.toUInt64, UInt64.ofNat_bitVecToNat, UInt64.toBitVec_ofNat']
-  apply rotateRight_rotateRight
+  have h2 : (rot_right64 x (n + m)) < 2^64 := by
+    apply rot_right64_lt
+    assumption
+
+  -- suffices to show equality over bits
+  suffices to_bits 64 (rot_right64 (rot_right64 x n) m) = to_bits 64 (rot_right64 x (n + m)) by
+    exact to_bits_injective 64 h1 h2 this
+
+  -- rewrite rotation over bits
+  rw [rotateRight64_to_bits _ _ h,
+    rotateRight64_to_bits _ _ (by apply rot_right64_lt; assumption),
+    rotateRight64_to_bits _ _ h]
+
+  -- now this is easy, it is just rotation composition over vectors
+  rw [Vector.rotate_rotate]
+
 
 omit [Fact (Nat.Prime p)] in
 lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x4, x4 := x5, x5 := x6, x6 := x7, x7 := x0 : U64 _}.value =
