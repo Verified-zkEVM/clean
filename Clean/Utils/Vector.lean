@@ -332,4 +332,17 @@ theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad 
 def mapRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : ℕ → m β) : m (Vector β n) := (range n).mapM f
 
 def mapFinRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : Fin n → m β) : m (Vector β n) := (finRange n).mapM f
+
+
+def rotate {α : Type} {n : ℕ} (v : Vector α n) (off : ℕ) : Vector α n :=
+  let rotated := v.toList.rotate off
+  ⟨rotated.toArray, by
+    simp only [List.size_toArray, List.length_rotate, Array.length_toList, Vector.size_toArray,
+      rotated]⟩
+
+theorem rotate_rotate {α : Type} {n : ℕ} (v : Vector α n) (off1 off2 : ℕ) :
+    v.rotate (off1 + off2) = (v.rotate off1).rotate off2 := by
+  simp only [rotate, List.rotate_rotate]
+
+
 end Vector

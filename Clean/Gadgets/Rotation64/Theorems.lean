@@ -17,30 +17,7 @@ def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let high := x / (2^(8 - offset.val))
   low * (2^offset.val) + high
 
-def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
-    rot_right64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
-  sorry
 
-lemma rot_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
-    rot_right64 x off1 = rot_right64 x off2 := by
-  simp only [rot_right64]
-  rw [←h]
-  have h' : off2 % 64 < 64 := Nat.mod_lt off2 (by linarith)
-  rw [←h] at h'
-  rw [Nat.mod_eq_of_lt h']
-
-lemma rot_right64_fin (x : ℕ) (offset : Fin 64) :
-    rot_right64 x offset.val = x % (2^offset.val) * (2^(64 - offset.val)) + x / (2^offset.val) := by
-  simp only [rot_right64]
-  rw [Nat.mod_eq_of_lt offset.is_lt]
-
-theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
-    rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
-  rw [rot_right64_eq_bv_rotate _ h,
-    rot_right64_eq_bv_rotate _ h,
-    rot_right64_eq_bv_rotate _ (by sorry)]
-
-  sorry
 
 omit [Fact (Nat.Prime p)] in
 lemma soundnessCase1 (x0 x1 x2 x3 x4 x5 x6 x7 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256 ∧ ZMod.val x4 < 256 ∧ ZMod.val x5 < 256 ∧ ZMod.val x6 < 256 ∧ ZMod.val x7 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x4, x4 := x5, x5 := x6, x6 := x7, x7 := x0 : U64 _}.value =

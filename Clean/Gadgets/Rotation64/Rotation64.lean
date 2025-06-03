@@ -1,5 +1,6 @@
 import Clean.Types.U64
 import Clean.Circuit.SubCircuit
+import Clean.Utils.Rotation
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Gadgets.Rotation64.Rotation64Bytes
 import Clean.Gadgets.Rotation64.Rotation64Bits
@@ -14,6 +15,7 @@ instance : Fact (p > 512) := by
   linarith [p_large_enough.elim]
 
 open Bitwise (rot_right64)
+open Utils.Rotation (rot_right64_composition)
 
 /--
   Rotate the 64-bit integer by `offset` bits
@@ -79,7 +81,7 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [h_input] at hy x_normalized
 
   -- reason about rotation
-  rw [Theorems.rot_right_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
+  rw [rot_right64_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
   rw [hy]
   rw [show(offset.val / 8) % 8 = offset.val / 8 by
     apply Nat.mod_eq_of_lt
