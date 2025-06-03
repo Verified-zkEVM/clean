@@ -327,6 +327,14 @@ def mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (_constant : ConstantCircuits body := by infer_constant_circuits) : Circuit F (Vector β m) :=
   Vector.mapFinRangeM m body
 
+def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β) (body : β → α → Circuit F β)
+  (_constant : ConstantCircuits (fun (s, a) => body s a) := by infer_constant_circuits)
+  (_h_const_out : Circuit.constant_output (fun (s, a) => body s a) := by
+      simp only [explicit_circuit_norm, ConstantCircuits.constant_output]
+      intros
+      rfl) : Circuit F β :=
+  xs.foldlM body init
+
 section forEach
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantCircuits body} {prop : Operations.Condition F}
@@ -467,3 +475,73 @@ lemma mapFinRange.uses_local_witnesses :
   simp only [mapFinRange, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
 end mapFinRange
+
+section foldl
+variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+  {body : β → α → Circuit F β} {init : β} {constant : ConstantCircuits fun (t : β × α) => body t.1 t.2}
+  {const_out : Circuit.constant_output (fun (t : β × α) => body t.1 t.2)}
+
+@[circuit_norm ↓]
+lemma foldl.local_length_eq :
+    (foldl xs init body constant const_out).local_length n = m * (body default default).local_length := by
+  rw [foldl, FoldlM.local_length_eq, constant.local_length_eq (_, _)]
+
+@[circuit_norm ↓]
+lemma foldl.output_eq [NeZero m] :
+  (foldl xs init body constant const_out).output n =
+    (body default (xs[m-1]'(Nat.pred_lt (NeZero.ne m)))).output (n + (m-1)*(body default default).local_length) := by
+  rw [foldl, FoldlM.output_eq]
+  unfold FoldlM.prod
+  rw [constant.local_length_eq (default, default) 0]
+  set k := constant.local_length
+  have : m-1 < m := Nat.pred_lt (NeZero.ne m)
+  rw [const_out (_, xs[m-1])]
+  conv => lhs; lhs; intro acc i; rw [const_out (acc, _)]
+  rcases m with _ | m
+  · nomatch this
+  simp only [Fin.foldl_const, Fin.natCast_eq_last, Fin.val_last, add_tsub_cancel_right]
+
+@[circuit_norm ↓]
+lemma foldl.forAll [NeZero m] :
+  Operations.forAll n prop (foldl xs init body constant const_out |>.operations n) ↔
+    (body init (xs[0]'(NeZero.pos m)) |>.forAll n prop) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let k := (body default default).local_length;
+      let acc := (body default xs[i]).output (n + i*k);
+      (body acc xs[i + 1]).forAll (n + (i + 1)*k) prop := by
+  simp only [foldl, ←forAll_def]
+  rw [FoldlM.forAll_iff_const constant const_out]
+
+@[circuit_norm ↓]
+lemma foldl.soundness [NeZero m] :
+  constraints_hold.soundness env (foldl xs init body constant const_out |>.operations n) ↔
+    constraints_hold.soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      constraints_hold.soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [foldl, constraints_hold.soundness_iff_forAll']
+  rw [FoldlM.forAll_iff_const constant const_out]
+
+@[circuit_norm ↓]
+lemma foldl.completeness [NeZero m] :
+  constraints_hold.completeness env (foldl xs init body constant const_out |>.operations n) ↔
+    constraints_hold.completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let acc := (body default xs[i]).output (n + i*(body default default).local_length);
+      constraints_hold.completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).local_length)) := by
+  simp only [foldl, constraints_hold.completeness_iff_forAll']
+  rw [FoldlM.forAll_iff_const constant const_out]
+
+@[circuit_norm ↓]
+lemma foldl.uses_local_witnesses [NeZero m] :
+  env.uses_local_witnesses_completeness n (foldl xs init body constant const_out |>.operations n) ↔
+    env.uses_local_witnesses_completeness n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+    ∀ (i : ℕ) (hi : i + 1 < m),
+      let k := (body default default).local_length;
+      let acc := (body default xs[i]).output (n + i*k);
+      env.uses_local_witnesses_completeness (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
+  simp only [foldl, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  rw [FoldlM.forAll_iff_const constant const_out]
+end foldl
+
+end Circuit
