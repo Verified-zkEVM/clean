@@ -217,6 +217,16 @@ def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: â
   -- that would unnecessarily complicate reasoning about the assignment
   { assignment with vars }
 
+/--
+  The number of auxiliary cells in the final assignment
+-/
+def num_aux (assignment: CellAssignment W S) : â„• :=
+  assignment.vars.foldl (fun acc cell =>
+    match cell with
+    | .input _ => acc
+    | .aux _ => acc + 1
+  ) 0
+
 end CellAssignment
 
 /--

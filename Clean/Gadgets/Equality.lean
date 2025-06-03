@@ -8,38 +8,35 @@ variable {F : Type} [Field F]
 open Circuit (constraints_hold)
 
 namespace Gadgets
-def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := forM xs assert_zero
+def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assert_zero
 
 theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+  simp only [all_zero, circuit_norm]
   intro h_holds x hx
-  obtain ⟨_, h_holds⟩ := constraints_hold.forM_vector_soundness' h_holds x hx
-  exact h_holds
+  obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
+  exact h_holds ⟨i, hi⟩
 
 theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → constraints_hold.completeness env ((all_zero xs).operations offset) := by
-  intro h_holds
-  apply constraints_hold.forM_vector_completeness.mpr
-  intro x hx _ _
-  exact h_holds x hx
+  simp only [all_zero, circuit_norm]
+  intro h_holds i
+  exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
 def main {α : TypeMap} [LawfulProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
   let (x, y) := input
   let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
-  forM diffs assert_zero
+  .forEach diffs assert_zero
 
 @[reducible]
 instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
-  main := main
+  main
   local_length _ := 0
   output _ _ := ()
 
-  local_length_eq _ n := by
-    rw [main, Vector.forM_toList, Circuit.forM_local_length]
-    simp only [ConstantLawfulCircuits.local_length, zero_mul]
-
-  initial_offset_eq _ n := by simp only [main, LawfulCircuit.initial_offset_eq]
+  local_length_eq _ n := by simp only [main, circuit_norm, mul_zero]
+  initial_offset_eq _ n := by simp only [main, circuit_norm]
 
 def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (ProvablePair α α) where
   assumptions _ := True

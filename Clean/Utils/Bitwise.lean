@@ -5,6 +5,8 @@ import Clean.Utils.Field
 namespace Bitwise
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
+def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
+
 def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
   let high := x / (2^offset.val)
@@ -20,6 +22,12 @@ def rot_right64 (x : ℕ) (offset : ℕ) : ℕ :=
   let low := x % (2^offset)
   let high := x / (2^offset)
   low * (2^(64 - offset)) + high
+
+def rot_right32 (x : ℕ) (offset : ℕ) : ℕ :=
+  let offset := offset % 32
+  let low := x % (2^offset)
+  let high := x / (2^offset)
+  low * (2^(32 - offset)) + high
 
 def rot_left64 (value : ℕ) (left : Fin 64) : ℕ:=
   let right := (64 - left) % 64

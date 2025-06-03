@@ -430,12 +430,13 @@ def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
   -- the constraints hold
   constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
-structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β] extends ElaboratedCircuit F β α where
+structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
+  extends elaborated : ElaboratedCircuit F β α where
   -- β = inputs, α = outputs
   assumptions: β F → Prop
   spec: β F → α F → Prop
-  soundness: Soundness F inferInstance assumptions spec
-  completeness: Completeness F (α:=α) inferInstance assumptions
+  soundness: Soundness F elaborated assumptions spec
+  completeness: Completeness F elaborated assumptions
 
 namespace Circuit
 @[circuit_norm]
@@ -465,7 +466,7 @@ In other words, for `FormalAssertion`s the spec must be an equivalent reformulat
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
 -/
 structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
-extends ElaboratedCircuit F β unit where
+  extends ElaboratedCircuit F β unit where
   assumptions: β F → Prop
   spec: β F → Prop
 

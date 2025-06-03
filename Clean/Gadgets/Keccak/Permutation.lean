@@ -104,13 +104,12 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
       exact h_succ.left
   exact h_norm i hi'
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState where
-  assumptions
-  spec
-  soundness
+def circuit : FormalCircuit (F p) KeccakState KeccakState := {
+  elaborated with
+  assumptions, spec, soundness
   -- TODO why does this time out??
-  -- TODO: `inferInstance` in `FormalCircuit` might be slow, shouldn't be necessary in latest Lean
   -- completeness
   completeness := by simp only [completeness]
+}
 
 end Gadgets.Keccak256.Permutation

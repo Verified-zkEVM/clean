@@ -108,22 +108,12 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   clear two_and_field x_y_val x_y_z_val h_xor z_lt
 
-  -- rewrite the goal to the form `(2 * w).val = (2 * v).val`,
-  -- where we can prove `(2 * v).val = 2 * v.val`
-  have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
-  have p_large := p_large_enough.elim
+  -- crucial step: since 2 divides (2 * w).val, we can actually pull in .val
+  have two_mul_val : (2 * w).val = 2 * w.val := FieldUtils.mul_nat_val_of_dvd 2
+    (by linarith [p_large_enough.elim]) two_and
 
-  let v : F p := nat_to_field (x.val &&& y.val) (by linarith)
-  have v_val_eq : v.val = x.val &&& y.val := nat_to_field_eq v rfl
-  rw [←v_val_eq] at two_and ⊢
-  apply congrArg ZMod.val
-  rw [←mul_right_inj' two_non_zero]
-  apply ext
-  rw [two_and]
-
-  -- this is now easy
-  have rhs_lt : (2 : F p).val * v.val < p := by rw [v_val_eq, val_two]; linarith
-  rw [ZMod.val_mul_of_lt rhs_lt, val_two]
+  rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
+  exact two_and
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
