@@ -4,7 +4,10 @@ import Mathlib.Data.Nat.Bitwise
 
 namespace Utils.Rotation
 open Bitwise (rot_right64)
-
+/--
+  Our definition of right rotation of a 64-bit integer is equal to
+  the one provided by `BitVec.rotateRight`
+-/
 def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     rot_right64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
   simp only [rot_right64]
@@ -128,13 +131,19 @@ def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
 
     rw [h_eq3]
 
+/--
+  Alternative definicion of rot_right64 using bitwise operations.
+-/
 lemma rot_right64_def (x : ℕ) (off : ℕ) (hx : x < 2^64) :
     rot_right64 x off = x >>> (off % 64) ||| x <<< (64 - off % 64) % 2 ^ 64 := by
   rw [rot_right64_eq_bv_rotate _ hx]
   simp only [Nat.toUInt64_eq, BitVec.toNat_rotateRight, UInt64.toNat_toBitVec, UInt64.toNat_ofNat']
   rw [show x % 2^64 = x by apply Nat.mod_eq_of_lt hx]
 
-lemma rotright_64_off_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
+/--
+  The rotation operation is invariant when taking the offset modulo 64.
+-/
+lemma rot_right_64_off_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
     rot_right64 x off1 = rot_right64 x off2 := by
   simp only [rot_right64]
   rw [←h]
@@ -230,7 +239,10 @@ theorem from_bits_to_bits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
   apply to_bits_injective n (from_bits_lt _ h_bits) hx
   rw [to_bits_from_bits _ h_bits]
 
-
+/--
+  Testing a bit of the result of a rotation in the range [0, r % 64) is equivalent to testing
+  the bit of the original number in the range [i, r % 64 + i).
+-/
 lemma rot_right64_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 64) :
     (rot_right64 x r).testBit i = x.testBit (r % 64 + i) := by
   rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
@@ -240,6 +252,10 @@ lemma rot_right64_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 
   simp [h_i']
   omega
 
+/--
+  Testing a bit of the result of a rotation in the range [64 - r % 64, 64) is equivalent to
+  testing the bit of the original number in the range [i - (64 - r % 64), i).
+-/
 lemma rot_right64_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r % 64) :
     (rot_right64 x r).testBit i = (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
   rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
@@ -268,6 +284,9 @@ lemma rot_right64_testBit (x r i : ℕ) (h : x < 2^64) :
     repeat omega
 
 
+/--
+  The bits of the result of a rotation are the rotated bits of the input
+-/
 theorem rot_right64_to_bits (x r : ℕ) (h : x < 2^64):
     to_bits 64 (rot_right64 x r) = (to_bits 64 x).rotate r := by
   simp [to_bits, Vector.rotate]
@@ -286,7 +305,10 @@ theorem rot_right64_lt (x r : ℕ) (h : x < 2^64) :
   have := Nat.shiftRight_le x (r % 64)
   apply Nat.or_lt_two_pow <;> omega
 
-
+/--
+  Rotating a 64-bit value by `n` bits and then by `m` bits is the same
+  as rotating it by `n + m` bits.
+-/
 theorem rot_right64_composition (x n m : ℕ) (h : x < 2^64) :
     rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
   have h1 : (rot_right64 (rot_right64 x n) m) < 2^64 := by
