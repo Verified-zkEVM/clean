@@ -142,6 +142,12 @@ def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
 
     rw [h_eq3]
 
+lemma rot_right64_def (x : ℕ) (off : ℕ) (hx : x < 2^64) :
+    rot_right64 x off = x >>> (off % 64) ||| x <<< (64 - off % 64) % 2 ^ 64 := by
+  rw [rot_right64_eq_bv_rotate _ hx]
+  simp only [Nat.toUInt64_eq, BitVec.toNat_rotateRight, UInt64.toNat_toBitVec, UInt64.toNat_ofNat']
+  rw [show x % 2^64 = x by apply Nat.mod_eq_of_lt hx]
+
 lemma rot_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
     rot_right64 x off1 = rot_right64 x off2 := by
   simp only [rot_right64]
