@@ -1,5 +1,5 @@
 import Clean.Utils.Primes
-import Clean.Circuit.ExplicitCircuit
+import Clean.Circuit.Explicit
 import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Examples.AddOperations
 
