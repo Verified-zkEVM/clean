@@ -7,7 +7,7 @@ variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (rot_right32)
 -- TODO: Create necessary soundness theorems for Rotation32Bytes
-open Rotation32.Theorems (soundnessCase1)
+open Rotation32.Theorems (soundnessCase1 soundnessCase2)
 
 @[reducible]
 def Inputs (F : Type) := U32 F
@@ -87,7 +87,10 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (
 
   · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
     rw [h_x0, h_x1, h_x2, h_x3]
-    sorry
+    constructor
+    · exact soundnessCase2 x0 x1 x2 x3 as
+    · simp [U32.is_normalized]
+      tauto
 
   · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
     rw [h_x0, h_x1, h_x2, h_x3]
