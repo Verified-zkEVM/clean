@@ -9,8 +9,8 @@ it builds up a list of `Operation`s that represent the circuit at a low level.
 
 Concretely, a `Circuit` is a function `(offset : ℕ) → α × List (Operation F)` for some
 return type `α`. The monad is a mix of
-- a writer monad that accumulated the list of operations
-- a state monad that keeps track of the `offset`,
+- a writer monad that accumulates the list of operations
+- a state monad that keeps track of the offset,
   where the next offset is computed from the operations added in the previous step.
 
 ```
@@ -27,7 +27,10 @@ def circuit : Circuit F Unit := do
 -/
 def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
 
-def Circuit.bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
+namespace Circuit
+-- definition of the circuit monad
+
+def bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
   let (b, ops') := g (f n).1 (n + Operations.local_length (f n).2)
   (b, (f n).2 ++ ops')
@@ -37,14 +40,14 @@ instance : Monad (Circuit F) where
     let (a, ops) := circuit n
     (f a, ops)
   pure {α} (a : α) := fun _ => (a, [])
-  bind := Circuit.bind
+  bind := bind
 
 /--
 in proofs, we rewrite `bind` into a definition that is more efficient to
 reason about (because it avoids the duplicated `f n` term).
  -/
 @[circuit_norm]
-theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
+theorem bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
   f >>= g = fun n =>
     let (a, ops) := f n
     let (b, ops') := g a (n + Operations.local_length ops)
@@ -52,9 +55,10 @@ theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
 
 -- normalize `bind` to `>>=`
 @[circuit_norm]
-theorem Circuit.bind_normal {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
+theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
 
-namespace Circuit
+-- the results of a circuit: operations, output value and local length (which determines the next offset)
+
 @[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
   (circuit offset).2
@@ -108,6 +112,7 @@ def lookup (l: Lookup F) : Circuit F Unit := fun _ =>
 
 end Circuit
 
+/-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
@@ -245,6 +250,18 @@ def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
   -- the constraints hold
   constraints_hold.completeness env (circuit.main b_var |>.operations offset)
 
+/--
+`FormalCircuit` is the main object that encapsulates correctness of a circuit.
+
+It requires you to provide
+- a spec, which is a relationship between inputs and outputs
+- assumptions, which are the conditions that must hold for the circuit to make sense
+- a proof of _soundness_: assumptions ∧ constraints → spec, for any witnesses
+- a proof of _completeness_: assumptions → constraints, when using the correct witnesses
+
+Note that soundness and completeness, taken together, show that the spec will hold for _all_ inputs.
+This means that, when viewed as a black box, the circuit acts similar to a function.
+-/
 structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
   extends elaborated : ElaboratedCircuit F β α where
   -- β = inputs, α = outputs
@@ -272,10 +289,9 @@ end Circuit
 - it doesn't return anything
 - by design, it is not complete: it further constrains its inputs
 
-The notion of _soundness_ is the same as for `FormalCircuit`: some `assumptions` + constraints imply a `spec`.
+The notion of _soundness_ is the same as for `FormalCircuit`: assumptions ∧ constraints → spec.
 
-However, the _completeness_ statement is weaker:
-If both the assumptions AND the spec are true, then the constraints hold.
+However, the _completeness_ statement is weaker: assumptions ∧ spec → constraints.
 
 In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
 (In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
@@ -359,14 +375,10 @@ def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
 -- `circuit_norm` attributes
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
--- attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
   Functor.map StateT.map
--- attribute [circuit_norm] monadLift MonadLift.monadLift
---   tell WriterT.mk WriterT.monad WriterT.liftTell
---   EmptyCollection.emptyCollection
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
