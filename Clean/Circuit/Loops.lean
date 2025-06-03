@@ -254,13 +254,38 @@ theorem foldlAcc_const (h_const_out : Circuit.constant_output fun (t : β × α)
   (i : ℕ) (hi : i < m) :
   foldlAcc n xs circuit init ⟨ i, hi ⟩ = match i with
     | 0 => init
-    | i + 1 => (circuit default xs[i]).output (n + i*(circuit default default).local_length) := by
+    | i + 1 => (circuit default xs[i]).output (n + i * (circuit default default).local_length) := by
   rcases i with _ | i
   · simp [foldlAcc]
   · rw [foldlAcc_const_succ h_const_out]
 
-theorem forAll_iff_const (h_const_out : Circuit.constant_output (prod circuit)) [NeZero m]
-    (constant : ConstantCircuits (prod circuit)) :
+theorem operations_eq_const [NeZero m] (constant : ConstantCircuits (prod circuit))
+    (h_const_out : Circuit.constant_output (prod circuit)) :
+  (Vector.foldlM circuit init xs).operations n =
+  (circuit init (xs[0]'(NeZero.pos m))).operations n ++
+  (List.ofFn fun (⟨i, _⟩ : Fin (m - 1)) =>
+    let k := (circuit default default).local_length
+    let acc := (circuit default xs[i]).output (n + i*k)
+    (circuit acc xs[i + 1]).operations (n + (i + 1)*k)).flatten := by
+  rw [operations_eq]
+  simp only
+  set k := (circuit default default).local_length
+  set k' := constant.local_length
+  have : k' = k := by simp only [k]; rw [constant.local_length_eq (_, _)]
+  rw [this]
+  rcases m with rfl | m
+  · nomatch ‹NeZero 0›
+  rw [List.ofFn_succ, List.flatten_cons]
+  simp only [foldlAcc_zero, Fin.val_zero, zero_mul, add_zero, Fin.val_succ, add_mul, one_mul,
+    add_tsub_cancel_right, Nat.add_one_sub_one, Fin.cast_eq_self, List.append_cancel_left_eq]
+  congr
+  funext i
+  rcases i with ⟨ i, hi ⟩
+  simp only [Fin.succ_mk]
+  rw [foldlAcc_const_succ h_const_out]
+
+theorem forAll_iff_const [NeZero m] (constant : ConstantCircuits (prod circuit))
+    (h_const_out : Circuit.constant_output (prod circuit)) :
   (xs.foldlM circuit init).forAll n prop ↔
   (circuit init (xs[0]'(NeZero.pos m))).forAll n prop ∧
   ∀ (i : ℕ) (hi : i + 1 < m),
