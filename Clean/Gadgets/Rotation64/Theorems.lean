@@ -245,7 +245,7 @@ theorem from_bits_to_bits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
   rw [to_bits_from_bits _ h_bits]
 
 
-lemma rotateRight_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 64) :
+lemma rot_right64_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 64) :
     (rot_right64 x r).testBit i = x.testBit (r % 64 + i) := by
   rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
     Nat.testBit_shiftLeft]
@@ -254,7 +254,7 @@ lemma rotateRight_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 
   simp [h_i']
   omega
 
-lemma rotateRight_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r % 64) :
+lemma rot_right64_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r % 64) :
     (rot_right64 x r).testBit i = (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
   rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
   suffices (x >>> (r % 64)).testBit i = false by
@@ -269,26 +269,26 @@ lemma rotateRight_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r 
     omega
   linarith
 
-lemma rotateRight_testBit (x r i : ℕ) (h : x < 2^64) :
+lemma rot_right64_testBit (x r i : ℕ) (h : x < 2^64) :
     (rot_right64 x r).testBit i =
     if i < 64 - r % 64 then
       x.testBit (r % 64 + i)
     else (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
 
   split
-  · rw [rotateRight_testBit_of_lt]
+  · rw [rot_right64_testBit_of_lt]
     repeat omega
-  · rw [rotateRight_testBit_of_ge]
+  · rw [rot_right64_testBit_of_ge]
     repeat omega
 
 
-theorem rotateRight64_to_bits (x r : ℕ) (h : x < 2^64):
+theorem rot_right64_to_bits (x r : ℕ) (h : x < 2^64):
     to_bits 64 (rot_right64 x r) = (to_bits 64 x).rotate r := by
   simp [to_bits, Vector.rotate]
   ext i hi
   · simp
   simp at ⊢ hi
-  rw [rotateRight_testBit]
+  rw [rot_right64_testBit]
   simp [List.getElem_rotate, hi]
   split <;> (congr; omega)
   linarith
@@ -316,9 +316,9 @@ theorem rot_right_composition (x n m : ℕ) (h : x < 2^64) :
     exact to_bits_injective 64 h1 h2 this
 
   -- rewrite rotation over bits
-  rw [rotateRight64_to_bits _ _ h,
-    rotateRight64_to_bits _ _ (by apply rot_right64_lt; assumption),
-    rotateRight64_to_bits _ _ h]
+  rw [rot_right64_to_bits _ _ h,
+    rot_right64_to_bits _ _ (by apply rot_right64_lt; assumption),
+    rot_right64_to_bits _ _ h]
 
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
