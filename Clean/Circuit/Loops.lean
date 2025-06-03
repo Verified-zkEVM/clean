@@ -140,6 +140,64 @@ theorem mapFinRangeM_forAll_iff {circuit : Fin m → Circuit F β} [constant : C
   simp only [Vector.getElem_finRange]
 end MapM
 
+namespace FoldlM
+variable {env : Environment F} {prop : Operations.Condition F} {xs : Vector α m}
+  {body : β → α → Circuit F β} {init : β} {constant : ConstantCircuits fun (t : β × α) => body t.1 t.2}
+
+lemma foldlM_cons (x: α) :
+  (Vector.cons x xs).foldlM body init = (do
+    let init' ← body init x
+    xs.foldlM body init') := by
+  rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+  simp only [←Vector.foldlM_toList]
+
+theorem local_length_eq :
+    (xs.foldlM body init).local_length n = m * constant.local_length := by
+  induction xs using Vector.induct generalizing init n
+  case nil => rw [zero_mul]; rfl
+  case cons x xs ih =>
+    rw [foldlM_cons, bind_local_length_eq, ih, constant.local_length_eq (init, x)]
+    ring
+
+lemma finFoldl_cons_succ (x: α) :
+  Fin.foldl (m + 1) (fun acc i => (body acc (Vector.cons x xs)[i.val]).output (n + i * constant.local_length)) init
+    = Fin.foldl m (fun acc i => (body acc xs[i.val]).output (n + constant.local_length + i * constant.local_length)) ((body init x).output n) := by
+  set k := constant.local_length
+  rw [Fin.foldl_succ]
+  simp only [Fin.val_succ, Fin.val_zero, zero_mul, add_zero]
+  congr
+  funext acc i
+  rw [add_mul, add_assoc, add_comm k]
+  simp [Vector.cons]
+
+theorem output_eq :
+  (xs.foldlM body init).output n =
+    Fin.foldl m (fun acc i => (body acc xs[i.val]).output (n + i * constant.local_length)) init := by
+  induction xs using Vector.induct generalizing init n
+  case nil => rfl
+  case cons x xs ih =>
+    rw [foldlM_cons, bind_output_eq, ih, constant.local_length_eq (init, x), finFoldl_cons_succ]
+
+variable [Inhabited β] [Inhabited α]
+
+def foldlAcc (n : ℕ) (xs : Vector α m) (body : β → α → Circuit F β) (init : β) (j : Fin m) : β :=
+  Fin.foldl j (fun acc i => (body acc xs[i.val]).output (n + i*(body default default).local_length)) init
+
+lemma foldlAcc_zero [NeZero m] : foldlAcc n xs body init 0 = init := by
+  simp [foldlAcc, Fin.foldl_zero]
+
+lemma foldlAcc_cons_succ (i : Fin m) (x : α) [constant : ConstantCircuits fun (t : β × α) => body t.1 t.2] :
+  foldlAcc n (Vector.cons x xs) body init i.succ =
+    foldlAcc (n + (body init x).local_length n) xs body ((body init x).output n) i := by
+  rw [constant.local_length_eq (init, x), ←constant.local_length_eq (default, default) 0]
+  simp only [foldlAcc]
+  simp only [Fin.val_succ, Vector.cons, Vector.getElem_mk, List.getElem_toArray, Fin.foldl_succ,
+    List.getElem_cons_succ, Array.getElem_toList, Vector.getElem_toArray, add_mul, one_mul,
+    Fin.val_zero, List.getElem_cons_zero, zero_mul, add_zero]
+  ac_rfl
+
+end FoldlM
+
 def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
     (_constant : ConstantCircuits body := by infer_constant_circuits) : Circuit F Unit :=
   xs.forM body
