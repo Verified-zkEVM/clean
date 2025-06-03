@@ -245,6 +245,31 @@ theorem from_bits_to_bits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
   rw [to_bits_from_bits _ h_bits]
 
 
+lemma rotateRight_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 64) :
+    (rot_right64 x r).testBit i = x.testBit (r % 64 + i) := by
+  rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
+    Nat.testBit_shiftLeft]
+  have h_i : 64 - r % 64 ≤ 64 := by apply Nat.sub_le
+  have h_i' : i < 64 := by linarith
+  simp [h_i']
+  omega
+
+lemma rotateRight_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r % 64) :
+    (rot_right64 x r).testBit i = (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
+  rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
+  suffices (x >>> (r % 64)).testBit i = false by
+    simp [this]
+    by_cases h : i < 64 <;> simp [h]; omega
+
+  simp only [Nat.testBit_shiftRight]
+  apply Nat.testBit_lt_two_pow
+  have : 2^64 ≤ 2^(r % 64 + i) := by
+    apply Nat.pow_le_pow_right
+    · linarith
+    omega
+  linarith
+
+
 lemma rotateRight_rotateRight {w : ℕ} (x : BitVec w) (n m : ℕ):
     (x.rotateRight n).rotateRight m = x.rotateRight (n + m) := by
   nth_rw 1 [←BitVec.rotateRight_mod_eq_rotateRight]
