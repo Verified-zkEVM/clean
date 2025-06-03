@@ -1,9 +1,11 @@
 import Clean.Utils.Bitwise
 import Clean.Utils.Vector
 import Mathlib.Data.Nat.Bitwise
+import Clean.Utils.Bits
 
 namespace Utils.Rotation
 open Bitwise (rot_right64)
+open Bits (to_bits to_bits_injective)
 /--
   Our definition of right rotation of a 64-bit integer is equal to
   the one provided by `BitVec.rotateRight`
