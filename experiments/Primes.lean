@@ -2,14 +2,36 @@
 -- define prime numbers, prove enough basic theorems
 -- to show the numbers 0,...,p-1 for p prime are a field
 
+import Mathlib.Data.Nat.GCD.Basic
+
 def prime (p : Nat) :=
   (p ≠ 0) ∧ (p ≠ 1) ∧
   ∀ x : Nat, (x ∣ p) → (x = 1) ∨ (x = p)
 
--- TODO: show that this is equivalent to prime
 def prime' (p : Nat) :=
   (p ≠ 0) ∧ (p ≠ 1) ∧
   ∀ a b : Nat, (p ∣ a*b) → (p ∣ a) ∨ (p ∣ b)
+
+theorem prime_eq_prime' : ∀ p : ℕ, prime p ↔ prime' p := by
+  intro p
+  constructor
+  · rintro ⟨pz, p1, h⟩
+    exact ⟨pz, p1, fun a b hab =>
+      if pa : p ∣ a then .inl pa else
+        match h (Nat.gcd p a) (Nat.gcd_dvd_left _ _) with
+        | .inl h1 => .inr (Nat.Coprime.dvd_of_dvd_mul_left h1 hab)
+        | .inr h2 => absurd (h2 ▸ Nat.gcd_dvd_right _ _) pa⟩
+  · rintro ⟨pz, p1, h⟩
+    exact ⟨pz, p1, fun x ⟨k, pk⟩ =>
+      match h x k (by rw [pk]) with
+      | .inl px => .inr (Nat.dvd_antisymm ⟨k, pk⟩ px)
+      | .inr ⟨m, km⟩ =>
+        have p_pos := Nat.pos_of_ne_zero pz
+        have : x * m * p = 1 * p := by rw [Nat.mul_assoc, Nat.mul_comm m p, ←km, pk, Nat.one_mul]
+        .inl (Nat.eq_one_of_mul_eq_one_right (Nat.eq_of_mul_eq_mul_right p_pos this))⟩
+
+noncomputable def prime_def_eq_prime'_def : prime = prime' :=
+  funext (fun p => propext (prime_eq_prime' p))
 
 structure Prime where
   val : Nat
