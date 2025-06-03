@@ -61,7 +61,34 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) Inputs Outputs where
     repeat rfl
 
 theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (spec off) := by
-  sorry
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
+
+  have h_x0 : x0_var.eval env = x0 := by injections h_inputs
+  have h_x1 : x1_var.eval env = x1 := by injections h_inputs
+  have h_x2 : x2_var.eval env = x2 := by injections h_inputs
+  have h_x3 : x3_var.eval env = x3 := by injections h_inputs
+  clear h_inputs
+  clear h
+
+  dsimp only [assumptions, U32.is_normalized] at as
+  fin_cases off
+  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
+    rw [h_x0, h_x1, h_x2, h_x3]
+    simp [U32.value, rot_right32, Nat.mod_one]
+    simp [U32.is_normalized]
+    tauto
+
+  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
+    rw [h_x0, h_x1, h_x2, h_x3]
+    sorry
+
+  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
+    rw [h_x0, h_x1, h_x2, h_x3]
+    sorry
+
+  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
+    rw [h_x0, h_x1, h_x2, h_x3]
+    sorry
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
