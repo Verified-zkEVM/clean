@@ -173,11 +173,11 @@ open ExplicitCircuit in
 def ConstantExplicitCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (explicit : ∀ a, ExplicitCircuit (circuit a))
   (h_length : ∀ a n, (explicit a).local_length n = (explicit default).local_length 0) : ConstantExplicitCircuits circuit where
   output a n := ExplicitCircuit.output (circuit a) n
-  local_length := (circuit default).local_length 0
+  local_length := ExplicitCircuit.local_length (circuit default) 0
   operations a n := ExplicitCircuit.operations (circuit a) n
 
   output_eq a n := ExplicitCircuit.output_eq n
-  local_length_eq a n := by rw [h_length]
+  local_length_eq a n := by rw [local_length_eq, h_length]
   operations_eq a n := ExplicitCircuit.operations_eq n
 
 syntax "infer_constant_explicit_circuits" : tactic
@@ -203,7 +203,8 @@ example :
   ConstantExplicitCircuits add := by infer_constant_explicit_circuits
 end
 
-attribute [lawful_norm] ExplicitCircuit.local_length ExplicitCircuit.operations ExplicitCircuit.output ConstantCircuit.local_length
-attribute [lawful_norm] ConstantExplicitCircuits.output ConstantCircuits.local_length ConstantExplicitCircuits.operations
+attribute [lawful_norm] ExplicitCircuit.local_length ExplicitCircuit.operations ExplicitCircuit.output
+attribute [lawful_norm] ConstantCircuit.local_length ConstantExplicitCircuit.output ConstantExplicitCircuit.operations
+attribute [lawful_norm] ConstantCircuits.local_length ConstantExplicitCircuits.output ConstantExplicitCircuits.operations
   ConstantExplicitCircuits.from_constant_length id_eq
 attribute [lawful_norm] ElaboratedCircuit.local_length ElaboratedCircuit.output
