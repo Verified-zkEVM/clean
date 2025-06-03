@@ -13,7 +13,7 @@ variable {F: Type} [Field F]
 namespace Operations
 
 @[circuit_norm]
-theorem local_length_append {a b: Operations F} :
+theorem append_local_length {a b: Operations F} :
     (a ++ b).local_length = a.local_length + b.local_length := by
   induction a using induct with
   | empty => ac_rfl
@@ -39,7 +39,7 @@ theorem pure_local_length_eq (a : α) (n : ℕ) :
 theorem bind_local_length_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
     (f >>= g).local_length n = f.local_length n + (g (f.output n)).local_length (n + f.local_length n) := by
   show (f.operations n ++ (g _).operations _).local_length = _
-  rw [Operations.local_length_append]
+  rw [Operations.append_local_length]
 
 theorem map_local_length_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
   (g <$> f).local_length n = f.local_length n := rfl
@@ -54,8 +54,8 @@ theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
   (g <$> f).output n = g (f.output n) := rfl
 
 /-- Extensionality theorem -/
-theorem ext_iff {circuit1 circuit2 : Circuit F α} :
-  (circuit1 = circuit2) ↔ (∀ n, (circuit1.output n = circuit2.output n) ∧ (circuit1.operations n = circuit2.operations n)) := by
+theorem ext_iff {f g : Circuit F α} :
+  (f = g) ↔ (∀ n, (f.output n = g.output n) ∧ (f.operations n = g.operations n)) := by
   constructor
   · intro h; subst h; intros; trivial
   intro h
@@ -65,12 +65,11 @@ theorem ext_iff {circuit1 circuit2 : Circuit F α} :
   · exact (h n).right
 
 @[ext]
-theorem ext {circuit1 circuit2 : Circuit F α}
-  (h_output : ∀ n, circuit1.output n = circuit2.output n)
-  (h_operations : ∀ n, circuit1.operations n = circuit2.operations n) :
-    circuit1 = circuit2 := by
-  rw [ext_iff]
-  exact fun n => ⟨ h_output n, h_operations n ⟩
+theorem ext {f g : Circuit F α}
+  (h_output : ∀ n, f.output n = g.output n)
+  (h_operations : ∀ n, f.operations n = g.operations n) :
+    f = g :=
+  ext_iff.mpr fun n => ⟨ h_output n, h_operations n ⟩
 
 -- lawful monad
 
