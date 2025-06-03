@@ -93,7 +93,7 @@ theorem from_bits_to_bits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
 
 
 
-variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
+variable {p : ℕ} [prime: Fact p.Prime]
 
 -- definitions
 
@@ -108,7 +108,6 @@ def field_from_bits_expr {n: ℕ} (bits : Vector (Expression (F p)) n) : Express
 
 -- theorems
 
-omit p_large_enough in
 /-- evaluation commutes with bits accumulation -/
 theorem field_from_bits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
     eval (field_from_bits_expr bits) = field_from_bits (bits.map eval) := by
@@ -124,7 +123,6 @@ theorem field_from_bits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector 
     symm
     rw [ZMod.cast_id]
 
-omit p_large_enough in
 /-- main lemma which establishes the behaviour of `field_from_bits` and `field_to_bits` by induction -/
 lemma field_to_bits_field_from_bits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
@@ -166,13 +164,15 @@ theorem field_to_bits_field_from_bits {n: ℕ} (hn : 2^n < p) (bits : Vector (F 
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     field_to_bits n (field_from_bits bits) = bits := (field_to_bits_field_from_bits_aux hn bits h_bits).right
 
-omit p_large_enough in
 /-- on numbers less than `2^n`, `field_to_bits n` is injective -/
 theorem field_to_bits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2^n →
     field_to_bits n x = field_to_bits n y → x = y := by
   intro hx hy h_eq
+  simp only [field_to_bits] at h_eq
   rw [Vector.ext_iff] at h_eq
-  simp only [field_to_bits, Vector.getElem_mapRange] at h_eq
+  simp only [to_bits, Vector.getElem_map, Vector.getElem_mapRange, Nat.cast_ite, Nat.cast_one,
+    Nat.cast_zero] at h_eq
+
   have h_eq' : ∀ i (hi : i < n), x.val.testBit i = y.val.testBit i := by
     intro i hi
     specialize h_eq i hi
@@ -193,7 +193,9 @@ theorem field_to_bits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2
 theorem field_from_bits_field_to_bits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
     field_from_bits (field_to_bits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (field_to_bits n x)[i] = 0 ∨ (field_to_bits n x)[i] = 1 := by
-    intro i hi; simp [field_to_bits]
+    intro i hi
+    simp [field_to_bits, to_bits]
+
   apply field_to_bits_injective n (field_from_bits_lt hn _ h_bits) hx
   rw [field_to_bits_field_from_bits hn _ h_bits]
 

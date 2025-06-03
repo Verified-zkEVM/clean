@@ -61,7 +61,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     constructor
     · intro i
       rw [h_bits i]
-      simp [field_to_bits]
+      simp [field_to_bits, to_bits]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
 
