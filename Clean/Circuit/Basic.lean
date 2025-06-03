@@ -54,9 +54,6 @@ theorem Circuit.bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
 @[circuit_norm]
 theorem Circuit.bind_normal {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
 
-instance : Monoid (List α) := inferInstanceAs (Monoid (FreeMonoid _))
-instance : LawfulMonad (Circuit F) := by sorry --inferInstanceAs (LawfulMonad (WriterT (List _) (StateM ℕ)))
-
 namespace Circuit
 @[reducible, circuit_norm]
 def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=

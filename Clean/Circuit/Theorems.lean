@@ -76,6 +76,31 @@ theorem ext {circuit1 circuit2 : Circuit F α}
   rw [ext_iff]
   exact fun n => ⟨ h_output n, h_operations n ⟩
 
+-- lawful monad
+
+instance : LawfulMonad (Circuit F) where
+  bind_pure_comp {α β} (g : α → β) (f : Circuit F α) := by
+    simp only [bind_def, Functor.map, List.append_nil]
+  bind_map {α β} (g : Circuit F (α → β)) (f : Circuit F α) := rfl
+  pure_bind {α β} (x : α) (f : α → Circuit F β) := by
+    simp only [bind_def, pure, List.nil_append]; rfl
+  bind_assoc {α β γ} (x : Circuit F α) (f : α → Circuit F β) (g : β → Circuit F γ) := by
+    ext1 n
+    · simp only [bind_output_eq, bind_local_length_eq, add_assoc]
+    · simp only [bind_operations_eq, bind_local_length_eq, bind_output_eq,
+        List.append_assoc, add_assoc]
+  map_const := rfl
+  id_map {α} (f : Circuit F α) := rfl
+  seqLeft_eq {α β} (f : Circuit F α) (g : Circuit F β) := by
+    funext n
+    simp only [SeqLeft.seqLeft, bind, List.append_nil, Seq.seq]
+    rfl
+  seqRight_eq {α β} (f : Circuit F α) (g : Circuit F β) := by
+    funext n
+    simp only [SeqRight.seqRight, bind, Seq.seq]
+    rfl
+  pure_seq {α β} (g : α → β) (f : Circuit F α) := rfl
+
 /--
 Soundness theorem which proves that we can replace constraints in subcircuits
 with their `soundness` statement.
