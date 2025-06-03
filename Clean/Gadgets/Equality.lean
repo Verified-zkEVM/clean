@@ -97,12 +97,12 @@ lemma elaborated_eq (α : TypeMap) [LawfulProvableType α] : (circuit α (F:=F))
 @[circuit_norm]
 theorem soundness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).soundness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit, forall_const]
+  simp only [subcircuit_norm, circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).completeness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit, true_and]
+  simp only [subcircuit_norm, circuit_norm, circuit]
 
 end Equality
 end Gadgets

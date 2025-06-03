@@ -272,6 +272,12 @@ def witness_vars (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (
     let vars := Vector.mapRange n fun i => ⟨ ops.offset + i ⟩
     ⟨vars, .witness ops n compute⟩
 
+@[circuit_norm]
+def witness_vector (n: ℕ) (compute : Environment F → Vector F n) : Circuit F (Vector (Expression F) n) :=
+  modifyGet fun ops =>
+    let vars := var_from_offset (fields n) ops.offset
+    ⟨vars, .witness ops n compute⟩
+
 /-- Add a constraint. -/
 @[circuit_norm]
 def assert_zero (e: Expression F) : Circuit F Unit :=
@@ -341,15 +347,11 @@ Version of `constraints_hold` that replaces the statement of subcircuits with th
 def constraints_hold.soundness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold.soundness eval ops
-  | .assert ops e =>
-    let constraint := eval e = 0
-    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
+  | .assert ops e => constraints_hold.soundness eval ops ∧ eval e = 0
   | .lookup ops { table, entry, .. } =>
-    let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
+    constraints_hold.soundness eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    let constraint := s.soundness eval
-    if let .empty m := ops then constraint else (constraints_hold.soundness eval ops ∧ constraint)
+    constraints_hold.soundness eval ops ∧ s.soundness eval
 
 /--
 Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
@@ -358,16 +360,11 @@ Version of `constraints_hold` that replaces the statement of subcircuits with th
 def constraints_hold.completeness {n : ℕ} (eval : Environment F) : Operations F n → Prop
   | .empty _ => True
   | .witness ops _ _ => constraints_hold.completeness eval ops
-  | .assert ops e =>
-    let constraint := eval e = 0
-    -- avoid a leading `True ∧` if ops is empty
-    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+  | .assert ops e => constraints_hold.completeness eval ops ∧ eval e = 0
   | .lookup ops { table, entry, .. } =>
-    let constraint := table.contains (entry.map eval)
-    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+    constraints_hold.completeness eval ops ∧ table.contains (entry.map eval)
   | .subcircuit ops s =>
-    let constraint := s.completeness eval
-    if let .empty m := ops then constraint else (constraints_hold.completeness eval ops ∧ constraint)
+    constraints_hold.completeness eval ops ∧ s.completeness eval
 end Circuit
 
 section
@@ -509,7 +506,7 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F)
 end Circuit
 end
 
-export Circuit (witness_var witness witness_vars assert_zero lookup)
+export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
 
 /-- move from inductive (nested) operations back to flat operations -/
 def to_flat_operations {n: ℕ} : Operations F n → List (FlatOperation F)
@@ -529,11 +526,6 @@ inductive Operation (F : Type) [Field F] where
   | subcircuit : {n : ℕ} → SubCircuit F n → Operation F
 
 namespace Operation
-def added_witness : Operation F → ℕ
-  | witness m _ => m
-  | subcircuit s => s.local_length
-  | _ => 0
-
 instance [Repr F] : Repr (Operation F) where
   reprPrec op _ := match op with
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
@@ -603,6 +595,9 @@ def Operations.forAll (condition : Operations.Condition F) : {n : ℕ} → Opera
   | n, .lookup ops l => ops.forAll condition ∧ condition.lookup n l
   | n + _, .subcircuit ops s => ops.forAll condition ∧ condition.subcircuit n s
 
+theorem Operations.forAll_empty {condition : Operations.Condition F} {n: ℕ} :
+    Operations.forAll condition (.empty n) = True := rfl
+
 -- `circuit_norm` attributes
 
 -- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
@@ -610,6 +605,9 @@ attribute [circuit_norm] bind StateT.bind
 attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 attribute [circuit_norm] pure StateT.pure
 attribute [circuit_norm] StateT.run
+
+-- basic logical simplifcations
+attribute [circuit_norm] true_and and_true true_implies forall_const
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form
