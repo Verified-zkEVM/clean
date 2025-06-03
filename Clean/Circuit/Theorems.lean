@@ -19,6 +19,24 @@ theorem append_local_length {a b: Operations F} :
   | empty => ac_rfl
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all +arith [local_length, ih]
+
+@[circuit_norm]
+theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
+
+@[circuit_norm]
+theorem forAll_cons {condition : Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
+  forAll offset condition (op :: ops) ↔
+    condition.apply offset op ∧ forAll (op.local_length + offset) condition ops := by
+  cases op <;> simp [forAll, Operation.local_length, Condition.apply]
+
+@[circuit_norm]
+theorem forAll_append {condition : Condition F} {offset: ℕ} {as bs: Operations F} :
+  forAll offset condition (as ++ bs) ↔
+    forAll offset condition as ∧ forAll (as.local_length + offset) condition bs := by
+  induction as using induct generalizing offset with
+  | empty => simp [forAll_empty, local_length]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp +arith only [List.cons_append, forAll, local_length, ih, and_assoc]
 end Operations
 
 namespace Circuit

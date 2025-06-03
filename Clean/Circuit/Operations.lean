@@ -236,24 +236,6 @@ def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
   | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.local_length + offset) condition ops
 
-@[circuit_norm]
-theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
-
-@[circuit_norm]
-theorem forAll_cons {condition : Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
-  forAll offset condition (op :: ops) ↔
-    condition.apply offset op ∧ forAll (op.local_length + offset) condition ops := by
-  cases op <;> simp [forAll, Operation.local_length, Condition.apply]
-
-@[circuit_norm]
-theorem forAll_append {condition : Condition F} {offset: ℕ} {as bs: Operations F} :
-  forAll offset condition (as ++ bs) ↔
-    forAll offset condition as ∧ forAll (as.local_length + offset) condition bs := by
-  induction as using induct generalizing offset with
-  | empty => simp [forAll_empty, local_length]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp +arith only [List.cons_append, forAll, local_length, ih, and_assoc]
-
 /--
 Subcircuits start at the same variable offset that the circuit currently is.
 In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
