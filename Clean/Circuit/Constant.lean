@@ -19,6 +19,11 @@ class ConstantCircuits (circuit : α → Circuit F β) where
   local_length : ℕ
   local_length_eq : ∀ (a : α) (n : ℕ), (circuit a).local_length n = local_length := by intro _ _; rfl
 
+-- circuit with _output_ not depending on the input.
+@[circuit_norm]
+def Circuit.constant_output (circuit : α → Circuit F β) [Inhabited α] :=
+  ∀ (x : α) (n : ℕ), (circuit x).output n = (circuit default).output n
+
 -- `pure` is a constant circuit
 instance ConstantCircuit.from_pure {a : α} : ConstantCircuit (pure a : Circuit F α) where
   local_length := 0
@@ -94,6 +99,3 @@ example :
 
   ConstantCircuits add := by infer_constant_circuits
 end
-
-def Circuit.constant_output (circuit : α → Circuit F β) [Inhabited α] :=
-  ∀ (x : α) (n : ℕ), (circuit x).output n = (circuit default).output n
