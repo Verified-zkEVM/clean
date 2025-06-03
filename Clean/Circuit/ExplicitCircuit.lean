@@ -1,8 +1,10 @@
 /-
 This file introduces `ExplicitCircuit`, a variant of `ElaboratedCircuit` that can be auto-derived
-using the `infer_explicit_circuit` tactic.
+using the `infer_explicit_circuit(s)` tactic.
+
 This could be useful to simplify circuit statements with less user intervention.
 -/
+
 import Clean.Circuit.Constant
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
@@ -26,7 +28,9 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   local_length_eq : ∀ (a : α) (n: ℕ), (circuit a).local_length n = local_length a n := by intro _ _; rfl
   operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
 
-instance ExplicitCircuits.from_explicit {circuit : α → Circuit F β} (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
+-- move between family and single explicit circuit
+
+instance ExplicitCircuits.from_single {circuit : α → Circuit F β} (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
   output a n := (explicit a).output n
   local_length a n := (explicit a).local_length n
   operations a n := (explicit a).operations n
@@ -34,7 +38,6 @@ instance ExplicitCircuits.from_explicit {circuit : α → Circuit F β} (explici
   local_length_eq a n := (explicit a).local_length_eq n
   operations_eq a n := (explicit a).operations_eq n
 
--- lower `ExplicitCircuits` to `ExplicitCircuit`
 instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
   output n := output circuit a n
   local_length n := explicit.local_length a n
@@ -42,28 +45,6 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [ex
   output_eq n := output_eq a n
   local_length_eq n := local_length_eq a n
   operations_eq n := operations_eq a n
-
--- slightly stronger variant: ExplicitCircuit with a fixed local length
-class ConstantExplicitCircuit (circuit : Circuit F α) extends ConstantCircuit circuit where
-  output : ℕ → α
-  operations : ℕ → Operations F
-  output_eq : ∀ n: ℕ, circuit.output n = output n := by intro _; rfl
-  operations_eq : ∀ n: ℕ, circuit.operations n = operations n := by intro _; rfl
-
-instance ConstantExplicitCircuit.toExplicitCircuit (circuit : Circuit F α) [constant: ConstantExplicitCircuit circuit] : ExplicitCircuit circuit where
-  output := constant.output
-  local_length _ := constant.local_length
-  operations := constant.operations
-  output_eq := output_eq
-  local_length_eq := constant.local_length_eq
-  operations_eq := operations_eq
-
--- indexed family of explicit circuits that all share the same local length
-class ConstantExplicitCircuits (circuit : α → Circuit F β) extends ConstantCircuits circuit where
-  output : α → ℕ → β
-  operations : α → ℕ → Operations F
-  output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
-  operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
 
 -- `pure` is a (constant) explicit circuit
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
@@ -144,18 +125,6 @@ instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input
   local_length _ := circuit.local_length input
   operations n := [.subcircuit (circuit.to_subcircuit n input)]
 
--- lower `ConstantExplicitCircuits` to `ConstantExplicitCircuit`
-instance ConstantExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [explicit : ConstantExplicitCircuits circuit] : ConstantExplicitCircuit (circuit a) where
-  output n := output circuit a n
-  local_length := explicit.local_length
-  operations n := operations circuit a n
-  output_eq := output_eq a
-  local_length_eq := (ConstantCircuits.to_single circuit a).local_length_eq
-  operations_eq := operations_eq a
-
-instance ExplicitCircuit.from_constants {circuit : α → Circuit F β} (explicit : ConstantExplicitCircuits circuit) (a : α) :
-    ExplicitCircuit (circuit a) := ConstantExplicitCircuits.to_single circuit a |>.toExplicitCircuit
-
 syntax "infer_explicit_circuit" : tactic
 
 macro_rules
@@ -171,12 +140,15 @@ macro_rules
     )))
 
 syntax "infer_explicit_circuits" : tactic
+
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
-    apply ExplicitCircuits.from_explicit (by infer_explicit_circuit)))
+    apply ExplicitCircuits.from_single (by infer_explicit_circuit)))
 
 -- this tactic is pretty good at inferring explicit circuits!
 section
+
+-- single
 example : ExplicitCircuit (witness (fun _ => (0 : F))) := by infer_explicit_circuit
 
 example :
@@ -188,40 +160,9 @@ example :
     pure z
 
   ExplicitCircuit add := by infer_explicit_circuit
-end
 
--- `ConstantExplicitCircuit(s)` can be proved from `ExplicitCircuit` by adding the requirement that `final_offset` is `n` plus a constant.
--- the latter can usually be proved by rfl!
-def ConstantExplicitCircuit.from_constant_length {circuit : Circuit F α} (explicit : ExplicitCircuit circuit)
-  (h_length : ∀ n, circuit.local_length n = circuit.local_length 0) : ConstantExplicitCircuit circuit where
-  output n := explicit.output n
-  local_length := circuit.local_length 0
-  operations n := explicit.operations n
-  output_eq n := explicit.output_eq n
-  local_length_eq := h_length
-  operations_eq n := explicit.operations_eq n
-
-def ConstantExplicitCircuits.from_constant_length {circuit : α → Circuit F β} [Inhabited α] (explicit : ∀ a, ExplicitCircuit (circuit a))
-  (h_length : ∀ a n, (explicit a).local_length n = (explicit default).local_length 0) : ConstantExplicitCircuits circuit where
-  output a n := ExplicitCircuit.output (circuit a) n
-  local_length := ExplicitCircuit.local_length (circuit default) 0
-  operations a n := ExplicitCircuit.operations (circuit a) n
-
-  output_eq a n := ExplicitCircuit.output_eq n
-  local_length_eq a n := by rw [ExplicitCircuit.local_length_eq, h_length]
-  operations_eq a n := ExplicitCircuit.operations_eq n
-
-syntax "infer_constant_explicit_circuits" : tactic
-
-macro_rules
-  | `(tactic|infer_constant_explicit_circuits) => `(tactic|(
-    apply ConstantExplicitCircuits.from_constant_length (by infer_explicit_circuit)
-    try intros
-    try simp only [ExplicitCircuit.local_length]
-    try ac_rfl))
-
-section
-example : ConstantExplicitCircuits (witness (F:=F)) := by infer_constant_explicit_circuits
+-- family
+example : ExplicitCircuits (witness (F:=F)) := by infer_explicit_circuits
 
 example :
   let add (x : Expression F) := do
@@ -235,8 +176,5 @@ end
 
 attribute [explicit_circuit_norm] ExplicitCircuit.local_length ExplicitCircuit.operations ExplicitCircuit.output
 attribute [explicit_circuit_norm] ExplicitCircuits.local_length ExplicitCircuits.operations ExplicitCircuits.output
-attribute [explicit_circuit_norm] ExplicitCircuits.to_single ExplicitCircuits.from_explicit
--- attribute [explicit_circuit_norm] ConstantCircuit.local_length ConstantExplicitCircuit.output ConstantExplicitCircuit.operations
--- attribute [explicit_circuit_norm] ConstantCircuits.local_length ConstantExplicitCircuits.output ConstantExplicitCircuits.operations
---   ConstantExplicitCircuits.from_constant_length id_eq
+attribute [explicit_circuit_norm] ExplicitCircuits.to_single ExplicitCircuits.from_single
 attribute [explicit_circuit_norm] ElaboratedCircuit.local_length ElaboratedCircuit.output
