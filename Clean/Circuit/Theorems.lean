@@ -53,10 +53,6 @@ theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
 theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
   (g <$> f).output n = g (f.output n) := rfl
 
-/-- the offset derived from operations is the same as the state offset -/
-lemma offset_consistent (circuit : Circuit F α) :
-  ∀ n : ℕ, circuit.final_offset n = n + circuit.local_length n := by intro _; rfl
-
 /-- Extensionality theorem -/
 theorem ext_iff {circuit1 circuit2 : Circuit F α} :
   (circuit1 = circuit2) ↔ (∀ n, (circuit1.output n = circuit2.output n) ∧ (circuit1.operations n = circuit2.operations n)) := by
@@ -340,8 +336,8 @@ variable {α β : Type} {n : ℕ} {prop : Operations.Condition F} {env: Environm
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
   ((f >>= g).operations n).forAll n prop ↔
     (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.local_length n)).forAll (n + f.local_length n)) prop := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
-  rw [h_ops, Operations.forAll_append, offset_consistent, add_comm n]
+  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
+  rw [h_ops, Operations.forAll_append, add_comm n]
 
 -- definition of `forAll` for circuits which collapses uses the same offset in two places
 
@@ -355,7 +351,7 @@ lemma forAll_def {circuit : Circuit F α} {n : ℕ} :
 theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
   (f >>= g).forAll n prop ↔
     f.forAll n prop ∧ ((g (f.output n)).forAll (n + f.local_length n) prop) := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (f.final_offset n) := rfl
+  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
   simp only [forAll]
   rw [bind_forAll]
 

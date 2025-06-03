@@ -56,10 +56,6 @@ theorem Circuit.bind_normal {α β} (f : Circuit F α) (g : α → Circuit F β)
 
 namespace Circuit
 @[reducible, circuit_norm]
-def final_offset (circuit: Circuit F α) (offset: ℕ) : ℕ :=
-  offset + Operations.local_length (circuit offset).2
-
-@[reducible, circuit_norm]
 def operations (circuit: Circuit F α) (offset := 0) : Operations F :=
   (circuit offset).2
 
