@@ -191,19 +191,6 @@ def local_witnesses (env: Environment F) : (ops: Operations F) → Vector F ops.
   | .lookup _ :: ops => local_witnesses env ops
   | .subcircuit s :: ops => s.witnesses env ++ local_witnesses env ops
 
-/--
-In a circuit, we track the offset (a natural number) of the next variable.
-When creating a variable, its index becomes the offset and the offset is incremented.
-
-This method computes the offset after running all operations, given an initial offset.
--/
-def offset (initial_offset : ℕ) : Operations F → ℕ
-  | [] => initial_offset
-  | .witness m _ :: ops => offset (initial_offset + m) ops
-  | .assert _ :: ops => offset initial_offset ops
-  | .lookup _ :: ops => offset initial_offset ops
-  | .subcircuit s :: ops => offset (initial_offset + s.local_length) ops
-
 /-- Induction principle for `Operations`. -/
 def induct {motive : Operations F → Sort*}
   (empty : motive [])
