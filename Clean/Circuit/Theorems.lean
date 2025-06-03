@@ -338,7 +338,7 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.local_length n) := rfl
   rw [h_ops, Operations.forAll_append, add_comm n]
 
--- definition of `forAll` for circuits which collapses uses the same offset in two places
+-- definition of `forAll` for circuits which uses the same offset in two places
 
 @[reducible, circuit_norm]
 def forAll (circuit : Circuit F α) (n : ℕ) (prop : Operations.Condition F) :=
@@ -379,9 +379,9 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
     ←constraints_hold.soundness_iff_forAll 0, ←constraints_hold.soundness_iff_forAll (as.local_length + 0)]
 
 @[circuit_norm] theorem constraints_hold.bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  constraints_hold.soundness (env) ((f >>= g).operations n)
-  ↔ constraints_hold.soundness (env) (f.operations n) ∧
-    constraints_hold.soundness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
+  constraints_hold.soundness env ((f >>= g).operations n)
+  ↔ constraints_hold.soundness env (f.operations n) ∧
+    constraints_hold.soundness env ((g (f.output n)).operations (n + f.local_length n)) := by
   rw [constraints_hold.soundness_iff_forAll n, constraints_hold.soundness_iff_forAll n,
     constraints_hold.soundness_iff_forAll (n + f.local_length n), bind_forAll]
 
@@ -392,9 +392,9 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
     ←constraints_hold.completeness_iff_forAll 0, ←constraints_hold.completeness_iff_forAll (as.local_length + 0)]
 
 @[circuit_norm] theorem constraints_hold.bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  constraints_hold.completeness (env) ((f >>= g).operations n)
-  ↔ constraints_hold.completeness (env) (f.operations n) ∧
-    constraints_hold.completeness (env) ((g (f.output n)).operations (n + f.local_length n)) := by
+  constraints_hold.completeness env ((f >>= g).operations n)
+  ↔ constraints_hold.completeness env (f.operations n) ∧
+    constraints_hold.completeness env ((g (f.output n)).operations (n + f.local_length n)) := by
   rw [constraints_hold.completeness_iff_forAll n, constraints_hold.completeness_iff_forAll n,
     constraints_hold.completeness_iff_forAll (n + f.local_length n), bind_forAll]
 
