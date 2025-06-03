@@ -271,12 +271,22 @@ theorem initial_offset_eq (circuit : Circuit F α) [LawfulCircuit circuit] (n : 
   rw [operations_eq circuit n]
   exact (final_offset_eq circuit n ▸ operations n).property
 
+theorem initial_offset_eq' (circuit : Circuit F α) [LawfulCircuit circuit] (ops : OperationsList F) :
+    (circuit ops).2.withLength.initial_offset = ops.withLength.initial_offset := by
+  rw [append_only, Operations.append_initial_offset]
+
 theorem local_length_eq (circuit : Circuit F α) [lawful: ConstantLawfulCircuit circuit] (n : ℕ) :
     circuit.local_length n = lawful.local_length := by
   apply Nat.add_left_cancel (n:=n)
   rw [←lawful.local_length_eq]
   rw (occs := .pos [1]) [←initial_offset_eq circuit n]
   rw [Circuit.total_length_eq, final_offset_eq]
+
+theorem local_length_eq' (circuit : Circuit F α) [lawful: ConstantLawfulCircuit circuit] (ops : OperationsList F) :
+    (circuit ops).2.withLength.local_length = ops.withLength.local_length + lawful.local_length := by
+  apply Nat.add_left_cancel (n:=(circuit ops).2.withLength.initial_offset)
+  rw [←add_assoc, Circuit.total_length_eq, initial_offset_eq', Circuit.total_length_eq,
+    offset_independent, ←lawful.local_length_eq]
 
 theorem bind_local_length (f : Circuit F α) (g : α → Circuit F β)
   (f_lawful: LawfulCircuit f) (g_lawful : ∀ a : α, LawfulCircuit (g a)) (n : ℕ) :
@@ -336,6 +346,20 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} (f_lawful: Lawf
   have h_ops : fg_lawful.operations n = f_lawful.operations n ++ h_length ▸ (g_lawful (f_lawful.output n)).operations (f_lawful.final_offset n) := by
     simp only [fg_lawful, from_bind]
   rw [h_ops, OperationsFrom.append_val, append_forAll]
+
+theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} (f_lawful: LawfulCircuit f) (g_lawful : ∀ a, LawfulCircuit (g a))
+  (ops : OperationsList F) :
+  ((f >>= g) ops).2.withLength.forAll prop ↔
+    (f ops).2.withLength.forAll prop ∧
+      ((g (LawfulCircuit.output f ops.offset)).operations (f ops).2.offset).forAll prop := by
+  open LawfulCircuit in
+  let fg_lawful : LawfulCircuit (f >>= g) := .from_bind inferInstance inferInstance
+  rw [append_only, append_only]
+  simp only
+  rw [append_forAll, append_forAll]
+  simp only [←LawfulCircuit.operations_eq' (Operations.forAll prop)]
+  simp only [bind_forAll]
+  simp only [and_assoc, and_assoc]
 
 -- specializations to soundness / completeness
 

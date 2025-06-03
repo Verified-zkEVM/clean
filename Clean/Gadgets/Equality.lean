@@ -12,14 +12,14 @@ def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs 
 
 theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
-  simp only [all_zero, circuit_norm]
+  simp only [all_zero, circuit_norm, true_and]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
 theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → constraints_hold.completeness env ((all_zero xs).operations offset) := by
-  simp only [all_zero, circuit_norm]
+  simp only [all_zero, circuit_norm, true_and]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
