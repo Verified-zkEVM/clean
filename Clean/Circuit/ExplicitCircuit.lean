@@ -17,6 +17,32 @@ class ExplicitCircuit (circuit : Circuit F α) where
   local_length_eq : ∀ n: ℕ, circuit.local_length n = local_length n := by intro _; rfl
   operations_eq : ∀ n: ℕ, circuit.operations n = operations n := by intro _; rfl
 
+/-- family of explicit circuits -/
+class ExplicitCircuits (circuit : α → Circuit F β) where
+  output : α → ℕ → β
+  local_length : α → ℕ → ℕ
+  operations : α → ℕ → Operations F
+  output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
+  local_length_eq : ∀ (a : α) (n: ℕ), (circuit a).local_length n = local_length a n := by intro _ _; rfl
+  operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
+
+instance ExplicitCircuits.from_explicit {circuit : α → Circuit F β} (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
+  output a n := (explicit a).output n
+  local_length a n := (explicit a).local_length n
+  operations a n := (explicit a).operations n
+  output_eq a n := (explicit a).output_eq n
+  local_length_eq a n := (explicit a).local_length_eq n
+  operations_eq a n := (explicit a).operations_eq n
+
+-- lower `ExplicitCircuits` to `ExplicitCircuit`
+instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α) [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
+  output n := output circuit a n
+  local_length n := explicit.local_length a n
+  operations n := operations circuit a n
+  output_eq n := output_eq a n
+  local_length_eq n := local_length_eq a n
+  operations_eq n := operations_eq a n
+
 -- slightly stronger variant: ExplicitCircuit with a fixed local length
 class ConstantExplicitCircuit (circuit : Circuit F α) extends ConstantCircuit circuit where
   output : ℕ → α
@@ -40,14 +66,14 @@ class ConstantExplicitCircuits (circuit : α → Circuit F β) extends ConstantC
   operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
 
 -- `pure` is a (constant) explicit circuit
-instance ConstantExplicitCircuit.from_pure {a : α} : ConstantExplicitCircuit (pure a : Circuit F α) where
+instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
   output _ := a
-  local_length := 0
+  local_length _ := 0
   operations _ := []
 
-instance ConstantExplicitCircuits.from_pure {f : α → β} : ConstantExplicitCircuits (fun a => pure (f a) : α → Circuit F β) where
+instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a => pure (f a) : α → Circuit F β) where
   output a _ := f a
-  local_length := 0
+  local_length _ _ := 0
   operations _ _ := []
 
 -- `bind` of two explicit circuits yields a explicit circuit
@@ -81,41 +107,41 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
 
 -- basic operations are (constant) explicit circuits
 
-instance : ConstantExplicitCircuits (F:=F) witness_var where
+instance : ExplicitCircuits (F:=F) witness_var where
   output _ n := ⟨ n ⟩
-  local_length := 1
+  local_length _ _ := 1
   operations c n := [.witness 1 fun env => #v[c env]]
 
-instance {k : ℕ} {c : Environment F → Vector F k} : ConstantExplicitCircuit (witness_vars k c) where
+instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witness_vars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
-  local_length := k
+  local_length _ := k
   operations n := [.witness k c]
 
-instance {α: TypeMap} [ProvableType α] : ConstantExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
+instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := var_from_offset α n
-  local_length := size α
+  local_length _ _ := size α
   operations c n := [.witness (size α) (to_elements ∘ c)]
 
-instance : ConstantExplicitCircuits (F:=F) assert_zero where
+instance : ExplicitCircuits (F:=F) assert_zero where
   output _ _ := ()
-  local_length := 0
+  local_length _ _ := 0
   operations e n := [.assert e]
 
-instance : ConstantExplicitCircuits (F:=F) lookup where
+instance : ExplicitCircuits (F:=F) lookup where
   output _ _ := ()
-  local_length := 0
+  local_length _ _ := 0
   operations l n := [.lookup l]
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
-    ConstantExplicitCircuit (subcircuit circuit input) where
+    ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
-  local_length := circuit.local_length input
+  local_length _ := circuit.local_length input
   operations n := [.subcircuit (circuit.to_subcircuit n input)]
 
 instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
-    ConstantExplicitCircuit (assertion circuit input) where
+    ExplicitCircuit (assertion circuit input) where
   output n := ()
-  local_length := circuit.local_length input
+  local_length _ := circuit.local_length input
   operations n := [.subcircuit (circuit.to_subcircuit n input)]
 
 -- lower `ConstantExplicitCircuits` to `ConstantExplicitCircuit`
@@ -143,6 +169,11 @@ macro_rules
         | apply ExplicitCircuit.from_map
       repeat infer_instance
     )))
+
+syntax "infer_explicit_circuits" : tactic
+macro_rules
+  | `(tactic|infer_explicit_circuits) => `(tactic|(
+    apply ExplicitCircuits.from_explicit (by infer_explicit_circuit)))
 
 -- this tactic is pretty good at inferring explicit circuits!
 section
@@ -199,11 +230,13 @@ example :
     assert_zero (x + y - z)
     pure z
 
-  ConstantExplicitCircuits add := by infer_constant_explicit_circuits
+  ExplicitCircuits add := by infer_explicit_circuits
 end
 
 attribute [explicit_circuit_norm] ExplicitCircuit.local_length ExplicitCircuit.operations ExplicitCircuit.output
-attribute [explicit_circuit_norm] ConstantCircuit.local_length ConstantExplicitCircuit.output ConstantExplicitCircuit.operations
-attribute [explicit_circuit_norm] ConstantCircuits.local_length ConstantExplicitCircuits.output ConstantExplicitCircuits.operations
-  ConstantExplicitCircuits.from_constant_length id_eq
+attribute [explicit_circuit_norm] ExplicitCircuits.local_length ExplicitCircuits.operations ExplicitCircuits.output
+attribute [explicit_circuit_norm] ExplicitCircuits.to_single ExplicitCircuits.from_explicit
+-- attribute [explicit_circuit_norm] ConstantCircuit.local_length ConstantExplicitCircuit.output ConstantExplicitCircuit.operations
+-- attribute [explicit_circuit_norm] ConstantCircuits.local_length ConstantExplicitCircuits.output ConstantExplicitCircuits.operations
+--   ConstantExplicitCircuits.from_constant_length id_eq
 attribute [explicit_circuit_norm] ElaboratedCircuit.local_length ElaboratedCircuit.output
