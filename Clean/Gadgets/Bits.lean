@@ -2,12 +2,10 @@ import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
 
-namespace Gadgets
+namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
-
-namespace ToBits
 def main (n: ℕ) (x : Expression (F p)) := do
   -- witness the bits of `x`
   let bits ← witness_vector n fun env => to_bits n (x.eval env)
@@ -36,21 +34,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     bits = to_bits n x
 
   soundness := by
-    intro k eval x_var x h_input h_assumptions h_holds
-    dsimp only [main] at *
-    simp only [main, circuit_norm, Boolean.circuit, true_and] at *
-    -- TODO: simp [circuit_norm] is not able to exclude the case that `forEach` results in empty operations
-    -- which leads to this case split and hard-to-discover proof that dicharges the empty case
-    split at h_holds
-    · rename_i h_eq
-      rcases (Circuit.forEach.no_empty h_eq) with h|h
-      · obtain rfl : n = 0 := h
-        simp [Vector.mapRange_zero]
-      obtain ⟨_, _, h⟩ := h
-      exact Operations.noConfusion h
-    rename_i h_eq; clear h_eq
-    simp only [h_input, circuit_norm, subcircuit_norm, true_implies] at h_holds
-    clear h_input
+    intro k eval x_var x h_input _h_assumptions h_holds
+    simp only [main, circuit_norm, Boolean.circuit] at *
+    simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
+    clear h_input _h_assumptions
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
 
@@ -68,17 +55,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
     simp only [main, circuit_norm, Boolean.circuit] at *
-    -- TODO: simp [circuit_norm] is not able to exclude the case that `forEach` results in empty operations
-    -- which leads to this case split and hard-to-discover proof that dicharges the empty case
-    split
-    · rename_i h_eq
-      rcases (Circuit.forEach.no_empty h_eq) with h|h
-      · obtain rfl : n = 0 := h
-        simp_all [Expression.eval, from_bits_expr]
-      obtain ⟨_, _, h⟩ := h
-      exact Operations.noConfusion h
-    rename_i h_eq; clear h_eq
-    simp only [h_input, circuit_norm, subcircuit_norm, true_implies, true_and, and_true] at h_env ⊢
+    simp only [h_input, circuit_norm, subcircuit_norm] at h_env ⊢
     obtain ⟨ h_bits, right ⟩ := h_env; clear right;
 
     constructor

@@ -12,14 +12,14 @@ def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs 
 
 theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
-  simp only [all_zero, circuit_norm, true_and]
+  simp only [all_zero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
 theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) → constraints_hold.completeness env ((all_zero xs).operations offset) := by
-  simp only [all_zero, circuit_norm, true_and]
+  simp only [all_zero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
@@ -97,12 +97,12 @@ lemma elaborated_eq (α : TypeMap) [LawfulProvableType α] : (circuit α (F:=F))
 @[circuit_norm]
 theorem soundness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).soundness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit, forall_const]
+  simp only [subcircuit_norm, circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).completeness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit, true_and]
+  simp only [subcircuit_norm, circuit_norm, circuit]
 
 end Equality
 end Gadgets

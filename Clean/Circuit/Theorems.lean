@@ -22,14 +22,12 @@ theorem can_replace_soundness  {n: ℕ} {ops : Operations F n} {env} :
   intro h
   induction ops with
   | empty => trivial
-  | witness ops _ c ih | assert ops c ih | lookup ops c ih =>
-    cases ops <;> simp_all [constraints_hold.completeness, constraints_hold, circuit_norm]
+  | witness | assert | lookup =>
+    simp_all [constraints_hold.soundness, constraints_hold]
   | subcircuit ops circuit ih =>
     dsimp only [constraints_hold.soundness]
     dsimp only [constraints_hold] at h
-    split
-    · exact circuit.imply_soundness env h.right
-    · exact ⟨ ih h.left, circuit.imply_soundness env h.right ⟩
+    exact ⟨ ih h.left, circuit.imply_soundness env h.right ⟩
 
 /--
 Initial offset + size of local witnesses = final offset of a circuit
@@ -215,8 +213,8 @@ theorem constraints_hold.soundness_iff_forAll {n : ℕ} (env : Environment F) (o
   } := by
   induction ops with
   | empty => trivial
-  | witness ops | assert ops | lookup ops | subcircuit ops =>
-    cases ops <;> simp_all [soundness, Operations.forAll]
+  | witness | assert | lookup | subcircuit =>
+    simp_all [soundness, Operations.forAll]
 
 theorem constraints_hold.completeness_iff_forAll {n : ℕ} (env : Environment F) (ops : Operations F n) :
   completeness env ops ↔ ops.forAll {
@@ -227,8 +225,8 @@ theorem constraints_hold.completeness_iff_forAll {n : ℕ} (env : Environment F)
   } := by
   induction ops with
   | empty => trivial
-  | witness ops | assert ops | lookup ops | subcircuit ops =>
-    cases ops <;> simp_all [completeness, Operations.forAll]
+  | witness | assert | lookup | subcircuit =>
+    simp_all [completeness, Operations.forAll]
 
 /--
 Completeness theorem which proves that we can replace constraints in subcircuits
