@@ -2,12 +2,10 @@ import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
 
-namespace Gadgets
+namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
-
-namespace ToBits
 def main (n: ℕ) (x : Expression (F p)) := do
   -- witness the bits of `x`
   let bits ← witness_vector n fun env => to_bits n (x.eval env)
