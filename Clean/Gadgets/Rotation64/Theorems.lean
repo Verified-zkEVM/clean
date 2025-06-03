@@ -269,6 +269,30 @@ lemma rotateRight_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r 
     omega
   linarith
 
+lemma rotateRight_testBit (x r i : ℕ) (h : x < 2^64) :
+    (rot_right64 x r).testBit i =
+    if i < 64 - r % 64 then
+      x.testBit (r % 64 + i)
+    else (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
+
+  split
+  · rw [rotateRight_testBit_of_lt]
+    repeat omega
+  · rw [rotateRight_testBit_of_ge]
+    repeat omega
+
+
+theorem rotateRight64_to_bits (x r : ℕ) (h : x < 2^64):
+    to_bits 64 (rot_right64 x r) = (to_bits 64 x).rotate r := by
+  simp [to_bits, Vector.rotate]
+  ext i hi
+  · simp
+  simp at ⊢ hi
+  rw [rotateRight_testBit]
+  simp [List.getElem_rotate, hi]
+  split <;> (congr; omega)
+  linarith
+
 
 lemma rotateRight_rotateRight {w : ℕ} (x : BitVec w) (n m : ℕ):
     (x.rotateRight n).rotateRight m = x.rotateRight (n + m) := by
