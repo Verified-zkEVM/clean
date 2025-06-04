@@ -8,30 +8,16 @@ variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
 
-theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
-    (h_low : low.val < 256) (h_high : high.val < 256)
-    (h : low + high * (2^offset.val) + -x = 0) :
-    x.val = low.val + high.val * (2^offset.val) := by
-  have pow_val_field : ZMod.val (2 : F p) ^ offset.val < 256 := by
-    rw [val_two]
-    fin_cases offset
-    repeat simp
-
-  have pow_val_field : ZMod.val (2 : F p) ^ offset.val < p := by
-    linarith [p_large_enough.elim]
-
-  have pow_val : (2 ^ offset.val) < 2^16 := by
-    apply Nat.pow_lt_pow_of_lt
-    · simp only [Nat.one_lt_ofNat]
-    · linarith [offset.is_lt]
-
-  have pow_val' : (2 ^ offset.val) < p := by
-    linarith [p_large_enough.elim]
+theorem byte_decomposition_lift {x low high two_power: F p}
+    (h_low : low.val < 256) (h_high : high.val < 256) (h_two_power : two_power.val < 256)
+    (h : low + high * two_power + -x = 0) :
+    x.val = low.val + high.val * two_power.val := by
+  have pow_val : two_power.val < 2^16 := by linarith
+  have pow_val' : two_power.val < p := by linarith [p_large_enough.elim]
 
   rw [add_neg_eq_iff_eq_add, zero_add] at h
   apply_fun ZMod.val at h
-  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow pow_val_field, Nat.mul_mod] at h
-  rw [val_two, Nat.mod_eq_of_lt pow_val'] at h
+  rw [ZMod.val_add, ZMod.val_mul, Nat.mul_mod, Nat.mod_eq_of_lt pow_val'] at h
 
   set low := low.val
   set high := high.val
@@ -40,24 +26,20 @@ theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
     apply Nat.mod_eq_of_lt
     linarith [p_large_enough.elim]
 
-  have mul_val : high * (2^offset.val) < 2^16 := by
+  have mul_val : high * two_power.val < 2^16 := by
     rw [show 2^16 = 256 * 2^8 by rfl]
-    apply Nat.mul_lt_mul_of_lt_of_lt
-    · linarith
-    · apply Nat.pow_lt_pow_of_lt
-      simp only [Nat.one_lt_ofNat]
-      linarith [offset.is_lt]
+    apply Nat.mul_lt_mul_of_lt_of_lt <;> linarith
 
-  have mul_val' : high * (2^offset.val) < p := by
+  have mul_val' : high * two_power.val < p := by
     linarith [p_large_enough.elim]
 
   rw [high_val, Nat.mod_eq_of_lt mul_val'] at h
 
-  have sum_val : low + high * (2^offset.val) < 2^8 + 2^16 := by
+  have sum_val : low + high * two_power.val < 2^8 + 2^16 := by
     apply Nat.add_lt_add
     repeat linarith
 
-  have sum_val' : low + high * (2^offset.val) < p := by
+  have sum_val' : low + high * two_power.val < p := by
     linarith [p_large_enough.elim]
 
   rw [Nat.mod_eq_of_lt sum_val'] at h
@@ -85,7 +67,17 @@ theorem soundness (offset : Fin 8) (x low high : F p)
 
   have low_byte : low.val < 256 := by linarith
   have high_byte : high.val < 256 := by linarith
-  have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
+  have two_power_val : ((2 : F p)^offset.val).val = 2^offset.val := by
+    rw [ZMod.val_pow, val_two]
+    rw [val_two]
+    linarith [p_large_enough.elim]
+
+  have two_power_byte : ZMod.val ((2 : F p)^offset.val) < 256 := by
+    rw [two_power_val]
+    linarith [two_power_lt]
+
+  have h := byte_decomposition_lift low_byte high_byte two_power_byte c
+  rw [two_power_val] at h
 
   have high_lt' : high.val < 2^(8 - offset.val) := by
     have eq : 2^(8 - offset.castSucc).val = 2^(8 - offset.val) := by
