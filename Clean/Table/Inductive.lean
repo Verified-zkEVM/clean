@@ -16,7 +16,7 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 - with assumptions replaced by the spec on the previous row
 - with input offset hard-coded to `size Row`
 -/
-structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [LawfulProvableType Row] where
+structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [ProvableType Row] where
   main : Var Row F → Circuit F (Var Row F)
   spec : ℕ → Row F → Prop
 
@@ -47,7 +47,7 @@ structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [LawfulProva
     )
 
 namespace InductiveTable
-variable {F : Type} [Field F] {Row : TypeMap} [LawfulProvableType Row]
+variable {F : Type} [Field F] {Row : TypeMap} [ProvableType Row]
 
 def tableSpec (table : InductiveTable F Row) {N : ℕ} (trace : TraceOfLength F Row N) : Prop :=
   trace.forAllRowsOfTraceWithIndex fun row i => table.spec i row
@@ -94,10 +94,10 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
       simp [h_env', hi, Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
         Vector.mapRange_zero, Vector.append_empty]
     have input_eq : first_row = input := by
-      rw [LawfulProvableType.ext_iff]
+      rw [ProvableType.ext_iff]
       intro i hi
-      rw [h_env i hi, ←constraints, LawfulProvableType.eval_var_from_offset,
-        LawfulProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
+      rw [h_env i hi, ←constraints, ProvableType.eval_var_from_offset,
+        ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
     rw [input_eq]
     exact input_spec
 
@@ -140,16 +140,16 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
       simp +arith [add_assoc]
 
     have input_eq : eval env' curr_var = curr := by
-      rw [LawfulProvableType.ext_iff]
+      rw [ProvableType.ext_iff]
       intro i hi
-      rw [h_env_input i hi, LawfulProvableType.eval_var_from_offset,
-        LawfulProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
+      rw [h_env_input i hi, ProvableType.eval_var_from_offset,
+        ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
 
     have next_eq : eval env' (var_from_offset Row (size Row + main_ops.local_length)) = next := by
-      rw [LawfulProvableType.ext_iff]
+      rw [ProvableType.ext_iff]
       intro i hi
-      rw [h_env_output i hi, LawfulProvableType.eval_var_from_offset,
-        LawfulProvableType.to_elements_from_elements, Vector.getElem_mapRange, add_comm _ i, add_assoc]
+      rw [h_env_output i hi, ProvableType.eval_var_from_offset,
+        ProvableType.to_elements_from_elements, Vector.getElem_mapRange, add_comm _ i, add_assoc]
 
     have h_soundness := table.soundness rest.len env' curr_var curr input_eq main_constraints spec_previous
     rw [←output_eq, next_eq] at h_soundness
