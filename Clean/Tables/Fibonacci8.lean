@@ -97,6 +97,8 @@ lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p))
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table
   spec := spec
+  offset_consistent := by
+    repeat constructor
 
   soundness := by
     intro N trace envs _

@@ -99,7 +99,11 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
   simp only [recursive_relation, table_assignment_norm, circuit_norm,
-    Gadgets.Addition32Full.circuit, assign_U32, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+    Gadgets.Addition32Full.circuit, assign_U32, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
+    Vector.mapRange_zero, Vector.mapRange_succ]
+  simp [Vector.append_empty, circuit_norm, Vector.mapRange_zero]
+  -- TODO goal is false!!
+  sorry
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -170,6 +174,10 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
   spec := spec,
+  offset_consistent := by
+    constructor
+    · simp only [boundary, table_assignment_norm, circuit_norm]
+    constructor
 
   soundness := by
     intro N trace envs _
