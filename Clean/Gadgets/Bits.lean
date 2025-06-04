@@ -8,13 +8,13 @@ variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
 def main (n: ℕ) (x : Expression (F p)) := do
   -- witness the bits of `x`
-  let bits ← witness_vector n fun env => to_bits n (x.eval env)
+  let bits ← witness_vector n fun env => field_to_bits n (x.eval env)
 
   -- add boolean constraints on all bits
   Circuit.forEach bits (assertion Boolean.circuit)
 
   -- check that the bits correctly sum to `x`
-  x.assert_equals (from_bits_expr bits)
+  x.assert_equals (field_from_bits_expr bits)
   return bits
 
 -- formal circuit that implements `to_bits` like a function, assuming `x.val < 2^n`
@@ -31,7 +31,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   assumptions (x : F p) := x.val < 2^n
 
   spec (x : F p) (bits : Vector (F p) n) :=
-    bits = to_bits n x
+    bits = field_to_bits n x
 
   soundness := by
     intro k eval x_var x h_input _h_assumptions h_holds
@@ -49,8 +49,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
         simp only [circuit_norm, bits, bit_vars]
         exact h_bits ⟨ i, hi ⟩
 
-    change x = eval (from_bits_expr bit_vars) at h_eq
-    rw [h_eq, from_bits_eval bit_vars, to_bits_from_bits hn bits h_bits]
+    change x = eval (field_from_bits_expr bit_vars) at h_eq
+    rw [h_eq, field_from_bits_eval bit_vars, field_to_bits_field_from_bits hn bits h_bits]
 
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
@@ -61,18 +61,18 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     constructor
     · intro i
       rw [h_bits i]
-      simp [to_bits]
+      simp [field_to_bits, to_bits]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
 
-    have h_bits_eq : bit_vars.map eval = to_bits n x := by
+    have h_bits_eq : bit_vars.map eval = field_to_bits n x := by
       rw [Vector.ext_iff]
       intro i hi
       simp only [circuit_norm, bit_vars]
       exact h_bits ⟨ i, hi ⟩
 
-    show x = eval (from_bits_expr bit_vars)
-    rw [from_bits_eval bit_vars, h_bits_eq, from_bits_to_bits hn h_assumptions]
+    show x = eval (field_from_bits_expr bit_vars)
+    rw [field_from_bits_eval bit_vars, h_bits_eq, field_from_bits_field_to_bits hn h_assumptions]
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
