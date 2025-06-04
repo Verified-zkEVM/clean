@@ -6,10 +6,6 @@ namespace Gadgets.ByteDecomposition.Theorems
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
--- TODO: remove when updating to new mathlib
-theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
-  Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
-
 lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
 
 theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
