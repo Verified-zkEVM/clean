@@ -181,12 +181,10 @@ def empty (W: ℕ+) : CellAssignment W S where
   vars := #v[]
 
 @[table_assignment_norm]
-def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S :=
-  {
-    offset := assignment.offset + 1
-    aux_length := assignment.aux_length + 1
-    vars := assignment.vars.push (.aux assignment.aux_length)
-  }
+def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S where
+  offset := assignment.offset + 1
+  aux_length := assignment.aux_length + 1
+  vars := assignment.vars.push (.aux assignment.aux_length)
 
 @[table_assignment_norm]
 def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
@@ -194,12 +192,10 @@ def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
   | n + 1 => (assignment.push_vars_aux n).push_var_aux
 
 @[table_assignment_norm]
-def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S :=
-  {
-    offset := assignment.offset + 1
-    aux_length := assignment.aux_length
-    vars := assignment.vars.push (.input off)
-  }
+def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S where
+  offset := assignment.offset + 1
+  aux_length := assignment.aux_length
+  vars := assignment.vars.push (.input off)
 
 @[table_assignment_norm]
 def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
@@ -335,7 +331,7 @@ def output {α: Type} (table : TableConstraint W S F α) : α :=
 def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
-      circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange (size S) fun i => env.get (ctx.offset + i)],
+      circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
       assignment := ctx.assignment.push_row row
     }
     (var_from_offset S ctx.offset, ctx')
