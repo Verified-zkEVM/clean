@@ -1,6 +1,7 @@
 import Clean.Utils.Field
 import Clean.Utils.Bitwise
 import Clean.Types.U64
+import Clean.Types.U32
 
 namespace Gadgets.ByteDecomposition.Theorems
 variable {p : ℕ} [Fact p.Prime]
