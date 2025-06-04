@@ -406,9 +406,13 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
     let b : β F := v.drop (size α) |>.cast (Nat.add_sub_self_left _ _) |> from_elements
     (a, b)
   from_elements_to_elements x := by
-    sorry
+    rcases x with ⟨a, b⟩
+    simp only
+    rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+    simp only [ProvableType.from_elements_to_elements]
   to_elements_from_elements v := by
-    sorry
+    simp only [ProvableType.to_elements_from_elements]
+    simp [Vector.cast]
 
 @[circuit_norm ↓ high]
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)
