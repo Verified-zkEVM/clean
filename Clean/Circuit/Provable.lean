@@ -93,7 +93,7 @@ def synthesize_const_var : Var α F :=
 instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
 
-def var_from_offset (α : TypeMap) [ProvableType α] (offset : Nat) : Var α F :=
+def var_from_offset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
   let vars := Vector.mapRange (size α) fun i => var ⟨offset + i⟩
   from_vars vars
 end ProvableType
@@ -210,7 +210,7 @@ namespace ProvableStruct
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
 
 /--
-Alternative `eval` which evaluates each component separately.
+Alterℕive `eval` which evaluates each component separately.
 -/
 @[circuit_norm]
 def eval (env : Environment F) (var: α (Expression F)) : α F :=
@@ -248,10 +248,10 @@ where
     apply eval_eq_eval_struct_aux
 
 /--
-Alternative `var_from_offset` which creates each component separately.
+Alterℕive `var_from_offset` which creates each component separately.
 -/
 @[circuit_norm]
-def var_from_offset (α : TypeMap) [ProvableStruct α] (offset : Nat) : Var α F :=
+def var_from_offset (α : TypeMap) [ProvableStruct α] (offset : ℕ) : Var α F :=
   go (components α) offset |> from_components (F:=Expression F)
 where
   @[circuit_norm]
@@ -264,7 +264,7 @@ omit [Field F] in
   `var_from_offset` === `ProvableStruct.var_from_offset`
 -/
 @[circuit_norm ↓ high]
-theorem from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (offset : Nat) :
+theorem from_offset_eq_from_offset_struct {α: TypeMap} [ProvableStruct α] (offset : ℕ) :
     ProvableType.var_from_offset (F:=F) α offset = ProvableStruct.var_from_offset α offset := by
   symm
   simp only [var_from_offset, ProvableType.var_from_offset, from_vars, size, from_elements]
@@ -293,7 +293,7 @@ theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) 
 
 omit [Field F] in
 @[circuit_norm ↓]
-theorem var_from_offset_field (offset : Nat) :
+theorem var_from_offset_field (offset : ℕ) :
   var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
 
 @[circuit_norm ↓]
@@ -302,7 +302,7 @@ theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields 
 
 omit [Field F] in
 @[circuit_norm ↓]
-theorem var_from_offset_fields (offset : Nat) :
+theorem var_from_offset_fields (offset : ℕ) :
   var_from_offset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
 namespace LawfulProvableType
@@ -315,6 +315,25 @@ theorem eval_const {F : Type} [Field F] {α: TypeMap} [LawfulProvableType α] (e
     funext
     simp only [Function.comp_apply, Expression.eval, id_eq]
   rw [this, Vector.map_id_fun, id_eq, from_elements_to_elements]
+
+theorem eval_var_from_offset {α: TypeMap} [LawfulProvableType α] (env : Environment F) (offset : ℕ) :
+    eval env (var_from_offset α offset) = from_elements (.mapRange (size α) fun i => env.get (offset + i)) := by
+  simp only [eval, var_from_offset, to_vars, from_vars, to_elements, from_elements]
+  rw [to_elements_from_elements]
+  congr
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+
+theorem ext_iff {F : Type} {α: TypeMap} [LawfulProvableType α] (x y : α F) :
+    x = y ↔ ∀ i (hi : i < size α), (to_elements x)[i] = (to_elements y)[i] := by
+  rw [←Vector.ext_iff]
+  constructor
+  · intro h; rw [h]
+  intro h
+  have h' := congrArg from_elements h
+  simp only [from_elements_to_elements] at h'
+  exact h'
 end LawfulProvableType
 
 -- more concrete ProvableType instances
@@ -338,7 +357,7 @@ theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α]
   rw [Vector.flatten_toChunks]
   simp [from_elements, eval, to_vars]
 
-theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : Nat) :
+theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
     var_from_offset (F:=F) (ProvableVector α n) offset
     = .mapRange n fun i => var_from_offset α (offset + (size α)*i) := by
   induction n with
