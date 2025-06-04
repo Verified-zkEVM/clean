@@ -191,12 +191,6 @@ def push_vars_aux (assignment: CellAssignment W S) : ℕ → CellAssignment W S
   | 0 => assignment
   | n + 1 => (assignment.push_vars_aux n).push_var_aux
 
-theorem push_vars_aux_offset (assignment: CellAssignment W S) (n: ℕ) :
-    (assignment.push_vars_aux n).offset = assignment.offset + n := by
-  induction n generalizing assignment with
-  | zero => rfl
-  | succ n ih => simp +arith only [push_vars_aux, push_var_aux, ih]
-
 @[table_assignment_norm]
 def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S where
   offset := assignment.offset + 1
@@ -266,19 +260,14 @@ instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
 
 @[table_assignment_norm]
-def assignment_from_circuit (as: CellAssignment W S) : Operations F → CellAssignment W S
-  | [] => as
-  | .witness m _ :: ops => assignment_from_circuit (as.push_vars_aux m) ops
-  | .assert _ :: ops => assignment_from_circuit as ops
-  | .lookup _ :: ops => assignment_from_circuit as ops
-  | .subcircuit s :: ops => assignment_from_circuit (as.push_vars_aux s.local_length) ops
+def vars_from_circuit (offset : ℕ) (ops: Operations F) : Vector (Cell W S) ops.local_length :=
+  .mapRange _ fun i => .aux (offset + i)
 
-theorem assignment_from_circuit_offset (as: CellAssignment W S) (ops: Operations F) :
-    (assignment_from_circuit as ops).offset = as.offset + ops.local_length := by
-  induction ops using Operations.induct generalizing as with
-  | empty => rfl
-  | witness | assert | lookup | subcircuit =>
-    simp_all +arith [assignment_from_circuit, CellAssignment.push_vars_aux_offset, Operations.local_length]
+@[table_assignment_norm]
+def assignment_from_circuit (as: CellAssignment W S) (ops : Operations F) : CellAssignment W S where
+  offset := as.offset + ops.local_length
+  aux_length := as.aux_length + ops.local_length
+  vars := as.vars ++ (vars_from_circuit as.offset ops : Vector (Cell W S) _)
 
 /--
 A `MonadLift` instance from `Circuit` to `TableConstraint` means that we can just use

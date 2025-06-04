@@ -79,4 +79,12 @@ def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S)
 
 lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
   (assignment.push_row row).offset = assignment.offset + size S := by rfl
+
+theorem assignment_from_circuit_offset (as: CellAssignment W S) (ops: Operations F) :
+    (assignment_from_circuit as ops).offset = as.offset + ops.local_length := by
+  induction ops using Operations.induct generalizing as with
+  | empty => rfl
+  | witness | assert | lookup | subcircuit =>
+    simp_all +arith [assignment_from_circuit, CellAssignment.push_vars_aux_offset, Operations.local_length]
+
 end CellAssignment
