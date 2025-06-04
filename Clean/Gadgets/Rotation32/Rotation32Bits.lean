@@ -48,7 +48,7 @@ def spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
 -- #eval! (rot32_bits (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bits off
-  local_length _ := 16
+  local_length _ := 12
   output _inputs i0 := var_from_offset U32 (i0 + 8)
   initial_offset_eq := by
     intros
@@ -59,4 +59,40 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp only [rot32_bits]
     rfl
 
-theorem rotation32_bits_soundness
+theorem rotation32_bits_soundness (offset : Fin 8) {
+      x0 x1 x2 x3
+      y0 y1 y2 y3
+      x0_l x1_l x2_l x3_l
+      x0_h x1_h x2_h x3_h : F p
+    }
+    (h_x0_l : x0_l.val = x0.val % 2 ^ offset.val)
+    (h_x0_h : x0_h.val = x0.val / 2 ^ offset.val)
+    (h_x1_l : x1_l.val = x1.val % 2 ^ offset.val)
+    (h_x1_h : x1_h.val = x1.val / 2 ^ offset.val)
+    (h_x2_l : x2_l.val = x2.val % 2 ^ offset.val)
+    (h_x2_h : x2_h.val = x2.val / 2 ^ offset.val)
+    (h_x3_l : x3_l.val = x3.val % 2 ^ offset.val)
+    (h_x3_h : x3_h.val = x3.val / 2 ^ offset.val)
+    (eq0 : x1_l * 2 ^ offset.val + (x0_h - y0) = 0)
+    (eq1 : x2_l * 2 ^ offset.val + (x1_h - y1) = 0)
+    (eq2 : x3_l * 2 ^ offset.val + (x2_h - y2) = 0)
+    (eq3 : x0_l * 2 ^ offset.val + (x3_h - y3) = 0) :
+    let x_val := x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3
+    let y_val := y0.val + y1.val * 256 + y2.val * 256^2 + y3.val * 256^3
+    y_val = (x_val) % 2 ^ (offset.val % 32) * 2 ^ (32 - offset.val % 32) + (x_val) / 2 ^ (offset.val % 32) := by
+
+  rw [←add_sub_assoc, sub_eq_add_neg] at eq0 eq1 eq2 eq3
+  sorry
+
+theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (spec off) := by
+  intro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs x_normalized h_holds
+
+  dsimp only [circuit_norm, elaborated, rot32_bits, U32.witness, var_from_offset] at h_holds
+  simp only [subcircuit_norm, U32.AssertNormalized.assumptions, U32.AssertNormalized.circuit, circuit_norm] at h_holds
+  simp only [U32ByteDecomposition.circuit, U32ByteDecomposition.elaborated, add_zero,
+    ElaboratedCircuit.local_length, ElaboratedCircuit.output, eval, from_elements, size, to_vars,
+    to_elements, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    U32ByteDecomposition.assumptions, Expression.eval, U32ByteDecomposition.spec,
+    U32.AssertNormalized.spec, Vector.mapRange_succ, Vector.mapRange_zero, Vector.push_mk,
+    Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append, forall_const,
+    Expression.eval.eq_1] at h_holds
