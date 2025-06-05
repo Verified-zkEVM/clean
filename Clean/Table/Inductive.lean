@@ -49,9 +49,6 @@ structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [ProvableTyp
 namespace InductiveTable
 variable {F : Type} [Field F] {Row : TypeMap} [ProvableType Row]
 
-def tableSpec (table : InductiveTable F Row) (output : Row F) (N : ℕ) : Prop :=
-  table.spec N output
-
 def inductiveConstraint (table : InductiveTable F Row) : TableConstraint 2 Row F Unit := do
   let input ← get_curr_row
   let output ← table.main input
@@ -108,7 +105,7 @@ lemma tableSoundnessAux (table : InductiveTable F Row) (input output: Row F)
       specialize goal constraints
       exact ⟨ goal.left, goal.right h_trace ⟩
 
-  simp only [table_norm, tableConstraints, tableSpec]
+  simp only [table_norm, tableConstraints]
   clear h_trace
   induction trace using Trace.everyRowTwoRowsInduction
 

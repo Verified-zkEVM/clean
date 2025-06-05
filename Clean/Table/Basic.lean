@@ -537,6 +537,9 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       | .EveryRowExceptLast constraint => constraint.offset_consistent
     := by repeat constructor
 
+def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace: TraceOfLength F S N) : Prop :=
+  table.assumption N → table.spec trace
+
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm low] size from_elements to_elements to_vars from_vars
