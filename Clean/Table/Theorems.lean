@@ -64,14 +64,6 @@ end Trace
 variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
--- a few lemmas about how offsets change with assignments
--- currently unused, because it turns out that offsets can usually be resolved with `rfl`
-
-lemma push_vars_aux_offset (assignment: CellAssignment W S) (n : ℕ) :
-  (assignment.push_vars_aux n).offset = assignment.offset + n := by
-  induction n with
-  | zero => rfl
-  | succ n ih => simp +arith [push_vars_aux, push_var_aux, ih]
 
 def push_var_input_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
   (assignment.push_var_input off).offset = assignment.offset + 1 := by
@@ -85,6 +77,15 @@ theorem assignment_from_circuit_offset (as: CellAssignment W S) (ops: Operations
   induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit =>
-    simp_all +arith [assignment_from_circuit, CellAssignment.push_vars_aux_offset, Operations.local_length]
+    simp_all +arith [assignment_from_circuit, CellAssignment.push_vars_aux, Operations.local_length]
+
+theorem assignment_from_circuit_vars (as: CellAssignment W S) (ops: Operations F) :
+    (assignment_from_circuit as ops).vars = (as.vars ++ (.mapRange ops.local_length fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
+      ).cast (assignment_from_circuit_offset ..).symm := by
+  induction ops using Operations.induct generalizing as with
+  | empty => rfl
+  | witness | assert | lookup | subcircuit =>
+    simp_all +arith [assignment_from_circuit, push_vars_aux, Operations.local_length,
+      Vector.mapRange_add_eq_append, Vector.cast, Array.append_assoc]
 
 end CellAssignment

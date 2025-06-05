@@ -115,8 +115,8 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
     obtain ⟨ main_constraints, output_eq ⟩ := constraints
     have h_env' : env' = window_env table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1)) := rfl
     simp only [window_env, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
-    simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd,
-      Nat.add_one_sub_one] at h_env'
+    simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
+      CellAssignment.assignment_from_circuit_offset, CellAssignment.assignment_from_circuit_vars] at h_env'
     set curr_var := var_from_offset Row 0
     set main_ops : Operations F := (table.main (var_from_offset Row 0) (size Row)).2
     set s := size Row
@@ -128,6 +128,7 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
       have hi''' : i < 0 + s + t := by linarith
       rw [h_env']
       simp only [main_ops, s, t, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+        CellAssignment.assignment_from_circuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
 
     have h_env_output i (hi : i < s) : (to_elements next)[i] = env'.get (i + s + t) := by
@@ -136,6 +137,7 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
       have hi''' : ¬(i + s + t < 0 + s + t) := by linarith
       rw [h_env']
       simp only [main_ops, hi', hi'', hi''', s, t, table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+        CellAssignment.assignment_from_circuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       simp +arith [add_assoc]
 
