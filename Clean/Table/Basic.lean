@@ -53,6 +53,21 @@ def getLeFromBottom :
   | _ +> currRow, ⟨0, _⟩, j => currRow.get j
   | rest +> _, ⟨i + 1, h⟩, j => getLeFromBottom rest ⟨i, Nat.le_of_succ_le_succ h⟩ j
 
+@[table_norm]
+def lastRow : (trace : Trace F S) → (hlen : trace.len > 0) → S F
+  | <+>, h  => nomatch h
+  | _ +> row, _ => row
+
+@[table_norm]
+def forAllRowsOfTraceWithIndex
+    (trace : Trace F S) (prop : Row F S → ℕ → Prop) : Prop :=
+  inner trace prop
+  where
+  @[table_norm]
+  inner : Trace F S → (Row F S → ℕ → Prop) → Prop
+    | <+>, _ => true
+    | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
+
 end Trace
 
 
@@ -74,6 +89,10 @@ def get {M : ℕ} :
       M - 1 - i,
       by rw [h]; apply Nat.sub_one_sub_lt_of_lt; exact i.is_lt
     ⟩ j
+
+@[table_norm]
+def lastRow {M : ℕ+} (trace : TraceOfLength F S M) : S F :=
+  trace.val.lastRow (by rw [trace.property]; exact M.pos)
 
 /--
   Apply a proposition to every row in the trace
@@ -107,12 +126,7 @@ def forAllRowsOfTraceExceptLast {N : ℕ}
 @[table_norm]
 def forAllRowsOfTraceWithIndex {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → ℕ → Prop) : Prop :=
-  inner trace.val prop
-  where
-  @[table_norm]
-  inner : Trace F S → (Row F S → ℕ → Prop) → Prop
-    | <+>, _ => true
-    | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
+  trace.val.forAllRowsOfTraceWithIndex prop
 
 end TraceOfLength
 variable {W: ℕ+} {α: Type}
@@ -392,11 +406,16 @@ def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S
 @[reducible]
 def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
 
+-- specify a row, either counting from the start or from the end of the trace.
+inductive SpecificRow where
+  | fromStart : ℕ → SpecificRow
+  | fromEnd : ℕ → SpecificRow
+
 inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
-  | Boundary: ℕ → SingleRowConstraint S F → TableOperation S F
+  | Boundary: SpecificRow → SingleRowConstraint S F → TableOperation S F
 
   /--
     An `EveryRow` constraint is a constraint that is applied to every row.
@@ -411,6 +430,11 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
     Note that this will not apply any constraints to a trace of length one.
   -/
   | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
+
+instance : Repr SpecificRow where
+  reprPrec
+    | .fromStart i, _ => reprStr (i : ℤ)
+    | .fromEnd i, _ => reprStr (-i : ℤ)
 
 instance [Repr F] : Repr (TableOperation S F) where
   reprPrec op _ := match op with
@@ -429,7 +453,7 @@ export TableOperation (Boundary EveryRow EveryRowExceptLast)
 def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
   (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F) : Prop :=
   let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
-  foldl constraints_and_envs trace.val constraints_and_envs
+  foldl N constraints_and_envs trace.val constraints_and_envs
   where
   /--
     The foldl function applies the constraints to the trace inductively on the trace
@@ -449,34 +473,37 @@ def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator: List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
     | trace +> curr +> next, (⟨.EveryRowExceptLast constraint, env⟩)::rest =>
-        let others := foldl cs (trace +> curr +> next) rest
+        let others := foldl N cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
         constraint.constraints_hold_on_window window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
     | trace +> row, (⟨.Boundary idx constraint, env⟩)::rest =>
-        let others := foldl cs (trace +> row) rest
+        let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        if trace.len = idx then constraint.constraints_hold_on_window window (env trace.len) ∧ others else others
+        let targetIdx := match idx with
+          | .fromStart i => i
+          | .fromEnd i => N - 1 - i
+        (if trace.len = targetIdx then constraint.constraints_hold_on_window window (env trace.len) else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
     | trace +> row, (⟨.EveryRow constraint, env⟩)::rest =>
-        let others := foldl cs (trace +> row) rest
+        let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
         constraint.constraints_hold_on_window window (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
     | trace, (⟨.EveryRowExceptLast _, _⟩)::rest =>
-        foldl cs trace rest
+        foldl N cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
     | trace +> _, [] =>
-        foldl cs trace cs
+        foldl N cs trace cs
 
     -- if the trace is empty, we are done
     | <+>, _ => True

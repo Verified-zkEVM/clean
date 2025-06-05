@@ -103,16 +103,28 @@ def twoRowInduction {prop : Row F S → ℕ → Prop}
     (succ : ∀ (N : ℕ) (curr next : Row F S), prop curr N → prop next (N + 1))
     : ∀ N (trace : TraceOfLength F S N), forAllRowsOfTraceWithIndex trace prop := by
   intro N trace
-  simp only [forAllRowsOfTraceWithIndex]
+  simp only [forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex]
   induction trace.val using Trace.everyRowTwoRowsInduction with
   | zero => trivial
   | one first_row =>
-    simp only [forAllRowsOfTraceWithIndex.inner]
+    simp only [Trace.forAllRowsOfTraceWithIndex.inner]
     exact ⟨ zero first_row, trivial ⟩
   | more curr next rest _ ih2 =>
-    simp only [forAllRowsOfTraceWithIndex.inner] at *
+    simp only [Trace.forAllRowsOfTraceWithIndex.inner] at *
     have h3 : prop next (rest +> curr).len := succ _ _ _ ih2.left
     exact ⟨ h3, ih2.left, ih2.right ⟩
+
+def lastRow_of_forAll {N: ℕ+} {prop : Row F S → ℕ → Prop}
+    (trace : TraceOfLength F S N) (h : forAllRowsOfTraceWithIndex trace prop) :
+    prop trace.lastRow (N - 1) := by
+  induction N, trace using everyRowTwoRowsInduction' with
+  | one row =>
+    simp only [table_norm, and_true] at h
+    exact h
+  | more N curr next rest ih =>
+    simp only [table_norm, and_true] at h ⊢
+    rw [rest.property] at h
+    exact h.left
 
 end TraceOfLength
 
