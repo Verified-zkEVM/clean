@@ -1,10 +1,10 @@
 /-
-"Inductive" table constraints are specified by a circuit on a `k`-row window of cells, which
+"Inductive" tables are specified by a circuit on a `k`-row window of cells, which
 take the first `k-1` rows as input variables and return the `k`-th row as output.
 
 Assignment of cells is handled in the background, which simplifies reasoning about the table.
 
-The common `k=2` case gets its own special definition.
+Thus far, only the common `k=2` case is handled.
 -/
 import Clean.Table.Theorems
 import Clean.Gadgets.Equality

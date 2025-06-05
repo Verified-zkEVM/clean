@@ -1,3 +1,4 @@
+/- Simple Fibonacci example using `InductiveTable` -/
 import Clean.Table.Inductive
 import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Gadgets.Equality
@@ -9,7 +10,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 def fib32 : ℕ -> ℕ
   | 0 => 0
   | 1 => 1
-  | (n + 2) => (fib32 n + fib32 (n + 1)) % 2^32
+  | n + 2 => (fib32 n + fib32 (n + 1)) % 2^32
 
 structure Row (F : Type) where
   x: U32 F
