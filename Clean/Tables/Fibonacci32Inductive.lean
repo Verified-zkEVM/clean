@@ -42,8 +42,7 @@ def table : InductiveTable (F p) Row where
 def formalTable (output : Row (F p)) := table.toFormal { x:= U32.from_byte 0, y:= U32.from_byte 1 } output
 
 -- The table's statement implies that the output row contains the nth Fibonacci number
-theorem tableStatement (output : Row (F p)) :
-  ∀ n > 0, ∀ (trace : TraceOfLength (F p) Row n),
+theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace,
     (formalTable output).statement n trace → output.y.value = fib32 n := by
   intro n hn trace spec
   simp only [FormalTable.statement, formalTable, InductiveTable.toFormal, table] at spec
