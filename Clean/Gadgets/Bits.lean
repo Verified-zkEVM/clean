@@ -24,9 +24,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   local_length _ := n
   output _ i := var_from_offset (fields n) i
 
-  initial_offset_eq _ n := by simp only [main, circuit_norm]
   local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
-  output_eq _ _ := by simp only [main, circuit_norm]
+  subcircuits_consistent x i0 := by simp +arith only [main, circuit_norm]
+    -- TODO arith is needed because forAll passes `local_length + offset` while bind passes `offset + local_length`
 
   assumptions (x : F p) := x.val < 2^n
 
@@ -56,11 +56,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     intro k eval x_var h_env x h_input h_assumptions
     simp only [main, circuit_norm, Boolean.circuit] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_env ⊢
-    obtain ⟨ h_bits, right ⟩ := h_env; clear right;
 
     constructor
     · intro i
-      rw [h_bits i]
+      rw [h_env i]
       simp [field_to_bits, to_bits]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
@@ -69,7 +68,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
       rw [Vector.ext_iff]
       intro i hi
       simp only [circuit_norm, bit_vars]
-      exact h_bits ⟨ i, hi ⟩
+      exact h_env ⟨ i, hi ⟩
 
     show x = eval (field_from_bits_expr bit_vars)
     rw [field_from_bits_eval bit_vars, h_bits_eq, field_from_bits_field_to_bits hn h_assumptions]
@@ -80,7 +79,7 @@ def range_check (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do _ ← main n x -- discard the output
   local_length _ := n
 
-  initial_offset_eq _ n := by simp only [main, circuit_norm]
+  subcircuits_consistent _ n := by simp +arith only [main, circuit_norm]
   local_length_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
 
   assumptions _ := True

@@ -36,7 +36,7 @@ instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F
   output _ _ := ()
 
   local_length_eq _ n := by simp only [main, circuit_norm, mul_zero]
-  initial_offset_eq _ n := by simp only [main, circuit_norm]
+  subcircuits_consistent n := by simp only [main, circuit_norm]
 
 def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (ProvablePair α α) where
   assumptions _ := True

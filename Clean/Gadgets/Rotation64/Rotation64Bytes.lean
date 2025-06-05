@@ -58,10 +58,10 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs Outputs where
     | 5 => ⟨ x5, x6, x7, x0, x1, x2, x3, x4 ⟩
     | 6 => ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
     | 7 => ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
-  initial_offset_eq := by
-    intros
-    fin_cases off
-    repeat rfl
+  subcircuits_consistent x i0 := by
+    simp only [rot64_bytes]
+    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+
   output_eq := by
     intros
     fin_cases off

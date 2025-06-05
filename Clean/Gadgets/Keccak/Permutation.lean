@@ -29,15 +29,14 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := state_var i0 23
 
   local_length_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
-  initial_offset_eq state i0 := by simp only [main, circuit_norm]
+  subcircuits_consistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, state_var, circuit_norm, KeccakRound.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
-  dsimp only [elaborated, main] at h_holds
-  simp only [circuit_norm, subcircuit_norm, spec,
+  simp only [main, circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.spec, KeccakRound.assumptions] at h_holds ⊢
   simp only [zero_add, h_input] at h_holds
@@ -73,10 +72,10 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
-  dsimp only [elaborated, main, assumptions] at h_assumptions h_env ⊢
-  simp only [h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
+  dsimp only [assumptions] at h_assumptions
+  simp only [main, h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.spec, KeccakRound.assumptions, zero_add] at h_env ⊢
+    KeccakRound.spec, KeccakRound.assumptions] at h_env ⊢
 
   obtain ⟨ ⟨ h_init, _ ⟩, h_succ ⟩ := h_env
   intro i hi

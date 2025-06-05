@@ -1,6 +1,5 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
-import Clean.Circuit.Lawful
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
@@ -65,6 +64,9 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
     z := { x0 := var ⟨i0⟩, x1 := var ⟨i0 + 2⟩, x2 := var ⟨i0 + 4⟩, x3 := var ⟨i0 + 6⟩ },
     carry_out := var ⟨i0 + 7⟩
   }
+  -- unfortunately, `rfl` in default tactic times out here
+  local_length_eq _ i0 := by
+    simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
@@ -82,9 +84,9 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  simp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  simp only [Boolean.spec, and_assoc, add_zero, h_inputs] at h
-  rw [ByteTable.equiv, ByteTable.equiv, ByteTable.equiv, ByteTable.equiv] at h
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
+  simp only [circuit_norm, subcircuit_norm] at h
+  simp only [h_inputs, ByteTable.equiv] at h
   repeat rw [add_neg_eq_zero] at h
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -132,10 +134,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  simp only [circuit_norm, subcircuit_norm,
-    add32_full, add8_full_carry, Boolean.circuit,
-    h_inputs, and_assoc
-  ] at henv ⊢
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
+  simp only [h_inputs, circuit_norm, subcircuit_norm] at henv ⊢
 
   -- characterize local witnesses
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := henv

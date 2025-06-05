@@ -321,7 +321,7 @@ theorem mapM_singleton (a : α) {m : Type → Type} [Monad m] [LawfulMonad m] (f
     #v[a].mapM f = (do pure #v[←f a]) := by
   simp [mapM, mapM.go]
 
-theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad m] [Nonempty β] (f : α → m β) (a : α) :
+theorem mapM_push (as : Vector α n) {m : Type → Type} [Monad m] [LawfulMonad m] (f : α → m β) (a : α) :
     (as.push a).mapM f = (do
       let bs ← as.mapM f
       let b ← f a
