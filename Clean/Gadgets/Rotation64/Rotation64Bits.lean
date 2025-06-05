@@ -70,6 +70,35 @@ lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
   fin_cases offset <;>
   simp only [Nat.reducePow, Nat.reduceMod, Nat.zero_pow h, Nat.zero_mod, mul_zero]
 
+lemma Nat.pow_minus_one_mul {x y : ℕ} (hy : y > 0) : x ^ y = x * x ^ (y - 1) := by
+  nth_rw 2 [←Nat.pow_one x]
+  rw [←Nat.pow_add, Nat.add_sub_of_le (by linarith [hy])]
+
+lemma divides_256_two_power {offset : Fin 8} {x i : ℕ} (h : i > 0):
+    (2^offset.val) ∣ x * (256 ^ i) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul]
+  apply Nat.dvd_mul_left_of_dvd
+  apply Nat.pow_dvd_pow
+  linarith [offset.is_lt]
+
+lemma div_256_two_power {offset : Fin 8} {i : ℕ} (h : i > 0):
+    256^i / 2^offset.val = 256^(i-1) * 2^(8 - offset.val) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, Nat.pow_div]
+  rw [←Nat.pow_mul, ←Nat.pow_add]
+  rw [Nat.mul_sub_left_distrib, Nat.mul_one]
+  rw [Nat.sub_add_sub_cancel]
+  repeat linarith [offset.is_lt]
+
+lemma mul_div_256_off {offset : Fin 8} {x : ℕ} (i : ℕ) (h : i > 0):
+    (x * 256^i) / 2^offset.val = x * 256^(i-1) * 2^(8 - offset.val) := by
+  rw [Nat.mul_div_assoc, div_256_two_power h]
+  rw [show 256=2^8 by rfl, ←Nat.pow_mul]
+  ac_rfl
+  rw [show 256=2^8 by rfl, ←Nat.pow_mul]
+  apply Nat.pow_dvd_pow
+  linarith [offset.is_lt]
+
+
 lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
     (2 ^ (8 - offset.val) % 256) = 2 ^ (8 - offset.val) := by
   apply Nat.mod_eq_of_lt
@@ -78,9 +107,6 @@ lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
     | contradiction
     | simp
 
-lemma Nat.pow_minus_one_mul {x y : ℕ} (hy : y > 0) : x ^ y = x * x ^ (y - 1) := by
-  nth_rw 2 [←Nat.pow_one x]
-  rw [←Nat.pow_add, Nat.add_sub_of_le (by linarith [hy])]
 
 lemma shifted_decomposition_eq {offset : Fin 8} {x1 x2 : ℕ} :
     (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256 =
@@ -234,10 +260,24 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
       x3 * 256 ^ 2 * 2^(8 - offset.val) + x4 * 256 ^ 3 * 2^(8 - offset.val) +
       x5 * 256 ^ 4 * 2^(8 - offset.val) + x6 * 256 ^ 5 * 2^(8 - offset.val) +
       x7 * 256 ^ 6 * 2^(8 - offset.val) := by
-    sorry
+    rw [←Nat.pow_one 256]
+    repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power; linarith)]
+
+    rw [mul_div_256_off 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
+    rw [mul_div_256_off 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    rw [mul_div_256_off 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    rw [mul_div_256_off 4 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    rw [mul_div_256_off 5 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    rw [mul_div_256_off 6 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    rw [mul_div_256_off 7 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
+      Nat.add_left_inj]
 
   have h_x0_const : 2 ^ (8 - offset.val) * 256^7 = 2^(64 - offset.val) := by
-    sorry
+    rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, add_comm]
+    simp only [Nat.reduceMul, Nat.ofNat_pos, ne_eq, OfNat.ofNat_ne_one, not_false_eq_true,
+      pow_right_inj₀]
+    simp only [Fin.is_le', ← Nat.add_sub_assoc, Nat.reduceAdd]
 
   rw [h_mod]
 
@@ -250,7 +290,7 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
       not_false_eq_true])]
     rw [h_div]
     rw [shifted_decomposition_eq]
-    repeat rw [shifted_decomposition_eq'' (by linarith)]
+    repeat rw [shifted_decomposition_eq'' (by simp only [gt_iff_lt, Nat.ofNat_pos])]
     simp only [Nat.add_one_sub_one, pow_one]
     simp only [add_mul]
     simp only [add_assoc]
