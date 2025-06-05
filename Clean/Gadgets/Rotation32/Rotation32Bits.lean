@@ -84,8 +84,8 @@ theorem rotation32_bits_soundness (offset : Fin 8) {
   rw [←add_sub_assoc, sub_eq_add_neg] at eq0 eq1 eq2 eq3
   sorry
 
-theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (spec off) := by
-  intro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs x_normalized h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
+  intro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_input x_normalized h_holds
 
   dsimp only [circuit_norm, elaborated, rot32_bits, U32.witness, var_from_offset] at h_holds
   simp only [subcircuit_norm, U32.AssertNormalized.assumptions, U32.AssertNormalized.circuit, circuit_norm] at h_holds
@@ -96,3 +96,38 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (
     U32.AssertNormalized.spec, Vector.mapRange_succ, Vector.mapRange_zero, Vector.push_mk,
     Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append, forall_const,
     Expression.eval.eq_1] at h_holds
+
+  simp only [assumptions] at x_normalized
+  simp [circuit_norm, spec, rot_right32, eval, elaborated, var_from_offset, Vector.mapRange]
+  ring_nf at h_input h_holds
+
+  rw [
+    show Expression.eval env x0_var = x0 by injections h_input,
+    show Expression.eval env x1_var = x1 by injections h_input,
+    show Expression.eval env x2_var = x2 by injections h_input,
+    show Expression.eval env x3_var = x3 by injections h_input
+  ] at h_holds
+  simp only [and_assoc] at h_holds
+  -- TODO: clarify why there's a difference between 32 and 64 bit version
+  -- for y_normalized. At some point above, h_holds seems to be rewritten differently...
+  obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3⟩ := h_holds
+  specialize h_decomposition x_normalized
+  obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h⟩ := h_decomposition
+  simp only [U32.value, y_normalized, and_true]
+  sorry
+  -- rw [rotation32_bits_soundness offset
+  --   h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
+  --   eq0 eq1 eq2 eq3]
+
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
+  sorry
+
+def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 := {
+  elaborated offset with
+  assumptions := assumptions
+  spec := spec offset
+  soundness := soundness offset
+  completeness := completeness offset
+}
+
+end Gadgets.Rotation32Bits
