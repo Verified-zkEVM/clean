@@ -206,4 +206,8 @@ def circuit : FormalCircuit (F p) U32 U32 where
 
 end U32.Copy
 
+@[reducible]
+def U32.copy (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) :=
+  subcircuit U32.Copy.circuit x
+
 end
