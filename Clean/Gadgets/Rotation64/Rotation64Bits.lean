@@ -67,8 +67,16 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
 lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
     (x * 256^i) % 2^offset.val = 0 := by
   rw [Nat.mul_mod, Nat.pow_mod]
-  fin_cases offset
-  repeat simp [Nat.zero_pow h]
+  fin_cases offset <;>
+  simp only [Nat.reducePow, Nat.reduceMod, Nat.zero_pow h, Nat.zero_mod, mul_zero]
+
+lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
+    (2 ^ (8 - offset.val) % 256) = 2 ^ (8 - offset.val) := by
+  apply Nat.mod_eq_of_lt
+  fin_cases offset <;>
+    first
+    | contradiction
+    | simp
 
 
 theorem rotation64_bits_soundness (offset : Fin 8) {
@@ -184,7 +192,15 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
 
   rw [h_mod]
-  sorry
+  if h_offset : offset = 0 then
+    rw [h_offset]
+    simp only [Fin.isValue, Fin.val_zero, pow_zero, Nat.div_one, Nat.mod_one, tsub_zero,
+      Nat.reducePow, Nat.mod_self, mul_zero, add_zero, zero_mul, zero_add, Nat.add_left_inj]
+  else
+    rw [two_off_eq_mod _ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
+      not_false_eq_true])]
+
+    sorry
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
