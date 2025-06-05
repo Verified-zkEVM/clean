@@ -1,5 +1,6 @@
 import Clean.Gadgets.ByteLookup
 import Clean.Circuit.Extensions
+import Clean.Gadgets.Equality
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -157,5 +158,52 @@ def circuit : FormalAssertion (F p) U32 where
     simp_all [circuit_norm, eval]
 
 end U32.AssertNormalized
+
+-- TODO: Maybe add U32.witness here?
+
+namespace U32.Copy
+
+def u32_copy (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p))  := do
+  let y ← ProvableType.witness fun env =>
+    U32.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3)
+  assert_equals x y
+  return y
+
+def assumptions (_input : U32 (F p)) := True
+
+def spec (x y : U32 (F p)) := x = y
+
+def circuit : FormalCircuit (F p) U32 U32 where
+  main := u32_copy
+  assumptions := assumptions
+  spec := spec
+  local_length := 4
+  output inputs i0 := var_from_offset U32 i0
+  soundness := by
+    rintro i0 env x_var
+    rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    simp [circuit_norm, u32_copy, spec, h_eval, eval, var_from_offset]
+    injections h_eval
+    intros h0 h1 h2 h3
+    aesop
+  completeness := by
+    rintro i0 env x_var
+    rintro h ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    simp [circuit_norm, u32_copy, spec, h_eval]
+    simp [circuit_norm, u32_copy, Gadgets.Equality.elaborated] at h
+    simp [subcircuit_norm, eval] at h
+    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
+    have h0 := h 0
+    have h1 := h 1
+    have h2 := h 2
+    have h3 := h 3
+    simp only [Fin.isValue, Fin.val_zero, add_zero, List.getElem_cons_zero] at h0
+    simp only [Fin.isValue, Fin.val_one, List.getElem_cons_succ, List.getElem_cons_zero] at h1
+    simp only [Fin.isValue, Fin.val_two, List.getElem_cons_succ, List.getElem_cons_zero] at h2
+    simp only [Fin.isValue, show @Fin.val 4 3 = 3 by rfl, List.getElem_cons_succ,
+      List.getElem_cons_zero] at h3
+    simp_all
+
+end U32.Copy
 
 end
