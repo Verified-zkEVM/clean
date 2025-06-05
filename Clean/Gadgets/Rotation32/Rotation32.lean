@@ -58,5 +58,33 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U32
   let byte_offset : ℕ := offset.val / 8
   let bit_offset : ℕ := (offset % 8).val
+  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation32Bytes.elaborated byte_offset) (x_var : Var U32 _) i0)
+
+  simp [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.spec, Rotation32Bytes.assumptions,
+    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.spec, Rotation32Bits.assumptions,
+    Vector.finRange] at h_holds
+
+  simp [circuit_norm, spec, h_holds, elaborated]
+  set y := eval env (var_from_offset U32 (i0 + 8))
+
+  simp [assumptions] at x_normalized
+  rw [←h_input] at x_normalized
+  obtain ⟨h0, h1⟩ := h_holds
+  specialize h0 x_normalized
+  obtain ⟨hy_rot, hy_norm⟩ := h0
+  specialize h1 hy_norm
+  rw [hy_rot] at h1
+  obtain ⟨hy, hy_norm⟩ := h1
+  simp only [hy_norm, and_true]
+  rw [h_input] at hy x_normalized
+
+  -- reason about rotation
+  rw [Theorems.rot_right_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
+  rw [hy]
+  rw [show(offset.val / 8) % 8 = offset.val / 8 by
+    apply Nat.mod_eq_of_lt
+    apply Nat.div_lt_of_lt_mul
+    exact offset.is_lt]
+  rw [Nat.div_add_mod']
 
 end Gadgets.Rotation32
