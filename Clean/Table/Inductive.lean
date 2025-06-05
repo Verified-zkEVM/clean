@@ -49,8 +49,8 @@ structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [ProvableTyp
 namespace InductiveTable
 variable {F : Type} [Field F] {Row : TypeMap} [ProvableType Row]
 
-def tableSpec (table : InductiveTable F Row) {N : ℕ} (trace : TraceOfLength F Row N) : Prop :=
-  trace.forAllRowsOfTraceWithIndex fun row i => table.spec i row
+def tableSpec (table : InductiveTable F Row) (output : Row F) (N : ℕ) : Prop :=
+  table.spec N output
 
 def inductiveConstraint (table : InductiveTable F Row) : TableConstraint 2 Row F Unit := do
   let input ← get_curr_row
@@ -66,53 +66,87 @@ def equalityConstraint (target : Row F) : SingleRowConstraint Row F := do
 def tableConstraints (table : InductiveTable F Row) (input output: Row F) :
   List (TableOperation Row F) := [
     .EveryRowExceptLast table.inductiveConstraint,
-    .Boundary 0 (equalityConstraint input),
-    -- TODO enable "last row" equality constraint without knowing the length `N` up front
-    -- .Boundary (N - 1) (equalityConstraint output)
+    .Boundary (.fromStart 0) (equalityConstraint input),
+    .Boundary (.fromEnd 0) (equalityConstraint output),
   ]
 
-theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
-  (N : ℕ) (trace: TraceOfLength F Row N) (env: ℕ → ℕ → Environment F) :
+theorem equalityConstraint.soundness  {row : Row F} {input : Row F} {env : Environment F} :
+  Circuit.constraints_hold.soundness (window_env (equalityConstraint input) ⟨<+> +> row, rfl⟩ env)
+    (equalityConstraint input .empty).2.circuit
+    ↔ row = input := by
+  set env' := window_env (equalityConstraint input) ⟨<+> +> row, rfl⟩ env
+  simp only [equalityConstraint, circuit_norm, table_norm]
+
+  have h_env_in i (hi : i < size Row) : (to_elements row)[i] = env'.get i := by
+    have h_env' : env' = window_env (equalityConstraint input) ⟨<+> +> row, _⟩ env := rfl
+    simp only [window_env, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
+    simp [h_env', hi, Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
+      Vector.mapRange_zero, Vector.append_empty]
+
+  have h_env : eval env' (var_from_offset Row 0) = row := by
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [h_env_in i hi, ProvableType.eval_var_from_offset,
+      ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
+  rw [h_env]
+
+lemma tableSoundnessAux (table : InductiveTable F Row) (input output: Row F)
+  (N : ℕ+) (trace: TraceOfLength F Row N) (env: ℕ → ℕ → Environment F) :
   table.spec 0 input →
   table_constraints_hold (table.tableConstraints input output) trace env →
-    table.tableSpec trace := by
+    trace.forAllRowsOfTraceWithIndex (fun row i => table.spec i row)
+    ∧ trace.lastRow = output := by
   intro input_spec
+
+  -- add a condition on the trace length to the goal,
+  -- so that we can change the induction to not depend on `N` (which would make it unprovable)
+  rcases trace with ⟨ trace, h_trace ⟩
+  suffices goal : table_constraints_hold (table.tableConstraints input output) ⟨ trace, h_trace ⟩ env →
+    trace.forAllRowsOfTraceWithIndex (fun row i => table.spec i row) ∧
+    (∀ (h_len : trace.len = N), trace.lastRow (by rw [h_len]; exact N.pos) = output) by
+      intro constraints
+      specialize goal constraints
+      exact ⟨ goal.left, goal.right h_trace ⟩
+
   simp only [table_norm, tableConstraints, tableSpec]
-  induction' trace.val using Trace.everyRowTwoRowsInduction
-  case zero => intro; trivial
+  clear h_trace
+  induction trace using Trace.everyRowTwoRowsInduction
+
+  case zero =>
+    intro constraints
+    simp only [Trace.forAllRowsOfTraceWithIndex.inner, true_and]
+    intro N0
+    nomatch N
 
   case one first_row =>
     intro constraints
     simp only [table_norm, tableConstraints, List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
       List.length_cons, zero_add, List.cons_append, reduceIte, and_true] at constraints
-    set env' := window_env (equalityConstraint input) ⟨<+> +> first_row, _⟩ (env 1 0)
-    simp only [table_norm, equalityConstraint, circuit_norm] at constraints
-    simp only [table_norm, and_true]
-    have h_env i (hi : i < size Row) : (to_elements first_row)[i] = env'.get i := by
-      have h_env' : env' = window_env (equalityConstraint input) ⟨<+> +> first_row, _⟩ (env 1 0) := rfl
-      simp only [window_env, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
-      simp [h_env', hi, Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
-        Vector.mapRange_zero, Vector.append_empty]
-    have input_eq : first_row = input := by
-      rw [ProvableType.ext_iff]
-      intro i hi
-      rw [h_env i hi, ←constraints, ProvableType.eval_var_from_offset,
-        ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
-    rw [input_eq]
-    exact input_spec
+    obtain ⟨ input_eq, output_eq ⟩ := constraints
+    rw [equalityConstraint.soundness] at input_eq output_eq
+    simp only [table_norm, and_true, Trace.lastRow]
+    constructor
+    · rw [input_eq]
+      exact input_spec
+    intro h_len
+    rw [←h_len] at output_eq
+    simp only [zero_add, tsub_self, reduceIte] at output_eq
+    exact output_eq
 
   case more curr next rest ih1 ih2 =>
+    intro constraints
     simp only [table_norm, tableConstraints, List.size_toArray, List.length_nil, List.push_toArray,
       List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
-      and_false, reduceIte] at ih1 ih2 ⊢
-    intro ⟨ constraints, h_rest ⟩
+      and_false, reduceIte, PNat.mk_coe, Nat.add_one_sub_one, tsub_zero, Nat.add_left_inj,
+      Nat.reduceAdd, true_and] at constraints ih1 ih2 ⊢
+    rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
     specialize ih2 h_rest
     have spec_previous : table.spec rest.len curr := by simp [ih2]
-    simp only [ih2, and_self, and_true]
+    simp only [ih2, and_self, and_true, Trace.lastRow]
     clear ih1 ih2
     set env' := window_env table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1))
     simp only [table_norm, circuit_norm, inductiveConstraint] at constraints
-    obtain ⟨ main_constraints, output_eq ⟩ := constraints
+    obtain ⟨ main_constraints, return_eq ⟩ := constraints
     have h_env' : env' = window_env table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1)) := rfl
     simp only [window_env, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
@@ -140,6 +174,7 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
         CellAssignment.assignment_from_circuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       simp +arith [add_assoc]
+    clear h_env'
 
     have input_eq : eval env' curr_var = curr := by
       rw [ProvableType.ext_iff]
@@ -154,15 +189,32 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
         ProvableType.to_elements_from_elements, Vector.getElem_mapRange, add_comm _ i, add_assoc]
 
     have h_soundness := table.soundness rest.len env' curr_var curr input_eq main_constraints spec_previous
-    rw [←output_eq, next_eq] at h_soundness
-    exact h_soundness
+    rw [←return_eq, next_eq] at h_soundness
+    use h_soundness
+
+    intro h_len
+    rw [equalityConstraint.soundness] at output_eq
+    rw [←h_len] at output_eq
+    simp only [add_tsub_cancel_right, Nat.add_left_inj, reduceIte] at output_eq
+    exact output_eq
+
+theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
+  (N : ℕ+) (trace: TraceOfLength F Row N) (env: ℕ → ℕ → Environment F) :
+  table.spec 0 input → table_constraints_hold (table.tableConstraints input output) trace env →
+    table.spec (N-1) output := by
+  intro h_input h_constraints
+  have ⟨ h_spec, h_output ⟩ := table.tableSoundnessAux input output N trace env h_input h_constraints
+  rw [←h_output]
+  exact TraceOfLength.lastRow_of_forAll (prop := fun row i => table.spec i row) trace h_spec
 
 def toFormal (table : InductiveTable F Row) (input output: Row F) (h_input : table.spec 0 input) : FormalTable F Row where
   constraints := table.tableConstraints input output
-  spec := table.tableSpec
-  soundness := by
-    intro N trace env _ constraints
-    exact table.tableSoundness input output _ _ _ h_input constraints
+  assumption N := N > 0
+  spec {N} _ := table.spec (N-1) output
+
+  soundness N trace env assumption constraints :=
+    table.tableSoundness input output ⟨N, assumption⟩ trace env h_input constraints
+
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
       table_assignment_norm, circuit_norm, CellAssignment.assignment_from_circuit_offset]
