@@ -61,6 +61,61 @@ def everyRowTwoRowsInduction' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
         (by sorry)
 
 end Trace
+
+namespace TraceOfLength
+variable {F : Type} {S : Type → Type} [ProvableType S] (N : ℕ)
+/--
+  Induction principle that applies for every row in the trace, where the inductive step takes into
+  account the previous two rows.
+-/
+def everyRowTwoRowsInduction {P : (N : ℕ) → TraceOfLength F S N → Sort*}
+    (zero : P 0 ⟨<+>, rfl⟩)
+    (one : ∀ row : Row F S, P 1 ⟨<+> +> row, rfl⟩)
+    (more : ∀ (N : ℕ) (curr next : Row F S),
+      ∀ rest : TraceOfLength F S N, P N (rest) →
+        P (N + 1) ⟨rest.val +> curr, by rw [Trace.len, rest.property]⟩ →
+        P (N + 2) ⟨rest.val +> curr +> next, by simp only [Trace.len, rest.property]⟩)
+    : ∀ N trace, P N trace
+  | 0, ⟨<+>, _⟩ => zero
+  | 1, ⟨<+> +> first, _⟩ => one first
+  | N + 2, ⟨rest +> curr +> next, (h : rest.len + 2 = N + 2)⟩ => by
+    have eq : rest.len = N := by rw [Nat.add_left_inj] at h; exact h
+    exact more N curr next ⟨rest, eq⟩
+      (everyRowTwoRowsInduction zero one more N ⟨rest, eq⟩)
+      (everyRowTwoRowsInduction zero one more (N + 1) ⟨rest +> curr, by rw [Trace.len, eq]⟩)
+
+def everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
+    (one : ∀ row : Row F S, P 1 ⟨<+> +> row, rfl⟩)
+    (more : ∀ (N : ℕ) (curr next : Row F S) (rest : TraceOfLength F S N),
+      P ⟨N + 1, Nat.succ_pos N⟩ ⟨rest.val +> curr, by simp [Trace.len, rest.property]⟩ →
+      P ⟨N + 2, Nat.succ_pos (N + 1)⟩ ⟨rest.val +> curr +> next, by simp [Trace.len, rest.property]⟩)
+    : ∀ N trace, P N trace := by
+  intro N trace
+  let P' (N : ℕ) (trace : TraceOfLength F S N) : Prop :=
+    if h : N = 0 then True else P ⟨N, Nat.pos_iff_ne_zero.mpr h⟩ trace
+  have goal' := everyRowTwoRowsInduction (P:=P') trivial one (by
+    intro N curr next rest h_rest h_curr
+    exact more N curr next rest h_curr) N trace
+  simpa [P', N.pos] using goal'
+
+def twoRowInduction {prop : Row F S → ℕ → Prop}
+    (zero : ∀ first_row : Row F S, prop first_row 0)
+    (succ : ∀ (N : ℕ) (curr next : Row F S), prop curr N → prop next (N + 1))
+    : ∀ N (trace : TraceOfLength F S N), forAllRowsOfTraceWithIndex trace prop := by
+  intro N trace
+  simp only [forAllRowsOfTraceWithIndex]
+  induction trace.val using Trace.everyRowTwoRowsInduction with
+  | zero => trivial
+  | one first_row =>
+    simp only [forAllRowsOfTraceWithIndex.inner]
+    exact ⟨ zero first_row, trivial ⟩
+  | more curr next rest _ ih2 =>
+    simp only [forAllRowsOfTraceWithIndex.inner] at *
+    have h3 : prop next (rest +> curr).len := succ _ _ _ ih2.left
+    exact ⟨ h3, ih2.left, ih2.right ⟩
+
+end TraceOfLength
+
 variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
