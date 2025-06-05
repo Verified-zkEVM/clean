@@ -240,6 +240,18 @@ theorem cast_drop_append_of_eq_length {v : Vector α n} {w : Vector α m} :
     List.drop_append_of_le_length (Nat.le_of_eq hv_length.symm),
     List.drop_of_length_le (Nat.le_of_eq hv_length), List.nil_append,
     List.take_of_length_le (Nat.le_of_eq hw_length), Array.toArray_toList]
+
+theorem append_take_drop {v : Vector α (n + m)} :
+    (v.take n |>.cast Nat.min_add_right_self) ++ (v.drop n |>.cast (Nat.add_sub_self_left n m)) = v := by
+  rw [take_eq_extract, drop_eq_cast_extract, cast_cast, Vector.ext_iff]
+  intro i hi
+  rw [getElem_append]
+  by_cases hi' : i < n
+  · have goal' : (v.extract 0 n)[i] = v[0 + i] := getElem_extract (by omega)
+    simp_all [hi', getElem_cast]
+  simp only [hi', reduceDIte, getElem_cast, getElem_extract]
+  congr
+  omega
 end Vector
 
 -- helpers for `Vector.toChunks`
