@@ -92,18 +92,14 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 variable {α : Type}
 
 -- assignment copied from eval:
--- #eval (recursive_relation (p:=p_babybear)).final_assignment.vars
+-- #eval! (recursive_relation (p:=p_babybear)).final_assignment.vars
 lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  simp only [recursive_relation, table_assignment_norm, circuit_norm,
-    Gadgets.Addition32Full.circuit, assign_U32, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
-    Vector.mapRange_zero, Vector.mapRange_succ]
-  simp [Vector.append_empty, circuit_norm, Vector.mapRange_zero]
-  -- TODO goal is false!!
-  sorry
+  dsimp only [table_assignment_norm, circuit_norm, recursive_relation, Gadgets.Addition32Full.circuit, assign_U32]
+  simp only [table_assignment_norm, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero, Vector.mapRange_succ]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -174,10 +170,6 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
   spec := spec,
-  offset_consistent := by
-    constructor
-    · simp only [boundary, table_assignment_norm, circuit_norm]
-    constructor
 
   soundness := by
     intro N trace envs _

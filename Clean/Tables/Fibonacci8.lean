@@ -97,8 +97,6 @@ lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p))
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table
   spec := spec
-  offset_consistent := by
-    repeat constructor
 
   soundness := by
     intro N trace envs _
@@ -139,7 +137,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl
       have hx_next : env.get 2 = next.x := by rfl
-      have hy_next : env.get 3 = next.y := by rfl
+      have hy_next : env.get (2 + 1) = next.y := by rfl
       rw [hx_curr, hy_curr, hx_next, hy_next] at constraints_hold
       clear hx_curr hy_curr hx_next hy_next
 
