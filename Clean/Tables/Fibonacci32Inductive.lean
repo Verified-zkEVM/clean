@@ -3,7 +3,7 @@ import Clean.Table.Inductive
 import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Gadgets.Equality
 
-namespace Tables.Fibonacci32
+namespace Tables.Fibonacci32Inductive
 open Gadgets
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -49,4 +49,4 @@ theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace,
   replace spec := spec ⟨hn, (by simp [table, fib32, U32.from_byte_value, U32.from_byte_is_normalized])⟩
   simp_all +arith
 
-end Tables.Fibonacci32
+end Tables.Fibonacci32Inductive

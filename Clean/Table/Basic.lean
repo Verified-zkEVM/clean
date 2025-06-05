@@ -434,7 +434,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
 instance : Repr RowIndex where
   reprPrec
     | .fromStart i, _ => reprStr (i : ℤ)
-    | .fromEnd i, _ => reprStr (-i : ℤ)
+    | .fromEnd i, _ => reprStr (-i-1 : ℤ)
 
 instance [Repr F] : Repr (TableOperation S F) where
   reprPrec op _ := match op with
