@@ -104,6 +104,19 @@ lemma shifted_decomposition_eq'' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
 
 
+  lemma soundness_simp {offset : Fin 8} {x y : ℕ} :
+      x % 2 ^ offset.val * 2 ^ (8 - offset.val) * y + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) * y =
+      x * y * 2^ (8 - offset.val) := by
+    rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
+    ac_rfl
+
+lemma soundness_simp' {offset : Fin 8} {x : ℕ} :
+    x % 2 ^ offset.val * 2 ^ (8 - offset.val) + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) =
+    x * 2^ (8 - offset.val) := by
+  rw [←Nat.mul_one (x % 2 ^ offset.val * 2 ^ (8 - offset.val))]
+  rw [←Nat.mul_one (2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val))]
+  rw [soundness_simp, Nat.mul_one]
+
 theorem rotation64_bits_soundness (offset : Fin 8) {
       x0 x1 x2 x3 x4 x5 x6 x7
       y0 y1 y2 y3 y4 y5 y6 y7
@@ -226,8 +239,23 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
       not_false_eq_true])]
     rw [shifted_decomposition_eq]
     repeat rw [shifted_decomposition_eq'' (by linarith)]
-    simp only [Nat.add_assoc, Nat.add_one_sub_one, pow_one]
-
+    simp only [Nat.add_one_sub_one, pow_one]
+    simp only [add_mul]
+    simp only [add_assoc]
+    rw [←add_assoc _ _ (_ * 256 ^ 7), soundness_simp]
+    nth_rw 12 [←add_assoc]
+    rw [soundness_simp]
+    nth_rw 10 [←add_assoc]
+    rw [soundness_simp]
+    nth_rw 8 [←add_assoc]
+    rw [soundness_simp]
+    nth_rw 6 [←add_assoc]
+    rw [soundness_simp]
+    nth_rw 4 [←add_assoc]
+    nth_rw 2 [Nat.mul_right_comm]
+    rw [soundness_simp]
+    nth_rw 2 [←add_assoc]
+    rw [soundness_simp']
 
     repeat sorry
 
