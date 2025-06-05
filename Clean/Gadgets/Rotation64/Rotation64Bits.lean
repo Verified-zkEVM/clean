@@ -64,6 +64,13 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp only [rot64_bits]
     rfl
 
+lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
+    (x * 256^i) % 2^offset.val = 0 := by
+  rw [Nat.mul_mod, Nat.pow_mod]
+  fin_cases offset
+  repeat simp [Nat.zero_pow h]
+
+
 theorem rotation64_bits_soundness (offset : Fin 8) {
       x0 x1 x2 x3 x4 x5 x6 x7
       y0 y1 y2 y3 y4 y5 y6 y7
@@ -152,9 +159,31 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   rw [eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7]
   dsimp only
 
-  simp [h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,
-    h_x4_l, h_x4_h, h_x5_l, h_x5_h, h_x6_l, h_x6_h, h_x7_l, h_x7_h, -Nat.reducePow]
+  have offset_mod_64 : offset.val % 64 = offset.val := by
+    apply Nat.mod_eq_of_lt
+    linarith [offset.is_lt]
 
+  simp [h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,
+    h_x4_l, h_x4_h, h_x5_l, h_x5_h, h_x6_l, h_x6_h, h_x7_l, h_x7_h,
+    offset_mod_64, -Nat.reducePow]
+
+  set x0 := x0.val
+  set x1 := x1.val
+  set x2 := x2.val
+  set x3 := x3.val
+  set x4 := x4.val
+  set x5 := x5.val
+  set x6 := x6.val
+  set x7 := x7.val
+
+  have h_mod : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
+        2 ^ offset.val = x0 % 2 ^ offset.val := by
+    simp only [pow_one, Nat.add_mod, dvd_refl, Nat.mod_mod_of_dvd, gt_iff_lt, Nat.ofNat_pos,
+      mul_mod_256_off, add_zero]
+    rw [←Nat.pow_one 256, Nat.mod_mod, Nat.mod_mod, mul_mod_256_off _ _ _ (by linarith)]
+    simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
+
+  rw [h_mod]
   sorry
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
