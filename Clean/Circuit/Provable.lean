@@ -195,20 +195,38 @@ namespace ProvableStruct
 
 @[circuit_norm]
 def components_to_elements {F : Type} : (cs: List WithProvableType) → ProvableTypeList F cs → Vector F (combined_size' cs)
-    | [], .nil => #v[]
-    | _ :: cs, .cons a as => to_elements a ++ components_to_elements cs as
+  | [], .nil => #v[]
+  | _ :: cs, .cons a as => to_elements a ++ components_to_elements cs as
 
 @[circuit_norm]
 def components_from_elements {F : Type} : (cs: List WithProvableType) → Vector F (combined_size' cs) → ProvableTypeList F cs
-    | [], _ => .nil
-    | c :: cs, (v : Vector F (size c.type + combined_size' cs)) =>
-      let head_size := size c.type
-      let tail_size := combined_size' cs
-      have h_head : head_size ⊓ (head_size + tail_size) = head_size := Nat.min_add_right_self
-      have h_tail : head_size + tail_size - head_size = tail_size := Nat.add_sub_self_left _ _
-      let head : Vector F head_size := (v.take head_size).cast h_head
-      let tail : Vector F tail_size := (v.drop head_size).cast h_tail
-      .cons (from_elements head) (components_from_elements cs tail)
+  | [], _ => .nil
+  | c :: cs, (v : Vector F (size c.type + combined_size' cs)) =>
+    let head_size := size c.type
+    let tail_size := combined_size' cs
+    have h_head : head_size ⊓ (head_size + tail_size) = head_size := Nat.min_add_right_self
+    have h_tail : head_size + tail_size - head_size = tail_size := Nat.add_sub_self_left _ _
+    let head : Vector F head_size := (v.take head_size).cast h_head
+    let tail : Vector F tail_size := (v.drop head_size).cast h_tail
+    .cons (from_elements head) (components_from_elements cs tail)
+
+variable {F : Type}
+
+theorem from_elements_to_elements {F} : (cs: List WithProvableType) → (xs : ProvableTypeList F cs) →
+    components_from_elements cs (components_to_elements cs xs) = xs
+  | [], .nil => rfl
+  | c :: cs, .cons a as => by
+    rw [components_from_elements, components_to_elements,
+      Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length,
+      ProvableType.from_elements_to_elements, from_elements_to_elements]
+
+theorem to_elements_from_elements {F} : (cs: List WithProvableType) → (xs : Vector F (combined_size' cs)) →
+    components_to_elements cs (components_from_elements cs xs) = xs
+  | [], ⟨ .mk [], _ ⟩ => rfl
+  | c :: cs, (v : Vector F (size c.type + combined_size' cs)) => by
+    simp only [components_to_elements, components_from_elements,
+      to_elements_from_elements, ProvableType.to_elements_from_elements]
+    rw [Vector.append_take_drop]
 end ProvableStruct
 
 open ProvableStruct in
@@ -220,9 +238,10 @@ instance ProvableType.from_struct {α : TypeMap} [ProvableStruct α] : ProvableT
     v.cast combined_size_eq |> components_from_elements (components α) |> from_components
   from_elements_to_elements x := by
     simp only [Vector.cast_cast, Vector.cast_rfl]
-    sorry
+    rw [ProvableStruct.from_elements_to_elements, from_components_to_components]
   to_elements_from_elements x := by
-    sorry
+    rw [to_components_from_components, ProvableStruct.to_elements_from_elements]
+    simp only [Vector.cast_cast, Vector.cast_rfl]
 
 namespace ProvableStruct
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
