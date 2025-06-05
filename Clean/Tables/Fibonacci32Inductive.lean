@@ -38,15 +38,16 @@ def table : InductiveTable (F p) Row where
   completeness := by simp_all [fib32, circuit_norm, subcircuit_norm,
     Addition32Full.circuit, Addition32Full.assumptions, Addition32Full.spec]
 
-def formalTable (output : Row (F p)) := table.toFormal ⟨ U32.from_byte 0, U32.from_byte 1 ⟩ output
-  (by simp [table, fib32, U32.from_byte_value, U32.from_byte_is_normalized])
+-- the input is hard-coded to (0, 1)
+def formalTable (output : Row (F p)) := table.toFormal { x:= U32.from_byte 0, y:= U32.from_byte 1 } output
 
-theorem tableSoundness (output : Row (F p)) :
+-- The table's statement implies that the output row contains the nth Fibonacci number
+theorem tableStatement (output : Row (F p)) :
   ∀ n > 0, ∀ (trace : TraceOfLength (F p) Row n),
     (formalTable output).statement n trace → output.y.value = fib32 n := by
   intro n hn trace spec
   simp only [FormalTable.statement, formalTable, InductiveTable.toFormal, table] at spec
-  replace spec := (spec hn).2.1
+  replace spec := spec ⟨hn, (by simp [table, fib32, U32.from_byte_value, U32.from_byte_is_normalized])⟩
   simp_all +arith
 
 end Tables.Fibonacci32

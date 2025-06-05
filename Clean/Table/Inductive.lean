@@ -49,6 +49,15 @@ structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [ProvableTyp
 namespace InductiveTable
 variable {F : Type} [Field F] {Row : TypeMap} [ProvableType Row]
 
+/-
+we show that every `InductiveTable` can be used to define a `FormalTable`
+whose statement is the following input-output relation:
+
+`table.spec 0 input → table.spec (N-1) output`
+
+for any given public `input` and `ouput`.
+-/
+
 def inductiveConstraint (table : InductiveTable F Row) : TableConstraint 2 Row F Unit := do
   let input ← get_curr_row
   let output ← table.main input
@@ -204,13 +213,13 @@ theorem tableSoundness (table : InductiveTable F Row) (input output: Row F)
   rw [←h_output]
   exact TraceOfLength.lastRow_of_forAll (prop := fun row i => table.spec i row) trace h_spec
 
-def toFormal (table : InductiveTable F Row) (input output: Row F) (h_input : table.spec 0 input) : FormalTable F Row where
+def toFormal (table : InductiveTable F Row) (input output: Row F) : FormalTable F Row where
   constraints := table.tableConstraints input output
-  assumption N := N > 0
+  assumption N := N > 0 ∧ table.spec 0 input
   spec {N} _ := table.spec (N-1) output
 
   soundness N trace env assumption constraints :=
-    table.tableSoundness input output ⟨N, assumption⟩ trace env h_input constraints
+    table.tableSoundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
