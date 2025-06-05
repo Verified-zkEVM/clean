@@ -50,8 +50,8 @@ namespace InductiveTable
 variable {F : Type} [Field F] {Row : TypeMap} [ProvableType Row]
 
 /-
-we show that every `InductiveTable` can be used to define a `FormalTable`
-whose statement is the following input-output relation:
+we show that every `InductiveTable` can be used to define a `FormalTable`,
+that encodes the following statement:
 
 `table.spec 0 input → table.spec (N-1) output`
 
