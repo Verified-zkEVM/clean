@@ -247,7 +247,7 @@ namespace ProvableStruct
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
 
 /--
-Alterℕive `eval` which evaluates each component separately.
+Alternative `eval` which evaluates each component separately.
 -/
 @[circuit_norm]
 def eval (env : Environment F) (var: α (Expression F)) : α F :=
@@ -285,7 +285,7 @@ where
     apply eval_eq_eval_struct_aux
 
 /--
-Alterℕive `var_from_offset` which creates each component separately.
+Alternative `var_from_offset` which creates each component separately.
 -/
 @[circuit_norm]
 def var_from_offset (α : TypeMap) [ProvableStruct α] (offset : ℕ) : Var α F :=
@@ -343,6 +343,20 @@ theorem var_from_offset_fields (offset : ℕ) :
   var_from_offset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
 namespace ProvableType
+variable {α: TypeMap} [ProvableType α]
+
+omit [Field F] in
+lemma comp_to_elements_from_elements :
+    to_elements ∘ @from_elements α _ F = id := by
+  funext x
+  simp [to_elements_from_elements]
+
+omit [Field F] in
+lemma comp_from_elements_to_elements :
+    from_elements ∘ @to_elements α _ F = id := by
+  funext x
+  simp [from_elements_to_elements]
+
 @[circuit_norm]
 theorem eval_const {F : Type} [Field F] {α: TypeMap} [ProvableType α] (env : Environment F) (x : α F) :
   eval env (const x) = x := by
@@ -386,9 +400,9 @@ instance ProvableVector.instance {α: TypeMap} [NonEmptyProvableType α] : Prova
   to_elements x := x.map to_elements |>.flatten
   from_elements v := v.toChunks (psize α) |>.map from_elements
   from_elements_to_elements x := by
-    sorry
+    rw [Vector.flatten_toChunks, Vector.map_map, ProvableType.comp_from_elements_to_elements, Vector.map_id]
   to_elements_from_elements v := by
-    sorry
+    rw [Vector.map_map, ProvableType.comp_to_elements_from_elements, Vector.map_id, Vector.toChunks_flatten]
 
 theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (env : Environment F)
   (x : Var (ProvableVector α n) F) :
@@ -426,12 +440,10 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
     (a, b)
   from_elements_to_elements x := by
     rcases x with ⟨a, b⟩
-    simp only
-    rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
-    simp only [ProvableType.from_elements_to_elements]
+    simp only [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length,
+      ProvableType.from_elements_to_elements]
   to_elements_from_elements v := by
-    simp only [ProvableType.to_elements_from_elements]
-    simp [Vector.cast]
+    simp [ProvableType.to_elements_from_elements, Vector.cast]
 
 @[circuit_norm ↓ high]
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)
