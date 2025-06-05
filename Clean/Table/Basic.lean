@@ -407,15 +407,15 @@ def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S
 def TwoRowsConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 2 S F Unit
 
 -- specify a row, either counting from the start or from the end of the trace.
-inductive SpecificRow where
-  | fromStart : ℕ → SpecificRow
-  | fromEnd : ℕ → SpecificRow
+inductive RowIndex where
+  | fromStart : ℕ → RowIndex
+  | fromEnd : ℕ → RowIndex
 
 inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
-  | Boundary: SpecificRow → SingleRowConstraint S F → TableOperation S F
+  | Boundary: RowIndex → SingleRowConstraint S F → TableOperation S F
 
   /--
     An `EveryRow` constraint is a constraint that is applied to every row.
@@ -431,7 +431,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
   -/
   | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
 
-instance : Repr SpecificRow where
+instance : Repr RowIndex where
   reprPrec
     | .fromStart i, _ => reprStr (i : ℤ)
     | .fromEnd i, _ => reprStr (-i : ℤ)
