@@ -119,4 +119,43 @@ lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p)
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
 end U32
+
+namespace U32.AssertNormalized
+open Gadgets (ByteLookup ByteTable)
+
+/--
+  Assert that a 32-bit unsigned integer is normalized.
+  This means that all its limbs are less than 256.
+-/
+def u32_assert_normalized (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
+  let ⟨ x0, x1, x2, x3 ⟩ := inputs
+  lookup (ByteLookup x0)
+  lookup (ByteLookup x1)
+  lookup (ByteLookup x2)
+  lookup (ByteLookup x3)
+
+def assumptions (_input : U32 (F p)) := True
+
+def spec (inputs : U32 (F p)) := inputs.is_normalized
+
+def circuit : FormalAssertion (F p) U32 where
+  main := u32_assert_normalized
+  assumptions := assumptions
+  spec := spec
+  soundness := by
+    rintro i0 env x_var
+    rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    simp [spec, circuit_norm, u32_assert_normalized, ByteLookup, is_normalized]
+    repeat rw [ByteTable.equiv]
+    simp_all [circuit_norm, eval]
+
+  completeness := by
+    rintro i0 env x_var
+    rintro _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    simp [spec, circuit_norm, u32_assert_normalized, ByteLookup, is_normalized]
+    repeat rw [ByteTable.equiv]
+    simp_all [circuit_norm, eval]
+
+end U32.AssertNormalized
+
 end
