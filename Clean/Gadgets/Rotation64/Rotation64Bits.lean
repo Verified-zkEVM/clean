@@ -78,6 +78,31 @@ lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
     | contradiction
     | simp
 
+lemma Nat.pow_minus_one_mul {x y : ℕ} (hy : y > 0) : x ^ y = x * x ^ (y - 1) := by
+  nth_rw 2 [←Nat.pow_one x]
+  rw [←Nat.pow_add, Nat.add_sub_of_le (by linarith [hy])]
+
+lemma shifted_decomposition_eq {offset : Fin 8} {x1 x2 : ℕ} :
+    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256 =
+    (2^offset.val * (x1 / 2^offset.val) + (x2 % 2^offset.val) * 256) * 2^(8 - offset.val) := by
+  ring_nf
+  simp only [Nat.add_left_inj]
+  rw [Nat.mul_assoc, ←Nat.pow_add, Nat.add_sub_of_le (by linarith [offset.is_lt])]
+  rfl
+
+lemma shifted_decomposition_eq' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
+    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256^i =
+    (2^offset.val * (x1 / 2^offset.val) + (x2 % 2^offset.val) * 256) * 2^(8 - offset.val) * 256^(i-1) := by
+  rw [Nat.pow_minus_one_mul hi, ←Nat.mul_assoc, shifted_decomposition_eq]
+
+lemma shifted_decomposition_eq'' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
+    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256^i =
+    (2^offset.val * (x1 / 2^offset.val) * 2^(8 - offset.val) * 256^(i-1) +
+    (x2 % 2^offset.val) * 2^(8 - offset.val) * 256^i) := by
+  rw [shifted_decomposition_eq' hi]
+  ring_nf
+  rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
+
 
 theorem rotation64_bits_soundness (offset : Fin 8) {
       x0 x1 x2 x3 x4 x5 x6 x7
@@ -199,8 +224,12 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   else
     rw [two_off_eq_mod _ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
       not_false_eq_true])]
+    rw [shifted_decomposition_eq]
+    repeat rw [shifted_decomposition_eq'' (by linarith)]
+    simp only [Nat.add_assoc, Nat.add_one_sub_one, pow_one]
 
-    sorry
+
+    repeat sorry
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
