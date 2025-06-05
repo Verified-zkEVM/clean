@@ -229,7 +229,18 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     rw [←Nat.pow_one 256, Nat.mod_mod, Nat.mod_mod, mul_mod_256_off _ _ _ (by linarith)]
     simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
 
+  have h_div : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ offset.val
+      = x0 / 2^offset.val + x1 * 2^(8 - offset.val) + x2 * 256 * 2^(8 - offset.val) +
+      x3 * 256 ^ 2 * 2^(8 - offset.val) + x4 * 256 ^ 3 * 2^(8 - offset.val) +
+      x5 * 256 ^ 4 * 2^(8 - offset.val) + x6 * 256 ^ 5 * 2^(8 - offset.val) +
+      x7 * 256 ^ 6 * 2^(8 - offset.val) := by
+    sorry
+
+  have h_x0_const : 2 ^ (8 - offset.val) * 256^7 = 2^(64 - offset.val) := by
+    sorry
+
   rw [h_mod]
+
   if h_offset : offset = 0 then
     rw [h_offset]
     simp only [Fin.isValue, Fin.val_zero, pow_zero, Nat.div_one, Nat.mod_one, tsub_zero,
@@ -237,6 +248,7 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   else
     rw [two_off_eq_mod _ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
       not_false_eq_true])]
+    rw [h_div]
     rw [shifted_decomposition_eq]
     repeat rw [shifted_decomposition_eq'' (by linarith)]
     simp only [Nat.add_one_sub_one, pow_one]
@@ -256,8 +268,9 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     rw [soundness_simp]
     nth_rw 2 [←add_assoc]
     rw [soundness_simp']
-
-    repeat sorry
+    nth_rw 7 [mul_assoc]
+    rw [h_x0_const]
+    ac_rfl
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
