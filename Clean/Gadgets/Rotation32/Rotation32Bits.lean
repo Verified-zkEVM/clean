@@ -108,16 +108,13 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     show Expression.eval env x3_var = x3 by injections h_input,
   ] at h_holds
   simp only [and_assoc] at h_holds
-  -- TODO: clarify why there's a difference between 32 and 64 bit version
-  -- for y_normalized. At some point above, h_holds seems to be rewritten differently...
   obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3⟩ := h_holds
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h⟩ := h_decomposition
   simp only [U32.value, y_normalized, and_true]
-
-  -- rw [rotation32_bits_soundness offset
-  --   h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
-  --   eq0 eq1 eq2 eq3]
+  rw [rotation32_bits_soundness offset
+    h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
+    eq0 eq1 eq2 eq3]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   sorry
