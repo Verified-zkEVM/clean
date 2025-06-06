@@ -29,6 +29,5 @@ def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α 
   ProvableType.witness compute
 
 @[circuit_norm]
-def ProvableVector.witnessAny (α: TypeMap) [NonEmptyProvableType α] (m : ℕ) : Circuit F (Vector (Var α F) m) := do
-  let compute ← undetermined (ProvableVector α m)
-  ProvableVector.witness m compute
+def ProvableVector.witnessAny (α: TypeMap) [NonEmptyProvableType α] (m : ℕ) : Circuit F (Vector (Var α F) m) :=
+  ProvableType.witnessAny (ProvableVector α m)
