@@ -6,18 +6,6 @@ import Clean.Specs.Keccak256
 open Specs.Keccak256
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 
-namespace Gadgets.Keccak256
-def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
-  main block := .forEach block (assertion U64.AssertNormalized.circuit)
-  assumptions _ := True
-  spec block := block.is_normalized
-  local_length_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
-  soundness := by
-    sorry
-  completeness := by
-    sorry
-end Gadgets.Keccak256
-
 namespace Tables.KeccakInductive
 open Gadgets.Keccak256
 
