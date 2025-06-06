@@ -99,13 +99,13 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
 
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right32, eval, elaborated, var_from_offset, Vector.mapRange]
-  ring_nf at h_input h_holds
+  ring_nf at h_input h_holds ⊢
 
   rw [
     show Expression.eval env x0_var = x0 by injections h_input,
     show Expression.eval env x1_var = x1 by injections h_input,
     show Expression.eval env x2_var = x2 by injections h_input,
-    show Expression.eval env x3_var = x3 by injections h_input
+    show Expression.eval env x3_var = x3 by injections h_input,
   ] at h_holds
   simp only [and_assoc] at h_holds
   -- TODO: clarify why there's a difference between 32 and 64 bit version
@@ -114,7 +114,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h⟩ := h_decomposition
   simp only [U32.value, y_normalized, and_true]
-  sorry
+
   -- rw [rotation32_bits_soundness offset
   --   h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
   --   eq0 eq1 eq2 eq3]
