@@ -145,6 +145,18 @@ def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
 def keccak_f (state : Vector ℕ 25): Vector ℕ 25 :=
   Fin.foldl 24 (fun state i => keccak_round state roundConstants[i.val]) state
 
+@[reducible] def CAPACITY := 8
+@[reducible] def RATE := 17
+example : RATE + CAPACITY = 25 := rfl
+
+def initial_state : Vector ℕ 25 := .fill 25 0
+
+def absorb_block (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 25 :=
+  -- absorb the block into the state by XORing with the first RATE elements
+  let state' := Vector.mapFinRange 25 fun i => state[i] ^^^ (if _ : i < RATE then block[i] else 0)
+  -- apply the permutation
+  keccak_f state'
+
 end Specs.Keccak256
 
 namespace Specs.Keccak256.Tests
