@@ -46,7 +46,7 @@ def boundary_fib : SingleRowConstraint RowType (F p) :=
   assign_curr_row { x := 0, y := 1 }
 
 def fib_table : List (TableOperation RowType (F p)) := [
-  Boundary 0 boundary_fib,
+  Boundary (.fromStart 0) boundary_fib,
   EveryRowExceptLast fib_relation,
 ]
 
@@ -101,7 +101,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
   soundness := by
     intro N trace envs _
     simp only [gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
-      fib_table, spec, TraceOfLength.forAllRowsOfTraceWithIndex, and_imp]
+      fib_table, spec, TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, and_imp]
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
     · simp [table_norm]
@@ -109,7 +109,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
       exact boundary_step first_row (envs 0 0)
     · -- first, we prove the inductive part of the spec
       -- TODO this should be easier, or there should be a custom induction for it
-      unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
+      unfold Trace.forAllRowsOfTraceWithIndex.inner
       intros constraints_hold
 
       simp only [table_norm] at constraints_hold
@@ -137,7 +137,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl
       have hx_next : env.get 2 = next.x := by rfl
-      have hy_next : env.get 3 = next.y := by rfl
+      have hy_next : env.get (2 + 1) = next.y := by rfl
       rw [hx_curr, hy_curr, hx_next, hy_next] at constraints_hold
       clear hx_curr hy_curr hx_next hy_next
 

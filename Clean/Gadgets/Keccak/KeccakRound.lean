@@ -71,7 +71,6 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   intro i
   by_cases hi : 0 = i.val <;> simp only [hi, reduceIte]
   · simp [←hi, h_rc]
-    rfl
   simp only [KeccakState.value, KeccakState.is_normalized, eval_vector,
     Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at chi_norm chi_eq
   specialize chi_eq i i.is_lt

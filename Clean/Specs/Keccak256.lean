@@ -134,7 +134,7 @@ def chi (b : Vector ℕ 25) : Vector ℕ 25 :=
   ]
 
 def iota (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
-  state.set 0 ((state.get 0) ^^^ rc.val)
+  state.set 0 ((state.get 0) ^^^ rc.toFin)
 
 def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   let theta_state := theta state

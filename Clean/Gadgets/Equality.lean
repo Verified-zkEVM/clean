@@ -24,13 +24,13 @@ theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vec
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
-def main {α : TypeMap} [LawfulProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
+def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
   let (x, y) := input
   let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assert_zero
 
 @[reducible]
-instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
+instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
   main
   local_length _ := 0
   output _ _ := ()
@@ -38,7 +38,7 @@ instance elaborated (α : TypeMap) [LawfulProvableType α] : ElaboratedCircuit F
   local_length_eq _ n := by simp only [main, circuit_norm, mul_zero]
   subcircuits_consistent n := by simp only [main, circuit_norm]
 
-def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (ProvablePair α α) where
+def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
   assumptions _ := True
 
   spec : α F × α F → Prop
@@ -77,7 +77,7 @@ def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (Provable
     rw [←hx, ←hy] at h_spec
     clear hx hy
     apply_fun to_elements at h_spec
-    simp only [LawfulProvableType.to_elements_from_elements] at h_spec
+    simp only [ProvableType.to_elements_from_elements] at h_spec
     rw [Vector.ext_iff] at h_spec
 
     rw [to_vars, to_vars, ←Vector.forall_getElem]
@@ -90,17 +90,17 @@ def circuit (α : TypeMap) [LawfulProvableType α] : FormalAssertion F (Provable
 
 -- allow `circuit_norm` to elaborate properties of the `circuit` while keeping main/spec/assumptions opaque
 @[circuit_norm ↓]
-lemma elaborated_eq (α : TypeMap) [LawfulProvableType α] : (circuit α (F:=F)).toElaboratedCircuit = elaborated α := rfl
+lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).toElaboratedCircuit = elaborated α := rfl
 
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).soundness env = (eval env x = eval env y) := by
   simp only [subcircuit_norm, circuit_norm, circuit]
 
 @[circuit_norm]
-theorem completeness (α : TypeMap) [LawfulProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).completeness env = (eval env x = eval env y) := by
   simp only [subcircuit_norm, circuit_norm, circuit]
 
@@ -109,11 +109,11 @@ end Gadgets
 
 -- this is exported at the top level because it is a core builtin gadget
 @[circuit_norm]
-def assert_equals {α : TypeMap} [LawfulProvableType α] (x y : α (Expression F)) : Circuit F Unit :=
+def assert_equals {α : TypeMap} [ProvableType α] (x y : α (Expression F)) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit α) (x, y)
 
 -- TODO unfortunately, if the inputs to `assert_equals` are just `Expression F`,
--- Lean doesn't come up with `α = id` -- even though `LawfulProvableType` is inferred when `(α:=id)` is passed explicitly.
+-- Lean doesn't come up with `α = id` -- even though `ProvableType` is inferred when `(α:=id)` is passed explicitly.
 -- this definition is a somehwat natural alternative that can be used on `Expression F` directly
 @[reducible]
 def Expression.assert_equals (x y : Expression F) : Circuit F Unit :=

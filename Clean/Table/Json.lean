@@ -37,7 +37,7 @@ instance : ToJson (TableOperation S F) where
   toJson
     | .Boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),
-      ("row", toJson i),
+      ("row", reprStr i),
       ("context", toJson c)
     ]
     | .EveryRow c => Json.mkObj [
