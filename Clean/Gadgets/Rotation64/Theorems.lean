@@ -95,11 +95,11 @@ lemma shifted_decomposition_eq'' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
 
 
-  lemma soundness_simp {offset : Fin 8} {x y : ℕ} :
-      x % 2 ^ offset.val * 2 ^ (8 - offset.val) * y + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) * y =
-      x * y * 2^ (8 - offset.val) := by
-    rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
-    ac_rfl
+lemma soundness_simp {offset : Fin 8} {x y : ℕ} :
+    x % 2 ^ offset.val * 2 ^ (8 - offset.val) * y + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) * y =
+    x * y * 2^ (8 - offset.val) := by
+  rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
+  ac_rfl
 
 lemma soundness_simp' {offset : Fin 8} {x : ℕ} :
     x % 2 ^ offset.val * 2 ^ (8 - offset.val) + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) =
