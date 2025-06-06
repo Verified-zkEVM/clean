@@ -87,4 +87,22 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
     exact offset.is_lt]
   rw [Nat.div_add_mod']
 
+theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) assumptions := by
+  intro i0 env x_var h_env x h_eval x_normalized
+
+  simp [circuit_norm, rot32, elaborated, subcircuit_norm,
+    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.assumptions,
+    Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.assumptions]
+  simp [circuit_norm, elaborated, rot32, subcircuit_norm,
+    Rotation32Bytes.circuit, Rotation32Bytes.assumptions, Rotation32Bytes.spec] at h_env
+
+  obtain ⟨h0, _⟩ := h_env
+  rw [h_eval] at h0
+  specialize h0 x_normalized
+  obtain ⟨h_rot, h_norm⟩ := h0
+
+  simp only [assumptions] at x_normalized
+  rw [h_eval]
+  simp only [x_normalized, true_and, h_norm]
+
 end Gadgets.Rotation32
