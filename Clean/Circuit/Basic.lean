@@ -119,7 +119,13 @@ def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment 
     let var := var_from_offset α offset
     (var, [.witness (size α) (fun env => compute env |> to_elements)])
 
+@[circuit_norm]
+def ProvableVector.witness {α: TypeMap} [NonEmptyProvableType α] (m: ℕ)
+    (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
+  ProvableType.witness (α := ProvableVector α m) compute
+
 namespace Circuit
+
 -- formal concepts of soundness and completeness of a circuit
 
 /--

@@ -1,7 +1,6 @@
 /- Simple Fibonacci example using `InductiveTable` -/
 import Clean.Table.Inductive
 import Clean.Gadgets.Addition32.Addition32Full
-import Clean.Gadgets.Equality
 
 namespace Tables.Fibonacci32Inductive
 open Gadgets

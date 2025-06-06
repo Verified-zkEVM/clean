@@ -13,7 +13,7 @@ def assumptions (state : KeccakState (F p)) := state.is_normalized
 
 def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
-  ∧ out_state.value = keccak_f state.value
+  ∧ out_state.value = keccak_permutation state.value
 
 /-- state in the ith round, starting from offset n -/
 def state_var (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
@@ -31,6 +31,11 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   local_length_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   subcircuits_consistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, state_var, circuit_norm, KeccakRound.circuit]
+
+-- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
+example (state : Vector ℕ 25) :
+  Fin.foldl 24 (fun state j => keccak_round state roundConstants[j]) state
+  = roundConstants.foldl keccak_round state := rfl
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
@@ -57,7 +62,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   -- inductive proof
   have h_inductive (i : ℕ) (hi : i < 24) :
     (state i).is_normalized ∧ (state i).value =
-      Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[↑j]) initial_state.value := by
+      Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[j.val]) initial_state.value := by
     induction i with
     | zero => simp [Fin.foldl_succ, h_init]
     | succ i ih =>
