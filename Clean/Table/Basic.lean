@@ -234,7 +234,7 @@ end CellAssignment
   offset, and the current assignment of the variables to the cells in the trace.
 -/
 structure TableContext (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
-  circuit : OperationsList F
+  circuit : Operations F
   assignment : CellAssignment W S
 deriving Repr
 
@@ -243,27 +243,33 @@ variable [Field F] {α : Type}
 namespace TableContext
 @[reducible, table_norm, table_assignment_norm]
 def empty : TableContext W S F where
-  circuit := .from_offset 0
+  circuit := []
   assignment := .empty W
 
 @[reducible, table_norm, table_assignment_norm]
-def offset (table : TableContext W S F) : ℕ := table.circuit.offset
+def offset (table : TableContext W S F) : ℕ := table.circuit.local_length
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
 def TableConstraint (W: ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] :=
   StateM (TableContext W S F)
 
+@[table_norm, table_assignment_norm]
+theorem bind_def {β : Type} (f : TableConstraint W S F α) (g : α → TableConstraint W S F β) :
+  (f >>= g) = fun ctx =>
+    let (a, ctx') := f ctx
+    g a ctx' := rfl
+
 instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
 
 @[table_assignment_norm]
-def assignment_from_circuit {n} (as: CellAssignment W S) : Operations F n → CellAssignment W S
-  | .empty _ => as
-  | .witness ops m _ => (assignment_from_circuit as ops).push_vars_aux m
-  | .assert ops _ => assignment_from_circuit as ops
-  | .lookup ops _ => assignment_from_circuit as ops
-  | .subcircuit ops s => (assignment_from_circuit as ops).push_vars_aux s.local_length
+def assignment_from_circuit (as: CellAssignment W S) : Operations F → CellAssignment W S
+  | [] => as
+  | .witness m _ :: ops => assignment_from_circuit (as.push_vars_aux m) ops
+  | .assert _ :: ops => assignment_from_circuit as ops
+  | .lookup _ :: ops => assignment_from_circuit as ops
+  | .subcircuit s :: ops => assignment_from_circuit (as.push_vars_aux s.local_length) ops
 
 /--
 A `MonadLift` instance from `Circuit` to `TableConstraint` means that we can just use
@@ -272,22 +278,20 @@ all circuit operations inside a table constraint.
 @[reducible, table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
-    let (a, ops) := circuit ctx.circuit
+    let (a, ops) := circuit ctx.circuit.local_length
     (a, {
-      circuit := ops,
-      -- the updated assignment is computed from a fresh starting circuit, independent of the circuit so far.
-      -- (if we would use `ops` instead of `circuit.operations 0`, we would be redoing previous assignments)
-      assignment := assignment_from_circuit ctx.assignment (circuit.operations 0)
+      circuit := ctx.circuit ++ ops,
+      assignment := assignment_from_circuit ctx.assignment ops
     })
 
 namespace TableConstraint
 @[reducible, table_norm, table_assignment_norm]
 def final_offset (table : TableConstraint W S F α) : ℕ :=
-  table .empty |>.snd.circuit.offset
+  table .empty |>.snd.circuit.local_length
 
 @[table_norm]
-def operations (table : TableConstraint W S F α) : Operations F table.final_offset :=
-  table .empty |>.snd.circuit.withLength
+def operations (table : TableConstraint W S F α) : Operations F :=
+  table .empty |>.snd.circuit
 
 @[table_assignment_norm]
 def final_assignment (table : TableConstraint W S F α) : CellAssignment W S :=
@@ -304,7 +308,7 @@ def window_env (table : TableConstraint W S F Unit)
   let assignment := table.final_assignment
   .mk fun i =>
     if hi : i < assignment.offset then
-      match assignment.vars.get ⟨i, hi⟩ with
+      match assignment.vars[i] with
       | .input ⟨i, j⟩ => window.get i j
       | .aux k => aux_env.get k
     else aux_env.get (i + assignment.aux_length)
@@ -330,9 +334,8 @@ def output {α: Type} (table : TableConstraint W S F α) : α :=
 @[table_norm, table_assignment_norm]
 def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
-    let vars := Vector.mapRange (size S) (fun i => ctx.offset + i)
     let ctx' : TableContext W S F := {
-      circuit := ctx.circuit.witness (size S) (fun env => vars.map fun i => env.get i),
+      circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange (size S) fun i => env.get (ctx.offset + i)],
       assignment := ctx.assignment.push_row row
     }
     (var_from_offset S ctx.offset, ctx')
@@ -504,7 +507,6 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       | .EveryRowExceptLast constraint => constraint.offset_consistent
     := by repeat constructor
 
-
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm low] size from_elements to_elements to_vars from_vars
@@ -514,7 +516,7 @@ attribute [table_norm] Circuit.constraints_hold.soundness
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
 
 attribute [table_norm, table_assignment_norm] liftM monadLift
-attribute [table_norm, table_assignment_norm] bind StateT.bind
+attribute [table_norm, table_assignment_norm] StateT.bind
 attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
 
 -- simp lemma to simplify updated circuit after an assignment

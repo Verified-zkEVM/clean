@@ -31,7 +31,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   output _ i0 := .mapRange 5 fun i => var_from_offset U64 (i0 + i*32 + 24)
 
   local_length_eq _ _ := by simp only [main, circuit_norm, Xor.circuit]
-  initial_offset_eq _ _ := by simp only [main, circuit_norm]
+  subcircuits_consistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
   output_eq _ _ := by simp only [main, circuit_norm, Xor.circuit,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 

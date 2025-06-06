@@ -83,7 +83,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
-    obtain ⟨ ⟨ ⟨ _, h_byte⟩, h_bool_carry⟩, h_add ⟩ := h_holds
+    obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     rw [(by rfl : outputs = ⟨z, carry_out⟩)]
 
@@ -123,11 +123,11 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     dsimp [assumptions] at as
 
     -- simplify local witnesses
-    simp only [circuit_norm, subcircuit_norm, add8_full_carry, Boolean.circuit, forall_const] at h_env
-    have ⟨⟨⟨_, hz⟩, hcarry_out⟩, _ ⟩ := h_env
+    simp only [circuit_norm, subcircuit_norm, add8_full_carry, Boolean.circuit] at h_env
+    have ⟨hz, hcarry_out⟩ := h_env
 
     -- unfold goal, (re)introduce names for some of unfolded variables
-    simp only [add8_full_carry, circuit_norm]
+    simp only [add8_full_carry, circuit_norm, Boolean.circuit, subcircuit_norm]
     rw [hx, hy, hcarry_in] at hz hcarry_out ⊢
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -138,7 +138,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     let goal_byte := ByteTable.contains (#v[z])
     let goal_bool := carry_out = 0 ∨ carry_out = 1
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
-    show ((True ∧ goal_byte) ∧ True ∧ goal_bool) ∧ goal_add
+    show goal_byte ∧ goal_bool ∧ goal_add
     suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
     have completeness1 : goal_byte := ByteTable.completeness z (hz ▸ ByteUtils.mod_256_lt _)
