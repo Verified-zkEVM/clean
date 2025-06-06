@@ -15,17 +15,18 @@ def fib32 : ℕ -> ℕ
 structure Row (F : Type) where
   x: U32 F
   y: U32 F
+
 instance : ProvableStruct Row where
   components := [U32, U32]
   to_components := fun { x, y } => .cons x (.cons y .nil)
   from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
 def table : InductiveTable (F p) Row where
-  main curr := do
+  step row := do
     let { z, .. } ← subcircuit Gadgets.Addition32Full.circuit {
-      x := curr.x, y := curr.y, carry_in := 0
+      x := row.x, y := row.y, carry_in := 0
     }
-    return { x := curr.y, y := z }
+    return { x := row.y, y := z }
 
   spec i row : Prop :=
     row.x.value = fib32 i ∧

@@ -17,30 +17,30 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 - with input offset hard-coded to `size Row`
 -/
 structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [ProvableType Row] where
-  main : Var Row F → Circuit F (Var Row F)
+  step : Var Row F → Circuit F (Var Row F)
   spec : ℕ → Row F → Prop
 
   soundness : ∀ (row_index : ℕ) (env : Environment F),
     -- for all rows
     ∀ (input_var : Var Row F) (input : Row F), eval env input_var = input →
     -- if the constraints hold
-    Circuit.constraints_hold.soundness env (main input_var |>.operations (size Row)) →
+    Circuit.constraints_hold.soundness env (step input_var |>.operations (size Row)) →
     -- and assuming the spec on the input row
     spec row_index input →
     -- we can conclude the spec on the output row
-    spec (row_index + 1) (eval env (main input_var |>.output (size Row)))
+    spec (row_index + 1) (eval env (step input_var |>.output (size Row)))
 
   completeness : ∀ (row_index : ℕ) (env : Environment F),
     -- for all rows
     ∀ (input_var : Var Row F) (input : Row F), eval env input_var = input →
     -- when using honest-prover witnesses
-    env.uses_local_witnesses_completeness (size Row) (main input_var |>.operations (size Row)) →
+    env.uses_local_witnesses_completeness (size Row) (step input_var |>.operations (size Row)) →
     -- and assuming the spec on the input row
     spec row_index input →
     -- the constraints hold
-    Circuit.constraints_hold.completeness env (main input_var |>.operations (size Row))
+    Circuit.constraints_hold.completeness env (step input_var |>.operations (size Row))
 
-  subcircuits_consistent : ∀ var, ((main var).operations (size Row)).subcircuits_consistent (size Row)
+  subcircuits_consistent : ∀ var, ((step var).operations (size Row)).subcircuits_consistent (size Row)
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial
@@ -60,7 +60,7 @@ for any given public `input` and `ouput`.
 
 def inductiveConstraint (table : InductiveTable F Row) : TableConstraint 2 Row F Unit := do
   let input ← get_curr_row
-  let output ← table.main input
+  let output ← table.step input
   let output' ← get_next_row
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
   assert_equals output' output
@@ -158,7 +158,7 @@ lemma tableSoundnessAux (table : InductiveTable F Row) (input output: Row F)
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
       CellAssignment.assignment_from_circuit_offset, CellAssignment.assignment_from_circuit_vars] at h_env'
     set curr_var := var_from_offset Row 0
-    set main_ops : Operations F := (table.main (var_from_offset Row 0) (size Row)).2
+    set main_ops : Operations F := (table.step (var_from_offset Row 0) (size Row)).2
     set s := size Row
     set t := main_ops.local_length
 
