@@ -52,5 +52,5 @@ instance : ToJson (Operation F) where
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
     | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
 
-instance : ToJson (OperationsList F) where
+instance : ToJson (Operations F) where
   toJson ops := toJson ops.toList

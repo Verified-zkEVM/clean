@@ -39,8 +39,6 @@ def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F 
   assert_zero (x0_l * two_power + x7_h - y7)
   return ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩
 
-instance lawful (off : Fin 8) : ConstantLawfulCircuits (F := (F p)) (rot64_bits off) := by infer_constant_lawful_circuits
-
 def assumptions (input : U64 (F p)) := input.is_normalized
 
 def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
@@ -53,10 +51,6 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bits off
   local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
-  initial_offset_eq := by
-    intros
-    simp only [rot64_bits]
-    rfl
   local_length_eq := by
     intros
     simp only [rot64_bits]
@@ -128,7 +122,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     show Expression.eval env x6_var = x6 by injections h_input,
     show Expression.eval env x7_var = x7 by injections h_input,
   ] at h_holds
-  simp only [and_assoc] at h_holds
   obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,

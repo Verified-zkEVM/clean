@@ -14,7 +14,7 @@ def build_aux_map (as : CellAssignment W S) : Std.HashMap Nat Nat := Id.run do
         match cell with
         | .aux _ => (idx + 1, offset + 1, m.insert idx offset)
         | _ => (idx + 1, offset, m)
-      (0, size S, Std.HashMap.empty)
+      (0, size S, Std.HashMap.emptyWithCapacity)
 
   map
 
@@ -37,10 +37,10 @@ def generate_next_row (tc : TableConstraint W S F Unit) (cur_row: Array F) : Arr
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
-  let generators := ctx.circuit.withLength.witness_generators
+  let generators := ctx.circuit.witness_generators
 
   let aux_map := build_aux_map assignment
-  let next_row := Array.mkArray cur_row.size 0
+  let next_row := Array.replicate cur_row.size 0
 
   -- rules for fetching the values for expression variables
   let env i :=
@@ -48,12 +48,12 @@ def generate_next_row (tc : TableConstraint W S F Unit) (cur_row: Array F) : Arr
       match assignment.vars.get ⟨i, h⟩ with
       | .input ⟨r, c⟩ =>
         -- fetch input values
-          if r = 0 then cur_row.get! c else next_row.get! c
+          if r = 0 then cur_row[c]! else next_row[c]!
       | .aux _ =>
         -- assumption:
         -- if expression var<i> corresponds to a aux type,
         -- then the value is already allocated in aux columns of the next_row.
-        next_row.get! aux_map[i]!
+        next_row[aux_map[i]!]!
     -- todo: maybe provide Inhabited instance for Cell to remove this?
     else panic! s!"Invalid variable index {i} in environment"
 
@@ -87,7 +87,7 @@ def witnesses
   (tc : TableConstraint W S F Unit) (init_row: Row F S) (n: ℕ) : Array (Array F) := Id.run do
 
   -- append auxiliary columns to the current row
-  let aux_cols := Array.mkArray tc.final_assignment.num_aux 0
+  let aux_cols := Array.replicate tc.final_assignment.num_aux 0
   let cur_row := (to_elements init_row).toArray ++ aux_cols
 
   let mut trace := #[cur_row]

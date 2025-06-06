@@ -1,13 +1,10 @@
 /- This file contains possible additions to the Circuit DSL that aren't currently used -/
-import Clean.Circuit.Lawful
+import Clean.Circuit.Constant
 
 variable {F : Type} [Field F]
 
-namespace ProvableType
-variable {α β: TypeMap} [ProvableType α] [ProvableType β]
-instance : Inhabited (Circuit F (Var α F)) where
-  default := witness default
-end ProvableType
+instance {α: TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
+  default := ProvableType.witness default
 
 def copy_to_var (x: Expression F) : Circuit F (Variable F) := do
   let x' ← witness_var x.eval
