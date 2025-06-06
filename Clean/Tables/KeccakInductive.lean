@@ -9,6 +9,8 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 namespace Tables.KeccakInductive
 open Gadgets.Keccak256
 
+set_option trace.Meta.Tactic.simp true
+
 def table : InductiveTable (F p) KeccakState where
   step state := do
     let block : KeccakBlock (Expression (F p)) ← ProvableType.witnessAny KeccakBlock
@@ -35,6 +37,14 @@ def table : InductiveTable (F p) KeccakState where
     simp only [absorb_blocks]
     rw [List.concat_eq_append, List.foldl_concat]
 
-  completeness := by sorry
+  completeness := by
+    intro i env state_var state h_input h_env spec_previous
+    set block' := ProvableType.witnessAny (F:=F p) KeccakBlock
+    simp_all only [circuit_norm, subcircuit_norm,
+      AbsorbBlock.circuit, AbsorbBlock.assumptions, AbsorbBlock.spec,
+      KeccakBlock.normalized]
+    set block := (block' (25 * 8)).1
+    simp only [block'] at h_env ⊢
+    simp only [circuit_norm] at h_env ⊢
 
 end Tables.KeccakInductive
