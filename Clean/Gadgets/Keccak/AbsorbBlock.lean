@@ -27,8 +27,6 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   -- apply the permutation
   subcircuit Permutation.circuit state'
 
-set_option linter.constructorNameAsVariable false
-
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   main
   local_length _ := 36808
@@ -54,7 +52,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     Permutation.circuit, Permutation.assumptions, Permutation.spec,
     Input.mk.injEq] at *
 
-  -- reduce goal to characterizing state after absorb step
+  -- reduce goal to characterizing absorb step
   set state_after_absorb : Var KeccakState (F p) :=
     (Vector.mapFinRange 17 fun i => var_from_offset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
@@ -68,18 +66,55 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   -- finish the proof by cases on i < 17
   apply KeccakState.normalized_value_ext
   intro ⟨ i, hi ⟩
-  simp only [state_after_absorb, eval_vector]
+  simp only [state_after_absorb, eval_vector, Vector.getElem_map, Vector.getElem_mapFinRange,
+    KeccakState.value, KeccakBlock.value]
 
-  by_cases hi' : i < 17
-  · simp only [hi', reduceDIte, Vector.getElem_map, Vector.getElem_append_left hi',
-      Vector.getElem_mapFinRange, KeccakState.value, KeccakBlock.value]
+  by_cases hi' : i < 17 <;> simp only [hi', reduceDIte]
+  · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_left hi']
     specialize h_holds ⟨ i, hi'⟩
     simp only [getElem_eval_vector, h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_holds
     exact ⟨ h_holds.right, h_holds.left ⟩
-  · simp only [hi', reduceDIte, Vector.getElem_map,
-      Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith),
-      Vector.getElem_mapFinRange, KeccakState.value]
+  · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
+theorem completeness : Completeness (F p) elaborated assumptions := by
+  intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
+
+  -- simplify goal and witnesses
+  simp only [circuit_norm, RATE, main, spec, assumptions, absorb_block, subcircuit_norm,
+    Xor.circuit, Xor.assumptions, Xor.spec,
+    Permutation.circuit, Permutation.assumptions, Permutation.spec,
+    Input.mk.injEq] at *
+  simp only [getElem_eval_vector, h_input] at h_env ⊢
+
+  have assumptions' (i : Fin 17) : state[i.val].is_normalized ∧ block[i.val].is_normalized := by
+    simp [h_assumptions.left ⟨i, by linarith [i.is_lt]⟩, h_assumptions.right i]
+  simp only [assumptions', and_true, true_implies, implies_true, true_and] at h_env ⊢
+
+  -- reduce goal to characterizing absorb step
+  set state_after_absorb : Var KeccakState (F p) :=
+    (Vector.mapFinRange 17 fun i => var_from_offset (F:=F p) U64 (i0 + i.val * 8)) ++
+    (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
+
+  suffices goal : (eval env state_after_absorb).is_normalized
+    ∧ (eval env state_after_absorb).value =
+      .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
+    simp_all
+  replace h_env := h_env.left
+
+  -- finish the proof by cases on i < 17
+  apply KeccakState.normalized_value_ext
+  intro ⟨ i, hi ⟩
+  simp only [eval_vector, Vector.getElem_map, KeccakState.value, KeccakBlock.value,
+    Vector.getElem_mapFinRange, state_after_absorb]
+  by_cases hi' : i < 17 <;> simp only [hi', reduceDIte]
+  · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_left hi']
+    exact ⟨ (h_env ⟨ i, hi'⟩).right, (h_env ⟨ i, hi'⟩).left ⟩
+  · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
+    have : 17 + (i - 17) = i := by omega
+    simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
+
+def circuit : FormalCircuit (F p) Input KeccakState :=
+  { elaborated with assumptions, spec, soundness, completeness }
 end Gadgets.Keccak256.AbsorbBlock
