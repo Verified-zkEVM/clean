@@ -70,6 +70,11 @@ def is_normalized (x: U32 (F p)) :=
 def value (x: U32 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3
 
+omit [Fact (Nat.Prime p)] p_large_enough in
+theorem value_lt_of_normalized {x : U32 (F p)} (hx: x.is_normalized) : x.value < 2^32 := by
+  simp_all only [value, is_normalized]
+  linarith
+
 /--
 Return the value of a 32-bit unsigned integer as a field element.
 -/

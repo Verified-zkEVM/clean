@@ -81,7 +81,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   -- reason about rotation
   rw [Theorems.rot_right_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy]
-  rw [show(offset.val / 8) % 8 = offset.val / 8 by
+  rw [show(offset.val / 8) % 4 = offset.val / 8 by
     apply Nat.mod_eq_of_lt
     apply Nat.div_lt_of_lt_mul
     exact offset.is_lt]
