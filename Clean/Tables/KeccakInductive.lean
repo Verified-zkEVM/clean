@@ -9,7 +9,9 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 namespace Tables.KeccakInductive
 open Gadgets.Keccak256
 
-set_option trace.Meta.Tactic.simp true
+-- set_option trace.Meta.Tactic.simp true
+-- set_option maxHeartbeats 200000
+-- set_option diagnostics true
 
 def table : InductiveTable (F p) KeccakState where
   step state := do
@@ -26,7 +28,7 @@ def table : InductiveTable (F p) KeccakState where
     intro i env state_var state h_input h_holds spec_previous
     simp_all only [circuit_norm, subcircuit_norm,
       AbsorbBlock.circuit, AbsorbBlock.assumptions, AbsorbBlock.spec,
-      KeccakBlock.normalized]
+      KeccakBlock.normalized, ProvableType.witnessAny]
     replace h_holds := h_holds.right h_holds.left
     set block := (eval env (var_from_offset KeccakBlock (25 * 8))).value
     obtain ⟨ blocks, blocks_length, state_value ⟩ := spec_previous.right
@@ -39,12 +41,13 @@ def table : InductiveTable (F p) KeccakState where
 
   completeness := by
     intro i env state_var state h_input h_env spec_previous
-    set block' := ProvableType.witnessAny (F:=F p) KeccakBlock
-    simp_all only [circuit_norm, subcircuit_norm,
-      AbsorbBlock.circuit, AbsorbBlock.assumptions, AbsorbBlock.spec,
-      KeccakBlock.normalized]
-    set block := (block' (25 * 8)).1
-    simp only [block'] at h_env ⊢
-    simp only [circuit_norm] at h_env ⊢
+    simp_all only [circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized]
+    simp only [circuit_norm, subcircuit_norm, AbsorbBlock.assumptions, AbsorbBlock.spec] at h_env ⊢
+    simp only [ProvableType.witnessAny, circuit_norm, h_input] at h_env ⊢
+    set block := var_from_offset KeccakBlock (25 * 8)
+    suffices goal : (eval env block).is_normalized by simp_all
+    -- TODO this is impossble to prove because we deliberately assumed nothing about `block`
+    sorry
+
 
 end Tables.KeccakInductive
