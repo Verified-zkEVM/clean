@@ -105,4 +105,12 @@ theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) 
   rw [h_eval]
   simp only [x_normalized, true_and, h_norm]
 
+def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
+  elaborated offset with
+  assumptions := assumptions
+  spec := spec offset
+  soundness := soundness offset
+  completeness := completeness offset
+}
+
 end Gadgets.Rotation32
