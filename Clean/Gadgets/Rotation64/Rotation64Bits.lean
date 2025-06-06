@@ -64,6 +64,14 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp only [rot64_bits]
     rfl
 
+
+lemma two_power_val {offset : Fin 8} :
+    ((2 ^ (8 - offset.val) % 256 : ℕ) : F p).val = 2 ^ (8 - offset.val) % 256 := by
+  rw [ZMod.val_natCast]
+  apply Nat.mod_eq_of_lt
+  have h : 2 ^ (8 - offset.val) % 256 < 256 := by apply Nat.mod_lt; linarith
+  linarith [h, p_large_enough.elim]
+
 lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
     (x * 256^i) % 2^offset.val = 0 := by
   rw [Nat.mul_mod, Nat.pow_mod]
@@ -143,6 +151,49 @@ lemma soundness_simp' {offset : Fin 8} {x : ℕ} :
   rw [←Nat.mul_one (2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val))]
   rw [soundness_simp, Nat.mul_one]
 
+omit p_large_enough in
+lemma two_power_byte {offset : Fin 8} :
+    ZMod.val ((2 ^ (8 - offset.val) % 256 : ℕ) : F p) < 256 := by
+  rw [ZMod.val_natCast]
+  apply Nat.mod_lt_of_lt
+  apply Nat.mod_lt
+  linarith
+
+lemma h_mod {offset : Fin 8} {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
+    (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
+      2 ^ offset.val = x0 % 2 ^ offset.val := by
+  simp only [pow_one, Nat.add_mod, dvd_refl, Nat.mod_mod_of_dvd, gt_iff_lt, Nat.ofNat_pos,
+    mul_mod_256_off, add_zero]
+  rw [←Nat.pow_one 256, Nat.mod_mod, Nat.mod_mod, mul_mod_256_off _ _ _ (by linarith)]
+  simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
+
+lemma h_div {offset : Fin 8} {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
+    (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ offset.val
+    = x0 / 2^offset.val + x1 * 2^(8 - offset.val) + x2 * 256 * 2^(8 - offset.val) +
+    x3 * 256 ^ 2 * 2^(8 - offset.val) + x4 * 256 ^ 3 * 2^(8 - offset.val) +
+    x5 * 256 ^ 4 * 2^(8 - offset.val) + x6 * 256 ^ 5 * 2^(8 - offset.val) +
+    x7 * 256 ^ 6 * 2^(8 - offset.val) := by
+  rw [←Nat.pow_one 256]
+  repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power; linarith)]
+
+  rw [mul_div_256_off 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
+  rw [mul_div_256_off 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off 4 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off 5 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off 6 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off 7 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
+    Nat.add_left_inj]
+
+lemma h_x0_const {offset : Fin 8} :
+    2 ^ (8 - offset.val) * 256^7 = 2^(64 - offset.val) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, add_comm]
+  simp only [Nat.reduceMul, Nat.ofNat_pos, ne_eq, OfNat.ofNat_ne_one, not_false_eq_true,
+    pow_right_inj₀]
+  simp only [Fin.is_le', ← Nat.add_sub_assoc, Nat.reduceAdd]
+
+
 theorem rotation64_bits_soundness (offset : Fin 8) {
       x0 x1 x2 x3 x4 x5 x6 x7
       y0 y1 y2 y3 y4 y5 y6 y7
@@ -189,6 +240,7 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
 
   rw [add_comm (_ * _)] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
 
+  -- lift every reconstruction constraint to its value form
   have x0_l_byte : x0_l.val < 256 := by rw [h_x0_l]; apply Nat.mod_lt_of_lt; assumption
   have x0_h_byte : x0_h.val < 256 := by rw [h_x0_h]; apply Nat.div_lt_of_lt; assumption
   have x1_l_byte : x1_l.val < 256 := by rw [h_x1_l]; apply Nat.mod_lt_of_lt; assumption
@@ -206,18 +258,6 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   have x7_l_byte : x7_l.val < 256 := by rw [h_x7_l]; apply Nat.mod_lt_of_lt; assumption
   have x7_h_byte : x7_h.val < 256 := by rw [h_x7_h]; apply Nat.div_lt_of_lt; assumption
 
-  have two_power_byte : ZMod.val ((2 ^ (8 - offset.val) % 256 : ℕ) : F p) < 256 := by
-    rw [ZMod.val_natCast]
-    apply Nat.mod_lt_of_lt
-    apply Nat.mod_lt
-    linarith
-
-  have two_power_val : ZMod.val ((2 ^ (8 - offset.val) % 256 : ℕ) : F p) = 2 ^ (8 - offset.val) % 256 := by
-    rw [ZMod.val_natCast]
-    apply Nat.mod_eq_of_lt
-    have h : 2 ^ (8 - offset.val) % 256 < 256 := by apply Nat.mod_lt; linarith
-    linarith [h, p_large_enough.elim]
-
   replace eq0 := byte_decomposition_lift x0_h_byte x1_l_byte two_power_byte eq0
   replace eq1 := byte_decomposition_lift x1_h_byte x2_l_byte two_power_byte eq1
   replace eq2 := byte_decomposition_lift x2_h_byte x3_l_byte two_power_byte eq2
@@ -227,6 +267,7 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
   replace eq6 := byte_decomposition_lift x6_h_byte x7_l_byte two_power_byte eq6
   replace eq7 := byte_decomposition_lift x7_h_byte x0_l_byte two_power_byte eq7
 
+  -- simplify the goal
   simp only [two_power_val, ZMod.val_natCast] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
   rw [eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7]
   dsimp only
@@ -239,61 +280,23 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     h_x4_l, h_x4_h, h_x5_l, h_x5_h, h_x6_l, h_x6_h, h_x7_l, h_x7_h,
     offset_mod_64, -Nat.reducePow]
 
-  set x0 := x0.val
-  set x1 := x1.val
-  set x2 := x2.val
-  set x3 := x3.val
-  set x4 := x4.val
-  set x5 := x5.val
-  set x6 := x6.val
-  set x7 := x7.val
-
-  have h_mod : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
-        2 ^ offset.val = x0 % 2 ^ offset.val := by
-    simp only [pow_one, Nat.add_mod, dvd_refl, Nat.mod_mod_of_dvd, gt_iff_lt, Nat.ofNat_pos,
-      mul_mod_256_off, add_zero]
-    rw [←Nat.pow_one 256, Nat.mod_mod, Nat.mod_mod, mul_mod_256_off _ _ _ (by linarith)]
-    simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
-
-  have h_div : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ offset.val
-      = x0 / 2^offset.val + x1 * 2^(8 - offset.val) + x2 * 256 * 2^(8 - offset.val) +
-      x3 * 256 ^ 2 * 2^(8 - offset.val) + x4 * 256 ^ 3 * 2^(8 - offset.val) +
-      x5 * 256 ^ 4 * 2^(8 - offset.val) + x6 * 256 ^ 5 * 2^(8 - offset.val) +
-      x7 * 256 ^ 6 * 2^(8 - offset.val) := by
-    rw [←Nat.pow_one 256]
-    repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power; linarith)]
-
-    rw [mul_div_256_off 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
-    rw [mul_div_256_off 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    rw [mul_div_256_off 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    rw [mul_div_256_off 4 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    rw [mul_div_256_off 5 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    rw [mul_div_256_off 6 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    rw [mul_div_256_off 7 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
-      Nat.add_left_inj]
-
-  have h_x0_const : 2 ^ (8 - offset.val) * 256^7 = 2^(64 - offset.val) := by
-    rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, add_comm]
-    simp only [Nat.reduceMul, Nat.ofNat_pos, ne_eq, OfNat.ofNat_ne_one, not_false_eq_true,
-      pow_right_inj₀]
-    simp only [Fin.is_le', ← Nat.add_sub_assoc, Nat.reduceAdd]
-
   rw [h_mod]
-
-  if h_offset : offset = 0 then
-    rw [h_offset]
+  -- if the offset is zero, then it is trivial: it is a special case since
+  -- in that case the rotation is a no-op
+  by_cases h_offset : offset.val = 0
+  · rw [h_offset]
     simp only [Fin.isValue, Fin.val_zero, pow_zero, Nat.div_one, Nat.mod_one, tsub_zero,
       Nat.reducePow, Nat.mod_self, mul_zero, add_zero, zero_mul, zero_add, Nat.add_left_inj]
-  else
-    rw [two_off_eq_mod _ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
+  · rw [two_off_eq_mod _ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
       not_false_eq_true])]
     rw [h_div]
+    -- proof technique: we care about only what happens to x0, all "internal" terms remain
+    -- the same, and are just divided by 2^offset.val
     rw [shifted_decomposition_eq]
     repeat rw [shifted_decomposition_eq'' (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    simp only [Nat.add_one_sub_one, pow_one]
-    simp only [add_mul]
-    simp only [add_assoc]
+    simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
+
+    -- we do a bit of expression juggling here
     rw [←add_assoc _ _ (_ * 256 ^ 7), soundness_simp]
     nth_rw 12 [←add_assoc]
     rw [soundness_simp]
@@ -309,6 +312,8 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     nth_rw 2 [←add_assoc]
     rw [soundness_simp']
     nth_rw 7 [mul_assoc]
+
+    -- at the end the terms are equal
     rw [h_x0_const]
     ac_rfl
 
