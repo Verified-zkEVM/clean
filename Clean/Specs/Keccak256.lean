@@ -153,7 +153,7 @@ def initial_state : Vector ℕ 25 := .fill 25 0
 
 def absorb_block (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 25 :=
   -- absorb the block into the state by XORing with the first RATE elements
-  let state' := Vector.mapFinRange 25 fun i => state[i] ^^^ (if _ : i < RATE then block[i] else 0)
+  let state' := Vector.mapFinRange 25 fun i => state[i] ^^^ (if _ : i.val < RATE then block[i] else 0)
   -- apply the permutation
   keccak_f state'
 
