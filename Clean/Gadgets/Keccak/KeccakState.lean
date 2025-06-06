@@ -1,11 +1,15 @@
 import Clean.Types.U64
 import Clean.Circuit.Provable
 import Clean.Utils.Field
+import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256
+open Specs.Keccak256
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
+
+-- definitions
 
 @[reducible] def KeccakState := ProvableVector U64 25
 
@@ -20,6 +24,15 @@ def KeccakRow.is_normalized (row : KeccakRow (F p)) :=
   ∀ i : Fin 5, row[i.val].is_normalized
 
 def KeccakRow.value (row : KeccakRow (F p)) := row.map U64.value
+
+@[reducible] def KeccakBlock := ProvableVector U64 RATE
+
+def KeccakBlock.is_normalized (block : KeccakBlock (F p)) :=
+  ∀ i : Fin 8, block[i.val].is_normalized
+
+def KeccakBlock.value (block : KeccakBlock (F p)) := block.map U64.value
+
+-- lemmas
 
 def KeccakRow.is_normalized_iff (row : KeccakRow (F p)) :
     row.is_normalized ↔
