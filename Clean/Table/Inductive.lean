@@ -40,7 +40,7 @@ structure InductiveTable (F : Type) [Field F] (Row : Type → Type) [ProvableTyp
     -- the constraints hold
     Circuit.constraints_hold.completeness env (main input_var |>.operations (size Row))
 
-  subcircuits_consistent : ∀ var, ((main var).operations).subcircuits_consistent 0
+  subcircuits_consistent : ∀ var, ((main var).operations (size Row)).subcircuits_consistent (size Row)
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial
