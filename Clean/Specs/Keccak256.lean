@@ -142,8 +142,8 @@ def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   let chi_state := chi rho_pi_state
   iota chi_state rc
 
-def keccak_f (state : Vector ℕ 25): Vector ℕ 25 :=
-  Fin.foldl 24 (fun state i => keccak_round state roundConstants[i.val]) state
+def keccak_permutation (state : Vector ℕ 25): Vector ℕ 25 :=
+  roundConstants.foldl keccak_round state
 
 @[reducible] def CAPACITY := 8
 @[reducible] def RATE := 17
@@ -155,7 +155,10 @@ def absorb_block (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 
   -- absorb the block into the state by XORing with the first RATE elements
   let state' := Vector.mapFinRange 25 fun i => state[i] ^^^ (if _ : i.val < RATE then block[i] else 0)
   -- apply the permutation
-  keccak_f state'
+  keccak_permutation state'
+
+def absorb_blocks (blocks : List (Vector ℕ RATE)) : Vector ℕ 25 :=
+  blocks.foldl absorb_block initial_state
 
 end Specs.Keccak256
 
@@ -195,7 +198,7 @@ def state' := state.map U64.value_nat
 
 def rc : U64 ℕ := ⟨235, 226, 178, 113, 2, 17, 87, 249⟩
 #eval theta state' |> rho_pi |> chi
-#eval keccak_f state' |>.map U64.decompose_nat_nat
+#eval keccak_permutation state' |>.map U64.decompose_nat_nat
 -- [[158, 112, 239, 65, 247, 184, 42, 29],[18, 33, 104, 153, 4, 113, 230, 164], [203, 128, 138, 52, 66, 249, 134, 137], [204, 130, 87, 203, 75, 229, 26, 49], [101, 124, 134, 181, 193, 247, 248, 194], [170, 160, 115, 17, 65, 59, 26, 242], [211, 14, 202, 60, 11, 138, 72, 44], [21, 90, 64, 58, 127, 167, 131, 94], [242, 160, 171, 170, 232, 135, 11, 166], [172, 234, 194, 74, 41, 176, 182, 229], [174, 35, 251, 95, 139, 151, 128, 196], [140, 76, 0, 166, 43, 181, 26, 214], [15, 95, 132, 163, 192, 11, 248, 213], [99, 110, 8, 73, 127, 107, 70, 240], [208, 251, 207, 18, 172, 113, 72, 220], [166, 119, 55, 190, 184, 224, 76, 193], [132, 182, 193, 105, 46, 92, 159, 3], [161, 219, 100, 118, 249, 82, 69, 168], [3, 191, 204, 13, 134, 22, 134, 93], [250, 46, 70, 133, 112, 75, 14, 27], [230, 133, 192, 229, 9, 245, 148, 47], [41, 51, 79, 61, 157, 210, 157, 201], [81, 88, 205, 113, 250, 141, 5, 116], [137, 227, 13, 73, 228, 151, 175, 151], [62, 184, 103, 254, 5, 201, 102, 121]]
 
 end Specs.Keccak256.Tests
