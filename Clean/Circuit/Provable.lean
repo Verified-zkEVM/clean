@@ -390,12 +390,14 @@ end ProvableType
 -- more concrete ProvableType instances
 
 -- `ProvableVector`
+section
+variable {n: ℕ} {α: TypeMap} [NonEmptyProvableType α]
 
 @[reducible]
 def psize (α : TypeMap) [NonEmptyProvableType α] : ℕ+ :=
   ⟨ size α, NonEmptyProvableType.nonempty⟩
 
-instance ProvableVector.instance {α: TypeMap} [NonEmptyProvableType α] : ProvableType (ProvableVector α n) where
+instance ProvableVector.instance : ProvableType (ProvableVector α n) where
   size := n * size α
   to_elements x := x.map to_elements |>.flatten
   from_elements v := v.toChunks (psize α) |>.map from_elements
@@ -404,13 +406,21 @@ instance ProvableVector.instance {α: TypeMap} [NonEmptyProvableType α] : Prova
   to_elements_from_elements v := by
     rw [Vector.map_map, ProvableType.comp_to_elements_from_elements, Vector.map_id, Vector.toChunks_flatten]
 
-theorem eval_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (env : Environment F)
+theorem eval_vector (env : Environment F)
   (x : Var (ProvableVector α n) F) :
     eval env x = x.map (eval env) := by
   simp only [eval, to_vars, to_elements, from_elements]
   simp only [Vector.map_flatten, Vector.map_map]
   rw [Vector.flatten_toChunks]
   simp [from_elements, eval, to_vars]
+
+theorem getElem_eval_vector (env : Environment F) (x : Var (ProvableVector α n) F) (i : ℕ) (h : i < n) :
+    (eval env x[i]) = (eval env x)[i] := by
+  rw [eval_vector, Vector.getElem_map]
+
+theorem getElemFin_eval_vector (env : Environment F) (x : Var (ProvableVector α n) F) (i : Fin n) :
+    (eval env x[i.val]) = (eval env x)[i.val] := by
+  rw [eval_vector, Vector.getElem_map]
 
 theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
     var_from_offset (F:=F) (ProvableVector α n) offset
@@ -428,6 +438,7 @@ theorem var_from_offset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProva
     rw [h_create, ←Vector.mapRange_add_eq_append]
     have h_size_succ : (n + 1) * size α = n * size α + size α := by rw [add_mul]; ac_rfl
     rw [←Vector.cast_mapRange h_size_succ]
+end
 
 -- `ProvablePair`
 

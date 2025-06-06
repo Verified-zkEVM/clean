@@ -49,10 +49,37 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
+  simp only [circuit_norm, RATE, main, spec, assumptions, absorb_block, subcircuit_norm,
+    Xor.circuit, Xor.assumptions, Xor.spec,
+    Permutation.circuit, Permutation.assumptions, Permutation.spec,
+    Input.mk.injEq] at *
+
+  -- reduce goal to characterizing state after absorb step
+  set state_after_absorb : Var KeccakState (F p) :=
+    (Vector.mapFinRange 17 fun i => var_from_offset (F:=F p) U64 (i0 + i.val * 8)) ++
+    (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
+
+  suffices goal : (eval env state_after_absorb).is_normalized
+    ∧ (eval env state_after_absorb).value =
+      .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
+    simp_all
+  replace h_holds := h_holds.left
+
+  -- finish the proof by cases on i < 17
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, Input.mk.injEq] at h_input
-  simp only [assumptions] at h_assumptions
-  simp only [circuit_norm, RATE, main, h_input, Xor.circuit, Permutation.circuit, subcircuit_norm,
-    Xor.assumptions, Xor.spec, Permutation.assumptions, Permutation.spec] at h_holds ⊢
+  intro ⟨ i, hi ⟩
+  simp only [state_after_absorb, eval_vector]
+
+  by_cases hi' : i < 17
+  · simp only [hi', reduceDIte, Vector.getElem_map, Vector.getElem_append_left hi',
+      Vector.getElem_mapFinRange, KeccakState.value, KeccakBlock.value]
+    specialize h_holds ⟨ i, hi'⟩
+    simp only [getElem_eval_vector, h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_holds
+    exact ⟨ h_holds.right, h_holds.left ⟩
+  · simp only [hi', reduceDIte, Vector.getElem_map,
+      Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith),
+      Vector.getElem_mapFinRange, KeccakState.value]
+    have : 17 + (i - 17) = i := by omega
+    simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
 end Gadgets.Keccak256.AbsorbBlock

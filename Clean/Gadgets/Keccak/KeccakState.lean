@@ -28,7 +28,7 @@ def KeccakRow.value (row : KeccakRow (F p)) := row.map U64.value
 @[reducible] def KeccakBlock := ProvableVector U64 RATE
 
 def KeccakBlock.is_normalized (block : KeccakBlock (F p)) :=
-  ∀ i : Fin 8, block[i.val].is_normalized
+  ∀ i : Fin RATE, block[i.val].is_normalized
 
 def KeccakBlock.value (block : KeccakBlock (F p)) := block.map U64.value
 
