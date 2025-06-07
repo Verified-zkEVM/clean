@@ -1,8 +1,7 @@
-use alloc::vec::{self, Vec};
+use alloc::vec::Vec;
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PairCol, VirtualPairCol};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
-use serde::de;
 
 use p3_uni_stark::{Entry, SymbolicExpression, SymbolicVariable};
 
@@ -27,8 +26,8 @@ impl<E> Lookup<E> {
 }
 
 pub trait MessageBuilder<L> {
-    fn send(&mut self, l: L) {}
-    fn receive(&mut self, l: L) {}
+    fn send(&mut self, _l: L) {}
+    fn receive(&mut self, _l: L) {}
 }
 
 pub trait BaseMessageBuilder: AirBuilder + MessageBuilder<Lookup<Self::Expr>>{}

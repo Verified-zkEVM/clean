@@ -1,16 +1,14 @@
-//! Factory functions for generating lookup AIRs with calculated traces
+//! Functions for generating lookup AIRs with calculated traces
 
 extern crate alloc;
 
 use core::panic;
-
 use alloc::vec::Vec;
 use p3_air::{Air, AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
-use p3_baby_bear::BabyBear;
 use p3_field::{ExtensionField, Field, PrimeField64};
 use p3_matrix::{Matrix, dense::RowMajorMatrix};
 
-use crate::{ByteRangeAir, MainAir, Lookup, LookupBuilder, LookupType, StarkGenericConfig,  Val};
+use crate::{ByteRangeAir, MainAir, Lookup, LookupBuilder, LookupType, StarkGenericConfig, Val};
 
 /// Represents a lookup AIR with its calculated main trace
 pub struct LookupAirWithTrace<F: Field> {

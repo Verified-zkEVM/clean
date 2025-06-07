@@ -10,10 +10,10 @@ use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
 use p3_maybe_rayon::prelude::*;
-use p3_util::{log2_ceil_usize, log2_strict_usize};
+use p3_util::log2_strict_usize;
 use tracing::{debug_span, info_span, instrument};
 
-use p3_uni_stark::{get_symbolic_constraints, SymbolicAirBuilder, SymbolicExpression};
+use p3_uni_stark::SymbolicAirBuilder;
 
 use crate::{permutation, CleanAir, Commitments, Domain, LookupBuilder, OpenedValues, PackedChallenge, PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val};
 

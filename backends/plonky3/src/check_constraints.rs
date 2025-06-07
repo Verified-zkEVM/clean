@@ -1,16 +1,15 @@
-use alloc::borrow::ToOwned;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PairBuilder};
-use p3_field::{Field, ExtensionField, PackedValue};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, PairBuilder};
+use p3_field::Field;
 use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
 use tracing::instrument;
 
-use crate::lookup::{MessageBuilder};
-use crate::{BaseMessageBuilder, MultiTableBuilder};
+use crate::lookup::MessageBuilder;
+use crate::BaseMessageBuilder;
 
 /// Runs constraint checks using a given AIR definition and trace matrix.
 ///

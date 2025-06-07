@@ -14,7 +14,7 @@ use p3_matrix::stack::VerticalPair;
 use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
-use p3_uni_stark::{SymbolicAirBuilder, get_log_quotient_degree};
+use p3_uni_stark::SymbolicAirBuilder;
 use crate::{CleanAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder};
 
 #[instrument(skip_all)]

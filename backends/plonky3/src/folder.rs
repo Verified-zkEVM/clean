@@ -1,11 +1,11 @@
 use alloc::vec::Vec;
 
 use p3_air::{AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PairBuilder, PermutationAirBuilder};
-use p3_field::{BasedVectorSpace, PackedField};
 use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
 
-use crate::{BaseMessageBuilder, MessageBuilder, MultiTableBuilder, PackedChallenge, PackedVal, StarkGenericConfig, Val};
+use crate::{BaseMessageBuilder, MessageBuilder, PackedChallenge, PackedVal, StarkGenericConfig, Val};
+use crate::permutation::MultiTableBuilder;
 
 #[derive(Debug)]
 pub struct ProverConstraintFolder<'a, SC: StarkGenericConfig> {

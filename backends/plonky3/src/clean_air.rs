@@ -4,17 +4,16 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, SymbolicExpression};
 use p3_util::log2_ceil_usize;
-use core::fmt;
 use core::marker::PhantomData;
 
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder, VirtualPairCol};
-use p3_field::{Field, PrimeCharacteristicRing, PrimeField64};
+use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
-use crate::{eval_permutation_constraints, BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType, MultiTableBuilder};
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType};
+use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
 
 pub trait CleanAir<F> {
     fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>>;
