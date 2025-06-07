@@ -1,5 +1,9 @@
 use std::vec::Vec;
 
+use clean_backend::{
+    generate_lookup_airs, parse_init_trace, prove, verify, CleanAirInstance,
+    Table, StarkConfig,
+};
 use itertools::Itertools;
 use p3_air::BaseAir;
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
@@ -8,14 +12,13 @@ use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::{Field, PrimeCharacteristicRing};
-use p3_fri::{TwoAdicFriPcs, create_test_fri_config};
-use p3_matrix::Matrix;
+use p3_fri::{create_test_fri_config, TwoAdicFriPcs};
 use p3_matrix::dense::RowMajorMatrix;
+use p3_matrix::Matrix;
 use p3_merkle_tree::MerkleTreeMmcs;
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
-use clean_backend::{prove, verify, StarkConfig, CleanAir, Trace, parse_init_trace, generate_lookup_airs, CleanAirInstance, CleanAirWrapper};
-use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use rand::SeedableRng;
 
 const JSON_PATH: &str = "clean_fib.json";
 
@@ -27,7 +30,6 @@ fn read_test_json(filename: &str) -> String {
         .unwrap_or_else(|e| panic!("Failed to read JSON file '{}': {}", filename, e))
 }
 
-
 #[test]
 fn test_clean() {
     // Initialize tracing subscriber to see tracing output
@@ -35,7 +37,6 @@ fn test_clean() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    
     type Val = BabyBear;
     type Perm = Poseidon2BabyBear<16>;
     type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
@@ -58,70 +59,68 @@ fn test_clean() {
     let dft = Dft::default();
     let config = create_test_fri_config(challenge_mmcs, 2);
     let pcs = Pcs::new(dft, val_mmcs, config);
-    // let challenger = Challenger::new(perm);
 
     let challenger = Challenger::new(perm);
     let config = MyConfig::new(pcs, challenger);
 
     // Read the trace JSON file content
     let trace_json_content = read_test_json("trace.json");
-    let init_trace = parse_init_trace(&trace_json_content);
+    let init_trace = parse_init_trace::<BabyBear>(&trace_json_content);
 
-    let trace: Trace<BabyBear> = Trace::new(init_trace);
+    let width = init_trace[0].len();
+
+    let main_trace: RowMajorMatrix<BabyBear> =
+        RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
 
     // get the last row, column 1
-    let x = trace.inner.get(trace.inner.height() - 1, 1).unwrap();
+    let x = main_trace.get(main_trace.height() - 1, 1).unwrap();
     // convert trace to RowMajorMatrix<Val>
 
     // Read the JSON file content
     let json_content = read_test_json(JSON_PATH);
-    
-    let clean_air_wrapper = CleanAirWrapper::new(&json_content, trace.clone());
 
-    // Generate lookup AIRs with calculated multiplicity traces using factory function
-    let lookup_airs_with_traces = generate_lookup_airs(clean_air_wrapper.as_clean_air().unwrap(), &trace);
+    let clean_air_wrapper = Table::new(&json_content, main_trace.clone());
 
+    // Generate lookup AIRs with calculated multiplicity traces 
+    let lookup_airs_with_traces =
+        generate_lookup_airs(clean_air_wrapper.as_clean_air().unwrap(), &main_trace);
 
     // Create properly typed vectors for the multi-AIR interface using wrapper
     let mut airs = vec![&clean_air_wrapper];
     let mut traces = vec![clean_air_wrapper.main_trace().clone()];
-    
+
     // Add lookup AIRs and their traces - create wrappers for them
-    let lookup_air_wrappers: Vec<CleanAirWrapper<BabyBear>> = lookup_airs_with_traces.iter()
+    let lookup_air_wrappers: Vec<Table<BabyBear>> = lookup_airs_with_traces
+        .iter()
         .map(|lookup_air| {
             let instance = CleanAirInstance::ByteRange(lookup_air.air.clone());
-            CleanAirWrapper::from_instance(instance, lookup_air.main_trace.clone())
+            Table::from_instance(instance, lookup_air.main_trace.clone())
         })
         .collect();
-    
+
     for wrapper in &lookup_air_wrappers {
         airs.push(wrapper);
         traces.push(wrapper.main_trace().clone());
     }
     // Build the preprocessed traces vector
     let mut pres = vec![clean_air_wrapper.inner().preprocessed_trace()];
-    
+
     // Add preprocessed traces for lookup AIRs
     for lookup_air in &lookup_airs_with_traces {
         pres.push(lookup_air.air.preprocessed_trace());
     }
-    
+
     // todo: allow null preprocessed traces, so we don't have to create default traces
     let pres = pres
         .into_iter()
         .enumerate()
-        .map(|(i, pre)| pre.unwrap_or_else(|| RowMajorMatrix::new(vec![BabyBear::ZERO; traces[i].height()], 1)))
+        .map(|(i, pre)| {
+            pre.unwrap_or_else(|| RowMajorMatrix::new(vec![BabyBear::ZERO; traces[i].height()], 1))
+        })
         .collect_vec();
-
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, x];
     // todo: let air wrappers to hold the corresponding traces
-    let proof = prove(
-        &config,
-        airs.clone(),
-        traces,
-        pres.clone(),
-        &pis,
-    );
+    let proof = prove(&config, airs.clone(), traces, pres.clone(), &pis);
     verify(&config, airs, pres, &proof, &pis).expect("verification failed");
 }

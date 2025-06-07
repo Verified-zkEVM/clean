@@ -2,13 +2,15 @@
 
 extern crate alloc;
 
+use core::panic;
+
 use alloc::vec::Vec;
 use p3_air::{Air, AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
 use p3_baby_bear::BabyBear;
 use p3_field::{ExtensionField, Field, PrimeField64};
 use p3_matrix::{Matrix, dense::RowMajorMatrix};
 
-use crate::{ByteRangeAir, CleanAir, Lookup, LookupBuilder, LookupType, StarkGenericConfig, Trace, Val};
+use crate::{ByteRangeAir, MainAir, Lookup, LookupBuilder, LookupType, StarkGenericConfig,  Val};
 
 /// Represents a lookup AIR with its calculated main trace
 pub struct LookupAirWithTrace<F: Field> {
@@ -37,8 +39,9 @@ pub trait MultiTableBuilder: ExtensionBuilder {
 /// # Returns
 /// A vector of lookup AIRs paired with their calculated main traces
 pub fn generate_lookup_airs<F>(
-    clean_air: &CleanAir<F>,
-    trace: &Trace<F>,
+    // todo: 
+    clean_air: &MainAir<F>,
+    trace: &RowMajorMatrix<F>,
 ) -> Vec<LookupAirWithTrace<F>>
 where
     F: Field + PrimeField64,
@@ -46,7 +49,7 @@ where
     let mut lookup_airs = Vec::new();
 
     // Create a lookup builder to extract lookup operations
-    let mut lookup_builder = LookupBuilder::new(0, trace.inner.width());
+    let mut lookup_builder = LookupBuilder::new(0, trace.width());
     clean_air.eval(&mut lookup_builder);
     let (sends, _receives) = lookup_builder.messages();
 
@@ -70,11 +73,11 @@ where
         );
 
         // Calculate multiplicities by evaluating lookup operations for each row
-        for row_idx in 0..trace.inner.height() {
+        for row_idx in 0..trace.height() {
             for send in &sends {
                 if matches!(send.kind, LookupType::ByteRange) {
                     // Apply the lookup expression to get the value being looked up
-                    let row_slice: Vec<F> = trace.inner.row(row_idx).unwrap().into_iter().collect();
+                    let row_slice: Vec<F> = trace.row(row_idx).unwrap().into_iter().collect();
                     let v = send.value.apply::<F, F>(&[], &row_slice);
                     
                     // Convert to index and increment multiplicity
@@ -82,6 +85,9 @@ where
                     if lookup_value < 256 {
                         let m = multiplicity_trace.row_mut(lookup_value).get_mut(0).unwrap();
                         *m += F::ONE;
+                    }
+                    else {
+                        panic!("Lookup value out of range for byte range lookup: {}", lookup_value);
                     }
                 }
             }
@@ -104,7 +110,7 @@ where
 /// 1. Builds the lookups using LookupBuilder for the given AIR.
 /// 2. Computes the permutation trace based on the lookups and the traces for the Air.
 pub fn generate_permutation_trace<SC, A, EF: ExtensionField<Val<SC>>>(
-    air: &A,
+    air: &A, // todo: use CleanAirWrapper
     main: &RowMajorMatrix<Val<SC>>,
     preprocessed: &RowMajorMatrix<Val<SC>>,
     random_elements: &[EF],

@@ -15,7 +15,7 @@ use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
 use p3_uni_stark::{SymbolicAirBuilder, get_log_quotient_degree};
-use crate::{BaseCleanAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder};
+use crate::{CleanAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder};
 
 #[instrument(skip_all)]
 pub fn verify<SC, A>(
@@ -28,7 +28,7 @@ pub fn verify<SC, A>(
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
-    A: BaseCleanAir<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
+    A: CleanAir<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
 {
     let zero = SC::Challenge::default();
 

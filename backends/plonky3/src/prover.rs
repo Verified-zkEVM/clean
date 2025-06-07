@@ -15,7 +15,7 @@ use tracing::{debug_span, info_span, instrument};
 
 use p3_uni_stark::{get_symbolic_constraints, SymbolicAirBuilder, SymbolicExpression};
 
-use crate::{permutation, BaseCleanAir, Commitments, Domain, LookupBuilder, OpenedValues, PackedChallenge, PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val};
+use crate::{permutation, CleanAir, Commitments, Domain, LookupBuilder, OpenedValues, PackedChallenge, PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val};
 
 #[instrument(skip_all)]
 #[allow(clippy::multiple_bound_locations)] // cfg not supported in where clauses?
@@ -32,7 +32,7 @@ pub fn prove<
 ) -> Proof<SC>
 where
     SC: StarkGenericConfig,
-    A: BaseCleanAir<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + Air<LookupBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>>,
+    A: CleanAir<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + Air<LookupBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>>,
 {
     let pcs = config.pcs();
 
@@ -324,7 +324,7 @@ fn quotient_values<SC, A, Mat>(
 ) -> Vec<SC::Challenge>
 where
     SC: StarkGenericConfig,
-    A: for<'a> Air<ProverConstraintFolder<'a, SC>> + BaseCleanAir<Val<SC>>,
+    A: for<'a> Air<ProverConstraintFolder<'a, SC>> + CleanAir<Val<SC>>,
     Mat: Matrix<Val<SC>> + Sync,
 {
     let quotient_size = quotient_domain.size();
