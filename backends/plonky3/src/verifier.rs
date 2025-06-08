@@ -48,6 +48,13 @@ where
 
     tracing::info!("permutation challenges: {:?}", permutation_challenges);
 
+    // todo: is this absorb necessary?
+    challenger.observe_slice(&opened_values
+        .iter()
+        .flat_map(|o| o.local_cumulative_sum.as_basis_coefficients_slice())
+        .copied()
+        .collect_vec());
+
     challenger.observe(commitments.perm.clone());
 
     let alpha: SC::Challenge = challenger.sample_algebra_element();

@@ -154,8 +154,16 @@ where
         "Sum of last sums: {:?}",
         last_sums.clone().into_iter().map(|s| { 
             tracing::info!("Last sum: {:?}", s);
-            s.clone()
+            *s
         }).sum::<SC::Challenge>()
+    );
+
+    challenger.observe_slice(
+        &last_sums
+            .iter()
+            .flat_map(|s| s.as_basis_coefficients_slice().iter())
+            .cloned()
+            .collect_vec()
     );
 
     challenger.observe(perm_commit.clone());
