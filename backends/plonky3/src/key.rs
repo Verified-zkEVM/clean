@@ -1,16 +1,21 @@
 use alloc::vec::Vec;
-use p3_air::{AirBuilder, PermutationAirBuilder, PairBuilder, AirBuilderWithPublicValues, VirtualPairCol, Air, BaseAir};
+use p3_air::{
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
+    VirtualPairCol,
+};
 use p3_field::Field;
-use p3_matrix::{Matrix, dense::RowMajorMatrix};
-use p3_uni_stark::{SymbolicExpression, get_symbolic_constraints};
+use p3_matrix::{dense::RowMajorMatrix, Matrix};
+use p3_uni_stark::{get_symbolic_constraints, SymbolicExpression};
 use p3_util::log2_ceil_usize;
 
-use crate::{BaseMessageBuilder, Lookup, LookupBuilder};
-use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
 use crate::clean_air::CleanAirInstance;
+use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
+use crate::{BaseMessageBuilder, Lookup, LookupBuilder};
 
 pub trait VerifyingKey<F> {
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field;
+    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
+    where
+        F: Field;
     /// Returns the width of the main trace
     fn width(&self) -> usize;
     fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
@@ -19,7 +24,14 @@ pub trait VerifyingKey<F> {
     fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>>;
     fn count_constraints(&self, public_inputs: usize) -> usize;
     fn log_quotient_degree(&self, public_inputs: usize) -> usize;
-    fn eval_constraints<AB>(&self, builder: &mut AB) where AB: AirBuilder<F = F> + PermutationAirBuilder + MultiTableBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder;
+    fn eval_constraints<AB>(&self, builder: &mut AB)
+    where
+        AB: AirBuilder<F = F>
+            + PermutationAirBuilder
+            + MultiTableBuilder
+            + AirBuilderWithPublicValues
+            + PairBuilder
+            + BaseMessageBuilder;
 }
 
 #[derive(Clone)]
@@ -35,7 +47,7 @@ impl<F: Field> VK<F> {
         let preprocessed_width = if air.preprocessed_trace().is_some() {
             air.preprocessed_trace().unwrap().width()
         } else {
-            0 
+            0
         };
 
         // Build lookups using LookupBuilder
@@ -51,10 +63,10 @@ impl<F: Field> VK<F> {
         }
 
         let (s, r) = lookup_builder.messages();
-        let lookups = s.into_iter()
+        let lookups = s
+            .into_iter()
             .map(|l| (l, true))
-            .chain(r.into_iter()
-            .map(|l| (l, false)))
+            .chain(r.into_iter().map(|l| (l, false)))
             .collect();
 
         let preprocessed = air.preprocessed_trace();
@@ -109,19 +121,24 @@ impl<F: Field> VerifyingKey<F> for VK<F> {
         } else {
             max_degree
         };
-        
+
         // division by vanishing polynomial results in degree - 1
         log2_ceil_usize(max_degree - 1)
     }
 
-    fn eval_constraints<AB>(&self, builder: &mut AB) 
-    where 
-        AB: AirBuilder<F = F> + PermutationAirBuilder + MultiTableBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder 
+    fn eval_constraints<AB>(&self, builder: &mut AB)
+    where
+        AB: AirBuilder<F = F>
+            + PermutationAirBuilder
+            + MultiTableBuilder
+            + AirBuilderWithPublicValues
+            + PairBuilder
+            + BaseMessageBuilder,
     {
         self.air.eval(builder);
         eval_permutation_constraints(self.lookups(), builder);
     }
-    
+
     fn width(&self) -> usize {
         self.air.width()
     }

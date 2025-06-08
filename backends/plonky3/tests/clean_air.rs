@@ -1,6 +1,6 @@
 use clean_backend::{
-    generate_lookup_tables, parse_init_trace, prove, verify, CleanAirInstance, MainAir,
-    Table, StarkConfig, VK, ByteRangeAir,
+    generate_lookup_tables, parse_init_trace, prove, verify, ByteRangeAir, CleanAirInstance,
+    MainAir, StarkConfig, Table, VK,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
@@ -78,7 +78,7 @@ fn test_clean_fib() {
     // Create the MainAir from JSON content
     let main_air = MainAir::new(&json_content, main_trace.width());
     let air_instance = CleanAirInstance::Main(main_air);
-    
+
     // Create VK first, then use it to create Table
     let main_vk = VK::new(air_instance, main_trace.width());
     let table = Table::new(main_vk.clone(), main_trace.clone());
@@ -91,13 +91,12 @@ fn test_clean_fib() {
     let byte_range_vk = VK::new(byte_range_air_instance, 1); // ByteRange has width 1
     let lookup_vks = vec![byte_range_vk];
 
-    let lookup_tables =
-        generate_lookup_tables(&main_vk, &lookup_vks, &main_trace);
+    let lookup_tables = generate_lookup_tables(&main_vk, &lookup_vks, &main_trace);
 
     for lookup_table in &lookup_tables {
         tables.push(lookup_table);
     }
-    
+
     // Add lookup VKs to the vks array
     for lookup_vk in &lookup_vks {
         vks.push(lookup_vk);

@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PairCol, VirtualPairCol};
+use p3_air::{
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PairCol, VirtualPairCol,
+};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
@@ -11,17 +13,20 @@ pub enum LookupType {
 }
 
 #[derive(Debug, Clone)]
-pub struct Lookup<E>
-{
+pub struct Lookup<E> {
     pub kind: LookupType,
     // todo: support compressing multiple column values
     pub value: E,
-    pub multiplicity: E
+    pub multiplicity: E,
 }
 
 impl<E> Lookup<E> {
     pub fn new(kind: LookupType, value: E, multiplicity: E) -> Self {
-        Self { kind, value, multiplicity }
+        Self {
+            kind,
+            value,
+            multiplicity,
+        }
     }
 }
 
@@ -30,10 +35,12 @@ pub trait MessageBuilder<L> {
     fn receive(&mut self, _l: L) {}
 }
 
-pub trait BaseMessageBuilder: AirBuilder + MessageBuilder<Lookup<Self::Expr>>{}
+pub trait BaseMessageBuilder: AirBuilder + MessageBuilder<Lookup<Self::Expr>> {}
 
-
-pub struct LookupBuilder<F> where F: Field {
+pub struct LookupBuilder<F>
+where
+    F: Field,
+{
     preprocessed: RowMajorMatrix<SymbolicVariable<F>>,
     main: RowMajorMatrix<SymbolicVariable<F>>,
     sends: Vec<Lookup<VirtualPairCol<F>>>,
@@ -70,7 +77,12 @@ impl<F: Field> LookupBuilder<F> {
         }
     }
 
-    pub fn messages(&self) -> (Vec<Lookup<VirtualPairCol<F>>>, Vec<Lookup<VirtualPairCol<F>>>) {
+    pub fn messages(
+        &self,
+    ) -> (
+        Vec<Lookup<VirtualPairCol<F>>>,
+        Vec<Lookup<VirtualPairCol<F>>>,
+    ) {
         (self.sends.clone(), self.receives.clone())
     }
 }
@@ -80,11 +92,11 @@ impl<F: Field> AirBuilder for LookupBuilder<F> {
     type Expr = SymbolicExpression<F>;
     type Var = SymbolicVariable<F>;
     type M = RowMajorMatrix<Self::Var>;
-    
+
     fn main(&self) -> Self::M {
         self.main.clone()
     }
-    
+
     fn is_first_row(&self) -> Self::Expr {
         SymbolicExpression::IsFirstRow
     }
@@ -118,13 +130,12 @@ impl<F: Field> AirBuilderWithPublicValues for LookupBuilder<F> {
     }
 }
 
-
 impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F> {
     fn send(&mut self, l: Lookup<SymbolicExpression<F>>) {
         let l = Lookup::new(
             l.kind,
             symbolic_to_virtual_pair(&l.value),
-            symbolic_to_virtual_pair(&l.multiplicity)
+            symbolic_to_virtual_pair(&l.multiplicity),
         );
         self.sends.push(l);
     }
@@ -133,7 +144,7 @@ impl<F: Field> MessageBuilder<Lookup<SymbolicExpression<F>>> for LookupBuilder<F
         let l = Lookup::new(
             l.kind,
             symbolic_to_virtual_pair(&l.value),
-            symbolic_to_virtual_pair(&l.multiplicity)
+            symbolic_to_virtual_pair(&l.multiplicity),
         );
         self.receives.push(l);
     }
@@ -159,11 +170,15 @@ fn eval_symbolic_to_virtual_pair<F: Field>(
     match expression {
         SymbolicExpression::Constant(c) => (Vec::new(), *c),
         SymbolicExpression::Variable(v) => match v.entry {
-            Entry::Preprocessed { offset: 0 } => {
-                (Vec::from([(PairCol::Preprocessed(v.index), F::ONE)]), F::ZERO)
-            }
+            Entry::Preprocessed { offset: 0 } => (
+                Vec::from([(PairCol::Preprocessed(v.index), F::ONE)]),
+                F::ZERO,
+            ),
             Entry::Main { offset: 0 } => (Vec::from([(PairCol::Main(v.index), F::ONE)]), F::ZERO),
-            _ => panic!("not an affine expression in current row elements {:?}", v.entry),
+            _ => panic!(
+                "not an affine expression in current row elements {:?}",
+                v.entry
+            ),
         },
         SymbolicExpression::Add { x, y, .. } => {
             let (v_l, c_l) = eval_symbolic_to_virtual_pair(x);
@@ -213,10 +228,7 @@ pub struct ByteRangeAir<F> {
 
 impl<F: Field> ByteRangeAir<F> {
     pub fn new() -> Self {
-        let preprocessed = RowMajorMatrix::new(
-            (0..256).map(|i| F::from_u8(i as u8)).collect(),
-            1,
-        );
+        let preprocessed = RowMajorMatrix::new((0..256).map(|i| F::from_u8(i as u8)).collect(), 1);
         Self { preprocessed }
     }
 }
@@ -244,24 +256,18 @@ where
         let local_mul = main.get(0, 0).unwrap().into();
         let local_preprocessed_val = preprocessed.get(0, 0).unwrap().into();
 
-        let receive = Lookup::new(
-            LookupType::ByteRange,
-            local_preprocessed_val,
-            local_mul
-        );
+        let receive = Lookup::new(LookupType::ByteRange, local_preprocessed_val, local_mul);
         builder.receive(receive);
     }
 }
 
 // Implementation for SymbolicAirBuilder from p3_uni_stark
-impl<F> MessageBuilder<Lookup<p3_uni_stark::SymbolicExpression<F>>> for p3_uni_stark::SymbolicAirBuilder<F> 
+impl<F> MessageBuilder<Lookup<p3_uni_stark::SymbolicExpression<F>>>
+    for p3_uni_stark::SymbolicAirBuilder<F>
 where
     F: Field,
 {
     // Default implementations are provided by the trait
 }
 
-impl<F> BaseMessageBuilder for p3_uni_stark::SymbolicAirBuilder<F> 
-where
-    F: Field,
-{}
+impl<F> BaseMessageBuilder for p3_uni_stark::SymbolicAirBuilder<F> where F: Field {}

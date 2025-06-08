@@ -1,11 +1,15 @@
 use alloc::vec::Vec;
 
-use p3_air::{AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PairBuilder, PermutationAirBuilder};
+use p3_air::{
+    AirBuilder, AirBuilderWithPublicValues, ExtensionBuilder, PairBuilder, PermutationAirBuilder,
+};
 use p3_matrix::dense::RowMajorMatrixView;
 use p3_matrix::stack::VerticalPair;
 
-use crate::{BaseMessageBuilder, MessageBuilder, PackedChallenge, PackedVal, StarkGenericConfig, Val};
 use crate::permutation::MultiTableBuilder;
+use crate::{
+    BaseMessageBuilder, MessageBuilder, PackedChallenge, PackedVal, StarkGenericConfig, Val,
+};
 
 #[derive(Debug)]
 pub struct ProverConstraintFolder<'a, SC: StarkGenericConfig> {
@@ -108,7 +112,8 @@ impl<'a, SC: StarkGenericConfig> ExtensionBuilder for ProverConstraintFolder<'a,
 
     fn assert_zero_ext<I>(&mut self, x: I)
     where
-        I: Into<Self::ExprEF> {
+        I: Into<Self::ExprEF>,
+    {
         // tracing::info!("constraint index: {}", self.constraint_index);
         let x: PackedChallenge<SC> = x.into();
         let alpha_power = self.alpha_powers[self.constraint_index];
@@ -121,9 +126,11 @@ impl<'a, SC: StarkGenericConfig> PermutationAirBuilder for ProverConstraintFolde
     type MP = ViewPair<'a, PackedChallenge<SC>>;
 
     type RandomVar = SC::Challenge;
-    
-    fn permutation(&self) -> Self::MP {self.perm}
-    
+
+    fn permutation(&self) -> Self::MP {
+        self.perm
+    }
+
     fn permutation_randomness(&self) -> &[Self::RandomVar] {
         self.perm_challenges
     }
@@ -134,7 +141,6 @@ impl<'a, SC: StarkGenericConfig> MultiTableBuilder for ProverConstraintFolder<'a
         self.local_cumulative_sum
     }
 }
-
 
 impl<'a, SC: StarkGenericConfig> AirBuilder for VerifierConstraintFolder<'a, SC> {
     type F = Val<SC>;
@@ -205,11 +211,11 @@ impl<'a, SC: StarkGenericConfig> ExtensionBuilder for VerifierConstraintFolder<'
 impl<'a, SC: StarkGenericConfig> PermutationAirBuilder for VerifierConstraintFolder<'a, SC> {
     type MP = ViewPair<'a, SC::Challenge>;
     type RandomVar = SC::Challenge;
-    
+
     fn permutation(&self) -> Self::MP {
         self.perm
     }
-    
+
     fn permutation_randomness(&self) -> &[Self::RandomVar] {
         self.perm_challenges
     }

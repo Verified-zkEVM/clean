@@ -6,9 +6,9 @@ use p3_air::Air;
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
-use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
+use p3_matrix::Matrix;
 use p3_maybe_rayon::prelude::*;
 use p3_util::log2_strict_usize;
 use p3_util::zip_eq::zip_eq;
@@ -16,7 +16,10 @@ use tracing::{debug_span, info_span, instrument};
 
 use p3_uni_stark::SymbolicAirBuilder;
 
-use crate::{permutation, CleanAir, Commitments, Domain, LookupBuilder, OpenedValues, PackedChallenge, PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val};
+use crate::{
+    permutation, CleanAir, Commitments, Domain, LookupBuilder, OpenedValues, PackedChallenge,
+    PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val,
+};
 
 #[instrument(skip_all)]
 #[allow(clippy::multiple_bound_locations)] // cfg not supported in where clauses?
@@ -31,79 +34,77 @@ pub fn prove<
 ) -> Proof<SC>
 where
     SC: StarkGenericConfig,
-    A: CleanAir<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + Air<LookupBuilder<Val<SC>>> + for<'a> Air<ProverConstraintFolder<'a, SC>>,
+    A: CleanAir<Val<SC>>
+        + Air<SymbolicAirBuilder<Val<SC>>>
+        + Air<LookupBuilder<Val<SC>>>
+        + for<'a> Air<ProverConstraintFolder<'a, SC>>,
 {
     let pcs = config.pcs();
     let mut challenger = config.initialise_challenger();
 
     let degrees = tables
-        .iter().enumerate()
-        .map(|(i, _)| {
-            tables[i].main().height()
-        });
+        .iter()
+        .enumerate()
+        .map(|(i, _)| tables[i].main().height());
 
-    let log_degrees = degrees
-        .clone()
-        .map(log2_strict_usize)
+    let log_degrees = degrees.clone().map(log2_strict_usize).collect_vec();
+
+    challenger.observe_slice(
+        &log_degrees
+            .iter()
+            .map(|&d| Val::<SC>::from_usize(d))
+            .collect_vec(),
+    );
+
+    let constraint_counts = tables
+        .iter()
+        .map(|table| table.count_constraints(public_values.len()))
         .collect_vec();
 
-    challenger.observe_slice(&log_degrees.iter().map(|&d| Val::<SC>::from_usize(d)).collect_vec());
-
-    let constraint_counts = tables.
-        iter()
-        .map(|table| {
-            table.count_constraints(public_values.len())
-        })
-        .collect_vec();
-
-    let log_quotient_degrees = tables.iter()
-        .map(|table| {
-            table.log_quotient_degree(public_values.len())
-        })
+    let log_quotient_degrees = tables
+        .iter()
+        .map(|table| table.log_quotient_degree(public_values.len()))
         .collect::<Vec<_>>();
 
-    tracing::info!("constraint counts: {:?}, log_quotient_degrees: {:?}", constraint_counts, log_quotient_degrees);
+    tracing::info!(
+        "constraint counts: {:?}, log_quotient_degrees: {:?}",
+        constraint_counts,
+        log_quotient_degrees
+    );
 
-    let quotient_degrees = log_quotient_degrees
-        .iter()
-        .map(|&d| 1 << d)
-        .collect_vec();
-
+    let quotient_degrees = log_quotient_degrees.iter().map(|&d| 1 << d).collect_vec();
 
     let trace_domains: Vec<Domain<SC>> = degrees
         .clone()
         .map(|d| pcs.natural_domain_for_degree(d))
         .collect_vec();
 
-
     let traces_and_domains = zip_eq(
-            trace_domains.iter(),
-            tables.iter(),
-            "Trace domains and tables length mismatch",
-        )
-        .unwrap()
-        .map(|(domain, table)| {
-            (*domain, table.main().clone())
-        })
-        .collect_vec();
+        trace_domains.iter(),
+        tables.iter(),
+        "Trace domains and tables length mismatch",
+    )
+    .unwrap()
+    .map(|(domain, table)| (*domain, table.main().clone()))
+    .collect_vec();
 
     let pre_and_domains = zip_eq(
-            trace_domains.iter(),
-            tables.iter(),
-            "Trace domains and tables length mismatch",
-        )
-        .unwrap()
-        .map(|(domain, table)| {
-            let pre = if let Some(pre) = table.preprocessed() {
-                pre.clone()
-            } else {
-                // todo: avoid this by allowing null preprocessed traces.
-                // If the table does not have a preprocessed trace, we create a default one.
-                RowMajorMatrix::new(vec![Val::<SC>::ZERO; domain.size()], 1)
-            };
-            (*domain, pre)
-        })
-        .collect_vec();
+        trace_domains.iter(),
+        tables.iter(),
+        "Trace domains and tables length mismatch",
+    )
+    .unwrap()
+    .map(|(domain, table)| {
+        let pre = if let Some(pre) = table.preprocessed() {
+            pre.clone()
+        } else {
+            // todo: avoid this by allowing null preprocessed traces.
+            // If the table does not have a preprocessed trace, we create a default one.
+            RowMajorMatrix::new(vec![Val::<SC>::ZERO; domain.size()], 1)
+        };
+        (*domain, pre)
+    })
+    .collect_vec();
 
     let (trace_commit, trace_data) =
         info_span!("commit to trace data").in_scope(|| pcs.commit(traces_and_domains));
@@ -135,16 +136,16 @@ where
         .collect_vec();
 
     let (perm_and_domains, last_sums): (Vec<_>, Vec<&SC::Challenge>) = zip_eq(
-            trace_domains.iter(),
-            perm_traces.iter(),
-            "Trace domains and perm traces length mismatch",
-        )
-        .unwrap()
-        .map(|(domain, (perm_trace, last_sum))| {
-            tracing::info!("perm trace width: {}", perm_trace.width());
-            ((*domain, perm_trace.clone().flatten_to_base()), last_sum)
-        })
-        .unzip();
+        trace_domains.iter(),
+        perm_traces.iter(),
+        "Trace domains and perm traces length mismatch",
+    )
+    .unwrap()
+    .map(|(domain, (perm_trace, last_sum))| {
+        tracing::info!("perm trace width: {}", perm_trace.width());
+        ((*domain, perm_trace.clone().flatten_to_base()), last_sum)
+    })
+    .unzip();
 
     let (perm_commit, perm_data) =
         info_span!("commit to permutation traces").in_scope(|| pcs.commit(perm_and_domains));
@@ -152,10 +153,14 @@ where
     // print out the sum of last sums
     tracing::info!(
         "Sum of last sums: {:?}",
-        last_sums.clone().into_iter().map(|s| { 
-            tracing::info!("Last sum: {:?}", s);
-            *s
-        }).sum::<SC::Challenge>()
+        last_sums
+            .clone()
+            .into_iter()
+            .map(|s| {
+                tracing::info!("Last sum: {:?}", s);
+                *s
+            })
+            .sum::<SC::Challenge>()
     );
 
     challenger.observe_slice(
@@ -163,7 +168,7 @@ where
             .iter()
             .flat_map(|s| s.as_basis_coefficients_slice().iter())
             .cloned()
-            .collect_vec()
+            .collect_vec(),
     );
 
     challenger.observe(perm_commit.clone());
@@ -177,16 +182,16 @@ where
             trace_domains.iter(),
             log_degrees.iter(),
             "Trace domains and log degrees length mismatch",
-        ).unwrap(),
+        )
+        .unwrap(),
         log_quotient_degrees.iter(),
-            "Combined domains and log quotient degrees length mismatch",
-        ).unwrap()
-        .map(|((trace_domain, &log_degree), &log_quotient_degree)| {
-            trace_domain.create_disjoint_domain(
-                1 << (log_degree + log_quotient_degree),
-            )
-        })
-        .collect_vec();
+        "Combined domains and log quotient degrees length mismatch",
+    )
+    .unwrap()
+    .map(|((trace_domain, &log_degree), &log_quotient_degree)| {
+        trace_domain.create_disjoint_domain(1 << (log_degree + log_quotient_degree))
+    })
+    .collect_vec();
 
     let quotient_values = tables
         .iter()
@@ -194,12 +199,15 @@ where
         .map(|(i, table)| {
             let trace_domain = trace_domains[i];
             let quotient_domain = quotient_domains[i];
-            let trace_on_quotient_domain = pcs.get_evaluations_on_domain(&trace_data, i, quotient_domains[i]);
-            let pre_on_quotient_domain = pcs.get_evaluations_on_domain(&pre_data, i, quotient_domains[i]);
-            let perm_on_quotient_domain = pcs.get_evaluations_on_domain(&perm_data, i, quotient_domains[i]);
+            let trace_on_quotient_domain =
+                pcs.get_evaluations_on_domain(&trace_data, i, quotient_domains[i]);
+            let pre_on_quotient_domain =
+                pcs.get_evaluations_on_domain(&pre_data, i, quotient_domains[i]);
+            let perm_on_quotient_domain =
+                pcs.get_evaluations_on_domain(&perm_data, i, quotient_domains[i]);
 
             let constraint_count = constraint_counts[i];
-            
+
             quotient_values(
                 *table,
                 public_values,
@@ -217,21 +225,25 @@ where
         .collect_vec();
 
     let quotient_domains_and_chunks = zip_eq(
-            zip_eq(
-                quotient_domains.iter(),
-                quotient_degrees.iter(),
-                "Quotient domains and degrees length mismatch",
-            ).unwrap(),
-            quotient_values.iter(),
-            "Combined domains/degrees and values length mismatch",
-        ).unwrap()
-        .flat_map(|((domain, &degree), values)| {
-            let quotient_flat = RowMajorMatrix::new_col(values.to_vec()).flatten_to_base();
-            let quotient_chunks = domain.split_evals(degree, quotient_flat);
-            let domain_chunks = domain.split_domains(degree);
-            domain_chunks.into_iter().zip_eq(quotient_chunks.into_iter())
-        })
-        .collect_vec();
+        zip_eq(
+            quotient_domains.iter(),
+            quotient_degrees.iter(),
+            "Quotient domains and degrees length mismatch",
+        )
+        .unwrap(),
+        quotient_values.iter(),
+        "Combined domains/degrees and values length mismatch",
+    )
+    .unwrap()
+    .flat_map(|((domain, &degree), values)| {
+        let quotient_flat = RowMajorMatrix::new_col(values.to_vec()).flatten_to_base();
+        let quotient_chunks = domain.split_evals(degree, quotient_flat);
+        let domain_chunks = domain.split_domains(degree);
+        domain_chunks
+            .into_iter()
+            .zip_eq(quotient_chunks.into_iter())
+    })
+    .collect_vec();
 
     let (quotient_commit, quotient_data) = info_span!("commit to quotient poly chunks")
         .in_scope(|| pcs.commit(quotient_domains_and_chunks));
@@ -244,7 +256,6 @@ where
         perm: perm_commit,
         quotient_chunks: quotient_commit,
     };
-
 
     let zeta: SC::Challenge = challenger.sample_algebra_element();
 
@@ -277,16 +288,13 @@ where
         .collect_vec();
 
     let quotient_points = (0..tables.len())
-        .flat_map(|i| {
-            (0..quotient_degrees[i]).map(|_| vec![zeta]).collect_vec()
-
-        })
+        .flat_map(|i| (0..quotient_degrees[i]).map(|_| vec![zeta]).collect_vec())
         .collect_vec();
 
     tracing::info!("quotient point size: {}", quotient_points.len());
 
-    let (openings, opening_proof) = info_span!("open commitments")
-        .in_scope(|| pcs.open(
+    let (openings, opening_proof) = info_span!("open commitments").in_scope(|| {
+        pcs.open(
             vec![
                 (&trace_data, trace_points),
                 (&pre_data, pre_points),
@@ -294,14 +302,11 @@ where
                 (&quotient_data, quotient_points),
             ],
             &mut challenger,
-        ));
+        )
+    });
 
-    let [
-        trace_opened_values,
-        preprocessed_opened_values,
-        perm_opened_values,
-        mut quotient_values,
-    ] = openings.try_into().unwrap();
+    let [trace_opened_values, preprocessed_opened_values, perm_opened_values, mut quotient_values] =
+        openings.try_into().unwrap();
 
     let mut quotient_opened_values = Vec::with_capacity(log_quotient_degrees.len());
     for log_quotient_degree in log_quotient_degrees.iter() {
@@ -310,8 +315,8 @@ where
         quotient_opened_values.push(slice.collect_vec());
     }
 
-    let opened_values = (0..tables.len()).map(|i| {
-        OpenedValues {
+    let opened_values = (0..tables.len())
+        .map(|i| OpenedValues {
             trace_local: trace_opened_values[i][0].clone(),
             trace_next: trace_opened_values[i][1].clone(),
             preprocessed_local: preprocessed_opened_values[i][0].clone(),
@@ -323,8 +328,8 @@ where
                 .iter()
                 .map(|v| v[0].clone())
                 .collect_vec(),
-        }
-    }).collect_vec();
+        })
+        .collect_vec();
 
     Proof {
         commitments,
@@ -407,14 +412,18 @@ where
             let main_local: Vec<_> = (0..width)
                 .map(|col| {
                     PackedVal::<SC>::from_fn(|offset| {
-                        trace_on_quotient_domain.get(wrap(i_start + offset), col).unwrap()
+                        trace_on_quotient_domain
+                            .get(wrap(i_start + offset), col)
+                            .unwrap()
                     })
                 })
                 .collect();
             let main_next: Vec<_> = (0..width)
                 .map(|col| {
                     PackedVal::<SC>::from_fn(|offset| {
-                        trace_on_quotient_domain.get(wrap(i_start + next_step + offset), col).unwrap()
+                        trace_on_quotient_domain
+                            .get(wrap(i_start + next_step + offset), col)
+                            .unwrap()
                     })
                 })
                 .collect();
@@ -423,14 +432,18 @@ where
             let prep_local: Vec<_> = (0..pre_width)
                 .map(|col| {
                     PackedVal::<SC>::from_fn(|offset| {
-                        pre_on_quotient_domain.get(wrap(i_start + offset), col).unwrap()
+                        pre_on_quotient_domain
+                            .get(wrap(i_start + offset), col)
+                            .unwrap()
                     })
                 })
                 .collect();
             let prep_next: Vec<_> = (0..pre_width)
                 .map(|col| {
                     PackedVal::<SC>::from_fn(|offset| {
-                        pre_on_quotient_domain.get(wrap(i_start + next_step + offset), col).unwrap()
+                        pre_on_quotient_domain
+                            .get(wrap(i_start + next_step + offset), col)
+                            .unwrap()
                     })
                 })
                 .collect();
@@ -441,7 +454,8 @@ where
                     PackedChallenge::<SC>::from_basis_coefficients_fn(|i| {
                         PackedVal::<SC>::from_fn(|offset| {
                             perm_on_quotient_domain
-                                .get(wrap(i_start + offset), col + i).unwrap()
+                                .get(wrap(i_start + offset), col + i)
+                                .unwrap()
                         })
                     })
                 })
@@ -453,12 +467,12 @@ where
                     PackedChallenge::<SC>::from_basis_coefficients_fn(|i| {
                         PackedVal::<SC>::from_fn(|offset| {
                             perm_on_quotient_domain
-                                .get(wrap(i_start + next_step + offset), col + i).unwrap()
+                                .get(wrap(i_start + next_step + offset), col + i)
+                                .unwrap()
                         })
                     })
                 })
                 .collect();
-
 
             let accumulator = PackedChallenge::<SC>::ZERO;
             let mut folder: ProverConstraintFolder<SC> = ProverConstraintFolder {

@@ -4,26 +4,26 @@
 
 extern crate alloc;
 
-mod config;
-mod folder;
-mod lookup;
-mod proof;
-mod prover;
-mod verifier;
 mod check_constraints;
 mod clean_air;
 mod clean_ast;
-mod permutation;
+mod config;
+mod folder;
 mod key;
+mod lookup;
+mod permutation;
+mod proof;
+mod prover;
+mod verifier;
 
 pub use check_constraints::*;
-pub use config::*;
-pub use folder::{ProverConstraintFolder, VerifierConstraintFolder};
-pub use proof::*;
-pub use prover::prove;
-pub use lookup::*;
-pub use verifier::verify;
 pub use clean_air::*;
 pub use clean_ast::*;
-pub use permutation::*;
+pub use config::*;
+pub use folder::{ProverConstraintFolder, VerifierConstraintFolder};
 pub use key::*;
+pub use lookup::*;
+pub use permutation::*;
+pub use proof::*;
+pub use prover::prove;
+pub use verifier::verify;

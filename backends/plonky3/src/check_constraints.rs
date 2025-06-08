@@ -3,9 +3,9 @@ use alloc::vec::Vec;
 
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, PairBuilder};
 use p3_field::Field;
-use p3_matrix::Matrix;
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
+use p3_matrix::Matrix;
 use tracing::instrument;
 
 use crate::lookup::MessageBuilder;
@@ -22,8 +22,12 @@ use crate::BaseMessageBuilder;
 /// - `main`: The trace matrix (rows of witness values)
 /// - `public_values`: Public values provided to the builder
 #[instrument(name = "check constraints", skip_all)]
-pub(crate) fn check_constraints<F, A>(air: &A, main: &RowMajorMatrix<F>, preprocessed: &RowMajorMatrix<F>, public_values: &Vec<F>)
-where
+pub(crate) fn check_constraints<F, A>(
+    air: &A,
+    main: &RowMajorMatrix<F>,
+    preprocessed: &RowMajorMatrix<F>,
+    public_values: &Vec<F>,
+) where
     F: Field,
     A: for<'a> Air<DebugConstraintBuilder<'a, F>>,
 {
@@ -43,7 +47,7 @@ where
         let default_row = vec![F::ZERO; preprocessed.width().max(1)];
         let local_preprocessed_opt = preprocessed.row_slice(i);
         let next_preprocessed_opt = preprocessed.row_slice(i_next);
-        
+
         let local_slice = match local_preprocessed_opt {
             Some(ref slice) => &**slice,
             None => &default_row[..],
@@ -164,15 +168,15 @@ impl<F: Field> BaseMessageBuilder for DebugConstraintBuilder<'_, F> {}
 
 // impl<F: Field> ExtensionBuilder for DebugConstraintBuilder<'_, F> {
 //     type EF = F;
-    
+
 //     type ExprEF = F;
-    
+
 //     type VarEF = F;
 
 //     fn assert_zero_ext<I: Into<Self::EF>>(&mut self, x: I) {
 //         self.assert_zero(x.into())
 //     }
-    
+
 // }
 
 // impl<F: Field> MultiTableBuilder for DebugConstraintBuilder<'_, F> {
@@ -306,6 +310,11 @@ mod tests {
         let len = values.len();
         let pre = RowMajorMatrix::new(vec![BabyBear::ZERO; len], 2);
         let main = RowMajorMatrix::new(values, 2);
-        check_constraints(&air, &main, &pre, &vec![BabyBear::new(99), BabyBear::new(77)]);
+        check_constraints(
+            &air,
+            &main,
+            &pre,
+            &vec![BabyBear::new(99), BabyBear::new(77)],
+        );
     }
 }

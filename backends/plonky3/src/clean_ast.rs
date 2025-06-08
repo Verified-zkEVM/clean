@@ -114,7 +114,9 @@ pub enum Transition {
 #[derive(Debug)]
 pub enum LookupRow {
     /// Specific row
-    Boundary { row: usize },
+    Boundary {
+        row: usize,
+    },
     Transition(Transition),
 }
 

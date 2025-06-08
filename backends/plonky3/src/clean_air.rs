@@ -1,17 +1,20 @@
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
-use p3_uni_stark::{get_max_constraint_degree, SymbolicExpression};
 use core::marker::PhantomData;
+use p3_uni_stark::{get_max_constraint_degree, SymbolicExpression};
 
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder, VirtualPairCol};
+use p3_air::{
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
+    VirtualPairCol,
+};
 use p3_field::{Field, PrimeCharacteristicRing};
-use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
+use p3_matrix::Matrix;
 
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType, VerifyingKey};
-use crate::permutation::MultiTableBuilder;
-use crate::clean_ast::{CleanOp, CleanOps, CircuitOp, LookupOp, VarLocation, LookupRow, AstUtils};
+use crate::clean_ast::{AstUtils, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation};
 use crate::key::VK;
+use crate::permutation::MultiTableBuilder;
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType, VerifyingKey};
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -182,7 +185,12 @@ pub enum CleanAirInstance<F: Field> {
 }
 
 impl<F: Field> CleanAirInstance<F> {
-    pub fn log_quotient_degree(&self, main: usize, preprocessed: usize, public_inputs: usize) -> usize {
+    pub fn log_quotient_degree(
+        &self,
+        main: usize,
+        preprocessed: usize,
+        public_inputs: usize,
+    ) -> usize {
         let d = get_max_constraint_degree(self, preprocessed, public_inputs);
 
         // todo: cache these lookups in the wrapper's constructor
@@ -278,18 +286,29 @@ impl<F: Field> VerifyingKey<F> for Table<F> {
         self.vk.log_quotient_degree(public_inputs)
     }
 
-    fn eval_constraints<AB>(&self, builder: &mut AB) where AB: AirBuilder<F = F> + PermutationAirBuilder + MultiTableBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder {
+    fn eval_constraints<AB>(&self, builder: &mut AB)
+    where
+        AB: AirBuilder<F = F>
+            + PermutationAirBuilder
+            + MultiTableBuilder
+            + AirBuilderWithPublicValues
+            + PairBuilder
+            + BaseMessageBuilder,
+    {
         self.vk.eval_constraints(builder);
     }
-    
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field {
+
+    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
+    where
+        F: Field,
+    {
         self.vk.lookups()
     }
-    
+
     fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
         self.vk.preprocessed()
     }
-    
+
     fn width(&self) -> usize {
         self.vk.air.width()
     }

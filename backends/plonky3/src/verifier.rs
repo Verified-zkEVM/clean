@@ -6,14 +6,14 @@ use p3_air::Air;
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
-use p3_matrix::{Matrix};
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
+use p3_matrix::Matrix;
 use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
-use p3_uni_stark::SymbolicAirBuilder;
 use crate::{PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder, VerifyingKey};
+use p3_uni_stark::SymbolicAirBuilder;
 
 #[instrument(skip_all)]
 pub fn verify<SC, A>(
@@ -24,7 +24,9 @@ pub fn verify<SC, A>(
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
-    A: VerifyingKey<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
+    A: VerifyingKey<Val<SC>>
+        + Air<SymbolicAirBuilder<Val<SC>>>
+        + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
 {
     let Proof {
         commitments,
@@ -34,12 +36,16 @@ where
     } = proof;
 
     let mut challenger = config.initialise_challenger();
-    challenger.observe_slice(&degree_bits.iter().map(|&d| Val::<SC>::from_usize(d)).collect_vec());
+    challenger.observe_slice(
+        &degree_bits
+            .iter()
+            .map(|&d| Val::<SC>::from_usize(d))
+            .collect_vec(),
+    );
 
     challenger.observe(commitments.trace.clone());
     challenger.observe(commitments.preprocessed.clone());
     challenger.observe_slice(public_values);
-    // todo: observe the cumulative sums?
 
     // Sample permutation challenges for each table.
     let permutation_challenges: Vec<SC::Challenge> = (0..vks.len())
@@ -49,11 +55,13 @@ where
     tracing::info!("permutation challenges: {:?}", permutation_challenges);
 
     // todo: is this absorb necessary?
-    challenger.observe_slice(&opened_values
-        .iter()
-        .flat_map(|o| o.local_cumulative_sum.as_basis_coefficients_slice())
-        .copied()
-        .collect_vec());
+    challenger.observe_slice(
+        &opened_values
+            .iter()
+            .flat_map(|o| o.local_cumulative_sum.as_basis_coefficients_slice())
+            .copied()
+            .collect_vec(),
+    );
 
     challenger.observe(commitments.perm.clone());
 
@@ -77,9 +85,7 @@ where
     let mut quotient_openings = Vec::new();
 
     let log_quotient_degrees = (0..vks.len())
-        .map(|i| {
-            vks[i].log_quotient_degree(public_values.len())
-        })
+        .map(|i| vks[i].log_quotient_degree(public_values.len()))
         .collect::<Vec<_>>();
 
     for i in 0..vks.len() {
@@ -99,7 +105,7 @@ where
         // let log_quotient_degree =
         //     get_log_quotient_degree::<Val<SC>, A>(air, pre.width, public_values.len(), 0);
         let log_quotient_degree = log_quotient_degrees[i];
-        
+
         tracing::info!("log_quotient_degree: {}", log_quotient_degree);
         let quotient_degree = 1 << log_quotient_degree;
 
@@ -123,7 +129,7 @@ where
                 .quotient_chunks
                 .iter()
                 .all(|qc| qc.len() == <SC::Challenge as BasedVectorSpace<Val<SC>>>::DIMENSION);
-        
+
         if !valid_shape {
             tracing::info!("invalid proof shape: trace_local: {}, trace_next: {}, quotient_chunks: {}, expected air width: {}, quotient degree: {}, challenge dimension: {}",
                 opened_values_i.trace_local.len(),
@@ -178,9 +184,9 @@ where
             &opened_values_i.quotient_chunks,
             VerificationError::InvalidProofShape,
         )?
-            .map(|(domain, values)| (*domain, vec![(zeta, values.clone())]))
-            .collect_vec();
-        
+        .map(|(domain, values)| (*domain, vec![(zeta, values.clone())]))
+        .collect_vec();
+
         quotient_openings.extend(quotient_chunk_openings);
     }
 
@@ -200,20 +206,22 @@ where
     let unflatten = |v: &[SC::Challenge]| {
         v.chunks_exact(SC::Challenge::DIMENSION)
             .map(|chunk| {
-                chunk.iter().enumerate().map(|(e_i, &x)| {
-                    // Using ith_basis_element which is available instead of monomial
-                    SC::Challenge::ith_basis_element(e_i).unwrap() * x
-                }).sum()
+                chunk
+                    .iter()
+                    .enumerate()
+                    .map(|(e_i, &x)| {
+                        // Using ith_basis_element which is available instead of monomial
+                        SC::Challenge::ith_basis_element(e_i).unwrap() * x
+                    })
+                    .sum()
             })
             .collect::<Vec<SC::Challenge>>()
     };
-
 
     // Init accumulative value for the cumulative sums
     let zero = SC::Challenge::default();
     // Now process constraint evaluation for each AIR
     for (vk, trace_domain, quotient_chunks_domains, opened_values_i) in all_air_data {
-
         let zps = quotient_chunks_domains
             .iter()
             .enumerate()
@@ -283,11 +291,15 @@ where
         vk.eval_constraints(&mut folder);
         let folded_constraints = folder.accumulator;
 
-
         // Finally, check that
         //     folded_constraints(zeta) / Z_H(zeta) = quotient(zeta)
         if folded_constraints * sels.inv_vanishing != quotient {
-            tracing::info!("folded_constraints: {}, quotient: {}, vanishing: {}", folded_constraints, quotient, trace_domain.vanishing_poly_at_point(zeta));
+            tracing::info!(
+                "folded_constraints: {}, quotient: {}, vanishing: {}",
+                folded_constraints,
+                quotient,
+                trace_domain.vanishing_poly_at_point(zeta)
+            );
             return Err(VerificationError::OodEvaluationMismatch);
         }
     }
@@ -297,7 +309,7 @@ where
         .iter()
         .map(|o| o.local_cumulative_sum)
         .sum::<SC::Challenge>();
-    
+
     if cum_sums != zero {
         return Err(VerificationError::CumulativeSumMismatch);
     }

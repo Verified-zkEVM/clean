@@ -5,9 +5,12 @@ extern crate alloc;
 use alloc::vec::Vec;
 use p3_air::{AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
 use p3_field::{ExtensionField, Field, PrimeField32};
-use p3_matrix::{Matrix, dense::RowMajorMatrix};
+use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
-use crate::{ByteRangeAir, CleanAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Table, Val, VK, VerifyingKey};
+use crate::{
+    ByteRangeAir, CleanAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Table, Val,
+    VerifyingKey, VK,
+};
 
 /// Represents a lookup AIR with its calculated main trace
 pub struct LookupAirWithTrace<F: Field> {
@@ -27,7 +30,7 @@ pub trait MultiTableBuilder: ExtensionBuilder {
 /// This function:
 /// 1. Uses the VK's pre-computed lookup operations
 /// 2. Collect lookups and multiplicity traces for each lookup type
-/// 3. Returns lookup tables 
+/// 3. Returns lookup tables
 ///
 /// # Arguments
 /// * `main_vk` - The VK instance containing lookup operations
@@ -44,34 +47,35 @@ where
 
     // Get lookup operations from the VK (they're already computed)
     let lookups = main_vk.lookups();
-    let sends: Vec<_> = lookups.iter()
+    let sends: Vec<_> = lookups
+        .iter()
         .filter(|(_, is_send)| *is_send)
         .map(|(lookup, _)| lookup)
         .collect();
-    
+
     // Main VK should only send lookups, not receive them
-    let receives: Vec<_> = lookups.iter()
-        .filter(|(_, is_send)| !*is_send)
-        .collect();
-    assert!(receives.is_empty(), "The main VK should only send lookups, as it is not a lookup air");
+    let receives: Vec<_> = lookups.iter().filter(|(_, is_send)| !*is_send).collect();
+    assert!(
+        receives.is_empty(),
+        "The main VK should only send lookups, as it is not a lookup air"
+    );
 
     // Group lookups by type using simple filtering
     // Process ByteRange lookups
-    let byte_range_sends: Vec<_> = sends.iter()
+    let byte_range_sends: Vec<_> = sends
+        .iter()
         .filter(|send| matches!(send.kind, LookupType::ByteRange))
         .collect();
-    
+
     if !byte_range_sends.is_empty() {
         // Find the corresponding ByteRange VK from the provided lookup VKs
-        let byte_range_vk = lookup_vks.iter()
+        let byte_range_vk = lookup_vks
+            .iter()
             .find(|vk| matches!(&vk.air, CleanAirInstance::ByteRange(_)))
             .expect("ByteRange VK not found in lookup_vks");
 
         // Create multiplicity trace for byte range lookups (256 possible values, 0-255)
-        let mut multiplicity_trace = RowMajorMatrix::new(
-            alloc::vec![F::ZERO; 256],
-            1,
-        );
+        let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; 256], 1);
 
         // Calculate multiplicities by evaluating lookup operations for each row
         for row_idx in 0..trace.height() {
@@ -82,7 +86,11 @@ where
 
                 // Convert lookup value to index of multiplicity trace and increment multiplicity
                 let lookup_idx = v.as_canonical_u32() as usize;
-                assert!(lookup_idx < 256, "Lookup value out of range for byte range lookup: {}", lookup_idx);
+                assert!(
+                    lookup_idx < 256,
+                    "Lookup value out of range for byte range lookup: {}",
+                    lookup_idx
+                );
 
                 let m = multiplicity_trace.row_mut(lookup_idx).get_mut(0).unwrap();
                 *m += F::ONE;
@@ -102,7 +110,7 @@ where
 /// 1. Builds the lookups using LookupBuilder for the given AIR.
 /// 2. Computes the permutation trace based on the lookups and the traces for the Air.
 pub fn generate_permutation_trace<SC, A, EF: ExtensionField<Val<SC>>>(
-    air: &A, 
+    air: &A,
     random_elements: &[EF],
 ) -> (RowMajorMatrix<EF>, EF)
 where
@@ -114,10 +122,10 @@ where
     let main_trace = air.main();
 
     let num_perm_cols = lookups.len() + 1; // +1 for cumulative sum column
-    
+
     let mut permutation_trace = RowMajorMatrix::new(
         alloc::vec![EF::ZERO; main_trace.height() * num_perm_cols],
-        num_perm_cols, 
+        num_perm_cols,
     );
 
     tracing::info!("perm height: {}", permutation_trace.height());
@@ -134,10 +142,15 @@ where
         let main_row: Vec<Val<SC>> = main_trace.row(row).unwrap().into_iter().collect();
 
         for (i, (lookup, is_send)) in lookups.iter().enumerate() {
-            let lookup_value: EF = lookup.value.apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row).into();
+            let lookup_value: EF = lookup
+                .value
+                .apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row)
+                .into();
             let denominator: EF = z - lookup_value;
 
-            let mut mult = lookup.multiplicity.apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row);
+            let mut mult = lookup
+                .multiplicity
+                .apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row);
 
             if !is_send {
                 mult = -mult;
@@ -149,25 +162,27 @@ where
 
     let local_cumulative_sums = permutation_trace
         .par_rows_mut()
-        .map(|row| {
-            row.iter().take(num_perm_cols - 1).copied().sum::<EF>()
-        })
+        .map(|row| row.iter().take(num_perm_cols - 1).copied().sum::<EF>())
         .collect::<Vec<_>>();
 
     let zero = EF::ZERO;
 
-    let local_cumulative_sums = local_cumulative_sums.into_iter().scan(
-        zero, |acc, val| {
+    let local_cumulative_sums = local_cumulative_sums
+        .into_iter()
+        .scan(zero, |acc, val| {
             *acc += val;
             Some(*acc)
-        }
-    ).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     let last_sum = *local_cumulative_sums.last().unwrap();
 
     // assign cumulative sums to the last column
     for (row, sum) in local_cumulative_sums.into_iter().enumerate() {
-        let perm_val = permutation_trace.row_mut(row).get_mut(num_perm_cols - 1).unwrap();
+        let perm_val = permutation_trace
+            .row_mut(row)
+            .get_mut(num_perm_cols - 1)
+            .unwrap();
         *perm_val = sum;
     }
 
@@ -178,8 +193,7 @@ where
 pub fn eval_permutation_constraints<AB>(
     lookups: &[(Lookup<VirtualPairCol<AB::F>>, bool)],
     builder: &mut AB,
-)
-where
+) where
     AB: AirBuilder + PairBuilder + PermutationAirBuilder + MultiTableBuilder,
 {
     let main = builder.main();
@@ -197,23 +211,23 @@ where
     // constrain permutation entries (except for the cumulative sum column)
     for ((lookup, is_send), entry) in lookups.iter().zip(perm_local.iter()) {
         let entry: AB::ExprEF = (*entry).into();
-        
+
         // Get preprocessed row once or use empty slice
         let preprocessed_row = preprocessed.row_slice(0);
         let empty_preprocessed: &[AB::Var] = &[];
         let preprocessed_ref = preprocessed_row.as_deref().unwrap_or(empty_preprocessed);
-        
-        let lookup_value: AB::ExprEF = lookup.value.apply::<AB::Expr, AB::Var>(
-            preprocessed_ref,
-            &main_local,
-        ).into();
+
+        let lookup_value: AB::ExprEF = lookup
+            .value
+            .apply::<AB::Expr, AB::Var>(preprocessed_ref, &main_local)
+            .into();
 
         let denominator = z.clone() - lookup_value;
 
-        let mut mult: AB::ExprEF = lookup.multiplicity.apply::<AB::Expr, AB::Var>(
-            preprocessed_ref,
-            &main_local,
-        ).into();
+        let mut mult: AB::ExprEF = lookup
+            .multiplicity
+            .apply::<AB::Expr, AB::Var>(preprocessed_ref, &main_local)
+            .into();
 
         if !is_send {
             mult = -mult;
@@ -237,15 +251,18 @@ where
     let perm_next_last: AB::ExprEF = (*perm_next.last().unwrap()).into();
 
     // constrain the first row
-    builder.when_first_row().assert_eq_ext(sum_local, perm_local_last.clone());
+    builder
+        .when_first_row()
+        .assert_eq_ext(sum_local, perm_local_last.clone());
 
     // constrain the transition window
-    builder.when_transition().assert_eq_ext(sum_next, perm_next_last - perm_local_last.clone());
+    builder
+        .when_transition()
+        .assert_eq_ext(sum_next, perm_next_last - perm_local_last.clone());
 
     // constrain the last row
     let cumulative_sum: AB::ExprEF = builder.cumulative_sum();
-    builder.when_last_row().assert_eq_ext(
-        cumulative_sum,
-        perm_local_last,
-    );
+    builder
+        .when_last_row()
+        .assert_eq_ext(cumulative_sum, perm_local_last);
 }
