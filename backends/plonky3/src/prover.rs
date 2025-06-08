@@ -47,6 +47,8 @@ where
         .map(log2_strict_usize)
         .collect_vec();
 
+    challenger.observe_slice(&log_degrees.iter().map(|&d| Val::<SC>::from_usize(d)).collect_vec());
+
     let constraint_counts = tables.
         iter()
         .map(|table| {

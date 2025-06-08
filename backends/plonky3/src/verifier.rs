@@ -5,7 +5,7 @@ use itertools::Itertools;
 use p3_air::Air;
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
-use p3_field::{BasedVectorSpace, Field};
+use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
 use p3_matrix::{Matrix};
 use p3_matrix::dense::{RowMajorMatrix, RowMajorMatrixView};
 use p3_matrix::stack::VerticalPair;
@@ -34,10 +34,11 @@ where
     } = proof;
 
     let mut challenger = config.initialise_challenger();
+    challenger.observe_slice(&degree_bits.iter().map(|&d| Val::<SC>::from_usize(d)).collect_vec());
+
     challenger.observe(commitments.trace.clone());
     challenger.observe(commitments.preprocessed.clone());
     challenger.observe_slice(public_values);
-    // todo: observe degree_bits?
     // todo: observe the cumulative sums?
 
     // Sample permutation challenges for each table.
