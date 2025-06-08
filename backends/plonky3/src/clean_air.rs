@@ -1,6 +1,4 @@
-use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
-use alloc::string::String;
 use alloc::vec::Vec;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, SymbolicExpression};
 use p3_util::log2_ceil_usize;
@@ -10,10 +8,10 @@ use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, 
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
-use serde::Deserialize;
 
 use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType};
 use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
+use crate::clean_ast::{CleanOp, CleanOps, CircuitOp, LookupOp, VarLocation, LookupRow, AstUtils};
 
 pub trait CleanAir<F> {
     fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field;
@@ -27,127 +25,13 @@ pub trait CleanAir<F> {
     fn eval_constraints<AB>(&self, builder: &mut AB) where AB: AirBuilder<F = F> + PermutationAirBuilder + MultiTableBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder;
 }
 
-/// Operations defined in the clean JSON format
-#[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type")]
-pub enum CleanOp {
-    Boundary { row: usize, context: OpContext },
-    EveryRowExceptLast { context: OpContext },
-}
-
-impl CleanOp {
-    /// Recursively find all lookup operations
-    fn find_lookup_ops(&self, ctx: &Vec<CircuitOp>) -> Vec<LookupOp> {
-        let mut lookup_ops = Vec::new();
-        for op in ctx {
-            match op {
-                CircuitOp::Lookup { lookup } => {
-                    lookup_ops.push(lookup.clone());
-                }
-                CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(self.find_lookup_ops(subcircuit));
-                }
-                _ => {}
-            }
-        }
-        lookup_ops
-    }
-
-    pub fn lookups(&self) -> Vec<LookupOp> {
-        match self {
-            CleanOp::Boundary { context, .. } => self.find_lookup_ops(&context.circuit),
-            CleanOp::EveryRowExceptLast { context } => self.find_lookup_ops(&context.circuit),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct OpContext {
-    pub circuit: Vec<CircuitOp>,
-    pub assignment: Assignment,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(untagged)]
-pub enum CircuitOp {
-    Witness { witness: usize },
-    Assert { assert: AssertOp },
-    Lookup { lookup: LookupOp },
-    Subcircuit { subcircuit: Vec<CircuitOp> },
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct AssertOp {
-    #[serde(rename = "type")]
-    pub op_type: String,
-    pub lhs: ExprNode,
-    pub rhs: ExprNode,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct LookupOp {
-    pub table: String,
-    pub entry: Vec<ExprNode>,
-}
-
-/// Expression nodes for the JSON AST
-#[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum ExprNode {
-    Var {
-        index: usize,
-    },
-    Const {
-        value: u64,
-    },
-    Add {
-        lhs: Box<ExprNode>,
-        rhs: Box<ExprNode>,
-    },
-    Mul {
-        lhs: Box<ExprNode>,
-        rhs: Box<ExprNode>,
-    },
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct Assignment {
-    /// Mapping from `var<i>` → concrete cell
-    pub vars: Vec<VarLocation>,
-    pub offset: usize,
-    pub aux_length: usize,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase", untagged)]
-#[allow(clippy::large_enum_variant)]
-pub enum VarLocation {
-    Cell { row: usize, column: usize },
-    Aux { aux: usize },
-}
-
-/// Current or next row transition
-#[derive(Debug)]
-pub enum Transition {
-    Current,
-    Next,
-}
-
-#[derive(Debug)]
-pub enum LookupRow {
-    /// Specific row
-    Boundary { row: usize },
-    Transition(Transition),
-}
-
-/// Clean AIR implementation for STARK constraints
 #[derive(Clone)]
 pub struct MainAir<F>
 where
     F: Field,
 {
-    /// Operations defined in the clean JSON format
-    ops: Vec<CleanOp>,
+    /// Operations handler for the clean JSON format
+    clean_ops: CleanOps,
     /// Width of the trace, including
     width: usize,
     _marker: PhantomData<F>,
@@ -179,7 +63,7 @@ where
             );
 
             // Build constraints from clean ops
-            for op in &self.ops {
+            for op in self.clean_ops.ops() {
                 match op {
                     CleanOp::Boundary { row, context: _ } => {
                         // When it is the first row
@@ -210,13 +94,13 @@ where
                         for circuit_op in &context.circuit {
                             match circuit_op {
                                 CircuitOp::Assert { assert } => {
-                                    let expr = self.to_expr::<AB>(&assert, &val_of);
+                                    let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
                                     when_transition.assert_zero(expr);
                                 }
                                 CircuitOp::Subcircuit { subcircuit } => {
                                     for sub_op in subcircuit {
                                         if let CircuitOp::Assert { assert } = sub_op {
-                                            let expr = self.to_expr::<AB>(&assert, &val_of);
+                                            let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
                                             when_transition.assert_zero(expr);
                                         }
                                     }
@@ -253,129 +137,38 @@ where
 impl<F: Field> MainAir<F> {
     /// Create a new CleanAir instance from JSON content and trace data
     pub fn new(json_content: &str, width: usize) -> Self {
-        let ops: Vec<CleanOp> = serde_json::from_str(json_content).expect("Failed to parse JSON");
+        let clean_ops = CleanOps::from_json(json_content);
         Self {
-            ops,
+            clean_ops,
             width,
             _marker: PhantomData,
         }
     }
 
-    /// Process lookups for all operations
-    pub fn process_lookups<C>(&self, mut callback: C)
+    /// Create a new CleanAir instance from CleanOps and trace data
+    pub fn from_ops(clean_ops: CleanOps, width: usize) -> Self {
+        Self {
+            clean_ops,
+            width,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Get reference to the clean operations
+    pub fn clean_ops(&self) -> &CleanOps {
+        &self.clean_ops
+    }
+
+    /// Process lookups for all operations (delegates to CleanOps)
+    pub fn process_lookups<C>(&self, callback: C)
     where
         C: FnMut(LookupRow, usize),
     {
-        for op in &self.ops {
-            // Extract context and check for boundary row match if needed
-            let (context, boundary_row) = match op {
-                CleanOp::Boundary { context, row } => (context, Some(row)),
-                CleanOp::EveryRowExceptLast { context } => (context, None),
-            };
-
-            // Process all lookups in the context
-            for lookup in op.lookups() {
-                for entry in lookup.entry.iter() {
-                    match entry {
-                        ExprNode::Var { index } => {
-                            let var = &context.assignment.vars[*index];
-                            match var {
-                                VarLocation::Cell { row, column } => {
-                                    if let Some(r) = boundary_row {
-                                        assert_eq!(
-                                            r, row,
-                                            "Boundary row does not match the lookup row"
-                                        );
-                                        callback(LookupRow::Boundary { row: *r }, *column);
-                                    } else if *row == 0 {
-                                        callback(
-                                            LookupRow::Transition(Transition::Current),
-                                            *column,
-                                        );
-                                    } else if *row == 1 {
-                                        callback(LookupRow::Transition(Transition::Next), *column);
-                                    } else {
-                                        panic!("Invalid row index in VarLocation");
-                                    }
-                                }
-                                VarLocation::Aux { .. } => {
-                                    // Handle aux variables through the callback if needed
-                                    todo!()
-                                }
-                            }
-                        }
-                        _ => panic!("Invalid lookup entry"),
-                    }
-                }
-            }
-        }
-    }
-
-    /// Convert ExprNode to AirBuilder::Expr
-    fn lower_expr<AB: AirBuilder>(
-        expr: &ExprNode,
-        lookup_var: &dyn Fn(usize) -> AB::Var,
-    ) -> AB::Expr
-    where
-        AB::F: Field + PrimeCharacteristicRing,
-    {
-        match expr {
-            ExprNode::Var { index } => AB::Var::from(lookup_var(*index)).into(),
-            ExprNode::Const { value } => AB::F::from_u64(*value).into(),
-            ExprNode::Add { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, lookup_var) + Self::lower_expr::<AB>(rhs, lookup_var)
-            }
-            ExprNode::Mul { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, lookup_var) * Self::lower_expr::<AB>(rhs, lookup_var)
-            }
-        }
-    }
-
-    /// Convert to AB::Expr
-    fn to_expr<AB: AirBuilder>(
-        &self,
-        assert_op: &AssertOp,
-        lookup_var: &dyn Fn(usize) -> AB::Var,
-    ) -> AB::Expr
-    where
-        AB::F: Field + PrimeCharacteristicRing,
-    {
-        match assert_op.op_type.as_str() {
-            "add" => {
-                Self::lower_expr::<AB>(&assert_op.lhs, lookup_var)
-                    + Self::lower_expr::<AB>(&assert_op.rhs, lookup_var)
-            }
-            "mul" => {
-                Self::lower_expr::<AB>(&assert_op.lhs, lookup_var)
-                    * Self::lower_expr::<AB>(&assert_op.rhs, lookup_var)
-            }
-            _ => panic!("Unsupported operation type: {}", assert_op.op_type),
-        }
-    }
-
-    /// Recursively find all lookup operations
-    fn find_lookup_ops(&self, ops: &[CircuitOp]) -> Vec<LookupOp> {
-        let mut lookup_ops = Vec::new();
-        for op in ops {
-            match op {
-                CircuitOp::Lookup { lookup } => {
-                    lookup_ops.push(lookup.clone());
-                }
-                CircuitOp::Subcircuit { subcircuit } => {
-                    lookup_ops.extend(self.find_lookup_ops(subcircuit));
-                }
-                _ => {}
-            }
-        }
-        lookup_ops
+        self.clean_ops.process_lookups(callback)
     }
 
     pub fn lookup_ops(&self) -> Vec<LookupOp> {
-        let ops = self.ops.iter().flat_map(|op| match op {
-            CleanOp::Boundary { context, .. } => context.circuit.clone(),
-            CleanOp::EveryRowExceptLast { context, .. } => context.circuit.clone(),
-        });
-        self.find_lookup_ops(&ops.collect::<Vec<_>>())
+        self.clean_ops.lookup_ops()
     }
 }
 

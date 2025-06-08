@@ -12,6 +12,7 @@ mod prover;
 mod verifier;
 mod check_constraints;
 mod clean_air;
+mod clean_ast;
 mod permutation;
 
 pub use check_constraints::*;
@@ -22,4 +23,5 @@ pub use prover::prove;
 pub use lookup::*;
 pub use verifier::verify;
 pub use clean_air::*;
+pub use clean_ast::*;
 pub use permutation::*;

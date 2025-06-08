@@ -233,7 +233,7 @@ where
     // constrain the transition window
     builder.when_transition().assert_eq_ext(sum_next, perm_next_last - perm_local_last.clone());
 
-    // // constrain the last row
+    // constrain the last row
     let cumulative_sum: AB::ExprEF = builder.cumulative_sum();
     builder.when_last_row().assert_eq_ext(
         cumulative_sum,
