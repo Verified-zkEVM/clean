@@ -2,13 +2,12 @@
 
 extern crate alloc;
 
-use core::panic;
 use alloc::vec::Vec;
 use p3_air::{Air, AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
 use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{Matrix, dense::RowMajorMatrix};
 
-use crate::{ByteRangeAir, MainAir, Lookup, LookupBuilder, LookupType, StarkGenericConfig, Val};
+use crate::{ByteRangeAir, CleanAir, CleanAirInstance, Lookup, LookupBuilder, LookupType, MainAir, StarkGenericConfig, Table, Val};
 
 /// Represents a lookup AIR with its calculated main trace
 pub struct LookupAirWithTrace<F: Field> {
@@ -22,25 +21,25 @@ pub trait MultiTableBuilder: ExtensionBuilder {
     }
 }
 
-/// Generates lookup AIRs with multiplicity traces,
+/// Generates lookup tables with multiplicity traces,
 /// based on the lookup operations from the `MainAir`.
 ///
 /// This function:
 /// 1. Evaluates the MainAir to extract lookup operations
-/// 2. Calculates multiplicity traces for each lookup type
-/// 3. Returns corresponding lookup AIRs with their traces
+/// 2. Collect lookups and multiplicity traces for each lookup type
+/// 3. Returns lookup tables 
 ///
 /// # Arguments
 /// * `main_air` - The MainAir instance containing lookup operations
 /// * `trace` - The main execution trace
-pub fn generate_lookup_airs<F>(
+pub fn generate_lookup_tables<F>(
     main_air: &MainAir<F>,
     trace: &RowMajorMatrix<F>,
-) -> Vec<LookupAirWithTrace<F>>
+) -> Vec<Table<F>>
 where
     F: Field + PrimeField32,
 {
-    let mut lookup_airs = Vec::new();
+    let mut tables = Vec::new();
 
     // Create a lookup builder to collect lookup operations
     let mut lookup_builder = LookupBuilder::new(0, trace.width());
@@ -78,59 +77,54 @@ where
             }
         }
 
-        // Create the ByteRangeAir with its calculated trace
-        let byte_range_air = ByteRangeAir::new();
-        lookup_airs.push(LookupAirWithTrace {
-            air: byte_range_air,
-            main_trace: multiplicity_trace,
-        });
+        let air = ByteRangeAir::new();
+        tables.push(Table::new(
+            CleanAirInstance::ByteRange(air),
+            multiplicity_trace,
+        ));
     }
 
     // TODO: Add support for other lookup types as needed
 
-    lookup_airs
+    tables
 }
 
 /// Generates a permutation trace for the given AIR.
 /// 1. Builds the lookups using LookupBuilder for the given AIR.
 /// 2. Computes the permutation trace based on the lookups and the traces for the Air.
 pub fn generate_permutation_trace<SC, A, EF: ExtensionField<Val<SC>>>(
-    air: &A, // todo: use CleanAirWrapper
-    main: &RowMajorMatrix<Val<SC>>,
-    preprocessed: &RowMajorMatrix<Val<SC>>,
+    air: &A, 
     random_elements: &[EF],
 ) -> (RowMajorMatrix<EF>, EF)
 where
     SC: StarkGenericConfig,
-    A: Air<LookupBuilder<Val<SC>>>,
+    A: CleanAir<Val<SC>>,
 {
     let z = random_elements[0];
-    let mut lookup_builder = LookupBuilder::new(preprocessed.width(), main.width());
-    air.eval(&mut lookup_builder);
-    let lookups = lookup_builder.messages();
-    // flatten the lookups into a single vector
-    let lookups = lookups.0
-        .into_iter().map(|l| (l, true))
-        .chain(lookups.1.into_iter().map(|l| (l, false)))
-        .collect::<Vec<_>>();
+    let lookups = air.lookups();
+    let main_trace = air.main();
 
     let num_perm_cols = lookups.len() + 1; // +1 for cumulative sum column
     
     let mut permutation_trace = RowMajorMatrix::new(
-        alloc::vec![EF::ZERO; main.height() * num_perm_cols],
+        alloc::vec![EF::ZERO; main_trace.height() * num_perm_cols],
         num_perm_cols, 
     );
 
     tracing::info!("perm height: {}", permutation_trace.height());
 
     // compute permutation trace via virtual columns represented by lookup values
-    for row in 0..main.height() {
-        // tracing::info!("Processing row {}", row);
+    for row in 0..main_trace.height() {
         let r = permutation_trace.row_mut(row);
 
+        let preprocessed_row: Vec<Val<SC>> = if let Some(pre) = air.preprocessed() {
+            pre.row(row).unwrap().into_iter().collect()
+        } else {
+            Vec::new()
+        };
+        let main_row: Vec<Val<SC>> = main_trace.row(row).unwrap().into_iter().collect();
+
         for (i, (lookup, is_send)) in lookups.iter().enumerate() {
-            let preprocessed_row: Vec<Val<SC>> = preprocessed.row(row).unwrap().into_iter().collect();
-            let main_row: Vec<Val<SC>> = main.row(row).unwrap().into_iter().collect();
             let lookup_value: EF = lookup.value.apply::<Val<SC>, Val<SC>>(&preprocessed_row, &main_row).into();
             let denominator: EF = z - lookup_value;
 
@@ -160,7 +154,7 @@ where
         }
     ).collect::<Vec<_>>();
 
-    let last_sum = local_cumulative_sums.last().unwrap().clone();
+    let last_sum = *local_cumulative_sums.last().unwrap();
 
     // assign cumulative sums to the last column
     for (row, sum) in local_cumulative_sums.into_iter().enumerate() {
@@ -188,24 +182,29 @@ where
     let z = &rands[0];
 
     let main_local = main.row_slice(0).expect("main trace is empty?");
-    let preprocessed_local = preprocessed.row_slice(0).expect("preprocessed trace is empty?");
     let perm_local = perm.row_slice(0).expect("perm trace is empty?");
     let perm_next = perm.row_slice(1).expect("perm trace only has 1 row?");
 
     // constrain permutation entries (except for the cumulative sum column)
     for ((lookup, is_send), entry) in lookups.iter().zip(perm_local.iter()) {
         let entry: AB::ExprEF = (*entry).into();
+        
+        // Get preprocessed row once or use empty slice
+        let preprocessed_row = preprocessed.row_slice(0);
+        let empty_preprocessed: &[AB::Var] = &[];
+        let preprocessed_ref = preprocessed_row.as_deref().unwrap_or(empty_preprocessed);
+        
         let lookup_value: AB::ExprEF = lookup.value.apply::<AB::Expr, AB::Var>(
-                &preprocessed_local,
-                &main_local,
-            ).into();
+            preprocessed_ref,
+            &main_local,
+        ).into();
 
         let denominator = z.clone() - lookup_value;
 
         let mut mult: AB::ExprEF = lookup.multiplicity.apply::<AB::Expr, AB::Var>(
-                &preprocessed_local,
-                &main_local,
-            ).into();
+            preprocessed_ref,
+            &main_local,
+        ).into();
 
         if !is_send {
             mult = -mult;

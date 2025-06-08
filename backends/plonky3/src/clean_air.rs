@@ -16,6 +16,11 @@ use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType}
 use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
 
 pub trait CleanAir<F> {
+    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field;
+    fn main(&self) -> &RowMajorMatrix<F>;
+    fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
+        None
+    }
     fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>>;
     fn count_constraints(&self, public_inputs: usize) -> usize;
     fn log_quotient_degree(&self, public_inputs: usize) -> usize;
@@ -391,7 +396,7 @@ pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) 
 /// Enum wrapper to handle multiple AIR types in the same vector
 #[derive(Clone)]
 pub enum CleanAirInstance<F: Field> {
-    Clean(MainAir<F>),
+    Main(MainAir<F>),
     ByteRange(ByteRangeAir<F>),
 }
 
@@ -415,14 +420,14 @@ impl<F: Field> CleanAirInstance<F> {
 impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
     fn width(&self) -> usize {
         match self {
-            CleanAirInstance::Clean(air) => air.width(),
+            CleanAirInstance::Main(air) => air.width(),
             CleanAirInstance::ByteRange(air) => air.width(),
         }
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
         match self {
-            CleanAirInstance::Clean(air) => air.preprocessed_trace(),
+            CleanAirInstance::Main(air) => air.preprocessed_trace(),
             CleanAirInstance::ByteRange(air) => air.preprocessed_trace(),
         }
     }
@@ -435,7 +440,7 @@ where
 {
     fn eval(&self, builder: &mut AB) {
         match self {
-            CleanAirInstance::Clean(air) => air.eval(builder),
+            CleanAirInstance::Main(air) => air.eval(builder),
             CleanAirInstance::ByteRange(air) => air.eval(builder),
         };
     }
@@ -446,16 +451,13 @@ pub struct Table<F: Field> {
     pub air: CleanAirInstance<F>,
     pub trace: RowMajorMatrix<F>,
     /// lookups as pairs of (Lookup, is_send)
-    lookups: Vec<(Lookup<VirtualPairCol<F>>, bool)>,
+    pub lookups: Vec<(Lookup<VirtualPairCol<F>>, bool)>,
 }
 
 impl<F: Field> Table<F> {
     /// Create a new CleanAirWrapper that pre-builds the lookups using LookupBuilder
-    pub fn new(json_content: &str, trace: RowMajorMatrix<F>) -> Self {
-        let inner = CleanAirInstance::Clean(MainAir::new(json_content, trace.width()));
-        let main_trace = trace.clone();
-
-        Self::from_instance(inner, main_trace)
+    pub fn new(air: CleanAirInstance<F>, trace: RowMajorMatrix<F>) -> Self {
+        Self::from_instance(air, trace)
     }
 
 
@@ -472,7 +474,7 @@ impl<F: Field> Table<F> {
         
         // Evaluate the inner Air to extract lookups
         match &inner {
-            CleanAirInstance::Clean(air) => {
+            CleanAirInstance::Main(air) => {
                 air.eval(&mut lookup_builder);
             }
             CleanAirInstance::ByteRange(air) => {
@@ -506,7 +508,7 @@ impl<F: Field> Table<F> {
     }
 
     pub fn as_clean_air(&self) -> Option<&MainAir<F>> {
-        if let CleanAirInstance::Clean(air) = &self.air {
+        if let CleanAirInstance::Main(air) = &self.air {
             Some(air)
         } else {
             None
@@ -562,6 +564,18 @@ impl<F: Field> CleanAir<F> for Table<F> {
         self.eval(builder);
 
         eval_permutation_constraints(self.lookups(), builder);
+    }
+    
+    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field {
+        &self.lookups
+    }
+    
+    fn main(&self) -> &RowMajorMatrix<F> {
+        &self.trace
+    }
+
+    fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
+        self.air.preprocessed_trace()
     }
 }
 

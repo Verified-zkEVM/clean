@@ -20,8 +20,7 @@ use crate::{CleanAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstrai
 #[instrument(skip_all)]
 pub fn verify<SC, A>(
     config: &SC,
-    airs: Vec<&A>,
-    pres: Vec<RowMajorMatrix<Val<SC>>>,
+    tables: &[&A],
     proof: &Proof<SC>,
     //todo: supply vk instead
     public_values: &Vec<Val<SC>>,
@@ -44,7 +43,7 @@ where
     challenger.observe(commitments.preprocessed.clone());
     challenger.observe_slice(public_values);
 
-    let permutation_challenges: Vec<SC::Challenge> = (0..airs.len())
+    let permutation_challenges: Vec<SC::Challenge> = (0..tables.len())
         .map(|_| challenger.sample_algebra_element())
         .collect();
 
@@ -65,19 +64,26 @@ where
     // First, collect all verification data and validate shapes for all AIRs
     let mut all_air_data = Vec::new();
     let mut trace_openings = Vec::new();
+    // todo: preprocessed openings should be from verifying key?
     let mut preprocessed_openings = Vec::new();
     let mut perm_openings = Vec::new();
     let mut quotient_openings = Vec::new();
 
-    let log_quotient_degrees = (0..airs.len())
+    let log_quotient_degrees = (0..tables.len())
         .map(|i| {
-            airs[i].log_quotient_degree(public_values.len())
+            tables[i].log_quotient_degree(public_values.len())
         })
         .collect::<Vec<_>>();
 
-    for i in 0..airs.len() {
-        let air = airs[i];
-        let pre = &pres[i];
+    for i in 0..tables.len() {
+        let table = tables[i];
+        let pre = if let Some(preprocessed) = table.preprocessed() {
+            preprocessed
+        } else {
+            // Create a default preprocessed trace if none exists
+            let degree = table.main().height();
+            RowMajorMatrix::new(vec![Val::<SC>::default(); degree], 1)
+        };
         let opened_values_i = &opened_values[i];
         let degree_bits_i = degree_bits[i];
 
@@ -95,13 +101,13 @@ where
             trace_domain.create_disjoint_domain(1 << (degree_bits_i + log_quotient_degree));
         let quotient_chunks_domains = quotient_domain.split_domains(quotient_degree);
 
-        let air_width = <A as BaseAir<Val<SC>>>::width(air);
+        let air_width = <A as BaseAir<Val<SC>>>::width(table);
         let valid_shape = opened_values_i.trace_local.len() == air_width
             && opened_values_i.trace_next.len() == air_width
             && opened_values_i.preprocessed_local.len() == pre.width()
             && opened_values_i.preprocessed_next.len() == pre.width()
             //todo: review this perm check
-            && !opened_values_i.perm_local.is_empty()  
+            && !opened_values_i.perm_local.is_empty()
             && !opened_values_i.perm_next.is_empty()
             && opened_values_i.perm_local.len() == opened_values_i.perm_next.len()
             && opened_values_i.quotient_chunks.len() == quotient_degree
@@ -127,7 +133,7 @@ where
 
         // Store data needed for constraint evaluation later
         all_air_data.push((
-            air,
+            table,
             trace_domain,
             quotient_chunks_domains.clone(),
             opened_values_i,
@@ -195,7 +201,7 @@ where
     };
 
     // Now process constraint evaluation for each AIR
-    for (air, trace_domain, quotient_chunks_domains, opened_values_i) in all_air_data {
+    for (table, trace_domain, quotient_chunks_domains, opened_values_i) in all_air_data {
 
         let zps = quotient_chunks_domains
             .iter()
@@ -263,7 +269,7 @@ where
             perm_challenges: &permutation_challenges,
             local_cumulative_sum: opened_values_i.local_cumulative_sum,
         };
-        air.eval_constraints(&mut folder);
+        table.eval_constraints(&mut folder);
         let folded_constraints = folder.accumulator;
 
         // Finally, check that
