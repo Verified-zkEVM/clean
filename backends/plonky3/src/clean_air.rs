@@ -1,7 +1,6 @@
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
-use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, SymbolicExpression};
-use p3_util::log2_ceil_usize;
+use p3_uni_stark::{get_max_constraint_degree, SymbolicExpression};
 use core::marker::PhantomData;
 
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder, VirtualPairCol};
@@ -9,21 +8,10 @@ use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::Matrix;
 use p3_matrix::dense::RowMajorMatrix;
 
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType};
-use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType, VerifyingKey};
+use crate::permutation::MultiTableBuilder;
 use crate::clean_ast::{CleanOp, CleanOps, CircuitOp, LookupOp, VarLocation, LookupRow, AstUtils};
-
-pub trait CleanAir<F> {
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field;
-    fn main(&self) -> &RowMajorMatrix<F>;
-    fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
-        None
-    }
-    fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>>;
-    fn count_constraints(&self, public_inputs: usize) -> usize;
-    fn log_quotient_degree(&self, public_inputs: usize) -> usize;
-    fn eval_constraints<AB>(&self, builder: &mut AB) where AB: AirBuilder<F = F> + PermutationAirBuilder + MultiTableBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder;
-}
+use crate::key::VK;
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -239,55 +227,21 @@ where
     }
 }
 
+pub trait CleanAir<F>: VerifyingKey<F> {
+    fn main(&self) -> &RowMajorMatrix<F>;
+}
+
 #[derive(Clone)]
 pub struct Table<F: Field> {
-    pub air: CleanAirInstance<F>,
+    pub vk: VK<F>,
+    // todo: verifier doesn't access to main traces
     pub trace: RowMajorMatrix<F>,
-    /// lookups as pairs of (Lookup, is_send)
-    pub lookups: Vec<(Lookup<VirtualPairCol<F>>, bool)>,
 }
 
 impl<F: Field> Table<F> {
-    /// Create a new CleanAirWrapper that pre-builds the lookups using LookupBuilder
-    pub fn new(air: CleanAirInstance<F>, trace: RowMajorMatrix<F>) -> Self {
-        Self::from_instance(air, trace)
-    }
-
-
-    /// Create a new CleanAirWrapper from an existing CleanAirInstance and main trace
-    pub fn from_instance(inner: CleanAirInstance<F>, main_trace: RowMajorMatrix<F>) -> Self {
-        let preprocessed_width = if inner.preprocessed_trace().is_some() {
-            inner.preprocessed_trace().unwrap().width()
-        } else {
-            0 
-        };
-
-        // Build lookups using LookupBuilder
-        let mut lookup_builder = LookupBuilder::new(preprocessed_width, main_trace.width());
-        
-        // Evaluate the inner Air to extract lookups
-        match &inner {
-            CleanAirInstance::Main(air) => {
-                air.eval(&mut lookup_builder);
-            }
-            CleanAirInstance::ByteRange(air) => {
-                air.eval(&mut lookup_builder);
-            }
-        }
-
-        let (s, r) = lookup_builder.messages();
-        let lookups = s.into_iter()
-            .map(|l| (l, true))
-            .chain(r.into_iter()
-            .map(|l| (l, false)))
-            .collect();
-
-        Self { air: inner, trace: main_trace, lookups }
-    }
-
-    /// Access the inner CleanAirInstance
-    pub fn inner(&self) -> &CleanAirInstance<F> {
-        &self.air
+    /// Create a new Table that delegates construction to VK
+    pub fn new(vk: VK<F>, trace: RowMajorMatrix<F>) -> Self {
+        Self { vk, trace }
     }
 
     /// Access the main trace
@@ -297,11 +251,11 @@ impl<F: Field> Table<F> {
 
     /// Access the cached lookup messages (sends, receives)
     pub fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> {
-        &self.lookups
+        self.vk.lookups()
     }
 
     pub fn as_clean_air(&self) -> Option<&MainAir<F>> {
-        if let CleanAirInstance::Main(air) = &self.air {
+        if let CleanAirInstance::Main(air) = &self.vk.air {
             Some(air)
         } else {
             None
@@ -309,76 +263,51 @@ impl<F: Field> Table<F> {
     }
 }
 
-impl<F: Field> CleanAir<F> for Table<F> {
+impl<F: Field> VerifyingKey<F> for Table<F> {
     /// Get symbolic constraints for this air
     fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>> {
-        let preprocessed = if let Some(pre) = self.air.preprocessed_trace() {
-            pre.width()
-        } else {
-            0 
-        };
-
-        get_symbolic_constraints(&self.air, preprocessed, public_inputs)
+        self.vk.constraints(public_inputs)
     }
 
     fn count_constraints(&self, public_inputs: usize) -> usize {
-        let constraints = self.constraints(public_inputs);
-
-        if !self.lookups.is_empty() {
-            self.lookups.len() + constraints.len() + 3 // 3 for the first row, last row, and transition constraints
-        } else {
-            constraints.len()
-        }
-        // constraints.len()
+        self.vk.count_constraints(public_inputs)
     }
 
     /// Get log quotient degree for this air
     fn log_quotient_degree(&self, public_inputs: usize) -> usize {
-        let constraints = self.constraints(public_inputs);
-        let max_degree = constraints
-            .iter()
-            .map(|c| c.degree_multiple())
-            .max()
-            .unwrap_or(0);
-
-        let max_degree = if !self.lookups().is_empty() {
-            // if there are permutations, ensure the degree is at least 2, because of the multiplication with selectors.
-            max_degree.max(2)
-        } else {
-            max_degree
-        };
-        
-        // division by vanishing polynomial results in degree - 1
-        log2_ceil_usize(max_degree - 1)
-        
+        self.vk.log_quotient_degree(public_inputs)
     }
 
     fn eval_constraints<AB>(&self, builder: &mut AB) where AB: AirBuilder<F = F> + PermutationAirBuilder + MultiTableBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder {
-        self.eval(builder);
-
-        eval_permutation_constraints(self.lookups(), builder);
+        self.vk.eval_constraints(builder);
     }
     
     fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> where F: Field {
-        &self.lookups
+        self.vk.lookups()
     }
     
+    fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
+        self.vk.preprocessed()
+    }
+    
+    fn width(&self) -> usize {
+        self.vk.air.width()
+    }
+}
+
+impl<F: Field> CleanAir<F> for Table<F> {
     fn main(&self) -> &RowMajorMatrix<F> {
         &self.trace
-    }
-
-    fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
-        self.air.preprocessed_trace()
     }
 }
 
 impl<F: Field> BaseAir<F> for Table<F> {
     fn width(&self) -> usize {
-        self.air.width()
+        self.vk.air.width()
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        self.air.preprocessed_trace()
+        self.vk.air.preprocessed_trace()
     }
 }
 
@@ -388,6 +317,6 @@ where
     AB::F: Field,
 {
     fn eval(&self, builder: &mut AB) {
-        self.air.eval(builder);
+        self.vk.air.eval(builder);
     }
 }

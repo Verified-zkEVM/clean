@@ -1,10 +1,8 @@
-//! See `prover.rs` for an overview of the protocol and a more detailed soundness analysis.
-
 use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-use p3_air::{Air, BaseAir};
+use p3_air::Air;
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, Field};
@@ -15,22 +13,19 @@ use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
 use p3_uni_stark::SymbolicAirBuilder;
-use crate::{CleanAir, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder};
+use crate::{PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder, VerifyingKey};
 
 #[instrument(skip_all)]
 pub fn verify<SC, A>(
     config: &SC,
-    tables: &[&A],
+    vks: &[&A],
     proof: &Proof<SC>,
-    //todo: supply vk instead
     public_values: &Vec<Val<SC>>,
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
-    A: CleanAir<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
+    A: VerifyingKey<Val<SC>> + Air<SymbolicAirBuilder<Val<SC>>> + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
 {
-    let zero = SC::Challenge::default();
-
     let Proof {
         commitments,
         opened_values,
@@ -42,8 +37,11 @@ where
     challenger.observe(commitments.trace.clone());
     challenger.observe(commitments.preprocessed.clone());
     challenger.observe_slice(public_values);
+    // todo: observe degree_bits?
+    // todo: observe the cumulative sums?
 
-    let permutation_challenges: Vec<SC::Challenge> = (0..tables.len())
+    // Sample permutation challenges for each table.
+    let permutation_challenges: Vec<SC::Challenge> = (0..vks.len())
         .map(|_| challenger.sample_algebra_element())
         .collect();
 
@@ -54,6 +52,7 @@ where
     let alpha: SC::Challenge = challenger.sample_algebra_element();
     challenger.observe(commitments.quotient_chunks.clone());
 
+    // Sample an evaluation point `zeta` for the out-of-domain evaluation.
     let zeta: SC::Challenge = challenger.sample_algebra_element();
 
     tracing::info!("alpha: {}", alpha);
@@ -69,19 +68,20 @@ where
     let mut perm_openings = Vec::new();
     let mut quotient_openings = Vec::new();
 
-    let log_quotient_degrees = (0..tables.len())
+    let log_quotient_degrees = (0..vks.len())
         .map(|i| {
-            tables[i].log_quotient_degree(public_values.len())
+            vks[i].log_quotient_degree(public_values.len())
         })
         .collect::<Vec<_>>();
 
-    for i in 0..tables.len() {
-        let table = tables[i];
-        let pre = if let Some(preprocessed) = table.preprocessed() {
+    for i in 0..vks.len() {
+        let vk = vks[i];
+        let pre = if let Some(preprocessed) = vk.preprocessed() {
             preprocessed
         } else {
             // Create a default preprocessed trace if none exists
-            let degree = table.main().height();
+            // todo: should read from degree bits
+            let degree = 1 << degree_bits[i];
             RowMajorMatrix::new(vec![Val::<SC>::default(); degree], 1)
         };
         let opened_values_i = &opened_values[i];
@@ -101,7 +101,7 @@ where
             trace_domain.create_disjoint_domain(1 << (degree_bits_i + log_quotient_degree));
         let quotient_chunks_domains = quotient_domain.split_domains(quotient_degree);
 
-        let air_width = <A as BaseAir<Val<SC>>>::width(table);
+        let air_width = VerifyingKey::width(vk);
         let valid_shape = opened_values_i.trace_local.len() == air_width
             && opened_values_i.trace_next.len() == air_width
             && opened_values_i.preprocessed_local.len() == pre.width()
@@ -133,7 +133,7 @@ where
 
         // Store data needed for constraint evaluation later
         all_air_data.push((
-            table,
+            vk,
             trace_domain,
             quotient_chunks_domains.clone(),
             opened_values_i,
@@ -200,8 +200,11 @@ where
             .collect::<Vec<SC::Challenge>>()
     };
 
+
+    // Init accumulative value for the cumulative sums
+    let zero = SC::Challenge::default();
     // Now process constraint evaluation for each AIR
-    for (table, trace_domain, quotient_chunks_domains, opened_values_i) in all_air_data {
+    for (vk, trace_domain, quotient_chunks_domains, opened_values_i) in all_air_data {
 
         let zps = quotient_chunks_domains
             .iter()
@@ -269,8 +272,9 @@ where
             perm_challenges: &permutation_challenges,
             local_cumulative_sum: opened_values_i.local_cumulative_sum,
         };
-        table.eval_constraints(&mut folder);
+        vk.eval_constraints(&mut folder);
         let folded_constraints = folder.accumulator;
+
 
         // Finally, check that
         //     folded_constraints(zeta) / Z_H(zeta) = quotient(zeta)

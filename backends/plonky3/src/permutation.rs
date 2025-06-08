@@ -3,11 +3,11 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use p3_air::{Air, AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
+use p3_air::{AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
 use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{Matrix, dense::RowMajorMatrix};
 
-use crate::{ByteRangeAir, CleanAir, CleanAirInstance, Lookup, LookupBuilder, LookupType, MainAir, StarkGenericConfig, Table, Val};
+use crate::{ByteRangeAir, CleanAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Table, Val, VK, VerifyingKey};
 
 /// Represents a lookup AIR with its calculated main trace
 pub struct LookupAirWithTrace<F: Field> {
@@ -22,18 +22,19 @@ pub trait MultiTableBuilder: ExtensionBuilder {
 }
 
 /// Generates lookup tables with multiplicity traces,
-/// based on the lookup operations from the `MainAir`.
+/// based on the lookup operations from the VK.
 ///
 /// This function:
-/// 1. Evaluates the MainAir to extract lookup operations
+/// 1. Uses the VK's pre-computed lookup operations
 /// 2. Collect lookups and multiplicity traces for each lookup type
 /// 3. Returns lookup tables 
 ///
 /// # Arguments
-/// * `main_air` - The MainAir instance containing lookup operations
+/// * `main_vk` - The VK instance containing lookup operations
 /// * `trace` - The main execution trace
 pub fn generate_lookup_tables<F>(
-    main_air: &MainAir<F>,
+    main_vk: &VK<F>,
+    lookup_vks: &[VK<F>],
     trace: &RowMajorMatrix<F>,
 ) -> Vec<Table<F>>
 where
@@ -41,12 +42,18 @@ where
 {
     let mut tables = Vec::new();
 
-    // Create a lookup builder to collect lookup operations
-    let mut lookup_builder = LookupBuilder::new(0, trace.width());
-    main_air.eval(&mut lookup_builder);
-
-    let (sends, receives) = lookup_builder.messages();
-    assert!(receives.is_empty(), "The main air should only send lookups, as it is not a lookup air");
+    // Get lookup operations from the VK (they're already computed)
+    let lookups = main_vk.lookups();
+    let sends: Vec<_> = lookups.iter()
+        .filter(|(_, is_send)| *is_send)
+        .map(|(lookup, _)| lookup)
+        .collect();
+    
+    // Main VK should only send lookups, not receive them
+    let receives: Vec<_> = lookups.iter()
+        .filter(|(_, is_send)| !*is_send)
+        .collect();
+    assert!(receives.is_empty(), "The main VK should only send lookups, as it is not a lookup air");
 
     // Group lookups by type using simple filtering
     // Process ByteRange lookups
@@ -55,6 +62,11 @@ where
         .collect();
     
     if !byte_range_sends.is_empty() {
+        // Find the corresponding ByteRange VK from the provided lookup VKs
+        let byte_range_vk = lookup_vks.iter()
+            .find(|vk| matches!(&vk.air, CleanAirInstance::ByteRange(_)))
+            .expect("ByteRange VK not found in lookup_vks");
+
         // Create multiplicity trace for byte range lookups (256 possible values, 0-255)
         let mut multiplicity_trace = RowMajorMatrix::new(
             alloc::vec![F::ZERO; 256],
@@ -77,11 +89,8 @@ where
             }
         }
 
-        let air = ByteRangeAir::new();
-        tables.push(Table::new(
-            CleanAirInstance::ByteRange(air),
-            multiplicity_trace,
-        ));
+        // Use the provided VK instead of creating a new one
+        tables.push(Table::new(byte_range_vk.clone(), multiplicity_trace));
     }
 
     // TODO: Add support for other lookup types as needed

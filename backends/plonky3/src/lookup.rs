@@ -222,6 +222,7 @@ impl<F: Field> ByteRangeAir<F> {
 }
 
 impl<F: Field> BaseAir<F> for ByteRangeAir<F> {
+    /// One column for multiplicity
     fn width(&self) -> usize {
         1
     }

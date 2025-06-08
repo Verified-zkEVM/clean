@@ -30,7 +30,6 @@ pub struct Commitments<Com> {
     pub(crate) preprocessed: Com,
     pub(crate) perm: Com,
     pub(crate) quotient_chunks: Com,
-    pub(crate) random: Option<Com>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,5 +42,4 @@ pub struct OpenedValues<Challenge> {
     pub(crate) perm_next: Vec<Challenge>,
     pub(crate) local_cumulative_sum: Challenge,
     pub(crate) quotient_chunks: Vec<Vec<Challenge>>,
-    pub(crate) random: Option<Vec<Challenge>>,
 }

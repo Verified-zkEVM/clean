@@ -233,7 +233,6 @@ where
         preprocessed: pre_commit,
         perm: perm_commit,
         quotient_chunks: quotient_commit,
-        random: None,
     };
 
 
@@ -314,7 +313,6 @@ where
                 .iter()
                 .map(|v| v[0].clone())
                 .collect_vec(),
-            random: None,
         }
     }).collect_vec();
 

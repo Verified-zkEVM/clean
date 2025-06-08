@@ -14,6 +14,7 @@ mod check_constraints;
 mod clean_air;
 mod clean_ast;
 mod permutation;
+mod key;
 
 pub use check_constraints::*;
 pub use config::*;
@@ -25,3 +26,4 @@ pub use verifier::verify;
 pub use clean_air::*;
 pub use clean_ast::*;
 pub use permutation::*;
+pub use key::*;
