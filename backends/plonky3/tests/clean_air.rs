@@ -72,22 +72,21 @@ fn test_clean() {
     let main_trace: RowMajorMatrix<BabyBear> =
         RowMajorMatrix::new(init_trace.iter().flatten().cloned().collect(), width);
 
-    // get the last row, column 1
+    // Get the result
     let x = main_trace.get(main_trace.height() - 1, 1).unwrap();
-    // convert trace to RowMajorMatrix<Val>
 
     // Read the JSON file content
     let json_content = read_test_json(JSON_PATH);
 
-    let clean_air_wrapper = Table::new(&json_content, main_trace.clone());
+    let table = Table::new(&json_content, main_trace.clone());
 
     // Generate lookup AIRs with calculated multiplicity traces 
     let lookup_airs_with_traces =
-        generate_lookup_airs(clean_air_wrapper.as_clean_air().unwrap(), &main_trace);
+        generate_lookup_airs(table.as_clean_air().unwrap(), &main_trace);
 
     // Create properly typed vectors for the multi-AIR interface using wrapper
-    let mut airs = vec![&clean_air_wrapper];
-    let mut traces = vec![clean_air_wrapper.main_trace().clone()];
+    let mut airs = vec![&table];
+    let mut traces = vec![table.main_trace().clone()];
 
     // Add lookup AIRs and their traces - create wrappers for them
     let lookup_air_wrappers: Vec<Table<BabyBear>> = lookup_airs_with_traces
@@ -103,7 +102,7 @@ fn test_clean() {
         traces.push(wrapper.main_trace().clone());
     }
     // Build the preprocessed traces vector
-    let mut pres = vec![clean_air_wrapper.inner().preprocessed_trace()];
+    let mut pres = vec![table.inner().preprocessed_trace()];
 
     // Add preprocessed traces for lookup AIRs
     for lookup_air in &lookup_airs_with_traces {

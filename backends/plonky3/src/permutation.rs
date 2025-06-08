@@ -5,7 +5,7 @@ extern crate alloc;
 use core::panic;
 use alloc::vec::Vec;
 use p3_air::{Air, AirBuilder, ExtensionBuilder, PairBuilder, PermutationAirBuilder, VirtualPairCol};
-use p3_field::{ExtensionField, Field, PrimeField64};
+use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{Matrix, dense::RowMajorMatrix};
 
 use crate::{ByteRangeAir, MainAir, Lookup, LookupBuilder, LookupType, StarkGenericConfig, Val};
@@ -22,48 +22,40 @@ pub trait MultiTableBuilder: ExtensionBuilder {
     }
 }
 
-/// Factory function that generates lookup AIRs with calculated main traces
-/// based on the lookup operations in the given CleanAir instance.
+/// Generates lookup AIRs with multiplicity traces,
+/// based on the lookup operations from the `MainAir`.
 ///
 /// This function:
-/// 1. Evaluates the CleanAir to extract lookup operations
+/// 1. Evaluates the MainAir to extract lookup operations
 /// 2. Calculates multiplicity traces for each lookup type
 /// 3. Returns corresponding lookup AIRs with their traces
 ///
 /// # Arguments
-/// * `clean_air` - The CleanAir instance containing lookup operations
+/// * `main_air` - The MainAir instance containing lookup operations
 /// * `trace` - The main execution trace
-///
-/// # Returns
-/// A vector of lookup AIRs paired with their calculated main traces
 pub fn generate_lookup_airs<F>(
-    // todo: 
-    clean_air: &MainAir<F>,
+    main_air: &MainAir<F>,
     trace: &RowMajorMatrix<F>,
 ) -> Vec<LookupAirWithTrace<F>>
 where
-    F: Field + PrimeField64,
+    F: Field + PrimeField32,
 {
     let mut lookup_airs = Vec::new();
 
-    // Create a lookup builder to extract lookup operations
+    // Create a lookup builder to collect lookup operations
     let mut lookup_builder = LookupBuilder::new(0, trace.width());
-    clean_air.eval(&mut lookup_builder);
-    let (sends, _receives) = lookup_builder.messages();
+    main_air.eval(&mut lookup_builder);
 
-    // Group lookups by type and calculate multiplicities
-    // For now, we focus on ByteRange lookups
-    let mut has_byte_range_lookups = false;
+    let (sends, receives) = lookup_builder.messages();
+    assert!(receives.is_empty(), "The main air should only send lookups, as it is not a lookup air");
 
-    // Check if we have any byte range lookups
-    for send in &sends {
-        if matches!(send.kind, LookupType::ByteRange) {
-            has_byte_range_lookups = true;
-            break;
-        }
-    }
-
-    if has_byte_range_lookups {
+    // Group lookups by type using simple filtering
+    // Process ByteRange lookups
+    let byte_range_sends: Vec<_> = sends.iter()
+        .filter(|send| matches!(send.kind, LookupType::ByteRange))
+        .collect();
+    
+    if !byte_range_sends.is_empty() {
         // Create multiplicity trace for byte range lookups (256 possible values, 0-255)
         let mut multiplicity_trace = RowMajorMatrix::new(
             alloc::vec![F::ZERO; 256],
@@ -72,22 +64,17 @@ where
 
         // Calculate multiplicities by evaluating lookup operations for each row
         for row_idx in 0..trace.height() {
-            for send in &sends {
-                if matches!(send.kind, LookupType::ByteRange) {
-                    // Apply the lookup expression to get the value being looked up
-                    let row_slice: Vec<F> = trace.row(row_idx).unwrap().into_iter().collect();
-                    let v = send.value.apply::<F, F>(&[], &row_slice);
-                    
-                    // Convert to index and increment multiplicity
-                    let lookup_value = v.as_canonical_u64() as usize;
-                    if lookup_value < 256 {
-                        let m = multiplicity_trace.row_mut(lookup_value).get_mut(0).unwrap();
-                        *m += F::ONE;
-                    }
-                    else {
-                        panic!("Lookup value out of range for byte range lookup: {}", lookup_value);
-                    }
-                }
+            for send in &byte_range_sends {
+                // Calculate the virtual column of the lookup values for the current row
+                let row_slice: Vec<F> = trace.row(row_idx).unwrap().into_iter().collect();
+                let v = send.value.apply::<F, F>(&[], &row_slice);
+
+                // Convert lookup value to index of multiplicity trace and increment multiplicity
+                let lookup_idx = v.as_canonical_u32() as usize;
+                assert!(lookup_idx < 256, "Lookup value out of range for byte range lookup: {}", lookup_idx);
+
+                let m = multiplicity_trace.row_mut(lookup_idx).get_mut(0).unwrap();
+                *m += F::ONE;
             }
         }
 
