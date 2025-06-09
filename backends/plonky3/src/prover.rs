@@ -272,7 +272,6 @@ where
 
     let pre_points = (0..tables.len())
         .map(|i| {
-            // todo: get domain from natural domain
             let trace_domain = trace_domains[i];
             let zeta_next = trace_domain.next_point(zeta).unwrap();
             vec![zeta, zeta_next]
@@ -372,7 +371,6 @@ where
     let qdb = log2_strict_usize(quotient_domain.size()) - log2_strict_usize(trace_domain.size());
     let next_step = 1 << qdb;
 
-    // todo: is this correct?
     let ext_degree = SC::Challenge::DIMENSION;
 
     // We take PackedVal::<SC>::WIDTH worth of values at a time from a quotient_size slice, so we need to
