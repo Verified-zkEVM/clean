@@ -41,6 +41,11 @@ where
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
 
+        let (local, next) = (
+            main.row_slice(0).expect("Matrix is empty?"),
+            main.row_slice(1).expect("Matrix only has 1 row?"),
+        );
+
         let pis = builder.public_values();
         // todo: it should be updated for generic use cases. ideally, it can know how to constrain the public inputs.
         // these public inputs are assumed for fibonacci example. 
@@ -53,23 +58,17 @@ where
         let b = pis[1];
         let x = pis[2];
 
-        let (local, next) = (
-            main.row_slice(0).expect("Matrix is empty?"),
-            main.row_slice(1).expect("Matrix only has 1 row?"),
-        );
+        // constrain public inputs
+        builder.when_first_row().assert_eq(local[0], a);
+        builder.when_first_row().assert_eq(local[1], b);
+        builder.when_last_row().assert_eq(local[1], x);
 
         // Build constraints from clean ops
         for op in self.clean_ops.ops() {
             match op {
                 CleanOp::Boundary { row, context: _ } => {
-                    // When it is the first row
-                    if *row == 0 {
-                        builder.when_first_row().assert_eq(local[0], a);
-                        builder.when_first_row().assert_eq(local[1], b);
-                    }
-
-                    // When it is the last row
-                    builder.when_last_row().assert_eq(local[1], x);
+                    // todo: constrain the circuit inside the context
+                    // should we support selectors for custom rows?
                 }
                 CleanOp::EveryRowExceptLast { context } => {
                     let val_of = |var_idx: usize| {
