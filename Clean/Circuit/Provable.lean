@@ -462,3 +462,12 @@ theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : En
     eval (α:=ProvablePair α β) env (a, b) = (eval env a, eval env b) := by
   simp only [eval, to_vars, to_elements, from_elements, Vector.map_append]
   rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+
+omit [Field F] in
+@[circuit_norm ↓ high]
+theorem var_from_offset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
+    var_from_offset (F:=F) (ProvablePair α β) offset
+    = (var_from_offset α offset, var_from_offset β (offset + size α)) := by
+  simp only [var_from_offset, from_vars, ProvablePair.instance]
+  rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
+  ac_rfl
