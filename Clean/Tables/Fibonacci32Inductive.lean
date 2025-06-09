@@ -20,8 +20,8 @@ instance : ProvableStruct Row where
   to_components := fun { x, y } => .cons x (.cons y .nil)
   from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
-def table : InductiveTable (F p) Row where
-  step row := do
+def table : InductiveTable (F p) Row unit where
+  step row _ := do
     let { z, .. } ← subcircuit Gadgets.Addition32Full.circuit {
       x := row.x, y := row.y, carry_in := 0
     }
