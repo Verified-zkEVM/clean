@@ -54,7 +54,6 @@ where
 
     tracing::info!("permutation challenges: {:?}", permutation_challenges);
 
-    // todo: is this absorb necessary?
     challenger.observe_slice(
         &opened_values
             .iter()
@@ -94,7 +93,6 @@ where
             preprocessed
         } else {
             // Create a default preprocessed trace if none exists
-            // todo: should read from degree bits
             let degree = 1 << degree_bits[i];
             RowMajorMatrix::new(vec![Val::<SC>::default(); degree], 1)
         };
@@ -102,8 +100,6 @@ where
         let degree_bits_i = degree_bits[i];
 
         let degree = 1 << degree_bits_i;
-        // let log_quotient_degree =
-        //     get_log_quotient_degree::<Val<SC>, A>(air, pre.width, public_values.len(), 0);
         let log_quotient_degree = log_quotient_degrees[i];
 
         tracing::info!("log_quotient_degree: {}", log_quotient_degree);
