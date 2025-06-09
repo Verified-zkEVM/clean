@@ -15,23 +15,19 @@ def to_var : Expression F → Circuit F (Variable F)
   | var v => pure v
   | x => copy_to_var x
 
-@[circuit_norm]
+-- these could be used if you want to witness _any_ value and don't care which
+-- (typically useless, because in completeness proofs you will often have to prove some assumption about the value)
+
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
 def compute_value_from_offset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
   from_elements <| .mapRange _ fun i => env.get (offset + i)
 
--- @[circuit_norm]
 def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset
   ProvableType.witness (compute_value_from_offset α offset)
 
-@[circuit_norm]
-def ProvableVector.witnessAny (α: TypeMap) [NonEmptyProvableType α] (m : ℕ) : Circuit F (Vector (Var α F) m) :=
-  ProvableType.witnessAny (ProvableVector α m)
-
-@[circuit_norm]
-theorem ProvableType.witnessAny_local_witnesses (offset : ℕ) (env : Environment F) :
-  env.uses_local_witnesses_completeness offset (ProvableType.witnessAny α offset).2 ↔ True := by
-  simp only [circuit_norm, ProvableType.witnessAny, compute_value_from_offset,
+theorem ProvableType.witnessAny.local_witnesses (n : ℕ) (env : Environment F) :
+    env.uses_local_witnesses_completeness n (ProvableType.witnessAny α |>.operations n) ↔ True := by
+  simp only [circuit_norm, getOffset, ProvableType.witnessAny, compute_value_from_offset,
     ProvableType.to_elements_from_elements]
