@@ -217,6 +217,12 @@ def fill (n : ℕ) (a: α) : Vector α n :=
   | 0 => #v[]
   | k + 1 => (fill k a).push a
 
+theorem getElem_fill {n} {a: α} {i : ℕ} {hi : i < n} :
+    (fill n a)[i] = a := by
+  induction n with
+  | zero => nomatch hi
+  | succ => simp_all [fill, getElem_push]
+
 instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
   default := fill n default
 

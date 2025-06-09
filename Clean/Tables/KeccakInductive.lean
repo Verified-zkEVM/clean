@@ -39,4 +39,35 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     simp_all only [circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
       subcircuit_norm, AbsorbBlock.assumptions, AbsorbBlock.spec]
 
+-- the input is hard-coded to the initial keccak state of all zeros
+def initialState : KeccakState (F p) := .fill 25 (U64.from_byte 0)
+
+lemma initialState_value : (initialState (p:=p)).value = .fill 25 0 := by
+  ext i hi
+  simp only [initialState, KeccakState.value]
+  rw [Vector.getElem_map, Vector.getElem_fill, Vector.getElem_fill, U64.from_byte_value, Fin.val_zero]
+
+lemma initialState_normalized : (initialState (p:=p)).is_normalized := by
+  simp only [initialState, KeccakState.is_normalized, Vector.getElem_fill, U64.from_byte_is_normalized]
+  trivial
+
+def formalTable (output : KeccakState (F p)) := table.toFormal initialState output
+
+def domain {p q : Sort*} (_ : p → q) := p
+
+-- The table's statement implies that the output state is the result of keccak-hashing some list of input blocks
+theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace,
+  (formalTable output).statement n trace →
+    output.is_normalized ∧
+    ∃ blocks, blocks.length = n - 1
+      ∧ output.value = absorb_blocks blocks := by
+  intro n hn trace spec
+  simp only [formalTable, FormalTable.statement, table, InductiveTable.toFormal, hn] at spec
+  simp only [initialState_value, initialState_normalized, absorb_blocks, initial_state, true_and] at spec
+  have ⟨ norm, ⟨ blocks, block_len, value_eq ⟩ ⟩ := spec ⟨ [], rfl, rfl ⟩
+  clear spec
+  use norm, blocks.map KeccakBlock.value
+  simp only [List.length_map]
+  exact ⟨ block_len, value_eq ⟩
+
 end Tables.KeccakInductive
