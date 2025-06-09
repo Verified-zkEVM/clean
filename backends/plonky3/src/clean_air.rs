@@ -40,64 +40,68 @@ where
 {
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
-        let _preprocessed = builder.preprocessed();
 
         let pis = builder.public_values();
-        if pis.len() >= 3 {
-            let a = pis[0];
-            let b = pis[1];
-            let x = pis[2];
+        // todo: it should be updated for generic use cases. ideally, it can know how to constrain the public inputs.
+        // these public inputs are assumed for fibonacci example. 
+        assert!(
+            pis.len() == 3,
+            "Expected exactly 3 public inputs, got {}",
+            pis.len()
+        );
+        let a = pis[0];
+        let b = pis[1];
+        let x = pis[2];
 
-            let (local, next) = (
-                main.row_slice(0).expect("Matrix is empty?"),
-                main.row_slice(1).expect("Matrix only has 1 row?"),
-            );
+        let (local, next) = (
+            main.row_slice(0).expect("Matrix is empty?"),
+            main.row_slice(1).expect("Matrix only has 1 row?"),
+        );
 
-            // Build constraints from clean ops
-            for op in self.clean_ops.ops() {
-                match op {
-                    CleanOp::Boundary { row, context: _ } => {
-                        // When it is the first row
-                        if *row == 0 {
-                            builder.when_first_row().assert_eq(local[0], a);
-                            builder.when_first_row().assert_eq(local[1], b);
-                        }
-
-                        // When it is the last row
-                        builder.when_last_row().assert_eq(local[1], x);
+        // Build constraints from clean ops
+        for op in self.clean_ops.ops() {
+            match op {
+                CleanOp::Boundary { row, context: _ } => {
+                    // When it is the first row
+                    if *row == 0 {
+                        builder.when_first_row().assert_eq(local[0], a);
+                        builder.when_first_row().assert_eq(local[1], b);
                     }
-                    CleanOp::EveryRowExceptLast { context } => {
-                        let val_of = |var_idx: usize| {
-                            let var: VarLocation = context.assignment.vars[var_idx].clone();
-                            match var {
-                                VarLocation::Cell { row, column } => match row {
-                                    0 => local[column],
-                                    1 => next[column],
-                                    _ => panic!("Invalid row index"),
-                                },
-                                // Currently assume the only aux var is the 3rd column of the next row
-                                VarLocation::Aux { .. } => *next.get(2).unwrap(),
-                            }
-                        };
 
-                        // When it is not the last row
-                        let mut when_transition = builder.when_transition();
-                        for circuit_op in &context.circuit {
-                            match circuit_op {
-                                CircuitOp::Assert { assert } => {
-                                    let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
-                                    when_transition.assert_zero(expr);
-                                }
-                                CircuitOp::Subcircuit { subcircuit } => {
-                                    for sub_op in subcircuit {
-                                        if let CircuitOp::Assert { assert } = sub_op {
-                                            let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
-                                            when_transition.assert_zero(expr);
-                                        }
+                    // When it is the last row
+                    builder.when_last_row().assert_eq(local[1], x);
+                }
+                CleanOp::EveryRowExceptLast { context } => {
+                    let val_of = |var_idx: usize| {
+                        let var: VarLocation = context.assignment.vars[var_idx].clone();
+                        match var {
+                            VarLocation::Cell { row, column } => match row {
+                                0 => local[column],
+                                1 => next[column],
+                                _ => panic!("Invalid row index"),
+                            },
+                            // Currently assume the only aux var is the 3rd column of the next row
+                            VarLocation::Aux { .. } => *next.get(2).unwrap(),
+                        }
+                    };
+
+                    // When it is not the last row
+                    let mut when_transition = builder.when_transition();
+                    for circuit_op in &context.circuit {
+                        match circuit_op {
+                            CircuitOp::Assert { assert } => {
+                                let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
+                                when_transition.assert_zero(expr);
+                            }
+                            CircuitOp::Subcircuit { subcircuit } => {
+                                for sub_op in subcircuit {
+                                    if let CircuitOp::Assert { assert } = sub_op {
+                                        let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
+                                        when_transition.assert_zero(expr);
                                     }
                                 }
-                                _ => {}
                             }
+                            _ => {}
                         }
                     }
                 }
