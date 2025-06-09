@@ -164,34 +164,39 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
       CellAssignment.assignment_from_circuit_offset, CellAssignment.assignment_from_circuit_vars] at h_env'
     set curr_var : Var State F × Var Input F := var_from_offset (ProvablePair State Input) 0
-    set main_ops : Operations F := (table.step (var_from_offset State 0) (var_from_offset Input (size State)) (size State + size Input)).2
     set s := size State
     set x := size Input
-    set t := Operations.local_length main_ops
+    set main_ops : Operations F := (table.step (var_from_offset State 0) (var_from_offset Input s) (s + x)).2
+    set t := main_ops.local_length
 
     have h_env_input_1 i (hi : i < s) : (to_elements curr.1)[i] = env'.get i := by
-      have hi' : i < s + x + t + s := by linarith
+      have hi' : i < s + x + t + (s + x) := by linarith
       have hi'' : i < 0 + (s + x) := by linarith
       have hi''' : i < 0 + (s + x) + t := by linarith
       rw [h_env']
-      simp only [main_ops, s, t, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
         CellAssignment.assignment_from_circuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
-      sorry
 
     have h_env_input_2 i (hi : i < x) : (to_elements curr.2)[i] = env'.get (i + s) := by
-      sorry
-
-    have h_env_output i (hi : i < s) : (to_elements next.1)[i] = env'.get (i + (s + x) + t) := by
-      have hi' : i + s + t < s + t + s := by linarith
-      have hi'' : ¬(i + s + t < 0 + s) := by linarith
-      have hi''' : ¬(i + s + t < 0 + s + t) := by linarith
+      have hi' : i + s < s + x + t + (s + x) := by linarith
+      have hi'' : i + s < 0 + (s + x) := by linarith
+      have hi''' : i + s < 0 + (s + x) + t := by linarith
       rw [h_env']
-      simp only [main_ops, hi', hi'', hi''', s, t, table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
         CellAssignment.assignment_from_circuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
-      simp +arith [add_assoc]
-      sorry
+      congr; omega
+
+    have h_env_output i (hi : i < s) : (to_elements next.1)[i] = env'.get (i + (s + x) + t) := by
+      have hi' : i + (s + x) + t < s + x + t + (s + x) := by linarith
+      have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
+      have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
+      rw [h_env']
+      simp +arith only [main_ops, hi, hi', hi'', hi''', s, t, x, table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+        CellAssignment.assignment_from_circuit_offset,
+        Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
+      simp +arith [hi, s, add_assoc]
     clear h_env'
 
     have input_eq_1 : eval env' curr_var.1 = curr.1 := by
