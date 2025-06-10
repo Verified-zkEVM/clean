@@ -71,7 +71,6 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs Outputs where
     fin_cases off
     repeat rfl
 
-
 theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
@@ -86,62 +85,14 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (
   clear h_inputs
   clear h
 
+
   dsimp only [assumptions, U64.is_normalized] at as
-  fin_cases off
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    simp [U64.value, rot_right64, Nat.mod_one]
-    simp [U64.is_normalized]
-    tauto
+  obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := as
 
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase1 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase2 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (3 : Fin 8).val = 3 by rfl]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase3 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (4 : Fin 8).val = 4 by rfl]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase4 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (5 : Fin 8).val = 5 by rfl]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase5 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (6 : Fin 8).val = 6 by rfl]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase6 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot64_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval, show (7 : Fin 8).val = 7 by rfl]
-    rw [h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7]
-    constructor
-    · exact soundnessCase7 x0 x1 x2 x3 x4 x5 x6 x7 as
-    · simp [U64.is_normalized]
-      tauto
+  simp [circuit_norm, spec, U64.value, -Nat.reducePow]
+  constructor
+  · fin_cases off <;> (simp_all [eval, Expression.eval, rot_right64, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> simp_all [circuit_norm, U64.is_normalized, eval, Expression.eval]
 
 theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ assumptions
