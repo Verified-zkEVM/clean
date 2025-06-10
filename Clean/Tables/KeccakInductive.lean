@@ -24,8 +24,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
     simp_all only [circuit_norm, subcircuit_norm,
       AbsorbBlock.circuit, AbsorbBlock.assumptions, AbsorbBlock.spec,
-      KeccakBlock.normalized]
-    simp only [absorb_blocks]
+      KeccakBlock.normalized, absorb_blocks]
     rw [List.concat_eq_append, List.map_append, List.map_cons, List.map_nil, List.foldl_concat]
 
   completeness := by
