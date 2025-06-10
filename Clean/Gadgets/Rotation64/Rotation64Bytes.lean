@@ -7,18 +7,11 @@ variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (rot_right64)
 
-@[reducible]
-def Inputs (F : Type) :=  U64 F
-
-@[reducible]
-def Outputs (F : Type) := U64 F
-
-
 /--
   Rotate the 64-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def rot64_bytes (offset : Fin 8) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def rot64_bytes (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let ⟨x0, x1, x2, x3 , x4, x5, x6, x7⟩ := input
 
   if offset = 0 then
@@ -38,12 +31,12 @@ def rot64_bytes (offset : Fin 8) (input : Var Inputs (F p)) : Circuit (F p) (Var
   else
     return ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
 
-def assumptions (input : Inputs (F p)) := input.is_normalized
+def assumptions (input : U64 (F p)) := input.is_normalized
 
-def spec (offset : Fin 8) (x : Inputs (F p)) (y: Outputs (F p)) :=
+def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value (offset.val * 8) ∧ y.is_normalized
 
-instance elaborated (off : Fin 8): ElaboratedCircuit (F p) Inputs Outputs where
+instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bytes off
   local_length _ := 0
   output input i0 :=
@@ -96,9 +89,7 @@ theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumpt
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ assumptions
   fin_cases off <;> simp [elaborated, rot64_bytes, circuit_norm]
 
-
-
-def circuit (off : Fin 8) : FormalCircuit (F p) Inputs Outputs := {
+def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated off with
   main := rot64_bytes off
   assumptions := assumptions
