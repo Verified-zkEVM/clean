@@ -292,4 +292,18 @@ end U64.Copy
 def U64.copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   subcircuit U64.Copy.circuit x
 
+namespace U64
+def from_byte (x: Fin 256) : U64 (F p) :=
+  ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
+
+lemma from_byte_value {x : Fin 256} : (from_byte x).value (p:=p) = x := by
+  simp [value, from_byte]
+  apply FieldUtils.val_lt_p x
+  linarith [x.is_lt, p_large_enough.elim]
+
+lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p) := by
+  simp [is_normalized, from_byte]
+  rw [FieldUtils.val_lt_p x]
+  repeat linarith [x.is_lt, p_large_enough.elim]
+end U64
 end

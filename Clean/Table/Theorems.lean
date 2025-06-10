@@ -114,8 +114,8 @@ def twoRowInduction {prop : Row F S → ℕ → Prop}
     have h3 : prop next (rest +> curr).len := succ _ _ _ ih2.left
     exact ⟨ h3, ih2.left, ih2.right ⟩
 
-def lastRow_of_forAll {N: ℕ+} {prop : Row F S → ℕ → Prop}
-    (trace : TraceOfLength F S N) (h : forAllRowsOfTraceWithIndex trace prop) :
+theorem lastRow_of_forAllWithIndex {N: ℕ+} {prop : Row F S → ℕ → Prop}
+  (trace : TraceOfLength F S N) (h : forAllRowsOfTraceWithIndex trace prop) :
     prop trace.lastRow (N - 1) := by
   induction N, trace using everyRowTwoRowsInduction' with
   | one row =>
@@ -124,6 +124,20 @@ def lastRow_of_forAll {N: ℕ+} {prop : Row F S → ℕ → Prop}
   | more N curr next rest ih =>
     simp only [table_norm, and_true] at h ⊢
     rw [rest.property] at h
+    exact h.left
+
+theorem lastRow_of_forAllWithPrevious {N: ℕ+} {prop : Row F S → (i: ℕ) → TraceOfLength F S i → Prop}
+  (trace : TraceOfLength F S N) (h : forAllRowsWithPrevious trace prop) :
+    prop trace.lastRow (N - 1) trace.tail := by
+  induction N, trace using everyRowTwoRowsInduction' with
+  | one row =>
+    simp only [forAllRowsWithPrevious, Trace.forAllRowsWithPrevious, and_true] at h
+    exact h
+  | more N curr next rest ih =>
+    rcases rest with ⟨ rest, hN ⟩
+    subst hN
+    simp only [forAllRowsWithPrevious, Trace.forAllRowsWithPrevious, table_norm, and_true] at h ⊢
+    simp only [PNat.mk_coe, Nat.add_one_sub_one, tail, Trace.tail]
     exact h.left
 
 end TraceOfLength

@@ -1,11 +1,15 @@
 import Clean.Types.U64
 import Clean.Circuit.Provable
 import Clean.Utils.Field
+import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256
+open Specs.Keccak256
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
+
+-- definitions
 
 @[reducible] def KeccakState := ProvableVector U64 25
 
@@ -20,6 +24,15 @@ def KeccakRow.is_normalized (row : KeccakRow (F p)) :=
   ∀ i : Fin 5, row[i.val].is_normalized
 
 def KeccakRow.value (row : KeccakRow (F p)) := row.map U64.value
+
+@[reducible] def KeccakBlock := ProvableVector U64 RATE
+
+def KeccakBlock.is_normalized (block : KeccakBlock (F p)) :=
+  ∀ i : Fin RATE, block[i.val].is_normalized
+
+def KeccakBlock.value (block : KeccakBlock (F p)) := block.map U64.value
+
+-- lemmas
 
 def KeccakRow.is_normalized_iff (row : KeccakRow (F p)) :
     row.is_normalized ↔
@@ -54,5 +67,21 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
   simp only [Vector.ext_iff, value, Vector.getElem_map]
   intro i hi
   exact (h ⟨ i, hi ⟩).right
+
+-- circuits
+
+def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
+  main block := .forEach block (assertion U64.AssertNormalized.circuit)
+  assumptions _ := True
+  spec block := block.is_normalized
+  local_length_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
+  soundness := by
+    simp only [circuit_norm, U64.AssertNormalized.circuit]
+    dsimp only [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.spec]
+    simp [getElem_eval_vector, KeccakBlock.is_normalized]
+  completeness := by
+    simp only [circuit_norm, U64.AssertNormalized.circuit]
+    dsimp only [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.spec]
+    simp [getElem_eval_vector, KeccakBlock.is_normalized]
 
 end Gadgets.Keccak256
