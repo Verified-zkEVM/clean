@@ -70,33 +70,12 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (
   clear h
 
   dsimp only [assumptions, U32.is_normalized] at as
-  fin_cases off
-  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3]
-    simp [U32.value, rot_right32, Nat.mod_one]
-    simp [U32.is_normalized]
-    tauto
+  obtain ⟨ h0, h1, h2, h3 ⟩ := as
 
-  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3]
-    constructor
-    · exact soundnessCase1 x0 x1 x2 x3 as
-    · simp [U32.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3]
-    constructor
-    · exact soundnessCase2 x0 x1 x2 x3 as
-    · simp [U32.is_normalized]
-      tauto
-
-  · simp [circuit_norm, rot32_bytes, spec, circuit_norm, Circuit.output, monad_norm, StateT.pure, pure, eval]
-    rw [h_x0, h_x1, h_x2, h_x3]
-    constructor
-    · exact soundnessCase3 x0 x1 x2 x3 as
-    · simp [U32.is_normalized]
-      tauto
+  simp [circuit_norm, spec, U32.value, -Nat.reducePow]
+  constructor
+  · fin_cases off <;> (simp_all [eval, Expression.eval, rot_right32, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> simp_all [circuit_norm, U32.is_normalized, eval, Expression.eval]
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
