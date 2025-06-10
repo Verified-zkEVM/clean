@@ -6,18 +6,11 @@ namespace Gadgets.Rotation32Bytes
 variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (rot_right32)
-
-@[reducible]
-def Inputs (F : Type) := U32 F
-
-@[reducible]
-def Outputs (F : Type) := U32 F
-
 /--
   Rotate the 32-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def rot32_bytes (offset : Fin 4) (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def rot32_bytes (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x0, x1, x2, x3⟩ := input
 
   if offset = 0 then
@@ -29,12 +22,12 @@ def rot32_bytes (offset : Fin 4) (input : Var Inputs (F p)) : Circuit (F p) (Var
   else
     return ⟨ x3, x0, x1, x2 ⟩
 
-def assumptions (input : Inputs (F p)) := input.is_normalized
+def assumptions (input : U32 (F p)) := input.is_normalized
 
-def spec (offset : Fin 4) (x : Inputs (F p)) (y: Outputs (F p)) :=
+def spec (offset : Fin 4) (x : U32 (F p)) (y: U32 (F p)) :=
   y.value = rot_right32 x.value (offset.val * 8) ∧ y.is_normalized
 
-instance elaborated (off : Fin 4): ElaboratedCircuit (F p) Inputs Outputs where
+instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bytes off
   local_length _ := 0
   output input i0 :=
@@ -83,7 +76,7 @@ theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumpt
     intro assumptions
     simp [elaborated, rot32_bytes, circuit_norm]
 
-def circuit (off : Fin 4) : FormalCircuit (F p) Inputs Outputs := {
+def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
   elaborated off with
   main := rot32_bytes off
   assumptions := assumptions
