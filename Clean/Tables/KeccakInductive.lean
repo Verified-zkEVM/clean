@@ -46,8 +46,6 @@ lemma initialState_normalized : (initialState (p:=p)).is_normalized := by
 
 def formalTable (output : KeccakState (F p)) := table.toFormal initialState output
 
-def domain {p q : Sort*} (_ : p → q) := p
-
 -- The table's statement implies that the output state is the result of keccak-hashing some list of input blocks
 theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace, ∃ blocks, blocks.length = n - 1 ∧
   (formalTable output).statement n trace →
