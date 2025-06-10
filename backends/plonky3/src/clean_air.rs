@@ -79,8 +79,7 @@ where
                                 1 => next[column],
                                 _ => panic!("Invalid row index"),
                             },
-                            // Currently assume the only aux var is the 3rd column of the next row
-                            VarLocation::Aux { .. } => *next.get(2).unwrap(),
+                            VarLocation::Aux { .. } => unreachable!("All aux vars should be already converted to cells"),
                         }
                     };
 
