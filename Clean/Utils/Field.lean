@@ -147,6 +147,29 @@ theorem mul_nat_val_of_dvd {x: F p} (c: ℕ) (c_lt : c < p) {z : ℕ} :
   intro h_dvd
   exact mul_val_of_dvd ⟨ z, h_dvd ⟩
 
+-- some helper lemmas about 2, using the common assumption that p > 512
+
+section
+variable [Fact (p > 512)]
+
+omit p_prime in
+lemma two_lt : 2 < p := by
+  linarith [‹Fact (p > 512)›.elim]
+
+lemma two_val : (2 : F p).val = 2 :=
+  FieldUtils.val_lt_p 2 two_lt
+
+omit p_prime in
+lemma two_pow_lt (n : ℕ) (hn : n ≤ 8) : 2^n < p := by
+  have h : 2^n ≤ 2^8 := Nat.pow_le_pow_of_le (a:=2) Nat.one_lt_ofNat hn
+  linarith [‹Fact (p > 512)›.elim]
+
+lemma two_pow_val (n : ℕ) (hn : n ≤ 8) : (2^n : F p).val = 2^n := by
+  rw [ZMod.val_pow, two_val]
+  rw [two_val]
+  exact two_pow_lt _ hn
+end
+
 end FieldUtils
 
 -- utils related to bytes, and specifically field elements that are bytes (< 256)

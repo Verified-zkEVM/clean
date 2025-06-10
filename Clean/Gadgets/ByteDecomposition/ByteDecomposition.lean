@@ -5,54 +5,36 @@ import Clean.Gadgets.ByteDecomposition.Theorems
 import Init.Data.Nat.Div.Basic
 
 namespace Gadgets.ByteDecomposition
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
+instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
-
--- TODO: is there a better way?
-instance : Fact (p > 512) := by
-  constructor
-  linarith [p_large_enough.elim]
+open FieldUtils (mod floordiv two_lt two_pow_lt two_val two_pow_val)
 
 structure Outputs (F : Type) where
   low : F
   high : F
 
-instance instProvableTypeOutputs : ProvableType Outputs where
-  size := 2
-  to_elements x := #v[x.low, x.high]
-  from_elements v :=
-    let ⟨ .mk [low, high], _ ⟩ := v
-    ⟨ low, high ⟩
+instance : ProvableStruct Outputs where
+  components := [field, field]
+  to_components := fun { low, high } => .cons low (.cons high .nil)
+  from_components := fun (.cons low (.cons high .nil)) => { low, high }
 
 /--
   Decompose a byte into a low and a high part.
   The low part is the least significant `offset` bits,
   and the high part is the most significant `8 - offset` bits.
 -/
-def byte_decomposition (offset : Fin 8) (x : Var field (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let x : Expression (F p) := x
-  let two_power : ℕ := (2 : ℕ)^offset.val
+def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+  let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
+  let high ← witness fun env => floordiv (env x) (2^offset.val)
 
-  let low ← witness fun env =>
-    FieldUtils.mod (env x) ⟨two_power, by dsimp only [two_power]; simp⟩ (by
-      dsimp only [two_power, PNat.mk_coe, two_power];
-      have h : 2^offset.val < 2^8 := by
-        apply Nat.pow_lt_pow_of_lt
-        simp only [Nat.one_lt_ofNat, two_power]
-        simp only [Fin.is_lt, two_power]
-      linarith [p_large_enough.elim]
-    )
+  lookup (ByteLookup ((2^(8 - offset.val) : F p) * low))
+  lookup (ByteLookup high)
 
-  let high ← witness fun env => FieldUtils.floordiv (env x) (2^offset.val)
+  x.assert_equals (low + (2^offset.val : F p) * high)
 
-  lookup (TwoPowerLookup.lookup (offset.castSucc) low)
-  lookup (TwoPowerLookup.lookup (8 - offset.castSucc) high)
-
-  assert_zero (low + high * ((2 : ℕ)^offset.val : F p) - x)
-
-  return ⟨ low, high ⟩
+  return { low, high }
 
 def assumptions (x : field (F p)) := x.val < 256
 
@@ -66,20 +48,46 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   local_length _ := 2
   output _ i0 := var_from_offset Outputs i0
 
-
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
-  intro i0 env x_var x h_input x_byte h_holds
+  intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
-  simp [circuit_norm, elaborated, byte_decomposition, TwoPowerLookup.lookup, TwoPowerLookup.equiv, h_input] at h_holds
-  simp [circuit_norm, spec, eval, Outputs, elaborated, var_from_offset, h_input]
-  obtain ⟨low_lt, high_lt, c⟩ := h_holds
-  simp_all [h_input]
+  simp only [circuit_norm, elaborated, byte_decomposition, spec, ByteLookup, ByteTable.equiv, h_input] at h_holds ⊢
+  clear h_input
+
+  obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
   set low := env.get i0
   set high := env.get (i0 + 1)
 
+  have : 2^16 < p := by linarith [p_large_enough.elim]
+  let n : ℕ := 8 - offset.val
+  have neg_off_le : n ≤ 8 := by omega
+  have pow_8 : 2^n * 2^offset.val = (2^8 : F p) := by simp [n, ←pow_add]
+
+  have h_eq_mul : 2^n * x = 2^n * low + 2^8 * high := by
+    rw [h_eq, mul_add, ←mul_assoc _ _ high, pow_8]
+  replace h_eq_mul := congrArg ZMod.val h_eq_mul
+
+  have h_lt_mul {x n} (hn : n ≤ 8) (hx: x < 2^8) : 2^n * x < 2^16 := by
+    have : 2^(n + 8) ≤ 2^16 := Nat.pow_le_pow_of_le (by norm_num) (by omega)
+    suffices 2^n * x < 2^(n + 8) by linarith
+    rw [pow_add]
+    exact Nat.mul_lt_mul_of_pos_left hx (Nat.two_pow_pos n)
+
+  have h_lt_mul_x : 2^n * x.val < 2^16 := h_lt_mul neg_off_le x_byte
+  have h_pow8_val : (2^8 : F p).val = 2^8 := two_pow_val _ (by norm_num)
+  have h_lt_mul_high : 2^8 * high.val < 2^16 := h_lt_mul (by norm_num) high_lt
+  have h_lt_low : (2 ^ n * low).val < 2^8 := low_lt
+
+  have h_mul_x : (2^n : F p).val * x.val = 2^n * ZMod.val x := by rw [two_pow_val _ neg_off_le]
+  have : (2 ^ n * x).val = 2^n * x.val := by rw [ZMod.val_mul_of_lt (by linarith), h_mul_x]
+  rw [this] at h_eq_mul
+
+  have : (2^n * low + 2 ^ 8 * high).val = (2^n * low).val + 2^8 * high.val := by
+    rw [ZMod.val_add, ZMod.val_mul _ high, Nat.add_mod_mod, h_pow8_val, Nat.mod_eq_of_lt]
+    linarith
+  rw [this] at h_eq_mul
+
   exact Theorems.soundness offset x low high x_byte low_lt high_lt c
-
-
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv x h_eval as
@@ -93,7 +101,6 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
   simp [circuit_norm, byte_decomposition, elaborated, ByteLookup, TwoPowerLookup.lookup]
   rw [TwoPowerLookup.equiv, TwoPowerLookup.equiv, h_eval, h0, h1]
   sorry
-
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
