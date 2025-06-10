@@ -6,7 +6,6 @@ namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (rot_right64)
-open Rotation64.Theorems (soundnessCase1 soundnessCase2 soundnessCase3 soundnessCase4 soundnessCase5 soundnessCase6 soundnessCase7)
 
 @[reducible]
 def Inputs (F : Type) :=  U64 F
@@ -84,7 +83,6 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (
   have h_x7 : x7_var.eval env = x7 := by injections h_inputs
   clear h_inputs
   clear h
-
 
   dsimp only [assumptions, U64.is_normalized] at as
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := as
