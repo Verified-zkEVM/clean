@@ -72,22 +72,26 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
+  -- simplify
   dsimp only [assumptions] at h_assumptions
   simp only [main, h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.spec, KeccakRound.assumptions] at h_env ⊢
 
-  obtain ⟨ ⟨ h_init, _ ⟩, h_succ ⟩ := h_env
+  -- only keep the statements about normalization
+  obtain ⟨ h_init, h_succ ⟩ := h_env
+  replace h_init := h_init.left
+  replace h_succ := fun i hi ih => (h_succ i hi ih).left
+
   intro i hi
-  have hi' : i < 24 := Nat.lt_of_succ_lt hi
 
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env (state_var n i)
 
   change (state 0).is_normalized at h_init
 
-  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).is_normalized → (state (i + 1)).is_normalized ∧
-    (state (i + 1)).value = keccak_round (state i).value roundConstants[i + 1]
+  change ∀ (i : ℕ) (hi : i + 1 < 24),
+    (state i).is_normalized → (state (i + 1)).is_normalized
   at h_succ
 
   change (state i).is_normalized
@@ -99,9 +103,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     | succ i ih =>
       have hi' : i < 24 := Nat.lt_of_succ_lt hi
       specialize ih hi'
-      specialize h_succ i hi ih
-      exact h_succ.left
-  exact h_norm i hi'
+      exact h_succ i hi ih
+  exact h_norm i (Nat.lt_of_succ_lt hi)
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with

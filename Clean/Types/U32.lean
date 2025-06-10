@@ -16,7 +16,7 @@ deriving Repr
 
 namespace U32
 
-instance : LawfulProvableType U32 where
+instance : ProvableType U32 where
   size := 4
   to_elements x := #v[x.x0, x.x1, x.x2, x.x3]
   from_elements v :=

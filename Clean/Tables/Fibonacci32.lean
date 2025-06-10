@@ -66,7 +66,7 @@ def boundary : SingleRowConstraint RowType (F p) := do
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
 def fib32_table : List (TableOperation RowType (F p)) := [
-  Boundary 0 boundary,
+  Boundary (.fromStart 0) boundary,
   EveryRowExceptLast recursive_relation,
 ]
 
@@ -92,14 +92,14 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 variable {α : Type}
 
 -- assignment copied from eval:
--- #eval (recursive_relation (p:=p_babybear)).final_assignment.vars
+-- #eval! (recursive_relation (p:=p_babybear)).final_assignment.vars
 lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  simp only [recursive_relation, table_assignment_norm, circuit_norm,
-    Gadgets.Addition32Full.circuit, assign_U32, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+  dsimp only [table_assignment_norm, circuit_norm, recursive_relation, Gadgets.Addition32Full.circuit, assign_U32]
+  simp only [table_assignment_norm, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero, Vector.mapRange_succ]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -174,7 +174,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
   soundness := by
     intro N trace envs _
     simp only [fib32_table, spec]
-    rw [TraceOfLength.forAllRowsOfTraceWithIndex, table_constraints_hold]
+    rw [TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, table_constraints_hold]
 
     /-
       We prove the soundness of the table by induction on the trace.
@@ -188,25 +188,17 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       apply boundary_constraints first_row (envs 0 0)
 
     -- inductive step
-    · -- first of all, we prove the inductive part of the spec
-      unfold TraceOfLength.forAllRowsOfTraceWithIndex.inner
-      intros constraints_hold
+    · simp [table_norm] at ih2 ⊢
+      intro constraints_hold boundary rest
+      -- first of all, we prove the inductive part of the spec
 
-      unfold table_constraints_hold.foldl at constraints_hold
-      simp only [Trace.len, Nat.succ_ne_zero, ite_false] at constraints_hold
-      unfold table_constraints_hold.foldl at constraints_hold
-      unfold table_constraints_hold.foldl at constraints_hold
-      simp only at constraints_hold
-      specialize ih2 constraints_hold.right
-      simp only [ih2, and_self]
+      specialize ih2 boundary rest
+      simp only [ih2, and_self, and_true]
 
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
-      simp only [and_true]
-      replace constraints_hold := constraints_hold.left
 
       -- simplfy constraints
-      simp at constraints_hold
-      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 (rest.len + 1)) constraints_hold
+      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) constraints_hold
 
       -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y
