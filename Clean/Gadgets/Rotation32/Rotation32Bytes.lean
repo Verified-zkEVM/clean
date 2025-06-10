@@ -6,7 +6,6 @@ namespace Gadgets.Rotation32Bytes
 variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (rot_right32)
-open Rotation32.Theorems (soundnessCase1 soundnessCase2 soundnessCase3)
 
 @[reducible]
 def Inputs (F : Type) := U32 F
