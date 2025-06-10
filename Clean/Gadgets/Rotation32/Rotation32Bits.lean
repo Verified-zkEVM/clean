@@ -2,7 +2,6 @@ import Clean.Types.U32
 import Clean.Circuit.SubCircuit
 import Clean.Gadgets.Rotation32.Theorems
 import Clean.Gadgets.Rotation32.Rotation32Bytes
-import Clean.Gadgets.Rotation32.ByteRotationTable
 import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 import Clean.Circuit.Provable
 
@@ -36,8 +35,6 @@ def rot32_bits (offset : Fin 8) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F 
 
   return ⟨y0, y1, y2, y3⟩
 
-instance lawful (off : Fin 8) : ConstantLawfulCircuits (F := (F p)) (rot32_bits off) := by infer_constant_lawful_circuits
-
 def assumptions (input : U32 (F p)) := input.is_normalized
 
 def spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
@@ -50,10 +47,6 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bits off
   local_length _ := 12
   output _inputs i0 := var_from_offset U32 (i0 + 8)
-  initial_offset_eq := by
-    intros
-    simp only [rot32_bits]
-    rfl
   local_length_eq := by
     intros
     simp only [rot32_bits]
@@ -107,7 +100,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     show Expression.eval env x2_var = x2 by injections h_input,
     show Expression.eval env x3_var = x3 by injections h_input,
   ] at h_holds
-  simp only [and_assoc] at h_holds
   obtain ⟨h_decomposition, y_normalized, eq0, eq1, eq2, eq3⟩ := h_holds
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h⟩ := h_decomposition
