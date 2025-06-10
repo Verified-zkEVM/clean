@@ -5,5 +5,5 @@ import Clean.Examples.ToJson
 import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
 import Clean.Tables.Fibonacci32Inductive
-import Clean.Gadgets.Keccak.KeccakRound
+import Clean.Tables.KeccakInductive
 import Clean.Gadgets.Bits
