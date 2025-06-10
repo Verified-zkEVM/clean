@@ -19,7 +19,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     ∧ ∃ blocks : List (KeccakBlock (F p)), blocks.length = i
       ∧ state.value = absorb_blocks (blocks.map KeccakBlock.value)
 
-  input_spec i block := block.is_normalized
+  honest_input_assumptions i block := block.is_normalized
 
   soundness := by
     intro i env state_var block_var state block h_input h_holds spec_previous

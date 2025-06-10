@@ -19,7 +19,7 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input] where
   step : Var State F → Var Input F → Circuit F (Var State F)
   spec : ℕ → State F → Prop
-  input_spec : ℕ → Input F → Prop := fun _ _ => True
+  honest_input_assumptions : ℕ → Input F → Prop := fun _ _ => True
 
   soundness : ∀ (row_index : ℕ) (env : Environment F),
     -- for all rows and inputs
@@ -41,7 +41,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- when using honest-prover witnesses
     env.uses_local_witnesses_completeness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- assuming the spec on the current row, and the input_spec on the input
-    spec row_index acc ∧ input_spec row_index x →
+    spec row_index acc ∧ honest_input_assumptions row_index x →
     -- the constraints hold
     Circuit.constraints_hold.completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 

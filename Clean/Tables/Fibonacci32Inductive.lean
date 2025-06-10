@@ -4,9 +4,9 @@ import Clean.Gadgets.Addition32.Addition32Full
 
 namespace Tables.Fibonacci32Inductive
 open Gadgets
-variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-def fib32 : ℕ -> ℕ
+def fib32 : ℕ → ℕ
   | 0 => 0
   | 1 => 1
   | n + 2 => (fib32 n + fib32 (n + 1)) % 2^32
@@ -39,7 +39,7 @@ def table : InductiveTable (F p) Row unit where
     Addition32Full.circuit, Addition32Full.assumptions, Addition32Full.spec]
 
 -- the input is hard-coded to (0, 1)
-def formalTable (output : Row (F p)) := table.toFormal { x:= U32.from_byte 0, y:= U32.from_byte 1 } output
+def formalTable (output : Row (F p)) := table.toFormal { x := U32.from_byte 0, y := U32.from_byte 1 } output
 
 -- The table's statement implies that the output row contains the nth Fibonacci number
 theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace,
