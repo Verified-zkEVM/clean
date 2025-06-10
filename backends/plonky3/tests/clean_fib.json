@@ -220,7 +220,8 @@
             "column": 1
           },
           {
-            "aux": 2
+            "row": 1,
+            "column": 2
           }
         ],
         "offset": 5,
