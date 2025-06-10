@@ -14,24 +14,17 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     assertion KeccakBlock.normalized block
     subcircuit AbsorbBlock.circuit { state, block }
 
-  spec i state : Prop :=
+  spec i state blocks _ : Prop :=
     state.is_normalized
-    ∧ ∃ blocks : List (KeccakBlock (F p)), blocks.length = i
-      ∧ state.value = absorb_blocks (blocks.map KeccakBlock.value)
+    ∧ state.value = absorb_blocks (blocks.map KeccakBlock.value)
 
   honest_input_assumptions i block := block.is_normalized
 
   soundness := by
-    intro i env state_var block_var state block h_input h_holds spec_previous
+    intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
     simp_all only [circuit_norm, subcircuit_norm,
       AbsorbBlock.circuit, AbsorbBlock.assumptions, AbsorbBlock.spec,
       KeccakBlock.normalized]
-    replace h_holds := h_holds.right h_holds.left
-    obtain ⟨ blocks, blocks_length, state_value ⟩ := spec_previous.right
-    use blocks.concat block
-    constructor
-    · rw [List.length_concat, blocks_length]
-    rw [state_value]
     simp only [absorb_blocks]
     rw [List.concat_eq_append, List.map_append, List.map_cons, List.map_nil, List.foldl_concat]
 
@@ -56,18 +49,15 @@ def formalTable (output : KeccakState (F p)) := table.toFormal initialState outp
 def domain {p q : Sort*} (_ : p → q) := p
 
 -- The table's statement implies that the output state is the result of keccak-hashing some list of input blocks
-theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace,
+theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace, ∃ blocks, blocks.length = n - 1 ∧
   (formalTable output).statement n trace →
-    output.is_normalized ∧
-    ∃ blocks, blocks.length = n - 1
-      ∧ output.value = absorb_blocks blocks := by
-  intro n hn trace spec
-  simp only [formalTable, FormalTable.statement, table, InductiveTable.toFormal, hn] at spec
+    output.is_normalized ∧ output.value = absorb_blocks blocks := by
+  intro n hn trace
+  use (InductiveTable.traceInputs trace.tail).map KeccakBlock.value
+  intro spec
+  simp only [formalTable, FormalTable.statement, table, InductiveTable.toFormal] at spec
+  simp only [List.length_map, Trace.toList_length, trace.tail.prop, InductiveTable.traceInputs, hn] at spec
   simp only [initialState_value, initialState_normalized, absorb_blocks, initial_state, true_and] at spec
-  have ⟨ norm, ⟨ blocks, block_len, value_eq ⟩ ⟩ := spec ⟨ [], rfl, rfl ⟩
-  clear spec
-  use norm, blocks.map KeccakBlock.value
-  simp only [List.length_map]
-  exact ⟨ block_len, value_eq ⟩
+  exact spec rfl
 
 end Tables.KeccakInductive

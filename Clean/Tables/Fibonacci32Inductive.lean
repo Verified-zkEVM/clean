@@ -27,7 +27,7 @@ def table : InductiveTable (F p) Row unit where
     }
     return { x := row.y, y := z }
 
-  spec i row : Prop :=
+  spec i row _ _ : Prop :=
     row.x.value = fib32 i ∧
     row.y.value = fib32 (i + 1) ∧
     row.x.is_normalized ∧ row.y.is_normalized
