@@ -58,6 +58,14 @@ def lastRow : (trace : Trace F S) → (hlen : trace.len > 0) → S F
   | <+>, h  => nomatch h
   | _ +> row, _ => row
 
+def tail : Trace F S → Trace F S
+  | <+>  => <+>
+  | rest +> _ => rest
+
+lemma tail_len : (trace : Trace F S) → trace.tail.len = trace.len - 1
+  | <+>  => rfl
+  | rest +> _ => by rw [tail, len, Nat.succ_sub_one]
+
 @[table_norm]
 def forAllRowsOfTraceWithIndex
     (trace : Trace F S) (prop : Row F S → ℕ → Prop) : Prop :=
@@ -67,6 +75,21 @@ def forAllRowsOfTraceWithIndex
   inner : Trace F S → (Row F S → ℕ → Prop) → Prop
     | <+>, _ => true
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
+
+/-- variant where the condition receives the entire previous trace instead of just the length -/
+def forAllRowsWithPrevious  : Trace F S → (Row F S → Trace F S → Prop) → Prop
+  | <+>, _ => true
+  | rest +> row, prop => (prop row rest) ∧ forAllRowsWithPrevious rest prop
+
+def toList : Trace F S → List (Row F S)
+  | <+> => []
+  | rest +> row => rest.toList.concat row
+
+lemma toList_length : (trace : Trace F S) → trace.toList.length = trace.len
+  | <+> => rfl
+  | rest +> _ => by
+    rw [toList, List.length_concat, len, Nat.succ_inj]
+    exact rest.toList_length
 
 end Trace
 
@@ -93,6 +116,9 @@ def get {M : ℕ} :
 @[table_norm]
 def lastRow {M : ℕ+} (trace : TraceOfLength F S M) : S F :=
   trace.val.lastRow (by rw [trace.property]; exact M.pos)
+
+def tail {M : ℕ} (trace : TraceOfLength F S M) : TraceOfLength F S (M - 1) :=
+  ⟨ trace.val.tail, by rw [trace.val.tail_len, trace.prop] ⟩
 
 /--
   Apply a proposition to every row in the trace
@@ -127,6 +153,22 @@ def forAllRowsOfTraceExceptLast {N : ℕ}
 def forAllRowsOfTraceWithIndex {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → ℕ → Prop) : Prop :=
   trace.val.forAllRowsOfTraceWithIndex prop
+
+def forAllRowsWithPrevious {N : ℕ}
+    (trace : TraceOfLength F S N) (prop : Row F S → (i : ℕ) → TraceOfLength F S i → Prop) : Prop :=
+  trace.val.forAllRowsWithPrevious fun row rest => prop row rest.len ⟨ rest, rfl ⟩
+
+def toList {N : ℕ} (trace : TraceOfLength F S N) : List.Vector (Row F S) N :=
+  ⟨ trace.val.toList, by rw [trace.val.toList_length, trace.prop] ⟩
+
+def take : {N : ℕ} → TraceOfLength F S N → (i : Fin (N + 1)) → TraceOfLength F S i
+  | 0, ⟨ <+>, h0 ⟩, i => ⟨ <+>, i.val_eq_zero.symm ▸ rfl ⟩
+  | N + 1, ⟨ rest +> row, h ⟩, ⟨ i, hi ⟩ =>
+    if hi' : i = N + 1 then
+      -- if `i` is the full length, we return the whole trace
+      ⟨ rest +> row, hi' ▸ h ⟩
+    else
+      take ⟨ rest, Nat.succ_inj.mp h ⟩ ⟨ i, by omega ⟩
 
 end TraceOfLength
 variable {W: ℕ+} {α: Type}
