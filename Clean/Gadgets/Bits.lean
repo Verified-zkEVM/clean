@@ -44,10 +44,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
     let bits : Vector (F p) n := bit_vars.map eval
 
-    replace h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1
-      | i, hi => by
-        simp only [circuit_norm, bits, bit_vars]
-        exact h_bits ⟨ i, hi ⟩
+    replace h_bits (i : ℕ) (hi : i < n) : bits[i] = 0 ∨ bits[i] = 1 := by
+      simp only [circuit_norm, bits, bit_vars]
+      exact h_bits ⟨ i, hi ⟩
 
     change x = eval (field_from_bits_expr bit_vars) at h_eq
     rw [h_eq, field_from_bits_eval bit_vars, field_to_bits_field_from_bits hn bits h_bits]
@@ -86,8 +85,36 @@ def range_check (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   spec (x : F p) := x.val < 2^n
 
   soundness := by
-    sorry
+    simp only [circuit_norm, main, Boolean.circuit]
+    simp only [circuit_norm, subcircuit_norm]
+    intro k eval x_var x h_input ⟨ h_bits, h_eq ⟩
+    rw [h_input] at h_eq
+    change x = eval _ at h_eq
+    rw [h_eq, field_from_bits_eval]
+    apply field_from_bits_lt hn
+    intro i hi
+    simp only [circuit_norm, h_bits ⟨ i, hi ⟩]
 
   completeness := by
-    sorry
+    simp only [circuit_norm, main, Boolean.circuit]
+    simp only [circuit_norm, subcircuit_norm]
+    intro k eval x_var h_env x h_input h_assumptions
+    simp only [h_input] at h_env ⊢
+
+    constructor
+    · intro i
+      rw [h_env i]
+      simp [field_to_bits, to_bits]
+
+    let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
+
+    have h_bits_eq : bit_vars.map eval = field_to_bits n x := by
+      rw [Vector.ext_iff]
+      intro i hi
+      simp only [circuit_norm, bit_vars]
+      exact h_env ⟨ i, hi ⟩
+
+    show _ = eval _
+    rw [field_from_bits_eval, h_bits_eq, field_from_bits_field_to_bits hn h_assumptions]
+
 end Gadgets.ToBits
