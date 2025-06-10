@@ -17,9 +17,19 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 - with input offset hard-coded to `size Row + size Input`
 -/
 structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input] where
+  /-- the `step` circuit encodes the transition logic from one state to the next -/
   step : Var State F → Var Input F → Circuit F (Var State F)
-  spec : (i: ℕ) → State F → (xs : List (Input F)) → (xs.length = i) → Prop
-  honest_input_assumptions : ℕ → Input F → Prop := fun _ _ => True
+
+  /-- the `spec` characterizes the `i`th state, possibly in relation to the full list of inputs up to that point -/
+  spec : (i : ℕ) → State F → (xs : List (Input F)) → (xs.length = i) → Prop
+
+  /--
+    assumptions on inputs for completeness.
+    explanation: in general, we expect the `step` circuit to impose some constraints on the `input`.
+    in the completeness proof, we therefore need to restrict the possible inputs a prover can provide in order to satisfy the constraints.
+    by design, completeness for the full table holds for any list of inputs that satisfy the `input_assumptions`.
+  -/
+  input_assumptions : ℕ → Input F → Prop := fun _ _ => True
 
   soundness : ∀ (row_index : ℕ) (env : Environment F),
     -- for all rows and inputs
@@ -29,7 +39,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- if the constraints hold
     Circuit.constraints_hold.soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- and assuming the spec on the current row and previous inputs
-    spec row_index acc xs xs_len  →
+    spec row_index acc xs xs_len →
     -- we can conclude the spec on the next row and inputs including the current input
     spec (row_index + 1) (eval env (step acc_var x_var |>.output ((size State) + (size Input)))) (xs.concat x) (xs_len ▸ List.length_concat)
 
@@ -41,7 +51,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- when using honest-prover witnesses
     env.uses_local_witnesses_completeness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- assuming the spec on the current row, and the input_spec on the input
-    spec row_index acc xs xs_len ∧ honest_input_assumptions row_index x →
+    spec row_index acc xs xs_len ∧ input_assumptions row_index x →
     -- the constraints hold
     Circuit.constraints_hold.completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 
