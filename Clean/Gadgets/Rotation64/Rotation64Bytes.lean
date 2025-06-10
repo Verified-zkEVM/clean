@@ -144,11 +144,8 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (
       tauto
 
 theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _
-  fin_cases off
-  repeat
-    intro assumptions
-    simp [elaborated, rot64_bytes, circuit_norm]
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ assumptions
+  fin_cases off <;> simp [elaborated, rot64_bytes, circuit_norm]
 
 
 
