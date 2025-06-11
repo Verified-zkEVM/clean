@@ -11,7 +11,7 @@ use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 
-use crate::clean_ast::{AstUtils, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation};
+use crate::clean_ast::{AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation};
 use crate::key::VK;
 use crate::permutation::MultiTableBuilder;
 use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType, VerifyingKey};
@@ -46,30 +46,53 @@ where
             main.row_slice(1).expect("Matrix only has 1 row?"),
         );
 
-        let pis = builder.public_values();
-        // todo: it should be updated for generic use cases. ideally, it can know how to constrain the public inputs.
-        // these public inputs are assumed for fibonacci example. 
-        assert!(
-            pis.len() == 3,
-            "Expected exactly 3 public inputs, got {}",
-            pis.len()
-        );
-        let a = pis[0];
-        let b = pis[1];
-        let x = pis[2];
-
-        // constrain public inputs
-        builder.when_first_row().assert_eq(local[0], a);
-        builder.when_first_row().assert_eq(local[1], b);
-        builder.when_last_row().assert_eq(local[1], x);
+        let pi_values = builder.public_values().to_vec();
+        let load_pi = |pi_idx: usize| {
+            pi_values[pi_idx].into()
+        };
 
         // Build constraints from clean ops
         for op in self.clean_ops.ops() {
             match op {
-                CleanOp::Boundary { row, context: _ } => {
-                    // todo: constrain the circuit inside the context
-                    // should we support selectors for custom rows?
+                // Convert boundary constraints
+                CleanOp::Boundary { row, context } => {
+                    let load_var = |var_idx: usize| {
+                        let var: VarLocation = context.assignment.vars[var_idx].clone();
+                        match var {
+                            VarLocation::Cell { row, column } => match row {
+                                0 => local[column],
+                                1 => next[column],
+                                _ => panic!("Invalid row index"),
+                            },
+                            VarLocation::Aux { .. } => unreachable!("All aux vars should be already converted to cells"),
+                        }
+                    };
+
+                    for circuit_op in &context.circuit {
+                        match circuit_op {
+                            CircuitOp::Assert { assert } => {
+                                let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
+                                match row {
+                                    BoundaryRow::FirstRow => builder.when_first_row().assert_zero(expr),
+                                    BoundaryRow::LastRow => builder.when_last_row().assert_zero(expr),
+                                }
+                            }
+                            CircuitOp::Subcircuit { subcircuit } => {
+                                for sub_op in subcircuit {
+                                    if let CircuitOp::Assert { assert } = sub_op {
+                                        let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
+                                        match row {
+                                            BoundaryRow::FirstRow => builder.when_first_row().assert_zero(expr),
+                                            BoundaryRow::LastRow => builder.when_last_row().assert_zero(expr),
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
                 }
+                // Convert trainsition constraints
                 CleanOp::EveryRowExceptLast { context } => {
                     let load_var = |var_idx: usize| {
                         let var: VarLocation = context.assignment.vars[var_idx].clone();
@@ -88,13 +111,13 @@ where
                     for circuit_op in &context.circuit {
                         match circuit_op {
                             CircuitOp::Assert { assert } => {
-                                let expr = AstUtils::to_expr::<AB>(&assert, &load_var);
+                                let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
                                 when_transition.assert_zero(expr);
                             }
                             CircuitOp::Subcircuit { subcircuit } => {
                                 for sub_op in subcircuit {
                                     if let CircuitOp::Assert { assert } = sub_op {
-                                        let expr = AstUtils::to_expr::<AB>(&assert, &load_var);
+                                        let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
                                         when_transition.assert_zero(expr);
                                     }
                                 }

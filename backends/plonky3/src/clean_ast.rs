@@ -5,11 +5,29 @@ use p3_air::AirBuilder;
 use p3_field::{Field, PrimeCharacteristicRing};
 use serde::Deserialize;
 
+/// Represents boundary row types for JSON deserialization
+#[derive(Clone, Debug, Deserialize)]
+#[serde(from = "i32")]
+pub enum BoundaryRow {
+    FirstRow,
+    LastRow,
+}
+
+impl From<i32> for BoundaryRow {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => BoundaryRow::FirstRow,
+            -1 => BoundaryRow::LastRow,
+            _ => panic!("Invalid boundary row value: {}. Expected 0 (FirstRow) or -1 (LastRow)", value),
+        }
+    }
+}
+
 /// Operations defined in the clean JSON format
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum CleanOp {
-    Boundary { row: usize, context: OpContext },
+    Boundary { row: BoundaryRow, context: OpContext },
     EveryRowExceptLast { context: OpContext },
 }
 
@@ -75,6 +93,9 @@ pub enum ExprNode {
     Var {
         index: usize,
     },
+    Pi {
+        index: usize,
+    },
     Const {
         value: u64,
     },
@@ -113,9 +134,9 @@ pub enum Transition {
 
 #[derive(Debug)]
 pub enum LookupRow {
-    /// Specific row
+    /// Specific boundary row
     Boundary {
-        row: usize,
+        row: BoundaryRow,
     },
     Transition(Transition),
 }
@@ -128,18 +149,20 @@ impl AstUtils {
     pub fn lower_expr<AB: AirBuilder>(
         expr: &ExprNode,
         var_fn: &dyn Fn(usize) -> AB::Var,
+        pi_fn: &dyn Fn(usize) -> AB::Expr,
     ) -> AB::Expr
     where
         AB::F: Field + PrimeCharacteristicRing,
     {
         match expr {
-            ExprNode::Var { index } => AB::Var::from(var_fn(*index)).into(),
+            ExprNode::Var { index } => var_fn(*index).into(),
+            ExprNode::Pi { index } => pi_fn(*index),
             ExprNode::Const { value } => AB::F::from_u64(*value).into(),
             ExprNode::Add { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, var_fn) + Self::lower_expr::<AB>(rhs, var_fn)
+                Self::lower_expr::<AB>(lhs, var_fn, pi_fn) + Self::lower_expr::<AB>(rhs, var_fn, pi_fn)
             }
             ExprNode::Mul { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, var_fn) * Self::lower_expr::<AB>(rhs, var_fn)
+                Self::lower_expr::<AB>(lhs, var_fn, pi_fn) * Self::lower_expr::<AB>(rhs, var_fn, pi_fn)
             }
         }
     }
@@ -148,18 +171,19 @@ impl AstUtils {
     pub fn to_expr<AB: AirBuilder>(
         assert_op: &AssertOp,
         lookup_var: &dyn Fn(usize) -> AB::Var,
+        lookup_pi: &dyn Fn(usize) -> AB::Expr,
     ) -> AB::Expr
     where
         AB::F: Field + PrimeCharacteristicRing,
     {
         match assert_op.op_type.as_str() {
             "add" => {
-                Self::lower_expr::<AB>(&assert_op.lhs, lookup_var)
-                    + Self::lower_expr::<AB>(&assert_op.rhs, lookup_var)
+                Self::lower_expr::<AB>(&assert_op.lhs, lookup_var, lookup_pi)
+                    + Self::lower_expr::<AB>(&assert_op.rhs, lookup_var, lookup_pi)
             }
             "mul" => {
-                Self::lower_expr::<AB>(&assert_op.lhs, lookup_var)
-                    * Self::lower_expr::<AB>(&assert_op.rhs, lookup_var)
+                Self::lower_expr::<AB>(&assert_op.lhs, lookup_var, lookup_pi)
+                    * Self::lower_expr::<AB>(&assert_op.rhs, lookup_var, lookup_pi)
             }
             _ => panic!("Unsupported operation type: {}", assert_op.op_type),
         }
@@ -223,15 +247,23 @@ impl CleanOps {
                 for entry in lookup.entry.iter() {
                     match entry {
                         ExprNode::Var { index } => {
+                            // todo: assume we would always lookup the current row
                             let var = &context.assignment.vars[*index];
                             match var {
                                 VarLocation::Cell { row, column } => {
-                                    if let Some(r) = boundary_row {
-                                        assert_eq!(
-                                            r, row,
-                                            "Boundary row does not match the lookup row"
-                                        );
-                                        callback(LookupRow::Boundary { row: *r }, *column);
+                                    if let Some(boundary_row) = boundary_row {
+                                        // Convert usize row to boundary row for comparison
+                                        let expected_row_value = match boundary_row {
+                                            BoundaryRow::FirstRow => 0,
+                                            BoundaryRow::LastRow => panic!("LastRow boundary not supported in cell lookups"),
+                                        };
+                                        
+                                        if *row != expected_row_value {
+                                            panic!("Boundary row {} does not match the lookup row {}", 
+                                                   expected_row_value, row);
+                                        }
+                                        
+                                        callback(LookupRow::Boundary { row: boundary_row.clone() }, *column);
                                     } else if *row == 0 {
                                         callback(
                                             LookupRow::Transition(Transition::Current),

@@ -22,8 +22,8 @@
               }
             },
             "lhs": {
-              "value": 0,
-              "type": "const"
+              "index": 0,
+              "type": "pi"
             }
           }
         },
@@ -45,8 +45,8 @@
               }
             },
             "lhs": {
-              "value": 1,
-              "type": "const"
+              "index": 1,
+              "type": "pi"
             }
           }
         }
