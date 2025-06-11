@@ -26,8 +26,6 @@ def rot32 (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) 
   let byte_rotated ← subcircuit (Rotation32Bytes.circuit byte_offset) x
   subcircuit (Rotation32Bits.circuit bit_offset) byte_rotated
 
-instance lawful (off : Fin 32) : ConstantLawfulCircuits (F := (F p)) (rot32 off) := by infer_constant_lawful_circuits
-
 def assumptions (input : U32 (F p)) := input.is_normalized
 
 def spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
@@ -40,14 +38,6 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32 off
   local_length _ := 12
   output _inputs i0 := var_from_offset U32 (i0 + 8)
-  initial_offset_eq := by
-    intros
-    simp only [rot32]
-    rfl
-  local_length_eq := by
-    intros
-    simp only [rot32]
-    rfl
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
