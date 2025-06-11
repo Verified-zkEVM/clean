@@ -3,106 +3,31 @@ import Clean.Utils.Bitwise
 import Clean.Types.U64
 
 namespace Gadgets.ByteDecomposition.Theorems
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
+instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
--- TODO: remove when updating to new mathlib
-theorem Nat.mod_lt_of_lt {a b c : Nat} (h : a < c) : a % b < c :=
-  Nat.lt_of_le_of_lt (Nat.mod_le _ _) h
-
-lemma val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+open FieldUtils (two_val two_pow_val)
 
 theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
-    (h_low : low.val < 256) (h_high : high.val < 256)
-    (h : low + high * (2^offset.val) + -x = 0) :
+  (h_low : low.val < 2^8) (h_high : high.val < 2^8)
+  (h : x = low + high * (2^offset.val)) :
     x.val = low.val + high.val * (2^offset.val) := by
-  have pow_val_field : ZMod.val (2 : F p) ^ offset.val < 256 := by
-    rw [val_two]
-    fin_cases offset
-    repeat simp
-
-  have pow_val_field : ZMod.val (2 : F p) ^ offset.val < p := by
-    linarith [p_large_enough.elim]
-
-  have pow_val : (2 ^ offset.val) < 2^16 := by
-    apply Nat.pow_lt_pow_of_lt
-    · simp only [Nat.one_lt_ofNat]
-    · linarith [offset.is_lt]
-
-  have pow_val' : (2 ^ offset.val) < p := by
-    linarith [p_large_enough.elim]
-
-  rw [add_neg_eq_iff_eq_add, zero_add] at h
-  apply_fun ZMod.val at h
-  rw [ZMod.val_add, ZMod.val_mul, ZMod.val_pow pow_val_field, Nat.mul_mod] at h
-  rw [val_two, Nat.mod_eq_of_lt pow_val'] at h
-
-  set low := low.val
-  set high := high.val
-
-  have high_val : high % p = high := by
-    apply Nat.mod_eq_of_lt
-    linarith [p_large_enough.elim]
-
-  have mul_val : high * (2^offset.val) < 2^16 := by
-    rw [show 2^16 = 256 * 2^8 by rfl]
-    apply Nat.mul_lt_mul_of_lt_of_lt
-    · linarith
-    · apply Nat.pow_lt_pow_of_lt
-      simp only [Nat.one_lt_ofNat]
-      linarith [offset.is_lt]
-
-  have mul_val' : high * (2^offset.val) < p := by
-    linarith [p_large_enough.elim]
-
-  rw [high_val, Nat.mod_eq_of_lt mul_val'] at h
-
-  have sum_val : low + high * (2^offset.val) < 2^8 + 2^16 := by
-    apply Nat.add_lt_add
-    repeat linarith
-
-  have sum_val' : low + high * (2^offset.val) < p := by
-    linarith [p_large_enough.elim]
-
-  rw [Nat.mod_eq_of_lt sum_val'] at h
-  simp only [h]
+  have pow_eq : (2^offset.val : F p).val = 2^offset.val := two_pow_val _ (by linarith [offset.is_lt])
+  rw [h, ←pow_eq]
+  field_to_nat
+  suffices high.val * ((2 : F p)^offset.val).val < 2^8 * 2^8 by linarith [p_large_enough.elim]
+  apply Nat.mul_lt_mul_of_lt_of_lt (by assumption)
+  rw [pow_eq]
+  exact Nat.pow_lt_pow_of_lt (by norm_num) offset.is_lt
 
 theorem soundness (offset : Fin 8) (x low high : F p)
-    (x_byte : ZMod.val x < 256)
-    (low_lt : ZMod.val low < 2 ^ offset.val)
-    (high_lt : ZMod.val high < 2 ^ (8-offset.castSucc).val)
-    (c : low + high * 2^offset.val + -x = 0) :
+  (x_lt : x.val < 2^8) (low_lt : low.val < 2^offset.val) (high_lt : high.val < 2^8)
+  (h_eq : x = low + high * 2^offset.val) :
     low.val = x.val % 2^offset.val ∧ high.val = x.val / 2^offset.val := by
 
   have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
-  have two_power_lt' : 2^(8-offset.castSucc).val ≤ 2^8 := by
-    apply Nat.pow_le_pow_of_le
-    linarith
-    rw [Fin.sub_val_of_le]
-    · rw [show @Fin.val 9 8 = 8 by rfl]
-      simp only [Nat.reduceAdd, Fin.coe_castSucc, tsub_le_iff_right, le_add_iff_nonneg_right,
-        zero_le]
-    · rw [Fin.le_def]
-      simp only [Nat.reduceAdd, Fin.coe_castSucc, Fin.isValue]
-      rw [show @Fin.val 9 8 = 8 by rfl]
-      linarith [offset.is_lt]
-
   have low_byte : low.val < 256 := by linarith
-  have high_byte : high.val < 256 := by linarith
-  have h := byte_decomposition_lift offset _ _ _ low_byte high_byte c
-
-  have high_lt' : high.val < 2^(8 - offset.val) := by
-    have eq : 2^(8 - offset.castSucc).val = 2^(8 - offset.val) := by
-      congr
-      rw [Fin.sub_val_of_le]
-      · rw [show @Fin.val 9 8 = 8 by rfl]
-        simp only [Nat.reduceAdd, Fin.coe_castSucc]
-      · rw [Fin.le_def]
-        simp only [Nat.reduceAdd, Fin.coe_castSucc, Fin.isValue]
-        rw [show @Fin.val 9 8 = 8 by rfl]
-        linarith [offset.is_lt]
-    rw [eq] at high_lt
-    assumption
+  have h := byte_decomposition_lift offset _ _ _ low_byte high_lt h_eq
 
   set low_b := UInt32.ofNat low.val
   set high_b := UInt32.ofNat high.val
@@ -110,10 +35,8 @@ theorem soundness (offset : Fin 8) (x low high : F p)
 
   -- The heavy lifting is done by using a SAT solver
   have h_decomposition_bv (base : UInt32) :
-      base < 256 →
-      low_b < base →
-      high_b < 256 / base →
-      x_b < 256 → x_b = low_b + high_b * base →
+      base < 256 → low_b < base → high_b < 256 → x_b < 256 →
+      x_b = low_b + high_b * base →
       low_b = x_b % base ∧ high_b = x_b / base := by
     bv_decide
 
@@ -155,12 +78,11 @@ theorem soundness (offset : Fin 8) (x low high : F p)
     rw [low_mod, two_power_mod]
     assumption
 
-  have high_b_lt : high_b < 256 / UInt32.ofNat (2^offset.val) := by
+  have high_b_lt : high_b < 256 := by
     simp only [high_b]
     rw [UInt32.lt_iff_toNat_lt]
     simp only [UInt32.toNat_ofNat', UInt32.toNat_div, UInt32.reduceToNat, low_b, high_b]
-    rw [high_mod, two_power_mod]
-    rw [show 256 = 2^8 by rfl, Nat.pow_div (by linarith [offset.is_lt]) (by linarith [offset.is_lt])]
+    rw [high_mod]
     assumption
 
   have x_lt : x_b < 256 := by
