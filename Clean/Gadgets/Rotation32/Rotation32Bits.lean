@@ -28,10 +28,10 @@ def rot32_bits (offset : Fin 8) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F 
 
   let ⟨y0, y1, y2, y3⟩ ← U32.witness fun _env => U32.mk 0 0 0 0
 
-  assert_zero (x1_l * base + x0_h - y0)
-  assert_zero (x2_l * base + x1_h - y1)
-  assert_zero (x3_l * base + x2_h - y2)
-  assert_zero (x0_l * base + x3_h - y3)
+  y0.assert_equals (x1_l * base + x0_h)
+  y1.assert_equals (x2_l * base + x1_h)
+  y2.assert_equals (x3_l * base + x2_h)
+  y3.assert_equals (x0_l * base + x3_h)
 
   return ⟨y0, y1, y2, y3⟩
 
@@ -52,15 +52,11 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_input x_normalized h_holds
 
-  dsimp only [circuit_norm, elaborated, rot32_bits, U32.witness, var_from_offset] at h_holds
-  simp only [subcircuit_norm, U32.AssertNormalized.assumptions, U32.AssertNormalized.circuit, circuit_norm] at h_holds
-  simp only [U32ByteDecomposition.circuit, U32ByteDecomposition.elaborated, add_zero,
-    ElaboratedCircuit.local_length, ElaboratedCircuit.output, eval, from_elements, size, to_vars,
-    to_elements, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    U32ByteDecomposition.assumptions, Expression.eval, U32ByteDecomposition.spec,
-    U32.AssertNormalized.spec, Vector.mapRange_succ, Vector.mapRange_zero, Vector.push_mk,
-    Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append, forall_const,
-    Expression.eval.eq_1] at h_holds
+  dsimp only [circuit_norm, elaborated, rot32_bits, U32.witness, U32.AssertNormalized.circuit] at h_holds
+  simp only [circuit_norm, elaborated, U32ByteDecomposition.circuit, U32ByteDecomposition.elaborated, U32.AssertNormalized.circuit] at h_holds
+  dsimp only [circuit_norm, subcircuit_norm, U32.AssertNormalized.assumptions, U32.AssertNormalized.spec,
+    U32ByteDecomposition.assumptions, U32ByteDecomposition.spec] at h_holds
+  simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_holds
 
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right32, eval, elaborated, var_from_offset, Vector.mapRange]

@@ -63,10 +63,10 @@ theorem rotation32_bits_soundness (offset : Fin 8) {
     (h_x2_h : x2_h.val = x2.val / 2 ^ offset.val)
     (h_x3_l : x3_l.val = x3.val % 2 ^ offset.val)
     (h_x3_h : x3_h.val = x3.val / 2 ^ offset.val)
-    (eq0 : x1_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x0_h + -y0 = 0)
-    (eq1 : x2_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x1_h + -y1 = 0)
-    (eq2 : x3_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x2_h + -y2 = 0)
-    (eq3 : x0_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x3_h + -y3 = 0):
+    (eq0 : y0 = x1_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x0_h)
+    (eq1 : y1 = x2_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x1_h)
+    (eq2 : y2 = x3_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x2_h)
+    (eq3 : y3 = x0_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x3_h):
     let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3
     let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3
     y_val = (x_val) % 2 ^ (offset.val % 32) * 2 ^ (32 - offset.val % 32) + (x_val) / 2 ^ (offset.val % 32) := by
