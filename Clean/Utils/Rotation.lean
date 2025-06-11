@@ -250,4 +250,100 @@ theorem rot_right64_composition (x n m : ℕ) (h : x < 2^64) :
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
 
+
+-- helpful lemmas for {32, 64}-bit rotation with offset in [0, 7]
+
+lemma two_power_val {p : ℕ} {offset : Fin 8} [p_large_enough: Fact (p > 2^16 + 2^8)] :
+    ((2 ^ (8 - offset.val) % 256 : ℕ) : F p).val = 2 ^ (8 - offset.val) % 256 := by
+  rw [ZMod.val_natCast]
+  apply Nat.mod_eq_of_lt
+  have h : 2 ^ (8 - offset.val) % 256 < 256 := by apply Nat.mod_lt; linarith
+  linarith [h, p_large_enough.elim]
+
+lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
+    (x * 256^i) % 2^offset.val = 0 := by
+  rw [Nat.mul_mod, Nat.pow_mod]
+  fin_cases offset <;>
+  simp only [Nat.reducePow, Nat.reduceMod, Nat.zero_pow h, Nat.zero_mod, mul_zero]
+
+lemma Nat.pow_minus_one_mul {x y : ℕ} (hy : y > 0) : x ^ y = x * x ^ (y - 1) := by
+  nth_rw 2 [←Nat.pow_one x]
+  rw [←Nat.pow_add, Nat.add_sub_of_le (by linarith [hy])]
+
+lemma divides_256_two_power {offset : Fin 8} {x i : ℕ} (h : i > 0):
+    (2^offset.val) ∣ x * (256 ^ i) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul]
+  apply Nat.dvd_mul_left_of_dvd
+  apply Nat.pow_dvd_pow
+  linarith [offset.is_lt]
+
+lemma div_256_two_power {offset : Fin 8} {i : ℕ} (h : i > 0):
+    256^i / 2^offset.val = 256^(i-1) * 2^(8 - offset.val) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, Nat.pow_div]
+  rw [←Nat.pow_mul, ←Nat.pow_add]
+  rw [Nat.mul_sub_left_distrib, Nat.mul_one]
+  rw [Nat.sub_add_sub_cancel]
+  repeat linarith [offset.is_lt]
+
+lemma mul_div_256_off {offset : Fin 8} {x : ℕ} (i : ℕ) (h : i > 0):
+    (x * 256^i) / 2^offset.val = x * 256^(i-1) * 2^(8 - offset.val) := by
+  rw [Nat.mul_div_assoc, div_256_two_power h]
+  rw [show 256=2^8 by rfl, ←Nat.pow_mul]
+  ac_rfl
+  rw [show 256=2^8 by rfl, ←Nat.pow_mul]
+  apply Nat.pow_dvd_pow
+  linarith [offset.is_lt]
+
+
+lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
+    (2 ^ (8 - offset.val) % 256) = 2 ^ (8 - offset.val) := by
+  apply Nat.mod_eq_of_lt
+  fin_cases offset <;>
+    first
+    | contradiction
+    | simp
+
+
+lemma shifted_decomposition_eq {offset : Fin 8} {x1 x2 : ℕ} :
+    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256 =
+    (2^offset.val * (x1 / 2^offset.val) + (x2 % 2^offset.val) * 256) * 2^(8 - offset.val) := by
+  ring_nf
+  simp only [Nat.add_left_inj]
+  rw [Nat.mul_assoc, ←Nat.pow_add, Nat.add_sub_of_le (by linarith [offset.is_lt])]
+  rfl
+
+lemma shifted_decomposition_eq' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
+    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256^i =
+    (2^offset.val * (x1 / 2^offset.val) + (x2 % 2^offset.val) * 256) * 2^(8 - offset.val) * 256^(i-1) := by
+  rw [Nat.pow_minus_one_mul hi, ←Nat.mul_assoc, shifted_decomposition_eq]
+
+lemma shifted_decomposition_eq'' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
+    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256^i =
+    (2^offset.val * (x1 / 2^offset.val) * 2^(8 - offset.val) * 256^(i-1) +
+    (x2 % 2^offset.val) * 2^(8 - offset.val) * 256^i) := by
+  rw [shifted_decomposition_eq' hi]
+  ring_nf
+  rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
+
+
+lemma soundness_simp {offset : Fin 8} {x y : ℕ} :
+    x % 2 ^ offset.val * 2 ^ (8 - offset.val) * y + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) * y =
+    x * y * 2^ (8 - offset.val) := by
+  rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
+  ac_rfl
+
+lemma soundness_simp' {offset : Fin 8} {x : ℕ} :
+    x % 2 ^ offset.val * 2 ^ (8 - offset.val) + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) =
+    x * 2^ (8 - offset.val) := by
+  rw [←Nat.mul_one (x % 2 ^ offset.val * 2 ^ (8 - offset.val))]
+  rw [←Nat.mul_one (2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val))]
+  rw [soundness_simp, Nat.mul_one]
+
+lemma two_power_byte {p : ℕ} {offset : Fin 8} :
+    ZMod.val ((2 ^ (8 - offset.val) % 256 : ℕ) : F p) < 256 := by
+  rw [ZMod.val_natCast]
+  apply Nat.mod_lt_of_lt
+  apply Nat.mod_lt
+  linarith
+
 end Utils.Rotation
