@@ -385,6 +385,16 @@ theorem ext_iff {F : Type} {α: TypeMap} [ProvableType α] (x y : α F) :
   have h' := congrArg from_elements h
   simp only [from_elements_to_elements] at h'
   exact h'
+
+theorem eval_from_vars {F : Type} [Field F] {α: TypeMap} [ProvableType α] (env : Environment F)
+  (xs : Vector (Expression F) (size α)) :
+    eval env (from_vars xs) = from_elements (xs.map env) := by
+  simp only [eval, to_vars, from_vars, to_elements_from_elements]
+
+theorem getElem_eval_to_vars {F : Type} [Field F] {α: TypeMap} [ProvableType α]
+  (env : Environment F) (x : Var α F) (i : ℕ) (hi : i < size α) :
+    Expression.eval env (to_vars x)[i] = (to_elements (eval env x))[i] := by
+  rw [eval, to_vars, to_elements_from_elements, Vector.getElem_map]
 end ProvableType
 
 -- more concrete ProvableType instances
