@@ -32,7 +32,7 @@ def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) 
   lookup (ByteLookup ((2^(8 - offset.val) : F p) * low))
   lookup (ByteLookup high)
 
-  x.assert_equals (low + (2^offset.val : F p) * high)
+  x.assert_equals (low + high * (2^offset.val : F p))
 
   return { low, high }
 
@@ -62,9 +62,11 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   let n : ℕ := 8 - offset.val
   have neg_off_le : n ≤ 8 := by omega
   have pow_8 : 2^n * 2^offset.val = (2^8 : F p) := by simp [n, ←pow_add]
+  have pow_8_nat : 2^n * 2^offset.val = 2^8 := by simp [n, ←pow_add]
 
-  have h_eq_mul : 2^n * x = 2^n * low + 2^8 * high := by
-    rw [h_eq, mul_add, ←mul_assoc _ _ high, pow_8]
+  -- we first work with the equation multiplied by `2^n`, where we can make use of the range check on `2^n * low`
+  -- the goal is to apply `FieldUtils.mul_nat_val_of_dvd` to get to the stronger inequality `low < 2^offset`
+  have h_eq_mul : 2^n * x = 2^n * low + 2^n * 2^offset.val * high := by rw [h_eq, mul_add, mul_comm high, mul_assoc]
   replace h_eq_mul := congrArg ZMod.val h_eq_mul
 
   have h_lt_mul {x n} (hn : n ≤ 8) (hx: x < 2^8) : 2^n * x < 2^16 := by
@@ -75,19 +77,27 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
 
   have h_lt_mul_x : 2^n * x.val < 2^16 := h_lt_mul neg_off_le x_byte
   have h_pow8_val : (2^8 : F p).val = 2^8 := two_pow_val _ (by norm_num)
-  have h_lt_mul_high : 2^8 * high.val < 2^16 := h_lt_mul (by norm_num) high_lt
-  have h_lt_low : (2 ^ n * low).val < 2^8 := low_lt
+  have h_lt_mul_high : 2^n * 2^offset.val * high.val < 2^16 := by rw [pow_8_nat]; exact h_lt_mul (by norm_num) high_lt
+  have h_lt_mul_low : (2 ^ n * low).val < 2^8 := low_lt
 
   have h_mul_x : (2^n : F p).val * x.val = 2^n * ZMod.val x := by rw [two_pow_val _ neg_off_le]
   have : (2 ^ n * x).val = 2^n * x.val := by rw [ZMod.val_mul_of_lt (by linarith), h_mul_x]
   rw [this] at h_eq_mul
 
-  have : (2^n * low + 2 ^ 8 * high).val = (2^n * low).val + 2^8 * high.val := by
-    rw [ZMod.val_add, ZMod.val_mul _ high, Nat.add_mod_mod, h_pow8_val, Nat.mod_eq_of_lt]
+  have : (2^n * low + 2^n * 2^offset.val * high).val = (2^n * low).val + 2^n * 2^offset.val * high.val := by
+    rw [ZMod.val_add, ZMod.val_mul _ high, Nat.add_mod_mod, pow_8_nat, pow_8, h_pow8_val, Nat.mod_eq_of_lt]
     linarith
-  rw [this] at h_eq_mul
+  rw [this, mul_assoc (2^n)] at h_eq_mul
+  replace h_eq_mul := Nat.sub_eq_of_eq_add h_eq_mul |>.symm
+  have two_pow_cast : 2^n = ((2^n : ℕ) : F p) := by simp
+  rw [←Nat.mul_sub, two_pow_cast] at h_eq_mul
+  have h_eq_mul_low := FieldUtils.mul_nat_val_of_dvd (2^n) (two_pow_lt n ‹_›) h_eq_mul
+  rw [←two_pow_cast] at h_eq_mul_low
+  rw [h_eq_mul_low, ←pow_8_nat, Nat.mul_lt_mul_left (show 2^n > 0 by simp)] at h_lt_mul_low
 
-  exact Theorems.soundness offset x low high x_byte low_lt high_lt c
+  -- finally we have the desired inequality on `low`
+  have h_lt_low : low.val < 2^offset.val := h_lt_mul_low
+  exact Theorems.soundness offset x low high x_byte h_lt_low high_lt h_eq
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv x h_eval as
@@ -99,7 +109,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 
   simp only [id_eq, ↓eval_field] at h_eval
   simp [circuit_norm, byte_decomposition, elaborated, ByteLookup, TwoPowerLookup.lookup]
-  rw [TwoPowerLookup.equiv, TwoPowerLookup.equiv, h_eval, h0, h1]
+  -- rw [TwoPowerLookup.equiv, TwoPowerLookup.equiv, h_eval, h0, h1]
   sorry
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
