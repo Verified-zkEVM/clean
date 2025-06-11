@@ -26,14 +26,14 @@ def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F 
 
   let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← U64.witness fun _env => U64.mk 0 0 0 0 0 0 0 0
 
-  assert_zero (x1_l * base + x0_h - y0)
-  assert_zero (x2_l * base + x1_h - y1)
-  assert_zero (x3_l * base + x2_h - y2)
-  assert_zero (x4_l * base + x3_h - y3)
-  assert_zero (x5_l * base + x4_h - y4)
-  assert_zero (x6_l * base + x5_h - y5)
-  assert_zero (x7_l * base + x6_h - y6)
-  assert_zero (x0_l * base + x7_h - y7)
+  y0.assert_equals (x1_l * base + x0_h)
+  y1.assert_equals (x2_l * base + x1_h)
+  y2.assert_equals (x3_l * base + x2_h)
+  y3.assert_equals (x4_l * base + x3_h)
+  y4.assert_equals (x5_l * base + x4_h)
+  y5.assert_equals (x6_l * base + x5_h)
+  y6.assert_equals (x7_l * base + x6_h)
+  y7.assert_equals (x0_l * base + x7_h)
   return ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩
 
 def assumptions (input : U64 (F p)) := input.is_normalized
@@ -57,15 +57,11 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
 
-  dsimp only [circuit_norm, elaborated, rot64_bits, U64.witness, var_from_offset] at h_holds
-  simp only [subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.circuit, circuit_norm] at h_holds
-  simp only [U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, add_zero,
-    ElaboratedCircuit.local_length, ElaboratedCircuit.output, eval, from_elements, size, to_vars,
-    to_elements, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    U64ByteDecomposition.assumptions, Expression.eval, U64ByteDecomposition.spec,
-    U64.AssertNormalized.spec, Vector.mapRange_succ, Vector.mapRange_zero, Vector.push_mk,
-    Nat.reduceAdd, List.push_toArray, List.nil_append, List.cons_append, forall_const,
-    Expression.eval.eq_1] at h_holds
+  dsimp only [circuit_norm, elaborated, rot64_bits, U64.witness, U64.AssertNormalized.circuit] at h_holds
+  simp only [circuit_norm, elaborated, U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, U64.AssertNormalized.circuit] at h_holds
+  dsimp only [circuit_norm, subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.spec,
+    U64ByteDecomposition.assumptions, U64ByteDecomposition.spec] at h_holds
+  simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_holds
 
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
