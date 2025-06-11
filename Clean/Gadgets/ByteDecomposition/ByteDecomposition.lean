@@ -3,10 +3,10 @@ import Clean.Utils.Field
 import Clean.Gadgets.ByteDecomposition.Theorems
 import Init.Data.Nat.Div.Basic
 
-namespace Gadgets.ByteDecomposition
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
+namespace Gadgets.ByteDecomposition
 open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
 open FieldUtils (mod floordiv two_lt two_pow_lt two_val two_pow_val)
 
@@ -133,12 +133,6 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
 end Gadgets.ByteDecomposition
 
 namespace Gadgets.U64ByteDecomposition
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2^16 + 2^8)]
-
-instance : Fact (p > 512) := by
-  constructor
-  linarith [p_large_enough.elim]
 
 structure Outputs (F : Type) where
   low : U64 F
@@ -215,11 +209,13 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := h_holds
   simp_all only [gt_iff_lt, Fin.val_pos_iff, forall_const, and_self]
 
-
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
-  rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ henv ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval as
-  simp only [assumptions] at as
-  sorry
+  rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ henv ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input as
+  simp only [assumptions, U64.is_normalized] at as
+  simp only [circuit_norm, eval, U64.mk.injEq] at h_input
+  dsimp only [circuit_norm, subcircuit_norm, elaborated, u64_byte_decomposition,
+    ByteDecomposition.circuit, ByteDecomposition.elaborated, ByteDecomposition.assumptions, ByteDecomposition.spec] at henv ⊢
+  simp_all only [circuit_norm]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 Outputs := {
   elaborated offset with
