@@ -226,3 +226,94 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U64 Outputs := {
   completeness := completeness offset
 }
 end Gadgets.U64ByteDecomposition
+
+namespace Gadgets.U32ByteDecomposition
+variable {p : ℕ} [Fact p.Prime]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+
+instance : Fact (p > 512) := by
+  constructor
+  linarith [p_large_enough.elim]
+
+structure Outputs (F : Type) where
+  low : U32 F
+  high : U32 F
+
+instance : ProvableStruct Outputs where
+  components := [U32, U32]
+  to_components := fun { low, high } => .cons low (.cons high .nil)
+  from_components := fun (.cons low (.cons high .nil)) => { low, high }
+
+/--
+  Decompose every limb of a u32 into a low and a high part.
+  The low part is the least significant `offset` bits, and the high part is the most significant `8 - offset` bits.
+-/
+def u32_byte_decomposition (offset : Fin 8) (x : Var U32 (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+  let ⟨x0, x1, x2, x3⟩ := x
+
+  let ⟨x0_l, x0_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit offset) x0
+  let ⟨x1_l, x1_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit offset) x1
+  let ⟨x2_l, x2_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit offset) x2
+  let ⟨x3_l, x3_h⟩ ← subcircuit (Gadgets.ByteDecomposition.circuit offset) x3
+
+  let low := U32.mk x0_l x1_l x2_l x3_l
+  let high := U32.mk x0_h x1_h x2_h x3_h
+
+  return ⟨ low, high ⟩
+
+def assumptions (x : U32 (F p)) := x.is_normalized
+
+def spec (offset : Fin 8) (input : U32 (F p)) (out: Outputs (F p)) :=
+  let ⟨x0, x1, x2, x3⟩ := input
+  let ⟨⟨x0_l, x1_l, x2_l, x3_l⟩,
+        ⟨x0_h, x1_h, x2_h, x3_h⟩⟩ := out
+  x0_l.val = x0.val % (2^offset.val) ∧ x0_h.val = x0.val / (2^offset.val) ∧
+  x1_l.val = x1.val % (2^offset.val) ∧ x1_h.val = x1.val / (2^offset.val) ∧
+  x2_l.val = x2.val % (2^offset.val) ∧ x2_h.val = x2.val / (2^offset.val) ∧
+  x3_l.val = x3.val % (2^offset.val) ∧ x3_h.val = x3.val / (2^offset.val)
+
+-- #eval! (u32_byte_decomposition (p:=p_babybear) 0) default |>.operations.local_length
+-- #eval! (u32_byte_decomposition (p:=p_babybear) 0) default |>.output
+def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U32 Outputs where
+  main := u32_byte_decomposition offset
+  local_length _ := 8
+  output _ i0 := {
+    low := ⟨var ⟨i0 + 0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩⟩,
+    high := ⟨var ⟨i0 + 1⟩, var ⟨i0 + 3⟩, var ⟨i0 + 5⟩, var ⟨i0 + 7⟩⟩
+  }
+
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
+  intro i0 env x_var ⟨x0, x1, x2, x3⟩ h_input ⟨x_byte, offset_positive⟩ h_holds
+  simp [circuit_norm, elaborated, u32_byte_decomposition, ByteLookup, ByteTable.equiv, h_input] at h_holds
+  simp [subcircuit_norm, ByteDecomposition.circuit, ByteDecomposition.elaborated,
+    ByteDecomposition.assumptions, ByteDecomposition.spec, eval, circuit_norm, var_from_offset, Vector.mapRange] at h_holds
+
+  simp [assumptions, U32.is_normalized] at x_byte
+  simp [eval, circuit_norm] at h_input
+
+  simp only [spec, ↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
+    ProvableStruct.eval.go, eval, from_elements, size, to_vars, to_elements, elaborated, add_zero,
+    ElaboratedCircuit.output, Vector.map_mk, List.map_toArray, List.map_cons, Expression.eval,
+    List.map_nil, Vector.mapRange]
+  obtain ⟨h0, h1, h2, h3⟩ := h_input
+  simp [h0, h1, h2, h3, and_assoc, var_from_offset] at h_holds
+  clear h0 h1 h2 h3
+
+  obtain ⟨ h0, h1, h2, h3 ⟩ := h_holds
+  simp_all only [gt_iff_lt, Fin.val_pos_iff, forall_const, and_self]
+
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
+  rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var⟩ henv ⟨x0, x1, x2, x3⟩ h_eval as
+  simp only [assumptions] at as
+  sorry
+
+def circuit (offset : Fin 8) : FormalCircuit (F p) U32 Outputs := {
+  elaborated offset with
+  main := u32_byte_decomposition offset
+  assumptions
+  spec := spec offset
+  soundness := soundness offset
+  completeness := completeness offset
+}
+
+end Gadgets.U32ByteDecomposition

@@ -1,6 +1,7 @@
 import Clean.Utils.Field
 import Clean.Utils.Bitwise
 import Clean.Types.U64
+import Clean.Types.U32
 
 namespace Gadgets.ByteDecomposition.Theorems
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -8,17 +9,14 @@ instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open FieldUtils (two_val two_pow_val)
 
-theorem byte_decomposition_lift (offset : Fin 8) (x low high : F p)
-  (h_low : low.val < 2^8) (h_high : high.val < 2^8)
-  (h : x = low + high * (2^offset.val)) :
-    x.val = low.val + high.val * (2^offset.val) := by
-  have pow_eq : (2^offset.val : F p).val = 2^offset.val := two_pow_val _ (by linarith [offset.is_lt])
-  rw [h, ←pow_eq]
+theorem byte_decomposition_lift {x low high two_power : F p}
+  (h_low : low.val < 2^8) (h_high : high.val < 2^8) (h_two_power : two_power.val < 256)
+  (h : x = low + high * two_power) :
+    x.val = low.val + high.val * two_power.val := by
+  rw [h]
   field_to_nat
-  suffices high.val * ((2 : F p)^offset.val).val < 2^8 * 2^8 by linarith [p_large_enough.elim]
-  apply Nat.mul_lt_mul_of_lt_of_lt (by assumption)
-  rw [pow_eq]
-  exact Nat.pow_lt_pow_of_lt (by norm_num) offset.is_lt
+  suffices high.val * two_power.val < 2^8 * 2^8 by linarith [p_large_enough.elim]
+  apply Nat.mul_lt_mul_of_lt_of_lt (by assumption) (by assumption)
 
 theorem soundness (offset : Fin 8) (x low high : F p)
   (x_lt : x.val < 2^8) (low_lt : low.val < 2^offset.val) (high_lt : high.val < 2^8)
@@ -26,8 +24,12 @@ theorem soundness (offset : Fin 8) (x low high : F p)
     low.val = x.val % 2^offset.val ∧ high.val = x.val / 2^offset.val := by
 
   have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
+  have two_power_val : ((2 : F p)^offset.val).val = 2^offset.val := two_pow_val offset.val (by linarith [offset.is_lt])
+  have two_power_lt' : (2^offset.val : F p).val < 2^8 := by rwa [two_power_val]
+
   have low_byte : low.val < 256 := by linarith
-  have h := byte_decomposition_lift offset _ _ _ low_byte high_lt h_eq
+  have h := byte_decomposition_lift low_byte high_lt two_power_lt' h_eq
+  rw [two_power_val] at h
 
   set low_b := UInt32.ofNat low.val
   set high_b := UInt32.ofNat high.val
