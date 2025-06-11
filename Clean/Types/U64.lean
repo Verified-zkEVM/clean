@@ -261,7 +261,6 @@ def circuit : FormalCircuit (F p) U64 U64 where
     rintro h ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp [circuit_norm, u64_copy, spec, h_eval]
     simp [circuit_norm, u64_copy, Gadgets.Equality.elaborated] at h
-    simp [subcircuit_norm, eval] at h
     simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
     have h0 := h 0
     have h1 := h 1

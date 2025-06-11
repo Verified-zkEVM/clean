@@ -91,14 +91,14 @@ theorem rotation64_bits_soundness (offset : Fin 8) {
     (h_x6_h : x6_h.val = x6.val / 2 ^ offset.val)
     (h_x7_l : x7_l.val = x7.val % 2 ^ offset.val)
     (h_x7_h : x7_h.val = x7.val / 2 ^ offset.val)
-    (eq0 : x1_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x0_h + -y0 = 0)
-    (eq1 : x2_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x1_h + -y1 = 0)
-    (eq2 : x3_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x2_h + -y2 = 0)
-    (eq3 : x4_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x3_h + -y3 = 0)
-    (eq4 : x5_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x4_h + -y4 = 0)
-    (eq5 : x6_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x5_h + -y5 = 0)
-    (eq6 : x7_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x6_h + -y6 = 0)
-    (eq7 : x0_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x7_h + -y7 = 0):
+    (eq0 : y0 = x1_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x0_h)
+    (eq1 : y1 = x2_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x1_h)
+    (eq2 : y2 = x3_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x2_h)
+    (eq3 : y3 = x4_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x3_h)
+    (eq4 : y4 = x5_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x4_h)
+    (eq5 : y5 = x6_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x5_h)
+    (eq6 : y6 = x7_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x6_h)
+    (eq7 : y7 = x0_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x7_h):
     let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3 + x4.val * 256 ^ 4 +
       x5.val * 256 ^ 5 + x6.val * 256 ^ 6 + x7.val * 256 ^ 7
     let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3 + y4.val * 256 ^ 4 +
