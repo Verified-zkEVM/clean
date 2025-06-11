@@ -104,16 +104,42 @@ theorem val_of_nat_to_field_eq {n: ℕ} (lt: n < p) : (nat_to_field n lt).val = 
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
 
-def less_than_p [p_pos: NeZero p] (x: F p) : x.val < p := by
-  rcases p
-  · have : 0 ≠ 0 := p_pos.out; contradiction
-  · exact x.is_lt
+def less_than_p (x: F p) : x.val < p := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  exact x.is_lt
 
 def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
   FieldUtils.nat_to_field (x.val % c) (by linarith [Nat.mod_lt x.val c.pos, lt])
 
-def floordiv [NeZero p] (x: F p) (c: ℕ+) : F p :=
+def floordiv (x: F p) (c: ℕ+) : F p :=
   FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
+
+theorem mod_lt {x : F p} {c: ℕ+} {lt : c < p} : (mod x c lt).val < c := by
+  rcases p with _ | p; cases p_neq_zero rfl
+  show (x.val % c) < c
+  exact Nat.mod_lt x.val (by norm_num)
+
+theorem floordiv_lt {x : F p} {c: ℕ+} {d : ℕ} (h : x.val < c * d) : (floordiv x c).val < d := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  exact Nat.div_lt_of_lt_mul h
+
+lemma val_mul_floordiv_self {x : F p} {c: ℕ+} (lt : c < p) : (c * (floordiv x c)).val = c * (x.val / c) := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  have : c * (x.val / c) ≤ x.val := Nat.mul_div_le (ZMod.val x) ↑c
+  have h : x.val < n + 1 := x.is_lt
+  rw [ZMod.val_mul, ZMod.val_cast_of_lt lt,
+    show ZMod.val (floordiv x c) = x.val / c by rfl, Nat.mod_eq_of_lt (by linarith)]
+
+theorem mod_add_floordiv {x : F p} {c: ℕ+} (lt : c < p) :
+    mod x c lt + c * (floordiv x c) = x := by
+  rcases p with _ | n; cases p_neq_zero rfl
+  have h : x.val < n + 1 := x.is_lt
+  apply ext
+  suffices x.val % c + (c * (floordiv x c)).val = x.val by
+    change (mod x c lt).val + _ = _ at this
+    rwa [ZMod.val_add_of_lt]
+    rwa [this]
+  rw [val_mul_floordiv_self lt, Nat.mod_add_div x.val c]
 
 theorem mul_val_of_dvd {x c : F p} :
     c.val ∣ (c * x).val → (c * x).val = c.val * x.val := by
@@ -147,6 +173,44 @@ theorem mul_nat_val_of_dvd {x: F p} (c: ℕ) (c_lt : c < p) {z : ℕ} :
   intro h_dvd
   exact mul_val_of_dvd ⟨ z, h_dvd ⟩
 
+theorem mul_nat_val_eq_iff {x: F p} (c: ℕ) (c_pos : c > 0) (c_lt : c < p) {z : ℕ} :
+    (c * x).val = c * z ↔ (x.val = z ∧ c * x.val < p) := by
+  constructor
+  · intro h_dvd
+    constructor
+    · apply (mul_right_inj' (Nat.ne_zero_iff_zero_lt.mpr c_pos)).mp
+      rw [←h_dvd, mul_nat_val_of_dvd c c_lt h_dvd]
+    · rw [←mul_nat_val_of_dvd c c_lt h_dvd]
+      apply ZMod.val_lt
+  · intro ⟨ h_eq, h_lt ⟩
+    have c_val_eq : c = (c : F p).val := by rw [ZMod.val_cast_of_lt c_lt]
+    rw [←h_eq, ZMod.val_mul_of_lt, ←c_val_eq]
+    rw [←c_val_eq]
+    exact h_lt
+
+-- some helper lemmas about 2, using the common assumption that p > 512
+
+section
+variable [Fact (p > 512)]
+
+omit p_prime in
+lemma two_lt : 2 < p := by
+  linarith [‹Fact (p > 512)›.elim]
+
+lemma two_val : (2 : F p).val = 2 :=
+  FieldUtils.val_lt_p 2 two_lt
+
+omit p_prime in
+lemma two_pow_lt (n : ℕ) (hn : n ≤ 8) : 2^n < p := by
+  have h : 2^n ≤ 2^8 := Nat.pow_le_pow_of_le (a:=2) Nat.one_lt_ofNat hn
+  linarith [‹Fact (p > 512)›.elim]
+
+lemma two_pow_val (n : ℕ) (hn : n ≤ 8) : (2^n : F p).val = 2^n := by
+  rw [ZMod.val_pow, two_val]
+  rw [two_val]
+  exact two_pow_lt _ hn
+end
+
 end FieldUtils
 
 -- utils related to bytes, and specifically field elements that are bytes (< 256)
@@ -159,10 +223,7 @@ def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
 
 def floordiv_256 (x: F p) : F p := floordiv x 256
 
-theorem mod_256_lt [Fact (p > 512)] (x : F p) : (mod_256 x).val < 256 := by
-  rcases p with _ | n; cases p_neq_zero rfl
-  show (x.val % 256) < 256
-  exact Nat.mod_lt x.val (by norm_num)
+theorem mod_256_lt [Fact (p > 512)] (x : F p) : (mod_256 x).val < 256 := mod_lt
 
 theorem floordiv_256_bool [Fact (p > 512)] {x: F p} (h : x.val < 512) :
   floordiv_256 x = 0 ∨ floordiv_256 x = 1 := by

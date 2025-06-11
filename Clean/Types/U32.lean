@@ -246,7 +246,6 @@ def circuit : FormalCircuit (F p) U32 U32 where
     rintro h ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp [circuit_norm, u32_copy, spec, h_eval]
     simp [circuit_norm, u32_copy, Gadgets.Equality.elaborated] at h
-    simp [subcircuit_norm, eval] at h
     simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
     have h0 := h 0
     have h1 := h 1
