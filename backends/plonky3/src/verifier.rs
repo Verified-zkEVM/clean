@@ -52,8 +52,6 @@ where
         .map(|_| challenger.sample_algebra_element())
         .collect();
 
-    tracing::info!("permutation challenges: {:?}", permutation_challenges);
-
     challenger.observe_slice(
         &opened_values
             .iter()
@@ -69,9 +67,6 @@ where
 
     // Sample an evaluation point `zeta` for the out-of-domain evaluation.
     let zeta: SC::Challenge = challenger.sample_algebra_element();
-
-    tracing::info!("alpha: {}", alpha);
-    tracing::info!("zeta: {}", zeta);
 
     let pcs = config.pcs();
 
