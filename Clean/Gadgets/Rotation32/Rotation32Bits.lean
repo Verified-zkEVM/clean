@@ -19,8 +19,7 @@ open Bitwise (rot_right32)
   Rotate the 32-bit integer by `offset` bits
 -/
 def rot32_bits (offset : Fin 8) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
-
-  let two_power : F p := 2^offset.val
+  let base : F p := (2^(8 - offset.val) % 256 : ℕ)
 
   let ⟨low, high⟩ ← subcircuit (Gadgets.U32ByteDecomposition.circuit offset) x
   let ⟨x0_l, x1_l, x2_l, x3_l⟩ := low
@@ -28,10 +27,10 @@ def rot32_bits (offset : Fin 8) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F 
 
   let ⟨y0, y1, y2, y3⟩ ← U32.witness fun _env => U32.mk 0 0 0 0
 
-  assert_zero (x1_l * two_power + x0_h - y0)
-  assert_zero (x2_l * two_power + x1_h - y1)
-  assert_zero (x3_l * two_power + x2_h - y2)
-  assert_zero (x0_l * two_power + x3_h - y3)
+  assert_zero (x1_l * base + x0_h - y0)
+  assert_zero (x2_l * base + x1_h - y1)
+  assert_zero (x3_l * base + x2_h - y2)
+  assert_zero (x0_l * base + x3_h - y3)
 
   return ⟨y0, y1, y2, y3⟩
 
@@ -47,35 +46,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bits off
   local_length _ := 12
   output _inputs i0 := var_from_offset U32 (i0 + 8)
-  local_length_eq := by
-    intros
-    simp only [rot32_bits]
-    rfl
 
-theorem rotation32_bits_soundness (offset : Fin 8) {
-      x0 x1 x2 x3
-      y0 y1 y2 y3
-      x0_l x1_l x2_l x3_l
-      x0_h x1_h x2_h x3_h : F p
-    }
-    (h_x0_l : x0_l.val = x0.val % 2 ^ offset.val)
-    (h_x0_h : x0_h.val = x0.val / 2 ^ offset.val)
-    (h_x1_l : x1_l.val = x1.val % 2 ^ offset.val)
-    (h_x1_h : x1_h.val = x1.val / 2 ^ offset.val)
-    (h_x2_l : x2_l.val = x2.val % 2 ^ offset.val)
-    (h_x2_h : x2_h.val = x2.val / 2 ^ offset.val)
-    (h_x3_l : x3_l.val = x3.val % 2 ^ offset.val)
-    (h_x3_h : x3_h.val = x3.val / 2 ^ offset.val)
-    (eq0 : x1_l * 2 ^ offset.val + (x0_h - y0) = 0)
-    (eq1 : x2_l * 2 ^ offset.val + (x1_h - y1) = 0)
-    (eq2 : x3_l * 2 ^ offset.val + (x2_h - y2) = 0)
-    (eq3 : x0_l * 2 ^ offset.val + (x3_h - y3) = 0) :
-    let x_val := x0.val + x1.val * 256 + x2.val * 256^2 + x3.val * 256^3
-    let y_val := y0.val + y1.val * 256 + y2.val * 256^2 + y3.val * 256^3
-    y_val = (x_val) % 2 ^ (offset.val % 32) * 2 ^ (32 - offset.val % 32) + (x_val) / 2 ^ (offset.val % 32) := by
-
-  rw [←add_sub_assoc, sub_eq_add_neg] at eq0 eq1 eq2 eq3
-  sorry
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_input x_normalized h_holds
@@ -104,9 +75,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h⟩ := h_decomposition
   simp only [U32.value, y_normalized, and_true]
-  rw [rotation32_bits_soundness offset
-    h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
-    eq0 eq1 eq2 eq3]
+  sorry
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   sorry
