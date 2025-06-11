@@ -15,18 +15,6 @@ open Utils.Rotation (mul_mod_256_off mul_div_256_off divides_256_two_power
   two_power_val two_power_byte two_off_eq_mod shifted_decomposition_eq shifted_decomposition_eq'
   shifted_decomposition_eq'' soundness_simp soundness_simp')
 
-def rot_right32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
-    rot_right32 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
-  sorry
-
-theorem rot_right_composition (x n m : ℕ) (h : x < 2^32) :
-      rot_right32 (rot_right32 x n) m = rot_right32 x (n + m) := by
-  rw [rot_right32_eq_bv_rotate _ h,
-    rot_right32_eq_bv_rotate _ h,
-    rot_right32_eq_bv_rotate _ (by sorry)]
-
-  sorry
-
 lemma h_mod32 {offset : Fin 8} {x0 x1 x2 x3 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) %
       2 ^ offset.val = x0 % 2 ^ offset.val := by
