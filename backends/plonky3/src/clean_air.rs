@@ -1,7 +1,6 @@
-use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
-use p3_uni_stark::{get_max_constraint_degree, SymbolicExpression};
+use p3_uni_stark::{SymbolicExpression};
 
 use p3_air::{
     Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
@@ -14,16 +13,16 @@ use p3_matrix::Matrix;
 use crate::clean_ast::{AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation};
 use crate::key::VK;
 use crate::permutation::MultiTableBuilder;
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, LookupBuilder, LookupType, VerifyingKey};
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, VerifyingKey};
 
 #[derive(Clone)]
 pub struct MainAir<F>
 where
     F: Field,
 {
-    /// Operations handler for the clean JSON format
+    /// Imported clean operations
     clean_ops: CleanOps,
-    /// Width of the trace, including
+    /// Width of the trace
     width: usize,
     _marker: PhantomData<F>,
 }
@@ -40,59 +39,40 @@ where
 {
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
-
         let (local, next) = (
             main.row_slice(0).expect("Matrix is empty?"),
             main.row_slice(1).expect("Matrix only has 1 row?"),
         );
 
         let pi_values = builder.public_values().to_vec();
-        let load_pi = |pi_idx: usize| {
-            pi_values[pi_idx].into()
-        };
+        let load_pi = |pi_idx: usize| pi_values[pi_idx].into();
 
         // Build constraints from clean ops
         for op in self.clean_ops.ops() {
             match op {
-                // Convert boundary constraints
                 CleanOp::Boundary { row, context } => {
                     let load_var = |var_idx: usize| {
                         let var: VarLocation = context.assignment.vars[var_idx].clone();
                         match var {
                             VarLocation::Cell { row, column } => match row {
                                 0 => local[column],
-                                1 => next[column],
-                                _ => panic!("Invalid row index"),
+                                _ => panic!("Invalid row index: {}", row),
                             },
                             VarLocation::Aux { .. } => unreachable!("All aux vars should be already converted to cells"),
                         }
                     };
-
-                    for circuit_op in &context.circuit {
-                        match circuit_op {
-                            CircuitOp::Assert { assert } => {
-                                let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
-                                match row {
-                                    BoundaryRow::FirstRow => builder.when_first_row().assert_zero(expr),
-                                    BoundaryRow::LastRow => builder.when_last_row().assert_zero(expr),
-                                }
-                            }
-                            CircuitOp::Subcircuit { subcircuit } => {
-                                for sub_op in subcircuit {
-                                    if let CircuitOp::Assert { assert } = sub_op {
-                                        let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
-                                        match row {
-                                            BoundaryRow::FirstRow => builder.when_first_row().assert_zero(expr),
-                                            BoundaryRow::LastRow => builder.when_last_row().assert_zero(expr),
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    
+                    let mut when_boundary = match row {
+                        BoundaryRow::FirstRow => builder.when_first_row(),
+                        BoundaryRow::LastRow => builder.when_last_row(),
+                    };
+                    
+                    let mut constraint_builder = |expr: AB::Expr| {
+                        when_boundary.assert_zero(expr);
+                    };
+                    
+                    self.apply_clean_constraints::<AB>(&context.circuit, &load_var, &load_pi, &mut constraint_builder);
                 }
-                // Convert trainsition constraints
                 CleanOp::EveryRowExceptLast { context } => {
                     let load_var = |var_idx: usize| {
                         let var: VarLocation = context.assignment.vars[var_idx].clone();
@@ -100,53 +80,25 @@ where
                             VarLocation::Cell { row, column } => match row {
                                 0 => local[column],
                                 1 => next[column],
-                                _ => panic!("Invalid row index"),
+                                _ => panic!("Invalid row index: {}", row),
                             },
                             VarLocation::Aux { .. } => unreachable!("All aux vars should be already converted to cells"),
                         }
                     };
-
-                    // When it is not the last row
+                    
                     let mut when_transition = builder.when_transition();
-                    for circuit_op in &context.circuit {
-                        match circuit_op {
-                            CircuitOp::Assert { assert } => {
-                                let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
-                                when_transition.assert_zero(expr);
-                            }
-                            CircuitOp::Subcircuit { subcircuit } => {
-                                for sub_op in subcircuit {
-                                    if let CircuitOp::Assert { assert } = sub_op {
-                                        let expr = AstUtils::to_expr::<AB>(assert, &load_var, &load_pi);
-                                        when_transition.assert_zero(expr);
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    
+                    let mut constraint_builder = |expr: AB::Expr| {
+                        when_transition.assert_zero(expr);
+                    };
+                    
+                    self.apply_clean_constraints::<AB>(&context.circuit, &load_var, &load_pi, &mut constraint_builder);
                 }
             }
         }
 
         // Apply constraints for lookup columns
-        let (local, _next) = (
-            main.row_slice(0).expect("Matrix is empty?"),
-            main.row_slice(1).expect("Matrix only has 1 row?"),
-        );
-
-        let mut lookup_cols = BTreeSet::new();
-        self.process_lookups(|_r, c| {
-            lookup_cols.insert(c);
-        });
-
-        // For now, assume these lookups are for byte range
-        for &c in &lookup_cols {
-            let v = local[c].into();
-            let mul = AB::F::ONE.into();
-            let l = Lookup::new(LookupType::ByteRange, v, mul);
-            builder.send(l);
-        }
+        self.apply_lookup_constraints(builder, &local);
     }
 }
 
@@ -186,6 +138,54 @@ impl<F: Field> MainAir<F> {
     pub fn lookup_ops(&self) -> Vec<LookupOp> {
         self.clean_ops.lookup_ops()
     }
+
+    /// Apply lookup constraints for the air
+    fn apply_lookup_constraints<AB>(&self, builder: &mut AB, local: &[AB::Var])
+    where
+        AB: AirBuilder + BaseMessageBuilder,
+        AB::F: Field + PrimeCharacteristicRing,
+    {
+        use alloc::collections::BTreeSet;
+        
+        let mut lookup_cols = BTreeSet::new();
+        self.process_lookups(|_r, c| {
+            lookup_cols.insert(c);
+        });
+
+        // For now, assume these lookups are for byte range
+        for &c in &lookup_cols {
+            let v = local[c].into();
+            let mul = AB::F::ONE.into();
+            let l = Lookup::new(crate::LookupType::ByteRange, v, mul);
+            builder.send(l);
+        }
+    }
+
+    /// Process circuit operations and apply constraints
+    fn apply_clean_constraints<AB>(
+        &self,
+        ops: &[CircuitOp], 
+        load_var: &dyn Fn(usize) -> AB::Var, 
+        load_pi: &dyn Fn(usize) -> AB::Expr,
+        constraint_builder: &mut dyn FnMut(AB::Expr)
+    ) where AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
+            AB::F: Field + PrimeCharacteristicRing {
+        for op in ops {
+            match op {
+                CircuitOp::Assert { assert } => {
+                    let expr = AstUtils::to_expr::<AB>(assert, load_var, load_pi);
+                    constraint_builder(expr);
+                }
+                CircuitOp::Subcircuit { subcircuit } => {
+                    // Recursively process subcircuit operations
+                    self.apply_clean_constraints::<AB>(subcircuit, load_var, load_pi, constraint_builder);
+                }
+                CircuitOp::Witness { .. } | CircuitOp::Lookup { .. } => {
+                    // Witness and lookup operations are handled elsewhere
+                }
+            }
+        }
+    }
 }
 
 /// Helper function to parse initial trace data from JSON
@@ -207,28 +207,6 @@ pub fn parse_init_trace<F: Field + PrimeCharacteristicRing>(json_content: &str) 
 pub enum CleanAirInstance<F: Field> {
     Main(MainAir<F>),
     ByteRange(ByteRangeAir<F>),
-}
-
-impl<F: Field> CleanAirInstance<F> {
-    pub fn log_quotient_degree(
-        &self,
-        main: usize,
-        preprocessed: usize,
-        public_inputs: usize,
-    ) -> usize {
-        let d = get_max_constraint_degree(self, preprocessed, public_inputs);
-
-        // todo: cache these lookups in the wrapper's constructor
-        let builder = LookupBuilder::<F>::new(main, preprocessed);
-        let (sends, receives) = builder.messages();
-
-        // if there are permutations, ensure the degree is at least 3
-        if !sends.is_empty() || !receives.is_empty() {
-            d.max(3)
-        } else {
-            d
-        }
-    }
 }
 
 impl<F: Field> BaseAir<F> for CleanAirInstance<F> {
