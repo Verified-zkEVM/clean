@@ -35,12 +35,12 @@ def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) 
 
   return { low, high }
 
-def assumptions (x : field (F p)) := x.val < 256
+def assumptions (x : F p) := x.val < 256
 
-def spec (offset : Fin 8) (x : field (F p)) (out: Outputs (F p)) :=
+def spec (offset : Fin 8) (x : F p) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
-  low.val = x.val % (2^offset.val) ∧
-  high.val = x.val / (2^offset.val)
+  (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
+  ∧ (low.val < 2^offset.val ∧ high.val < 2^(8 - offset.val))
 
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := byte_decomposition offset
@@ -95,7 +95,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
 
   -- finally we have the desired inequality on `low`
   have h_lt_low : low.val < 2^offset.val := h_lt_mul_low
-  exact Theorems.soundness offset x low high x_byte h_lt_low high_lt h_eq
+  have ⟨ low_eq, high_eq ⟩ := Theorems.soundness offset x low high x_byte h_lt_low high_lt h_eq
+  use ⟨ low_eq, high_eq ⟩, h_lt_low
+  rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
