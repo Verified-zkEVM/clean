@@ -11,10 +11,10 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
   .mapFinRange 5 fun i => do
-    let c ← subcircuit Xor.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
-    let c ← subcircuit Xor.circuit ⟨c, state[5*i.val + 2]⟩
-    let c ← subcircuit Xor.circuit ⟨c, state[5*i.val + 3]⟩
-    let c ← subcircuit Xor.circuit ⟨c, state[5*i.val + 4]⟩
+    let c ← subcircuit Xor64.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
+    let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 2]⟩
+    let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 3]⟩
+    let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
 def assumptions (state : KeccakState (F p)) := state.is_normalized
@@ -30,9 +30,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   local_length _ := 160
   output _ i0 := .mapRange 5 fun i => var_from_offset U64 (i0 + i*32 + 24)
 
-  local_length_eq _ _ := by simp only [main, circuit_norm, Xor.circuit]
+  local_length_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuits_consistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
-  output_eq _ _ := by simp only [main, circuit_norm, Xor.circuit,
+  output_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite theta_c as a loop
@@ -53,7 +53,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [circuit_norm, subcircuit_norm, h_input, eval_vector,
-    main, Xor.circuit, Xor.assumptions, Xor.spec] at h_holds
+    main, Xor64.circuit, Xor64.assumptions, Xor64.spec] at h_holds
   simp only [and_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
@@ -67,7 +67,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm, subcircuit_norm, assumptions, eval_vector,
-    main, Xor.circuit, Xor.assumptions, Xor.spec, KeccakState.is_normalized] at h_env ⊢
+    main, Xor64.circuit, Xor64.assumptions, Xor64.spec, KeccakState.is_normalized] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].is_normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
