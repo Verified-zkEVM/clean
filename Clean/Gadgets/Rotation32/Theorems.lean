@@ -1,152 +1,125 @@
 import Clean.Utils.Field
 import Clean.Utils.Bitwise
+import Clean.Utils.Rotation
 import Clean.Types.U32
+import Clean.Gadgets.ByteDecomposition.ByteDecomposition
+
 
 variable {p : ℕ} [Fact p.Prime]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation32.Theorems
 open Bitwise (rot_right32)
+open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
+open Utils.Rotation (mul_mod_256_off mul_div_256_off divides_256_two_power
+  two_power_val two_power_byte two_off_eq_mod shifted_decomposition_eq shifted_decomposition_eq'
+  shifted_decomposition_eq'' soundness_simp soundness_simp')
 
-def rot_right32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
-    rot_right32 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
-  sorry
+lemma h_mod32 {offset : Fin 8} {x0 x1 x2 x3 : ℕ} :
+    (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) %
+      2 ^ offset.val = x0 % 2 ^ offset.val := by
+  simp only [pow_one, Nat.add_mod, dvd_refl, Nat.mod_mod_of_dvd, gt_iff_lt, Nat.ofNat_pos,
+    mul_mod_256_off, add_zero]
+  rw [←Nat.pow_one 256, Nat.mod_mod, Nat.mod_mod, mul_mod_256_off _ _ _ (by linarith)]
+  simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
 
-theorem rot_right_composition (x n m : ℕ) (h : x < 2^32) :
-      rot_right32 (rot_right32 x n) m = rot_right32 x (n + m) := by
-  rw [rot_right32_eq_bv_rotate _ h,
-    rot_right32_eq_bv_rotate _ h,
-    rot_right32_eq_bv_rotate _ (by sorry)]
+lemma h_div32 {offset : Fin 8} {x0 x1 x2 x3: ℕ} :
+    (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ offset.val
+    = x0 / 2^offset.val + x1 * 2^(8 - offset.val) + x2 * 256 * 2^(8 - offset.val) +
+    x3 * 256 ^ 2 * 2^(8 - offset.val) := by
+  rw [←Nat.pow_one 256]
+  repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power; linarith)]
 
-  sorry
+  rw [mul_div_256_off 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
+  rw [mul_div_256_off 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
+    Nat.add_left_inj]
 
-omit [Fact (Nat.Prime p)] in
-lemma soundnessCase1 (x0 x1 x2 x3 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x0 : U32 _}.value =
-  rot_right32 { x0 := x0, x1 := x1, x2 := x2, x3 := x3 : U32 _}.value 8 := by
-  simp only [U32.value, rot_right32]
-  rw [
-    show (8 % 32) = 8 by norm_num,
-    show (32 - 8) = 24 by norm_num,
-  ]
-  have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
-  zify at *
-  set x0 : ℤ := x0.val.cast
-  set x1 : ℤ := x1.val.cast
-  set x2 : ℤ := x2.val.cast
-  set x3 : ℤ := x3.val.cast
+lemma h_x0_const32 {offset : Fin 8} :
+    2 ^ (8 - offset.val) * 256^3 = 2^(32 - offset.val) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, add_comm]
+  simp only [Nat.reduceMul, Nat.ofNat_pos, ne_eq, OfNat.ofNat_ne_one, not_false_eq_true,
+    pow_right_inj₀]
+  simp only [Fin.is_le', ← Nat.add_sub_assoc, Nat.reduceAdd]
 
-  have powers_mod :
-    (16777216 : ℤ) % 256 = 0 ∧
-    (65536 : ℤ) % 256 = 0 := by norm_num
 
-  have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) % 2 ^ 8 = x0 := by
-    repeat
-      ring_nf
-      rw [Int.add_emod, Int.mul_emod]
-      simp only [powers_mod]
-      norm_num
-    rw [Int.emod_eq_of_lt x0_pos (by linarith)]
 
-  have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ 8 =
-      x1 + x2 * 256 + x3 * 256 ^ 2 := by
+theorem rotation32_bits_soundness (offset : Fin 8) {
+      x0 x1 x2 x3
+      y0 y1 y2 y3
+      x0_l x1_l x2_l x3_l
+      x0_h x1_h x2_h x3_h : F p
+    }
+    (h_x0 : x0.val < 256)
+    (h_x1 : x1.val < 256)
+    (h_x2 : x2.val < 256)
+    (h_x3 : x3.val < 256)
+    (h_x0_l : x0_l.val = x0.val % 2 ^ offset.val)
+    (h_x0_h : x0_h.val = x0.val / 2 ^ offset.val)
+    (h_x1_l : x1_l.val = x1.val % 2 ^ offset.val)
+    (h_x1_h : x1_h.val = x1.val / 2 ^ offset.val)
+    (h_x2_l : x2_l.val = x2.val % 2 ^ offset.val)
+    (h_x2_h : x2_h.val = x2.val / 2 ^ offset.val)
+    (h_x3_l : x3_l.val = x3.val % 2 ^ offset.val)
+    (h_x3_h : x3_h.val = x3.val / 2 ^ offset.val)
+    (eq0 : y0 = x1_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x0_h)
+    (eq1 : y1 = x2_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x1_h)
+    (eq2 : y2 = x3_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x2_h)
+    (eq3 : y3 = x0_l * ↑(2 ^ (8 - offset.val) % 256 : ℕ) + x3_h):
+    let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3
+    let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3
+    y_val = (x_val) % 2 ^ (offset.val % 32) * 2 ^ (32 - offset.val % 32) + (x_val) / 2 ^ (offset.val % 32) := by
 
-    repeat
-      ring_nf
-      rw [Int.add_ediv_of_dvd_right (by
-        rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
-        try rw [show (16777216 : ℤ) % 256 = 0 by rfl]
-        try rw [show (65536 : ℤ) % 256 = 0 by rfl]
-        rfl)]
-      rw [Int.mul_ediv_assoc _ (by norm_num)]
-      norm_num
-    rw [Int.ediv_eq_zero_of_lt (by simp only [x0_pos]) (by simp only [as])]
+  rw [add_comm (_ * _)] at eq0 eq1 eq2 eq3
 
-  rw [h, h']
-  ring
+  -- lift every reconstruction constraint to its value form
+  have x0_l_byte : x0_l.val < 256 := by rw [h_x0_l]; apply Nat.mod_lt_of_lt; assumption
+  have x0_h_byte : x0_h.val < 256 := by rw [h_x0_h]; apply Nat.div_lt_of_lt; assumption
+  have x1_l_byte : x1_l.val < 256 := by rw [h_x1_l]; apply Nat.mod_lt_of_lt; assumption
+  have x1_h_byte : x1_h.val < 256 := by rw [h_x1_h]; apply Nat.div_lt_of_lt; assumption
+  have x2_l_byte : x2_l.val < 256 := by rw [h_x2_l]; apply Nat.mod_lt_of_lt; assumption
+  have x2_h_byte : x2_h.val < 256 := by rw [h_x2_h]; apply Nat.div_lt_of_lt; assumption
+  have x3_l_byte : x3_l.val < 256 := by rw [h_x3_l]; apply Nat.mod_lt_of_lt; assumption
+  have x3_h_byte : x3_h.val < 256 := by rw [h_x3_h]; apply Nat.div_lt_of_lt; assumption
 
-omit [Fact (Nat.Prime p)] in
-lemma soundnessCase2 (x0 x1 x2 x3 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256) : { x0 := x2, x1 := x3, x2 := x0, x3 := x1 : U32 _}.value =
-  rot_right32 { x0 := x0, x1 := x1, x2 := x2, x3 := x3 : U32 _}.value 16 := by
-  simp only [U32.value, rot_right32]
-  rw [
-    show (16 % 32) = 16 by norm_num,
-    show (32 - 16) = 16 by norm_num,
-  ]
-  have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
-  have x1_pos : 0 ≤ x1.val := by exact Nat.zero_le _
-  have x0_x1_pos : 0 ≤ x0.val + x1.val * 256 := by
-    exact Nat.le_add_right_of_le x0_pos
-  zify at *
-  set x0 : ℤ := x0.val.cast
-  set x1 : ℤ := x1.val.cast
-  set x2 : ℤ := x2.val.cast
-  set x3 : ℤ := x3.val.cast
+  replace eq0 := byte_decomposition_lift x0_h_byte x1_l_byte two_power_byte eq0
+  replace eq1 := byte_decomposition_lift x1_h_byte x2_l_byte two_power_byte eq1
+  replace eq2 := byte_decomposition_lift x2_h_byte x3_l_byte two_power_byte eq2
+  replace eq3 := byte_decomposition_lift x3_h_byte x0_l_byte two_power_byte eq3
 
-  have powers_mod :
-    (16777216 : ℤ) % 65536 = 0 := by norm_num
+  -- simplify the goal
+  simp only [two_power_val, ZMod.val_natCast] at eq0 eq1 eq2 eq3
+  rw [eq0, eq1, eq2, eq3]
+  dsimp only
 
-  have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) % (2 ^ 16) = x0 + x1 * 256 := by
-    norm_num
-    repeat
-      rw [Int.add_emod, Int.mul_emod]
-      simp only [powers_mod]
-      norm_num
-    rw [Int.emod_eq_of_lt x0_x1_pos (by linarith)]
+  have offset_mod_64 : offset.val % 32 = offset.val := by
+    apply Nat.mod_eq_of_lt
+    linarith [offset.is_lt]
 
-  have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ 16 =
-      x2 + x3 * 256 := by
+  simp [h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h, offset_mod_64, -Nat.reducePow]
 
-    repeat
-      norm_num
-      rw [Int.add_ediv_of_dvd_right (by
-        rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
-        try rw [show (16777216 : ℤ) % 65536 = 0 by rfl]
-        rfl)]
-      rw [Int.mul_ediv_assoc _ (by norm_num)]
-      norm_num
-    rw [Int.ediv_eq_zero_of_lt (by simp only [x0_x1_pos]) (by linarith)]
-
-  rw [h, h']
-  ring
-
-omit [Fact (Nat.Prime p)] in
-lemma soundnessCase3 (x0 x1 x2 x3 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256) : { x0 := x3, x1 := x0, x2 := x1, x3 := x2 : U32 _}.value =
-  rot_right32 { x0 := x0, x1 := x1, x2 := x2, x3 := x3 : U32 _}.value 24 := by
-  simp only [U32.value, rot_right32]
-  rw [
-    show (24 % 32) = 24 by norm_num,
-    show (32 - 24) = 8 by norm_num,
-  ]
-  have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
-  have x1_pos : 0 ≤ x1.val := by exact Nat.zero_le _
-  have x2_pos : 0 ≤ x2.val := by exact Nat.zero_le _
-  have x0_x1_pos : 0 ≤ x0.val + x1.val * 256 := by
-    exact Nat.le_add_right_of_le x0_pos
-  have x0_x1_x2_pos : 0 ≤ x0.val + x1.val * 256 + x2.val * 65536 := by
-    exact Nat.le_add_right_of_le x0_x1_pos
-  zify at *
-  set x0 : ℤ := x0.val.cast
-  set x1 : ℤ := x1.val.cast
-  set x2 : ℤ := x2.val.cast
-  set x3 : ℤ := x3.val.cast
-
-  have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) % (2 ^ 24) = x0 + x1 * 256 + x2 * 256 ^ 2 := by
-    norm_num
-    rw [Int.add_emod, Int.mul_emod]
-    norm_num
-    rw [Int.emod_eq_of_lt x2_pos (by linarith)]
-    rw [Int.emod_eq_of_lt x0_x1_x2_pos (by linarith)]
-
-  have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ 24 = x3 := by
-    repeat
-      norm_num
-      rw [Int.add_ediv_of_dvd_right (by
-        rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
-        rfl)]
-      rw [Int.mul_ediv_assoc _ (by norm_num)]
-      norm_num
-    rw [Int.ediv_eq_zero_of_lt (by simp only [x0_x1_x2_pos]) (by linarith)]
-
-  rw [h, h']
-  ring
+  rw [h_mod32]
+  -- if the offset is zero, then it is trivial: it is a special case since
+  -- in that case the rotation is a no-op
+  by_cases h_offset : offset.val = 0
+  · rw [h_offset]
+    simp only [Fin.isValue, Fin.val_zero, pow_zero, Nat.div_one, Nat.mod_one, tsub_zero,
+      Nat.reducePow, Nat.mod_self, mul_zero, add_zero, zero_mul, zero_add, Nat.add_left_inj]
+  · rw [two_off_eq_mod _ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
+      not_false_eq_true])]
+    rw [h_div32]
+    -- proof technique: we care about only what happens to x0, all "internal" terms remain
+    -- the same, and are just divided by 2^offset.val
+    rw [shifted_decomposition_eq]
+    repeat rw [shifted_decomposition_eq'' (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+    simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
+    rw [←add_assoc _ _ (_ * 256 ^ 3), soundness_simp]
+    nth_rw 4 [←add_assoc]
+    rw [Nat.mul_right_comm _ 256, soundness_simp]
+    nth_rw 2 [←add_assoc]
+    rw [Nat.mul_right_comm _ 256, soundness_simp']
+    rw [mul_assoc (x0.val % 2 ^ offset.val), h_x0_const32]
+    ac_rfl
 
 end Gadgets.Rotation32.Theorems
