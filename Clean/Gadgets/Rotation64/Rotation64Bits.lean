@@ -15,18 +15,21 @@ open Bitwise (rot_right64)
 open Rotation64.Theorems (rotation64_bits_soundness)
 open ByteDecomposition (Outputs)
 
+def to_vars' (x : Var U64 (F p)) : Vector (Expression (F p)) 8 := to_vars x
+def from_vars' (x : Vector (Expression (F p)) 8) : Var U64 (F p) := from_vars x
+
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
 def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let base : F p := (2^(8 - offset.val) % 256 : ℕ)
 
-  let parts ← Circuit.map (to_vars x) (subcircuit (Gadgets.ByteDecomposition.circuit offset))
+  let parts ← Circuit.map (to_vars' x) (subcircuit (Gadgets.ByteDecomposition.circuit offset))
   let lows := parts.map Outputs.low |>.rotate 1
   let highs := parts.map Outputs.high
   let rotated := lows.zip highs |>.map fun (low, high) => low * base + high
 
-  (from_vars rotated : Var U64 (F p)).copy
+  (from_vars' rotated : Var U64 (F p)).copy
 
 def assumptions (input : U64 (F p)) := input.is_normalized
 
@@ -72,10 +75,36 @@ lemma concat_byte (offset : Fin 8) (x y : F p) (hx : x.val < 2^offset.val) (hy :
   rw [h_base]; linarith
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
-  intro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_input x_normalized h_holds
+  intro i0 env x_var x h_input x_normalized h_holds
 
-  dsimp only [circuit_norm, elaborated, rot64_bits, U64.witness, U64.AssertNormalized.circuit] at h_holds
-  simp only [circuit_norm, elaborated, U64ByteDecomposition.circuit, U64ByteDecomposition.elaborated, U64.AssertNormalized.circuit] at h_holds
+  dsimp only [circuit_norm, elaborated, rot64_bits, U64.copy,
+    U64.Copy.circuit, ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
+  simp only [spec, circuit_norm, elaborated, subcircuit_norm, U64.Copy.assumptions, U64.Copy.spec,
+    ByteDecomposition.assumptions, ByteDecomposition.spec] at h_holds ⊢
+  set y := eval env (var_from_offset U64 (i0 + 16))
+  obtain ⟨ h_decomposition, h_concatenation ⟩ := h_holds
+
+  simp only [ProvableType.ext_iff, size, from_vars',
+    ProvableType.eval_from_vars, ProvableType.to_elements_from_elements] at h_concatenation
+  simp only [Vector.getElem_map, Vector.getElem_zip, Vector.getElem_mapIdx, Vector.getElem_rotate] at h_concatenation
+  simp only [Expression.eval] at h_concatenation
+
+  simp only [to_vars',
+    -- TODO this should have worked:
+    ProvableType.getElem_eval_to_vars, size] at h_decomposition
+  -- TODO add a U64 characterizing U64.is_normalized in terms of its elements
+
+  have y_norm : y.is_normalized := by
+    simp only [U64.is_normalized]
+    suffices goal : ∀ (i : ℕ) (hi : i < 8), (to_elements y)[i].val < 2^8 by
+      exact ⟨ goal 0 (by norm_num), goal 1 (by norm_num), goal 2 (by norm_num), goal 3 (by norm_num),
+        goal 4 (by norm_num), goal 5 (by norm_num), goal 6 (by norm_num), goal 7 (by norm_num) ⟩
+    intro i hi
+    specialize h_concatenation i hi
+    simp only [size, ←h_concatenation]
+    sorry
+
+
   dsimp only [circuit_norm, subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.spec,
     U64ByteDecomposition.assumptions, U64ByteDecomposition.spec] at h_holds
   simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_holds
