@@ -179,8 +179,6 @@ def spec (offset : Fin 8) (input : U64 (F p)) (out: Outputs (F p)) :=
   x6_l.val = x6.val % (2^offset.val) ∧ x6_h.val = x6.val / (2^offset.val) ∧
   x7_l.val = x7.val % (2^offset.val) ∧ x7_h.val = x7.val / (2^offset.val)
 
--- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.operations.local_length
--- #eval! (u64_byte_decomposition (p:=p_babybear) 0) default |>.output
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U64 Outputs where
   main := u64_byte_decomposition offset
   local_length _ := 16
@@ -228,12 +226,6 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U64 Outputs := {
 end Gadgets.U64ByteDecomposition
 
 namespace Gadgets.U32ByteDecomposition
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 2^16 + 2^8)]
-
-instance : Fact (p > 512) := by
-  constructor
-  linarith [p_large_enough.elim]
 
 structure Outputs (F : Type) where
   low : U32 F
@@ -272,8 +264,6 @@ def spec (offset : Fin 8) (input : U32 (F p)) (out: Outputs (F p)) :=
   x2_l.val = x2.val % (2^offset.val) ∧ x2_h.val = x2.val / (2^offset.val) ∧
   x3_l.val = x3.val % (2^offset.val) ∧ x3_h.val = x3.val / (2^offset.val)
 
--- #eval! (u32_byte_decomposition (p:=p_babybear) 0) default |>.operations.local_length
--- #eval! (u32_byte_decomposition (p:=p_babybear) 0) default |>.output
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) U32 Outputs where
   main := u32_byte_decomposition offset
   local_length _ := 8
