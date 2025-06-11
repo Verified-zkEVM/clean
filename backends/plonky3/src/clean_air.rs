@@ -71,7 +71,7 @@ where
                     // should we support selectors for custom rows?
                 }
                 CleanOp::EveryRowExceptLast { context } => {
-                    let val_of = |var_idx: usize| {
+                    let load_var = |var_idx: usize| {
                         let var: VarLocation = context.assignment.vars[var_idx].clone();
                         match var {
                             VarLocation::Cell { row, column } => match row {
@@ -88,13 +88,13 @@ where
                     for circuit_op in &context.circuit {
                         match circuit_op {
                             CircuitOp::Assert { assert } => {
-                                let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
+                                let expr = AstUtils::to_expr::<AB>(&assert, &load_var);
                                 when_transition.assert_zero(expr);
                             }
                             CircuitOp::Subcircuit { subcircuit } => {
                                 for sub_op in subcircuit {
                                     if let CircuitOp::Assert { assert } = sub_op {
-                                        let expr = AstUtils::to_expr::<AB>(&assert, &val_of);
+                                        let expr = AstUtils::to_expr::<AB>(&assert, &load_var);
                                         when_transition.assert_zero(expr);
                                     }
                                 }

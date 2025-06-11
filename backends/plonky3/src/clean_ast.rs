@@ -127,19 +127,19 @@ impl AstUtils {
     /// Convert ExprNode to AirBuilder::Expr
     pub fn lower_expr<AB: AirBuilder>(
         expr: &ExprNode,
-        lookup_var: &dyn Fn(usize) -> AB::Var,
+        var_fn: &dyn Fn(usize) -> AB::Var,
     ) -> AB::Expr
     where
         AB::F: Field + PrimeCharacteristicRing,
     {
         match expr {
-            ExprNode::Var { index } => AB::Var::from(lookup_var(*index)).into(),
+            ExprNode::Var { index } => AB::Var::from(var_fn(*index)).into(),
             ExprNode::Const { value } => AB::F::from_u64(*value).into(),
             ExprNode::Add { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, lookup_var) + Self::lower_expr::<AB>(rhs, lookup_var)
+                Self::lower_expr::<AB>(lhs, var_fn) + Self::lower_expr::<AB>(rhs, var_fn)
             }
             ExprNode::Mul { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, lookup_var) * Self::lower_expr::<AB>(rhs, lookup_var)
+                Self::lower_expr::<AB>(lhs, var_fn) * Self::lower_expr::<AB>(rhs, var_fn)
             }
         }
     }
