@@ -12,33 +12,21 @@ instance : Fact (p > 512) := by
   linarith [p_large_enough.elim]
 
 open Bitwise (rot_right64)
-open Gadgets.Rotation64.Theorems (rotation64_bits_soundness)
+open Rotation64.Theorems (rotation64_bits_soundness)
+open ByteDecomposition (Outputs)
+
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
 def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-
   let base : F p := (2^(8 - offset.val) % 256 : ℕ)
 
-  let ⟨low, high⟩ ← subcircuit (Gadgets.U64ByteDecomposition.circuit offset) x
-  let ⟨x0_l, x1_l, x2_l, x3_l, x4_l, x5_l, x6_l, x7_l⟩ := low
-  let ⟨x0_h, x1_h, x2_h, x3_h, x4_h, x5_h, x6_h, x7_h⟩ := high
+  let parts ← Circuit.map (to_vars x) (subcircuit (Gadgets.ByteDecomposition.circuit offset))
+  let lows := parts.map Outputs.low |>.rotate 1
+  let highs := parts.map Outputs.high
+  let rotated := lows.zip highs |>.map fun (low, high) => low * base + high
 
-  let ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩ ← ProvableType.witness fun eval => U64.mk
-    (eval (x1_l * base + x0_h)) (eval (x2_l * base + x1_h))
-    (eval (x3_l * base + x2_h)) (eval (x4_l * base + x3_h))
-    (eval (x5_l * base + x4_h)) (eval (x6_l * base + x5_h))
-    (eval (x7_l * base + x6_h)) (eval (x0_l * base + x7_h))
-
-  y0.assert_equals (x1_l * base + x0_h)
-  y1.assert_equals (x2_l * base + x1_h)
-  y2.assert_equals (x3_l * base + x2_h)
-  y3.assert_equals (x4_l * base + x3_h)
-  y4.assert_equals (x5_l * base + x4_h)
-  y5.assert_equals (x6_l * base + x5_h)
-  y6.assert_equals (x7_l * base + x6_h)
-  y7.assert_equals (x0_l * base + x7_h)
-  return ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩
+  (from_vars rotated : Var U64 (F p)).copy
 
 def assumptions (input : U64 (F p)) := input.is_normalized
 
@@ -52,6 +40,15 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bits off
   local_length _ := 24
   output _inputs i0 := var_from_offset U64 (i0 + 16)
+  local_length_eq _ i0 := by
+    simp only [circuit_norm, rot64_bits, U64.Copy.circuit,
+      ByteDecomposition.circuit, ByteDecomposition.elaborated]
+  output_eq _ _ := by
+    simp only [circuit_norm, rot64_bits, U64.Copy.circuit,
+      ByteDecomposition.circuit, ByteDecomposition.elaborated]
+  subcircuits_consistent _ _ := by
+    simp +arith only [circuit_norm, rot64_bits, U64.Copy.circuit,
+      ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 lemma concat_byte (offset : Fin 8) (x y : F p) (hx : x.val < 2^offset.val) (hy : y.val < 2^(8 - offset.val)) :
     (x * (2^(8 - offset.val) % 256 : ℕ) + y).val < 2^8 := by
@@ -86,6 +83,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
 
+  stop
   rw [
     show Expression.eval env x0_var = x0 by injections h_input,
     show Expression.eval env x1_var = x1 by injections h_input,
