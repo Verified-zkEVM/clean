@@ -14,6 +14,7 @@ instance : Fact (p > 512) := by
   linarith [p_large_enough.elim]
 
 open Bitwise (rot_right32)
+open Gadgets.Rotation32.Theorems (rotation32_bits_soundness)
 
 /--
   Rotate the 32-bit integer by `offset` bits
@@ -63,7 +64,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
 
   simp only [assumptions] at x_normalized
   simp [circuit_norm, spec, rot_right32, eval, elaborated, var_from_offset, Vector.mapRange]
-  ring_nf at h_input h_holds ⊢
 
   rw [
     show Expression.eval env x0_var = x0 by injections h_input,
@@ -75,7 +75,11 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   specialize h_decomposition x_normalized
   obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h⟩ := h_decomposition
   simp only [U32.value, y_normalized, and_true]
-  sorry
+  obtain ⟨h_x0, h_x1, h_x2, h_x3⟩ := x_normalized
+  rw [rotation32_bits_soundness offset
+    h_x0 h_x1 h_x2 h_x3
+    h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
+    eq0 eq1 eq2 eq3]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   sorry
