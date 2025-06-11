@@ -303,9 +303,12 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   simp_all only [gt_iff_lt, Fin.val_pos_iff, forall_const, and_self]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
-  rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var⟩ henv ⟨x0, x1, x2, x3⟩ h_eval as
-  simp only [assumptions] at as
-  sorry
+  rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var⟩ henv ⟨x0, x1, x2, x3⟩ h_input as
+  simp only [assumptions, U32.is_normalized] at as
+  simp only [circuit_norm, eval, U32.mk.injEq] at h_input
+  dsimp only [circuit_norm, subcircuit_norm, elaborated, u32_byte_decomposition,
+    ByteDecomposition.circuit, ByteDecomposition.elaborated, ByteDecomposition.assumptions, ByteDecomposition.spec] at henv ⊢
+  simp_all only [circuit_norm]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 Outputs := {
   elaborated offset with
