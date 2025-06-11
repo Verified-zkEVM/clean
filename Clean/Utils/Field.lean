@@ -147,6 +147,21 @@ theorem mul_nat_val_of_dvd {x: F p} (c: ℕ) (c_lt : c < p) {z : ℕ} :
   intro h_dvd
   exact mul_val_of_dvd ⟨ z, h_dvd ⟩
 
+theorem mul_nat_val_eq_iff {x: F p} (c: ℕ) (c_pos : c > 0) (c_lt : c < p) {z : ℕ} :
+    (c * x).val = c * z ↔ (x.val = z ∧ c * x.val < p) := by
+  constructor
+  · intro h_dvd
+    constructor
+    · apply (mul_right_inj' (Nat.ne_zero_iff_zero_lt.mpr c_pos)).mp
+      rw [←h_dvd, mul_nat_val_of_dvd c c_lt h_dvd]
+    · rw [←mul_nat_val_of_dvd c c_lt h_dvd]
+      apply ZMod.val_lt
+  · intro ⟨ h_eq, h_lt ⟩
+    have c_val_eq : c = (c : F p).val := by rw [ZMod.val_cast_of_lt c_lt]
+    rw [←h_eq, ZMod.val_mul_of_lt, ←c_val_eq]
+    rw [←c_val_eq]
+    exact h_lt
+
 -- some helper lemmas about 2, using the common assumption that p > 512
 
 section
