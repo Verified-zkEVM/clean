@@ -75,9 +75,7 @@ theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
   -- simplify the goal
   simp only [rot_right64, rot_right64_u64, U64.value_nat]
 
-  have offset_mod_64 : o % 64 = o := by
-    apply Nat.mod_eq_of_lt
-    linarith
+  have offset_mod_64 : o % 64 = o := Nat.mod_eq_of_lt (by linarith)
   simp only [offset_mod_64]
 
   rw [h_mod ho]
@@ -87,7 +85,7 @@ theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
   · simp [h_offset, Nat.mod_one]
   · rw [h_div ho]
     -- proof technique: we care about only what happens to x0, all "internal" terms remain
-    -- the same, and are just divided by 2^offset.val
+    -- the same, and are just divided by 2^o
     rw [shifted_decomposition_eq ho]
     repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
     simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
