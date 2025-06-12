@@ -13,11 +13,11 @@ open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
 open Utils.Rotation
 
 /--
-We define a bit rotation on "byte vectors" like u64 by splitting each byte
+We define a bit rotation on "byte vectors" like u32 by splitting each byte
 into low and high bits, and moving the lowest low bits to the top and concatenating
 each resulting (high, low) pair again.
 
-The ultimate goal is to prove that this is equivalent to `rot_right64`.
+The ultimate goal is to prove that this is equivalent to `rot_right32`.
 -/
 def rot_right32_bytes (xs : Vector ℕ 4) (o : ℕ) : Vector ℕ 4 :=
   .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 4] % 2^o) * 2^(8-o)
@@ -68,8 +68,8 @@ theorem rotation32_bits_soundness {o : ℕ} (ho : o < 8) {x : U32 ℕ} :
   -- simplify the goal
   simp only [rot_right32, rot_right32_u32, U32.value_nat]
 
-  have offset_mod_64 : o % 32 = o := Nat.mod_eq_of_lt (by linarith)
-  simp only [offset_mod_64]
+  have offset_mod_32 : o % 32 = o := Nat.mod_eq_of_lt (by linarith)
+  simp only [offset_mod_32]
 
   rw [h_mod32 ho]
   -- if the offset is zero, then it is trivial: it is a special case since
