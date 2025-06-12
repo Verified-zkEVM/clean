@@ -7,3 +7,4 @@ import Clean.Tables.Fibonacci32
 import Clean.Tables.Fibonacci32Inductive
 import Clean.Tables.KeccakInductive
 import Clean.Gadgets.Bits
+import Clean.Gadgets.Rotation32.Rotation32

@@ -1,5 +1,6 @@
 import Clean.Utils.Field
 import Clean.Utils.Bitwise
+import Clean.Utils.Rotation
 import Clean.Types.U64
 
 variable {p : ℕ} [Fact p.Prime]
