@@ -1,14 +1,12 @@
 import Clean.Utils.Field
 import Clean.Utils.Bitwise
 import Clean.Types.U64
-import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation64.Theorems
 open Bitwise (rot_right64)
-open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
 
 /--
 We define a bit rotation on "byte vectors" like u64 by splitting each byte

@@ -2,6 +2,7 @@ import Clean.Types.U64
 import Clean.Circuit.SubCircuit
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Circuit.Provable
+import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 
 namespace Gadgets.Rotation64Bits
 variable {p : ℕ} [Fact p.Prime]
@@ -14,6 +15,7 @@ instance : Fact (p > 512) := by
 open Bitwise (rot_right64)
 open Rotation64.Theorems
 open ByteDecomposition (Outputs)
+open ByteDecomposition.Theorems (byte_decomposition_lt)
 
 -- definitions to prevent `to_vars`/`from_vars` from being unfolded in the proof
 -- TODO get rid of these
@@ -55,25 +57,6 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp +arith only [circuit_norm, rot64_bits, U64.Copy.circuit,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^(8-o)) (hy : y.val < 2^o) :
-    (x + y * (2^(8-o) : ℕ)).val < 2^8
-    ∧ (x + y * (2^(8-o) : ℕ)).val = x.val + y.val * 2^(8-o)
-     := by
-  let base : F p := (2^(8 - o) : ℕ)
-  have : 2^8 < p := by linarith [p_large_enough.elim]
-  have : 2^(8 - o) ≤ 2^8 := Nat.pow_le_pow_of_le (show 2 > 1 by norm_num) (by omega)
-  have h_base : base.val = 2^(8 - o) := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
-  have : y.val * 2^(8 - o) + 2^(8 - o) ≤ 2^8 := by
-    suffices y.val * 2^(8 - o) + 1 * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
-      rw [←pow_add, add_tsub_cancel_of_le (by linarith [ho])] at this
-      linarith
-    rw [←add_mul]
-    exact Nat.mul_le_mul_right _ hy
-  field_to_nat
-  rw [h_base]
-  use by linarith
-  rw [h_base]; linarith
-
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
@@ -98,6 +81,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
 
   simp only [to_vars', Fin.forall_iff, getElem_eval_to_vars, x_normalized, true_implies] at h_decomposition
   set base := ((2^(8 - offset.val) : ℕ) : F p)
+  have neg_offset_le : 8 - offset.val ≤ 8 := by
+    rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 
   -- prove that the output is normalized
   have y_norm : y.is_normalized := by
@@ -109,7 +94,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     set y := env.get (i0 + (i + 1) % 8 * 2)
     have hx : x.val < 2^(8 - offset.val) := (h_decomposition i hi).right.right
     have hy : y.val < 2^offset.val := (h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))).right.left
-    exact (concat_byte offset.val offset.is_lt x y hx hy).left
+    have hy' : y.val < 2^(8 - (8 - offset.val)) := by rw [Nat.sub_sub_self offset.is_le']; exact hy
+    exact (byte_decomposition_lt (8-offset.val) neg_offset_le x y hx hy').left
   suffices y.value = _ from ⟨ this, y_norm ⟩
 
   -- capture the rotation relation in terms of byte vectors
@@ -126,7 +112,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     obtain h_decomp_y := h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
     have hx : x.val < 2^(8 - o) := h_decomp_x.right.right
     have hy : y.val < 2^o := h_decomp_y.right.left
-    rw [(concat_byte o offset.is_lt x y hx hy).right, h_decomp_x.left.right, h_decomp_y.left.left]
+    have hy' : y.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact hy
+    rw [(byte_decomposition_lt (8-o) neg_offset_le x y hx hy').right, h_decomp_x.left.right, h_decomp_y.left.left]
 
   -- finish the proof using our characerization of rotation on byte vectors
   have h_rot_vector' : y.vals = rot_right64_u64 x.vals o := by

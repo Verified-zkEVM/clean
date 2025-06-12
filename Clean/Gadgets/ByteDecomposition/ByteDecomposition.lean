@@ -7,7 +7,6 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 namespace Gadgets.ByteDecomposition
-open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
 open FieldUtils (mod floordiv two_lt two_pow_lt two_val two_pow_val)
 
 structure Outputs (F : Type) where
