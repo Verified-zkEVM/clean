@@ -17,4 +17,7 @@ def BLAKE3State.is_normalized (state : BLAKE3State (F p)) :=
 
 def BLAKE3State.value (state : BLAKE3State (F p)) := state.map U32.value
 
+instance (F : Type) [Inhabited F] : Inhabited (BLAKE3State F) where
+  default := .replicate 16 default
+
 end Gadgets.BLAKE3

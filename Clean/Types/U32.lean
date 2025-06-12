@@ -28,6 +28,9 @@ instance : ProvableType U32 where
 instance : NonEmptyProvableType U32 where
   nonempty := by simp only [size, Nat.reduceGT]
 
+instance (T: Type) [Inhabited T] : Inhabited (U32 T) where
+  default := ⟨ default, default, default, default ⟩
+
 instance (T: Type) [Repr T] : Repr (U32 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ "⟩"
 
