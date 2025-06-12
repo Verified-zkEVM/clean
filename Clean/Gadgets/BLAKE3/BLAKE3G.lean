@@ -147,9 +147,38 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
         exact h_state_normalized_getElem i
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
-  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_inputs as
-  sorry
+  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_inputs h_normalized
+  dsimp [circuit_norm, subcircuit_norm, main, elaborated,
+    Addition32.circuit, Addition32.elaborated, Addition32.assumptions, Addition32.spec,
+    Xor32.circuit, Xor32.elaborated, Xor32.assumptions, Xor32.spec,
+    Rotation32.circuit, Rotation32.elaborated, Rotation32.assumptions, Rotation32.spec,
+  ] at henv ⊢
 
+  simp [circuit_norm] at h_inputs
+  obtain ⟨h_state_var, h_x_var, h_y_var⟩ := h_inputs
+
+  dsimp [assumptions] at h_normalized
+  obtain ⟨h_state, h_x, h_y⟩ := h_normalized
+  simp only [BLAKE3State.is_normalized] at h_state
+
+  have h_state_var_getElem (i : Fin 16) : eval env state_var[i.val] = state[i.val] := by
+    rw [←h_state_var]
+    simp only [Fin.getElem_fin, getElem_eval_vector]
+
+  have h_state_normalized_getElem (i : Fin 16) : state[i.val].is_normalized := by
+    simp [h_state]
+
+  ring_nf at henv
+  simp [circuit_norm, h_state_var_getElem, h_x_var, h_y_var] at henv
+  obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := henv
+
+  -- resolve all chains of assumptions
+  simp_all only [implies_true, forall_const]
+
+  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
+    ProvableStruct.eval.go, and_true]
+  ring_nf
+  simp_all only [gt_iff_lt, Nat.add_mod_mod, Nat.mod_add_mod, and_self]
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated a b c d with
