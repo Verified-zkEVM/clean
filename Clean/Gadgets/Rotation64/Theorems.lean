@@ -10,6 +10,16 @@ namespace Gadgets.Rotation64.Theorems
 open Bitwise (rot_right64)
 open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
 
+/--
+We define a bit rotation on "byte vectors" like u64 by splitting each byte
+into low and high bits, and moving the lowest low bits to the top and concatenating
+each resulting (high, low) pair again.
+
+The ultimate goal is to prove that this is equivalent to `rot_right64`.
+-/
+def rot_right64_bytes (o : ℕ) (_ : o < 8) (xs : Vector ℕ 8) : Vector ℕ 8 :=
+  .ofFn fun ⟨ i, hi ⟩ =>
+    (xs[(i + 1) % 8] % 2^o) * (2^(8-o) % 256) + xs[i] / 2^o
 
 def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)

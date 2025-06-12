@@ -122,7 +122,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   let b := (2^(8 - offset.val) % 256 : ℕ)
 
   have h_rot_vector (i : ℕ) (hi : i < 8) :
-      ys[i].val = (xs[(i + 1) % 8].val % 2^o) * (2 ^ (8 - o) % 256) + xs[i].val / 2^o := by
+      ys[i].val = (xs[(i + 1) % 8].val % 2^o) * (2^(8-o) % 256) + xs[i].val / 2^o := by
     rw [←h_concatenation i hi]
     set x := env.get (i0 + (i + 1) % 8 * 2)
     set y := env.get (i0 + i * 2 + 1)
@@ -132,6 +132,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     have hy : y.val < 2^(8 - o) := h_decomp_y.right.right
     rw [(concat_byte o offset.is_lt x y hx hy).right, h_decomp_x.left.left, h_decomp_y.left.right]
 
+  simp only [rot_right64]
   stop
   simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_concatenation h_decomposition
   simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
