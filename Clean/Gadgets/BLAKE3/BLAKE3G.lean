@@ -3,6 +3,7 @@ import Clean.Gadgets.BLAKE3.BLAKE3State
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Rotation32.Rotation32
 import Clean.Specs.BLAKE3
+import Clean.Circuit.Provable
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -79,15 +80,29 @@ def spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assumptions (spec a b c d) := by
   intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
   dsimp [circuit_norm, subcircuit_norm, elaborated, main, spec,
-    Addition32.circuit, Addition32.elaborated,
-    Xor32.circuit, Xor32.elaborated,
-    Rotation32.circuit, Rotation32.elaborated,
+    Addition32.circuit, Addition32.elaborated, Addition32.assumptions, Addition32.spec,
+    Xor32.circuit, Xor32.elaborated, Xor32.assumptions, Xor32.spec,
+    Rotation32.circuit, Rotation32.elaborated, Rotation32.assumptions, Rotation32.spec,
   ] at h_holds
-  simp [circuit_norm, elaborated, main, spec]
   dsimp [assumptions] at h_normalized
+
+  obtain ⟨h_state, h_x, h_y⟩ := h_normalized
+  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
+    ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
+  obtain ⟨h_state_var, h_x_var, h_y_var⟩ := h_input
+
+  simp only [BLAKE3State.is_normalized] at h_state
+
+  have h_state_var_getElem (i : Fin 16) : eval env state_var[i.val] = state[i.val] := by
+    rw [←h_state_var]
+    simp only [Fin.getElem_fin, getElem_eval_vector]
+
+  have h_state_normalized_getElem (i : Fin 16) : state[i.val].is_normalized := by
+    simp [h_state]
 
   -- normalize offsets
   ring_nf at h_holds ⊢
+  simp [circuit_norm, h_state_var_getElem, h_x_var, h_y_var] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
   -- give names to intermediate variables for clarity
@@ -108,9 +123,10 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   set tmp7 := var_from_offset U32 (96 + i0)
   set state_b2 := var_from_offset U32 (108 + i0)
 
+  -- resolve all chains of assumptions
+  simp_all only [implies_true, forall_const]
 
 
-  simp [circuit_norm, eval, Expression.eval] at c1
   constructor
   · sorry
   · sorry
