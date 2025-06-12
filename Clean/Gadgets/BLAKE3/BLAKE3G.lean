@@ -128,7 +128,21 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
 
   simp only [spec, ElaboratedCircuit.output]
   constructor
-  · sorry
+  · ext i hi
+    ring_nf
+    simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
+      Vector.getElem_map, g, Fin.getElem_fin, Bitwise.add32]
+    repeat' split
+    · rw [c11.left]
+      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+    · rw [c12.left]
+      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+    · rw [c14.left]
+      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+    · rw [c9.left]
+      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+    rw [Function.comp_apply, ←h_state_var]
+    simp only [Fin.getElem_fin, getElem_eval_vector]
   · intro i
     ring_nf
     simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set, ↓reduceIte]
