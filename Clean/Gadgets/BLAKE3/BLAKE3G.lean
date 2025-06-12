@@ -105,24 +105,6 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   simp [circuit_norm, h_state_var_getElem, h_x_var, h_y_var] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
-  -- give names to intermediate variables for clarity
-  set tmp1 : U32 (Expression (F p)) := ⟨var ⟨i0⟩, var ⟨2 + i0⟩, var ⟨4 + i0⟩, var ⟨6 + i0⟩⟩
-  set state_a1 : U32 (Expression (F p)) := ⟨var ⟨8 + i0⟩, var ⟨10 + i0⟩, var ⟨12 + i0⟩, var ⟨14 + i0⟩⟩
-  set tmp2 := var_from_offset U32 (16 + i0)
-  set state_d1 : U32 (Expression (F p)) := ⟨var ⟨20 + i0⟩, var ⟨22 + i0⟩, var ⟨24 + i0⟩, var ⟨26 + i0⟩⟩
-  set tmp3 := var_from_offset U32 (28 + i0)
-  set state_c1 : U32 (Expression (F p)) := ⟨var ⟨32 + i0⟩, var ⟨34 + i0⟩, var ⟨36 + i0⟩, var ⟨38 + i0⟩⟩
-  set tmp4 := var_from_offset U32 (40 + i0)
-  set state_b1 := var_from_offset U32 (52 + i0)
-
-  set tmp5 : U32 (Expression (F p)) := ⟨var ⟨56 + i0⟩, var ⟨58 + i0⟩, var ⟨60 + i0⟩, var ⟨62 + i0⟩⟩
-  set state_a2 : U32 (Expression (F p)) := ⟨var ⟨64 + i0⟩, var ⟨66 + i0⟩, var ⟨68 + i0⟩, var ⟨70 + i0⟩⟩
-  set tmp6 := var_from_offset U32 (72 + i0)
-  set state_d2 := var_from_offset U32 (84 + i0)
-  set state_c2 : U32 (Expression (F p)) := ⟨var ⟨88 + i0⟩, var ⟨90 + i0⟩, var ⟨92 + i0⟩, var ⟨94 + i0⟩⟩
-  set tmp7 := var_from_offset U32 (96 + i0)
-  set state_b2 := var_from_offset U32 (108 + i0)
-
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const]
 
