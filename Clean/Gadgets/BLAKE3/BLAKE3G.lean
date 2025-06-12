@@ -105,39 +105,46 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   simp [circuit_norm, h_state_var_getElem, h_x_var, h_y_var] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
-  -- resolve all chains of assumptions
+  -- resolve all chains of assumptions, fortunately this is easy
   simp_all only [implies_true, forall_const]
 
+  -- In c9, c11, c12, and c14, we now have the correct hypotheses regarding the
+  -- updated values in the output state.
+  -- From this point onward, we need to prove that the updated values are consistent with the spec.
+  -- Unfortunately, this is not trivial because we do not require that a, b, c, and d are distinct.
+  -- Therefore, there could be overwriting of values in the state update chain, requiring
+  -- case-by-case reasoning on the indices.
+  -- NOTE: This is not a bug, we are following the BLAKE specification of the g function verbatim.
+  -- See, for example, https://www.ietf.org/archive/id/draft-aumasson-blake3-00.html#name-quarter-round-function-g
   simp only [spec, ElaboratedCircuit.output]
   constructor
   · ext i hi
     ring_nf
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, Bitwise.add32]
-    repeat' split
-    · rw [c11.left]
-      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-    · rw [c12.left]
-      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-    · rw [c14.left]
-      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-    · rw [c9.left]
-      simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-    rw [Function.comp_apply, ←h_state_var]
-    simp only [Fin.getElem_fin, getElem_eval_vector]
+    (repeat' split) <;> first
+      | rw [c11.left]
+        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+      | rw [c12.left]
+        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+      | rw [c14.left]
+        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+      | rw [c9.left]
+        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
+      | rw [Function.comp_apply, ←h_state_var]
+        simp only [Fin.getElem_fin, getElem_eval_vector]
+
   · intro i
     ring_nf
     simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set, ↓reduceIte]
-
-    -- split the goal by cases on i
     (repeat' split) <;> first
-        | exact c11.right
-        | exact c12.right
-        | exact c14.right
-        | exact c9.right
-        | simp only [Vector.getElem_map]
-          rw [h_state_var_getElem]
-          exact h_state_normalized_getElem i
+      | exact c11.right
+      | exact c12.right
+      | exact c14.right
+      | exact c9.right
+      | simp only [Vector.getElem_map]
+        rw [h_state_var_getElem]
+        exact h_state_normalized_getElem i
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
   rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_inputs as
