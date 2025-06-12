@@ -15,8 +15,8 @@ open Bitwise (rot_right64)
 open Rotation64.Theorems (rotation64_bits_soundness)
 open ByteDecomposition (Outputs)
 
-def to_vars' (x : Var U64 (F p)) : Vector (Expression (F p)) 8 := to_vars x
-def from_vars' (x : Vector (Expression (F p)) 8) : Var U64 (F p) := from_vars x
+def to_vars' (x : Var U64 (F p)) : Vector (Expression (F p)) (size U64) := to_vars x
+def from_vars' (x : Vector (Expression (F p)) (size U64)) : Var U64 (F p) := from_vars x
 
 /--
   Rotate the 64-bit integer by `offset` bits
@@ -84,35 +84,37 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   set y := eval env (var_from_offset U64 (i0 + 16))
   obtain ⟨ h_decomposition, h_concatenation ⟩ := h_holds
 
-  simp only [ProvableType.ext_iff, size, from_vars',
-    ProvableType.eval_from_vars, ProvableType.to_elements_from_elements] at h_concatenation
+  simp only [ProvableType.ext_iff, size, from_vars', ProvableType.eval_from_vars,
+    ProvableType.to_elements_from_elements] at h_concatenation
   simp only [Vector.getElem_map, Vector.getElem_zip, Vector.getElem_mapIdx, Vector.getElem_rotate] at h_concatenation
   simp only [Expression.eval] at h_concatenation
 
-  simp only [to_vars',
-    -- TODO this should have worked:
-    ProvableType.getElem_eval_to_vars, size] at h_decomposition
-  -- TODO add a U64 characterizing U64.is_normalized in terms of its elements
+  rw [assumptions, U64.ByteVector.is_normalized_iff] at x_normalized
+
+  have byte_decomp_assumptions (i : ℕ) (hi : i < 8) : ((to_vars x_var)[i].eval env).val < 256 := by
+    rw [ProvableType.getElem_eval_to_vars, h_input]
+    exact x_normalized i hi
+  simp only [size] at byte_decomp_assumptions
+  simp only [to_vars', byte_decomp_assumptions, true_implies] at h_decomposition
 
   have y_norm : y.is_normalized := by
-    simp only [U64.is_normalized]
-    suffices goal : ∀ (i : ℕ) (hi : i < 8), (to_elements y)[i].val < 2^8 by
-      exact ⟨ goal 0 (by norm_num), goal 1 (by norm_num), goal 2 (by norm_num), goal 3 (by norm_num),
-        goal 4 (by norm_num), goal 5 (by norm_num), goal 6 (by norm_num), goal 7 (by norm_num) ⟩
+    simp only [U64.ByteVector.is_normalized_iff]
     intro i hi
     specialize h_concatenation i hi
     simp only [size, ←h_concatenation]
-    sorry
-
-
-  dsimp only [circuit_norm, subcircuit_norm, U64.AssertNormalized.assumptions, U64.AssertNormalized.spec,
-    U64ByteDecomposition.assumptions, U64ByteDecomposition.spec] at h_holds
-  simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_holds
-
-  simp only [assumptions] at x_normalized
-  simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
+    let j : Fin 8 := ⟨ (i + 1) % 8, Nat.mod_lt _ (by norm_num) ⟩
+    set x := env.get (i0 + (i + 1) % 8 * 2)
+    set y := env.get (i0 + i * 2 + 1)
+    set base := ((2^(8 - offset.val) % 256 : ℕ) : F p)
+    have hx : x.val < 2^offset.val := (h_decomposition j).right.left
+    have hy : y.val < 2^(8 - offset.val) := (h_decomposition ⟨ i, hi ⟩).right.right
+    exact concat_byte offset x y hx hy
+  suffices y.value = _ from ⟨ this, y_norm ⟩
 
   stop
+  simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_concatenation h_decomposition
+  simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
+
   rw [
     show Expression.eval env x0_var = x0 by injections h_input,
     show Expression.eval env x1_var = x1 by injections h_input,

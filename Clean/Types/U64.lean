@@ -285,13 +285,12 @@ def circuit : FormalCircuit (F p) U64 U64 where
       List.getElem_cons_zero] at h7
     simp_all
 
-end U64.Copy
+end Copy
 
 @[reducible]
-def U64.copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+def copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   subcircuit U64.Copy.circuit x
 
-namespace U64
 def from_byte (x: Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 
@@ -304,5 +303,29 @@ lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p)
   simp [is_normalized, from_byte]
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
+
+namespace ByteVector
+-- results about U64 when viewed as a vector of bytes, via `to_elements` and `from_elements`
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+theorem is_normalized_iff {x : U64 (F p)} :
+    x.is_normalized ↔ ∀ i (_ : i < 8), (to_elements x)[i].val < 256 := by
+  rcases x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
+  simp only [is_normalized, to_elements, size, Vector.getElem_mk, List.getElem_toArray]
+  constructor
+  · intro h i hi
+    repeat (rcases hi with _ | hi; try simp [*, size])
+  · intro h
+    let h0 := h 0 (by decide)
+    let h1 := h 1 (by decide)
+    let h2 := h 2 (by decide)
+    let h3 := h 3 (by decide)
+    let h4 := h 4 (by decide)
+    let h5 := h 5 (by decide)
+    let h6 := h 6 (by decide)
+    let h7 := h 7 (by decide)
+    simp only [List.getElem_cons_zero, List.getElem_cons_succ] at h0 h1 h2 h3 h4 h5 h6 h7
+    simp_all
+
+end ByteVector
 end U64
-end
