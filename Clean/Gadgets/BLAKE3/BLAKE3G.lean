@@ -67,19 +67,16 @@ def c := main (p:=p_babybear) 0 1 2 3 {
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
   local_length _ := 112
-  output inputs i0 := sorry
+  output inputs i0 := inputs.state
+      |>.set a (⟨var ⟨i0 + 64⟩, var ⟨i0 + 66⟩, var ⟨i0 + 68⟩, var ⟨i0 + 70⟩⟩)
+      |>.set b (var_from_offset U32 (i0 + 108))
+      |>.set c (⟨var ⟨i0 + 88⟩, var ⟨i0 + 90⟩, var ⟨i0 + 92⟩, var ⟨i0 + 94⟩⟩)
+      |>.set d (var_from_offset U32 (i0 + 84))
 
   local_length_eq _ n := by
     simp [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit,
-    Xor32.elaborated, Addition32.elaborated, Rotation32.elaborated]
+      Xor32.elaborated, Addition32.elaborated, Rotation32.elaborated]
 
-  subcircuits_consistent _ i := by
-    simp [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit,
-    Xor32.elaborated, Addition32.elaborated, Rotation32.elaborated]
-    repeat
-      try constructor
-      ac_rfl
 
-  output_eq _ i := by sorry
 
 end Gadgets.BLAKE3.G
