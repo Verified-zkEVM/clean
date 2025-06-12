@@ -165,9 +165,6 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
     rw [←h_state_var]
     simp only [Fin.getElem_fin, getElem_eval_vector]
 
-  have h_state_normalized_getElem (i : Fin 16) : state[i.val].is_normalized := by
-    simp [h_state]
-
   ring_nf at henv
   simp [circuit_norm, h_state_var_getElem, h_x_var, h_y_var] at henv
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := henv
@@ -177,7 +174,11 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
 
   simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
     ProvableStruct.eval.go, and_true]
+
+  -- normalize offsets
   ring_nf
+
+  -- now, all the conclusions are somewhere in the hypotheses
   simp_all only [gt_iff_lt, Nat.add_mod_mod, Nat.mod_add_mod, and_self]
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
