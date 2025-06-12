@@ -19,7 +19,7 @@ The ultimate goal is to prove that this is equivalent to `rot_right64`.
 -/
 def rot_right64_bytes (o : ℕ) (_ : o < 8) (xs : Vector ℕ 8) : Vector ℕ 8 :=
   .ofFn fun ⟨ i, hi ⟩ =>
-    (xs[(i + 1) % 8] % 2^o) * (2^(8-o) % 256) + xs[i] / 2^o
+    (xs[(i + 1) % 8] % 2^o) * 2^(8-o) + xs[i] / 2^o
 
 def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
@@ -31,20 +31,16 @@ def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let high := x / (2^(8 - offset.val))
   low * (2^offset.val) + high
 
+lemma two_power_val {o : ℕ} (_ : o < 8) :
+    ((2 ^ (8 - o) : ℕ) : F p).val = 2 ^ (8 - o) := by
+  have : 2 ^ (8 - o) ≤ 2 ^ 8 := Nat.pow_le_pow_of_le (show 2 > 1 by norm_num) (by omega)
+  rw [ZMod.val_natCast_of_lt]
+  linarith [p_large_enough.elim]
 
-lemma two_power_val {offset : Fin 8} :
-    ((2 ^ (8 - offset.val) % 256 : ℕ) : F p).val = 2 ^ (8 - offset.val) % 256 := by
-  rw [ZMod.val_natCast]
-  apply Nat.mod_eq_of_lt
-  have h : 2 ^ (8 - offset.val) % 256 < 256 := by apply Nat.mod_lt; linarith
-  linarith [h, p_large_enough.elim]
-
-lemma two_power_val' {o : ℕ} (_ : o < 8) :
-    ((2 ^ (8 - o) % 256 : ℕ) : F p).val = 2 ^ (8 - o) % 256 := by
-  rw [ZMod.val_natCast]
-  apply Nat.mod_eq_of_lt
-  have h : 2 ^ (8 - o) % 256 < 256 := by apply Nat.mod_lt; linarith
-  linarith [h, p_large_enough.elim]
+lemma two_power_byte {o : ℕ} (ho : o < 8) :
+    ZMod.val ((2 ^ (8 - o) : ℕ) : F p) ≤ 2^8 := by
+  rw [two_power_val ho]
+  exact Nat.pow_le_pow_of_le (show 2 > 1 by norm_num) (by omega)
 
 lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
     (x * 256^i) % 2^offset.val = 0 := by
@@ -80,16 +76,6 @@ lemma mul_div_256_off {offset : Fin 8} {x : ℕ} (i : ℕ) (h : i > 0):
   apply Nat.pow_dvd_pow
   linarith [offset.is_lt]
 
-
-lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
-    (2 ^ (8 - offset.val) % 256) = 2 ^ (8 - offset.val) := by
-  apply Nat.mod_eq_of_lt
-  fin_cases offset <;>
-    first
-    | contradiction
-    | simp
-
-
 lemma shifted_decomposition_eq {offset : ℕ} (ho : offset < 8) {x1 x2 : ℕ} :
     (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256 =
     (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) := by
@@ -124,22 +110,6 @@ lemma soundness_simp' {offset : ℕ} {x : ℕ} :
   rw [←Nat.mul_one (x % 2 ^ offset * 2 ^ (8 - offset))]
   rw [←Nat.mul_one (2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset))]
   rw [soundness_simp, Nat.mul_one]
-
-omit p_large_enough in
-lemma two_power_byte {offset : Fin 8} :
-    ZMod.val ((2 ^ (8 - offset.val) % 256 : ℕ) : F p) < 256 := by
-  rw [ZMod.val_natCast]
-  apply Nat.mod_lt_of_lt
-  apply Nat.mod_lt
-  linarith
-
-omit p_large_enough in
-lemma two_power_byte' {o : ℕ} (_ : o < 8) :
-    ZMod.val ((2 ^ (8 - o) % 256 : ℕ) : F p) < 256 := by
-  rw [ZMod.val_natCast]
-  apply Nat.mod_lt_of_lt
-  apply Nat.mod_lt
-  linarith
 
 lemma h_mod {offset : Fin 8} {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
@@ -205,14 +175,14 @@ theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
     (h_x6_h : x6_h.val = x6.val / 2^o)
     (h_x7_l : x7_l.val = x7.val % 2^o)
     (h_x7_h : x7_h.val = x7.val / 2^o)
-    (eq0 : y0 = x1_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x0_h)
-    (eq1 : y1 = x2_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x1_h)
-    (eq2 : y2 = x3_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x2_h)
-    (eq3 : y3 = x4_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x3_h)
-    (eq4 : y4 = x5_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x4_h)
-    (eq5 : y5 = x6_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x5_h)
-    (eq6 : y6 = x7_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x6_h)
-    (eq7 : y7 = x0_l * ↑(2 ^ (8 - o) % 256 : ℕ) + x7_h):
+    (eq0 : y0 = x1_l * ↑(2 ^ (8 - o) : ℕ) + x0_h)
+    (eq1 : y1 = x2_l * ↑(2 ^ (8 - o) : ℕ) + x1_h)
+    (eq2 : y2 = x3_l * ↑(2 ^ (8 - o) : ℕ) + x2_h)
+    (eq3 : y3 = x4_l * ↑(2 ^ (8 - o) : ℕ) + x3_h)
+    (eq4 : y4 = x5_l * ↑(2 ^ (8 - o) : ℕ) + x4_h)
+    (eq5 : y5 = x6_l * ↑(2 ^ (8 - o) : ℕ) + x5_h)
+    (eq6 : y6 = x7_l * ↑(2 ^ (8 - o) : ℕ) + x6_h)
+    (eq7 : y7 = x0_l * ↑(2 ^ (8 - o) : ℕ) + x7_h):
     let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3 + x4.val * 256 ^ 4 +
       x5.val * 256 ^ 5 + x6.val * 256 ^ 6 + x7.val * 256 ^ 7
     let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3 + y4.val * 256 ^ 4 +
@@ -239,7 +209,7 @@ theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
   have x7_l_byte : x7_l.val < 256 := by rw [h_x7_l]; apply Nat.mod_lt_of_lt; assumption
   have x7_h_byte : x7_h.val < 256 := by rw [h_x7_h]; apply Nat.div_lt_of_lt; assumption
 
-  let two_power_byte := two_power_byte' (p:=p) ho
+  let two_power_byte := two_power_byte (p:=p) ho
 
   replace eq0 := byte_decomposition_lift x0_h_byte x1_l_byte two_power_byte eq0
   replace eq1 := byte_decomposition_lift x1_h_byte x2_l_byte two_power_byte eq1
@@ -251,7 +221,7 @@ theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
   replace eq7 := byte_decomposition_lift x7_h_byte x0_l_byte two_power_byte eq7
 
   -- simplify the goal
-  simp only [two_power_val' ho, ZMod.val_natCast] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
+  simp only [two_power_val ho, ZMod.val_natCast] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
   rw [eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7]
   dsimp only
 
@@ -271,9 +241,7 @@ theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
   · rw [h_offset]
     simp only [Fin.isValue, Fin.val_zero, pow_zero, Nat.div_one, Nat.mod_one, tsub_zero,
       Nat.reducePow, Nat.mod_self, mul_zero, add_zero, zero_mul, zero_add, Nat.add_left_inj]
-  · rw [two_off_eq_mod ⟨ o, ho ⟩ (by simp only [ne_eq, Fin.val_eq_zero_iff, Fin.isValue, h_offset,
-      not_false_eq_true])]
-    rw [h_div (offset := ⟨o, ho⟩)]
+  · rw [h_div (offset := ⟨o, ho⟩)]
     simp only
     -- proof technique: we care about only what happens to x0, all "internal" terms remain
     -- the same, and are just divided by 2^offset.val

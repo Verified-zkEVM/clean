@@ -15,6 +15,8 @@ open Bitwise (rot_right64)
 open Rotation64.Theorems (rotation64_bits_soundness)
 open ByteDecomposition (Outputs)
 
+-- definitions to prevent `to_vars`/`from_vars` from being unfolded in the proof
+-- TODO get rid of these
 def to_vars' (x : Var U64 (F p)) : Vector (Expression (F p)) (size U64) := to_vars x
 def from_vars' (x : Vector (Expression (F p)) (size U64)) : Var U64 (F p) := from_vars x
 
@@ -22,7 +24,7 @@ def from_vars' (x : Vector (Expression (F p)) (size U64)) : Var U64 (F p) := fro
   Rotate the 64-bit integer by `offset` bits
 -/
 def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let base : F p := (2^(8 - offset.val) % 256 : ℕ)
+  let base : F p := (2^(8 - offset.val) : ℕ)
 
   let parts ← Circuit.map (to_vars' x) (subcircuit (Gadgets.ByteDecomposition.circuit offset))
   let lows := parts.map Outputs.low |>.rotate 1
@@ -53,18 +55,15 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp +arith only [circuit_norm, rot64_bits, U64.Copy.circuit,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^o) (hy : y.val < 2^(8 - o)) :
-    (x * (2^(8 - o) % 256 : ℕ) + y).val < 2^8
-    ∧ (x * (2^(8 - o) % 256 : ℕ) + y).val = x.val * (2^(8 - o) % 256) + y.val
+lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^o) (hy : y.val < 2^(8-o)) :
+    (x * (2^(8-o) : ℕ) + y).val < 2^8
+    ∧ (x * (2^(8-o) : ℕ) + y).val = x.val * (2^(8-o)) + y.val
      := by
-  let base : F p := (2^(8 - o) % 256 : ℕ)
+  let base : F p := (2^(8 - o) : ℕ)
   have : 2^8 < p := by linarith [p_large_enough.elim]
-  have : 2^(8 - o) % 256 < 256 := Nat.mod_lt _ (by norm_num)
-  have : 2^(8 - o) % 256 ≤ 2^(8 - o) := Nat.mod_le ..
-  have h_base : base.val = 2^(8 - o) % 256 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
-  have : x.val * (2^(8 - o) % 256) + 2^(8 - o) ≤ 2^8 := by
-    have : x.val * (2^(8 - o) % 256) ≤ x.val * 2^(8 - o) :=
-      Nat.mul_le_mul_left _ (Nat.mod_le ..)
+  have : 2^(8 - o) ≤ 2^8 := Nat.pow_le_pow_of_le (show 2 > 1 by norm_num) (by omega)
+  have h_base : base.val = 2^(8 - o) := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
+  have : x.val * (2^(8 - o)) + 2^(8 - o) ≤ 2^8 := by
     suffices x.val * 2^(8 - o) + 1 * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
       rw [←pow_add, add_tsub_cancel_of_le (by linarith [ho])] at this
       linarith
@@ -100,7 +99,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   simp only [size] at getElem_eval_to_vars x_normalized
 
   simp only [to_vars', Fin.forall_iff, getElem_eval_to_vars, x_normalized, true_implies] at h_decomposition
-  set base := ((2^(8 - offset.val) % 256 : ℕ) : F p)
+  set base := ((2^(8 - offset.val) : ℕ) : F p)
 
   -- prove that the output is normalized
   have y_norm : y.is_normalized := by
@@ -119,10 +118,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   set xs : Vector _ 8 := to_elements x
   set ys : Vector _ 8 := to_elements y
   set o := offset.val
-  let b := (2^(8 - offset.val) % 256 : ℕ)
+  let b := (2^(8 - offset.val) : ℕ)
 
   have h_rot_vector (i : ℕ) (hi : i < 8) :
-      ys[i].val = (xs[(i + 1) % 8].val % 2^o) * (2^(8-o) % 256) + xs[i].val / 2^o := by
+      ys[i].val = (xs[(i + 1) % 8].val % 2^o) * (2^(8-o)) + xs[i].val / 2^o := by
     rw [←h_concatenation i hi]
     set x := env.get (i0 + (i + 1) % 8 * 2)
     set y := env.get (i0 + i * 2 + 1)
