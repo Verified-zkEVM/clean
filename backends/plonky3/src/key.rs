@@ -1,16 +1,33 @@
+use core::default;
+
 use alloc::vec::Vec;
 use p3_air::{
     Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
     VirtualPairCol,
 };
+use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::Field;
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 use p3_uni_stark::{get_symbolic_constraints, SymbolicExpression};
 use p3_util::log2_ceil_usize;
 
+// Bring vec! macro into scope
+extern crate alloc;
+use alloc::vec;
+
 use crate::clean_air::CleanAirInstance;
 use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
-use crate::{BaseMessageBuilder, Lookup, LookupBuilder};
+use crate::{BaseMessageBuilder, Lookup, LookupBuilder, StarkGenericConfig};
+
+type Com<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
+    <SC as StarkGenericConfig>::Challenge,
+    <SC as StarkGenericConfig>::Challenger,
+>>::Commitment;
+
+type PcsData<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
+    <SC as StarkGenericConfig>::Challenge,
+    <SC as StarkGenericConfig>::Challenger,
+>>::ProverData;
 
 pub trait VerifyingKey<F> {
     fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
@@ -34,14 +51,76 @@ pub trait VerifyingKey<F> {
             + BaseMessageBuilder;
 }
 
+pub struct VK<F: Field, SC: StarkGenericConfig> {
+    air_infos: Vec<AirInfo<F>>,
+    pre_com: Com<SC>,
+    pre_data: PcsData<SC>,
+}
+
+impl<F: Field, SC: StarkGenericConfig> VK<F, SC> {
+    /// Create a new VK with preprocessed trace commitment from a list of air instances
+    pub fn new(air_infos: Vec<AirInfo<F>>, traces_heights: Vec<usize>, config: &SC) -> Self
+    where
+        F: From<crate::Val<SC>> + Into<crate::Val<SC>>,
+    {
+        let pcs = config.pcs();
+        // Collect all preprocessed traces for batch commitment
+        let mut pre_and_domains = Vec::new();
+        for (i, air_info) in air_infos.iter().enumerate() {
+            if let Some(preprocessed_trace) = &air_info.preprocessed {
+                let degree = preprocessed_trace.height();
+                let domain = pcs.natural_domain_for_degree(degree);
+                
+                // Convert the matrix to the right field type
+                let mut converted_values = Vec::new();
+                for row in 0..preprocessed_trace.height() {
+                    for col in 0..preprocessed_trace.width() {
+                        let val = preprocessed_trace.get(row, col).unwrap();
+                        converted_values.push(val.into());
+                    }
+                }
+                let converted_matrix = RowMajorMatrix::new(converted_values, preprocessed_trace.width());
+                pre_and_domains.push((domain, converted_matrix));
+            }
+            else {
+                // todo: remove the need for default preprocessed trace if no preprocessed trace is available
+                // If no preprocessed trace, use a default matrix
+                let domain = pcs.natural_domain_for_degree(traces_heights[i]); 
+                let default_matrix = RowMajorMatrix::new(vec![crate::Val::<SC>::default(); domain.size()], 1); 
+                pre_and_domains.push((domain, default_matrix));
+            }
+        }
+        
+        // Create batch commitment for all preprocessed traces
+        let (pre_com, pre_data) = pcs.commit(pre_and_domains);
+
+        Self { air_infos, pre_com, pre_data }
+    }
+
+    /// Get the preprocessed trace commitment
+    pub fn preprocessed_commitment(&self) -> &Com<SC> {
+        &self.pre_com
+    }
+
+    /// Get the preprocessed trace data
+    pub fn preprocessed_data(&self) -> &PcsData<SC> {
+        &self.pre_data
+    }
+
+    /// Get access to all AirInfo instances
+    pub fn air_infos(&self) -> &Vec<AirInfo<F>> {
+        &self.air_infos
+    }
+}
+
 #[derive(Clone)]
-pub struct VK<F: Field> {
+pub struct AirInfo<F: Field> {
     pub air: CleanAirInstance<F>,
     pub lookups: Vec<(Lookup<VirtualPairCol<F>>, bool)>,
     pub preprocessed: Option<RowMajorMatrix<F>>,
 }
 
-impl<F: Field> VK<F> {
+impl<F: Field> AirInfo<F> {
     /// Create a new VK from air instance and trace width, building lookups automatically
     pub fn new(air: CleanAirInstance<F>, trace_width: usize) -> Self {
         let preprocessed_width = if air.preprocessed_trace().is_some() {
@@ -78,7 +157,7 @@ impl<F: Field> VK<F> {
     }
 }
 
-impl<F: Field> VerifyingKey<F> for VK<F> {
+impl<F: Field> VerifyingKey<F> for AirInfo<F> {
     fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> {
         &self.lookups
     }
@@ -144,7 +223,7 @@ impl<F: Field> VerifyingKey<F> for VK<F> {
     }
 }
 
-impl<F: Field> BaseAir<F> for VK<F> {
+impl<F: Field> BaseAir<F> for AirInfo<F> {
     fn width(&self) -> usize {
         self.air.width()
     }
@@ -154,7 +233,7 @@ impl<F: Field> BaseAir<F> for VK<F> {
     }
 }
 
-impl<AB> Air<AB> for VK<AB::F>
+impl<AB> Air<AB> for AirInfo<AB::F>
 where
     AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
     AB::F: Field,
@@ -164,3 +243,5 @@ where
         // Note: Permutation constraints are handled separately in the proving/verification process
     }
 }
+
+

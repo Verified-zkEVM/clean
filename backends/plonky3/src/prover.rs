@@ -2,7 +2,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use itertools::Itertools;
-use p3_air::Air;
 use p3_challenger::{CanObserve, FieldChallenger};
 use p3_commit::{Pcs, PolynomialSpace};
 use p3_field::{BasedVectorSpace, PackedValue, PrimeCharacteristicRing};
@@ -14,38 +13,27 @@ use p3_util::log2_strict_usize;
 use p3_util::zip_eq::zip_eq;
 use tracing::{debug_span, info_span, instrument};
 
-use p3_uni_stark::SymbolicAirBuilder;
-
 use crate::{
-    permutation, CleanAir, Commitments, Domain, LookupBuilder, OpenedValues, PackedChallenge,
-    PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val,
+    permutation, AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK
 };
 
 #[instrument(skip_all)]
-#[allow(clippy::multiple_bound_locations)]
-pub fn prove<
-    SC,
-    #[cfg(debug_assertions)] A: for<'a> Air<crate::check_constraints::DebugConstraintBuilder<'a, Val<SC>>>,
-    #[cfg(not(debug_assertions))] A,
->(
+pub fn prove<SC>(
     config: &SC,
-    tables: &Vec<&A>,
+    air_infos: &Vec<AirInfo<Val<SC>>>,
+    traces: &[RowMajorMatrix<Val<SC>>],
     public_values: &Vec<Val<SC>>,
 ) -> Proof<SC>
 where
     SC: StarkGenericConfig,
-    A: CleanAir<Val<SC>>
-        + Air<SymbolicAirBuilder<Val<SC>>>
-        + Air<LookupBuilder<Val<SC>>>
-        + for<'a> Air<ProverConstraintFolder<'a, SC>>,
 {
     let pcs = config.pcs();
     let mut challenger = config.initialise_challenger();
+    
+    // Ensure we have the same number of traces as air infos
+    assert_eq!(traces.len(), air_infos.len(), "Number of traces must match number of AirInfo instances");
 
-    let degrees = tables
-        .iter()
-        .enumerate()
-        .map(|(i, _)| tables[i].main().height());
+    let degrees = traces.iter().map(|trace| trace.height());
 
     let log_degrees = degrees.clone().map(log2_strict_usize).collect_vec();
 
@@ -57,14 +45,16 @@ where
             .collect_vec(),
     );
 
-    let constraint_counts = tables
+    let vk = VK::new(air_infos.to_vec(), degrees.clone().collect_vec(), config);
+
+    let constraint_counts = air_infos
         .iter()
-        .map(|table| table.count_constraints(public_values.len()))
+        .map(|air_info| air_info.count_constraints(public_values.len()))
         .collect_vec();
 
-    let log_quotient_degrees = tables
+    let log_quotient_degrees = air_infos
         .iter()
-        .map(|table| table.log_quotient_degree(public_values.len()))
+        .map(|air_info| air_info.log_quotient_degree(public_values.len()))
         .collect::<Vec<_>>();
 
     let quotient_degrees = log_quotient_degrees.iter().map(|&d| 1 << d).collect_vec();
@@ -76,36 +66,19 @@ where
 
     let traces_and_domains = zip_eq(
             trace_domains.iter(),
-            tables.iter(),
-            "Trace domains and tables length mismatch",
+            traces.iter(),
+            "Trace domains and traces length mismatch",
         )
         .unwrap()
-        .map(|(domain, table)| (*domain, table.main().clone()))
-        .collect_vec();
-
-    let pre_and_domains = zip_eq(
-            trace_domains.iter(),
-            tables.iter(),
-            "Trace domains and tables length mismatch",
-        )
-        .unwrap()
-        .map(|(domain, table)| {
-            let pre = if let Some(pre) = table.preprocessed() {
-                pre.clone()
-            } else {
-                // todo: avoid this by allowing null preprocessed traces.
-                // If the table does not have a preprocessed trace, we create a default one.
-                RowMajorMatrix::new(vec![Val::<SC>::ZERO; domain.size()], 1)
-            };
-            (*domain, pre)
-        })
+        .map(|(domain, trace)| (*domain, trace.clone()))
         .collect_vec();
 
     let (trace_commit, trace_data) =
         info_span!("commit to trace data").in_scope(|| pcs.commit(traces_and_domains));
 
-    let (pre_commit, pre_data) =
-        info_span!("commit to preprocessed data").in_scope(|| pcs.commit(pre_and_domains));
+    // Use the preprocessed commitment and data from the VK
+    let pre_commit = vk.preprocessed_commitment().clone();
+    let pre_data = vk.preprocessed_data();
 
     // Observe the instance.
     challenger.observe(trace_commit.clone());
@@ -113,16 +86,18 @@ where
     challenger.observe_slice(public_values);
 
     // Get the challenges for the permutation trace calculation.
-    let permutation_challenges: Vec<SC::Challenge> = (0..tables.len())
+    let permutation_challenges: Vec<SC::Challenge> = (0..air_infos.len())
         .map(|_| challenger.sample_algebra_element())
         .collect_vec();
 
     // compute permutation traces
-    let perm_traces = tables
+    let perm_traces = air_infos
         .iter()
-        .map(|table| {
-            permutation::generate_permutation_trace::<SC, A, SC::Challenge>(
-                table,
+        .zip(traces.iter())
+        .map(|(air_info, trace)| {
+            permutation::generate_permutation_trace::<SC, SC::Challenge>(
+                air_info,
+                trace,
                 &permutation_challenges,
             )
         })
@@ -173,11 +148,13 @@ where
         })
         .collect_vec();
 
-    let quotient_values = tables
-        .iter()
-        .enumerate()
-        .map(|(i, table)| {
-            let trace_domain = trace_domains[i];
+    let quotient_values = zip_eq(
+        air_infos.iter(),
+        trace_domains.iter().enumerate(),
+        "Air infos and trace domains length mismatch"
+    )
+        .unwrap()
+        .map(|(air_info, (i, trace_domain))| {
             let quotient_domain = quotient_domains[i];
             let trace_on_quotient_domain =
                 pcs.get_evaluations_on_domain(&trace_data, i, quotient_domains[i]);
@@ -188,10 +165,10 @@ where
 
             let constraint_count = constraint_counts[i];
 
-            quotient_values(
-                *table,
+            quotient_values::<SC, _>(
+                air_info,
                 public_values,
-                trace_domain,
+                *trace_domain,
                 quotient_domain,
                 trace_on_quotient_domain,
                 pre_on_quotient_domain,
@@ -240,7 +217,7 @@ where
     // Out of domain challenge point.
     let zeta: SC::Challenge = challenger.sample_algebra_element();
 
-    let trace_points = (0..tables.len())
+    let trace_points = (0..air_infos.len())
         .map(|i| {
             let trace_domain = trace_domains[i];
             let zeta_next = trace_domain.next_point(zeta).unwrap();
@@ -248,7 +225,7 @@ where
         })
         .collect_vec();
 
-    let pre_points = (0..tables.len())
+    let pre_points = (0..air_infos.len())
         .map(|i| {
             let trace_domain = trace_domains[i];
             let zeta_next = trace_domain.next_point(zeta).unwrap();
@@ -256,7 +233,7 @@ where
         })
         .collect_vec();
 
-    let perm_points = (0..tables.len())
+    let perm_points = (0..air_infos.len())
         .map(|i| {
             let trace_domain = trace_domains[i];
             let zeta_next = trace_domain.next_point(zeta).unwrap();
@@ -264,7 +241,7 @@ where
         })
         .collect_vec();
 
-    let quotient_points = (0..tables.len())
+    let quotient_points = (0..air_infos.len())
         .flat_map(|i| (0..quotient_degrees[i]).map(|_| vec![zeta]).collect_vec())
         .collect_vec();
 
@@ -290,7 +267,7 @@ where
         quotient_opened_values.push(slice.collect_vec());
     }
 
-    let opened_values = (0..tables.len())
+    let opened_values = (0..air_infos.len())
         .map(|i| OpenedValues {
             trace_local: trace_opened_values[i][0].clone(),
             trace_next: trace_opened_values[i][1].clone(),
@@ -316,8 +293,8 @@ where
 
 #[instrument(name = "compute quotient polynomial", skip_all)]
 #[allow(clippy::too_many_arguments)]
-fn quotient_values<SC, A, Mat>(
-    air: &A,
+fn quotient_values<SC, Mat>(
+    air_info: &crate::key::AirInfo<Val<SC>>,
     public_values: &Vec<Val<SC>>,
     trace_domain: Domain<SC>,
     quotient_domain: Domain<SC>,
@@ -331,7 +308,6 @@ fn quotient_values<SC, A, Mat>(
 ) -> Vec<SC::Challenge>
 where
     SC: StarkGenericConfig,
-    A: for<'a> Air<ProverConstraintFolder<'a, SC>> + CleanAir<Val<SC>>,
     Mat: Matrix<Val<SC>> + Sync,
 {
     let quotient_size = quotient_domain.size();
@@ -472,7 +448,7 @@ where
                 accumulator,
                 constraint_index: 0,
             };
-            air.eval_constraints(&mut folder);
+            air_info.eval_constraints(&mut folder);
 
             // quotient(x) = constraints(x) / Z_H(x)
             let quotient = folder.accumulator * inv_vanishing;

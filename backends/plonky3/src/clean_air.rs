@@ -1,9 +1,8 @@
 use alloc::vec::Vec;
 use core::marker::PhantomData;
-use p3_uni_stark::{SymbolicExpression};
 
 use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder,
     VirtualPairCol,
 };
 use p3_field::{Field, PrimeCharacteristicRing};
@@ -12,8 +11,7 @@ use p3_matrix::Matrix;
 
 use crate::clean_ast::{AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation};
 use crate::key::VK;
-use crate::permutation::MultiTableBuilder;
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, VerifyingKey};
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, VerifyingKey, StarkGenericConfig};
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -238,20 +236,19 @@ where
     }
 }
 
-pub trait CleanAir<F>: VerifyingKey<F> {
+pub trait CleanTrace<F> {
     fn main(&self) -> &RowMajorMatrix<F>;
 }
 
-#[derive(Clone)]
-pub struct Table<F: Field> {
-    pub vk: VK<F>,
+pub struct Table<F: Field, SC: StarkGenericConfig> {
+    pub vk: VK<F, SC>,
     // todo: verifier doesn't access to main traces
     pub trace: RowMajorMatrix<F>,
 }
 
-impl<F: Field> Table<F> {
+impl<F: Field, SC: StarkGenericConfig> Table<F, SC> {
     /// Create a new Table that delegates construction to VK
-    pub fn new(vk: VK<F>, trace: RowMajorMatrix<F>) -> Self {
+    pub fn new(vk: VK<F, SC>, trace: RowMajorMatrix<F>) -> Self {
         Self { vk, trace }
     }
 
@@ -260,13 +257,13 @@ impl<F: Field> Table<F> {
         &self.trace
     }
 
-    /// Access the cached lookup messages (sends, receives)
-    pub fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)> {
-        self.vk.lookups()
+    /// Access the verifying key
+    pub fn vk(&self) -> &VK<F, SC> {
+        &self.vk
     }
 
     pub fn as_clean_air(&self) -> Option<&MainAir<F>> {
-        if let CleanAirInstance::Main(air) = &self.vk.air {
+        if let CleanAirInstance::Main(air) = &self.vk.air_infos()[0].air {
             Some(air)
         } else {
             None
@@ -274,71 +271,11 @@ impl<F: Field> Table<F> {
     }
 }
 
-impl<F: Field> VerifyingKey<F> for Table<F> {
-    /// Get symbolic constraints for this air
-    fn constraints(&self, public_inputs: usize) -> Vec<SymbolicExpression<F>> {
-        self.vk.constraints(public_inputs)
-    }
-
-    fn count_constraints(&self, public_inputs: usize) -> usize {
-        self.vk.count_constraints(public_inputs)
-    }
-
-    /// Get log quotient degree for this air
-    fn log_quotient_degree(&self, public_inputs: usize) -> usize {
-        self.vk.log_quotient_degree(public_inputs)
-    }
-
-    fn eval_constraints<AB>(&self, builder: &mut AB)
-    where
-        AB: AirBuilder<F = F>
-            + PermutationAirBuilder
-            + MultiTableBuilder
-            + AirBuilderWithPublicValues
-            + PairBuilder
-            + BaseMessageBuilder,
-    {
-        self.vk.eval_constraints(builder);
-    }
-
-    fn lookups(&self) -> &Vec<(Lookup<VirtualPairCol<F>>, bool)>
-    where
-        F: Field,
-    {
-        self.vk.lookups()
-    }
-
-    fn preprocessed(&self) -> Option<RowMajorMatrix<F>> {
-        self.vk.preprocessed()
-    }
-
-    fn width(&self) -> usize {
-        self.vk.air.width()
-    }
-}
-
-impl<F: Field> CleanAir<F> for Table<F> {
+impl<F: Field, SC: StarkGenericConfig> CleanTrace<F> for Table<F, SC> 
+where
+    VK<F, SC>: Clone,
+{
     fn main(&self) -> &RowMajorMatrix<F> {
         &self.trace
-    }
-}
-
-impl<F: Field> BaseAir<F> for Table<F> {
-    fn width(&self) -> usize {
-        self.vk.air.width()
-    }
-
-    fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        self.vk.air.preprocessed_trace()
-    }
-}
-
-impl<AB> Air<AB> for Table<AB::F>
-where
-    AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
-    AB::F: Field,
-{
-    fn eval(&self, builder: &mut AB) {
-        self.vk.air.eval(builder);
     }
 }

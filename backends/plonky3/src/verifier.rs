@@ -12,21 +12,17 @@ use p3_matrix::Matrix;
 use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
-use crate::{PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder, VerifyingKey};
-use p3_uni_stark::SymbolicAirBuilder;
+use crate::{AirInfo, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder, VerifyingKey, VK};
 
 #[instrument(skip_all)]
-pub fn verify<SC, A>(
+pub fn verify<SC>(
     config: &SC,
-    vks: &[&A],
+    air_infos: &Vec<AirInfo<Val<SC>>>,
     proof: &Proof<SC>,
     public_values: &Vec<Val<SC>>,
 ) -> Result<(), VerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
-    A: VerifyingKey<Val<SC>>
-        + Air<SymbolicAirBuilder<Val<SC>>>
-        + for<'a> Air<VerifierConstraintFolder<'a, SC>>,
 {
     let Proof {
         commitments,
@@ -34,6 +30,7 @@ where
         opening_proof,
         degree_bits,
     } = proof;
+
 
     let mut challenger = config.initialise_challenger();
     challenger.observe_slice(
@@ -43,12 +40,16 @@ where
             .collect_vec(),
     );
 
+    // todo: construct VK without relying on degree_bits
+    let vk = VK::new(air_infos.clone(), degree_bits.iter().map(|d| 1 << d).collect_vec(), config);
+
     challenger.observe(commitments.trace.clone());
-    challenger.observe(commitments.preprocessed.clone());
+    // Use VK's preprocessed commitment instead of proof's preprocessed commitment
+    challenger.observe(vk.preprocessed_commitment().clone());
     challenger.observe_slice(public_values);
 
-    // Sample permutation challenges for each table.
-    let permutation_challenges: Vec<SC::Challenge> = (0..vks.len())
+    // Sample permutation challenges for each air info.
+    let permutation_challenges: Vec<SC::Challenge> = (0..air_infos.len())
         .map(|_| challenger.sample_algebra_element())
         .collect();
 
@@ -73,18 +74,17 @@ where
     // First, collect all verification data and validate shapes for all AIRs
     let mut all_air_data = Vec::new();
     let mut trace_openings = Vec::new();
-    // todo: preprocessed openings should be from verifying key?
     let mut preprocessed_openings = Vec::new();
     let mut perm_openings = Vec::new();
     let mut quotient_openings = Vec::new();
 
-    let log_quotient_degrees = (0..vks.len())
-        .map(|i| vks[i].log_quotient_degree(public_values.len()))
+    let log_quotient_degrees = (0..air_infos.len())
+        .map(|i| air_infos[i].log_quotient_degree(public_values.len()))
         .collect::<Vec<_>>();
 
-    for i in 0..vks.len() {
-        let vk = vks[i];
-        let pre = if let Some(preprocessed) = vk.preprocessed() {
+    for i in 0..air_infos.len() {
+        let air_info = &air_infos[i];
+        let pre = if let Some(preprocessed) = air_info.preprocessed() {
             preprocessed
         } else {
             // Create a default preprocessed trace if none exists
@@ -106,7 +106,7 @@ where
             trace_domain.create_disjoint_domain(1 << (degree_bits_i + log_quotient_degree));
         let quotient_chunks_domains = quotient_domain.split_domains(quotient_degree);
 
-        let air_width = VerifyingKey::width(vk);
+        let air_width = air_info.width();
         let valid_shape = opened_values_i.trace_local.len() == air_width
             && opened_values_i.trace_next.len() == air_width
             && opened_values_i.preprocessed_local.len() == pre.width()
@@ -138,7 +138,7 @@ where
 
         // Store data needed for constraint evaluation later
         all_air_data.push((
-            vk,
+            air_info,
             trace_domain,
             quotient_chunks_domains.clone(),
             opened_values_i,
@@ -184,7 +184,7 @@ where
     // Prepare commitments with their respective opening points
     let coms_to_verify = vec![
         (commitments.trace.clone(), trace_openings),
-        (commitments.preprocessed.clone(), preprocessed_openings),
+        (vk.preprocessed_commitment().clone(), preprocessed_openings),
         (commitments.perm.clone(), perm_openings),
         (commitments.quotient_chunks.clone(), quotient_openings),
     ];
@@ -212,7 +212,7 @@ where
     // Init accumulative value for the cumulative sums
     let zero = SC::Challenge::default();
     // Now process constraint evaluation for each AIR
-    for (vk, trace_domain, quotient_chunks_domains, opened_values_i) in all_air_data {
+    for (air_info, trace_domain, quotient_chunks_domains, opened_values) in all_air_data {
         let zps = quotient_chunks_domains
             .iter()
             .enumerate()
@@ -231,7 +231,7 @@ where
             })
             .collect_vec();
 
-        let quotient = opened_values_i
+        let quotient = opened_values
             .quotient_chunks
             .iter()
             .enumerate()
@@ -251,16 +251,16 @@ where
         let sels = trace_domain.selectors_at_point(zeta);
 
         let main = VerticalPair::new(
-            RowMajorMatrixView::new_row(&opened_values_i.trace_local),
-            RowMajorMatrixView::new_row(&opened_values_i.trace_next),
+            RowMajorMatrixView::new_row(&opened_values.trace_local),
+            RowMajorMatrixView::new_row(&opened_values.trace_next),
         );
         let preprocessed = VerticalPair::new(
-            RowMajorMatrixView::new_row(&opened_values_i.preprocessed_local),
-            RowMajorMatrixView::new_row(&opened_values_i.preprocessed_next),
+            RowMajorMatrixView::new_row(&opened_values.preprocessed_local),
+            RowMajorMatrixView::new_row(&opened_values.preprocessed_next),
         );
 
-        let unflattened_perm_local = unflatten(&opened_values_i.perm_local);
-        let unflattened_perm_next = unflatten(&opened_values_i.perm_next);
+        let unflattened_perm_local = unflatten(&opened_values.perm_local);
+        let unflattened_perm_next = unflatten(&opened_values.perm_next);
         let perm = VerticalPair::new(
             RowMajorMatrixView::new_row(&unflattened_perm_local),
             RowMajorMatrixView::new_row(&unflattened_perm_next),
@@ -277,20 +277,20 @@ where
             alpha,
             accumulator: zero,
             perm_challenges: &permutation_challenges,
-            local_cumulative_sum: opened_values_i.local_cumulative_sum,
+            local_cumulative_sum: opened_values.local_cumulative_sum,
         };
-        vk.eval_constraints(&mut folder);
+        air_info.eval_constraints(&mut folder);
         let folded_constraints = folder.accumulator;
 
+        tracing::info!(
+            "folded_constraints: {}, quotient: {}, vanishing: {}",
+            folded_constraints,
+            quotient,
+            trace_domain.vanishing_poly_at_point(zeta)
+        );
         // Finally, check that
         //     folded_constraints(zeta) / Z_H(zeta) = quotient(zeta)
         if folded_constraints * sels.inv_vanishing != quotient {
-            tracing::info!(
-                "folded_constraints: {}, quotient: {}, vanishing: {}",
-                folded_constraints,
-                quotient,
-                trace_domain.vanishing_poly_at_point(zeta)
-            );
             return Err(VerificationError::OodEvaluationMismatch);
         }
     }

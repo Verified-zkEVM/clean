@@ -8,7 +8,7 @@ use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
 use crate::{
-    ByteRangeAir, CleanAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Table, Val,
+    ByteRangeAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Val,
     VerifyingKey, VK,
 };
 
@@ -25,28 +25,29 @@ pub trait MultiTableBuilder: ExtensionBuilder {
 }
 
 /// Generates lookup tables with multiplicity traces,
-/// based on the lookup operations from the VK.
+/// based on the lookup operations from the AirInfo instances.
 ///
 /// This function:
-/// 1. Uses the VK's pre-computed lookup operations
-/// 2. Collect lookups and multiplicity traces for each lookup type
-/// 3. Returns lookup tables
+/// 1. Uses the pre-computed lookup operations from the main air (index 0)
+/// 2. Collect lookups and multiplicity traces for each lookup type using other airs
+/// 3. Returns lookup traces
 ///
 /// # Arguments
-/// * `main_vk` - The VK instance containing lookup operations
-/// * `trace` - The main execution trace
-pub fn generate_lookup_tables<F>(
-    main_vk: &VK<F>,
-    lookup_vks: &[VK<F>],
-    trace: &RowMajorMatrix<F>,
-) -> Vec<Table<F>>
+/// * `air_infos` - Vector of AirInfo instances (main + lookup airs)  
+/// * `main_trace` - The main execution trace (corresponds to air_infos[0])
+pub fn generate_lookup_traces<F, SC>(
+    air_infos: &[crate::key::AirInfo<F>],
+    main_trace: &RowMajorMatrix<F>,
+) -> Vec<RowMajorMatrix<F>>
 where
-    F: Field + PrimeField32,
+    F: Field + PrimeField32 + From<crate::Val<SC>> + Into<crate::Val<SC>>,
+    SC: StarkGenericConfig,
 {
-    let mut tables = Vec::new();
-
-    // Get lookup operations from the VK (they're already computed)
-    let lookups = main_vk.lookups();
+    let mut lookup_traces = Vec::new();
+    
+    // Get lookup operations from the main air (first air in the list)
+    let main_air_info = &air_infos[0];
+    let lookups = main_air_info.lookups();
     let sends: Vec<_> = lookups
         .iter()
         .filter(|(_, is_send)| *is_send)
@@ -57,10 +58,10 @@ where
     let receives: Vec<_> = lookups.iter().filter(|(_, is_send)| !*is_send).collect();
     assert!(
         receives.is_empty(),
-        "The main VK should only send lookups, as it is not a lookup air"
+        "The main air should only send lookups, as it is not a lookup air"
     );
 
-    // Group lookups by type using simple filtering
+    // Group lookups by type and find corresponding airs in the VK
     // Process ByteRange lookups
     let byte_range_sends: Vec<_> = sends
         .iter()
@@ -68,20 +69,20 @@ where
         .collect();
 
     if !byte_range_sends.is_empty() {
-        // Find the corresponding ByteRange VK from the provided lookup VKs
-        let byte_range_vk = lookup_vks
+        // Find the corresponding ByteRange air in the VK
+        let _byte_range_air_info = air_infos
             .iter()
-            .find(|vk| matches!(&vk.air, CleanAirInstance::ByteRange(_)))
-            .expect("ByteRange VK not found in lookup_vks");
+            .find(|air_info| matches!(&air_info.air, CleanAirInstance::ByteRange(_)))
+            .expect("ByteRange air not found in VK");
 
         // Create multiplicity trace for byte range lookups (256 possible values, 0-255)
         let mut multiplicity_trace = RowMajorMatrix::new(alloc::vec![F::ZERO; 256], 1);
 
         // Calculate multiplicities by evaluating lookup operations for each row
-        for row_idx in 0..trace.height() {
+        for row_idx in 0..main_trace.height() {
             for send in &byte_range_sends {
                 // Calculate the virtual column of the lookup values for the current row
-                let row_slice: Vec<F> = trace.row(row_idx).unwrap().into_iter().collect();
+                let row_slice: Vec<F> = main_trace.row(row_idx).unwrap().into_iter().collect();
                 let v = send.value.apply::<F, F>(&[], &row_slice);
 
                 // Convert lookup value to index of multiplicity trace and increment multiplicity
@@ -97,29 +98,27 @@ where
             }
         }
 
-        // Use the provided VK instead of creating a new one
-        tables.push(Table::new(byte_range_vk.clone(), multiplicity_trace));
+        lookup_traces.push(multiplicity_trace);
     }
 
     // TODO: Add support for other lookup types as needed
 
-    tables
+    lookup_traces
 }
 
 /// Generates a permutation trace for the given AIR.
 /// 1. Builds the lookups using LookupBuilder for the given AIR.
 /// 2. Computes the permutation trace based on the lookups and the traces for the Air.
-pub fn generate_permutation_trace<SC, A, EF: ExtensionField<Val<SC>>>(
-    air: &A,
+pub fn generate_permutation_trace<SC, EF: ExtensionField<Val<SC>>>(
+    air_info: &crate::key::AirInfo<Val<SC>>,
+    main_trace: &RowMajorMatrix<Val<SC>>,
     random_elements: &[EF],
 ) -> (RowMajorMatrix<EF>, EF)
 where
     SC: StarkGenericConfig,
-    A: CleanAir<Val<SC>>,
 {
     let z = random_elements[0];
-    let lookups = air.lookups();
-    let main_trace = air.main();
+    let lookups = air_info.lookups();
 
     let num_perm_cols = lookups.len() + 1; // +1 for cumulative sum column
 
@@ -134,7 +133,7 @@ where
     for row in 0..main_trace.height() {
         let r = permutation_trace.row_mut(row);
 
-        let preprocessed_row: Vec<Val<SC>> = if let Some(pre) = air.preprocessed() {
+        let preprocessed_row: Vec<Val<SC>> = if let Some(pre) = air_info.preprocessed() {
             pre.row(row).unwrap().into_iter().collect()
         } else {
             Vec::new()
