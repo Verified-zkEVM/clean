@@ -77,38 +77,33 @@ theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
 
   have offset_mod_64 : o % 64 = o := Nat.mod_eq_of_lt (by linarith)
   simp only [offset_mod_64]
+  rw [h_mod ho, h_div ho]
 
-  rw [h_mod ho]
-  -- if the offset is zero, then it is trivial: it is a special case since
-  -- in that case the rotation is a no-op
-  by_cases h_offset : o = 0
-  · simp [h_offset, Nat.mod_one]
-  · rw [h_div ho]
-    -- proof technique: we care about only what happens to x0, all "internal" terms remain
-    -- the same, and are just divided by 2^o
-    rw [shifted_decomposition_eq ho]
-    repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
+  -- proof technique: we care about only what happens to x0, all "internal" terms remain
+  -- the same, and are just divided by 2^o
+  rw [shifted_decomposition_eq ho]
+  repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
 
-    -- we do a bit of expression juggling here
-    rw [←add_assoc _ _ (_ * 256 ^ 7), soundness_simp]
-    nth_rw 12 [←add_assoc]
-    rw [soundness_simp]
-    nth_rw 10 [←add_assoc]
-    rw [soundness_simp]
-    nth_rw 8 [←add_assoc]
-    rw [soundness_simp]
-    nth_rw 6 [←add_assoc]
-    rw [soundness_simp]
-    nth_rw 4 [←add_assoc]
-    nth_rw 2 [Nat.mul_right_comm]
-    rw [soundness_simp]
-    nth_rw 2 [←add_assoc]
-    rw [soundness_simp']
-    nth_rw 7 [mul_assoc]
+  -- we do a bit of expression juggling here
+  rw [←add_assoc _ _ (_ * 256 ^ 7), soundness_simp]
+  nth_rw 12 [←add_assoc]
+  rw [soundness_simp]
+  nth_rw 10 [←add_assoc]
+  rw [soundness_simp]
+  nth_rw 8 [←add_assoc]
+  rw [soundness_simp]
+  nth_rw 6 [←add_assoc]
+  rw [soundness_simp]
+  nth_rw 4 [←add_assoc]
+  nth_rw 2 [Nat.mul_right_comm]
+  rw [soundness_simp]
+  nth_rw 2 [←add_assoc]
+  rw [soundness_simp']
+  nth_rw 7 [mul_assoc]
 
-    -- at the end the terms are equal
-    rw [h_x0_const ho]
-    ac_rfl
+  -- at the end the terms are equal
+  rw [h_x0_const ho]
+  ac_rfl
 
 end Gadgets.Rotation64.Theorems

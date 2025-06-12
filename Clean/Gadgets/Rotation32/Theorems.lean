@@ -70,24 +70,19 @@ theorem rotation32_bits_soundness {o : ℕ} (ho : o < 8) {x : U32 ℕ} :
 
   have offset_mod_32 : o % 32 = o := Nat.mod_eq_of_lt (by linarith)
   simp only [offset_mod_32]
+  rw [h_mod32 ho, h_div32 ho]
 
-  rw [h_mod32 ho]
-  -- if the offset is zero, then it is trivial: it is a special case since
-  -- in that case the rotation is a no-op
-  by_cases h_offset : o = 0
-  · simp [h_offset, Nat.mod_one]
-  · rw [h_div32 ho]
-    -- proof technique: we care about only what happens to x0, all "internal" terms remain
-    -- the same, and are just divided by 2^o
-    rw [shifted_decomposition_eq ho]
-    repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-    simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
-    rw [←add_assoc _ _ (_ * 256 ^ 3), soundness_simp]
-    nth_rw 4 [←add_assoc]
-    rw [Nat.mul_right_comm _ 256, soundness_simp]
-    nth_rw 2 [←add_assoc]
-    rw [Nat.mul_right_comm _ 256, soundness_simp']
-    rw [mul_assoc (x.x0 % 2 ^ o), h_x0_const32 ho]
-    ac_rfl
+  -- proof technique: we care about only what happens to x0, all "internal" terms remain
+  -- the same, and are just divided by 2^o
+  rw [shifted_decomposition_eq ho]
+  repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
+  rw [←add_assoc _ _ (_ * 256 ^ 3), soundness_simp]
+  nth_rw 4 [←add_assoc]
+  rw [Nat.mul_right_comm _ 256, soundness_simp]
+  nth_rw 2 [←add_assoc]
+  rw [Nat.mul_right_comm _ 256, soundness_simp']
+  rw [mul_assoc (x.x0 % 2 ^ o), h_x0_const32 ho]
+  ac_rfl
 
 end Gadgets.Rotation32.Theorems
