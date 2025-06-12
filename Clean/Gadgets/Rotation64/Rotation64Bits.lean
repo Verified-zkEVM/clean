@@ -86,7 +86,6 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   obtain ⟨ h_decomposition, h_concatenation ⟩ := h_holds
 
   -- targeted rewriting of the assumptions
-
   simp only [ProvableType.ext_iff, size, from_vars', to_vars', ProvableType.eval_from_vars,
     ProvableType.to_elements_from_elements, Vector.getElem_map, Vector.getElem_zip,
     Vector.getElem_mapIdx, Vector.getElem_rotate, Expression.eval] at h_concatenation
