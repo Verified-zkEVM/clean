@@ -138,11 +138,24 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   exact rotation64_bits_soundness offset.is_lt
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
-  sorry
+  intro i0 env x_var _ x h_input x_normalized
+
+  -- simplify goal
+  simp only [rot64_bits, elaborated, circuit_norm, subcircuit_norm,
+    U64.copy, U64.Copy.circuit, U64.Copy.assumptions,
+    ByteDecomposition.circuit, ByteDecomposition.assumptions]
+
+  -- we only have to prove the byte decomposition assumptions
+  rw [assumptions, U64.ByteVector.is_normalized_iff] at x_normalized
+
+  have getElem_eval_to_vars (i : ℕ) (hi : i < 8) : (to_vars x_var)[i].eval env = (to_elements x)[i] := by
+    rw [ProvableType.getElem_eval_to_vars, h_input]
+
+  simp_all only [size, to_vars', forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with
-  assumptions := assumptions
+  assumptions
   spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
