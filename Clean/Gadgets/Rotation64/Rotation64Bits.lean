@@ -26,12 +26,11 @@ def from_vars' (x : Vector (Expression (F p)) (size U64)) := from_vars x
   Rotate the 64-bit integer by `offset` bits
 -/
 def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let base : F p := (2^(8 - offset.val) : ℕ)
-
   let parts ← Circuit.map (to_vars' x) (subcircuit (ByteDecomposition.circuit offset))
   let lows := parts.map Outputs.low |>.rotate 1
   let highs := parts.map Outputs.high
-  let rotated := lows.zip highs |>.map fun (low, high) => high + low * base
+  let rotated := lows.zip highs |>.map fun (low, high) =>
+    high + low * ((2^(8 - offset.val) : ℕ) : F p)
 
   (from_vars' rotated : Var U64 (F p)).copy
 
@@ -59,8 +58,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   intro i0 env x_var x h_input x_normalized h_holds
 
   -- simplify statements
-  dsimp only [circuit_norm, elaborated, rot64_bits, U64.copy,
-    U64.Copy.circuit, ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
+  dsimp only [circuit_norm, elaborated, rot64_bits, U64.copy, U64.Copy.circuit,
+    ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
   simp only [spec, circuit_norm, elaborated, subcircuit_norm, U64.Copy.assumptions, U64.Copy.spec,
     ByteDecomposition.assumptions, ByteDecomposition.spec] at h_holds ⊢
   set y := eval env (var_from_offset U64 (i0 + 16))
