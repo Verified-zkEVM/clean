@@ -19,7 +19,7 @@ The ultimate goal is to prove that this is equivalent to `rot_right64`.
 -/
 def rot_right64_bytes (o : ℕ) (_ : o < 8) (xs : Vector ℕ 8) : Vector ℕ 8 :=
   .ofFn fun ⟨ i, hi ⟩ =>
-    (xs[(i + 1) % 8] % 2^o) * 2^(8-o) + xs[i] / 2^o
+    xs[i] / 2^o + (xs[(i + 1) % 8] % 2^o) * 2^(8-o)
 
 def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
@@ -97,7 +97,6 @@ lemma shifted_decomposition_eq'' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ
   ring_nf
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
 
-
 lemma soundness_simp {offset : ℕ} {x y : ℕ} :
     x % 2 ^ offset * 2 ^ (8 - offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) * y =
     x * y * 2^ (8 - offset) := by
@@ -146,101 +145,41 @@ lemma h_x0_const {offset : ℕ} (ho : offset < 8) :
   omega
 
 theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
-      x0 x1 x2 x3 x4 x5 x6 x7
-      y0 y1 y2 y3 y4 y5 y6 y7
-      x0_l x1_l x2_l x3_l x4_l x5_l x6_l x7_l
-      x0_h x1_h x2_h x3_h x4_h x5_h x6_h x7_h : F p
-    }
-    (h_x0 : x0.val < 256)
-    (h_x1 : x1.val < 256)
-    (h_x2 : x2.val < 256)
-    (h_x3 : x3.val < 256)
-    (h_x4 : x4.val < 256)
-    (h_x5 : x5.val < 256)
-    (h_x6 : x6.val < 256)
-    (h_x7 : x7.val < 256)
-    (h_x0_l : x0_l.val = x0.val % 2^o)
-    (h_x0_h : x0_h.val = x0.val / 2^o)
-    (h_x1_l : x1_l.val = x1.val % 2^o)
-    (h_x1_h : x1_h.val = x1.val / 2^o)
-    (h_x2_l : x2_l.val = x2.val % 2^o)
-    (h_x2_h : x2_h.val = x2.val / 2^o)
-    (h_x3_l : x3_l.val = x3.val % 2^o)
-    (h_x3_h : x3_h.val = x3.val / 2^o)
-    (h_x4_l : x4_l.val = x4.val % 2^o)
-    (h_x4_h : x4_h.val = x4.val / 2^o)
-    (h_x5_l : x5_l.val = x5.val % 2^o)
-    (h_x5_h : x5_h.val = x5.val / 2^o)
-    (h_x6_l : x6_l.val = x6.val % 2^o)
-    (h_x6_h : x6_h.val = x6.val / 2^o)
-    (h_x7_l : x7_l.val = x7.val % 2^o)
-    (h_x7_h : x7_h.val = x7.val / 2^o)
-    (eq0 : y0 = x1_l * ↑(2 ^ (8 - o) : ℕ) + x0_h)
-    (eq1 : y1 = x2_l * ↑(2 ^ (8 - o) : ℕ) + x1_h)
-    (eq2 : y2 = x3_l * ↑(2 ^ (8 - o) : ℕ) + x2_h)
-    (eq3 : y3 = x4_l * ↑(2 ^ (8 - o) : ℕ) + x3_h)
-    (eq4 : y4 = x5_l * ↑(2 ^ (8 - o) : ℕ) + x4_h)
-    (eq5 : y5 = x6_l * ↑(2 ^ (8 - o) : ℕ) + x5_h)
-    (eq6 : y6 = x7_l * ↑(2 ^ (8 - o) : ℕ) + x6_h)
-    (eq7 : y7 = x0_l * ↑(2 ^ (8 - o) : ℕ) + x7_h):
-    let x_val := x0.val + x1.val * 256 + x2.val * 256 ^ 2 + x3.val * 256 ^ 3 + x4.val * 256 ^ 4 +
-      x5.val * 256 ^ 5 + x6.val * 256 ^ 6 + x7.val * 256 ^ 7
-    let y_val := y0.val + y1.val * 256 + y2.val * 256 ^ 2 + y3.val * 256 ^ 3 + y4.val * 256 ^ 4 +
-      y5.val * 256 ^ 5 + y6.val * 256 ^ 6 + y7.val * 256 ^ 7
-    y_val = (x_val) % 2 ^ (o % 64) * 2 ^ (64 - o % 64) + (x_val) / 2 ^ (o % 64) := by
+    x0 x1 x2 x3 x4 x5 x6 x7
+    y0 y1 y2 y3 y4 y5 y6 y7 : ℕ
+  }
+  (eq0 : y0 = (x0 / 2^o) + (x1 % 2^o) * 2^(8-o))
+  (eq1 : y1 = (x1 / 2^o) + (x2 % 2^o) * 2^(8-o))
+  (eq2 : y2 = (x2 / 2^o) + (x3 % 2^o) * 2^(8-o))
+  (eq3 : y3 = (x3 / 2^o) + (x4 % 2^o) * 2^(8-o))
+  (eq4 : y4 = (x4 / 2^o) + (x5 % 2^o) * 2^(8-o))
+  (eq5 : y5 = (x5 / 2^o) + (x6 % 2^o) * 2^(8-o))
+  (eq6 : y6 = (x6 / 2^o) + (x7 % 2^o) * 2^(8-o))
+  (eq7 : y7 = (x7 / 2^o) + (x0 % 2^o) * 2^(8-o)) :
 
-  rw [add_comm (_ * _)] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
+    let x_val := x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3 + x4 * 256^4 +
+      x5 * 256^5 + x6 * 256^6 + x7 * 256^7
 
-  -- lift every reconstruction constraint to its value form
-  have x0_l_byte : x0_l.val < 256 := by rw [h_x0_l]; apply Nat.mod_lt_of_lt; assumption
-  have x0_h_byte : x0_h.val < 256 := by rw [h_x0_h]; apply Nat.div_lt_of_lt; assumption
-  have x1_l_byte : x1_l.val < 256 := by rw [h_x1_l]; apply Nat.mod_lt_of_lt; assumption
-  have x1_h_byte : x1_h.val < 256 := by rw [h_x1_h]; apply Nat.div_lt_of_lt; assumption
-  have x2_l_byte : x2_l.val < 256 := by rw [h_x2_l]; apply Nat.mod_lt_of_lt; assumption
-  have x2_h_byte : x2_h.val < 256 := by rw [h_x2_h]; apply Nat.div_lt_of_lt; assumption
-  have x3_l_byte : x3_l.val < 256 := by rw [h_x3_l]; apply Nat.mod_lt_of_lt; assumption
-  have x3_h_byte : x3_h.val < 256 := by rw [h_x3_h]; apply Nat.div_lt_of_lt; assumption
-  have x4_l_byte : x4_l.val < 256 := by rw [h_x4_l]; apply Nat.mod_lt_of_lt; assumption
-  have x4_h_byte : x4_h.val < 256 := by rw [h_x4_h]; apply Nat.div_lt_of_lt; assumption
-  have x5_l_byte : x5_l.val < 256 := by rw [h_x5_l]; apply Nat.mod_lt_of_lt; assumption
-  have x5_h_byte : x5_h.val < 256 := by rw [h_x5_h]; apply Nat.div_lt_of_lt; assumption
-  have x6_l_byte : x6_l.val < 256 := by rw [h_x6_l]; apply Nat.mod_lt_of_lt; assumption
-  have x6_h_byte : x6_h.val < 256 := by rw [h_x6_h]; apply Nat.div_lt_of_lt; assumption
-  have x7_l_byte : x7_l.val < 256 := by rw [h_x7_l]; apply Nat.mod_lt_of_lt; assumption
-  have x7_h_byte : x7_h.val < 256 := by rw [h_x7_h]; apply Nat.div_lt_of_lt; assumption
+    let y_val := y0 + y1 * 256 + y2 * 256^2 + y3 * 256^3 + y4 * 256^4 +
+      y5 * 256^5 + y6 * 256^6 + y7 * 256^7
 
-  let two_power_byte := two_power_byte (p:=p) ho
-
-  replace eq0 := byte_decomposition_lift x0_h_byte x1_l_byte two_power_byte eq0
-  replace eq1 := byte_decomposition_lift x1_h_byte x2_l_byte two_power_byte eq1
-  replace eq2 := byte_decomposition_lift x2_h_byte x3_l_byte two_power_byte eq2
-  replace eq3 := byte_decomposition_lift x3_h_byte x4_l_byte two_power_byte eq3
-  replace eq4 := byte_decomposition_lift x4_h_byte x5_l_byte two_power_byte eq4
-  replace eq5 := byte_decomposition_lift x5_h_byte x6_l_byte two_power_byte eq5
-  replace eq6 := byte_decomposition_lift x6_h_byte x7_l_byte two_power_byte eq6
-  replace eq7 := byte_decomposition_lift x7_h_byte x0_l_byte two_power_byte eq7
+    y_val = rot_right64 x_val o := by
 
   -- simplify the goal
-  simp only [two_power_val ho, ZMod.val_natCast] at eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7
+  simp only [rot_right64]
   rw [eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7]
-  dsimp only
 
   have offset_mod_64 : o % 64 = o := by
     apply Nat.mod_eq_of_lt
     linarith
-
-  simp [h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,
-    h_x4_l, h_x4_h, h_x5_l, h_x5_h, h_x6_l, h_x6_h, h_x7_l, h_x7_h,
-    offset_mod_64, -Nat.reducePow]
+  simp only [offset_mod_64]
 
   rw [h_mod (offset := ⟨o, ho⟩)]
   simp only
   -- if the offset is zero, then it is trivial: it is a special case since
   -- in that case the rotation is a no-op
   by_cases h_offset : o = 0
-  · rw [h_offset]
-    simp only [Fin.isValue, Fin.val_zero, pow_zero, Nat.div_one, Nat.mod_one, tsub_zero,
-      Nat.reducePow, Nat.mod_self, mul_zero, add_zero, zero_mul, zero_add, Nat.add_left_inj]
+  · simp [h_offset, Nat.mod_one]
   · rw [h_div (offset := ⟨o, ho⟩)]
     simp only
     -- proof technique: we care about only what happens to x0, all "internal" terms remain

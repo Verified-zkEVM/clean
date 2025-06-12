@@ -29,7 +29,7 @@ def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F 
   let parts ← Circuit.map (to_vars' x) (subcircuit (Gadgets.ByteDecomposition.circuit offset))
   let lows := parts.map Outputs.low |>.rotate 1
   let highs := parts.map Outputs.high
-  let rotated := lows.zip highs |>.map fun (low, high) => low * base + high
+  let rotated := lows.zip highs |>.map fun (low, high) => high + low * base
 
   (from_vars' rotated : Var U64 (F p)).copy
 
@@ -55,20 +55,20 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp +arith only [circuit_norm, rot64_bits, U64.Copy.circuit,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^o) (hy : y.val < 2^(8-o)) :
-    (x * (2^(8-o) : ℕ) + y).val < 2^8
-    ∧ (x * (2^(8-o) : ℕ) + y).val = x.val * (2^(8-o)) + y.val
+lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^(8-o)) (hy : y.val < 2^o) :
+    (x + y * (2^(8-o) : ℕ)).val < 2^8
+    ∧ (x + y * (2^(8-o) : ℕ)).val = x.val + y.val * (2^(8-o))
      := by
   let base : F p := (2^(8 - o) : ℕ)
   have : 2^8 < p := by linarith [p_large_enough.elim]
   have : 2^(8 - o) ≤ 2^8 := Nat.pow_le_pow_of_le (show 2 > 1 by norm_num) (by omega)
   have h_base : base.val = 2^(8 - o) := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
-  have : x.val * (2^(8 - o)) + 2^(8 - o) ≤ 2^8 := by
-    suffices x.val * 2^(8 - o) + 1 * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
+  have : 2^(8 - o) + y.val * (2^(8 - o)) ≤ 2^8 := by
+    suffices 1 * 2^(8 - o) + y.val * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
       rw [←pow_add, add_tsub_cancel_of_le (by linarith [ho])] at this
       linarith
-    rw [←add_mul]
-    exact Nat.mul_le_mul_right _ hx
+    rw [←add_mul, add_comm]
+    exact Nat.mul_le_mul_right _ hy
   rw [ZMod.val_add_of_lt, ZMod.val_mul_of_lt, h_base]
   use by linarith
   rw [h_base]; linarith
@@ -107,10 +107,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     intro i hi
     specialize h_concatenation i hi
     simp only [size, ←h_concatenation]
-    set x := env.get (i0 + (i + 1) % 8 * 2)
-    set y := env.get (i0 + i * 2 + 1)
-    have hx : x.val < 2^offset.val := (h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))).right.left
-    have hy : y.val < 2^(8 - offset.val) := (h_decomposition i hi).right.right
+    set x := env.get (i0 + i * 2 + 1)
+    set y := env.get (i0 + (i + 1) % 8 * 2)
+    have hx : x.val < 2^(8 - offset.val) := (h_decomposition i hi).right.right
+    have hy : y.val < 2^offset.val := (h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))).right.left
     exact (concat_byte offset.val offset.is_lt x y hx hy).left
   suffices y.value = _ from ⟨ this, y_norm ⟩
 
@@ -118,18 +118,17 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   set xs : Vector _ 8 := to_elements x
   set ys : Vector _ 8 := to_elements y
   set o := offset.val
-  let b := (2^(8 - offset.val) : ℕ)
 
   have h_rot_vector (i : ℕ) (hi : i < 8) :
-      ys[i].val = (xs[(i + 1) % 8].val % 2^o) * (2^(8-o)) + xs[i].val / 2^o := by
+      ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 8].val % 2^o) * 2^(8-o) := by
     rw [←h_concatenation i hi]
-    set x := env.get (i0 + (i + 1) % 8 * 2)
-    set y := env.get (i0 + i * 2 + 1)
-    obtain h_decomp_x := h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
-    obtain h_decomp_y := h_decomposition i hi
-    have hx : x.val < 2^o := h_decomp_x.right.left
-    have hy : y.val < 2^(8 - o) := h_decomp_y.right.right
-    rw [(concat_byte o offset.is_lt x y hx hy).right, h_decomp_x.left.left, h_decomp_y.left.right]
+    set x := env.get (i0 + i * 2 + 1)
+    set y := env.get (i0 + (i + 1) % 8 * 2)
+    obtain h_decomp_x := h_decomposition i hi
+    obtain h_decomp_y := h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have hx : x.val < 2^(8 - o) := h_decomp_x.right.right
+    have hy : y.val < 2^o := h_decomp_y.right.left
+    rw [(concat_byte o offset.is_lt x y hx hy).right, h_decomp_x.left.right, h_decomp_y.left.left]
 
   simp only [rot_right64]
   stop

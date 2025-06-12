@@ -9,11 +9,9 @@ instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open FieldUtils (two_val two_pow_val)
 
-theorem byte_decomposition_lift {x low high two_power : F p}
-  (h_low : low.val < 2^8) (h_high : high.val < 2^8) (h_two_power : two_power.val ≤ 256)
-  (h : x = low + high * two_power) :
-    x.val = low.val + high.val * two_power.val := by
-  rw [h]
+theorem byte_decomposition_lift {low high two_power : F p}
+  (h_low : low.val < 2^8) (h_high : high.val < 2^8) (h_two_power : two_power.val ≤ 2^8) :
+    (low + high * two_power).val = low.val + high.val * two_power.val := by
   field_to_nat
   suffices high.val * two_power.val < 2^8 * 2^8 by linarith [p_large_enough.elim]
   apply Nat.mul_lt_mul_of_lt_of_le (by assumption) (by assumption)
@@ -27,11 +25,11 @@ theorem soundness (offset : Fin 8) (x low high : F p)
 
   have two_power_lt : 2^offset.val < 2^8 := Nat.pow_lt_pow_of_lt (by linarith) offset.is_lt
   have two_power_val : ((2 : F p)^offset.val).val = 2^offset.val := two_pow_val offset.val (by linarith [offset.is_lt])
-  have two_power_lt' : (2^offset.val : F p).val < 2^8 := by rwa [two_power_val]
+  have two_power_le : (2^offset.val : F p).val ≤ 2^8 := by rw [two_power_val]; linarith
 
   have low_byte : low.val < 256 := by linarith
-  have h := byte_decomposition_lift low_byte high_lt (by linarith) h_eq
-  rw [two_power_val] at h
+  have h := byte_decomposition_lift low_byte high_lt two_power_le
+  rw [two_power_val, ←h_eq] at h
 
   set low_b := UInt32.ofNat low.val
   set high_b := UInt32.ofNat high.val
