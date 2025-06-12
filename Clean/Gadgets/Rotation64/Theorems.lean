@@ -17,9 +17,25 @@ each resulting (high, low) pair again.
 
 The ultimate goal is to prove that this is equivalent to `rot_right64`.
 -/
-def rot_right64_bytes (o : ℕ) (_ : o < 8) (xs : Vector ℕ 8) : Vector ℕ 8 :=
-  .ofFn fun ⟨ i, hi ⟩ =>
-    xs[i] / 2^o + (xs[(i + 1) % 8] % 2^o) * 2^(8-o)
+def rot_right64_bytes (xs : Vector ℕ 8) (o : ℕ) : Vector ℕ 8 :=
+  .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 8] % 2^o) * 2^(8-o)
+
+-- unfold what rot_right64_bytes does on a U64
+def rot_right64_u64 : U64 ℕ → ℕ → U64 ℕ
+  | ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, o => ⟨
+    (x0 / 2^o) + (x1 % 2^o) * 2^(8-o),
+    (x1 / 2^o) + (x2 % 2^o) * 2^(8-o),
+    (x2 / 2^o) + (x3 % 2^o) * 2^(8-o),
+    (x3 / 2^o) + (x4 % 2^o) * 2^(8-o),
+    (x4 / 2^o) + (x5 % 2^o) * 2^(8-o),
+    (x5 / 2^o) + (x6 % 2^o) * 2^(8-o),
+    (x6 / 2^o) + (x7 % 2^o) * 2^(8-o),
+    (x7 / 2^o) + (x0 % 2^o) * 2^(8-o),
+  ⟩
+
+-- these two are definitionally equal
+lemma rot_right64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
+  (rot_right64_bytes (to_elements x) o) = to_elements (rot_right64_u64 x o) := rfl
 
 def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
@@ -209,4 +225,13 @@ theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
     rw [h_x0_const ho]
     ac_rfl
 
+theorem rotation64_bits_soundness' {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
+    (rot_right64_u64 x o).value_nat = rot_right64 x.value_nat o := by
+  set y := rot_right64_u64 x o
+  have heq : y = rot_right64_u64 x o := rfl
+  rcases x with ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩
+  rcases y with ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩
+  simp only [U64.mk.injEq, rot_right64_u64] at heq
+  simp only [U64.value_nat]
+  apply rotation64_bits_soundness o ho <;> simp_all
 end Gadgets.Rotation64.Theorems

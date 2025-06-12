@@ -12,7 +12,7 @@ instance : Fact (p > 512) := by
   linarith [p_large_enough.elim]
 
 open Bitwise (rot_right64)
-open Rotation64.Theorems (rotation64_bits_soundness)
+open Rotation64.Theorems
 open ByteDecomposition (Outputs)
 
 -- definitions to prevent `to_vars`/`from_vars` from being unfolded in the proof
@@ -130,36 +130,14 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     have hy : y.val < 2^o := h_decomp_y.right.left
     rw [(concat_byte o offset.is_lt x y hx hy).right, h_decomp_x.left.right, h_decomp_y.left.left]
 
-  simp only [rot_right64]
-  stop
-  simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_concatenation h_decomposition
-  simp [circuit_norm, spec, rot_right64, eval, elaborated, var_from_offset, Vector.mapRange]
+  -- finish the proof using our characerization of rotation on byte vectors
+  have h_rot_vector' : y.vals = rot_right64_u64 x.vals o := by
+    rw [ProvableType.ext_iff, ←rot_right64_bytes_u64_eq]
+    simp only [U64.vals, U64.to_elements_map, Vector.getElem_map, rot_right64_bytes, size, Vector.getElem_ofFn]
+    exact h_rot_vector
 
-  rw [
-    show Expression.eval env x0_var = x0 by injections h_input,
-    show Expression.eval env x1_var = x1 by injections h_input,
-    show Expression.eval env x2_var = x2 by injections h_input,
-    show Expression.eval env x3_var = x3 by injections h_input,
-    show Expression.eval env x4_var = x4 by injections h_input,
-    show Expression.eval env x5_var = x5 by injections h_input,
-    show Expression.eval env x6_var = x6 by injections h_input,
-    show Expression.eval env x7_var = x7 by injections h_input,
-  ] at h_holds
-  obtain ⟨h_decomposition, eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7⟩ := h_holds
-  specialize h_decomposition x_normalized
-  obtain ⟨h_x0_l, h_x0_h, h_x1_l, h_x1_h, h_x2_l, h_x2_h, h_x3_l, h_x3_h,
-    h_x4_l, h_x4_h, h_x5_l, h_x5_h, h_x6_l, h_x6_h, h_x7_l, h_x7_h⟩ := h_decomposition
-  simp only [U64.value, U64.is_normalized, and_true]
-
-  dsimp [U64.is_normalized] at x_normalized
-  obtain ⟨h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7⟩ := x_normalized
-  rw [rotation64_bits_soundness offset
-    h_x0 h_x1 h_x2 h_x3 h_x4 h_x5 h_x6 h_x7
-    h_x0_l h_x0_h h_x1_l h_x1_h h_x2_l h_x2_h h_x3_l h_x3_h
-    h_x4_l h_x4_h h_x5_l h_x5_h h_x6_l h_x6_h h_x7_l h_x7_h
-    eq0 eq1 eq2 eq3 eq4 eq5 eq6 eq7]
-  use rfl
-  sorry
+  rw [←U64.vals_value, ←U64.vals_value, h_rot_vector']
+  exact rotation64_bits_soundness' offset.is_lt
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   sorry

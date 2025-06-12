@@ -38,6 +38,11 @@ namespace U64
 def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
   ⟨ f x.x0, f x.x1, f x.x2, f x.x3, f x.x4, f x.x5, f x.x6, f x.x7 ⟩
 
+lemma to_elements_map {α β : Type} (x : U64 α) (f : α → β) :
+  to_elements (map x f) = (to_elements x).map f := rfl
+
+def vals (x : U64 (F p)) : U64 ℕ := x.map ZMod.val
+
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
   Extensionality principle for U64
@@ -98,6 +103,9 @@ theorem value_xor_horner {x : U64 (F p)} (hx: x.is_normalized) : x.value =
 def value_nat (x: U64 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
   x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma vals_value (x : U64 (F p)) : x.vals.value_nat = x.value := rfl
 
 /--
   Return a 64-bit unsigned integer from a natural number, by decomposing
