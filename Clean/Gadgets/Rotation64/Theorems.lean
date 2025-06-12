@@ -40,10 +40,8 @@ lemma rot_right64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
 lemma h_mod {offset : ℕ} (ho : offset < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
       2^offset = x0 % 2^offset := by
-  simp only [pow_one, Nat.add_mod, dvd_refl, Nat.mod_mod_of_dvd, gt_iff_lt, Nat.ofNat_pos,
-    mul_mod_256_off ho, add_zero]
-  rw [←Nat.pow_one 256, Nat.mod_mod, Nat.mod_mod, mul_mod_256_off ho _ _ (by linarith)]
-  simp only [add_zero, dvd_refl, Nat.mod_mod_of_dvd]
+  nth_rw 1 [←Nat.pow_one 256]
+  repeat rw [Nat.add_mod, mul_mod_256_off ho _ _ (by trivial), add_zero, Nat.mod_mod]
 
 lemma h_div {offset : ℕ} (ho : offset < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ offset
@@ -65,9 +63,7 @@ lemma h_div {offset : ℕ} (ho : offset < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
 
 lemma h_x0_const {offset : ℕ} (ho : offset < 8) :
     2 ^ (8 - offset) * 256^7 = 2^(64 - offset) := by
-  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, add_comm]
-  simp only [Nat.reduceMul, Nat.ofNat_pos, ne_eq, OfNat.ofNat_ne_one, not_false_eq_true,
-    pow_right_inj₀]
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, pow_right_inj₀ (by norm_num) (by norm_num)]
   omega
 
 theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
