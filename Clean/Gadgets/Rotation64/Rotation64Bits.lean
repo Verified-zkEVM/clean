@@ -57,22 +57,21 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
 
 lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^(8-o)) (hy : y.val < 2^o) :
     (x + y * (2^(8-o) : ℕ)).val < 2^8
-    ∧ (x + y * (2^(8-o) : ℕ)).val = x.val + y.val * (2^(8-o))
+    ∧ (x + y * (2^(8-o) : ℕ)).val = x.val + y.val * 2^(8-o)
      := by
   let base : F p := (2^(8 - o) : ℕ)
   have : 2^8 < p := by linarith [p_large_enough.elim]
   have : 2^(8 - o) ≤ 2^8 := Nat.pow_le_pow_of_le (show 2 > 1 by norm_num) (by omega)
   have h_base : base.val = 2^(8 - o) := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
-  have : 2^(8 - o) + y.val * (2^(8 - o)) ≤ 2^8 := by
-    suffices 1 * 2^(8 - o) + y.val * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
+  have : y.val * 2^(8 - o) + 2^(8 - o) ≤ 2^8 := by
+    suffices y.val * 2^(8 - o) + 1 * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
       rw [←pow_add, add_tsub_cancel_of_le (by linarith [ho])] at this
       linarith
-    rw [←add_mul, add_comm]
+    rw [←add_mul]
     exact Nat.mul_le_mul_right _ hy
-  rw [ZMod.val_add_of_lt, ZMod.val_mul_of_lt, h_base]
+  field_to_nat
+  rw [h_base]
   use by linarith
-  rw [h_base]; linarith
-  rw [ZMod.val_mul_of_lt, h_base]; linarith
   rw [h_base]; linarith
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
@@ -137,7 +136,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     exact h_rot_vector
 
   rw [←U64.vals_value, ←U64.vals_value, h_rot_vector']
-  exact rotation64_bits_soundness' offset.is_lt
+  exact rotation64_bits_soundness offset.is_lt
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   sorry

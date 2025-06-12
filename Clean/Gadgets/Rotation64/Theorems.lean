@@ -160,30 +160,10 @@ lemma h_x0_const {offset : ℕ} (ho : offset < 8) :
     pow_right_inj₀]
   omega
 
-theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
-    x0 x1 x2 x3 x4 x5 x6 x7
-    y0 y1 y2 y3 y4 y5 y6 y7 : ℕ
-  }
-  (eq0 : y0 = (x0 / 2^o) + (x1 % 2^o) * 2^(8-o))
-  (eq1 : y1 = (x1 / 2^o) + (x2 % 2^o) * 2^(8-o))
-  (eq2 : y2 = (x2 / 2^o) + (x3 % 2^o) * 2^(8-o))
-  (eq3 : y3 = (x3 / 2^o) + (x4 % 2^o) * 2^(8-o))
-  (eq4 : y4 = (x4 / 2^o) + (x5 % 2^o) * 2^(8-o))
-  (eq5 : y5 = (x5 / 2^o) + (x6 % 2^o) * 2^(8-o))
-  (eq6 : y6 = (x6 / 2^o) + (x7 % 2^o) * 2^(8-o))
-  (eq7 : y7 = (x7 / 2^o) + (x0 % 2^o) * 2^(8-o)) :
-
-    let x_val := x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3 + x4 * 256^4 +
-      x5 * 256^5 + x6 * 256^6 + x7 * 256^7
-
-    let y_val := y0 + y1 * 256 + y2 * 256^2 + y3 * 256^3 + y4 * 256^4 +
-      y5 * 256^5 + y6 * 256^6 + y7 * 256^7
-
-    y_val = rot_right64 x_val o := by
-
+theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
+    (rot_right64_u64 x o).value_nat = rot_right64 x.value_nat o := by
   -- simplify the goal
-  simp only [rot_right64]
-  rw [eq0, eq1, eq2, eq3, eq4, eq5, eq6, eq7]
+  simp only [rot_right64, rot_right64_u64, U64.value_nat]
 
   have offset_mod_64 : o % 64 = o := by
     apply Nat.mod_eq_of_lt
@@ -225,13 +205,4 @@ theorem rotation64_bits_soundness (o : ℕ) (ho : o < 8) {
     rw [h_x0_const ho]
     ac_rfl
 
-theorem rotation64_bits_soundness' {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
-    (rot_right64_u64 x o).value_nat = rot_right64 x.value_nat o := by
-  set y := rot_right64_u64 x o
-  have heq : y = rot_right64_u64 x o := rfl
-  rcases x with ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩
-  rcases y with ⟨y0, y1, y2, y3, y4, y5, y6, y7⟩
-  simp only [U64.mk.injEq, rot_right64_u64] at heq
-  simp only [U64.value_nat]
-  apply rotation64_bits_soundness o ho <;> simp_all
 end Gadgets.Rotation64.Theorems
