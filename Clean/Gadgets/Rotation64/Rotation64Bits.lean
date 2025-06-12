@@ -53,23 +53,25 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp +arith only [circuit_norm, rot64_bits, U64.Copy.circuit,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-lemma concat_byte (offset : Fin 8) (x y : F p) (hx : x.val < 2^offset.val) (hy : y.val < 2^(8 - offset.val)) :
-    (x * (2^(8 - offset.val) % 256 : ℕ) + y).val < 2^8 := by
-  let base : F p := (2^(8 - offset.val) % 256 : ℕ)
+lemma concat_byte (o : ℕ) (ho : o < 8) (x y : F p) (hx : x.val < 2^o) (hy : y.val < 2^(8 - o)) :
+    (x * (2^(8 - o) % 256 : ℕ) + y).val < 2^8
+    ∧ (x * (2^(8 - o) % 256 : ℕ) + y).val = x.val * (2^(8 - o) % 256) + y.val
+     := by
+  let base : F p := (2^(8 - o) % 256 : ℕ)
   have : 2^8 < p := by linarith [p_large_enough.elim]
-  have : 2^(8 - offset.val) % 256 < 256 := Nat.mod_lt _ (by norm_num)
-  have : 2^(8 - offset.val) % 256 ≤ 2^(8 - offset.val) := Nat.mod_le ..
-  have h_base : base.val = 2^(8 - offset.val) % 256 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
-  have : x.val * (2^(8 - offset.val) % 256) + 2^(8 - offset.val) ≤ 2^8 := by
-    have : x.val * (2^(8 - offset.val) % 256) ≤ x.val * 2^(8 - offset.val) :=
+  have : 2^(8 - o) % 256 < 256 := Nat.mod_lt _ (by norm_num)
+  have : 2^(8 - o) % 256 ≤ 2^(8 - o) := Nat.mod_le ..
+  have h_base : base.val = 2^(8 - o) % 256 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim])
+  have : x.val * (2^(8 - o) % 256) + 2^(8 - o) ≤ 2^8 := by
+    have : x.val * (2^(8 - o) % 256) ≤ x.val * 2^(8 - o) :=
       Nat.mul_le_mul_left _ (Nat.mod_le ..)
-    suffices x.val * 2^(8 - offset.val) + 1 * 2^(8 - offset.val) ≤ 2^offset.val * 2^(8 - offset.val) by
-      rw [←pow_add, add_tsub_cancel_of_le (by linarith [offset.is_lt])] at this
+    suffices x.val * 2^(8 - o) + 1 * 2^(8 - o) ≤ 2^o * 2^(8 - o) by
+      rw [←pow_add, add_tsub_cancel_of_le (by linarith [ho])] at this
       linarith
     rw [←add_mul]
     exact Nat.mul_le_mul_right _ hx
   rw [ZMod.val_add_of_lt, ZMod.val_mul_of_lt, h_base]
-  linarith
+  use by linarith
   rw [h_base]; linarith
   rw [ZMod.val_mul_of_lt, h_base]; linarith
   rw [h_base]; linarith
@@ -77,6 +79,7 @@ lemma concat_byte (offset : Fin 8) (x y : F p) (hx : x.val < 2^offset.val) (hy :
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
+  -- simplify statements
   dsimp only [circuit_norm, elaborated, rot64_bits, U64.copy,
     U64.Copy.circuit, ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
   simp only [spec, circuit_norm, elaborated, subcircuit_norm, U64.Copy.assumptions, U64.Copy.spec,
@@ -84,32 +87,50 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   set y := eval env (var_from_offset U64 (i0 + 16))
   obtain ⟨ h_decomposition, h_concatenation ⟩ := h_holds
 
-  simp only [ProvableType.ext_iff, size, from_vars', ProvableType.eval_from_vars,
-    ProvableType.to_elements_from_elements] at h_concatenation
-  simp only [Vector.getElem_map, Vector.getElem_zip, Vector.getElem_mapIdx, Vector.getElem_rotate] at h_concatenation
-  simp only [Expression.eval] at h_concatenation
+  -- targeted rewriting of the assumptions
+
+  simp only [ProvableType.ext_iff, size, from_vars', to_vars', ProvableType.eval_from_vars,
+    ProvableType.to_elements_from_elements, Vector.getElem_map, Vector.getElem_zip,
+    Vector.getElem_mapIdx, Vector.getElem_rotate, Expression.eval] at h_concatenation
 
   rw [assumptions, U64.ByteVector.is_normalized_iff] at x_normalized
 
-  have byte_decomp_assumptions (i : ℕ) (hi : i < 8) : ((to_vars x_var)[i].eval env).val < 256 := by
+  have getElem_eval_to_vars (i : ℕ) (hi : i < 8) : (to_vars x_var)[i].eval env = (to_elements x)[i] := by
     rw [ProvableType.getElem_eval_to_vars, h_input]
-    exact x_normalized i hi
-  simp only [size] at byte_decomp_assumptions
-  simp only [to_vars', byte_decomp_assumptions, true_implies] at h_decomposition
+  simp only [size] at getElem_eval_to_vars x_normalized
 
+  simp only [to_vars', Fin.forall_iff, getElem_eval_to_vars, x_normalized, true_implies] at h_decomposition
+  set base := ((2^(8 - offset.val) % 256 : ℕ) : F p)
+
+  -- prove that the output is normalized
   have y_norm : y.is_normalized := by
     simp only [U64.ByteVector.is_normalized_iff]
     intro i hi
     specialize h_concatenation i hi
     simp only [size, ←h_concatenation]
-    let j : Fin 8 := ⟨ (i + 1) % 8, Nat.mod_lt _ (by norm_num) ⟩
     set x := env.get (i0 + (i + 1) % 8 * 2)
     set y := env.get (i0 + i * 2 + 1)
-    set base := ((2^(8 - offset.val) % 256 : ℕ) : F p)
-    have hx : x.val < 2^offset.val := (h_decomposition j).right.left
-    have hy : y.val < 2^(8 - offset.val) := (h_decomposition ⟨ i, hi ⟩).right.right
-    exact concat_byte offset x y hx hy
+    have hx : x.val < 2^offset.val := (h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))).right.left
+    have hy : y.val < 2^(8 - offset.val) := (h_decomposition i hi).right.right
+    exact (concat_byte offset.val offset.is_lt x y hx hy).left
   suffices y.value = _ from ⟨ this, y_norm ⟩
+
+  -- capture the rotation relation in terms of byte vectors
+  set xs : Vector _ 8 := to_elements x
+  set ys : Vector _ 8 := to_elements y
+  set o := offset.val
+  let b := (2^(8 - offset.val) % 256 : ℕ)
+
+  have h_rot_vector (i : ℕ) (hi : i < 8) :
+      ys[i].val = (xs[(i + 1) % 8].val % 2^o) * (2 ^ (8 - o) % 256) + xs[i].val / 2^o := by
+    rw [←h_concatenation i hi]
+    set x := env.get (i0 + (i + 1) % 8 * 2)
+    set y := env.get (i0 + i * 2 + 1)
+    obtain h_decomp_x := h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    obtain h_decomp_y := h_decomposition i hi
+    have hx : x.val < 2^o := h_decomp_x.right.left
+    have hy : y.val < 2^(8 - o) := h_decomp_y.right.right
+    rw [(concat_byte o offset.is_lt x y hx hy).right, h_decomp_x.left.left, h_decomp_y.left.right]
 
   stop
   simp only [circuit_norm, eval, var_from_offset, Vector.mapRange] at h_concatenation h_decomposition
