@@ -19,8 +19,8 @@ open ByteDecomposition.Theorems (byte_decomposition_lt)
 
 -- definitions to prevent `to_vars`/`from_vars` from being unfolded in the proof
 -- TODO get rid of these
-def to_vars' (x : Var U64 (F p)) : Vector (Expression (F p)) (size U64) := to_vars x
-def from_vars' (x : Vector (Expression (F p)) (size U64)) : Var U64 (F p) := from_vars x
+def to_vars' (x : Var U64 (F p)) := to_vars x
+def from_vars' (x : Vector (Expression (F p)) (size U64)) := from_vars x
 
 /--
   Rotate the 64-bit integer by `offset` bits
@@ -28,7 +28,7 @@ def from_vars' (x : Vector (Expression (F p)) (size U64)) : Var U64 (F p) := fro
 def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let base : F p := (2^(8 - offset.val) : ℕ)
 
-  let parts ← Circuit.map (to_vars' x) (subcircuit (Gadgets.ByteDecomposition.circuit offset))
+  let parts ← Circuit.map (to_vars' x) (subcircuit (ByteDecomposition.circuit offset))
   let lows := parts.map Outputs.low |>.rotate 1
   let highs := parts.map Outputs.high
   let rotated := lows.zip highs |>.map fun (low, high) => high + low * base
@@ -41,8 +41,6 @@ def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value offset.val
   ∧ y.is_normalized
 
--- #eval! (rot64_bits (p:=p_babybear) 0) default |>.local_length
--- #eval! (rot64_bits (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bits off
   local_length _ := 24
@@ -84,45 +82,39 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   have neg_offset_le : 8 - offset.val ≤ 8 := by
     rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 
-  -- prove that the output is normalized
-  have y_norm : y.is_normalized := by
-    simp only [U64.ByteVector.is_normalized_iff]
-    intro i hi
-    specialize h_concatenation i hi
-    simp only [size, ←h_concatenation]
-    set x := env.get (i0 + i * 2 + 1)
-    set y := env.get (i0 + (i + 1) % 8 * 2)
-    have hx : x.val < 2^(8 - offset.val) := (h_decomposition i hi).right.right
-    have hy : y.val < 2^offset.val := (h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))).right.left
-    have hy' : y.val < 2^(8 - (8 - offset.val)) := by rw [Nat.sub_sub_self offset.is_le']; exact hy
-    exact (byte_decomposition_lt (8-offset.val) neg_offset_le x y hx hy').left
-  suffices y.value = _ from ⟨ this, y_norm ⟩
-
   -- capture the rotation relation in terms of byte vectors
   set xs : Vector _ 8 := to_elements x
   set ys : Vector _ 8 := to_elements y
   set o := offset.val
 
   have h_rot_vector (i : ℕ) (hi : i < 8) :
+      ys[i].val < 2^8 ∧
       ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 8].val % 2^o) * 2^(8-o) := by
     rw [←h_concatenation i hi]
-    set x := env.get (i0 + i * 2 + 1)
-    set y := env.get (i0 + (i + 1) % 8 * 2)
-    obtain h_decomp_x := h_decomposition i hi
-    obtain h_decomp_y := h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
-    have hx : x.val < 2^(8 - o) := h_decomp_x.right.right
-    have hy : y.val < 2^o := h_decomp_y.right.left
-    have hy' : y.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact hy
-    rw [(byte_decomposition_lt (8-o) neg_offset_le x y hx hy').right, h_decomp_x.left.right, h_decomp_y.left.left]
+    set high := env.get (i0 + i * 2 + 1)
+    set next_low := env.get (i0 + (i + 1) % 8 * 2)
+    have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_decomposition i hi
+    have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_decomposition ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
+    have ⟨lt, eq⟩ := byte_decomposition_lt (8-o) neg_offset_le high_lt next_low_lt'
+    use lt
+    rw [eq, high_eq, next_low_eq]
+
+  -- prove that the output is normalized
+  have y_norm : y.is_normalized := by
+    rw [U64.ByteVector.is_normalized_iff]
+    intro i hi
+    exact (h_rot_vector i hi).left
 
   -- finish the proof using our characerization of rotation on byte vectors
   have h_rot_vector' : y.vals = rot_right64_u64 x.vals o := by
     rw [ProvableType.ext_iff, ←rot_right64_bytes_u64_eq]
+    intro i hi
     simp only [U64.vals, U64.to_elements_map, Vector.getElem_map, rot_right64_bytes, size, Vector.getElem_ofFn]
-    exact h_rot_vector
+    exact (h_rot_vector i hi).right
 
   rw [←U64.vals_value, ←U64.vals_value, h_rot_vector']
-  exact rotation64_bits_soundness offset.is_lt
+  exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   intro i0 env x_var _ x h_input x_normalized

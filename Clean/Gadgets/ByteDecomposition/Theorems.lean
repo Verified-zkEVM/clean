@@ -19,7 +19,7 @@ theorem byte_decomposition_lift {low high two_power : F p}
   trivial
 
 -- version of the above which requires stronger assumptions and provides a tight bound
-theorem byte_decomposition_lt (o : ℕ) (ho : o ≤ 8) (low high : F p) (h_low : low.val < 2^o) (h_high : high.val < 2^(8-o)) :
+theorem byte_decomposition_lt (o : ℕ) (ho : o ≤ 8) {low high : F p} (h_low : low.val < 2^o) (h_high : high.val < 2^(8-o)) :
     (low + high * (2^o : ℕ)).val < 2^8
     ∧ (low + high * (2^o : ℕ)).val = low.val + high.val * 2^o
      := by
