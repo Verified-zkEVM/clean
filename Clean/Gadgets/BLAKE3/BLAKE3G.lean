@@ -115,6 +115,17 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   · sorry
   · sorry
 
+theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
+  sorry
+
+
+def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
+  elaborated a b c d with
+  assumptions := assumptions
+  spec := spec a b c d
+  soundness := soundness a b c d
+  completeness := completeness a b c d
+}
 
 
 end Gadgets.BLAKE3.G
