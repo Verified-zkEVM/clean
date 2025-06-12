@@ -126,12 +126,70 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const]
 
-
+  simp only [spec, ElaboratedCircuit.output]
   constructor
   · sorry
-  · sorry
+  · intro i
+    ring_nf
+
+    -- split the goal by cases on i
+    -- unfortunately, for each case the goal is not trivial, since
+    -- the indices a b c d are not necessarily distinct.
+    -- However, for every case, we can split by cases once again, and if the
+    -- final assigned elements get overwritten, the result will still be normalized.
+
+    -- case i = a
+    by_cases h_ia : i = a
+    · simp only [eval_vector, Vector.map_set, h_ia, ↓Vector.getElem_set, ↓reduceIte]
+      repeat' split
+      repeat first
+        | exact c11.right
+        | exact c12.right
+        | exact c14.right
+        | exact c9.right
+
+    -- case i = b
+    by_cases h_ib : i = b
+    · simp only [eval_vector, Vector.map_set, h_ib, ↓Vector.getElem_set, ↓reduceIte]
+      repeat' split
+      repeat first
+        | exact c11.right
+        | exact c12.right
+        | exact c14.right
+        | exact c9.right
+
+    -- case i = c
+    by_cases h_ic : i = c
+    · simp only [eval_vector, Vector.map_set, h_ic, ↓Vector.getElem_set, ↓reduceIte]
+      repeat' split
+      repeat first
+        | exact c11.right
+        | exact c12.right
+        | exact c14.right
+        | exact c9.right
+
+    -- case i = d
+    by_cases h_id : i = d
+    · simp only [eval_vector, Vector.map_set, h_id, ↓Vector.getElem_set, ↓reduceIte]
+      repeat first
+        | exact c11.right
+        | exact c12.right
+        | exact c14.right
+        | exact c9.right
+
+    -- case i is not a, b, c, or d, this is trivial by assumption
+    simp only [eval_vector, Vector.map_set, Vector.getElem_set, Vector.getElem_map]
+    repeat' split
+    repeat first
+      | exact c11.right
+      | exact c12.right
+      | exact c14.right
+      | exact c9.right
+    rw [h_state_var_getElem]
+    exact h_state_normalized_getElem i
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
+  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_inputs as
   sorry
 
 
