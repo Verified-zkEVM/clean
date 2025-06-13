@@ -11,7 +11,7 @@ open Bitwise (rot_left64)
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
 ]
-def rhoPiShifts : Vector ℕ 25 := #v[
+def rhoPiShifts : Vector (Fin 64) 25 := #v[
   0, 28, 1, 27, 62, 44, 20, 6, 36, 55, 43, 3, 25, 10, 39, 21, 45, 8, 15, 41, 14, 61, 18, 56, 2
 ]
 def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
@@ -26,18 +26,17 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.rho_pi state.value
 
+def output (i0 : ℕ) : Var KeccakState (F p) :=
+  rhoPiShifts.mapIdx fun i s => Rotation64Bits.output ((-s) % 8).val (i0 + i*16)
+
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
-  local_length _ := 600
-  output _ i0 := .mapRange 25 fun i => var_from_offset U64 (i0 + i*24 + 16)
+  local_length _ := 400
+  output _ i0 := output i0
 
   local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
   subcircuits_consistent _ _ := by simp only [main, circuit_norm]
-  output_eq state i0 := by
-    simp only [main, circuit_norm, Rotation64.circuit, Vector.mapRange, Rotation64.elaborated]
-    simp only [rhoPiConstants, rhoPiIndices, rhoPiShifts, Vector.mk_zip_mk, List.zip_toArray, Vector.mapIdx_mk, List.mapIdx_toArray]
-    simp only [List.zip_cons_cons, List.zip_nil_right]
-    simp only [List.mapIdx_cons, List.mapIdx_nil]
+  output_eq state i0 := by simp only [output, main, circuit_norm]; rfl
 
 -- recharacterize rho_phi as a loop
 lemma rho_pi_loop (state : Vector ℕ 25) :
@@ -54,15 +53,16 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [spec, elaborated, rho_pi_loop, eval_vector, KeccakState.value,
-    Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange]
+  simp only [elaborated, output, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,
+    KeccakState.value, rho_pi_loop]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [assumptions, KeccakState.is_normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
-    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated] at h_holds
-  simp_all [Bitwise.rot_left_eq_rot_right]
+    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated,
+    Vector.getElem_zip] at h_holds
+  simp_all [rhoPiConstants, Bitwise.rot_left_eq_rot_right]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm

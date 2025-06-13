@@ -38,12 +38,8 @@ def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
 -- #eval! (rot64 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64 off
-  local_length _ := 24
-  output _inputs i0 := var_from_offset U64 (i0 + 16)
-  local_length_eq := by
-    intros
-    simp only [rot64]
-    rfl
+  local_length _ := 16
+  output _ i0 := Rotation64Bits.output (off % 8).val i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds

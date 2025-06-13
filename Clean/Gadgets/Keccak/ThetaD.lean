@@ -28,13 +28,13 @@ def theta_d (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main := theta_d
-  local_length _ := 160
+  local_length _ := 120
   output _ i0 := #v[
-    var_from_offset U64 (i0 + 24),
-    var_from_offset U64 (i0 + 56),
+    var_from_offset U64 (i0 + 16),
+    var_from_offset U64 (i0 + 40),
+    var_from_offset U64 (i0 + 64),
     var_from_offset U64 (i0 + 88),
-    var_from_offset U64 (i0 + 120),
-    var_from_offset U64 (i0 + 152)
+    var_from_offset U64 (i0 + 112)
   ]
 
 def assumptions (state : KeccakRow (F p)) := state.is_normalized
