@@ -1,5 +1,6 @@
 use clean_backend::{
-    generate_lookup_traces, parse_init_trace, prove, verify, AirInfo, ByteRangeAir, CleanAirInstance, MainAir, StarkConfig
+    generate_multiplicity_traces, parse_init_trace, prove, verify, AirInfo, ByteRangeAir,
+    CleanAirInstance, MainAir, StarkConfig,
 };
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
@@ -21,17 +22,17 @@ const JSON_PATH: &str = "clean_fib.json";
 /// Generate Fibonacci trace using the simplified Lean script
 fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
     steps: usize,
-    output_filename: &str
+    output_filename: &str,
 ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
     let backend_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let tests_dir = backend_dir.join("tests");
     let script_path = tests_dir.join("generate_trace.sh");
     let output_path = format!("output/{}", output_filename);
-    
+
     // Create the output directory if it doesn't exist
     let output_dir = tests_dir.join("output");
     std::fs::create_dir_all(&output_dir)?;
-    
+
     // Run the simplified trace generation script
     let output = Command::new("bash")
         .arg(&script_path)
@@ -39,16 +40,16 @@ fn generate_trace_from_lean<F: Field + PrimeCharacteristicRing>(
         .arg(&output_path)
         .current_dir(&tests_dir)
         .output()?;
-    
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("Failed to generate trace: {}", stderr).into());
     }
-    
+
     // Read the generated JSON file
     let json_path = tests_dir.join(&output_path);
     let json_content = std::fs::read_to_string(json_path)?;
-    
+
     // Parse the trace using the existing parse_init_trace function
     let trace = parse_init_trace::<F>(&json_content);
     Ok(trace)
@@ -97,10 +98,13 @@ fn test_clean_fib() {
     let config = MyConfig::new(pcs, challenger);
 
     let steps = 512; // Number of steps for the Fibonacci sequence
-    // Generate trace from Lean with 256 steps, fallback to static file if it fails
+                     // Generate trace from Lean with 256 steps, fallback to static file if it fails
     let init_trace = match generate_trace_from_lean::<BabyBear>(steps, "trace.json") {
         Ok(trace) => {
-            println!("Successfully generated trace from Lean with {} rows", trace.len());
+            println!(
+                "Successfully generated trace from Lean with {} rows",
+                trace.len()
+            );
             trace
         }
         Err(e) => {
@@ -126,7 +130,7 @@ fn test_clean_fib() {
     // Create a single VK with multiple AirInfo instances
     let byte_range_air = ByteRangeAir::new();
     let byte_range_air_instance = CleanAirInstance::ByteRange(byte_range_air);
-    
+
     // Create VK with multiple air instances (main + lookup)
     let air_instances = vec![
         (air_instance, main_trace.width()),
@@ -137,13 +141,12 @@ fn test_clean_fib() {
         .into_iter()
         .map(|(air, trace_width)| AirInfo::new(air, trace_width))
         .collect();
-    
+
     // Generate lookup traces using the AirInfo instances from the VK
-    let lookup_traces = generate_lookup_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
+    let lookup_traces = generate_multiplicity_traces::<BabyBear, MyConfig>(&air_infos, &main_trace);
     // Collect all traces: main trace + lookup traces
     let mut traces = vec![main_trace.clone()];
     traces.extend(lookup_traces);
-
 
     let pis = vec![BabyBear::ZERO, BabyBear::ONE, x];
     let proof = prove(&config, &air_infos, &traces, &pis);

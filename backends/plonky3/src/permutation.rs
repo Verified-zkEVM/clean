@@ -8,8 +8,7 @@ use p3_field::{ExtensionField, Field, PrimeField32};
 use p3_matrix::{dense::RowMajorMatrix, Matrix};
 
 use crate::{
-    ByteRangeAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Val,
-    VerifyingKey, VK,
+    ByteRangeAir, CleanAirInstance, Lookup, LookupType, StarkGenericConfig, Val, VerifyingKey, VK,
 };
 
 /// Represents a lookup AIR with its calculated main trace
@@ -30,12 +29,12 @@ pub trait MultiTableBuilder: ExtensionBuilder {
 /// This function:
 /// 1. Uses the pre-computed lookup operations from the main air (index 0)
 /// 2. Collect lookups and multiplicity traces for each lookup type using other airs
-/// 3. Returns lookup traces
+/// 3. Returns multiplicity traces
 ///
 /// # Arguments
 /// * `air_infos` - Vector of AirInfo instances (main + lookup airs)  
 /// * `main_trace` - The main execution trace (corresponds to air_infos[0])
-pub fn generate_lookup_traces<F, SC>(
+pub fn generate_multiplicity_traces<F, SC>(
     air_infos: &[crate::key::AirInfo<F>],
     main_trace: &RowMajorMatrix<F>,
 ) -> Vec<RowMajorMatrix<F>>
@@ -44,7 +43,7 @@ where
     SC: StarkGenericConfig,
 {
     let mut lookup_traces = Vec::new();
-    
+
     // Get lookup operations from the main air (first air in the list)
     let main_air_info = &air_infos[0];
     let lookups = main_air_info.lookups();

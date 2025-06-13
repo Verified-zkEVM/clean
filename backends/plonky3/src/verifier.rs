@@ -12,7 +12,9 @@ use p3_matrix::Matrix;
 use p3_util::zip_eq::zip_eq;
 use tracing::instrument;
 
-use crate::{AirInfo, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder, VerifyingKey, VK};
+use crate::{
+    AirInfo, PcsError, Proof, StarkGenericConfig, Val, VerifierConstraintFolder, VerifyingKey, VK,
+};
 
 #[instrument(skip_all)]
 pub fn verify<SC>(
@@ -31,7 +33,6 @@ where
         degree_bits,
     } = proof;
 
-
     let mut challenger = config.initialise_challenger();
     challenger.observe_slice(
         &degree_bits
@@ -41,7 +42,11 @@ where
     );
 
     // todo: construct VK without relying on degree_bits
-    let vk = VK::new(air_infos.clone(), degree_bits.iter().map(|d| 1 << d).collect_vec(), config);
+    let vk = VK::new(
+        air_infos.clone(),
+        degree_bits.iter().map(|d| 1 << d).collect_vec(),
+        config,
+    );
 
     challenger.observe(commitments.trace.clone());
     // Use VK's preprocessed commitment instead of proof's preprocessed commitment

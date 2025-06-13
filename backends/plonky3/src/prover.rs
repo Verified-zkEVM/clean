@@ -14,7 +14,8 @@ use p3_util::zip_eq::zip_eq;
 use tracing::{debug_span, info_span, instrument};
 
 use crate::{
-    permutation, AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof, ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK
+    permutation, AirInfo, Commitments, Domain, OpenedValues, PackedChallenge, PackedVal, Proof,
+    ProverConstraintFolder, StarkGenericConfig, Val, VerifyingKey, VK,
 };
 
 #[instrument(skip_all)]
@@ -29,9 +30,13 @@ where
 {
     let pcs = config.pcs();
     let mut challenger = config.initialise_challenger();
-    
+
     // Ensure we have the same number of traces as air infos
-    assert_eq!(traces.len(), air_infos.len(), "Number of traces must match number of AirInfo instances");
+    assert_eq!(
+        traces.len(),
+        air_infos.len(),
+        "Number of traces must match number of AirInfo instances"
+    );
 
     let degrees = traces.iter().map(|trace| trace.height());
 
@@ -65,13 +70,13 @@ where
         .collect_vec();
 
     let traces_and_domains = zip_eq(
-            trace_domains.iter(),
-            traces.iter(),
-            "Trace domains and traces length mismatch",
-        )
-        .unwrap()
-        .map(|(domain, trace)| (*domain, trace.clone()))
-        .collect_vec();
+        trace_domains.iter(),
+        traces.iter(),
+        "Trace domains and traces length mismatch",
+    )
+    .unwrap()
+    .map(|(domain, trace)| (*domain, trace.clone()))
+    .collect_vec();
 
     let (trace_commit, trace_data) =
         info_span!("commit to trace data").in_scope(|| pcs.commit(traces_and_domains));
@@ -104,16 +109,16 @@ where
         .collect_vec();
 
     let (perm_and_domains, last_sums): (Vec<_>, Vec<&SC::Challenge>) = zip_eq(
-            trace_domains.iter(),
-            perm_traces.iter(),
-            "Trace domains and perm traces length mismatch",
-        )
-        .unwrap()
-        .map(|(domain, (perm_trace, last_sum))| {
-            tracing::info!("perm trace width: {}", perm_trace.width());
-            ((*domain, perm_trace.clone().flatten_to_base()), last_sum)
-        })
-        .unzip();
+        trace_domains.iter(),
+        perm_traces.iter(),
+        "Trace domains and perm traces length mismatch",
+    )
+    .unwrap()
+    .map(|(domain, (perm_trace, last_sum))| {
+        tracing::info!("perm trace width: {}", perm_trace.width());
+        ((*domain, perm_trace.clone().flatten_to_base()), last_sum)
+    })
+    .unzip();
 
     challenger.observe_slice(
         &last_sums
@@ -133,74 +138,74 @@ where
     let alpha: SC::Challenge = challenger.sample_algebra_element();
 
     let quotient_domains = zip_eq(
-            zip_eq(
-                trace_domains.iter(),
-                log_degrees.iter(),
-                "Trace domains and log degrees length mismatch",
-            )
-            .unwrap(),
-            log_quotient_degrees.iter(),
-            "Combined domains and log quotient degrees length mismatch",
+        zip_eq(
+            trace_domains.iter(),
+            log_degrees.iter(),
+            "Trace domains and log degrees length mismatch",
         )
-        .unwrap()
-        .map(|((trace_domain, &log_degree), &log_quotient_degree)| {
-            trace_domain.create_disjoint_domain(1 << (log_degree + log_quotient_degree))
-        })
-        .collect_vec();
+        .unwrap(),
+        log_quotient_degrees.iter(),
+        "Combined domains and log quotient degrees length mismatch",
+    )
+    .unwrap()
+    .map(|((trace_domain, &log_degree), &log_quotient_degree)| {
+        trace_domain.create_disjoint_domain(1 << (log_degree + log_quotient_degree))
+    })
+    .collect_vec();
 
     let quotient_values = zip_eq(
         air_infos.iter(),
         trace_domains.iter().enumerate(),
-        "Air infos and trace domains length mismatch"
+        "Air infos and trace domains length mismatch",
     )
-        .unwrap()
-        .map(|(air_info, (i, trace_domain))| {
-            let quotient_domain = quotient_domains[i];
-            let trace_on_quotient_domain =
-                pcs.get_evaluations_on_domain(&trace_data, i, quotient_domains[i]);
-            let pre_on_quotient_domain =
-                pcs.get_evaluations_on_domain(&pre_data, i, quotient_domains[i]);
-            let perm_on_quotient_domain =
-                pcs.get_evaluations_on_domain(&perm_data, i, quotient_domains[i]);
+    .unwrap()
+    .map(|(air_info, (i, trace_domain))| {
+        let quotient_domain = quotient_domains[i];
+        let trace_on_quotient_domain =
+            pcs.get_evaluations_on_domain(&trace_data, i, quotient_domains[i]);
+        let pre_on_quotient_domain =
+            pcs.get_evaluations_on_domain(&pre_data, i, quotient_domains[i]);
+        let perm_on_quotient_domain =
+            pcs.get_evaluations_on_domain(&perm_data, i, quotient_domains[i]);
 
-            let constraint_count = constraint_counts[i];
+        let constraint_count = constraint_counts[i];
 
-            quotient_values::<SC, _>(
-                air_info,
-                public_values,
-                *trace_domain,
-                quotient_domain,
-                trace_on_quotient_domain,
-                pre_on_quotient_domain,
-                perm_on_quotient_domain,
-                *last_sums[i],
-                alpha,
-                &permutation_challenges,
-                constraint_count,
-            )
-        })
-        .collect_vec();
+        quotient_values::<SC, _>(
+            air_info,
+            public_values,
+            *trace_domain,
+            quotient_domain,
+            trace_on_quotient_domain,
+            pre_on_quotient_domain,
+            perm_on_quotient_domain,
+            *last_sums[i],
+            alpha,
+            &permutation_challenges,
+            constraint_count,
+        )
+    })
+    .collect_vec();
 
     let quotient_domains_and_chunks = zip_eq(
-            zip_eq(
-                quotient_domains.iter(),
-                quotient_degrees.iter(),
-                "Quotient domains and degrees length mismatch",
-            )
-            .unwrap(),
-            quotient_values.iter(),
-            "Combined domains/degrees and values length mismatch",
+        zip_eq(
+            quotient_domains.iter(),
+            quotient_degrees.iter(),
+            "Quotient domains and degrees length mismatch",
         )
-        .unwrap()
-        .flat_map(|((domain, &degree), values)| {
-            let quotient_flat = RowMajorMatrix::new_col(values.to_vec()).flatten_to_base();
-            let quotient_chunks = domain.split_evals(degree, quotient_flat);
-            let domain_chunks = domain.split_domains(degree);
-            domain_chunks
-                .into_iter()
-                .zip_eq(quotient_chunks.into_iter())
-        })
-        .collect_vec();
+        .unwrap(),
+        quotient_values.iter(),
+        "Combined domains/degrees and values length mismatch",
+    )
+    .unwrap()
+    .flat_map(|((domain, &degree), values)| {
+        let quotient_flat = RowMajorMatrix::new_col(values.to_vec()).flatten_to_base();
+        let quotient_chunks = domain.split_evals(degree, quotient_flat);
+        let domain_chunks = domain.split_domains(degree);
+        domain_chunks
+            .into_iter()
+            .zip_eq(quotient_chunks.into_iter())
+    })
+    .collect_vec();
 
     let (quotient_commit, quotient_data) = info_span!("commit to quotient poly chunks")
         .in_scope(|| pcs.commit(quotient_domains_and_chunks));

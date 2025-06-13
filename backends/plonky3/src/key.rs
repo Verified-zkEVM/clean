@@ -1,5 +1,3 @@
-use core::default;
-
 use alloc::vec::Vec;
 use p3_air::{
     Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, PermutationAirBuilder,
@@ -17,7 +15,7 @@ use alloc::vec;
 
 use crate::clean_air::CleanAirInstance;
 use crate::permutation::{eval_permutation_constraints, MultiTableBuilder};
-use crate::{BaseMessageBuilder, Lookup, LookupBuilder, StarkGenericConfig};
+use crate::{BaseMessageBuilder, Lookup, LookupBuilder, StarkGenericConfig, Val};
 
 type Com<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
     <SC as StarkGenericConfig>::Challenge,
@@ -51,18 +49,15 @@ pub trait VerifyingKey<F> {
             + BaseMessageBuilder;
 }
 
-pub struct VK<F: Field, SC: StarkGenericConfig> {
-    air_infos: Vec<AirInfo<F>>,
+pub struct VK<SC: StarkGenericConfig> {
+    air_infos: Vec<AirInfo<Val<SC>>>,
     pre_com: Com<SC>,
     pre_data: PcsData<SC>,
 }
 
-impl<F: Field, SC: StarkGenericConfig> VK<F, SC> {
+impl<SC: StarkGenericConfig> VK<SC> {
     /// Create a new VK with preprocessed trace commitment from a list of air instances
-    pub fn new(air_infos: Vec<AirInfo<F>>, traces_heights: Vec<usize>, config: &SC) -> Self
-    where
-        F: From<crate::Val<SC>> + Into<crate::Val<SC>>,
-    {
+    pub fn new(air_infos: Vec<AirInfo<Val<SC>>>, traces_heights: Vec<usize>, config: &SC) -> Self {
         let pcs = config.pcs();
         // Collect all preprocessed traces for batch commitment
         let mut pre_and_domains = Vec::new();
@@ -70,31 +65,26 @@ impl<F: Field, SC: StarkGenericConfig> VK<F, SC> {
             if let Some(preprocessed_trace) = &air_info.preprocessed {
                 let degree = preprocessed_trace.height();
                 let domain = pcs.natural_domain_for_degree(degree);
-                
-                // Convert the matrix to the right field type
-                let mut converted_values = Vec::new();
-                for row in 0..preprocessed_trace.height() {
-                    for col in 0..preprocessed_trace.width() {
-                        let val = preprocessed_trace.get(row, col).unwrap();
-                        converted_values.push(val.into());
-                    }
-                }
-                let converted_matrix = RowMajorMatrix::new(converted_values, preprocessed_trace.width());
-                pre_and_domains.push((domain, converted_matrix));
-            }
-            else {
+
+                pre_and_domains.push((domain, preprocessed_trace.clone()));
+            } else {
                 // todo: remove the need for default preprocessed trace if no preprocessed trace is available
                 // If no preprocessed trace, use a default matrix
-                let domain = pcs.natural_domain_for_degree(traces_heights[i]); 
-                let default_matrix = RowMajorMatrix::new(vec![crate::Val::<SC>::default(); domain.size()], 1); 
+                let domain = pcs.natural_domain_for_degree(traces_heights[i]);
+                let default_matrix =
+                    RowMajorMatrix::new(vec![Val::<SC>::default(); domain.size()], 1);
                 pre_and_domains.push((domain, default_matrix));
             }
         }
-        
+
         // Create batch commitment for all preprocessed traces
         let (pre_com, pre_data) = pcs.commit(pre_and_domains);
 
-        Self { air_infos, pre_com, pre_data }
+        Self {
+            air_infos,
+            pre_com,
+            pre_data,
+        }
     }
 
     /// Get the preprocessed trace commitment
@@ -108,7 +98,7 @@ impl<F: Field, SC: StarkGenericConfig> VK<F, SC> {
     }
 
     /// Get access to all AirInfo instances
-    pub fn air_infos(&self) -> &Vec<AirInfo<F>> {
+    pub fn air_infos(&self) -> &Vec<AirInfo<Val<SC>>> {
         &self.air_infos
     }
 }
@@ -243,5 +233,3 @@ where
         // Note: Permutation constraints are handled separately in the proving/verification process
     }
 }
-
-

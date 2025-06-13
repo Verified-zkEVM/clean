@@ -18,7 +18,10 @@ impl From<i32> for BoundaryRow {
         match value {
             0 => BoundaryRow::FirstRow,
             -1 => BoundaryRow::LastRow,
-            _ => panic!("Invalid boundary row value: {}. Expected 0 (FirstRow) or -1 (LastRow)", value),
+            _ => panic!(
+                "Invalid boundary row value: {}. Expected 0 (FirstRow) or -1 (LastRow)",
+                value
+            ),
         }
     }
 }
@@ -27,8 +30,13 @@ impl From<i32> for BoundaryRow {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum CleanOp {
-    Boundary { row: BoundaryRow, context: OpContext },
-    EveryRowExceptLast { context: OpContext },
+    Boundary {
+        row: BoundaryRow,
+        context: OpContext,
+    },
+    EveryRowExceptLast {
+        context: OpContext,
+    },
 }
 
 impl CleanOp {
@@ -159,10 +167,12 @@ impl AstUtils {
             ExprNode::Pi { index } => pi_fn(*index),
             ExprNode::Const { value } => AB::F::from_u64(*value).into(),
             ExprNode::Add { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, var_fn, pi_fn) + Self::lower_expr::<AB>(rhs, var_fn, pi_fn)
+                Self::lower_expr::<AB>(lhs, var_fn, pi_fn)
+                    + Self::lower_expr::<AB>(rhs, var_fn, pi_fn)
             }
             ExprNode::Mul { lhs, rhs } => {
-                Self::lower_expr::<AB>(lhs, var_fn, pi_fn) * Self::lower_expr::<AB>(rhs, var_fn, pi_fn)
+                Self::lower_expr::<AB>(lhs, var_fn, pi_fn)
+                    * Self::lower_expr::<AB>(rhs, var_fn, pi_fn)
             }
         }
     }
@@ -255,15 +265,24 @@ impl CleanOps {
                                         // Convert usize row to boundary row for comparison
                                         let expected_row_value = match boundary_row {
                                             BoundaryRow::FirstRow => 0,
-                                            BoundaryRow::LastRow => panic!("LastRow boundary not supported in cell lookups"),
+                                            BoundaryRow::LastRow => panic!(
+                                                "LastRow boundary not supported in cell lookups"
+                                            ),
                                         };
-                                        
+
                                         if *row != expected_row_value {
-                                            panic!("Boundary row {} does not match the lookup row {}", 
-                                                   expected_row_value, row);
+                                            panic!(
+                                                "Boundary row {} does not match the lookup row {}",
+                                                expected_row_value, row
+                                            );
                                         }
-                                        
-                                        callback(LookupRow::Boundary { row: boundary_row.clone() }, *column);
+
+                                        callback(
+                                            LookupRow::Boundary {
+                                                row: boundary_row.clone(),
+                                            },
+                                            *column,
+                                        );
                                     } else if *row == 0 {
                                         callback(
                                             LookupRow::Transition(Transition::Current),

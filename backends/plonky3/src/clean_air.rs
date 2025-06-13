@@ -1,17 +1,16 @@
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder,
-    VirtualPairCol,
-};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, VirtualPairCol};
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 
-use crate::clean_ast::{AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation};
+use crate::clean_ast::{
+    AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
+};
 use crate::key::VK;
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, VerifyingKey, StarkGenericConfig};
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, StarkGenericConfig, VerifyingKey};
 
 #[derive(Clone)]
 pub struct MainAir<F>
@@ -56,20 +55,27 @@ where
                                 0 => local[column],
                                 _ => panic!("Invalid row index: {}", row),
                             },
-                            VarLocation::Aux { .. } => unreachable!("All aux vars should be already converted to cells"),
+                            VarLocation::Aux { .. } => {
+                                unreachable!("All aux vars should be already converted to cells")
+                            }
                         }
                     };
-                    
+
                     let mut when_boundary = match row {
                         BoundaryRow::FirstRow => builder.when_first_row(),
                         BoundaryRow::LastRow => builder.when_last_row(),
                     };
-                    
+
                     let mut constraint_builder = |expr: AB::Expr| {
                         when_boundary.assert_zero(expr);
                     };
-                    
-                    self.apply_clean_constraints::<AB>(&context.circuit, &load_var, &load_pi, &mut constraint_builder);
+
+                    self.apply_clean_constraints::<AB>(
+                        &context.circuit,
+                        &load_var,
+                        &load_pi,
+                        &mut constraint_builder,
+                    );
                 }
                 CleanOp::EveryRowExceptLast { context } => {
                     let load_var = |var_idx: usize| {
@@ -80,17 +86,24 @@ where
                                 1 => next[column],
                                 _ => panic!("Invalid row index: {}", row),
                             },
-                            VarLocation::Aux { .. } => unreachable!("All aux vars should be already converted to cells"),
+                            VarLocation::Aux { .. } => {
+                                unreachable!("All aux vars should be already converted to cells")
+                            }
                         }
                     };
-                    
+
                     let mut when_transition = builder.when_transition();
-                    
+
                     let mut constraint_builder = |expr: AB::Expr| {
                         when_transition.assert_zero(expr);
                     };
-                    
-                    self.apply_clean_constraints::<AB>(&context.circuit, &load_var, &load_pi, &mut constraint_builder);
+
+                    self.apply_clean_constraints::<AB>(
+                        &context.circuit,
+                        &load_var,
+                        &load_pi,
+                        &mut constraint_builder,
+                    );
                 }
             }
         }
@@ -144,7 +157,7 @@ impl<F: Field> MainAir<F> {
         AB::F: Field + PrimeCharacteristicRing,
     {
         use alloc::collections::BTreeSet;
-        
+
         let mut lookup_cols = BTreeSet::new();
         self.process_lookups(|_r, c| {
             lookup_cols.insert(c);
@@ -162,12 +175,14 @@ impl<F: Field> MainAir<F> {
     /// Process circuit operations and apply constraints
     fn apply_clean_constraints<AB>(
         &self,
-        ops: &[CircuitOp], 
-        load_var: &dyn Fn(usize) -> AB::Var, 
+        ops: &[CircuitOp],
+        load_var: &dyn Fn(usize) -> AB::Var,
         load_pi: &dyn Fn(usize) -> AB::Expr,
-        constraint_builder: &mut dyn FnMut(AB::Expr)
-    ) where AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
-            AB::F: Field + PrimeCharacteristicRing {
+        constraint_builder: &mut dyn FnMut(AB::Expr),
+    ) where
+        AB: AirBuilder + AirBuilderWithPublicValues + PairBuilder + BaseMessageBuilder,
+        AB::F: Field + PrimeCharacteristicRing,
+    {
         for op in ops {
             match op {
                 CircuitOp::Assert { assert } => {
@@ -176,7 +191,12 @@ impl<F: Field> MainAir<F> {
                 }
                 CircuitOp::Subcircuit { subcircuit } => {
                     // Recursively process subcircuit operations
-                    self.apply_clean_constraints::<AB>(subcircuit, load_var, load_pi, constraint_builder);
+                    self.apply_clean_constraints::<AB>(
+                        subcircuit,
+                        load_var,
+                        load_pi,
+                        constraint_builder,
+                    );
                 }
                 CircuitOp::Witness { .. } | CircuitOp::Lookup { .. } => {
                     // Witness and lookup operations are handled elsewhere
@@ -235,4 +255,3 @@ where
         };
     }
 }
-
