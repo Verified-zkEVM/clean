@@ -1,9 +1,4 @@
-import Clean.Gadgets.Xor.Xor32
 import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Rotation32.Rotation32
-import Clean.Specs.BLAKE3
-import Clean.Circuit.Provable
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime]
