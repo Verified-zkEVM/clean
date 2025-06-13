@@ -27,7 +27,7 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   ∧ out_state.value = Specs.Keccak256.rho_pi state.value
 
 def output (i0 : ℕ) : Var KeccakState (F p) :=
-  rhoPiShifts.mapIdx fun i s => Rotation64Bits.output ((-s) % 8).val (i0 + i*16)
+  rhoPiShifts.mapIdx fun i s => Rotation64.output (-s) (i0 + i*16)
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
@@ -72,7 +72,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   simp only [assumptions, KeccakState.is_normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [state_norm, h_input, main, circuit_norm, subcircuit_norm,
+  simp_all [main, circuit_norm, subcircuit_norm,
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
