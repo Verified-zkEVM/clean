@@ -88,37 +88,42 @@ A flat list of circuit operations, instantiated at a certain offset.
 To enable composition of formal proofs, subcircuits come with custom `soundness` and `completeness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
+-- structure SubCircuit (F: Type) [Field F] where
 structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   ops: List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`,
   -- `completeness` and `uses_local_witnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  soundness : Environment F → Prop
-  completeness : Environment F → Prop
-  uses_local_witnesses : Environment F → Prop
+  -- soundness : Environment F → Prop
+  -- completeness : Environment F → Prop
+  -- uses_local_witnesses : Environment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
-  local_length : ℕ
+  -- local_length : ℕ
 
   -- `soundness` needs to follow from the constraints for any witness
-  imply_soundness : ∀ env,
-    constraints_hold_flat env ops → soundness env
+  -- imply_soundness : ∀ env,
+    -- constraints_hold_flat env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
-    completeness env → constraints_hold_flat env ops
+  -- implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+    -- completeness env → constraints_hold_flat env ops
 
   -- `uses_local_witnesses` needs to follow from the local witness generator condition
-  implied_by_local_witnesses : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
-    uses_local_witnesses env
+  -- implied_by_local_witnesses : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+    -- uses_local_witnesses env
 
   -- `local_length` must be consistent with the operations
-  local_length_eq : local_length = FlatOperation.witness_length ops
+  -- local_length_eq : local_length = FlatOperation.witness_length ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
+def SubCircuit.local_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
+
+@[reducible, circuit_norm]
+def SubCircuit.witnesses (sc: SubCircuit F n) (env : Environment F) : Vector F sc.local_length :=
+  FlatOperation.witnesses env sc.ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.

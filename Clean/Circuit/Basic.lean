@@ -144,31 +144,31 @@ def constraints_hold (eval : Environment F) : List (Operation F) → Prop
   | .subcircuit s :: ops =>
     constraints_hold_flat eval s.ops ∧ constraints_hold eval ops
 
-/--
-Version of `constraints_hold` that replaces the statement of subcircuits with their `soundness`.
--/
-@[circuit_norm]
-def constraints_hold.soundness (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => constraints_hold.soundness eval ops
-  | .assert e :: ops => eval e = 0 ∧ constraints_hold.soundness eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.contains (entry.map eval) ∧ constraints_hold.soundness eval ops
-  | .subcircuit s :: ops =>
-    s.soundness eval ∧ constraints_hold.soundness eval ops
+-- /--
+-- Version of `constraints_hold` that replaces the statement of subcircuits with their `soundness`.
+-- -/
+-- @[circuit_norm]
+-- def constraints_hold.soundness (eval : Environment F) : List (Operation F) → Prop
+--   | [] => True
+--   | .witness _ _ :: ops => constraints_hold.soundness eval ops
+--   | .assert e :: ops => eval e = 0 ∧ constraints_hold.soundness eval ops
+--   | .lookup { table, entry, .. } :: ops =>
+--     table.contains (entry.map eval) ∧ constraints_hold.soundness eval ops
+--   | .subcircuit s :: ops =>
+--     s.soundness eval ∧ constraints_hold.soundness eval ops
 
-/--
-Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
--/
-@[circuit_norm]
-def constraints_hold.completeness (eval : Environment F) : List (Operation F) → Prop
-  | [] => True
-  | .witness _ _ :: ops => constraints_hold.completeness eval ops
-  | .assert e :: ops => eval e = 0 ∧ constraints_hold.completeness eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.contains (entry.map eval) ∧ constraints_hold.completeness eval ops
-  | .subcircuit s :: ops =>
-    s.completeness eval ∧ constraints_hold.completeness eval ops
+-- /--
+-- Version of `constraints_hold` that replaces the statement of subcircuits with their `completeness`.
+-- -/
+-- @[circuit_norm]
+-- def constraints_hold.completeness (eval : Environment F) : List (Operation F) → Prop
+--   | [] => True
+--   | .witness _ _ :: ops => constraints_hold.completeness eval ops
+--   | .assert e :: ops => eval e = 0 ∧ constraints_hold.completeness eval ops
+--   | .lookup { table, entry, .. } :: ops =>
+--     table.contains (entry.map eval) ∧ constraints_hold.completeness eval ops
+--   | .subcircuit s :: ops =>
+--     s.completeness eval ∧ constraints_hold.completeness eval ops
 end Circuit
 
 /--
@@ -185,16 +185,16 @@ def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List 
   | .lookup _ :: ops => env.uses_local_witnesses offset ops
   | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
 
-/--
-Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
--/
-@[circuit_norm]
-def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
-  | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
-  | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
+-- /--
+-- Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
+-- -/
+-- @[circuit_norm]
+-- def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
+--   | [] => True
+--   | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
+--   | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
+--   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
+--   | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
 section
 open Circuit (constraints_hold)
@@ -240,7 +240,7 @@ def Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
   ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
   assumptions b →
   -- if the constraints hold
-  constraints_hold.soundness env (circuit.main b_var |>.operations offset) →
+  constraints_hold env (circuit.main b_var |>.operations offset) →
   -- the spec holds on the input and output
   let a := eval env (circuit.output b_var offset)
   spec b a
@@ -249,12 +249,12 @@ def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
     (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
-  env.uses_local_witnesses_completeness offset (circuit.main b_var |>.operations offset) →
+  env.uses_local_witnesses offset (circuit.main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β F, eval env b_var = b →
   assumptions b →
   -- the constraints hold
-  constraints_hold.completeness env (circuit.main b_var |>.operations offset)
+  constraints_hold env (circuit.main b_var |>.operations offset)
 
 /--
 `FormalCircuit` is the main object that encapsulates correctness of a circuit.
@@ -314,19 +314,19 @@ structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
     ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
     assumptions b →
     -- if the constraints hold
-    constraints_hold.soundness env (main b_var |>.operations offset) →
+    constraints_hold env (main b_var |>.operations offset) →
     -- the spec holds
     spec b
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
     ∀ offset, ∀ env, ∀ b_var : Var β F,
-    env.uses_local_witnesses_completeness offset (main b_var |>.operations offset) →
+    env.uses_local_witnesses offset (main b_var |>.operations offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β F, eval env b_var = b →
     assumptions b → spec b →
     -- the constraints hold
-    constraints_hold.completeness env (main b_var |>.operations offset)
+    constraints_hold env (main b_var |>.operations offset)
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   local_length := fun _ => 0
@@ -368,7 +368,7 @@ def Operations.witness_generators : (ops: Operations F) → Vector (Environment 
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
   | .assert _ :: ops => witness_generators ops
   | .lookup _ :: ops => witness_generators ops
-  | .subcircuit s :: ops => (s.local_length_eq ▸ FlatOperation.witness_generators s.ops) ++ witness_generators ops
+  | .subcircuit s :: ops => FlatOperation.witness_generators s.ops ++ witness_generators ops
 
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
