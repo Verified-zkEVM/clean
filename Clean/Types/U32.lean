@@ -279,7 +279,7 @@ theorem from_limbs_to_limbs {F} (x : U32 F) :
     U32.from_limbs x.to_limbs = x := rfl
 
 theorem to_limbs_from_limbs {F} (v : Vector F 4) :
-    U32.to_limbs (U32.from_limbs v) = v := ProvableType.to_elements_from_elements ..
+    (U32.from_limbs v).to_limbs = v := ProvableType.to_elements_from_elements ..
 
 theorem ext_iff {F} {x y : U32 F} :
     x = y ↔ ∀ i (_ : i < 4), x.to_limbs[i] = y.to_limbs[i] := by
@@ -289,7 +289,7 @@ omit [Fact (Nat.Prime p)] p_large_enough in
 theorem is_normalized_iff {x : U32 (F p)} :
     x.is_normalized ↔ ∀ i (_ : i < 4), x.to_limbs[i].val < 256 := by
   rcases x with ⟨ x0, x1, x2, x3 ⟩
-  simp only [U32.to_limbs, is_normalized, to_elements, size, Vector.getElem_mk, List.getElem_toArray]
+  simp only [to_limbs, is_normalized, to_elements, size, Vector.getElem_mk, List.getElem_toArray]
   constructor
   · intro h i hi
     repeat (rcases hi with _ | hi; try simp [*, size])

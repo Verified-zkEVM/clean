@@ -35,20 +35,18 @@ def rot_right64_u64 : U64 ℕ → ℕ → U64 ℕ
 
 -- these two are definitionally equal
 lemma rot_right64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
-  rot_right64_bytes (to_elements x) o = to_elements (rot_right64_u64 x o) := rfl
+  rot_right64_bytes x.to_limbs o = (rot_right64_u64 x o).to_limbs := rfl
 
-lemma h_mod {offset : ℕ} (ho : offset < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
+lemma h_mod {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
-      2^offset = x0 % 2^offset := by
+      2^o = x0 % 2^o := by
   nth_rw 1 [←Nat.pow_one 256]
   repeat rw [Nat.add_mod, mul_mod_256_off ho _ _ (by trivial), add_zero, Nat.mod_mod]
 
-lemma h_div {offset : ℕ} (ho : offset < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
-    (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) / 2 ^ offset
-    = x0 / 2^offset + x1 * 2^(8 - offset) + x2 * 256 * 2^(8 - offset) +
-    x3 * 256 ^ 2 * 2^(8 - offset) + x4 * 256 ^ 3 * 2^(8 - offset) +
-    x5 * 256 ^ 4 * 2^(8 - offset) + x6 * 256 ^ 5 * 2^(8 - offset) +
-    x7 * 256 ^ 6 * 2^(8 - offset) := by
+lemma h_div {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
+    (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3 + x4 * 256^4 + x5 * 256^5 + x6 * 256^6 + x7 * 256^7) / 2 ^ o
+    = x0 / 2^o + x1 * 2^(8-o) + x2 * 256 * 2^(8-o) + x3 * 256^2 * 2^(8-o) + x4 * 256^3 * 2^(8-o) +
+    x5 * 256^4 * 2^(8-o) + x6 * 256^5 * 2^(8-o) + x7 * 256^6 * 2^(8-o) := by
   rw [←Nat.pow_one 256]
   repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power ho; linarith)]
   rw [mul_div_256_off ho 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
@@ -61,8 +59,8 @@ lemma h_div {offset : ℕ} (ho : offset < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
   simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
     Nat.add_left_inj]
 
-lemma h_x0_const {offset : ℕ} (ho : offset < 8) :
-    2 ^ (8 - offset) * 256^7 = 2^(64 - offset) := by
+lemma h_x0_const {o : ℕ} (ho : o < 8) :
+    2^(8 - o) * 256^7 = 2^(64 - o) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, pow_right_inj₀ (by norm_num) (by norm_num)]
   omega
 

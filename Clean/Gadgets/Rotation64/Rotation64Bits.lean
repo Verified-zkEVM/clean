@@ -16,23 +16,18 @@ open Bitwise (rot_right64)
 open Rotation64.Theorems
 open ByteDecomposition (Outputs)
 open ByteDecomposition.Theorems (byte_decomposition_lt)
-
--- definitions to prevent `to_vars`/`from_vars` from being unfolded in the proof
--- TODO get rid of these
-def to_vars' (x : Var U64 (F p)) := to_vars x
-def from_vars' (x : Vector (Expression (F p)) (size U64)) := from_vars x
-
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
 def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let parts ← Circuit.map (to_vars' x) (subcircuit (ByteDecomposition.circuit offset))
-  let lows := parts.map Outputs.low |>.rotate 1
+  let parts ← Circuit.map x.to_limbs (subcircuit (ByteDecomposition.circuit offset))
+  let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
-  let rotated := lows.zip highs |>.map fun (low, high) =>
+
+  let rotated := highs.zip (lows.rotate 1) |>.map fun (high, low) =>
     high + low * ((2^(8 - offset.val) : ℕ) : F p)
 
-  (from_vars' rotated : Var U64 (F p)).copy
+  U64.from_limbs rotated |>.copy
 
 def assumptions (input : U64 (F p)) := input.is_normalized
 
@@ -66,24 +61,20 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   obtain ⟨ h_decomposition, h_concatenation ⟩ := h_holds
 
   -- targeted rewriting of the assumptions
-  simp only [ProvableType.ext_iff, size, from_vars', to_vars', ProvableType.eval_from_vars,
-    ProvableType.to_elements_from_elements, Vector.getElem_map, Vector.getElem_zip,
+  simp only [size, U64.ByteVector.ext_iff, U64.ByteVector.eval_from_limbs,
+    U64.ByteVector.to_limbs_from_limbs, Vector.getElem_map, Vector.getElem_zip,
     Vector.getElem_mapIdx, Vector.getElem_rotate, Expression.eval] at h_concatenation
 
   rw [assumptions, U64.ByteVector.is_normalized_iff] at x_normalized
+  simp only [size, Fin.forall_iff, U64.ByteVector.getElem_eval_to_limbs, h_input, x_normalized, true_implies] at h_decomposition
 
-  have getElem_eval_to_vars (i : ℕ) (hi : i < 8) : (to_vars x_var)[i].eval env = (to_elements x)[i] := by
-    rw [ProvableType.getElem_eval_to_vars, h_input]
-  simp only [size] at getElem_eval_to_vars x_normalized
-
-  simp only [to_vars', Fin.forall_iff, getElem_eval_to_vars, x_normalized, true_implies] at h_decomposition
   set base := ((2^(8 - offset.val) : ℕ) : F p)
   have neg_offset_le : 8 - offset.val ≤ 8 := by
     rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 
   -- capture the rotation relation in terms of byte vectors
-  set xs : Vector _ 8 := to_elements x
-  set ys : Vector _ 8 := to_elements y
+  set xs := x.to_limbs
+  set ys := y.to_limbs
   set o := offset.val
 
   have h_rot_vector (i : ℕ) (hi : i < 8) :
@@ -107,9 +98,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
 
   -- finish the proof using our characerization of rotation on byte vectors
   have h_rot_vector' : y.vals = rot_right64_u64 x.vals o := by
-    rw [ProvableType.ext_iff, ←rot_right64_bytes_u64_eq]
+    rw [U64.ByteVector.ext_iff, ←rot_right64_bytes_u64_eq]
     intro i hi
-    simp only [U64.vals, U64.to_elements_map, Vector.getElem_map, rot_right64_bytes, size, Vector.getElem_ofFn]
+    simp only [U64.vals, U64.ByteVector.to_limbs_map, Vector.getElem_map, rot_right64_bytes, size, Vector.getElem_ofFn]
     exact (h_rot_vector i hi).right
 
   rw [←U64.vals_value, ←U64.vals_value, h_rot_vector']
@@ -125,11 +116,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 
   -- we only have to prove the byte decomposition assumptions
   rw [assumptions, U64.ByteVector.is_normalized_iff] at x_normalized
-
-  have getElem_eval_to_vars (i : ℕ) (hi : i < 8) : (to_vars x_var)[i].eval env = (to_elements x)[i] := by
-    rw [ProvableType.getElem_eval_to_vars, h_input]
-
-  simp_all only [size, to_vars', forall_const]
+  simp_all only [size, U64.ByteVector.getElem_eval_to_limbs, forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with
