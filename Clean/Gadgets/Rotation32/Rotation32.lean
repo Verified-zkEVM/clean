@@ -33,12 +33,15 @@ def spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
   y.value = rot_right32 x.value offset.val
   ∧ y.is_normalized
 
+def output (offset : Fin 32) (i0 : Nat) : U32 (Expression (F p)) :=
+  Rotation32Bits.output (offset % 8).val i0
+
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32 off
   local_length _ := 8
-  output _inputs i0 := Rotation32Bits.output (off % 8).val i0
+  output _inputs i0 := output off i0
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
@@ -55,7 +58,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
     Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.spec, Rotation32Bits.assumptions,
     Vector.finRange] at h_holds
 
-  simp [circuit_norm, spec, h_holds, elaborated]
+  simp [circuit_norm, spec, output, h_holds, elaborated]
   set y := eval env (Rotation32Bits.output (offset.val % 8 : ℕ) i0)
 
   simp [assumptions] at x_normalized
