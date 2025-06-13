@@ -220,13 +220,14 @@ theorem assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β
     FlatOperation.flat_witness_length_eq, ←circuit.local_length_eq input offset]
 end Circuit
 
-namespace SubCircuit
-open Circuit (subcircuit_soundness subcircuit_completeness constraints_hold can_replace_subcircuits)
+section
+open Circuit (subcircuit_soundness subcircuit_completeness constraints_hold can_replace_subcircuits
+  subassertion_soundness subassertion_completeness)
 
 -- soundness/completeness of subcircuits
 
 @[subcircuit_norm]
-theorem imply_soundness (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F}:
+theorem FormalCircuit.imply_soundness (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F}:
   constraints_hold_flat env (circuit.to_subcircuit offset input).ops →
     subcircuit_soundness circuit input offset env := by
   intro h_holds
@@ -248,7 +249,7 @@ theorem imply_soundness (circuit: FormalCircuit F β α) {input: Var β F} {offs
   exact can_replace_subcircuits.mpr h_holds
 
 @[subcircuit_norm]
-theorem implied_by_completeness (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F}:
+theorem FormalCircuit.implied_by_completeness (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F}:
   env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset →
     subcircuit_completeness circuit input env → constraints_hold_flat env (circuit.to_subcircuit offset input).ops := by
   intro h_env
@@ -269,7 +270,7 @@ theorem implied_by_completeness (circuit: FormalCircuit F β α) {input: Var β 
   apply can_replace_subcircuits.mp h_holds
 
 @[subcircuit_norm]
-theorem implied_by_local_witnesses (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F} :
+theorem FormalCircuit.implied_by_local_witnesses (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F} :
   env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset →
     subcircuit_soundness circuit input offset env := by
   intro h_env as
@@ -277,7 +278,52 @@ theorem implied_by_local_witnesses (circuit: FormalCircuit F β α) {input: Var 
   have h_holds := implied_by_completeness circuit h_env as
   -- by soundness, this implies the spec
   exact imply_soundness circuit h_holds as
-end SubCircuit
+
+@[subcircuit_norm]
+theorem FormalAssertion.imply_soundness (circuit: FormalAssertion F β) {input: Var β F} {offset: ℕ} {env : Environment F}:
+  constraints_hold_flat env (circuit.to_subcircuit offset input).ops →
+    subassertion_soundness circuit input env := by
+  intro h_holds
+  show subassertion_soundness circuit input env
+
+  let b : β F := eval env input
+  rintro (as : circuit.assumptions b)
+  show circuit.spec b
+
+  -- by soundness of the circuit, the spec is satisfied if only the constraints hold
+  suffices h: constraints_hold env (circuit.main input |>.operations offset) by
+    exact circuit.soundness offset env input b rfl as h
+
+  -- so we just need to go from flattened constraints to constraints
+  change FlatOperation.constraints_hold_flat env (to_flat_operations (circuit.main input |>.operations offset)) at h_holds
+  exact can_replace_subcircuits.mpr h_holds
+
+@[subcircuit_norm]
+theorem FormalAssertion.implied_by_completeness (circuit: FormalAssertion F β) {input: Var β F} {offset: ℕ} {env : Environment F}:
+  env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset →
+    subassertion_completeness circuit input env → constraints_hold_flat env (circuit.to_subcircuit offset input).ops := by
+  intro h_env h_completeness
+
+  let b := eval env input
+  have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
+
+  have h_env : env.uses_local_witnesses offset (circuit.main input |>.operations offset) := by
+    change env.extends_vector (FlatOperation.witnesses env (to_flat_operations (circuit.main input |>.operations offset))) offset
+    at h_env
+    apply env.can_replace_local_witnesses
+    exact Environment.env_extends_of_flat h_env
+
+  -- by completeness of the circuit, this means we can make the constraints hold
+  have h_holds := circuit.completeness offset env input h_env b rfl as.left as.right
+
+  -- so we just need to go from constraints to flattened constraints
+  apply can_replace_subcircuits.mp h_holds
+
+-- @[subcircuit_norm]
+-- theorem FormalAssertion.implied_by_local_witnesses (circuit: FormalAssertion F β) {input: Var β F} {offset: ℕ} {env : Environment F} :
+--     env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset → True := by
+--   intros; exact trivial
+end
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
