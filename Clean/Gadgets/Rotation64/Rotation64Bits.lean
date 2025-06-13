@@ -44,23 +44,22 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   local_length _ := 16
   output _ i0 := output off i0
   local_length_eq _ i0 := by
-    simp only [circuit_norm, rot64_bits, U64.Copy.circuit,
-      ByteDecomposition.circuit, ByteDecomposition.elaborated]
+    simp only [circuit_norm, rot64_bits, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, rot64_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.from_limbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
   subcircuits_consistent _ _ := by
-    simp +arith only [circuit_norm, rot64_bits, U64.Copy.circuit,
+    simp +arith only [circuit_norm, rot64_bits,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   -- simplify statements
-  dsimp only [circuit_norm, elaborated, rot64_bits, U64.copy, U64.Copy.circuit,
+  dsimp only [circuit_norm, elaborated, rot64_bits,
     ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
-  simp only [spec, circuit_norm, elaborated, subcircuit_norm, U64.Copy.assumptions, U64.Copy.spec,
+  simp only [spec, circuit_norm, elaborated, subcircuit_norm,
     ByteDecomposition.assumptions, ByteDecomposition.spec] at h_holds ⊢
 
   -- targeted rewriting of the assumptions
@@ -113,7 +112,6 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 
   -- simplify goal
   simp only [rot64_bits, elaborated, circuit_norm, subcircuit_norm,
-    U64.copy, U64.Copy.circuit, U64.Copy.assumptions,
     ByteDecomposition.circuit, ByteDecomposition.assumptions]
 
   -- we only have to prove the byte decomposition assumptions
