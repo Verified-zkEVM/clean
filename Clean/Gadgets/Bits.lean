@@ -14,7 +14,7 @@ def main (n: ℕ) (x : Expression (F p)) := do
   Circuit.forEach bits (assertion Boolean.circuit)
 
   -- check that the bits correctly sum to `x`
-  x.assert_equals (field_from_bits_expr bits)
+  x === (field_from_bits_expr bits)
   return bits
 
 -- formal circuit that implements `to_bits` like a function, assuming `x.val < 2^n`
