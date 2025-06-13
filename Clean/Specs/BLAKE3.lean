@@ -1,6 +1,6 @@
 import Clean.Utils.Bitwise
 
-namespace Specs.blake3
+namespace Specs.BLAKE3
 open Bitwise (add32 rot_right32)
 
 ------------
@@ -165,13 +165,13 @@ def compress (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counte
   let state := state.set 15 (state[15] ^^^ chaining_value[7])
   state
 
-end Specs.blake3
+end Specs.BLAKE3
 
 --------
 -- TESTS
 --------
 
-namespace Specs.blake3.Tests
+namespace Specs.BLAKE3.Tests
 
 /--
 The following checks are based on the reference Python implementation of BLAKE3:
@@ -201,4 +201,4 @@ def flags : Nat := 2498436276
 set_option maxRecDepth 737
 example : compress chainingValue blockWords counter blockLen flags = #v[2723421452, 2900812491, 409287158, 2844031487, 1256578214, 2677699013, 2070649829, 3853882973, 2869165109, 1080268436, 1942754410, 576800287, 963977849, 584425189, 1029827681, 3685994844] := rfl
 
-end Specs.blake3.Tests
+end Specs.BLAKE3.Tests

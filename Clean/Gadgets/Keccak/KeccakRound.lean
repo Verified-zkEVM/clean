@@ -14,7 +14,7 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
   let state ← subcircuit Chi.circuit state
 
   -- add the round constant
-  let s0 ← subcircuit Xor.circuit ⟨state[0], const (U64.from_u64 rc)⟩
+  let s0 ← subcircuit Xor64.circuit ⟨state[0], const (U64.from_u64 rc)⟩
   return state.set 0 s0
 
 def assumptions (state : KeccakState (F p)) := state.is_normalized
@@ -28,9 +28,9 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
   local_length _ := 1528
   output _ i0 := (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) ).set 0 (var_from_offset U64 (i0 + 1520))
 
-  local_length_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit]
+  local_length_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
   output_eq state i0 := by
-    simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit, Vector.mapRange]
+    simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (spec rc) := by
   intro i0 env state_var state h_input state_norm h_holds
@@ -42,9 +42,9 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   -- simplify constraints
   simp only [assumptions] at state_norm
   simp only [main, h_input, state_norm, circuit_norm, subcircuit_norm,
-    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit,
+    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
-    Chi.assumptions, Chi.spec, Xor.assumptions, Xor.spec
+    Chi.assumptions, Chi.spec, Xor64.assumptions, Xor64.spec
   ] at h_holds
   simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
@@ -84,9 +84,9 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumpti
   -- simplify goal and witness hypotheses
   simp only [assumptions] at state_norm
   dsimp only [main, circuit_norm, subcircuit_norm,
-    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor.circuit,
+    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
-    Chi.assumptions, Chi.spec, Xor.assumptions, Xor.spec
+    Chi.assumptions, Chi.spec, Xor64.assumptions, Xor64.spec
   ] at h_env ⊢
   simp_all only [main, h_input, state_norm, circuit_norm,
     U64.from_u64_normalized]
