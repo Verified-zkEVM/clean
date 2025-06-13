@@ -4,7 +4,7 @@ import Clean.Circuit.Theorems
 variable {F: Type} [Field F]
 
 namespace FlatOperation
-open Circuit (constraints_hold.completeness constraints_hold)
+open Circuit (constraints_hold)
 
 lemma constraints_hold_cons : ∀ {op : FlatOperation F}, ∀ {ops: List (FlatOperation F)}, ∀ {env : Environment F},
   constraints_hold_flat env (op :: ops) ↔ constraints_hold_flat env [op] ∧ constraints_hold_flat env ops := by
@@ -66,66 +66,66 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
   let flat_ops := to_flat_operations ops
   have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
-  have imply_soundness : ∀ env : Environment F,
-      constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
-    -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env h_holds
-    show subcircuit_soundness circuit b_var n env
+  -- have imply_soundness : ∀ env : Environment F,
+  --     constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
+  --   -- we are given an environment where the constraints hold, and can assume the assumptions are true
+  --   intro env h_holds
+  --   show subcircuit_soundness circuit b_var n env
 
-    let b : β F := eval env b_var
-    let a : α F := eval env (circuit.output b_var n)
-    rintro (as : circuit.assumptions b)
-    show circuit.spec b a
+  --   let b : β F := eval env b_var
+  --   let a : α F := eval env (circuit.output b_var n)
+  --   rintro (as : circuit.assumptions b)
+  --   show circuit.spec b a
 
-    -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    suffices h: constraints_hold.soundness env ops by
-      exact circuit.soundness n env b_var b rfl as h
+  --   -- by soundness of the circuit, the spec is satisfied if only the constraints hold
+  --   suffices h: constraints_hold.soundness env ops by
+  --     exact circuit.soundness n env b_var b rfl as h
 
-    -- so we just need to go from flattened constraints to constraints
-    guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
-    apply can_replace_soundness
-    exact can_replace_subcircuits.mpr h_holds
+  --   -- so we just need to go from flattened constraints to constraints
+  --   guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
+  --   apply can_replace_soundness
+  --   exact can_replace_subcircuits.mpr h_holds
 
-  have implied_by_completeness : ∀ env : Environment F,
-      env.extends_vector (FlatOperation.witnesses env flat_ops) n →
-      subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
-    -- we are given that the assumptions are true
-    intro env h_env
-    let b := eval env b_var
-    intro (as : circuit.assumptions b)
+  -- have implied_by_completeness : ∀ env : Environment F,
+  --     env.extends_vector (FlatOperation.witnesses env flat_ops) n →
+  --     subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
+  --   -- we are given that the assumptions are true
+  --   intro env h_env
+  --   let b := eval env b_var
+  --   intro (as : circuit.assumptions b)
 
-    have h_env : env.uses_local_witnesses n ops := by
-      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-      apply env.can_replace_local_witnesses
-      exact env_extends_of_flat h_env
-    have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
+  --   have h_env : env.uses_local_witnesses n ops := by
+  --     guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
+  --     apply env.can_replace_local_witnesses
+  --     exact env_extends_of_flat h_env
+  --   have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
-    -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
+  --   -- by completeness of the circuit, this means we can make the constraints hold
+  --   have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
 
-    -- so we just need to go from constraints to flattened constraints
-    apply can_replace_subcircuits.mp
-    exact can_replace_completeness h_consistent h_env h_holds
+  --   -- so we just need to go from constraints to flattened constraints
+  --   apply can_replace_subcircuits.mp
+  --   exact can_replace_completeness h_consistent h_env h_holds
 
   {
     ops := flat_ops,
-    soundness := subcircuit_soundness circuit b_var n,
-    completeness := subcircuit_completeness circuit b_var,
-    uses_local_witnesses := subcircuit_soundness circuit b_var n,
-    local_length := circuit.local_length b_var
+    -- soundness := subcircuit_soundness circuit b_var n,
+    -- completeness := subcircuit_completeness circuit b_var,
+    -- uses_local_witnesses := subcircuit_soundness circuit b_var n,
+    -- local_length := circuit.local_length b_var
 
-    imply_soundness
-    implied_by_completeness
-    implied_by_local_witnesses := by
-      intro env h_env as
-      -- by completeness, the constraints hold
-      have h_holds := implied_by_completeness env h_env as
-      -- by soundness, this implies the spec
-      exact imply_soundness env h_holds as
+    -- imply_soundness
+    -- implied_by_completeness
+    -- implied_by_local_witnesses := by
+    --   intro env h_env as
+    --   -- by completeness, the constraints hold
+    --   have h_holds := implied_by_completeness env h_env as
+    --   -- by soundness, this implies the spec
+    --   exact imply_soundness env h_holds as
 
-    local_length_eq := by
-      rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+    -- local_length_eq := by
+    --   rw [← circuit.local_length_eq b_var n]
+    --   exact Environment.flat_witness_length_eq |>.symm
   }
 
 /--
@@ -139,54 +139,54 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
   {
     ops := flat_ops,
-    soundness := subassertion_soundness circuit b_var,
-    completeness := subassertion_completeness circuit b_var,
-    uses_local_witnesses _ := True,
-    local_length := circuit.local_length b_var
+    -- soundness := subassertion_soundness circuit b_var,
+    -- completeness := subassertion_completeness circuit b_var,
+    -- uses_local_witnesses _ := True,
+    -- local_length := circuit.local_length b_var
 
-    imply_soundness := by
-      -- we are given an environment where the constraints hold, and can assume the assumptions are true
-      intro env h_holds
-      show subassertion_soundness circuit b_var env
+    -- imply_soundness := by
+    --   -- we are given an environment where the constraints hold, and can assume the assumptions are true
+    --   intro env h_holds
+    --   show subassertion_soundness circuit b_var env
 
-      let b : β F := eval env b_var
-      rintro (as : circuit.assumptions b)
-      show circuit.spec b
+    --   let b : β F := eval env b_var
+    --   rintro (as : circuit.assumptions b)
+    --   show circuit.spec b
 
-      -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-      suffices h: constraints_hold.soundness env ops by
-        exact circuit.soundness n env b_var b rfl as h
+    --   -- by soundness of the circuit, the spec is satisfied if only the constraints hold
+    --   suffices h: constraints_hold.soundness env ops by
+    --     exact circuit.soundness n env b_var b rfl as h
 
-      -- so we just need to go from flattened constraints to constraints
-      guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
-      apply can_replace_soundness
-      exact can_replace_subcircuits.mpr h_holds
+    --   -- so we just need to go from flattened constraints to constraints
+    --   guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
+    --   apply can_replace_soundness
+    --   exact can_replace_subcircuits.mpr h_holds
 
-    implied_by_completeness := by
-      -- we are given that the assumptions and the spec are true
-      intro env h_env h_completeness
+    -- implied_by_completeness := by
+    --   -- we are given that the assumptions and the spec are true
+    --   intro env h_env h_completeness
 
-      let b := eval env b_var
-      have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
+    --   let b := eval env b_var
+    --   have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
-      have h_env : env.uses_local_witnesses n ops := by
-        guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        apply env.can_replace_local_witnesses
-        exact env_extends_of_flat h_env
-      have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
+    --   have h_env : env.uses_local_witnesses n ops := by
+    --     guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
+    --     apply env.can_replace_local_witnesses
+    --     exact env_extends_of_flat h_env
+    --   have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
-      -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right
+    --   -- by completeness of the circuit, this means we can make the constraints hold
+    --   have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right
 
-      -- so we just need to go from constraints to flattened constraints
-      apply can_replace_subcircuits.mp
-      exact can_replace_completeness h_consistent h_env h_holds
+    --   -- so we just need to go from constraints to flattened constraints
+    --   apply can_replace_subcircuits.mp
+    --   exact can_replace_completeness h_consistent h_env h_holds
 
-    implied_by_local_witnesses := by intros; exact trivial
+    -- implied_by_local_witnesses := by intros; exact trivial
 
-    local_length_eq := by
-      rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+    -- local_length_eq := by
+    --   rw [← circuit.local_length_eq b_var n]
+    --   exact Environment.flat_witness_length_eq |>.symm
   }
 end
 
@@ -210,10 +210,14 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 /-- The local length of a subcircuit is derived from the original formal circuit -/
 lemma subcircuit_local_length_eq (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
-  (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
+    (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by
+  rw [SubCircuit.local_length, FormalCircuit.to_subcircuit,
+    FlatOperation.flat_witness_length_eq, ←circuit.local_length_eq input offset]
 
 lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
-  (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
+    (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by
+  rw [SubCircuit.local_length, FormalAssertion.to_subcircuit,
+    FlatOperation.flat_witness_length_eq, ←circuit.local_length_eq input offset]
 end Circuit
 
 -- simp set to unfold subcircuits

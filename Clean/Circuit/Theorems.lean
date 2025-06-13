@@ -136,13 +136,7 @@ instance : LawfulMonad (Circuit F) where
 
 end Circuit
 
-namespace Environment
-open FlatOperation (witness_length witnesses)
-/-
-what follows are relationships between different ways of deriving local witness generators,
-and between different versions of `Environment.uses_local_witnesses`
--/
-
+namespace FlatOperation
 lemma witness_length_append {F} {a b: List (FlatOperation F)} :
     witness_length (a ++ b) = witness_length a + witness_length b := by
   induction a using FlatOperation.witness_length.induct with
@@ -172,6 +166,14 @@ lemma flat_witness_length_eq {ops: Operations F} :
       try omega
     | case3 ops _ ih' | case4 ops _ ih' =>
       simp_all only [witness_length_append, forall_eq', witness_length, List.cons_append]
+end FlatOperation
+
+namespace Environment
+open FlatOperation (witness_length witnesses)
+/-
+what follows are relationships between different ways of deriving local witness generators,
+and between different versions of `Environment.uses_local_witnesses`
+-/
 
 lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
     (witnesses env (a ++ b)).toArray = (witnesses env a).toArray ++ (witnesses env b).toArray := by
@@ -208,7 +210,7 @@ lemma env_extends_of_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
     env.uses_local_witnesses' n ops := by
   simp only [uses_local_witnesses', extends_vector, Vector.get, flat_witness_eq_witness]
   intro h i
-  exact h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
+  exact h ⟨ i, by rw [FlatOperation.flat_witness_length_eq]; exact i.is_lt ⟩
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F} {env: Environment F} {m c} :
     env.uses_local_witnesses' n (.witness m c :: ops) → env.uses_local_witnesses' (m + n) ops := by
