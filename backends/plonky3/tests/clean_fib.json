@@ -1,0 +1,232 @@
+[
+  {
+    "type": "Boundary",
+    "row": 0,
+    "context": {
+      "circuit": [
+        {
+          "witness": 1
+        },
+        {
+          "assert": {
+            "type": "add",
+            "rhs": {
+              "type": "mul",
+              "rhs": {
+                "type": "var",
+                "index": 0
+              },
+              "lhs": {
+                "value": 2013265920,
+                "type": "const"
+              }
+            },
+            "lhs": {
+              "index": 0,
+              "type": "pi"
+            }
+          }
+        },
+        {
+          "witness": 1
+        },
+        {
+          "assert": {
+            "type": "add",
+            "rhs": {
+              "type": "mul",
+              "rhs": {
+                "type": "var",
+                "index": 1
+              },
+              "lhs": {
+                "value": 2013265920,
+                "type": "const"
+              }
+            },
+            "lhs": {
+              "index": 1,
+              "type": "pi"
+            }
+          }
+        }
+      ],
+      "assignment": {
+        "vars": [
+          {
+            "row": 0,
+            "column": 0
+          },
+          {
+            "row": 0,
+            "column": 1
+          }
+        ],
+        "offset": 2,
+        "aux_length": 2
+      }
+    }
+  },
+  {
+    "type": "EveryRowExceptLast",
+    "context": {
+      "circuit": [
+        {
+          "witness": 2
+        },
+        {
+          "witness": 1
+        },
+        {
+          "assert": {
+            "type": "add",
+            "rhs": {
+              "type": "mul",
+              "rhs": {
+                "type": "var",
+                "index": 2
+              },
+              "lhs": {
+                "value": 2013265920,
+                "type": "const"
+              }
+            },
+            "lhs": {
+              "type": "var",
+              "index": 1
+            }
+          }
+        },
+        {
+          "subcircuit": [
+            {
+              "witness": 1
+            },
+            {
+              "lookup": {
+                "table": "Bytes",
+                "entry": [
+                  {
+                    "type": "var",
+                    "index": 3
+                  }
+                ]
+              }
+            },
+            {
+              "witness": 1
+            },
+            {
+              "assert": {
+                "type": "mul",
+                "rhs": {
+                  "type": "add",
+                  "rhs": {
+                    "type": "mul",
+                    "rhs": {
+                      "value": 1,
+                      "type": "const"
+                    },
+                    "lhs": {
+                      "value": 2013265920,
+                      "type": "const"
+                    }
+                  },
+                  "lhs": {
+                    "type": "var",
+                    "index": 4
+                  }
+                },
+                "lhs": {
+                  "type": "var",
+                  "index": 4
+                }
+              }
+            },
+            {
+              "assert": {
+                "type": "add",
+                "rhs": {
+                  "type": "mul",
+                  "rhs": {
+                    "type": "mul",
+                    "rhs": {
+                      "value": 256,
+                      "type": "const"
+                    },
+                    "lhs": {
+                      "type": "var",
+                      "index": 4
+                    }
+                  },
+                  "lhs": {
+                    "value": 2013265920,
+                    "type": "const"
+                  }
+                },
+                "lhs": {
+                  "type": "add",
+                  "rhs": {
+                    "type": "mul",
+                    "rhs": {
+                      "type": "var",
+                      "index": 3
+                    },
+                    "lhs": {
+                      "value": 2013265920,
+                      "type": "const"
+                    }
+                  },
+                  "lhs": {
+                    "type": "add",
+                    "rhs": {
+                      "value": 0,
+                      "type": "const"
+                    },
+                    "lhs": {
+                      "type": "add",
+                      "rhs": {
+                        "type": "var",
+                        "index": 1
+                      },
+                      "lhs": {
+                        "type": "var",
+                        "index": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "assignment": {
+        "vars": [
+          {
+            "row": 0,
+            "column": 0
+          },
+          {
+            "row": 0,
+            "column": 1
+          },
+          {
+            "row": 1,
+            "column": 0
+          },
+          {
+            "row": 1,
+            "column": 1
+          },
+          {
+            "row": 1,
+            "column": 2
+          }
+        ],
+        "offset": 5,
+        "aux_length": 3
+      }
+    }
+  }
+]
