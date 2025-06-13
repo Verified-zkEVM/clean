@@ -107,16 +107,63 @@ theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environme
 end Equality
 end Gadgets
 
--- this is exported at the top level because it is a core builtin gadget
+/-
+Provides a unified `===` notation for asserting equality in circuits:
+- Core `assert_equals` for `α (Expression F)` and `Expression F`.
+- `HasAssertEq` / `HasAssertEqM` dispatch so `assert_equals_generic x y`
+  and `x === y` pick the right gadget and lift via `MonadLift`.
+- Marked `@[circuit_norm]`/`@[reducible]` so `dsimp only [circuit_norm]`
+  unfolds `===` to the original `assert_equals`.
+-/
 @[circuit_norm]
-def assert_equals {α : TypeMap} [ProvableType α] (x y : α (Expression F)) : Circuit F Unit :=
+def assert_equals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+  (x y : α (Expression F)) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit α) (x, y)
 
--- TODO unfortunately, if the inputs to `assert_equals` are just `Expression F`,
--- Lean doesn't come up with `α = id` -- even though `ProvableType` is inferred when `(α:=id)` is passed explicitly.
--- this definition is a somehwat natural alternative that can be used on `Expression F` directly
-@[reducible]
-def Expression.assert_equals (x y : Expression F) : Circuit F Unit :=
+@[circuit_norm, reducible]
+def Expression.assert_equals {F : Type} [Field F]
+  (x y : Expression F) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit id) (x, y)
 
--- TODO define a custom syntax e.g. `===` that figures out whether to use `assert_equals` or `Expression.assert_equals`
+class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
+  assert_eq : β → β → Circuit F Unit
+
+@[circuit_norm, reducible]
+instance {F : Type} [Field F] : HasAssertEq (Expression F) F where
+  assert_eq := Expression.assert_equals
+
+@[circuit_norm, reducible]
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+  HasAssertEq (α (Expression F)) F where
+  assert_eq := @assert_equals F _ α _
+
+@[circuit_norm, reducible]
+def assert_equals_generic {β : Type} {F : Type} [Field F] [HasAssertEq β F]
+  (x y : β) : Circuit F Unit :=
+  HasAssertEq.assert_eq x y
+
+class HasAssertEqM (β : Type) (m : Type → Type) (F : outParam Type) [Field F] where
+  assert_eqM : β → β → m Unit
+
+@[circuit_norm, reducible]
+instance hasAssertEqM_Circuit {β : Type} {F : Type} [Field F] [HasAssertEq β F] :
+  HasAssertEqM β (Circuit F) F where
+  assert_eqM x y := assert_equals_generic x y
+
+@[circuit_norm, reducible]
+instance hasAssertEqM_lift {β : Type} {F : Type} [Field F] [HasAssertEq β F]
+  {m : Type → Type} [MonadLift (Circuit F) m] :
+  HasAssertEqM β m F where
+  assert_eqM x y := MonadLift.monadLift (assert_equals_generic x y)
+
+@[circuit_norm, reducible, simp]
+def assert_eqM' {β : Type} {m : Type → Type} {F : Type} [Field F] [HasAssertEqM β m F]
+  (x y : β) : m Unit :=
+  HasAssertEqM.assert_eqM x y
+
+infix:50 " === " => assert_eqM'
+
+@[circuit_norm]
+lemma HasAssertEq.assert_eq_eq {β : Type} {F : Type} [Field F] [inst : HasAssertEq β F]
+  (x y : β) :
+  inst.assert_eq x y = assert_equals_generic x y := rfl

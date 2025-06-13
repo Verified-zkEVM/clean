@@ -235,7 +235,7 @@ namespace U64.Copy
 def u64_copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let y ← ProvableType.witness fun env =>
     U64.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3) (env x.x4) (env x.x5) (env x.x6) (env x.x7)
-  assert_equals x y
+  x === y
   return y
 
 def assumptions (_input : U64 (F p)) := True

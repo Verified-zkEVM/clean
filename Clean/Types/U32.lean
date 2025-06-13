@@ -221,7 +221,7 @@ namespace U32.Copy
 def u32_copy (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let y ← ProvableType.witness fun env =>
     U32.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3)
-  assert_equals x y
+  x === y
   return y
 
 def assumptions (_input : U32 (F p)) := True
