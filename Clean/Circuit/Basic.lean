@@ -142,7 +142,7 @@ def constraints_hold (eval : Environment F) : List (Operation F) → Prop
   | .lookup { table, entry, .. } :: ops =>
     table.contains (entry.map eval) ∧ constraints_hold eval ops
   | .subcircuit s :: ops =>
-    constraints_hold_flat eval s.ops ∧ constraints_hold eval ops
+    s.constraints_hold eval ∧ constraints_hold eval ops
 
 -- /--
 -- Version of `constraints_hold` that replaces the statement of subcircuits with their `soundness`.
@@ -178,12 +178,13 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
+@[circuit_norm]
 def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
   | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (m + offset) ops
   | .assert _ :: ops => env.uses_local_witnesses offset ops
   | .lookup _ :: ops => env.uses_local_witnesses offset ops
-  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
+  | .subcircuit s :: ops => s.uses_local_witnesses env offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
 
 -- /--
 -- Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.

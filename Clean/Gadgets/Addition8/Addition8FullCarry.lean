@@ -84,6 +84,9 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     set carry_out := env.get (i0 + 1)
     rw [hx, hy, hcarry_in] at h_holds
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
+    -- TODO not easy enough
+    replace h_bool_carry := FormalAssertion.imply_soundness _ h_bool_carry
+    simp only [circuit_norm, Boolean.circuit] at h_bool_carry
 
     rw [(by rfl : outputs = ⟨z, carry_out⟩)]
 
@@ -95,8 +98,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
     guard_hyp h_byte: ByteTable.contains (#v[z])
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    change True → (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
-    specialize h_bool_carry trivial
+    change (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
 
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
@@ -124,7 +126,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- simplify local witnesses
     simp only [circuit_norm, subcircuit_norm, add8_full_carry, Boolean.circuit] at h_env
-    have ⟨hz, hcarry_out⟩ := h_env
+    obtain ⟨hz, hcarry_out⟩ := h_env
 
     -- unfold goal, (re)introduce names for some of unfolded variables
     simp only [add8_full_carry, circuit_norm, Boolean.circuit, subcircuit_norm]

@@ -158,7 +158,7 @@ lemma flat_witness_length_eq {ops: Operations F} :
     generalize to_flat_operations ops = flat_ops at *
     generalize Operations.local_length ops = n at *
     induction flat_ops using FlatOperation.witness_length.induct generalizing n with
-    | case1 => simp_all [witness_length, add_comm, List.nil_append, right_eq_add]
+    | case1 => simp_all [witness_length, add_comm, List.nil_append, right_eq_add, SubCircuit.local_length]
     | case2 ops m' _ ih' =>
       dsimp only [witness_length, witness] at *
       specialize ih' (n - m') (by rw [←ih]; omega)
@@ -232,8 +232,8 @@ lemma env_extends_witness_inner {n: ℕ} {ops: Operations F} {env: Environment F
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F} {env: Environment F} {n'} {s : SubCircuit F n'} :
     env.uses_local_witnesses' n (.subcircuit s :: ops) → env.uses_local_witnesses' (s.local_length + n) ops := by
   intro h i
-  simp_all only [uses_local_witnesses', circuit_norm]
-  specialize h ⟨ s.local_length + i, by linarith [i.is_lt] ⟩
+  simp_all only [uses_local_witnesses', circuit_norm, SubCircuit.local_length]
+  specialize h ⟨ witness_length s.ops + i, by linarith [i.is_lt] ⟩
   rw [←add_assoc, add_comm n] at h
   rw [h]
   simp [Vector.get]
@@ -241,8 +241,8 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F} {env: Environment F} {
 lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F} {env: Environment F} {n'} {s : SubCircuit F n'} :
     env.uses_local_witnesses' n (.subcircuit s :: ops) → env.extends_vector (witnesses env s.ops) n := by
   intro h i
-  simp_all only [uses_local_witnesses', circuit_norm, witness_length]
-  have : i < s.local_length + ops.local_length := by linarith [i.is_lt]
+  simp_all only [uses_local_witnesses', circuit_norm, witness_length, SubCircuit.local_length]
+  have : i < witness_length s.ops + ops.local_length := by linarith [i.is_lt]
   specialize h ⟨ i, this ⟩
   simp only at h
   rw [h, Vector.getElem_append]
@@ -264,7 +264,7 @@ theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operatio
   | assert | lookup =>
     simp_all [uses_local_witnesses', uses_local_witnesses, circuit_norm]
   | subcircuit _ _ ih =>
-    rw [uses_local_witnesses, extends_vector_subcircuit]
+    rw [uses_local_witnesses, SubCircuit.uses_local_witnesses, extends_vector_subcircuit]
     exact ⟨ env_extends_subcircuit_inner h, ih _ (env_extends_subcircuit h) ⟩
 
 -- theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Operations F} {n: ℕ} (h: ops.subcircuits_consistent n) :
@@ -290,7 +290,7 @@ theorem uses_local_witnesses_iff_forAll (n: ℕ) {env: Environment F} {ops: Oper
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
-    simp_all +arith [uses_local_witnesses, Operations.forAll]
+    simp_all +arith [uses_local_witnesses, SubCircuit.uses_local_witnesses, Operations.forAll]
 end Environment
 
 namespace Circuit
@@ -304,7 +304,7 @@ theorem constraints_hold.iff_forAll (n : ℕ) (env : Environment F) (ops : Opera
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all [constraints_hold, Operations.forAll]
+    simp_all [constraints_hold, SubCircuit.constraints_hold, Operations.forAll]
     try intros
     apply ih
 

@@ -118,12 +118,17 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   -- `local_length` must be consistent with the operations
   -- local_length_eq : local_length = FlatOperation.witness_length ops
 
-@[reducible, circuit_norm]
 def SubCircuit.local_length (sc: SubCircuit F n) := FlatOperation.witness_length sc.ops
 
 @[reducible, circuit_norm]
 def SubCircuit.witnesses (sc: SubCircuit F n) (env : Environment F) : Vector F sc.local_length :=
   FlatOperation.witnesses env sc.ops
+
+def SubCircuit.constraints_hold (sc: SubCircuit F n) (env: Environment F) : Prop :=
+  FlatOperation.constraints_hold_flat env sc.ops
+
+def SubCircuit.uses_local_witnesses (sc: SubCircuit F n) (env: Environment F) (offset : ℕ) : Prop :=
+  env.extends_vector (sc.witnesses env) offset
 
 /--
 Core type representing the result of a circuit: a sequence of operations.

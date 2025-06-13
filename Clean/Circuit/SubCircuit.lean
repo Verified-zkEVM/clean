@@ -55,7 +55,7 @@ theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : E
     dsimp only [to_flat_operations]
     try rw [constraints_hold_cons]
     try rw [constraints_hold_append]
-    simp_all only [constraints_hold, constraints_hold_flat, and_true, true_and]
+    simp_all only [SubCircuit.constraints_hold, constraints_hold, constraints_hold_flat, and_true, true_and]
 
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
@@ -228,7 +228,7 @@ open Circuit (subcircuit_soundness subcircuit_completeness constraints_hold can_
 
 @[subcircuit_norm]
 theorem FormalCircuit.imply_soundness (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F}:
-  constraints_hold_flat env (circuit.to_subcircuit offset input).ops →
+  (circuit.to_subcircuit offset input).constraints_hold env →
     subcircuit_soundness circuit input offset env := by
   intro h_holds
   show subcircuit_soundness circuit input offset env
@@ -250,8 +250,8 @@ theorem FormalCircuit.imply_soundness (circuit: FormalCircuit F β α) {input: V
 
 @[subcircuit_norm]
 theorem FormalCircuit.implied_by_completeness (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F}:
-  env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset →
-    subcircuit_completeness circuit input env → constraints_hold_flat env (circuit.to_subcircuit offset input).ops := by
+  (circuit.to_subcircuit offset input).uses_local_witnesses env offset →
+    subcircuit_completeness circuit input env → (circuit.to_subcircuit offset input).constraints_hold env := by
   intro h_env
 
   let b := eval env input
@@ -271,7 +271,7 @@ theorem FormalCircuit.implied_by_completeness (circuit: FormalCircuit F β α) {
 
 @[subcircuit_norm]
 theorem FormalCircuit.implied_by_local_witnesses (circuit: FormalCircuit F β α) {input: Var β F} {offset: ℕ} {env : Environment F} :
-  env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset →
+  (circuit.to_subcircuit offset input).uses_local_witnesses env offset →
     subcircuit_soundness circuit input offset env := by
   intro h_env as
   -- by completeness, the constraints hold
@@ -281,7 +281,7 @@ theorem FormalCircuit.implied_by_local_witnesses (circuit: FormalCircuit F β α
 
 @[subcircuit_norm]
 theorem FormalAssertion.imply_soundness (circuit: FormalAssertion F β) {input: Var β F} {offset: ℕ} {env : Environment F}:
-  constraints_hold_flat env (circuit.to_subcircuit offset input).ops →
+  (circuit.to_subcircuit offset input).constraints_hold env →
     subassertion_soundness circuit input env := by
   intro h_holds
   show subassertion_soundness circuit input env
@@ -300,8 +300,8 @@ theorem FormalAssertion.imply_soundness (circuit: FormalAssertion F β) {input: 
 
 @[subcircuit_norm]
 theorem FormalAssertion.implied_by_completeness (circuit: FormalAssertion F β) {input: Var β F} {offset: ℕ} {env : Environment F}:
-  env.extends_vector (FlatOperation.witnesses env (circuit.to_subcircuit offset input).ops) offset →
-    subassertion_completeness circuit input env → constraints_hold_flat env (circuit.to_subcircuit offset input).ops := by
+  (circuit.to_subcircuit offset input).uses_local_witnesses env offset →
+    subassertion_completeness circuit input env → (circuit.to_subcircuit offset input).constraints_hold env := by
   intro h_env h_completeness
 
   let b := eval env input
