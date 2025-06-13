@@ -17,15 +17,15 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 /-- state in the ith round, starting from offset n -/
 def state_var (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
-  Vector.mapRange 25 (fun j => var_from_offset U64 (n + i * 1528 + j * 16 + 1128))
-  |>.set 0 (var_from_offset U64 (n + i * 1528 + 1520))
+  Vector.mapRange 25 (fun j => var_from_offset U64 (n + i * 1288 + j * 16 + 888))
+  |>.set 0 (var_from_offset U64 (n + i * 1288 + 1280))
 
 -- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
-  local_length _ := 36672
+  local_length _ := 30912
   output _ i0 := state_var i0 23
 
   local_length_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]

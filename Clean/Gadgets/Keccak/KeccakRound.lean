@@ -25,8 +25,8 @@ def spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
 
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := main rc
-  local_length _ := 1528
-  output _ i0 := (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 1128) ).set 0 (var_from_offset U64 (i0 + 1520))
+  local_length _ := 1288
+  output _ i0 := (Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 888) ).set 0 (var_from_offset U64 (i0 + 1280))
 
   local_length_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
   output_eq state i0 := by
@@ -55,7 +55,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi state_norm h_input
 
   -- simplify round constant constraint
-  set state0_before_rc := eval env (var_from_offset U64 (i0 + 1128))
+  set state0_before_rc := eval env (var_from_offset U64 (i0 + 888))
   have h_rc_norm : state0_before_rc.is_normalized := by
     simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at chi_norm
     exact chi_norm 0

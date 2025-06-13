@@ -58,16 +58,20 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
 
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
-  local_length _ := 112
-  output inputs i0 := inputs.state
-      |>.set a (⟨var ⟨i0 + 64⟩, var ⟨i0 + 66⟩, var ⟨i0 + 68⟩, var ⟨i0 + 70⟩⟩)
-      |>.set b (var_from_offset U32 (i0 + 108))
-      |>.set c (⟨var ⟨i0 + 88⟩, var ⟨i0 + 90⟩, var ⟨i0 + 92⟩, var ⟨i0 + 94⟩⟩)
-      |>.set d (var_from_offset U32 (i0 + 84))
+  local_length _ := 96
+  output inputs i0 := (inputs.state : Vector (U32 (Expression (F p))) 16)
+    |>.set a (⟨var ⟨i0 + 56⟩, var ⟨i0 + 58⟩, var ⟨i0 + 60⟩, var ⟨i0 + 62⟩⟩) a.is_lt
+    |>.set b (Rotation32.output 7 (i0 + 88)) b.is_lt
+    |>.set c (⟨var ⟨i0 + 76⟩, var ⟨i0 + 78⟩, var ⟨i0 + 80⟩, var ⟨i0 + 82⟩⟩) c.is_lt
+    |>.set d (Rotation32.output 8 (i0 + 68)) d.is_lt
 
   local_length_eq _ n := by
-    simp [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit,
-      Xor32.elaborated, Addition32.elaborated, Rotation32.elaborated]
+    dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
+  output_eq _ _ := by
+    dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
+  subcircuits_consistent _ _ := by
+    simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    ring_nf; trivial
 
 def assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input
@@ -79,39 +83,18 @@ def spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assumptions (spec a b c d) := by
   intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
-  dsimp only [elaborated, ElaboratedCircuit.main, main, Addition32.circuit, Addition32.elaborated,
-    ↓Fin.getElem_fin, Xor32.circuit, Xor32.elaborated, Fin.isValue, Rotation32.circuit,
-    Rotation32.elaborated, pure, Circuit.bind_def, subcircuit.eq_1, ElaboratedCircuit.output,
-    FormalCircuit.to_subcircuit.eq_1, Circuit.operations, ElaboratedCircuit.local_length,
-    List.cons_append, List.nil_append, Operations.local_length.eq_5, Operations.local_length.eq_1,
-    Nat.add_zero, Circuit.constraints_hold.soundness.eq_5, Circuit.subcircuit_soundness,
-    Addition32.assumptions, Addition32.spec, Nat.reducePow, Xor32.assumptions, Xor32.spec,
-    Rotation32.assumptions, Rotation32.spec, Fin.coe_ofNat_eq_mod, Nat.reduceMod,
-    Circuit.constraints_hold.soundness.eq_1] at h_holds
-  dsimp only [assumptions] at h_normalized
+  simp only [circuit_norm, Inputs.mk.injEq] at h_input
+  dsimp only [assumptions, BLAKE3State.is_normalized] at h_normalized
 
-  obtain ⟨h_state, h_x, h_y⟩ := h_normalized
-  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
-    ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
-  obtain ⟨h_state_var, h_x_var, h_y_var⟩ := h_input
+  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
+  simp only [circuit_norm, subcircuit_norm, and_imp,
+    Addition32.assumptions, Addition32.spec, Rotation32.assumptions, Rotation32.spec,
+    Xor32.assumptions, Xor32.spec, getElem_eval_vector, h_input] at h_holds
 
-  simp only [BLAKE3State.is_normalized] at h_state
-
-  have h_state_var_getElem (i : Fin 16) : eval env state_var[i.val] = state[i.val] := by
-    rw [←h_state_var]
-    simp only [Fin.getElem_fin, getElem_eval_vector]
-
-  have h_state_normalized_getElem (i : Fin 16) : state[i.val].is_normalized := by
-    simp only [h_state]
-
-  -- normalize offsets
-  ring_nf at h_holds ⊢
-  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
-    ProvableStruct.eval.go, h_state_var_getElem, h_x_var, and_imp, h_y_var, and_true] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
   -- resolve all chains of assumptions, fortunately this is easy
-  simp_all only [implies_true, forall_const]
+  simp_all only [forall_const]
 
   -- In c9, c11, c12, and c14, we now have the correct hypotheses regarding the
   -- updated values in the output state.
@@ -124,74 +107,37 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   simp only [spec, ElaboratedCircuit.output]
   constructor
   · ext i hi
-    ring_nf
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, Bitwise.add32]
-    (repeat' split) <;> first
-      | rw [c11.left]
-        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-      | rw [c12.left]
-        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-      | rw [c14.left]
-        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-      | rw [c9.left]
-        simp only [Nat.add_mod_mod, Nat.mod_add_mod, Nat.reducePow]
-      | rw [Function.comp_apply, ←h_state_var]
-        simp only [Fin.getElem_fin, getElem_eval_vector]
+    repeat' split
+    · rw [c11.left]
+    · rw [c12.left]
+    · rw [c14.left]
+    · rw [c9.left]
+    · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
 
   · intro i
-    ring_nf
-    simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set, ↓reduceIte]
-    (repeat' split) <;> first
-      | exact c11.right
-      | exact c12.right
-      | exact c14.right
-      | exact c9.right
-      | simp only [Vector.getElem_map]
-        rw [h_state_var_getElem]
-        exact h_state_normalized_getElem i
+    simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
+    repeat' split
+    · exact c11.right
+    · exact c12.right
+    · exact c14.right
+    · exact c9.right
+    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_normalized]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
-  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_inputs h_normalized
-  dsimp only [elaborated, ElaboratedCircuit.main, main, Addition32.circuit, Addition32.elaborated,
-    ↓Fin.getElem_fin, Xor32.circuit, Xor32.elaborated, Fin.isValue, Rotation32.circuit,
-    Rotation32.elaborated, pure, Circuit.bind_def, subcircuit.eq_1, ElaboratedCircuit.output,
-    FormalCircuit.to_subcircuit.eq_1, Circuit.operations, ElaboratedCircuit.local_length,
-    List.cons_append, List.nil_append, Operations.local_length.eq_5, Operations.local_length.eq_1,
-    Nat.add_zero, Environment.uses_local_witnesses_completeness.eq_5, Circuit.subcircuit_soundness,
-    Addition32.assumptions, Addition32.spec, Nat.reducePow, Xor32.assumptions, Xor32.spec,
-    Rotation32.assumptions, Rotation32.spec, Fin.coe_ofNat_eq_mod, Nat.reduceMod,
-    Environment.uses_local_witnesses_completeness.eq_1, Circuit.constraints_hold.completeness.eq_5,
-    Circuit.subcircuit_completeness, Circuit.constraints_hold.completeness.eq_1] at henv ⊢
-
+  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
   simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
-    ProvableStruct.eval.go, Inputs.mk.injEq] at h_inputs
-  obtain ⟨h_state_var, h_x_var, h_y_var⟩ := h_inputs
+    ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
+  dsimp only [assumptions, BLAKE3State.is_normalized] at h_normalized
 
-  dsimp only [assumptions] at h_normalized
-  obtain ⟨h_state, h_x, h_y⟩ := h_normalized
-  simp only [BLAKE3State.is_normalized] at h_state
-
-  have h_state_var_getElem (i : Fin 16) : eval env state_var[i.val] = state[i.val] := by
-    rw [←h_state_var]
-    simp only [Fin.getElem_fin, getElem_eval_vector]
-
-  ring_nf at henv
-  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
-    ProvableStruct.eval.go, h_state_var_getElem, h_x_var, and_imp, h_y_var, and_true] at henv
-  obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := henv
+  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
+  simp only [h_input, circuit_norm, subcircuit_norm, and_imp,
+    Addition32.assumptions, Addition32.spec, Rotation32.assumptions, Rotation32.spec,
+    Xor32.assumptions, Xor32.spec, getElem_eval_vector] at henv ⊢
 
   -- resolve all chains of assumptions
-  simp_all only [implies_true, forall_const]
-
-  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
-    ProvableStruct.eval.go, and_true]
-
-  -- normalize offsets
-  ring_nf
-
-  -- now, all the conclusions are somewhere in the hypotheses
-  simp_all only [gt_iff_lt, Nat.add_mod_mod, Nat.mod_add_mod, and_self]
+  simp_all only [implies_true, forall_const, and_true]
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated a b c d with
