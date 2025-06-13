@@ -18,7 +18,6 @@ type PcsProof<SC> = <<SC as StarkGenericConfig>::Pcs as Pcs<
 #[serde(bound = "")]
 pub struct Proof<SC: StarkGenericConfig> {
     pub(crate) commitments: Commitments<Com<SC>>,
-    // todo: why the opened values needs to be on extension field?
     pub(crate) opened_values: Vec<OpenedValues<SC::Challenge>>,
     pub(crate) opening_proof: PcsProof<SC>,
     pub(crate) degree_bits: Vec<usize>,
