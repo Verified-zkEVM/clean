@@ -13,8 +13,6 @@ open Specs.BLAKE3 (msgPermutation permute)
 def main (state : Var BLAKE3State (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   return Vector.ofFn (fun i => state[msgPermutation[i]])
 
--- #eval! main (p:=p_babybear) default |>.operations.local_length
--- #eval! main (p:=p_babybear) default |>.output
 instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
   main := main
   local_length _ := 0
