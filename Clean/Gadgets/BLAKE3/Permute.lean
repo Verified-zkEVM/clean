@@ -1,6 +1,6 @@
 import Clean.Gadgets.BLAKE3.BLAKE3State
 
-namespace Gadgets.BLAKE3.G
+namespace Gadgets.BLAKE3.Permute
 variable {p : ℕ} [Fact p.Prime]
 
 open Specs.BLAKE3 (msgPermutation permute)
@@ -43,4 +43,4 @@ def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State := {
   elaborated with assumptions, spec, soundness, completeness
 }
 
-end Gadgets.BLAKE3.G
+end Gadgets.BLAKE3.Permute
