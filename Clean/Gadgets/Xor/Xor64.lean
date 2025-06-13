@@ -12,7 +12,9 @@ import Clean.Gadgets.Xor.ByteXorTable
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-namespace Gadgets.Xor
+namespace Gadgets.Xor64
+open Gadgets.Xor
+
 structure Inputs (F : Type) where
   x: U64 F
   y: U64 F
@@ -22,7 +24,7 @@ instance : ProvableStruct Inputs where
   to_components := fun { x, y } => .cons x (.cons y .nil)
   from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
-def xor_u64 (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
   let z ← ProvableType.witness (fun env =>
     let z0 := (env x.x0).val ^^^ (env y.x0).val
@@ -54,7 +56,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   z.value = x.value ^^^ y.value ∧ z.is_normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
-  main := xor_u64
+  main := main
   local_length _ := 8
   output _ i0 := var_from_offset U64 i0
 
@@ -98,7 +100,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
-  simp only [h_input, circuit_norm, xor_u64, ByteXorLookup,
+  simp only [h_input, circuit_norm, main, ByteXorLookup,
     var_from_offset, Vector.mapRange] at h_holds
   repeat rw [ByteXorTable.equiv] at h_holds
 
@@ -125,7 +127,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte, x4_byte, x5_byte, x6_byte, x7_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, xor_u64, ByteXorLookup,
+  simp only [h_input, circuit_norm, main, ByteXorLookup,
     var_from_offset, Vector.mapRange] at h_env ⊢
   repeat rw [ByteXorTable.equiv]
   have h_env0 := by let h := h_env 0; simp at h; exact h
@@ -150,4 +152,4 @@ def circuit : FormalCircuit (F p) Inputs U64 where
   spec
   soundness
   completeness
-end Gadgets.Xor
+end Gadgets.Xor64

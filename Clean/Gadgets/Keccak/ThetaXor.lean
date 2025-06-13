@@ -17,16 +17,16 @@ instance : ProvableStruct Inputs where
 
 def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>
-    subcircuit Xor.circuit ⟨state[i.val], d[i.val / 5]⟩
+    subcircuit Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   main
   local_length _ := 200
   output _ i0 := var_from_offset KeccakState i0
 
-  local_length_eq _ n := by simp only [main, circuit_norm, Xor.circuit]
+  local_length_eq _ n := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuits_consistent _ i := by simp only [main, circuit_norm]
-  output_eq _ i := by simp only [main, circuit_norm, Xor.circuit, var_from_offset_vector,
+  output_eq _ i := by simp only [main, circuit_norm, Xor64.circuit, var_from_offset_vector,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
@@ -54,7 +54,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [circuit_norm, subcircuit_norm, main, h_input, Xor.circuit, Xor.assumptions, Xor.spec] at h_holds
+  simp only [circuit_norm, subcircuit_norm, main, h_input, Xor64.circuit, Xor64.assumptions, Xor64.spec] at h_holds
 
   -- use assumptions, prove goal
   intro i
@@ -64,7 +64,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [h_input, main, circuit_norm, subcircuit_norm, Xor.circuit, Xor.assumptions]
+  simp only [h_input, main, circuit_norm, subcircuit_norm, Xor64.circuit, Xor64.assumptions]
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
