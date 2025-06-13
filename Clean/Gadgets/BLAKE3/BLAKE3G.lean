@@ -56,8 +56,6 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
                     |>.set d state_d
   return state
 
--- #eval (main (p:=p_babybear) 0 1 2 3 default).local_length
--- set_option profiler true in
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
   local_length _ := 96
