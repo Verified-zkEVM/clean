@@ -351,7 +351,9 @@ def mapRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : ℕ → m β) : m (Ve
 
 def mapFinRangeM (n : ℕ) {m : Type → Type} [Monad m] (f : Fin n → m β) : m (Vector β n) := (finRange n).mapM f
 
-
+/--
+rotates elements to the left by `off`.
+-/
 def rotate {α : Type} {n : ℕ} (v : Vector α n) (off : ℕ) : Vector α n :=
   let rotated := v.toList.rotate off
   ⟨rotated.toArray, by
@@ -362,5 +364,8 @@ theorem rotate_rotate {α : Type} {n : ℕ} (v : Vector α n) (off1 off2 : ℕ) 
     v.rotate (off1 + off2) = (v.rotate off1).rotate off2 := by
   simp only [rotate, List.rotate_rotate]
 
-
+theorem getElem_rotate {α : Type} {n : ℕ} {v : Vector α n} {off : ℕ} {i : ℕ} (hi : i < n) :
+    (v.rotate off)[i] = v[(i + off) % n]'(Nat.mod_lt _ (Nat.pos_iff_ne_zero.mpr (Nat.ne_zero_of_lt hi))) := by
+  rcases v with ⟨ ⟨ xs ⟩ , h ⟩
+  simp [rotate, List.getElem_rotate, h]
 end Vector

@@ -510,39 +510,41 @@ lemma two_power_val {p : ℕ} {offset : Fin 8} [p_large_enough: Fact (p > 2^16 +
   have h : 2 ^ (8 - offset.val) % 256 < 256 := by apply Nat.mod_lt; linarith
   linarith [h, p_large_enough.elim]
 
-lemma mul_mod_256_off (offset : Fin 8) (x i : ℕ) (h : i > 0):
-    (x * 256^i) % 2^offset.val = 0 := by
+lemma mul_mod_256_off {offset : ℕ} (ho : offset < 8) (x i : ℕ) (h : i > 0):
+    (x * 256^i) % 2^offset = 0 := by
   rw [Nat.mul_mod, Nat.pow_mod]
-  fin_cases offset <;>
-  simp only [Nat.reducePow, Nat.reduceMod, Nat.zero_pow h, Nat.zero_mod, mul_zero]
+  repeat (
+    rcases ho with _ | ho
+    try simp only [zero_add, Nat.reducePow, Nat.reduceMod, Nat.zero_pow h, Nat.zero_mod, mul_zero]
+  )
 
 lemma Nat.pow_minus_one_mul {x y : ℕ} (hy : y > 0) : x ^ y = x * x ^ (y - 1) := by
   nth_rw 2 [←Nat.pow_one x]
   rw [←Nat.pow_add, Nat.add_sub_of_le (by linarith [hy])]
 
-lemma divides_256_two_power {offset : Fin 8} {x i : ℕ} (h : i > 0):
-    (2^offset.val) ∣ x * (256 ^ i) := by
+lemma divides_256_two_power {offset : ℕ} (ho : offset < 8) {x i : ℕ} (h : i > 0):
+    (2^offset) ∣ x * (256 ^ i) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul]
   apply Nat.dvd_mul_left_of_dvd
   apply Nat.pow_dvd_pow
-  linarith [offset.is_lt]
+  linarith
 
-lemma div_256_two_power {offset : Fin 8} {i : ℕ} (h : i > 0):
-    256^i / 2^offset.val = 256^(i-1) * 2^(8 - offset.val) := by
+lemma div_256_two_power {offset : ℕ} (ho : offset < 8) {i : ℕ} (h : i > 0):
+    256^i / 2^offset = 256^(i-1) * 2^(8 - offset) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, Nat.pow_div]
   rw [←Nat.pow_mul, ←Nat.pow_add]
   rw [Nat.mul_sub_left_distrib, Nat.mul_one]
   rw [Nat.sub_add_sub_cancel]
-  repeat linarith [offset.is_lt]
+  repeat linarith
 
-lemma mul_div_256_off {offset : Fin 8} {x : ℕ} (i : ℕ) (h : i > 0):
-    (x * 256^i) / 2^offset.val = x * 256^(i-1) * 2^(8 - offset.val) := by
-  rw [Nat.mul_div_assoc, div_256_two_power h]
+lemma mul_div_256_off {offset : ℕ} (ho : offset < 8) {x : ℕ} (i : ℕ) (h : i > 0):
+    (x * 256^i) / 2^offset = x * 256^(i-1) * 2^(8 - offset) := by
+  rw [Nat.mul_div_assoc, div_256_two_power ho h]
   rw [show 256=2^8 by rfl, ←Nat.pow_mul]
   ac_rfl
   rw [show 256=2^8 by rfl, ←Nat.pow_mul]
   apply Nat.pow_dvd_pow
-  linarith [offset.is_lt]
+  linarith
 
 
 lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
@@ -554,39 +556,39 @@ lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
     | simp
 
 
-lemma shifted_decomposition_eq {offset : Fin 8} {x1 x2 : ℕ} :
-    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256 =
-    (2^offset.val * (x1 / 2^offset.val) + (x2 % 2^offset.val) * 256) * 2^(8 - offset.val) := by
+lemma shifted_decomposition_eq {offset : ℕ} (ho : offset < 8) {x1 x2 : ℕ} :
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256 =
+    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) := by
   ring_nf
   simp only [Nat.add_left_inj]
-  rw [Nat.mul_assoc, ←Nat.pow_add, Nat.add_sub_of_le (by linarith [offset.is_lt])]
+  rw [Nat.mul_assoc, ←Nat.pow_add, Nat.add_sub_of_le (by linarith)]
   rfl
 
-lemma shifted_decomposition_eq' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
-    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256^i =
-    (2^offset.val * (x1 / 2^offset.val) + (x2 % 2^offset.val) * 256) * 2^(8 - offset.val) * 256^(i-1) := by
-  rw [Nat.pow_minus_one_mul hi, ←Nat.mul_assoc, shifted_decomposition_eq]
+lemma shifted_decomposition_eq' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ} (hi : i > 0) :
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256^i =
+    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) * 256^(i-1) := by
+  rw [Nat.pow_minus_one_mul hi, ←Nat.mul_assoc, shifted_decomposition_eq ho]
 
-lemma shifted_decomposition_eq'' {offset : Fin 8} {x1 x2 i : ℕ} (hi : i > 0) :
-    (x1 / 2 ^ offset.val + x2 % 2 ^ offset.val * 2 ^ (8 - offset.val)) * 256^i =
-    (2^offset.val * (x1 / 2^offset.val) * 2^(8 - offset.val) * 256^(i-1) +
-    (x2 % 2^offset.val) * 2^(8 - offset.val) * 256^i) := by
-  rw [shifted_decomposition_eq' hi]
+lemma shifted_decomposition_eq'' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ} (hi : i > 0) :
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256^i =
+    (2^offset * (x1 / 2^offset) * 2^(8 - offset) * 256^(i-1) +
+    (x2 % 2^offset) * 2^(8 - offset) * 256^i) := by
+  rw [shifted_decomposition_eq' ho hi]
   ring_nf
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
 
 
-lemma soundness_simp {offset : Fin 8} {x y : ℕ} :
-    x % 2 ^ offset.val * 2 ^ (8 - offset.val) * y + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) * y =
-    x * y * 2^ (8 - offset.val) := by
+lemma soundness_simp {offset : ℕ} {x y : ℕ} :
+    x % 2 ^ offset * 2 ^ (8 - offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) * y =
+    x * y * 2^ (8 - offset) := by
   rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
   ac_rfl
 
-lemma soundness_simp' {offset : Fin 8} {x : ℕ} :
-    x % 2 ^ offset.val * 2 ^ (8 - offset.val) + 2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val) =
-    x * 2^ (8 - offset.val) := by
-  rw [←Nat.mul_one (x % 2 ^ offset.val * 2 ^ (8 - offset.val))]
-  rw [←Nat.mul_one (2 ^ offset.val * (x / 2 ^ offset.val) * 2 ^ (8 - offset.val))]
+lemma soundness_simp' {offset : ℕ} {x : ℕ} :
+    x % 2 ^ offset * 2 ^ (8 - offset) + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) =
+    x * 2^ (8 - offset) := by
+  rw [←Nat.mul_one (x % 2 ^ offset * 2 ^ (8 - offset))]
+  rw [←Nat.mul_one (2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset))]
   rw [soundness_simp, Nat.mul_one]
 
 lemma two_power_byte {p : ℕ} {offset : Fin 8} :
