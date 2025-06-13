@@ -104,6 +104,11 @@ theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environme
     ((circuit α).to_subcircuit n (x, y)).completeness env = (eval env x = eval env y) := by
   simp only [subcircuit_norm, circuit_norm, circuit]
 
+@[circuit_norm]
+theorem uses_local_witnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+    ((circuit α).to_subcircuit n (x, y)).uses_local_witnesses env = True := by
+  simp only [FormalAssertion.to_subcircuit, circuit]
+
 end Equality
 end Gadgets
 

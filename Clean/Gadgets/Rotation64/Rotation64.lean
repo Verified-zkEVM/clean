@@ -34,16 +34,15 @@ def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value offset.val
   ∧ y.is_normalized
 
+def output (offset : Fin 64) (i0 : Nat) : U64 (Expression (F p)) :=
+  Rotation64Bits.output (offset % 8).val i0
+
 -- #eval! (rot64 (p:=p_babybear) 0) default |>.operations.local_length
 -- #eval! (rot64 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64 off
-  local_length _ := 24
-  output _inputs i0 := var_from_offset U64 (i0 + 16)
-  local_length_eq := by
-    intros
-    simp only [rot64]
-    rfl
+  local_length _ := 16
+  output _ i0 := output off i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
@@ -60,8 +59,8 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.spec, Rotation64Bits.assumptions,
     Vector.finRange] at h_holds
 
-  simp [circuit_norm, spec, h_holds, elaborated]
-  set y := eval env (var_from_offset U64 (i0 + 16))
+  simp [circuit_norm, spec, output, h_holds, elaborated]
+  set y := eval env (Rotation64Bits.output (offset.val % 8 : ℕ) i0)
 
   simp [assumptions] at x_normalized
   rw [←h_input] at x_normalized

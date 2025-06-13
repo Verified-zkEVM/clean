@@ -35,8 +35,13 @@ instance (T: Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 
 namespace U64
+def to_limbs {F} (x : U64 F) : Vector F 8 := to_elements x
+def from_limbs {F} (v : Vector F 8) : U64 F := from_elements v
+
 def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
   ⟨ f x.x0, f x.x1, f x.x2, f x.x3, f x.x4, f x.x5, f x.x6, f x.x7 ⟩
+
+def vals (x : U64 (F p)) : U64 ℕ := x.map ZMod.val
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /--
@@ -98,6 +103,9 @@ theorem value_xor_horner {x : U64 (F p)} (hx: x.is_normalized) : x.value =
 def value_nat (x: U64 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
   x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma vals_value (x : U64 (F p)) : x.vals.value_nat = x.value := rfl
 
 /--
   Return a 64-bit unsigned integer from a natural number, by decomposing
@@ -246,7 +254,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   main := u64_copy
   assumptions := assumptions
   spec := spec
-  local_length := 8
+  local_length _ := 8
   output inputs i0 := var_from_offset U64 i0
   soundness := by
     rintro i0 env x_var
@@ -261,7 +269,6 @@ def circuit : FormalCircuit (F p) U64 U64 where
     rintro h ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp [circuit_norm, u64_copy, spec, h_eval]
     simp [circuit_norm, u64_copy, Gadgets.Equality.elaborated] at h
-    simp [subcircuit_norm, eval] at h
     simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
     have h0 := h 0
     have h1 := h 1
@@ -286,13 +293,12 @@ def circuit : FormalCircuit (F p) U64 U64 where
       List.getElem_cons_zero] at h7
     simp_all
 
-end U64.Copy
+end Copy
 
 @[reducible]
-def U64.copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+def copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   subcircuit U64.Copy.circuit x
 
-namespace U64
 def from_byte (x: Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 
@@ -305,5 +311,49 @@ lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p)
   simp [is_normalized, from_byte]
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
+
+namespace ByteVector
+-- results about U64 when viewed as a vector of bytes, via `to_limbs` and `from_limbs`
+
+theorem from_limbs_to_limbs {F} (x : U64 F) :
+    U64.from_limbs x.to_limbs = x := rfl
+
+theorem to_limbs_from_limbs {F} (v : Vector F 8) :
+    (U64.from_limbs v).to_limbs = v := ProvableType.to_elements_from_elements ..
+
+theorem ext_iff {F} {x y : U64 F} :
+    x = y ↔ ∀ i (_ : i < 8), x.to_limbs[i] = y.to_limbs[i] := by
+  simp only [U64.to_limbs, ProvableType.ext_iff, size]
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+theorem is_normalized_iff {x : U64 (F p)} :
+    x.is_normalized ↔ ∀ i (_ : i < 8), x.to_limbs[i].val < 256 := by
+  rcases x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
+  simp only [to_limbs, is_normalized, to_elements, size, Vector.getElem_mk, List.getElem_toArray]
+  constructor
+  · intro h i hi
+    repeat (rcases hi with _ | hi; try simp [*, size])
+  · intro h
+    let h0 := h 0 (by decide)
+    let h1 := h 1 (by decide)
+    let h2 := h 2 (by decide)
+    let h3 := h 3 (by decide)
+    let h4 := h 4 (by decide)
+    let h5 := h 5 (by decide)
+    let h6 := h 6 (by decide)
+    let h7 := h 7 (by decide)
+    simp only [List.getElem_cons_zero, List.getElem_cons_succ] at h0 h1 h2 h3 h4 h5 h6 h7
+    simp_all
+
+lemma to_limbs_map {α β : Type} (x : U64 α) (f : α → β) :
+  to_limbs (map x f) = (to_limbs x).map f := rfl
+
+lemma getElem_eval_to_limbs {F} [Field F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
+    Expression.eval env x.to_limbs[i] = (eval env x).to_limbs[i] := by
+  simp only [to_limbs, eval, size, to_vars, ProvableType.to_elements_from_elements, Vector.getElem_map]
+
+lemma eval_from_limbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 8} :
+    eval env (U64.from_limbs v) = .from_limbs (v.map env) := by
+  simp only [U64.from_limbs, ProvableType.eval_from_elements]
+end ByteVector
 end U64
-end

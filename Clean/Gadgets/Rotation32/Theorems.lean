@@ -1,152 +1,82 @@
 import Clean.Utils.Field
 import Clean.Utils.Bitwise
+import Clean.Utils.Rotation
 import Clean.Types.U32
+import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 
 variable {p : ℕ} [Fact p.Prime]
+variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation32.Theorems
 open Bitwise (rot_right32)
+open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
+open Utils.Rotation
 
-def rot_right32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
-    rot_right32 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
-  sorry
+/--
+We define a bit rotation on byte vectors like U32 by splitting each byte
+into low and high bits, and moving the lowest low bits to the top and concatenating
+each resulting (high, low) pair again.
 
-theorem rot_right_composition (x n m : ℕ) (h : x < 2^32) :
-      rot_right32 (rot_right32 x n) m = rot_right32 x (n + m) := by
-  rw [rot_right32_eq_bv_rotate _ h,
-    rot_right32_eq_bv_rotate _ h,
-    rot_right32_eq_bv_rotate _ (by sorry)]
+The ultimate goal is to prove that this is equivalent to `rot_right32`.
+-/
+def rot_right32_bytes (xs : Vector ℕ 4) (o : ℕ) : Vector ℕ 4 :=
+  .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 4] % 2^o) * 2^(8-o)
 
-  sorry
+-- unfold what rot_right32_bytes does on a U32
+def rot_right32_u32 : U32 ℕ → ℕ → U32 ℕ
+  | ⟨ x0, x1, x2, x3 ⟩, o => ⟨
+    (x0 / 2^o) + (x1 % 2^o) * 2^(8-o),
+    (x1 / 2^o) + (x2 % 2^o) * 2^(8-o),
+    (x2 / 2^o) + (x3 % 2^o) * 2^(8-o),
+    (x3 / 2^o) + (x0 % 2^o) * 2^(8-o),
+  ⟩
 
-omit [Fact (Nat.Prime p)] in
-lemma soundnessCase1 (x0 x1 x2 x3 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256) : { x0 := x1, x1 := x2, x2 := x3, x3 := x0 : U32 _}.value =
-  rot_right32 { x0 := x0, x1 := x1, x2 := x2, x3 := x3 : U32 _}.value 8 := by
-  simp only [U32.value, rot_right32]
-  rw [
-    show (8 % 32) = 8 by norm_num,
-    show (32 - 8) = 24 by norm_num,
-  ]
-  have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
-  zify at *
-  set x0 : ℤ := x0.val.cast
-  set x1 : ℤ := x1.val.cast
-  set x2 : ℤ := x2.val.cast
-  set x3 : ℤ := x3.val.cast
+-- these two are definitionally equal
+lemma rot_right32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
+  rot_right32_bytes x.to_limbs o = (rot_right32_u32 x o).to_limbs := rfl
 
-  have powers_mod :
-    (16777216 : ℤ) % 256 = 0 ∧
-    (65536 : ℤ) % 256 = 0 := by norm_num
+lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
+    (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) % 2^o = x0 % 2^o := by
+  nth_rw 1 [←Nat.pow_one 256]
+  repeat rw [Nat.add_mod, mul_mod_256_off ho _ _ (by trivial), add_zero, Nat.mod_mod]
 
-  have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) % 2 ^ 8 = x0 := by
-    repeat
-      ring_nf
-      rw [Int.add_emod, Int.mul_emod]
-      simp only [powers_mod]
-      norm_num
-    rw [Int.emod_eq_of_lt x0_pos (by linarith)]
+lemma h_div32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3: ℕ} :
+    (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) / 2^o
+    = x0 / 2^o + x1 * 2^(8-o) + x2 * 256 * 2^(8-o) + x3 * 256^2 * 2^(8-o) := by
+  rw [←Nat.pow_one 256]
+  repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power ho; linarith)]
 
-  have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ 8 =
-      x1 + x2 * 256 + x3 * 256 ^ 2 := by
+  rw [mul_div_256_off ho 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
+  rw [mul_div_256_off ho 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
+    Nat.add_left_inj]
 
-    repeat
-      ring_nf
-      rw [Int.add_ediv_of_dvd_right (by
-        rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
-        try rw [show (16777216 : ℤ) % 256 = 0 by rfl]
-        try rw [show (65536 : ℤ) % 256 = 0 by rfl]
-        rfl)]
-      rw [Int.mul_ediv_assoc _ (by norm_num)]
-      norm_num
-    rw [Int.ediv_eq_zero_of_lt (by simp only [x0_pos]) (by simp only [as])]
+lemma h_x0_const32 {o : ℕ} (ho : o < 8) :
+    2^(8 - o) * 256^3 = 2^(32 - o) := by
+  rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, pow_right_inj₀ (by norm_num) (by norm_num)]
+  omega
 
-  rw [h, h']
-  ring
+theorem rotation32_bits_soundness {o : ℕ} (ho : o < 8) {x : U32 ℕ} :
+    (rot_right32_u32 x o).value_nat = rot_right32 x.value_nat o := by
+  -- simplify the goal
+  simp only [rot_right32, rot_right32_u32, U32.value_nat]
 
-omit [Fact (Nat.Prime p)] in
-lemma soundnessCase2 (x0 x1 x2 x3 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256) : { x0 := x2, x1 := x3, x2 := x0, x3 := x1 : U32 _}.value =
-  rot_right32 { x0 := x0, x1 := x1, x2 := x2, x3 := x3 : U32 _}.value 16 := by
-  simp only [U32.value, rot_right32]
-  rw [
-    show (16 % 32) = 16 by norm_num,
-    show (32 - 16) = 16 by norm_num,
-  ]
-  have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
-  have x1_pos : 0 ≤ x1.val := by exact Nat.zero_le _
-  have x0_x1_pos : 0 ≤ x0.val + x1.val * 256 := by
-    exact Nat.le_add_right_of_le x0_pos
-  zify at *
-  set x0 : ℤ := x0.val.cast
-  set x1 : ℤ := x1.val.cast
-  set x2 : ℤ := x2.val.cast
-  set x3 : ℤ := x3.val.cast
+  have offset_mod_32 : o % 32 = o := Nat.mod_eq_of_lt (by linarith)
+  simp only [offset_mod_32]
+  rw [h_mod32 ho, h_div32 ho]
 
-  have powers_mod :
-    (16777216 : ℤ) % 65536 = 0 := by norm_num
-
-  have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) % (2 ^ 16) = x0 + x1 * 256 := by
-    norm_num
-    repeat
-      rw [Int.add_emod, Int.mul_emod]
-      simp only [powers_mod]
-      norm_num
-    rw [Int.emod_eq_of_lt x0_x1_pos (by linarith)]
-
-  have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ 16 =
-      x2 + x3 * 256 := by
-
-    repeat
-      norm_num
-      rw [Int.add_ediv_of_dvd_right (by
-        rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
-        try rw [show (16777216 : ℤ) % 65536 = 0 by rfl]
-        rfl)]
-      rw [Int.mul_ediv_assoc _ (by norm_num)]
-      norm_num
-    rw [Int.ediv_eq_zero_of_lt (by simp only [x0_x1_pos]) (by linarith)]
-
-  rw [h, h']
-  ring
-
-omit [Fact (Nat.Prime p)] in
-lemma soundnessCase3 (x0 x1 x2 x3 : F p) (as : ZMod.val x0 < 256 ∧ ZMod.val x1 < 256 ∧ ZMod.val x2 < 256 ∧ ZMod.val x3 < 256) : { x0 := x3, x1 := x0, x2 := x1, x3 := x2 : U32 _}.value =
-  rot_right32 { x0 := x0, x1 := x1, x2 := x2, x3 := x3 : U32 _}.value 24 := by
-  simp only [U32.value, rot_right32]
-  rw [
-    show (24 % 32) = 24 by norm_num,
-    show (32 - 24) = 8 by norm_num,
-  ]
-  have x0_pos : 0 ≤ x0.val := by exact Nat.zero_le _
-  have x1_pos : 0 ≤ x1.val := by exact Nat.zero_le _
-  have x2_pos : 0 ≤ x2.val := by exact Nat.zero_le _
-  have x0_x1_pos : 0 ≤ x0.val + x1.val * 256 := by
-    exact Nat.le_add_right_of_le x0_pos
-  have x0_x1_x2_pos : 0 ≤ x0.val + x1.val * 256 + x2.val * 65536 := by
-    exact Nat.le_add_right_of_le x0_x1_pos
-  zify at *
-  set x0 : ℤ := x0.val.cast
-  set x1 : ℤ := x1.val.cast
-  set x2 : ℤ := x2.val.cast
-  set x3 : ℤ := x3.val.cast
-
-  have h : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) % (2 ^ 24) = x0 + x1 * 256 + x2 * 256 ^ 2 := by
-    norm_num
-    rw [Int.add_emod, Int.mul_emod]
-    norm_num
-    rw [Int.emod_eq_of_lt x2_pos (by linarith)]
-    rw [Int.emod_eq_of_lt x0_x1_x2_pos (by linarith)]
-
-  have h' : (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3) / 2 ^ 24 = x3 := by
-    repeat
-      norm_num
-      rw [Int.add_ediv_of_dvd_right (by
-        rw [Int.dvd_iff_emod_eq_zero, Int.mul_emod]
-        rfl)]
-      rw [Int.mul_ediv_assoc _ (by norm_num)]
-      norm_num
-    rw [Int.ediv_eq_zero_of_lt (by simp only [x0_x1_x2_pos]) (by linarith)]
-
-  rw [h, h']
-  ring
+  -- proof technique: we care about only what happens to x0, all "internal" terms remain
+  -- the same, and are just divided by 2^o
+  rw [shifted_decomposition_eq ho]
+  repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
+  rw [←add_assoc _ _ (_ * 256 ^ 3), soundness_simp]
+  nth_rw 4 [←add_assoc]
+  rw [Nat.mul_right_comm _ 256, soundness_simp]
+  nth_rw 2 [←add_assoc]
+  rw [Nat.mul_right_comm _ 256, soundness_simp']
+  rw [mul_assoc (x.x0 % 2 ^ o), h_x0_const32 ho]
+  ac_rfl
 
 end Gadgets.Rotation32.Theorems

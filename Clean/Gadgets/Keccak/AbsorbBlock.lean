@@ -18,7 +18,7 @@ instance : ProvableStruct Input where
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
-  let state_rate ← Circuit.mapFinRange RATE fun i => subcircuit Xor.circuit ⟨state[i.val], block[i.val]⟩
+  let state_rate ← Circuit.mapFinRange RATE fun i => subcircuit Xor64.circuit ⟨state[i.val], block[i.val]⟩
 
   -- the remaining elements of the state are unchanged
   let state_capacity := Vector.mapFinRange (25 - RATE) fun i => state[RATE + i.val]
@@ -29,12 +29,12 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
 
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   main
-  local_length _ := 36808
+  local_length _ := 31048
   output _ i0 := Permutation.state_var (i0 + 136) 23
 
-  local_length_eq _ _ := by simp only [main, circuit_norm, Xor.circuit, Permutation.circuit, RATE]
-  output_eq input i0 := by simp only [main, circuit_norm, Xor.circuit, Permutation.circuit, RATE]
-  subcircuits_consistent _ _ := by simp +arith only [main, circuit_norm, Xor.circuit, Permutation.circuit, RATE]
+  local_length_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+  output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+  subcircuits_consistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
 @[reducible] def assumptions (input : Input (F p)) :=
   input.state.is_normalized ∧ input.block.is_normalized
@@ -48,7 +48,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify goal and constraints
   simp only [circuit_norm, RATE, main, spec, assumptions, absorb_block, subcircuit_norm,
-    Xor.circuit, Xor.assumptions, Xor.spec,
+    Xor64.circuit, Xor64.assumptions, Xor64.spec,
     Permutation.circuit, Permutation.assumptions, Permutation.spec,
     Input.mk.injEq] at *
 
@@ -83,7 +83,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 
   -- simplify goal and witnesses
   simp only [circuit_norm, RATE, main, spec, assumptions, absorb_block, subcircuit_norm,
-    Xor.circuit, Xor.assumptions, Xor.spec,
+    Xor64.circuit, Xor64.assumptions, Xor64.spec,
     Permutation.circuit, Permutation.assumptions, Permutation.spec,
     Input.mk.injEq] at *
   simp only [getElem_eval_vector, h_input] at h_env ⊢
