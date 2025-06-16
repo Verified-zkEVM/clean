@@ -32,11 +32,8 @@ def output (i0 : ℕ) : Var KeccakState (F p) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   local_length _ := 400
-  output _ i0 := output i0
-
   local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
   subcircuits_consistent _ _ := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [output, main, circuit_norm]; rfl
 
 -- recharacterize rho_phi as a loop
 lemma rho_pi_loop (state : Vector ℕ 25) :
@@ -53,7 +50,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, output, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,
+  simp only [elaborated, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,
     KeccakState.value, rho_pi_loop]
 
   -- simplify constraints
@@ -61,7 +58,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [assumptions, KeccakState.is_normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated,
-    Vector.getElem_zip] at h_holds
+    Vector.getElem_zip] at h_holds ⊢
   simp_all [rhoPiConstants, Bitwise.rot_left_eq_rot_right]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by

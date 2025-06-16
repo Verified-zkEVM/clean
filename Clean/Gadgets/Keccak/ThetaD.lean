@@ -29,13 +29,6 @@ def theta_d (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main := theta_d
   local_length _ := 120
-  output _ i0 := #v[
-    var_from_offset U64 (i0 + 16),
-    var_from_offset U64 (i0 + 40),
-    var_from_offset U64 (i0 + 64),
-    var_from_offset U64 (i0 + 88),
-    var_from_offset U64 (i0 + 112)
-  ]
 
 def assumptions (state : KeccakRow (F p)) := state.is_normalized
 
@@ -47,9 +40,10 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env row_var row h_input row_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [assumptions] at row_norm
-  dsimp only [circuit_norm, theta_d, Xor64.circuit, Rotation64.circuit] at h_holds
-  simp only [circuit_norm, subcircuit_norm, Xor64.assumptions, Xor64.spec, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated] at h_holds
+  dsimp only [circuit_norm, spec, theta_d, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
+  simp only [circuit_norm, subcircuit_norm, Xor64.assumptions, Xor64.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
   simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
+  simp only [circuit_norm, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
 
   have s (i : ℕ) (hi : i < 5) : eval env (row_var[i]) = row[i] := by
     rw [←h_input, Vector.getElem_map]
@@ -77,8 +71,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   specialize h_xor4 (row_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp only [circuit_norm, spec, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value]
-  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Bitwise.rot_left64, eval_vector]
+  simp [Specs.Keccak256.theta_d, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Bitwise.rot_left64]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions

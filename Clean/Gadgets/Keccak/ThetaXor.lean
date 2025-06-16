@@ -22,12 +22,9 @@ def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   main
   local_length _ := 200
-  output _ i0 := var_from_offset KeccakState i0
 
   local_length_eq _ n := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuits_consistent _ i := by simp only [main, circuit_norm]
-  output_eq _ i := by simp only [main, circuit_norm, Xor64.circuit, var_from_offset_vector,
-    Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
@@ -48,9 +45,8 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, size, theta_xor_loop, var_from_offset_vector, eval_vector,
-    Vector.getElem_map, Vector.getElem_mapRange, Vector.getElem_mapFinRange, mul_comm,
-    KeccakState.value, KeccakRow.value]
+  simp only [main, circuit_norm, theta_xor_loop, Xor64.circuit, var_from_offset_vector, eval_vector,
+    mul_comm, KeccakState.value, KeccakRow.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
