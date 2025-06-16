@@ -1,8 +1,34 @@
-import Clean.Gadgets.Addition8.Addition8Full
+import Clean.Gadgets.Addition8.Addition8FullCarry
 
-namespace Gadgets.Addition8
+namespace Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
+/--
+  Compute the 8-bit addition of two numbers with a carry-in bit.
+  Returns the sum.
+-/
+def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
+  main := fun inputs => do
+    let { z, .. } ← subcircuit Addition8FullCarry.circuit inputs
+    return z
+
+  local_length _ := 2
+  output _ i0 := var ⟨i0⟩
+
+  assumptions := fun { x, y, carry_in } =>
+    x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+
+  spec := fun { x, y, carry_in } z =>
+    z.val = (x.val + y.val + carry_in.val) % 256
+
+  -- the proofs are trivial since this just wraps `Addition8FullCarry`
+  soundness := by simp_all [Soundness, circuit_norm, subcircuit_norm,
+    Addition8FullCarry.circuit, Addition8FullCarry.assumptions, Addition8FullCarry.spec]
+
+  completeness := by simp_all [Completeness, circuit_norm, subcircuit_norm,
+    Addition8FullCarry.circuit, Addition8FullCarry.assumptions]
+
+namespace Addition8
 structure Inputs (F : Type) where
   x: F
   y: F
@@ -12,32 +38,24 @@ instance : ProvableStruct Inputs where
   to_components := fun { x, y } => .cons x (.cons y .nil)
   from_components := fun (.cons x (.cons y .nil)) => { x, y }
 
-def main (input : Var Inputs (F p)) := do
-  let ⟨x, y⟩ := input
-  subcircuit Addition8Full.circuit { x, y, carry_in := 0 }
-
 /--
   Compute the 8-bit addition of two numbers.
   Returns the sum.
 -/
 def circuit : FormalCircuit (F p) Inputs field where
-  main
+  main := fun { x, y } =>
+    subcircuit Addition8Full.circuit { x, y, carry_in := 0 }
+
   local_length _ := 2
   output _ i0 := var ⟨i0⟩
 
-  assumptions (input : Inputs (F p)) :=
-    let ⟨x, y⟩ := input
-    x.val < 256 ∧ y.val < 256
+  assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
-  spec (input : Inputs (F p)) (z: F p) :=
-    let ⟨x, y⟩ := input
-    z.val = (x.val + y.val) % 256
+  spec | { x, y }, z => z.val = (x.val + y.val) % 256
 
-  -- the proofs are trivial since we are just wrapping `Addition8Full`
-  soundness := by simp_all [Soundness, circuit_norm, subcircuit_norm, main,
-    Addition8Full.circuit, Addition8Full.assumptions, Addition8Full.spec]
+  -- the proofs are trivial since this just wraps `Addition8Full`
+  soundness := by simp_all [Soundness, circuit_norm, subcircuit_norm, Addition8Full.circuit]
+  completeness := by simp_all [Completeness, circuit_norm, subcircuit_norm, Addition8Full.circuit]
 
-  completeness := by simp_all [Completeness, circuit_norm, subcircuit_norm, main,
-    Addition8Full.circuit, Addition8Full.assumptions, Addition8Full.spec]
-
-end Gadgets.Addition8
+end Addition8
+end Gadgets
