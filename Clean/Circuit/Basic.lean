@@ -213,18 +213,18 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
   local_length: Var β F → ℕ
 
   /-- the local length must not depend on the offset. usually automatically proved by `rfl` -/
-  local_length_eq : ∀ var offset, (main var).local_length offset = local_length var
+  local_length_eq : ∀ input offset, (main input).local_length offset = local_length input
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
-  output : Var β F → ℕ → Var α F
+  output : Var β F → ℕ → Var α F := fun input offset => (main input).output offset
 
   /-- correctness of `output` -/
-  output_eq : ∀ var offset, (main var).output offset = output var offset
+  output_eq : ∀ input offset, (main input).output offset = output input offset
     := by intros; rfl
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
-  subcircuits_consistent : ∀ var offset, ((main var).operations offset).subcircuits_consistent offset
+  subcircuits_consistent : ∀ input offset, ((main input).operations offset).subcircuits_consistent offset
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial
@@ -276,11 +276,15 @@ structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [
   soundness: Soundness F elaborated assumptions spec
   completeness: Completeness F elaborated assumptions
 
+def ElaboratedCircuit.out {F: Type} [Field F] {β α: TypeMap} [ProvableType β] [ProvableType α]
+  (circuit: ElaboratedCircuit F β α) (input: Var β F) (offset := 0) : Var α F :=
+  circuit.output input offset
+
 namespace Circuit
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (offset: ℕ) (env : Environment F) :=
   let b := eval env b_var
-  let a_var := circuit.output b_var offset
+  let a_var := circuit.out b_var offset
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
