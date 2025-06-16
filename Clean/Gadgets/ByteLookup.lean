@@ -8,7 +8,7 @@ variable [p_large_enough: Fact (p > 512)]
 def from_byte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-def ByteTable : Table (F p) where
+def ByteTable : StaticTable (F p) where
   name := "Bytes"
   length := 256
   arity := 1
@@ -36,7 +36,7 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (#v[x])
 def ByteTable.equiv (x: F p) : ByteTable.contains (#v[x]) ↔ x.val < 256 :=
   ⟨ByteTable.soundness x, ByteTable.completeness x⟩
 
-def ByteLookup (x: Expression (F p)) : Lookup (F p) := {
+def ByteLookup (x: Expression (F p)) : StaticLookup (F p) := {
   table := ByteTable
   entry := #v[x]
   -- to make this work, we need to pass an `eval` function to the callback!!

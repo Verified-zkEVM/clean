@@ -5,7 +5,7 @@ namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-def ByteXorTable: Table (F p) where
+def ByteXorTable: StaticTable (F p) where
   name := "ByteXor"
   length := 256*256
   arity := 3
@@ -13,7 +13,7 @@ def ByteXorTable: Table (F p) where
     let (x, y) := split_two_bytes i
     #v[from_byte x, from_byte y, from_byte (x ^^^ y)]
 
-def ByteXorLookup (x y z: Expression (F p)) : Lookup (F p) := {
+def ByteXorLookup (x y z: Expression (F p)) : StaticLookup (F p) := {
   table := ByteXorTable
   entry := #v[x, y, z]
   index env := by
@@ -26,7 +26,7 @@ def ByteXorLookup (x y z: Expression (F p)) : Lookup (F p) := {
 def ByteXorTable.soundness (x y z: F p) :
     ByteXorTable.contains #v[x, y, z] →
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val := by
-  dsimp [Table.contains]
+  dsimp [StaticTable.contains]
   rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩
   simp [ByteXorTable] at h
   simp only [ByteXorTable] at i
