@@ -18,7 +18,7 @@ def from_byte_limb {two_exponent : Fin 9} (x: Fin (2 ^ two_exponent.val)) : F p 
   where `two_exponent` is a (compile-time) parameter of the table.
   Supports `two_exponent` values from `0` to `8` included.
 -/
-def ByteLessThanTwoPower (two_exponent : Fin 9) : Table (F p) where
+def ByteLessThanTwoPower (two_exponent : Fin 9) : StaticTable (F p) where
   name := "ByteLessThanTwoPower"
   length := 2^two_exponent.val
   arity := 1
@@ -26,7 +26,7 @@ def ByteLessThanTwoPower (two_exponent : Fin 9) : Table (F p) where
 
 def soundness (two_exponent : Fin 9) (x: F p) :
     (ByteLessThanTwoPower two_exponent).contains (#v[x]) → x.val < 2^two_exponent.val := by
-  dsimp only [ByteLessThanTwoPower, Table.contains]
+  dsimp only [ByteLessThanTwoPower, StaticTable.contains]
   rintro ⟨ i, h: #v[x] = #v[from_byte_limb i] ⟩
   have h' : x = from_byte_limb i := by repeat injection h with h
   rw [FieldUtils.nat_to_field_eq x h']
@@ -35,7 +35,7 @@ def soundness (two_exponent : Fin 9) (x: F p) :
 def completeness (two_exponent : Fin 9) (x: F p) :
     x.val < 2^two_exponent.val → (ByteLessThanTwoPower two_exponent).contains (#v[x]) := by
   intro h
-  dsimp only [ByteLessThanTwoPower, Table.contains]
+  dsimp only [ByteLessThanTwoPower, StaticTable.contains]
   use x.val
   simp only [from_byte_limb, Fin.val_natCast]
   ext1
@@ -48,7 +48,7 @@ def equiv (two_exponent : Fin 9) (x: F p) :
     (ByteLessThanTwoPower two_exponent).contains (#v[x]) ↔ x.val < 2^two_exponent.val :=
   ⟨soundness two_exponent x, completeness two_exponent x⟩
 
-def lookup (two_exponent : Fin 9) (x: Expression (F p)) : Lookup (F p) := {
+def lookup (two_exponent : Fin 9) (x: Expression (F p)) : StaticLookup (F p) := {
   table := ByteLessThanTwoPower two_exponent
   entry := #v[x]
   index := fun env =>
