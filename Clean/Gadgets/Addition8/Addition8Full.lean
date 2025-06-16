@@ -3,16 +3,7 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 namespace Gadgets.Addition8Full
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
-
-structure Inputs (F : Type) where
-  x: F
-  y: F
-  carry_in: F
-
-instance : ProvableStruct Inputs where
-  components := [field, field, field]
-  to_components := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
-  from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
+open Addition8FullCarry (Inputs)
 
 def add8_full (input : Var Inputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
@@ -37,31 +28,29 @@ def circuit : FormalCircuit (F p) Inputs field where
   assumptions := assumptions
   spec := spec
   local_length _ := 2
-  output _ i0 := var ⟨i0⟩
+  output input i0 := (Addition8FullCarry.circuit.out input i0).z
 
   soundness := by
     -- introductions
-    rintro offset env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs as h_holds z
+    rintro offset env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs as h_holds
 
-    -- simplify constraints hypothesis
-    -- it's just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    simp only [add8_full, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit, eval] at h_holds
+    -- simplify constraints and goal
+    -- constraints are just the `subcircuit_soundness` of `Add8FullCarry.circuit`
+    simp only [add8_full, spec, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit, ElaboratedCircuit.out] at h_holds ⊢
 
     -- rewrite input and ouput values
     simp only [circuit_norm, Inputs.mk.injEq] at h_inputs
     simp only [h_inputs] at h_holds
-    rw [←(by rfl : z = env.get offset)] at h_holds
+    set z := env.get offset
 
     -- satisfy `Add8FullCarry.assumptions` by using our own assumptions
-    let ⟨ asx, asy, as_carry_in ⟩ := as
-    have as': Addition8FullCarry.assumptions { x, y, carry_in } := ⟨asx, asy, as_carry_in⟩
+    have as': Addition8FullCarry.assumptions { x, y, carry_in } := as
     specialize h_holds as'
 
-    guard_hyp h_holds : Addition8FullCarry.spec { x, y, carry_in } { z, .. }
+    change Addition8FullCarry.spec { x, y, carry_in } { z, .. } at h_holds
 
     -- unfold `Add8FullCarry` spec to show what the hypothesis is in our context
     dsimp only [Addition8FullCarry.spec] at h_holds
-    dsimp only [spec]
     -- discard second part of the spec
     exact h_holds.left
 
