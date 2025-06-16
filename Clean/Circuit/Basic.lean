@@ -276,15 +276,11 @@ structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [
   soundness: Soundness F elaborated assumptions spec
   completeness: Completeness F elaborated assumptions
 
-def ElaboratedCircuit.out {F: Type} [Field F] {β α: TypeMap} [ProvableType β] [ProvableType α]
-  (circuit: ElaboratedCircuit F β α) (input: Var β F) (offset := 0) : Var α F :=
-  circuit.output input offset
-
 namespace Circuit
 @[circuit_norm]
 def subcircuit_soundness (circuit: FormalCircuit F β α) (b_var : Var β F) (offset: ℕ) (env : Environment F) :=
   let b := eval env b_var
-  let a_var := circuit.out b_var offset
+  let a_var := circuit.output b_var offset
   let a := eval env a_var
   circuit.assumptions b → circuit.spec b a
 
