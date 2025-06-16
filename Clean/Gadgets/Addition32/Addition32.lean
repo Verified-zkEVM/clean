@@ -37,18 +37,19 @@ def spec (input : Inputs (F p)) (z: U32 (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
   local_length _ := 8
-  output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
+  -- output := fun { x, y } n =>
+  --   (Addition32Full.circuit.out { x, y, carry_in := 0 } n).z
   local_length_eq _ i0 := by
-    simp only [circuit_norm, main, Boolean.circuit, Addition32Full.elaborated, Addition32Full.circuit]
+    simp only [circuit_norm, main, Boolean.circuit, Addition32Full.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
-  simp_all [circuit_norm, spec, main, Addition32Full.circuit, Addition32Full.elaborated, subcircuit_norm,
-  Addition32Full.assumptions, Addition32Full.spec, assumptions]
+  simp_all [circuit_norm, spec, main, Addition32Full.circuit, subcircuit_norm,
+  Addition32Full.assumptions, Addition32Full.spec, assumptions, ElaboratedCircuit.out]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
-  simp_all [circuit_norm, spec, main, Addition32Full.circuit, Addition32Full.elaborated, subcircuit_norm,
+  simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated, subcircuit_norm,
   Addition32Full.assumptions, Addition32Full.spec, assumptions]
 
 def circuit : FormalCircuit (F p) Inputs U32 where

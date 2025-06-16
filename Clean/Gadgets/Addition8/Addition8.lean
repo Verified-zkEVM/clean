@@ -37,14 +37,13 @@ def circuit : FormalCircuit (F p) Inputs field where
   assumptions := assumptions
   spec := spec
   local_length _ := 2
-  output _ i0 := var ⟨i0⟩
 
   soundness := by
     -- introductions
     rintro offset env inputs_var inputs h_inputs as
     let ⟨x, y⟩ := inputs
     let ⟨x_var, y_var⟩ := inputs_var
-    intro h_holds z
+    intro h_holds
 
     -- characterize inputs
     have hx : x_var.eval env = x := by injection h_inputs
@@ -52,23 +51,23 @@ def circuit : FormalCircuit (F p) Inputs field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Addition8Full.circuit`
-    simp [circuit_norm, subcircuit_norm, add8, Addition8Full.circuit] at h_holds
+    simp only [circuit_norm, subcircuit_norm, add8, spec, Addition8Full.circuit, ElaboratedCircuit.out] at h_holds ⊢
 
     -- rewrite input and ouput values
-    rw [hx, hy, ←(by rfl : z = env.get offset)] at h_holds
+    rw [hx, hy] at h_holds
 
     -- satisfy `Addition8Full.assumptions` by using our own assumptions
     let ⟨ asx, asy ⟩ := as
     have as': Addition8Full.assumptions { x, y, carry_in := 0 } := ⟨asx, asy, by tauto⟩
     specialize h_holds as'
 
-    guard_hyp h_holds : Addition8Full.spec { x, y, carry_in := 0 } z
+    guard_hyp h_holds : Addition8Full.spec { x, y, carry_in := 0 } _
 
     -- unfold `Addition8Full` statements to show what the hypothesis is in our context
     dsimp [Addition8Full.spec] at h_holds
-    guard_hyp h_holds : z.val = (x.val + y.val + (0 : F p).val) % 256
+    guard_hyp h_holds : _ = (x.val + y.val + (0 : F p).val) % 256
 
-    simp at h_holds
+    simp only [ZMod.val_zero, add_zero] at h_holds
     exact h_holds
 
   completeness := by
