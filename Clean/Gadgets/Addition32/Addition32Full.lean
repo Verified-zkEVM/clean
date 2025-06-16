@@ -52,9 +52,8 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
 /--
 Elaborated circuit data can be found as follows:
 ```
-def c := add32_full (p:=p_babybear) default
-#eval c.operations.local_length
-#eval c.output
+#eval (add32_full (p:=p_babybear) default).local_length
+#eval (add32_full (p:=p_babybear) default).output
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
@@ -63,6 +62,8 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   -- unfortunately, `rfl` in default tactic times out here
   local_length_eq _ i0 := by
     simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
+  output_eq _ i0 := by
+    simp only [circuit_norm, add32_full, add8_full_carry]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h

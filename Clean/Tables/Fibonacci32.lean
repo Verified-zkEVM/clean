@@ -1,7 +1,7 @@
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
 import Clean.Table.Theorems
-import Clean.Gadgets.Addition32.Addition32Full
+import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Equality
 import Clean.Types.U32
 
@@ -45,11 +45,7 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.get_curr_row
   let next ← TableConstraint.get_next_row
 
-  let { z, ..} ← subcircuit Gadgets.Addition32Full.circuit {
-    x := curr.x,
-    y := curr.y,
-    carry_in := 0
-  }
+  let z ← subcircuit Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
 
   assign_U32 next_row_off.y z
   assert_equals curr.y next.x
@@ -98,7 +94,7 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [table_assignment_norm, circuit_norm, recursive_relation, Gadgets.Addition32Full.circuit, assign_U32]
+  dsimp only [table_assignment_norm, circuit_norm, recursive_relation, Gadgets.Addition32.circuit, assign_U32]
   simp only [table_assignment_norm, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero, Vector.mapRange_succ]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
@@ -133,7 +129,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
   set env := recursive_relation.window_env  ⟨<+> +> curr +> next, rfl⟩ aux_env
   simp only [table_norm, circuit_norm, recursive_relation,
-    assign_U32, Gadgets.Addition32Full.circuit]
+    assign_U32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
   simp only [table_norm, circuit_norm, subcircuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
@@ -141,11 +137,10 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   clear hcurr_x hcurr_y hnext_x hnext_y
   constructor
   · exact h_eq
-  rw [Gadgets.Addition32Full.assumptions, Gadgets.Addition32Full.spec] at h_add
+  rw [Gadgets.Addition32.assumptions, Gadgets.Addition32.spec] at h_add
   intro h_norm_x h_norm_y
-  specialize h_add ⟨ h_norm_x, h_norm_y, Or.inl rfl ⟩
-  rw [ZMod.val_zero, add_zero] at h_add
-  obtain ⟨ h_add_mod, _, h_norm_next_y, _ ⟩ := h_add
+  specialize h_add ⟨ h_norm_x, h_norm_y ⟩
+  obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
   exact ⟨h_add_mod, h_norm_next_y⟩
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :

@@ -28,7 +28,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   assumptions := assumptions
   spec := spec
   local_length _ := 2
-  output input i0 := (Addition8FullCarry.circuit.out input i0).z
+  output _ i0 := var ⟨i0⟩
 
   soundness := by
     -- introductions
@@ -36,7 +36,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
     -- simplify constraints and goal
     -- constraints are just the `subcircuit_soundness` of `Add8FullCarry.circuit`
-    simp only [add8_full, spec, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit, ElaboratedCircuit.out] at h_holds ⊢
+    simp only [add8_full, spec, circuit_norm, subcircuit_norm, Addition8FullCarry.circuit] at h_holds ⊢
 
     -- rewrite input and ouput values
     simp only [circuit_norm, Inputs.mk.injEq] at h_inputs

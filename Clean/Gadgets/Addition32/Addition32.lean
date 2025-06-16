@@ -32,20 +32,18 @@ def spec (input : Inputs (F p)) (z: U32 (F p)) :=
 
 
 -- def c := main (p:=p_babybear) default
--- #eval c.operations.local_length
+-- #eval c.local_length
 -- #eval c.output
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
   local_length _ := 8
-  -- output := fun { x, y } n =>
-  --   (Addition32Full.circuit.out { x, y, carry_in := 0 } n).z
-  local_length_eq _ i0 := by
-    simp only [circuit_norm, main, Boolean.circuit, Addition32Full.circuit]
+  output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
+  rw [←elaborated.output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
   simp_all [circuit_norm, spec, main, Addition32Full.circuit, subcircuit_norm,
-  Addition32Full.assumptions, Addition32Full.spec, assumptions, ElaboratedCircuit.out]
+  Addition32Full.assumptions, Addition32Full.spec, assumptions]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as

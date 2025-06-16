@@ -37,6 +37,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   assumptions := assumptions
   spec := spec
   local_length _ := 2
+  output _ i0 := var ⟨i0⟩
 
   soundness := by
     -- introductions
@@ -51,7 +52,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
     -- simplify constraints hypothesis
     -- it's just the `subcircuit_soundness` of `Addition8Full.circuit`
-    simp only [circuit_norm, subcircuit_norm, add8, spec, Addition8Full.circuit, ElaboratedCircuit.out] at h_holds ⊢
+    simp only [circuit_norm, subcircuit_norm, add8, spec, Addition8Full.circuit] at h_holds ⊢
 
     -- rewrite input and ouput values
     rw [hx, hy] at h_holds
