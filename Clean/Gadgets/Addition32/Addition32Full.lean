@@ -62,8 +62,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   -- unfortunately, `rfl` in default tactic times out here
   local_length_eq _ i0 := by
     simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
-  output_eq _ i0 := by
-    simp only [circuit_norm, add32_full, add8_full_carry]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
