@@ -23,7 +23,7 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
--- #eval! main (p:=p_babybear) default |>.operations.local_length
+-- #eval! main (p:=p_babybear) default |>.local_length
 -- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main

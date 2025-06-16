@@ -1,6 +1,6 @@
 /- Simple Fibonacci example using `InductiveTable` -/
 import Clean.Table.Inductive
-import Clean.Gadgets.Addition32.Addition32Full
+import Clean.Gadgets.Addition32.Addition32
 
 namespace Tables.Fibonacci32Inductive
 open Gadgets
@@ -22,9 +22,7 @@ instance : ProvableStruct Row where
 
 def table : InductiveTable (F p) Row unit where
   step row _ := do
-    let { z, .. } ← subcircuit Gadgets.Addition32Full.circuit {
-      x := row.x, y := row.y, carry_in := 0
-    }
+    let z ← subcircuit Gadgets.Addition32.circuit { x := row.x, y := row.y }
     return { x := row.y, y := z }
 
   spec i row _ _ : Prop :=
@@ -33,10 +31,10 @@ def table : InductiveTable (F p) Row unit where
     row.x.is_normalized ∧ row.y.is_normalized
 
   soundness := by simp_all [fib32, circuit_norm, subcircuit_norm,
-    Addition32Full.circuit, Addition32Full.assumptions, Addition32Full.spec]
+    Addition32.circuit, Addition32.assumptions, Addition32.spec]
 
   completeness := by simp_all [fib32, circuit_norm, subcircuit_norm,
-    Addition32Full.circuit, Addition32Full.assumptions, Addition32Full.spec]
+    Addition32.circuit, Addition32.assumptions, Addition32.spec]
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.from_byte 0, y := U32.from_byte 1 } output

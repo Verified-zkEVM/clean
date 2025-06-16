@@ -52,18 +52,13 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
 /--
 Elaborated circuit data can be found as follows:
 ```
-def c := add32_full (p:=p_babybear) default
-#eval c.operations.local_length
-#eval c.output
+#eval (add32_full (p:=p_babybear) default).local_length
+#eval (add32_full (p:=p_babybear) default).output
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main := add32_full
   local_length _ := 8
-  output _ i0 := {
-    z := { x0 := var ⟨i0⟩, x1 := var ⟨i0 + 2⟩, x2 := var ⟨i0 + 4⟩, x3 := var ⟨i0 + 6⟩ },
-    carry_out := var ⟨i0 + 7⟩
-  }
   -- unfortunately, `rfl` in default tactic times out here
   local_length_eq _ i0 := by
     simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
@@ -84,10 +79,8 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit, ByteLookup] at h
-  simp only [circuit_norm, subcircuit_norm] at h
-  simp only [h_inputs, ByteTable.equiv] at h
-  repeat rw [add_neg_eq_zero] at h
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, ByteLookup, U32.value, U32.is_normalized] at h ⊢
+  simp only [circuit_norm, subcircuit_norm, eval, h_inputs, ByteTable.equiv] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
   set z1 := env.get (i0 + 2)
@@ -96,19 +89,11 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   set c2 := env.get (i0 + 5)
   set z3 := env.get (i0 + 6)
   set c3 := env.get (i0 + 7)
-  have ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
-  clear h
-
-  -- simplify output and spec
-  set output := eval env (elaborated.output _ i0)
-  have h_output : output = { z := U32.mk z0 z1 z2 z3, carry_out := c3 } := by
-    simp only [output, circuit_norm, eval]; rfl
-  rw [h_output]
-  dsimp only [spec, U32.value, U32.is_normalized]
+  obtain ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩ := h
 
   -- get rid of the boolean carry_out and normalized output
   simp only [c3_bool, z0_byte, z1_byte, z2_byte, z3_byte, and_self, and_true]
-  rw [add_neg_eq_iff_eq_add] at h0 h1 h2 h3
+  rw [add_neg_eq_zero, add_neg_eq_iff_eq_add] at h0 h1 h2 h3
 
   -- apply the main soundness theorem
   apply Addition32.Theorems.add32_soundness

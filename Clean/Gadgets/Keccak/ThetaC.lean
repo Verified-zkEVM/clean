@@ -23,17 +23,12 @@ def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
   out.is_normalized
   ∧ out.value = Specs.Keccak256.theta_c state.value
 
--- #eval! theta_c (p:=p_babybear) default |>.operations.local_length
--- #eval! theta_c (p:=p_babybear) default |>.output
+-- #eval! theta_c (p:=p_babybear) default |>.local_length
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
   local_length _ := 160
-  output _ i0 := .mapRange 5 fun i => var_from_offset U64 (i0 + i*32 + 24)
-
   local_length_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuits_consistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
-  output_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit,
-    Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite theta_c as a loop
 lemma theta_c_loop (state : Vector ℕ 25) :
@@ -47,8 +42,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [elaborated, theta_c_loop, eval_vector, KeccakState.value,
-    Vector.getElem_map, Vector.getElem_mapFinRange, Vector.getElem_mapRange]
+  simp only [main, theta_c_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

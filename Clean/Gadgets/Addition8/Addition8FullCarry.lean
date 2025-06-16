@@ -14,23 +14,19 @@ structure Inputs (F : Type) where
   y: F
   carry_in: F
 
-instance : ProvableType Inputs where
-  size := 3
-  to_elements x := #v[x.x, x.y, x.carry_in]
-  from_elements v :=
-    let ⟨ .mk [x, y, carry_in], _ ⟩ := v
-    ⟨ x, y, carry_in ⟩
+instance : ProvableStruct Inputs where
+  components := [field, field, field]
+  to_components := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
+  from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
 
 structure Outputs (F : Type) where
   z: F
   carry_out: F
 
-instance : ProvableType Outputs where
-  size := 2
-  to_elements x := #v[x.z, x.carry_out]
-  from_elements v :=
-    let ⟨ .mk [z, carry_out], _ ⟩ := v
-    ⟨ z, carry_out ⟩
+instance : ProvableStruct Outputs where
+  components := [field, field]
+  to_components := fun { z, carry_out } => .cons z (.cons carry_out .nil)
+  from_components := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
 
 def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
@@ -62,88 +58,66 @@ def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
-  assumptions := assumptions
-  spec := spec
+  assumptions
+  spec
   local_length _ := 2
   output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
 
   soundness := by
     -- introductions
-    rintro i0 env inputs_var inputs h_inputs as
-    let ⟨x, y, carry_in⟩ := inputs
-    let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
-    rintro h_holds outputs
-    -- characterize inputs
-    have hx : x_var.eval env = x := by injection h_inputs
-    have hy : y_var.eval env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
+    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
 
-    -- simplify constraints hypothesis
-    simp only [circuit_norm, add8_full_carry, ByteLookup] at h_holds
+    -- characterize inputs
+    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
+      simpa [circuit_norm] using h_inputs
+
+    -- simplify constraints, assumptions and goal
+    simp_all only [circuit_norm, subcircuit_norm, h_inputs, spec, assumptions, add8_full_carry,
+      ByteLookup, Boolean.circuit, ByteTable.equiv]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
-    rw [hx, hy, hcarry_in] at h_holds
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
-    rw [(by rfl : outputs = ⟨z, carry_out⟩)]
-
-    -- simplify assumptions and spec
-    dsimp [spec]
-    dsimp [assumptions] at as
-
     -- now it's just mathematics!
-    guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
-    guard_hyp h_byte: ByteTable.contains (#v[z])
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+    guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    change True → (carry_out = 0 ∨ carry_out = 1) at h_bool_carry
-    specialize h_bool_carry trivial
+    guard_hyp h_bool_carry: carry_out = 0 ∨ carry_out = 1
 
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
-    -- reuse ByteTable.soundness
-    have h_byte': z.val < 256 := ByteTable.soundness z h_byte
-
-    have ⟨as_x, as_y, as_carry_in⟩ := as
-    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte' as_carry_in h_bool_carry h_add
+    have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
+    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry h_add
 
   completeness := by
    -- introductions
-    rintro i0 env inputs_var h_env inputs h_inputs
-    let ⟨x, y, carry_in⟩ := inputs
-    let ⟨x_var, y_var, carry_in_var⟩ := inputs_var
-    rintro as
+    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
-    have hx : x_var.eval env = x := by injection h_inputs
-    have hy : y_var.eval env = y := by injection h_inputs
-    have hcarry_in : carry_in_var.eval env = carry_in := by injection h_inputs
+    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
+      simpa [circuit_norm] using h_inputs
 
-    -- simplify assumptions
-    dsimp [assumptions] at as
-
-    -- simplify local witnesses
-    simp only [circuit_norm, subcircuit_norm, add8_full_carry, Boolean.circuit] at h_env
-    have ⟨hz, hcarry_out⟩ := h_env
-
-    -- unfold goal, (re)introduce names for some of unfolded variables
-    simp only [add8_full_carry, circuit_norm, Boolean.circuit, subcircuit_norm]
-    rw [hx, hy, hcarry_in] at hz hcarry_out ⊢
+    -- simplify assumptions and goal
+    simp only [circuit_norm, subcircuit_norm, h_inputs, assumptions, add8_full_carry,
+      ByteLookup, Boolean.circuit, ByteTable.equiv] at *
+    obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
 
     -- now it's just mathematics!
-    guard_hyp as : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-    let goal_byte := ByteTable.contains (#v[z])
+    let goal_byte := z.val < 256
     let goal_bool := carry_out = 0 ∨ carry_out = 1
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show goal_byte ∧ goal_bool ∧ goal_add
-    suffices goal_byte ∧ goal_bool ∧ goal_add by tauto
 
-    have completeness1 : goal_byte := ByteTable.completeness z (hz ▸ ByteUtils.mod_256_lt _)
+    have completeness1 : z.val < 256 := by
+      rw [hz]
+      apply ByteUtils.mod_256_lt
 
-    have ⟨as_x, as_y, as_carry_in⟩ := as
+    have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
     have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
