@@ -26,9 +26,6 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.rho_pi state.value
 
-def output (i0 : ℕ) : Var KeccakState (F p) :=
-  rhoPiShifts.mapIdx fun i s => Rotation64.output (-s) (i0 + i*16)
-
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   local_length _ := 400
@@ -37,8 +34,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 
 -- recharacterize rho_phi as a loop
 lemma rho_pi_loop (state : Vector ℕ 25) :
-  Specs.Keccak256.rho_pi state =
-    rhoPiConstants.map fun (i, s) => rot_left64 state[i.val] s := by
+    Specs.Keccak256.rho_pi state = rhoPiConstants.map fun (i, s) => rot_left64 state[i.val] s := by
   simp only [Specs.Keccak256.rho_pi, circuit_norm]
   rw [Vector.map_mk]
   simp only
