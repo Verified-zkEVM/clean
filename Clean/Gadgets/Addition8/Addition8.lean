@@ -33,8 +33,10 @@ def circuit : FormalCircuit (F p) Inputs field where
     let ⟨x, y⟩ := input
     z.val = (x.val + y.val) % 256
 
+  -- the proofs are trivial since we are just wrapping `Addition8Full`
   soundness := by simp_all [Soundness, circuit_norm, subcircuit_norm, main,
     Addition8Full.circuit, Addition8Full.assumptions, Addition8Full.spec]
+
   completeness := by simp_all [Completeness, circuit_norm, subcircuit_norm, main,
     Addition8Full.circuit, Addition8Full.assumptions, Addition8Full.spec]
 
