@@ -37,7 +37,7 @@ def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
 def output (offset : Fin 64) (i0 : Nat) : U64 (Expression (F p)) :=
   Rotation64Bits.output (offset % 8).val i0
 
--- #eval! (rot64 (p:=p_babybear) 0) default |>.operations.local_length
+-- #eval! (rot64 (p:=p_babybear) 0) default |>.local_length
 -- #eval! (rot64 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64 off
