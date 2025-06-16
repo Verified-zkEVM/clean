@@ -15,26 +15,26 @@ structure Lookup (F : Type) where
   /-- a row in the table that the added entry is constrained to equal -/
   witness: Environment F → (row : Vector F table.arity) ×' table.contains row
 
-structure FixedTable (F : Type) where
+structure StaticTable (F : Type) where
   name: String
   arity: ℕ
   length: ℕ
   row: Fin length → Vector F arity
 
-def FixedTable.contains (table: FixedTable F) row := ∃ (i : Fin table.length), row = table.row i
+def StaticTable.contains (table: StaticTable F) row := ∃ (i : Fin table.length), row = table.row i
 
-def FixedTable.toTable (table: FixedTable F) : Table F where
+def StaticTable.toTable (table: StaticTable F) : Table F where
   name := table.name
   arity := table.arity
   contains row := table.contains row
 
-structure FixedLookup (F : Type) where
-  table: FixedTable F
+structure StaticLookup (F : Type) where
+  table: StaticTable F
   entry: Vector (Expression F) table.arity
   /-- index of the entry -/
   index: Environment F → Fin table.length
 
-def FixedLookup.toLookup (lookup: FixedLookup F) : Lookup F where
+def StaticLookup.toLookup (lookup: StaticLookup F) : Lookup F where
   table := lookup.table.toTable
   entry := lookup.entry
   witness env := ⟨ lookup.table.row (lookup.index env), ⟨ lookup.index env, rfl ⟩ ⟩
