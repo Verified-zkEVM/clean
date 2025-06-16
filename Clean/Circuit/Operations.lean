@@ -6,16 +6,38 @@ variable {F: Type} [Field F] {α : Type} {n : ℕ}
 
 structure Table (F : Type) where
   name: String
-  length: ℕ
   arity: ℕ
-  row: Fin length → Vector F arity
-
-def Table.contains (table: Table F) row := ∃ i, row = table.row i
+  contains: Vector F arity → Prop
 
 structure Lookup (F : Type) where
   table: Table F
   entry: Vector (Expression F) table.arity
-  index: Environment F → Fin table.length -- index of the entry
+  /-- a row in the table that the added entry is constrained to equal -/
+  witness: Environment F → (row : Vector F table.arity) ×' table.contains row
+
+structure FixedTable (F : Type) where
+  name: String
+  arity: ℕ
+  length: ℕ
+  row: Fin length → Vector F arity
+
+def FixedTable.contains (table: FixedTable F) row := ∃ (i : Fin table.length), row = table.row i
+
+def FixedTable.toTable (table: FixedTable F) : Table F where
+  name := table.name
+  arity := table.arity
+  contains row := table.contains row
+
+structure FixedLookup (F : Type) where
+  table: FixedTable F
+  entry: Vector (Expression F) table.arity
+  /-- index of the entry -/
+  index: Environment F → Fin table.length
+
+def FixedLookup.toLookup (lookup: FixedLookup F) : Lookup F where
+  table := lookup.table.toTable
+  entry := lookup.entry
+  witness env := ⟨ lookup.table.row (lookup.index env), ⟨ lookup.index env, rfl ⟩ ⟩
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
