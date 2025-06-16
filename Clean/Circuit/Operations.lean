@@ -23,6 +23,7 @@ structure StaticTable (F : Type) where
 
 def StaticTable.contains (table: StaticTable F) row := ∃ (i : Fin table.length), row = table.row i
 
+@[circuit_norm]
 def StaticTable.toTable (table: StaticTable F) : Table F where
   name := table.name
   arity := table.arity
@@ -34,6 +35,7 @@ structure StaticLookup (F : Type) where
   /-- index of the entry -/
   index: Environment F → Fin table.length
 
+@[circuit_norm]
 def StaticLookup.toLookup (lookup: StaticLookup F) : Lookup F where
   table := lookup.table.toTable
   entry := lookup.entry
