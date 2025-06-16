@@ -217,7 +217,7 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
     := by intros; rfl
 
   /-- a direct way of computing the output of this circuit (i.e. without having to unfold `main`) -/
-  output : Var β F → ℕ → Var α F := fun _ offset => (main default).output offset
+  output : Var β F → ℕ → Var α F := fun input offset => (main input).output offset
 
   /-- correctness of `output` -/
   output_eq : ∀ input offset, (main input).output offset = output input offset
