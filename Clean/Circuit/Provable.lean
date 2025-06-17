@@ -470,6 +470,12 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
   to_elements_from_elements v := by
     simp [ProvableType.to_elements_from_elements, Vector.cast]
 
+def ProvablePair.from_elements {α β: TypeMap} [ProvableType α] [ProvableType β] (xs : Vector F (size α + size β)) : α F × β F :=
+  (ProvableType.from_elements xs : ProvablePair α β F)
+
+def ProvablePair.to_elements {α β: TypeMap} [ProvableType α] [ProvableType β] (pair : α F × β F) : Vector F (size α + size β) :=
+  ProvableType.to_elements (M:=ProvablePair α β) pair
+
 @[circuit_norm ↓ high]
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)
   (a : Var α F) (b : Var β F) :
