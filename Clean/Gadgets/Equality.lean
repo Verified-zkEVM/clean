@@ -112,16 +112,27 @@ theorem uses_local_witnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : E
 end Equality
 end Gadgets
 
--- this is exported at the top level because it is a core builtin gadget
+-- Defines a unified `===` notation for asserting equality in circuits.
+
 @[circuit_norm]
-def assert_equals {α : TypeMap} [ProvableType α] (x y : α (Expression F)) : Circuit F Unit :=
+def assert_equals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+  (x y : α (Expression F)) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit α) (x, y)
 
--- TODO unfortunately, if the inputs to `assert_equals` are just `Expression F`,
--- Lean doesn't come up with `α = id` -- even though `ProvableType` is inferred when `(α:=id)` is passed explicitly.
--- this definition is a somehwat natural alternative that can be used on `Expression F` directly
-@[reducible]
-def Expression.assert_equals (x y : Expression F) : Circuit F Unit :=
+@[circuit_norm, reducible]
+def Expression.assert_equals {F : Type} [Field F]
+  (x y : Expression F) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit id) (x, y)
 
--- TODO define a custom syntax e.g. `===` that figures out whether to use `assert_equals` or `Expression.assert_equals`
+class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
+  assert_eq : β → β → Circuit F Unit
+
+instance {F : Type} [Field F] : HasAssertEq (Expression F) F where
+  assert_eq := Expression.assert_equals
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+  HasAssertEq (α (Expression F)) F where
+  assert_eq := @assert_equals F _ α _
+
+attribute [circuit_norm] HasAssertEq.assert_eq
+infix:50 " === " => HasAssertEq.assert_eq
