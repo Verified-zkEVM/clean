@@ -152,7 +152,7 @@ def constraints_hold.soundness (eval : Environment F) : List (Operation F) → P
   | [] => True
   | .witness _ _ :: ops => constraints_hold.soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ constraints_hold.soundness eval ops
-  | .lookup { table, entry, .. } :: ops =>
+  | .lookup { table, entry } :: ops =>
     table.contains (entry.map eval) ∧ constraints_hold.soundness eval ops
   | .subcircuit s :: ops =>
     s.soundness eval ∧ constraints_hold.soundness eval ops
@@ -165,8 +165,8 @@ def constraints_hold.completeness (eval : Environment F) : List (Operation F) �
   | [] => True
   | .witness _ _ :: ops => constraints_hold.completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ constraints_hold.completeness eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.contains (entry.map eval) ∧ constraints_hold.completeness eval ops
+  | .lookup { table, entry } :: ops =>
+    table.validAndEq (entry.map eval) ∧ constraints_hold.completeness eval ops
   | .subcircuit s :: ops =>
     s.completeness eval ∧ constraints_hold.completeness eval ops
 end Circuit
