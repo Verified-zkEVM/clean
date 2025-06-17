@@ -196,6 +196,19 @@ def Environment.uses_local_witnesses_completeness (env: Environment F) (offset :
   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
+namespace Circuit
+/--
+A circuit has _computable witnesses_ when witness generators only depends on the environment at indices smaller than the current offset.
+This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
+-/
+def computable_witnesses (circuit: Circuit F α) (offset : ℕ) : Prop :=
+  (circuit.operations offset).forAll offset {
+    witness n m compute := ∀ env env', (∀ i < n + m, env.get i = env'.get i) → compute env = compute env',
+    -- TODO: this should be a property already known about subcircuits
+    subcircuit n _ s := ∀ env env', (∀ i < n + s.local_length, env.get i = env'.get i) → s.witnesses env = s.witnesses env',
+  }
+end Circuit
+
 section
 open Circuit (constraints_hold)
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
@@ -350,18 +363,11 @@ export Circuit (witness_var witness witness_vars witness_vector assert_zero look
 
 -- witness generation
 
-def WitnessGenerators (F: Type) (n: ℕ) := Vector (Environment F → F) n
-
 def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
   | [] => #v[]
-  | op :: ops =>
-    let ws := witness_generators ops
-    match op with
-    | witness m compute =>
-      ⟨ (Vector.mapFinRange m (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
-        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
-    | assert _ | lookup _ =>
-      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
+  | .assert _ :: ops => witness_generators ops
+  | .lookup _ :: ops => witness_generators ops
 
 def Operations.witness_generators : (ops: Operations F) → Vector (Environment F → F) ops.local_length
   | [] => #v[]

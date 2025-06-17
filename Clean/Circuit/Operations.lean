@@ -101,22 +101,14 @@ def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Pro
 @[circuit_norm]
 def witness_length : List (FlatOperation F) → ℕ
   | [] => 0
-  | op :: ops =>
-    match op with
-    | witness m _ => witness_length ops + m
-    | assert _ | lookup _ => witness_length ops
+  | witness m _ :: ops => m + witness_length ops
+  | assert _ :: ops | lookup _ :: ops => witness_length ops
 
 @[circuit_norm]
 def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (witness_length l)
   | [] => #v[]
-  | op :: ops =>
-    let ws := witnesses env ops
-    match op with
-    | witness m compute =>
-      ⟨ (compute env).toArray ++ ws.toArray, by
-        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl ⟩
-    | assert _ | lookup _ =>
-      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
+  | witness _ compute :: ops => compute env ++ witnesses env ops
+  | assert _ :: ops | lookup _ :: ops => witnesses env ops
 end FlatOperation
 
 export FlatOperation (constraints_hold_flat)

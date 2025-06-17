@@ -165,7 +165,7 @@ lemma flat_witness_length_eq {ops: Operations F} :
     generalize Operations.local_length ops = n at *
     induction flat_ops using FlatOperation.witness_length.induct generalizing n with
     | case1 => simp_all [witness_length, add_comm, List.nil_append, right_eq_add, SubCircuit.local_length_eq]
-    | case2 ops m' _ ih' =>
+    | case2 m' _ ops' ih' =>
       dsimp only [witness_length, witness] at *
       specialize ih' (n - m') (by rw [←ih]; omega)
       simp_all +arith only [witness_length_append, witness_length]
@@ -179,9 +179,9 @@ lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
   | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.toArray_empty,
     Array.empty_append]
   | case2 _ _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, ih, Array.append_assoc]
+    simp only [List.cons_append, witness_length, witnesses, Vector.toArray_append, ih, Array.append_assoc]
   | case3 _ _ ih | case4 _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, ih, Vector.mk_toArray]
+    simp only [List.cons_append, witness_length, witnesses, ih]
 
 /--
 The witnesses created from flat and nested operations are the same
@@ -194,7 +194,7 @@ lemma flat_witness_eq_witness {ops: Operations F} {env} :
     simp only [to_flat_operations, Operations.local_length, Operations.local_witnesses, Vector.toArray_append]
     rw [←ih]
     try rw [witnesses_append]
-    try simp only [witness_length, witnesses, Vector.toArray_empty, Array.append_empty, SubCircuit.witnesses, Vector.toArray_cast]
+    try simp only [witness_length, witnesses, Vector.toArray_append, SubCircuit.witnesses, Vector.toArray_cast]
 
 /-- equivalent, non-inductive statement of `Environment.uses_local_witnesses` (that is harder to unfold for a circuit) -/
 def uses_local_witnesses' (env: Environment F) (offset : ℕ) (ops: Operations F) :=
