@@ -2,25 +2,22 @@ import Clean.Circuit.SubCircuit
 import Clean.Circuit.Foundations
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
+def FormalCircuit.constantOutput (circuit : FormalCircuit F α β) (proverEnv : (input: α F) → Environment F) (input : α F) (offset := 0) : β F :=
+  circuit.output (const input) offset |> eval (proverEnv input)
+
 def FormalCircuit.toTable (circuit : FormalCircuit F α β) (name : String)
-  (henv : (input: α F) → (env : Environment F) ×' env.uses_local_witnesses 0 (circuit.main (const input) |>.operations 0)) :
+  (proverEnv : (input: α F) → Environment F)
+  (henv : ∀ input, (proverEnv input).uses_local_witnesses 0 (circuit.main (const input) |>.operations 0)) :
     TypedTable F (ProvablePair α β) where
-  name := name
+  name
 
-  valid x := circuit.assumptions x.1
-  contains x := circuit.spec x.1 x.2
+  valid := fun (input, output) => circuit.assumptions input ∧ output = circuit.constantOutput proverEnv input
+  contains := fun (input, output) => circuit.spec input output
 
-  map x _ :=
-    let (input, _) := x
-    let env := henv input
-    let output_var := circuit.output (const input) 0
-    let output : β F := eval env.1 output_var
-    ⟨input, output⟩
-
-  mapContains x hx := by
-    let (input, _) := x
-    simp only
-    set env := (henv input).1 with env_def
-    apply circuit.original_soundness 0 env (const input) input (ProvableType.eval_const ..) hx
-    apply circuit.original_completeness 0 env (const input) input (ProvableType.eval_const ..) hx
-    exact (henv input).2
+  implies := by
+    intro (input, output) ⟨h_assumptions, h_output⟩
+    simp only [h_output, constantOutput]
+    set env := proverEnv input with env_def
+    apply circuit.original_soundness 0 env (const input) input ProvableType.eval_const h_assumptions
+    apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
+    exact henv input
