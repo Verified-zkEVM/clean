@@ -17,12 +17,14 @@ structure Lookup (F : Type) where
   table: Table F
   entry: Vector (Expression F) table.arity
 
-theorem Lookup.valid_hint_implies_contains (lookup : Lookup F) (env: Environment F) : match lookup with
-  | { table, entry } => let row := entry.map env;
-    (h_valid: table.valid row) → row = (table.map row h_valid) → table.contains row := by
-  intro h_valid h_eq
+def Table.validAndEq {F} (table : Table F) (value : Vector F table.arity) : Prop :=
+  ∃ (h_valid : table.valid value), value = table.map value h_valid
+
+theorem Table.validAndEq_implies_contains {F} (table : Table F) (value : Vector F table.arity) :
+    table.validAndEq value → table.contains value := by
+  rintro ⟨h_valid, h_eq⟩
   rw [h_eq]
-  exact lookup.table.mapContains (lookup.entry.map env) h_valid
+  exact table.mapContains value h_valid
 
 -- usually we want lookups to be properly typed, with input and output types.
 
