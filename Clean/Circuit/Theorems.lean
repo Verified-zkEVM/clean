@@ -37,6 +37,15 @@ theorem forAll_append {condition : Condition F} {offset: ℕ} {as bs: Operations
   | empty => simp [forAll_empty, local_length]
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp +arith only [List.cons_append, forAll, local_length, ih, and_assoc]
+
+theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : Operations F} :
+  c.implies c' → (forAll n c ops → forAll n c' ops) := by
+  simp only [Condition.implies]
+  intro h
+  induction ops using Operations.induct generalizing n with
+  | empty => simp [forAll_empty]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all [forAll_cons, forAll_append, Operations.local_length, h]
 end Operations
 
 namespace Circuit
@@ -206,9 +215,13 @@ Helper lemma: An environment respects local witnesses if it does so in the flatt
 lemma env_extends_of_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
     env.extends_vector (witnesses env (to_flat_operations ops)) n →
     env.uses_local_witnesses' n ops := by
-  simp only [uses_local_witnesses', extends_vector, Vector.get, flat_witness_eq_witness]
+  simp only [extends_vector, uses_local_witnesses']
   intro h i
-  exact h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
+  specialize h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
+  rw [Vector.getElem_mk] at h
+  simp only [flat_witness_eq_witness] at h
+  rw [h]
+  simp
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F} {env: Environment F} {m c} :
     env.uses_local_witnesses' n (.witness m c :: ops) → env.uses_local_witnesses' (m + n) ops := by
@@ -292,6 +305,16 @@ theorem uses_local_witnesses_completeness_iff_forAll (n: ℕ) {env: Environment 
   | empty => trivial
   | assert | lookup | witness | subcircuit =>
     simp_all +arith [uses_local_witnesses_completeness, Operations.forAll]
+
+theorem uses_local_witnesses_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
+  env.uses_local_witnesses n ops ↔ ops.forAll n {
+    witness n _ c := env.extends_vector (c env) n,
+    subcircuit n _ s := env.extends_vector (s.witnesses env) n
+  } := by
+  induction ops using Operations.induct generalizing n with
+  | empty => trivial
+  | assert | lookup | witness | subcircuit =>
+    simp_all +arith [uses_local_witnesses, Operations.forAll]
 end Environment
 
 namespace Circuit
@@ -428,4 +451,43 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
     env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
   rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
     env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
+
+/--
+If a circuit satisfies `computable_witnesses`, we can construct a concrete environment from the witness generators
+which satisfies `uses_local_witnesses`.
+-/
+def proverEnvironment (circuit : Circuit F α) (offset := 0) : Environment F :=
+  .fromList (circuit.witnesses offset)
+end Circuit
+
+def Environment.zero : Environment F := .mk fun _ => 0
+
+lemma Environment.fromEmpty_eq_zero : fromList [] = zero (F:=F) := rfl
+
+lemma Operations.witnesses_cons (op : Operation F) (ops: Operations F) :
+    Operations.witnesses (op :: ops) = ops.witnesses (op.witnesses Environment.zero) := by
+  simp only [witnesses, List.foldl_cons, Environment.fromEmpty_eq_zero, List.nil_append]
+
+namespace Circuit
+variable {α : Type}
+
+theorem proverEnvironment_uses_local_witnesses (circuit : Circuit F α) (offset := 0) :
+    circuit.computable_witnesses → (circuit.proverEnvironment offset).uses_local_witnesses offset (circuit.operations offset) := by
+  intro h_computable
+  specialize h_computable offset
+  simp only [proverEnvironment, Environment.uses_local_witnesses_iff_forAll, Circuit.witnesses]
+  generalize circuit.operations offset = ops at *
+  clear circuit
+  induction ops using Operations.induct generalizing offset with
+  | empty => simp only [Operations.forAll_empty, true_implies]
+  | witness m compute ops ih =>
+    simp_all only [Operations.forAll_cons, Operations.Condition.apply, Operation.local_length, Environment.extends_vector]
+    specialize ih (m + offset) h_computable.right
+    constructor
+    intro i
+    simp only [Operations.witnesses_cons, Operation.witnesses, Environment.fromList]
+    -- simp
+  | assert _  => sorry
+  | lookup _  => sorry
+  | subcircuit circuit => sorry
 end Circuit

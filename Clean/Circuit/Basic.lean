@@ -201,8 +201,8 @@ namespace Circuit
 A circuit has _computable witnesses_ when witness generators only depends on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def computable_witnesses (circuit: Circuit F α) (offset : ℕ) : Prop :=
-  (circuit.operations offset).forAll offset {
+def computable_witnesses (circuit: Circuit F α) :=
+  ∀ offset, (circuit.operations offset).forAll offset {
     witness n m compute := ∀ env env', (∀ i < n + m, env.get i = env'.get i) → compute env = compute env',
     -- TODO: this should be a property already known about subcircuits
     subcircuit n _ s := ∀ env env', (∀ i < n + s.local_length, env.get i = env'.get i) → s.witnesses env = s.witnesses env',
@@ -377,12 +377,22 @@ def Operations.witness_generators : (ops: Operations F) → Vector (Environment 
   | .subcircuit s :: ops => (s.local_length_eq ▸ FlatOperation.witness_generators s.ops) ++ witness_generators ops
 
 -- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
-def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := (circuit.operations offset).witness_generators
-  generators.foldl (fun acc compute =>
-    let env i := acc.getD i 0
-    acc.push (compute ⟨ env ⟩))
-  #[]
+def Operation.witnesses (op : Operation F) (env : Environment F) : List F := match op with
+  | .witness _ c => (c env).toList
+  | .assert _ => []
+  | .lookup _ => []
+  | .subcircuit s => (s.witnesses env).toList
+
+def Environment.fromList (witnesses: List F) : Environment F :=
+  .mk fun i => witnesses.getD i 0
+
+def Operations.witnesses (ops: Operations F) (acc : List F := []) : List F :=
+  ops.foldl (fun (acc : List F) (op : Operation F) =>
+    acc ++ op.witnesses (.fromList acc)
+  ) acc
+
+def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : List F :=
+  (circuit.operations offset).witnesses
 
 -- `circuit_norm` attributes
 

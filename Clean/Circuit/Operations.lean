@@ -62,7 +62,7 @@ instance [Repr F] : Repr (Lookup F) where
 
 @[circuit_norm]
 def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: ℕ) : Prop :=
-  ∀ i : Fin n, env.get (offset + i) = wit.get i
+  ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 /--
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
@@ -256,6 +256,9 @@ def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Pro
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
+
+def Condition.implies (c c': Condition F) : Prop :=
+  ∀ (offset : ℕ) (op : Operation F), c.apply offset op → c'.apply offset op
 
 /--
 Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
