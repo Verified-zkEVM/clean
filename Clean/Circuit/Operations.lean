@@ -5,41 +5,67 @@ import Clean.Circuit.SimpGadget
 variable {F: Type} [Field F] {α : Type} {n : ℕ}
 
 structure Table (F : Type) where
-  name: String
-  arity: ℕ
-  contains: Vector F arity → Prop
+  name : String
+  arity : ℕ
+  valid : Vector F arity → Prop
+  contains : Vector F arity → Prop
+  /-- the table maps valid "hints" to full rows that satisfy the predicate -/
+  map : (row : Vector F arity) → valid row → Vector F arity
+  mapContains : ∀ (row : Vector F arity) (h_valid : valid row), contains (map row h_valid)
 
 structure Lookup (F : Type) where
   table: Table F
   entry: Vector (Expression F) table.arity
-  /-- a row in the table that the added entry is constrained to equal -/
-  witness: Environment F → (row : Vector F table.arity) ×' table.contains row
+
+theorem Lookup.valid_hint_implies_contains (lookup : Lookup F) (env: Environment F) : match lookup with
+  | { table, entry } => let row := entry.map env;
+    (h_valid: table.valid row) → row = (table.map row h_valid) → table.contains row := by
+  intro h_valid h_eq
+  rw [h_eq]
+  exact lookup.table.mapContains (lookup.entry.map env) h_valid
+
+-- usually we want lookups to be properly typed, with input and output types.
+
+section typed_table
+variable {Row : TypeMap} [ProvableType Row]
+
+structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
+  name : String
+  valid : Row F → Prop
+  contains : Row F → Prop
+  map : (row: Row F) → valid row → Row F
+  mapContains : ∀ (row: Row F) (h_valid: valid row), contains (map row h_valid)
+
+def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
+  name := table.name
+  arity := size Row
+  valid row := table.valid (from_elements row)
+  contains row := table.contains (from_elements row)
+  map row h_valid := to_elements (table.map (from_elements row) h_valid)
+  mapContains row h_valid := by
+    simp only [ProvableType.from_elements_to_elements]
+    apply table.mapContains
+
+end typed_table
 
 structure StaticTable (F : Type) where
   name: String
   arity: ℕ
   length: ℕ
   row: Fin length → Vector F arity
+  index: Vector F arity → ℕ
 
-def StaticTable.contains (table: StaticTable F) row := ∃ (i : Fin table.length), row = table.row i
+def StaticTable.contains (table: StaticTable F) row :=
+  ∃ (i : Fin table.length), row = table.row i
 
 @[circuit_norm]
 def StaticTable.toTable (table: StaticTable F) : Table F where
   name := table.name
   arity := table.arity
+  valid row := table.index row < table.length
   contains row := table.contains row
-
-structure StaticLookup (F : Type) where
-  table: StaticTable F
-  entry: Vector (Expression F) table.arity
-  /-- index of the entry -/
-  index: Environment F → Fin table.length
-
-@[circuit_norm]
-def StaticLookup.toLookup (lookup: StaticLookup F) : Lookup F where
-  table := lookup.table.toTable
-  entry := lookup.entry
-  witness env := ⟨ lookup.table.row (lookup.index env), ⟨ lookup.index env, rfl ⟩ ⟩
+  map row i_lt := table.row ⟨ table.index row, i_lt ⟩
+  mapContains row i_lt := ⟨ ⟨ table.index row, i_lt ⟩, rfl ⟩
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"

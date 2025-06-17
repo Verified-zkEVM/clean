@@ -107,8 +107,8 @@ def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup (l: StaticLookup F) : Circuit F Unit := fun _ =>
-  ((), [.lookup l.toLookup])
+def lookup (l: Lookup F) : Circuit F Unit := fun _ =>
+  ((), [.lookup l])
 
 end Circuit
 

@@ -13,6 +13,7 @@ def ByteTable : StaticTable (F p) where
   length := 256
   arity := 1
   row i := #v[from_byte i]
+  index := fun ⟨⟨[x]⟩, _⟩ => x.val
 
 def ByteTable.soundness (x: F p) : ByteTable.contains (#v[x]) → x.val < 256 := by
   dsimp only [ByteTable, Table.contains]
@@ -36,14 +37,7 @@ def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (#v[x])
 def ByteTable.equiv (x: F p) : ByteTable.contains (#v[x]) ↔ x.val < 256 :=
   ⟨ByteTable.soundness x, ByteTable.completeness x⟩
 
-def ByteLookup (x: Expression (F p)) : StaticLookup (F p) := {
-  table := ByteTable
+def ByteLookup (x: Expression (F p)) : Lookup (F p) where
+  table := ByteTable.toTable
   entry := #v[x]
-  -- to make this work, we need to pass an `eval` function to the callback!!
-  index := fun env =>
-    let x := x.eval env |>.val
-    if h : (x < 256)
-    then ⟨x, h⟩
-    else ⟨0, by show 0 < 256; norm_num⟩
-}
 end Gadgets
