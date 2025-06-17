@@ -350,8 +350,6 @@ export Circuit (witness_var witness witness_vars witness_vector assert_zero look
 
 -- witness generation
 
-def WitnessGenerators (F: Type) (n: ℕ) := Vector (Environment F → F) n
-
 def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
   | [] => #v[]
   | op :: ops =>

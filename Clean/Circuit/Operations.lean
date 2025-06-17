@@ -9,20 +9,22 @@ structure Table (F : Type) where
   arity : ℕ
   valid : Vector F arity → Prop
   contains : Vector F arity → Prop
-  /-- the table maps valid "hints" to full rows that satisfy the predicate -/
-  map : (row : Vector F arity) → valid row → Vector F arity
-  mapContains : ∀ (row : Vector F arity) (h_valid : valid row), contains (map row h_valid)
 
 structure Lookup (F : Type) where
   table: Table F
   entry: Vector (Expression F) table.arity
 
-theorem Lookup.valid_hint_implies_contains (lookup : Lookup F) (env: Environment F) : match lookup with
-  | { table, entry } => let row := entry.map env;
+structure LawfulTable (F : Type) extends Table F where
+  /-- the table maps valid "hints" to full rows that satisfy the predicate -/
+  map : (row : Vector F arity) → valid row → Vector F arity
+  mapContains : ∀ (row : Vector F arity) (h_valid : valid row), contains (map row h_valid)
+
+theorem LawfulTable.valid_implies_contains (table: LawfulTable F) (entry: Vector (Expression F) table.arity) (env: Environment F) :
+  let row := entry.map env;
     (h_valid: table.valid row) → row = (table.map row h_valid) → table.contains row := by
-  intro h_valid h_eq
+  intro row h_valid h_eq
   rw [h_eq]
-  exact lookup.table.mapContains (lookup.entry.map env) h_valid
+  exact table.mapContains (entry.map env) h_valid
 
 -- usually we want lookups to be properly typed, with input and output types.
 
@@ -33,18 +35,12 @@ structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
   valid : Row F → Prop
   contains : Row F → Prop
-  map : (row: Row F) → valid row → Row F
-  mapContains : ∀ (row: Row F) (h_valid: valid row), contains (map row h_valid)
 
 def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
   name := table.name
   arity := size Row
   valid row := table.valid (from_elements row)
   contains row := table.contains (from_elements row)
-  map row h_valid := to_elements (table.map (from_elements row) h_valid)
-  mapContains row h_valid := by
-    simp only [ProvableType.from_elements_to_elements]
-    apply table.mapContains
 
 end typed_table
 
@@ -59,7 +55,7 @@ def StaticTable.contains (table: StaticTable F) row :=
   ∃ (i : Fin table.length), row = table.row i
 
 @[circuit_norm]
-def StaticTable.toTable (table: StaticTable F) : Table F where
+def StaticTable.toTable (table: StaticTable F) : LawfulTable F where
   name := table.name
   arity := table.arity
   valid row := table.index row < table.length
