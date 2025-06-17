@@ -9,22 +9,12 @@ structure Table (F : Type) where
   arity : ℕ
   valid : Vector F arity → Prop
   contains : Vector F arity → Prop
-  /-- the table maps valid "hints" to full rows that satisfy the predicate -/
-  map : (row : Vector F arity) → valid row → Vector F arity
-  mapContains : ∀ (row : Vector F arity) (h_valid : valid row), contains (map row h_valid)
+  /-- being valid implies being contained in the table -/
+  implies : ∀ (row : Vector F arity), valid row → contains row
 
 structure Lookup (F : Type) where
   table: Table F
   entry: Vector (Expression F) table.arity
-
-def Table.validAndEq {F} (table : Table F) (value : Vector F table.arity) : Prop :=
-  ∃ (h_valid : table.valid value), value = table.map value h_valid
-
-theorem Table.validAndEq_implies_contains {F} (table : Table F) (value : Vector F table.arity) :
-    table.validAndEq value → table.contains value := by
-  rintro ⟨h_valid, h_eq⟩
-  rw [h_eq]
-  exact table.mapContains value h_valid
 
 -- usually we want lookups to be properly typed, with input and output types.
 
@@ -35,18 +25,14 @@ structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
   valid : Row F → Prop
   contains : Row F → Prop
-  map : (row: Row F) → valid row → Row F
-  mapContains : ∀ (row: Row F) (h_valid: valid row), contains (map row h_valid)
+  implies : ∀ (row: Row F), valid row → contains row
 
 def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
   name := table.name
   arity := size Row
   valid row := table.valid (from_elements row)
   contains row := table.contains (from_elements row)
-  map row h_valid := to_elements (table.map (from_elements row) h_valid)
-  mapContains row h_valid := by
-    simp only [ProvableType.from_elements_to_elements]
-    apply table.mapContains
+  implies row := table.implies (from_elements row)
 
 end typed_table
 
@@ -60,14 +46,16 @@ structure StaticTable (F : Type) where
 def StaticTable.contains (table: StaticTable F) row :=
   ∃ (i : Fin table.length), row = table.row i
 
+def StaticTable.valid (table: StaticTable F) (row: Vector F table.arity) :=
+  ∃ i_lt : table.index row < table.length, row = table.row ⟨ table.index row, i_lt ⟩
+
 @[circuit_norm]
 def StaticTable.toTable (table: StaticTable F) : Table F where
   name := table.name
   arity := table.arity
-  valid row := table.index row < table.length
-  contains row := table.contains row
-  map row i_lt := table.row ⟨ table.index row, i_lt ⟩
-  mapContains row i_lt := ⟨ ⟨ table.index row, i_lt ⟩, rfl ⟩
+  valid := table.valid
+  contains := table.contains
+  implies row is_valid := ⟨ ⟨ table.index row, is_valid.1 ⟩, is_valid.2 ⟩
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"

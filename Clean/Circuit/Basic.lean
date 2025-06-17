@@ -166,7 +166,7 @@ def constraints_hold.completeness (eval : Environment F) : List (Operation F) �
   | .witness _ _ :: ops => constraints_hold.completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ constraints_hold.completeness eval ops
   | .lookup { table, entry } :: ops =>
-    table.validAndEq (entry.map eval) ∧ constraints_hold.completeness eval ops
+    table.valid (entry.map eval) ∧ constraints_hold.completeness eval ops
   | .subcircuit s :: ops =>
     s.completeness eval ∧ constraints_hold.completeness eval ops
 end Circuit

@@ -358,8 +358,8 @@ lemma comp_from_elements_to_elements :
   simp [from_elements_to_elements]
 
 @[circuit_norm]
-theorem eval_const {F : Type} [Field F] {α: TypeMap} [ProvableType α] (env : Environment F) (x : α F) :
-  eval env (const x) = x := by
+theorem eval_const {F : Type} [Field F] {α: TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
+    eval env (const x) = x := by
   simp only [circuit_norm, const, eval]
   rw [to_elements_from_elements, Vector.map_map]
   have : Expression.eval env ∘ Expression.const = id := by
