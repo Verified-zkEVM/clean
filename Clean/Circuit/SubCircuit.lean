@@ -214,7 +214,16 @@ lemma subcircuit_local_length_eq (circuit: FormalCircuit F β α) (input: Var β
 
 lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
   (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
+
+theorem subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) :
+    (subcircuit circuit input).computable_witnesses := by
+  intro n
+  simp only [operations, subcircuit, FormalCircuit.to_subcircuit, Operations.forAll, SubCircuit.witnesses, and_true]
+  intro env env' h
+  simp only [Vector.cast_eq_cast, Vector.cast_rfl, FlatOperation.witnesses]
+  rw [←Vector.toArray_inj, Environment.flat_witness_eq_witness, Environment.flat_witness_eq_witness, Vector.toArray_inj]
 end Circuit
+
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]

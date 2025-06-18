@@ -364,16 +364,24 @@ def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
     acc ++ op.witnesses (.fromList acc)
   ) init
 
+def Environment.only_accessed_below (n : ℕ) (f : Environment F → α) :=
+  ∀ env env', (∀ i < n, env.get i = env'.get i) → f env = f env'
+
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Circuit.computable_witnesses (circuit: Circuit F α) :=
-  ∀ offset, (circuit.operations offset).forAll offset {
-    witness n _ compute := ∀ env env', (∀ i < n, env.get i = env'.get i) → compute env = compute env',
+def Operations.computable_witnesses (ops: Operations F) (n : ℕ) : Prop :=
+  ops.forAll n {
+    witness n _ compute := Environment.only_accessed_below n compute,
     -- TODO: this should be a property already known about subcircuits
-    subcircuit n _ s := ∀ env env', (∀ i < n, env.get i = env'.get i) → s.witnesses env = s.witnesses env',
+    subcircuit n _ s := FlatOperation.forAll n {
+      witness n _ compute := Environment.only_accessed_below n compute,
+    } s.ops
   }
+
+def Circuit.computable_witnesses (circuit: Circuit F α) :=
+  ∀ offset, (circuit.operations offset).computable_witnesses offset
 
 /--
 If a circuit satisfies `computable_witnesses`, we can construct a concrete environment

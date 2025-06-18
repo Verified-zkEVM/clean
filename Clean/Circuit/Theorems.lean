@@ -20,6 +20,10 @@ theorem append_local_length {a b: Operations F} :
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all +arith [local_length, ih]
 
+theorem local_length_cons {a : Operation F} {as: Operations F} :
+    Operations.local_length (a :: as) = a.local_length + as.local_length := by
+  cases a <;> simp_all [local_length, Operation.local_length]
+
 @[circuit_norm]
 theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
 
@@ -487,7 +491,7 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
   induction ops generalizing init with
   | nil => trivial
   | cons op ops ih =>
-    simp only [Operations.forAll_cons] at h_computable
+    simp only [Operations.computable_witnesses, Operations.forAll_cons] at h_computable
     simp only [Environment.uses_local_witnesses_iff_forAll, Operations.forAll_cons]
     constructor
     -- get rid of ih first
@@ -505,7 +509,7 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
     simp only [Environment.fromList, add_tsub_cancel_left, add_lt_iff_neg_left, not_lt_zero', ↓reduceIte, Environment.extends_vector]
     cases op with
     | assert | lookup  => simp only [Operations.Condition.apply]
-    | witness m c | subcircuit s =>
+    | witness m c =>
       intro i
       rw [Operations.getD_witnesses_cons_right i.is_lt]
       simp only [Operation.witnesses, Vector.getElem_toList]
@@ -514,3 +518,65 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
       intro j hj
       simp only [Environment.fromList, hj, List.getElem?_eq_getElem, Option.getD_some, h_env,
         Operations.getD_witnesses_of_lt]
+    | subcircuit s =>
+      simp only [Operations.Condition.apply] at h_computable
+      sorry
+      -- TODO: we need a flat version of this theorem first
+
+theorem Operations.local_witnesses_cons (op : Operation F) (ops : Operations F) (env : Environment F) :
+  Operations.local_witnesses env (op :: ops) =
+    (op.local_witnesses env ++ ops.local_witnesses env).cast (Operations.local_length_cons.symm) := by
+  cases op <;> simp only [local_witnesses, Operation.local_witnesses, Vector.cast_rfl]
+  rw [Vector.empty_append]; simp
+  rw [Vector.empty_append]; simp
+
+theorem Operations.computable_witnesses_iff (ops : Operations F) (n : ℕ) :
+  ops.computable_witnesses n ↔
+    ∀ env env', (∀ i < ops.local_length + n, env.get i = env'.get i) → ops.local_witnesses env = ops.local_witnesses env' := by
+  simp only [computable_witnesses]
+  induction ops generalizing n with
+  | nil => simp [local_witnesses, forAll_empty]
+  | cons op ops ih =>
+    simp only [local_witnesses, forAll_cons, and_congr_right_iff]
+    rw [ih (op.local_length + n)]
+    clear ih
+    simp only [local_witnesses_cons, local_length_cons]
+    ring_nf
+    constructor
+    case mp =>
+      intro ⟨ h_comp, h_ih ⟩ env env' h_env
+      specialize h_ih env env'
+      simp only [Vector.cast_eq_cast, Vector.cast_rfl]
+      congr 1
+      · cases op with
+        | assert | lookup =>
+          simp_all only [Condition.apply, Operation.local_witnesses, Operation.local_length, local_length]
+        | witness m c | subcircuit s =>
+          simp_all only [Condition.apply, Operation.local_witnesses, Operation.local_length, local_length]
+          apply h_comp env env'
+          intro i hi
+          exact h_env i (by linarith)
+      exact h_ih h_env
+    case mpr =>
+      intro h
+      simp only [Vector.cast_eq_cast, Vector.cast_rfl] at h
+      have h_left := fun env env' h_env => (Vector.append_inj (h env env' h_env)).left
+      have h_right := fun env env' h_env => (Vector.append_inj (h env env' h_env)).right
+      clear h
+      constructor
+      case right =>
+        intro env env' h_env
+        exact h_right env env' h_env
+      cases op with
+      | assert | lookup =>
+        simp_all only [Operation.local_length, Operation.local_witnesses, Condition.apply]
+      | witness m c | subcircuit s =>
+        simp_all only [Operation.local_length, Operation.local_witnesses, Condition.apply]
+        intro env env' h_env
+        apply h_left
+        intro i hi
+        exact h_env i (by linarith)
+
+        apply h_comp env env'
+        intro i hi
+        exact h_env i (by linarith)

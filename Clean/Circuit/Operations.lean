@@ -181,6 +181,12 @@ def local_length : Operation F → ℕ
   | .assert _ => 0
   | .lookup _ => 0
   | .subcircuit s => s.local_length
+
+def local_witnesses (env: Environment F) : (op: Operation F) → Vector F op.local_length
+  | .witness _ c => c env
+  | .assert _ => #v[]
+  | .lookup _ => #v[]
+  | .subcircuit s => s.witnesses env
 end Operation
 
 /--
@@ -314,3 +320,69 @@ where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consi
     subst n_eq
     exact subcircuit n s ops (motive' ops _ h.right)
 end Operations
+
+def Operations.Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
+  | .witness m c => condition.witness offset m c
+  | .assert e => condition.assert offset e
+  | .lookup l => condition.lookup offset l
+
+def FlatOperation.local_length : FlatOperation F → ℕ
+  | .witness m _ => m
+  | .assert _ => 0
+  | .lookup _ => 0
+
+def FlatOperation.forAll (offset : ℕ) (condition : Operations.Condition F) : List (FlatOperation F) → Prop
+  | [] => True
+  | op :: ops => condition.applyFlat offset op ∧ forAll (op.local_length + offset) condition ops
+
+lemma FlatOperation.witness_length_cons {F} {op : FlatOperation F} {ops : List (FlatOperation F)} :
+    FlatOperation.witness_length (op :: ops) = op.local_length + FlatOperation.witness_length ops := by
+  cases op <;> simp +arith only [FlatOperation.witness_length, FlatOperation.local_length, List.cons_append]
+
+lemma FlatOperation.forAll_append {condition : Operations.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
+  FlatOperation.forAll n condition (ops ++ ops') ↔
+    FlatOperation.forAll n condition ops ∧ FlatOperation.forAll (FlatOperation.witness_length ops + n) condition ops' := by
+  induction ops generalizing n with
+  | nil => simp only [List.nil_append, forAll, witness_length, zero_add, true_and]
+  | cons op ops ih =>
+    specialize ih (n + op.local_length)
+    simp_all +arith [forAll, FlatOperation.forAll, witness_length_cons, and_assoc]
+
+def Operations.forAllFlat (offset : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
+  FlatOperation.forAll offset condition (to_flat_operations ops)
+
+lemma Operations.forAllFlat_mp {condition : Condition F} {ops : Operations F} (n : ℕ) :
+  (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s → FlatOperation.forAll n condition s.ops) →
+    (ops.forAll n condition → ops.forAllFlat n condition) := by
+  intro h
+  simp only [Operations.forAllFlat]
+  induction ops using Operations.induct generalizing n with
+  | empty => simp only [to_flat_operations, FlatOperation.forAll, implies_true]
+  | witness | assert | lookup =>
+    simp_all [to_flat_operations, FlatOperation.forAll, forAll, Condition.applyFlat, FlatOperation.local_length]
+  | subcircuit s ops ih =>
+    simp_all only [to_flat_operations, FlatOperation.forAll, forAll, Condition.applyFlat, FlatOperation.local_length]
+    rw [FlatOperation.forAll_append, s.local_length_eq]
+    simp_all
+
+lemma Operations.forAllFlat_mpr {condition : Condition F} {ops : Operations F} (n : ℕ) :
+  (∀ n {m} (s : SubCircuit F m), FlatOperation.forAll n condition s.ops → condition.subcircuit n s) →
+    (ops.forAllFlat n condition → ops.forAll n condition) := by
+  intro h
+  simp only [Operations.forAllFlat]
+  induction ops using Operations.induct generalizing n with
+  | empty => simp only [forAll, implies_true]
+  | witness | assert | lookup =>
+    simp_all [to_flat_operations, FlatOperation.forAll, forAll, Condition.applyFlat, FlatOperation.local_length]
+  | subcircuit s ops ih =>
+    simp_all only [to_flat_operations, FlatOperation.forAll, forAll, Condition.applyFlat, FlatOperation.local_length]
+    rw [FlatOperation.forAll_append, s.local_length_eq]
+    simp_all
+
+lemma Operations.forAllFlat_iff {condition : Condition F} {ops : Operations F} (n : ℕ) :
+  (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s ↔ FlatOperation.forAll n condition s.ops) →
+    (ops.forAll n condition ↔ ops.forAllFlat n condition) := by
+  intro h
+  constructor
+  · simp_all only [Operations.forAllFlat_mp, implies_true]
+  · simp_all only [Operations.forAllFlat_mpr, implies_true]
