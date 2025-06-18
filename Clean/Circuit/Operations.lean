@@ -339,9 +339,14 @@ lemma FlatOperation.witness_length_cons {F} {op : FlatOperation F} {ops : List (
     FlatOperation.witness_length (op :: ops) = op.local_length + FlatOperation.witness_length ops := by
   cases op <;> simp +arith only [FlatOperation.witness_length, FlatOperation.local_length, List.cons_append]
 
+theorem FlatOperation.forAll_cons {condition : Operations.Condition F} {offset: ℕ} {op: FlatOperation F} {ops: List (FlatOperation F)} :
+  forAll offset condition (op :: ops) ↔
+    condition.applyFlat offset op ∧ forAll (op.local_length + offset) condition ops := by
+  cases op <;> simp [forAll, Operations.Condition.applyFlat]
+
 lemma FlatOperation.forAll_append {condition : Operations.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
-  FlatOperation.forAll n condition (ops ++ ops') ↔
-    FlatOperation.forAll n condition ops ∧ FlatOperation.forAll (FlatOperation.witness_length ops + n) condition ops' := by
+  forAll n condition (ops ++ ops') ↔
+    forAll n condition ops ∧ forAll (witness_length ops + n) condition ops' := by
   induction ops generalizing n with
   | nil => simp only [List.nil_append, forAll, witness_length, zero_add, true_and]
   | cons op ops ih =>
