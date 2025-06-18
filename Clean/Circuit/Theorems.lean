@@ -454,6 +454,19 @@ end Circuit
 
 -- witness generation
 
+def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
+  | [] => #v[]
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
+  | .assert _ :: ops => witness_generators ops
+  | .lookup _ :: ops => witness_generators ops
+
+def Operations.witness_generators : (ops: Operations F) → Vector (Environment F → F) ops.local_length
+  | [] => #v[]
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
+  | .assert _ :: ops => witness_generators ops
+  | .lookup _ :: ops => witness_generators ops
+  | .subcircuit s :: ops => (s.local_length_eq ▸ FlatOperation.witness_generators s.ops) ++ witness_generators ops
+
 def Operation.witnesses (op : Operation F) (env : Environment F) : List F := match op with
   | .witness _ c => (c env).toList
   | .assert _ => []
