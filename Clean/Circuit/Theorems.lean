@@ -215,53 +215,60 @@ def uses_local_witnesses' (env: Environment F) (offset : ℕ) (ops: Operations F
 /--
 Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
 -/
-lemma env_extends_of_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
-    env.extends_vector (witnesses env (to_flat_operations ops)) n →
+lemma env_extends_iff_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
+    env.extends_vector (witnesses env (to_flat_operations ops)) n ↔
     env.uses_local_witnesses' n ops := by
-  simp only [extends_vector, uses_local_witnesses']
-  intro h i
-  specialize h ⟨ i, by rw [flat_witness_length_eq]; exact i.is_lt ⟩
-  rw [Vector.getElem_mk] at h
-  simp only [flat_witness_eq_witness] at h
-  rw [h]
-  simp
+  simp only [extends_vector, uses_local_witnesses', Fin.forall_iff, flat_witness_length_eq]
+  constructor
+  · intro h i hi
+    rw [h i hi, Vector.getElem_mk]
+    simp [flat_witness_eq_witness]
+  · intro h i hi
+    rw [h i hi, Vector.getElem_mk, Vector.getElem_mk]
+    simp [flat_witness_eq_witness]
 
 lemma env_extends_witness {n: ℕ} {ops: Operations F} {env: Environment F} {m c} :
-    env.uses_local_witnesses' n (.witness m c :: ops) → env.uses_local_witnesses' (m + n) ops := by
-  intro h i
-  simp only [uses_local_witnesses', circuit_norm] at h
-  specialize h ⟨ m + i, by omega ⟩
-  rw [←add_assoc, add_comm n] at h
-  rw [h]
-  simp [Vector.get]
-
-lemma env_extends_witness_inner {n: ℕ} {ops: Operations F} {env: Environment F} {m c} :
-    env.uses_local_witnesses' n (.witness m c :: ops) → env.extends_vector (c env) n := by
-  intro h i
-  simp only [uses_local_witnesses', circuit_norm] at h
-  specialize h ⟨ i, by linarith [i.is_lt] ⟩
-  rw [h, Vector.getElem_append]
-  simp [Vector.get]
+    env.uses_local_witnesses' n (.witness m c :: ops) ↔ (env.extends_vector (c env) n ∧ env.uses_local_witnesses' (m + n) ops) := by
+  simp_all only [uses_local_witnesses', circuit_norm, Vector.getElem_append]
+  constructor
+  · intro h
+    constructor
+    · intro i
+      specialize h ⟨ i, by omega ⟩
+      simp [h]
+    · intro i
+      specialize h ⟨ m + i, by omega ⟩
+      ring_nf at *
+      simp [h]
+  · intro ⟨ h_inner, h_outer ⟩ ⟨ i, hi ⟩
+    by_cases hi' : i < m <;> simp only [hi', reduceDIte]
+    · exact h_inner ⟨ i, hi' ⟩
+    · specialize h_outer ⟨ i - m, by omega ⟩
+      simp only [←h_outer]
+      congr 1
+      omega
 
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F} {env: Environment F} {n'} {s : SubCircuit F n'} :
-    env.uses_local_witnesses' n (.subcircuit s :: ops) → env.uses_local_witnesses' (s.local_length + n) ops := by
-  intro h i
-  simp_all only [uses_local_witnesses', circuit_norm]
-  specialize h ⟨ s.local_length + i, by linarith [i.is_lt] ⟩
-  rw [←add_assoc, add_comm n] at h
-  rw [h]
-  simp [Vector.get]
-
-lemma env_extends_subcircuit_inner {n: ℕ} {ops: Operations F} {env: Environment F} {n'} {s : SubCircuit F n'} :
-    env.uses_local_witnesses' n (.subcircuit s :: ops) → env.extends_vector (witnesses env s.ops) n := by
-  intro h i
-  simp_all only [uses_local_witnesses', circuit_norm, witness_length]
-  have : i < s.local_length + ops.local_length := by rw [s.local_length_eq]; linarith [i.is_lt]
-  specialize h ⟨ i, this ⟩
-  simp only at h
-  rw [h, Vector.getElem_append]
-  have : i < s.local_length := by rw [s.local_length_eq]; exact i.is_lt
-  simp [this]
+    env.uses_local_witnesses' n (.subcircuit s :: ops) ↔ (env.extends_vector (witnesses env s.ops) n ∧ env.uses_local_witnesses' (s.local_length + n) ops) := by
+  simp_all only [uses_local_witnesses', circuit_norm, witness_length, Vector.getElem_append, Fin.forall_iff]
+  constructor
+  · intro h
+    constructor
+    · intro i hi
+      have : i < s.local_length := by rw [s.local_length_eq]; exact hi
+      specialize h i (by omega)
+      simp [h, this]
+    · intro i hi
+      specialize h (s.local_length + i) (by linarith [hi])
+      ring_nf at *
+      simp [h]
+  · intro ⟨ h_inner, h_outer ⟩ i hi
+    by_cases hi' : i < s.local_length <;> simp only [hi', reduceDIte]
+    · exact h_inner i (by rw [s.local_length_eq] at hi'; exact hi')
+    · specialize h_outer (i - s.local_length) (by omega)
+      simp only [←h_outer]
+      congr 1
+      omega
 
 lemma extends_vector_subcircuit (env : Environment F) {n} {n'} {circuit : SubCircuit F n'} :
     env.extends_vector (circuit.witnesses env) n = env.extends_vector (FlatOperation.witnesses env circuit.ops) n := by
@@ -271,18 +278,15 @@ lemma extends_vector_subcircuit (env : Environment F) {n} {n'} {circuit : SubCir
   apply Vector.cast_heq
 
 theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operations F}  :
-    env.uses_local_witnesses' n ops → env.uses_local_witnesses n ops := by
-  intro h
+    env.uses_local_witnesses' n ops ↔ env.uses_local_witnesses n ops := by
   induction ops using Operations.induct generalizing n with
-  | empty => trivial
-  | witness _ _ _ ih =>
-    rw [uses_local_witnesses]
-    exact ⟨ env_extends_witness_inner h, ih _ (env_extends_witness h) ⟩
+  | empty => simp [uses_local_witnesses, uses_local_witnesses', extends_vector, Operations.local_witnesses, Operations.local_length]
+  | witness m _ _ ih =>
+    rw [uses_local_witnesses, env_extends_witness, ih (m + n)]
   | assert | lookup =>
     simp_all [uses_local_witnesses', uses_local_witnesses, circuit_norm]
-  | subcircuit _ _ ih =>
-    rw [uses_local_witnesses, extends_vector_subcircuit]
-    exact ⟨ env_extends_subcircuit_inner h, ih _ (env_extends_subcircuit h) ⟩
+  | subcircuit s _ ih =>
+    rw [uses_local_witnesses, env_extends_subcircuit, extends_vector_subcircuit, ih (_ + n)]
 
 theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Operations F} {n: ℕ} (h: ops.subcircuits_consistent n) :
     env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
