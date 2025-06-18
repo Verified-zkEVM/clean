@@ -521,10 +521,10 @@ theorem Operations.local_witnesses_cons (op : Operation F) (ops : Operations F) 
   rw [Vector.empty_append]; simp
   rw [Vector.empty_append]; simp
 
-theorem FlatOperation.only_accessed_below_all {ops : List (FlatOperation F)} (n : ℕ)
-  (h_comp : FlatOperation.forAll n { witness n _ compute := Environment.only_accessed_below n compute } ops) :
-    Environment.only_accessed_below (n + witness_length ops) (fun env => FlatOperation.witnesses env ops) := by
-  intro env env' h_env
+theorem FlatOperation.only_accessed_below_all {ops : List (FlatOperation F)} (n : ℕ) :
+  forAll n { witness n _ := Environment.only_accessed_below n } ops →
+    Environment.only_accessed_below (n + witness_length ops) (witnesses · ops) := by
+  intro h_comp env env' h_env
   simp only
   induction ops generalizing n with
   | nil => simp [witnesses]
