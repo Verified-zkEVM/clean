@@ -38,7 +38,6 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 section
 open Circuit
 open FlatOperation (constraints_hold_cons constraints_hold_append)
-open Environment (env_extends_of_flat)
 
 /--
 Consistency theorem which proves that flattened constraints are equivalent to the
@@ -96,8 +95,8 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     have h_env : env.uses_local_witnesses n ops := by
       guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-      apply env.can_replace_local_witnesses
-      exact env_extends_of_flat h_env
+      rw [←env.can_replace_local_witnesses, ←env.env_extends_iff_flat]
+      exact h_env
     have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
@@ -171,8 +170,8 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
       have h_env : env.uses_local_witnesses n ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        apply env.can_replace_local_witnesses
-        exact env_extends_of_flat h_env
+        rw [←env.can_replace_local_witnesses, ←env.env_extends_iff_flat]
+        exact h_env
       have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
@@ -218,10 +217,13 @@ lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F
 theorem subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) :
     (subcircuit circuit input).computable_witnesses := by
   intro n
-  simp only [operations, subcircuit, FormalCircuit.to_subcircuit, Operations.forAll, SubCircuit.witnesses, and_true]
-  intro env env' h
-  simp only [Vector.cast_eq_cast, Vector.cast_rfl, FlatOperation.witnesses]
-  rw [←Vector.toArray_inj, Environment.flat_witness_eq_witness, Environment.flat_witness_eq_witness, Vector.toArray_inj]
+  simp only [Operations.computable_witnesses, operations, subcircuit, FormalCircuit.to_subcircuit,
+    Operations.forAll, and_true]
+  suffices h : ((circuit.main input).operations n).computable_witnesses n by
+    rw [Operations.computable_witnesses, Operations.forAllFlat_iff, Operations.forAllFlat, FlatOperation.forAll_ignore_subcircuit] at h
+    exact h
+    simp [FlatOperation.forAll_ignore_subcircuit]
+  sorry
 end Circuit
 
 

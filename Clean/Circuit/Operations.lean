@@ -348,6 +348,15 @@ lemma FlatOperation.forAll_append {condition : Operations.Condition F} {ops ops'
     specialize ih (n + op.local_length)
     simp_all +arith [forAll, FlatOperation.forAll, witness_length_cons, and_assoc]
 
+lemma FlatOperation.forAll_ignore_subcircuit {condition : Operations.Condition F} {ops : List (FlatOperation F)} (n : ℕ) :
+  FlatOperation.forAll n condition ops ↔
+    FlatOperation.forAll n { condition with subcircuit _ _ _ := True } ops := by
+  induction ops generalizing n with
+  | nil => simp only [forAll]
+  | cons op ops ih =>
+    simp only [forAll, Operations.Condition.applyFlat]
+    split <;> simp_all
+
 def Operations.forAllFlat (offset : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   FlatOperation.forAll offset condition (to_flat_operations ops)
 
