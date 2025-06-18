@@ -450,17 +450,6 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
     env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
   rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
     env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
-
-/--
-A circuit has _computable witnesses_ when witness generators only depends on the environment at indices smaller than the current offset.
-This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
--/
-def computable_witnesses (circuit: Circuit F α) :=
-  ∀ offset, (circuit.operations offset).forAll offset {
-    witness n m compute := ∀ env env', (∀ i < n + m, env.get i = env'.get i) → compute env = compute env',
-    -- TODO: this should be a property already known about subcircuits
-    subcircuit n _ s := ∀ env env', (∀ i < n + s.local_length, env.get i = env'.get i) → s.witnesses env = s.witnesses env',
-  }
 end Circuit
 
 -- witness generation
@@ -478,30 +467,23 @@ def Operations.witness_generators : (ops: Operations F) → Vector (Environment 
   | .lookup _ :: ops => witness_generators ops
   | .subcircuit s :: ops => (s.local_length_eq ▸ FlatOperation.witness_generators s.ops) ++ witness_generators ops
 
--- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
 def Operation.witnesses (op : Operation F) (env : Environment F) : List F := match op with
   | .witness _ c => (c env).toList
   | .assert _ => []
   | .lookup _ => []
   | .subcircuit s => (s.witnesses env).toList
 
-def Environment.fromList (witnesses: List F) (offset : ℕ) : Environment F :=
-  .mk fun i => (List.replicate offset 0 ++ witnesses).getD i 0
+lemma Operation.witnesses_length {op : Operation F} {env : Environment F} :
+    (op.witnesses env).length = op.local_length := by
+  rcases op <;> simp only [witnesses, local_length, Vector.length_toList, List.length_nil]
+
+def Environment.fromList (witnesses: List F) (n : ℕ) : Environment F :=
+  .mk fun i => if i < n then 0 else witnesses.getD (i - n) 0
 
 def Operations.witnesses (ops: Operations F) (offset : ℕ) (acc : List F := []) : List F :=
   ops.foldl (fun (acc : List F) (op : Operation F) =>
     acc ++ op.witnesses (.fromList acc offset)
   ) acc
-
-def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : List F :=
-  (circuit.operations offset).witnesses offset
-
-/--
-If a circuit satisfies `computable_witnesses`, we can construct a concrete environment from the witness generators
-which satisfies `uses_local_witnesses`.
--/
-def Circuit.proverEnvironment (circuit : Circuit F α) (offset := 0) : Environment F :=
-  .fromList (circuit.witnesses offset) offset
 
 def Environment.zero : Environment F := .mk fun _ => 0
 
@@ -515,23 +497,70 @@ lemma Operations.witnesses_cons (op : Operation F) (ops: Operations F) (n : ℕ)
     Operations.witnesses (op :: ops) n = ops.witnesses n (op.witnesses Environment.zero) := by
   simp only [witnesses, List.foldl_cons, Environment.fromList_empty, List.nil_append]
 
-theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) (n := 0) :
+lemma Operations.getD_witnesses_of_lt {ops: Operations F} {n i : ℕ} {acc : List F} (hi : i < acc.length) :
+    (ops.witnesses n acc).getD i 0 = acc[i] := by
+  simp only [Operations.witnesses]
+  induction ops generalizing acc with
+  | nil => simp [hi]
+  | cons op ops ih =>
+    have : i < (acc ++ op.witnesses (Environment.fromList acc n)).length := by rw [List.length_append]; linarith
+    rw [List.foldl_cons, ih this, List.getElem_append_left]
+
+lemma Operations.getD_witnesses_cons {op : Operation F} {ops: Operations F} {n i : ℕ} (hi : i < op.local_length) :
+    (Operations.witnesses (op :: ops) n).getD i 0 = (op.witnesses Environment.zero)[i]'(Operation.witnesses_length (F:=F) ▸ hi) := by
+  simp only [witnesses_cons]
+  apply Operations.getD_witnesses_of_lt
+
+def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : List F :=
+  (circuit.operations offset).witnesses offset
+
+/--
+A circuit has _computable witnesses_ when witness generators only depends on the environment at indices smaller than the current offset.
+This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
+-/
+def Circuit.computable_witnesses (circuit: Circuit F α) :=
+  ∀ offset, (circuit.operations offset).forAll offset {
+    witness n _ compute := ∀ env env', (∀ i < n, env.get i = env'.get i) → compute env = compute env',
+    -- TODO: this should be a property already known about subcircuits
+    subcircuit n _ s := ∀ env env', (∀ i < n, env.get i = env'.get i) → s.witnesses env = s.witnesses env',
+  }
+
+/--
+If a circuit satisfies `computable_witnesses`, we can construct a concrete environment from the witness generators
+which satisfies `uses_local_witnesses`.
+-/
+def Circuit.proverEnvironment (circuit : Circuit F α) (offset := 0) : Environment F :=
+  .fromList (circuit.witnesses offset) offset
+
+
+theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) (n : ℕ) :
     circuit.computable_witnesses → (circuit.proverEnvironment n).uses_local_witnesses n (circuit.operations n) := by
   intro h_computable
   specialize h_computable n
+  -- simp only [Circuit.computable_witnesses] at h_computable
   simp only [proverEnvironment, Circuit.witnesses]
   generalize circuit.operations n = ops at *
   clear circuit
   induction ops using Operations.induct generalizing n with
   | empty => simp [Operations.witnesses, Environment.fromList_empty, true_implies, Environment.uses_local_witnesses]
   | witness m compute ops ih =>
-    simp_all only [Operations.forAll_cons, Operations.Condition.apply, Operation.local_length, Environment.extends_vector]
-    specialize ih (m + n) h_computable.right
+    simp only [Operations.forAll_cons, Operations.Condition.apply,
+      Operation.local_length] at h_computable
+    simp only [Environment.uses_local_witnesses]
     constructor
-    intro i
-    rw [Operations.witnesses_cons]
-    simp only [Operations.witnesses_cons, Operation.witnesses, Environment.fromList]
-    -- simp
+    · intro i
+      set env := (Environment.fromList (Operations.witnesses (_ :: ops) n) n) with h_env
+      nth_rw 1 [h_env]
+      simp only [Environment.fromList, add_tsub_cancel_left, add_lt_iff_neg_left, not_lt_zero', ↓reduceIte]
+      rw [Operations.getD_witnesses_cons i.is_lt]
+      simp only [Operation.witnesses, Vector.getElem_toList]
+      congr 1
+      apply h_computable.left Environment.zero env
+      intro i hi
+      simp only [h_env, Environment.fromList, Environment.zero, hi, reduceIte]
+    specialize ih (m + n) h_computable.right
+    simp only [add_lt_iff_neg_left, not_lt_zero', ↓reduceIte, add_tsub_cancel_left]
+    simp only [Operations.witnesses]
   | assert _  => sorry
   | lookup _  => sorry
   | subcircuit circuit => sorry
