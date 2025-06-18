@@ -196,19 +196,6 @@ def Environment.uses_local_witnesses_completeness (env: Environment F) (offset :
   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
-namespace Circuit
-/--
-A circuit has _computable witnesses_ when witness generators only depends on the environment at indices smaller than the current offset.
-This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
--/
-def computable_witnesses (circuit: Circuit F α) :=
-  ∀ offset, (circuit.operations offset).forAll offset {
-    witness n m compute := ∀ env env', (∀ i < n + m, env.get i = env'.get i) → compute env = compute env',
-    -- TODO: this should be a property already known about subcircuits
-    subcircuit n _ s := ∀ env env', (∀ i < n + s.local_length, env.get i = env'.get i) → s.witnesses env = s.witnesses env',
-  }
-end Circuit
-
 section
 open Circuit (constraints_hold)
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
@@ -360,39 +347,6 @@ end Circuit
 end
 
 export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
-
--- witness generation
-
-def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
-  | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
-  | .assert _ :: ops => witness_generators ops
-  | .lookup _ :: ops => witness_generators ops
-
-def Operations.witness_generators : (ops: Operations F) → Vector (Environment F → F) ops.local_length
-  | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
-  | .assert _ :: ops => witness_generators ops
-  | .lookup _ :: ops => witness_generators ops
-  | .subcircuit s :: ops => (s.local_length_eq ▸ FlatOperation.witness_generators s.ops) ++ witness_generators ops
-
--- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
-def Operation.witnesses (op : Operation F) (env : Environment F) : List F := match op with
-  | .witness _ c => (c env).toList
-  | .assert _ => []
-  | .lookup _ => []
-  | .subcircuit s => (s.witnesses env).toList
-
-def Environment.fromList (witnesses: List F) : Environment F :=
-  .mk fun i => witnesses.getD i 0
-
-def Operations.witnesses (ops: Operations F) (acc : List F := []) : List F :=
-  ops.foldl (fun (acc : List F) (op : Operation F) =>
-    acc ++ op.witnesses (.fromList acc)
-  ) acc
-
-def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : List F :=
-  (circuit.operations offset).witnesses
 
 -- `circuit_norm` attributes
 
