@@ -349,19 +349,33 @@ end
 export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
 
 -- witness generation
-
-def Operation.witnesses (op : Operation F) (env : Environment F) : List F := match op with
-  | .witness _ c => (c env).toList
-  | .assert _ => []
-  | .lookup _ => []
-  | .subcircuit s => (s.witnesses env).toList
+-- TODO unify these names
 
 def Environment.fromList (witnesses: List F) : Environment F :=
   .mk fun i => witnesses[i]?.getD 0
 
+def FlatOperation.dynamic_witnesses (op : FlatOperation F) (acc : List F) : List F := match op with
+  | .witness _ c => (c (.fromList acc)).toList
+  | .assert _ => []
+  | .lookup _ => []
+
+def FlatOperation.dynamic_witnesses_list (ops: List (FlatOperation F)) (init : List F) : List F :=
+  ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
+    acc ++ op.dynamic_witnesses acc
+  ) init
+
+def Environment.fromFlatOperations (ops : List (FlatOperation F)) (init : List F) : Environment F :=
+  .fromList (FlatOperation.dynamic_witnesses_list ops init)
+
+def Operation.witnesses (op : Operation F) (acc : List F) : List F := match op with
+  | .witness _ c => (c (.fromList acc)).toList
+  | .assert _ => []
+  | .lookup _ => []
+  | .subcircuit s => (s.witnesses (.fromFlatOperations s.ops acc)).toList
+
 def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : Operation F) =>
-    acc ++ op.witnesses (.fromList acc)
+    acc ++ op.witnesses acc
   ) init
 
 def Environment.only_accessed_below (n : ℕ) (f : Environment F → α) :=
