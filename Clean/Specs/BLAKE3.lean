@@ -198,7 +198,7 @@ def counter : Nat := 953581910
 def blockLen : Nat := 2437728858
 def flags : Nat := 2498436276
 -- Necessary to avoid 'maximum recursion depth has been reached' error during 'rfl'.
-set_option maxRecDepth 737
+set_option maxRecDepth 738
 example : compress chainingValue blockWords counter blockLen flags = #v[2723421452, 2900812491, 409287158, 2844031487, 1256578214, 2677699013, 2070649829, 3853882973, 2869165109, 1080268436, 1942754410, 576800287, 963977849, 584425189, 1029827681, 3685994844] := rfl
 
 end Specs.BLAKE3.Tests
