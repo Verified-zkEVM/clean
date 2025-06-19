@@ -1,2 +1,4 @@
 /.lake
 .vscode
+backends/plonky3/target
+backends/plonky3/tests/output
