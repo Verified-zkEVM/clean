@@ -1,89 +1,9 @@
 import Clean.Circuit.Expression
+import Clean.Circuit.Lookup
 import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
 
 variable {F: Type} [Field F] {α : Type} {n : ℕ}
-
-structure Table (F : Type) where
-  name : String
-  arity : ℕ
-  /--
-  `contains` captures what it means to be in the table.
-  there should be a concrete way of instantiating the table where `contains` is proved to hold on every row.
-  -/
-  contains : Vector F arity → Prop
-
-  /--
-  we allow to rewrite the `contains` property into two statements that are easier to work with
-  in the context of soundness and completeness proofs.
-  -/
-  soundness : Vector F arity → Prop
-  completeness : Vector F arity → Prop
-
-  imply_soundness : ∀ row, contains row → soundness row
-  implied_by_completeness : ∀ row, completeness row → contains row
-
-structure Lookup (F : Type) where
-  table: Table F
-  entry: Vector (Expression F) table.arity
-
--- usually we want lookups to be properly typed, with input and output types.
-
-section typed_table
-variable {Row : TypeMap} [ProvableType Row]
-
-structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
-  name : String
-  contains : Row F → Prop
-  soundness : Row F → Prop
-  completeness : Row F → Prop
-  imply_soundness : ∀ row, contains row → soundness row
-  implied_by_completeness : ∀ row, completeness row → contains row
-
-def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
-  name := table.name
-  arity := size Row
-  contains row := table.contains (from_elements row)
-  soundness row := table.soundness (from_elements row)
-  completeness row := table.completeness (from_elements row)
-  imply_soundness row := table.imply_soundness (from_elements row)
-  implied_by_completeness row := table.implied_by_completeness (from_elements row)
-end typed_table
-
--- TODO move this somewhere else
-structure StaticTable (F : Type) where
-  name: String
-  arity: ℕ
-  length: ℕ
-  row: Fin length → Vector F arity
-  -- TODO this would make sense if we had separate input and output types,
-  -- and the lookup would automatically witness the output given the input.
-  -- then we could weaken completeness to be `index input < length`!
-  index: Vector F arity → ℕ
-  soundness: Vector F arity → Prop
-  completeness: Vector F arity → Prop
-  imply_soundness : ∀ x, (∃ i, x = row i) → soundness x
-  implied_by_completeness : ∀ x, completeness x → (∃ i, x = row i)
-
-def StaticTable.contains (table: StaticTable F) (row: Vector F table.arity) :=
-  ∃ i : Fin table.length, row = table.row i
-
-@[circuit_norm]
-def StaticTable.toTable (table: StaticTable F) : Table F where
-  name := table.name
-  arity := table.arity
-  contains := table.contains
-  soundness := table.soundness
-  completeness := table.completeness
-  imply_soundness := table.imply_soundness
-  implied_by_completeness := table.implied_by_completeness
-
-instance [Repr F] : Repr (Lookup F) where
-  reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
-
-@[circuit_norm]
-def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: ℕ) : Prop :=
-  ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 /--
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
@@ -146,6 +66,10 @@ def induct {motive : List (FlatOperation F) → Sort*}
 end FlatOperation
 
 export FlatOperation (constraints_hold_flat)
+
+@[circuit_norm]
+def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: ℕ) : Prop :=
+  ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 /--
 This is a low-level way to model a subcircuit:
