@@ -196,6 +196,9 @@ def Environment.uses_local_witnesses_completeness (env: Environment F) (offset :
   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
+def Environment.uses_local_witnesses_flat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
+  FlatOperation.forAll n { witness n _ compute := env.extends_vector (compute env) n } ops
+
 section
 open Circuit (constraints_hold)
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]

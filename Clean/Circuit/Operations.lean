@@ -342,10 +342,16 @@ where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consi
     exact subcircuit n s ops (motive' ops _ h.right)
 end Operations
 
+def Operations.Condition.ignoreSubcircuit (condition : Operations.Condition F) : Operations.Condition F :=
+  { condition with subcircuit := fun _ _ _ => True }
+
 def Operations.Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
+
+def Operations.Condition.impliesFlat (c c': Condition F) : Prop :=
+  ∀ (offset : ℕ) (op : FlatOperation F), c.ignoreSubcircuit.applyFlat offset op → c'.applyFlat offset op
 
 def FlatOperation.local_length : FlatOperation F → ℕ
   | .witness m _ => m
