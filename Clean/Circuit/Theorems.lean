@@ -1,5 +1,5 @@
 /-
-This file contains theorems that immediately follow from the definitions in `Circuit.Basic`.
+This file contains theorems that immediately follow from the definitions in `Circuit.Operations` and `Circuit.Basic`.
 
 For more complicated interconnected theorems, we have separate files,
 such as `Circuit.SubCircuit` which focuses on establishing the foundation for subcircuit composition.
@@ -40,15 +40,6 @@ theorem forAll_append {condition : Condition F} {offset: ℕ} {as bs: Operations
   | empty => simp [forAll_empty, local_length]
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp +arith only [List.cons_append, forAll, local_length, ih, and_assoc]
-
-theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : Operations F} :
-  c.implies c' → (forAll n c ops → forAll n c' ops) := by
-  simp only [Condition.implies]
-  intro h
-  induction ops using Operations.induct generalizing n with
-  | empty => simp [forAll_empty]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all [forAll_cons, forAll_append, Operations.local_length, h]
 end Operations
 
 namespace Circuit
@@ -147,12 +138,12 @@ theorem can_replace_soundness {ops : Operations F} {env} :
 
 end Circuit
 
-namespace Environment
-open FlatOperation (witness_length witnesses)
-/-
-what follows are relationships between different ways of deriving local witness generators,
-and between different versions of `Environment.uses_local_witnesses`
--/
+-- more about `FlatOperation`, and relationships to `Operations`
+
+namespace FlatOperation
+lemma witness_length_cons {F} {op : FlatOperation F} {ops : List (FlatOperation F)} :
+    FlatOperation.witness_length (op :: ops) = op.local_length + FlatOperation.witness_length ops := by
+  cases op <;> simp +arith only [FlatOperation.witness_length, FlatOperation.local_length, List.cons_append]
 
 lemma witness_length_append {F} {a b: List (FlatOperation F)} :
     witness_length (a ++ b) = witness_length a + witness_length b := by
@@ -162,6 +153,30 @@ lemma witness_length_append {F} {a b: List (FlatOperation F)} :
     simp only [List.cons_append, witness_length, ih]; ac_rfl
   | case3 _ _ ih | case4 _ _ ih =>
     simp only [List.cons_append, witness_length, ih]
+
+theorem forAll_cons {condition : Operations.Condition F} {offset: ℕ} {op: FlatOperation F} {ops: List (FlatOperation F)} :
+  forAll offset condition (op :: ops) ↔
+    condition.applyFlat offset op ∧ forAll (op.local_length + offset) condition ops := by
+  cases op <;> simp [forAll, Operations.Condition.applyFlat]
+
+lemma forAll_append {condition : Operations.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
+  forAll n condition (ops ++ ops') ↔
+    forAll n condition ops ∧ forAll (witness_length ops + n) condition ops' := by
+  induction ops generalizing n with
+  | nil => simp only [List.nil_append, forAll, witness_length, zero_add, true_and]
+  | cons op ops ih =>
+    specialize ih (n + op.local_length)
+    simp_all +arith [forAll, FlatOperation.forAll, witness_length_cons, and_assoc]
+
+lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
+    (witnesses env (a ++ b)).toArray = (witnesses env a).toArray ++ (witnesses env b).toArray := by
+  induction a using FlatOperation.witness_length.induct with
+  | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.toArray_empty,
+    Array.empty_append]
+  | case2 _ _ _ ih =>
+    simp only [List.cons_append, witness_length, witnesses, Vector.toArray_append, ih, Array.append_assoc]
+  | case3 _ _ ih | case4 _ _ ih =>
+    simp only [List.cons_append, witness_length, witnesses, ih]
 
 /--
 The witness length from flat and nested operations is the same
@@ -184,16 +199,6 @@ lemma flat_witness_length_eq {ops: Operations F} :
     | case3 ops _ ih' | case4 ops _ ih' =>
       simp_all only [witness_length_append, forall_eq', witness_length, List.cons_append]
 
-lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
-    (witnesses env (a ++ b)).toArray = (witnesses env a).toArray ++ (witnesses env b).toArray := by
-  induction a using FlatOperation.witness_length.induct with
-  | case1 => simp only [List.nil_append, witness_length, witnesses, Vector.toArray_empty,
-    Array.empty_append]
-  | case2 _ _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, Vector.toArray_append, ih, Array.append_assoc]
-  | case3 _ _ ih | case4 _ _ ih =>
-    simp only [List.cons_append, witness_length, witnesses, ih]
-
 /--
 The witnesses created from flat and nested operations are the same
 -/
@@ -206,14 +211,19 @@ lemma flat_witness_eq_witness {ops: Operations F} {env} :
     rw [←ih]
     try rw [witnesses_append]
     try simp only [witness_length, witnesses, Vector.toArray_append, SubCircuit.witnesses, Vector.toArray_cast]
+end FlatOperation
+
+namespace Environment
+open FlatOperation (witness_length witnesses flat_witness_length_eq flat_witness_eq_witness)
+/-
+what follows are relationships between different versions of `Environment.uses_local_witnesses`
+-/
 
 /-- equivalent, non-inductive statement of `Environment.uses_local_witnesses` (that is harder to unfold for a circuit) -/
 def uses_local_witnesses' (env: Environment F) (offset : ℕ) (ops: Operations F) :=
   env.extends_vector (ops.local_witnesses env) offset
 
-/--
-Helper lemma: An environment respects local witnesses if it does so in the flattened variant.
--/
+/-- An environment respects local witnesses iff it does so in the flattened variant. -/
 lemma env_extends_iff_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
     env.extends_vector (witnesses env (to_flat_operations ops)) n ↔
     env.uses_local_witnesses' n ops := by
@@ -458,6 +468,65 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
   rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
     env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
 end Circuit
+
+-- more theorems about forAll / forAllFlat
+
+lemma FlatOperation.forAll_ignore_subcircuit {condition : Operations.Condition F} {ops : List (FlatOperation F)} (n : ℕ) :
+  FlatOperation.forAll n condition ops ↔
+    FlatOperation.forAll n { condition with subcircuit _ _ _ := True } ops := by
+  induction ops generalizing n with
+  | nil => simp only [forAll]
+  | cons op ops ih =>
+    simp only [forAll, Operations.Condition.applyFlat]
+    split <;> simp_all
+
+namespace Operations
+theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : Operations F} :
+  c.implies c' → (forAll n c ops → forAll n c' ops) := by
+  simp only [Condition.implies]
+  intro h
+  induction ops using Operations.induct generalizing n with
+  | empty => simp [forAll_empty]
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all [forAll_cons, forAll_append, Operations.local_length, h]
+
+lemma forAllFlat_iff' (n : ℕ) (condition : Condition F) (ops : Operations F) :
+    FlatOperation.forAll n condition (to_flat_operations ops) ↔ Operations.forAllFlat n condition ops := by
+  induction ops using Operations.induct generalizing n with
+  | empty => simp only [forAllFlat, forAll, to_flat_operations, FlatOperation.forAll]
+  | witness | assert | lookup =>
+    simp_all [forAllFlat, forAll, to_flat_operations, FlatOperation.forAll, Condition.applyFlat, FlatOperation.local_length]
+  | subcircuit s ops ih =>
+    simp_all only [forAllFlat, forAll, to_flat_operations]
+    rw [FlatOperation.forAll_append, s.local_length_eq]
+    simp_all
+
+lemma forAllFlat_mp {condition : Condition F} {ops : Operations F} (n : ℕ) :
+  (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s → FlatOperation.forAll n condition s.ops) →
+    (ops.forAll n condition → FlatOperation.forAll n condition (to_flat_operations ops)) := by
+  intro h
+  rw [Operations.forAllFlat_iff', forAllFlat]
+  apply forAll_implies
+  intro n op
+  cases op <;> simp_all only [Condition.apply, implies_true]
+
+lemma forAllFlat_mpr {condition : Condition F} {ops : Operations F} (n : ℕ) :
+  (∀ n {m} (s : SubCircuit F m), FlatOperation.forAll n condition s.ops → condition.subcircuit n s) →
+    (FlatOperation.forAll n condition (to_flat_operations ops) → ops.forAll n condition) := by
+  intro h
+  rw [Operations.forAllFlat_iff', forAllFlat]
+  apply forAll_implies
+  intro n op
+  cases op <;> simp_all only [Condition.apply, implies_true]
+
+lemma forAllFlat_iff {condition : Condition F} {ops : Operations F} (n : ℕ) :
+  (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s ↔ FlatOperation.forAll n condition s.ops) →
+    (ops.forAll n condition ↔ FlatOperation.forAll n condition (to_flat_operations ops)) := by
+  intro h
+  constructor
+  · simp_all only [Operations.forAllFlat_mp, implies_true]
+  · simp_all only [Operations.forAllFlat_mpr, implies_true]
+end Operations
 
 -- theorems about witness generation
 
