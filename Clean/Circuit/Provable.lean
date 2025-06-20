@@ -358,8 +358,8 @@ lemma comp_from_elements_to_elements :
   simp [from_elements_to_elements]
 
 @[circuit_norm]
-theorem eval_const {F : Type} [Field F] {α: TypeMap} [ProvableType α] (env : Environment F) (x : α F) :
-  eval env (const x) = x := by
+theorem eval_const {F : Type} [Field F] {α: TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
+    eval env (const x) = x := by
   simp only [circuit_norm, const, eval]
   rw [to_elements_from_elements, Vector.map_map]
   have : Expression.eval env ∘ Expression.const = id := by
@@ -469,6 +469,12 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
       ProvableType.from_elements_to_elements]
   to_elements_from_elements v := by
     simp [ProvableType.to_elements_from_elements, Vector.cast]
+
+def ProvablePair.from_elements {α β: TypeMap} [ProvableType α] [ProvableType β] (xs : Vector F (size α + size β)) : α F × β F :=
+  (ProvableType.from_elements xs : ProvablePair α β F)
+
+def ProvablePair.to_elements {α β: TypeMap} [ProvableType α] [ProvableType β] (pair : α F × β F) : Vector F (size α + size β) :=
+  ProvableType.to_elements (M:=ProvablePair α β) pair
 
 @[circuit_norm ↓ high]
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)

@@ -215,16 +215,12 @@ def circuit : FormalAssertion (F p) U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [spec, circuit_norm, u64_assert_normalized, ByteLookup, is_normalized]
-    repeat rw [ByteTable.equiv]
-    simp_all [circuit_norm, eval]
+    simp_all [spec, circuit_norm, u64_assert_normalized, ByteLookup, ByteTable, is_normalized, eval]
 
   completeness := by
     rintro i0 env x_var
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [spec, circuit_norm, u64_assert_normalized, ByteLookup, is_normalized]
-    repeat rw [ByteTable.equiv]
-    simp_all [circuit_norm, eval]
+    simp_all [spec, circuit_norm, u64_assert_normalized, ByteLookup, ByteTable, is_normalized, eval]
 
 end U64.AssertNormalized
 

@@ -152,8 +152,8 @@ def constraints_hold.soundness (eval : Environment F) : List (Operation F) → P
   | [] => True
   | .witness _ _ :: ops => constraints_hold.soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ constraints_hold.soundness eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.contains (entry.map eval) ∧ constraints_hold.soundness eval ops
+  | .lookup { table, entry } :: ops =>
+    table.soundness (entry.map eval) ∧ constraints_hold.soundness eval ops
   | .subcircuit s :: ops =>
     s.soundness eval ∧ constraints_hold.soundness eval ops
 
@@ -165,8 +165,8 @@ def constraints_hold.completeness (eval : Environment F) : List (Operation F) �
   | [] => True
   | .witness _ _ :: ops => constraints_hold.completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ constraints_hold.completeness eval ops
-  | .lookup { table, entry, .. } :: ops =>
-    table.contains (entry.map eval) ∧ constraints_hold.completeness eval ops
+  | .lookup { table, entry } :: ops =>
+    table.completeness (entry.map eval) ∧ constraints_hold.completeness eval ops
   | .subcircuit s :: ops =>
     s.completeness eval ∧ constraints_hold.completeness eval ops
 end Circuit
@@ -178,12 +178,8 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
-  | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (m + offset) ops
-  | .assert _ :: ops => env.uses_local_witnesses offset ops
-  | .lookup _ :: ops => env.uses_local_witnesses offset ops
-  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
+def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
+  ops.forAllFlat offset { witness n _ compute := env.extends_vector (compute env) n }
 
 /--
 Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
@@ -195,6 +191,10 @@ def Environment.uses_local_witnesses_completeness (env: Environment F) (offset :
   | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
+
+/-- Same as `uses_local_witnesses`, but on flat operations -/
+def Environment.uses_local_witnesses_flat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
+  FlatOperation.forAll n { witness n _ compute := env.extends_vector (compute env) n } ops
 
 section
 open Circuit (constraints_hold)
@@ -349,19 +349,76 @@ end
 export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
 
 -- witness generation
+-- TODO unify these names
 
-def WitnessGenerators (F: Type) (n: ℕ) := Vector (Environment F → F) n
+def Environment.fromList (witnesses: List F) : Environment F :=
+  .mk fun i => witnesses[i]?.getD 0
+
+def FlatOperation.dynamic_witnesses (op : FlatOperation F) (acc : List F) : List F := match op with
+  | .witness _ c => (c (.fromList acc)).toList
+  | .assert _ => []
+  | .lookup _ => []
+
+def FlatOperation.dynamic_witnesses_list (ops: List (FlatOperation F)) (init : List F) : List F :=
+  ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
+    acc ++ op.dynamic_witnesses acc
+  ) init
+
+def Environment.fromFlatOperations (ops : List (FlatOperation F)) (init : List F) : Environment F :=
+  .fromList (FlatOperation.dynamic_witnesses_list ops init)
+
+def Operation.witnesses (op : Operation F) (acc : List F) : List F := match op with
+  | .witness _ c => (c (.fromList acc)).toList
+  | .assert _ => []
+  | .lookup _ => []
+  | .subcircuit s => (s.witnesses (.fromFlatOperations s.ops acc)).toList
+
+def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
+  FlatOperation.dynamic_witnesses_list (to_flat_operations ops) init
+
+def Environment.same_below (n : ℕ) (env env' : Environment F) :=
+  ∀ i < n, env.get i = env'.get i
+
+lemma Environment.same_below_of_le {F} {n m : ℕ} {env env' : Environment F} :
+    env.same_below n env' → m ≤ n → env.same_below m env' :=
+  fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
+
+def Environment.only_accessed_below (n : ℕ) (f : Environment F → α) :=
+  ∀ env env', (∀ i < n, env.get i = env'.get i) → f env = f env'
+
+def Environment.only_accessed_below' (n : ℕ) (f : Environment F → α) (env env' : Environment F) :=
+  (∀ i < n, env.get i = env'.get i) → f env = f env'
+
+/--
+A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
+This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
+-/
+def Operations.computable_witnesses (ops: Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
+   ops.forAllFlat n {
+    witness n _ compute := (∀ i < n, env.get i = env'.get i) → compute env = compute env',
+  }
+
+def Circuit.computable_witnesses (circuit: Circuit F α) (n : ℕ) :=
+  ∀ (env env' : Environment F), (circuit.operations n).computable_witnesses n env env'
+
+def Circuit.computable_witnesses' (circuit: Circuit F α) (n : ℕ) (env env' : Environment F) :=
+  (circuit.operations n).computable_witnesses n env env'
+
+/--
+If a circuit satisfies `computable_witnesses`, we can construct a concrete environment
+that satisfies `uses_local_witnesses`. (Proof in `Theorems`.)
+-/
+def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
+  .fromList ((circuit.operations init.length).witnesses init)
+
+-- witness generators used for AIR trace export
+-- TODO unify with the definitions above
 
 def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
   | [] => #v[]
-  | op :: ops =>
-    let ws := witness_generators ops
-    match op with
-    | witness m compute =>
-      ⟨ (Vector.mapFinRange m (fun i env => (compute env).get i)).toArray ++ ws.toArray, by
-        simp only [Array.size_append, Vector.size_toArray, witness_length]; ac_rfl⟩
-    | assert _ | lookup _ =>
-      ⟨ ws.toArray, by simp only [ws.size_toArray, witness_length]⟩
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
+  | .assert _ :: ops => witness_generators ops
+  | .lookup _ :: ops => witness_generators ops
 
 def Operations.witness_generators : (ops: Operations F) → Vector (Environment F → F) ops.local_length
   | [] => #v[]
@@ -369,14 +426,6 @@ def Operations.witness_generators : (ops: Operations F) → Vector (Environment 
   | .assert _ :: ops => witness_generators ops
   | .lookup _ :: ops => witness_generators ops
   | .subcircuit s :: ops => (s.local_length_eq ▸ FlatOperation.witness_generators s.ops) ++ witness_generators ops
-
--- TODO this is inefficient, Array should be mutable and env should be defined once at the beginning
-def Circuit.witnesses (circuit: Circuit F α) (offset := 0) : Array F :=
-  let generators := (circuit.operations offset).witness_generators
-  generators.foldl (fun acc compute =>
-    let env i := acc.getD i 0
-    acc.push (compute ⟨ env ⟩))
-  #[]
 
 -- `circuit_norm` attributes
 

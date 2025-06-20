@@ -86,9 +86,8 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
-  simp only [h_input, circuit_norm, main, ByteXorLookup,
+  simp only [h_input, circuit_norm, main, ByteXorLookup, ByteXorTable,
     var_from_offset, Vector.mapRange] at h_holds
-  repeat rw [ByteXorTable.equiv] at h_holds
 
   apply soundness_to_u32 x_norm y_norm
   simp only [circuit_norm, var_from_offset, Vector.mapRange, eval]
@@ -113,9 +112,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, main, ByteXorLookup,
+  simp only [h_input, circuit_norm, main, ByteXorLookup, ByteXorTable,
     var_from_offset, Vector.mapRange] at h_env ⊢
-  repeat rw [ByteXorTable.equiv]
   have h_env0 := by let h := h_env 0; simp at h; exact h
   have h_env1 := by let h := h_env 1; simp at h; exact h
   have h_env2 := by let h := h_env 2; simp at h; exact h

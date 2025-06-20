@@ -38,7 +38,6 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 section
 open Circuit
 open FlatOperation (constraints_hold_cons constraints_hold_append)
-open Environment (env_extends_of_flat)
 
 /--
 Consistency theorem which proves that flattened constraints are equivalent to the
@@ -96,8 +95,8 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     have h_env : env.uses_local_witnesses n ops := by
       guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-      apply env.can_replace_local_witnesses
-      exact env_extends_of_flat h_env
+      rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
+      exact h_env
     have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
@@ -125,7 +124,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+      exact FlatOperation.flat_witness_length_eq |>.symm
   }
 
 /--
@@ -171,8 +170,8 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
       have h_env : env.uses_local_witnesses n ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        apply env.can_replace_local_witnesses
-        exact env_extends_of_flat h_env
+        rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
+        exact h_env
       have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
@@ -186,7 +185,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+      exact FlatOperation.flat_witness_length_eq |>.symm
   }
 end
 
@@ -215,6 +214,25 @@ lemma subcircuit_local_length_eq (circuit: FormalCircuit F β α) (input: Var β
 lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
   (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
 end Circuit
+
+-- subcircuit composability for `computable_witnesses`
+
+def FormalCircuit.computable_witnesses (circuit : FormalCircuit F β α) : Prop :=
+  ∀ (n : ℕ) (input : Var β F) env env',
+    Environment.only_accessed_below' n (eval · input) env env' → (circuit.main input).computable_witnesses' n env env'
+
+theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
+  Environment.only_accessed_below n (eval · input) ∧ circuit.computable_witnesses →
+    (subcircuit circuit input).computable_witnesses n := by
+  simp only [FormalCircuit.computable_witnesses, Circuit.computable_witnesses, Circuit.computable_witnesses']
+  intro ⟨ h_input, h_computable ⟩
+  intro env env'
+  specialize h_computable n input env env' (h_input env env')
+  rw [Operations.computable_witnesses] at h_computable
+  simp only [Operations.computable_witnesses, operations, subcircuit,
+    FormalCircuit.to_subcircuit, Operations.forAllFlat, Operations.forAll, and_true]
+  rw [Operations.forAllFlat_iff']
+  exact h_computable
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
