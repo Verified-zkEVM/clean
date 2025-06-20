@@ -124,7 +124,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+      exact FlatOperation.flat_witness_length_eq |>.symm
   }
 
 /--
@@ -185,7 +185,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+      exact FlatOperation.flat_witness_length_eq |>.symm
   }
 end
 
@@ -228,12 +228,11 @@ theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α)
   intro ⟨ h_input, h_computable ⟩
   intro env env'
   specialize h_computable n input env env' (h_input env env')
+  rw [Operations.computable_witnesses] at h_computable
   simp only [Operations.computable_witnesses, operations, subcircuit,
-    FormalCircuit.to_subcircuit, Operations.forAll, and_true]
-  rw [Operations.computable_witnesses, Operations.forAllFlat_iff, Operations.forAllFlat,
-    FlatOperation.forAll_ignore_subcircuit] at h_computable
+    FormalCircuit.to_subcircuit, Operations.forAllFlat, Operations.forAll, and_true]
+  rw [Operations.forAllFlat_iff']
   exact h_computable
-  simp [FlatOperation.forAll_ignore_subcircuit]
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]

@@ -20,8 +20,15 @@ theorem append_local_length {a b: Operations F} :
     simp_all +arith [local_length, ih]
 
 theorem local_length_cons {a : Operation F} {as: Operations F} :
-    Operations.local_length (a :: as) = a.local_length + as.local_length := by
+    local_length (a :: as) = a.local_length + as.local_length := by
   cases a <;> simp_all [local_length, Operation.local_length]
+
+theorem local_witnesses_cons (op : Operation F) (ops : Operations F) (env : Environment F) :
+  local_witnesses env (op :: ops) =
+    (op.local_witnesses env ++ ops.local_witnesses env).cast (local_length_cons.symm) := by
+  cases op <;> simp only [local_witnesses, Operation.local_witnesses, Vector.cast_rfl]
+  rw [Vector.empty_append]; simp
+  rw [Vector.empty_append]; simp
 
 @[circuit_norm]
 theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
@@ -544,30 +551,23 @@ end Operations
 
 -- theorems about witness generation
 
-lemma FlatOperation.dynamic_witnesses_length {op : FlatOperation F} {init : List F} :
+namespace FlatOperation
+lemma dynamic_witnesses_length {op : FlatOperation F} {init : List F} :
     (op.dynamic_witnesses init).length = op.local_length := by
   rcases op <;> simp [dynamic_witnesses, local_length]
 
-lemma FlatOperation.dynamic_witnesses_list_length {ops : List (FlatOperation F)} (init : List F) :
+lemma dynamic_witnesses_list_length {ops : List (FlatOperation F)} (init : List F) :
     (dynamic_witnesses_list ops init).length = init.length + witness_length ops := by
   induction ops generalizing init with
   | nil => rw [dynamic_witnesses_list, List.foldl_nil, witness_length, add_zero]
   | cons op ops ih =>
     simp_all +arith [dynamic_witnesses_list, witness_length_cons, dynamic_witnesses_length]
 
-lemma Operation.witnesses_length {op : Operation F} {init : List F} :
-    (op.witnesses init).length = op.local_length := by
-  rcases op <;> simp only [witnesses, local_length, Vector.length_toList, List.length_nil]
-
-lemma FlatOperation.dynamic_witnesses_cons {op : FlatOperation F} {ops: List (FlatOperation F)} {acc : List F} :
+lemma dynamic_witnesses_cons {op : FlatOperation F} {ops: List (FlatOperation F)} {acc : List F} :
     dynamic_witnesses_list (op :: ops) acc = dynamic_witnesses_list ops (acc ++ op.dynamic_witnesses acc) := by
   simp only [dynamic_witnesses_list, List.foldl_cons]
 
-lemma Operations.witnesses_cons (op : Operation F) (ops: Operations F) (init : List F) :
-    witnesses (op :: ops) init = ops.witnesses (init ++ op.witnesses init) := by
-  simp only [witnesses, List.foldl_cons]
-
-lemma FlatOperation.getD_dynamic_witnesses_of_lt {ops: List (FlatOperation F)} {acc : List F} {i : ℕ} (hi : i < acc.length) :
+lemma getD_dynamic_witnesses_of_lt {ops: List (FlatOperation F)} {acc : List F} {i : ℕ} (hi : i < acc.length) :
     (dynamic_witnesses_list ops acc)[i]?.getD 0 = acc[i] := by
   simp only [dynamic_witnesses_list]
   induction ops generalizing acc with
@@ -576,35 +576,13 @@ lemma FlatOperation.getD_dynamic_witnesses_of_lt {ops: List (FlatOperation F)} {
     have : i < (acc ++ dynamic_witnesses op acc).length := by rw [List.length_append]; linarith
     rw [List.foldl_cons, ih this, List.getElem_append_left]
 
-lemma Operations.getD_witnesses_of_lt {ops: Operations F} {acc : List F} {i : ℕ} (hi : i < acc.length) :
-    (ops.witnesses acc)[i]?.getD 0 = acc[i] := by
-  simp only [Operations.witnesses]
-  induction ops generalizing acc with
-  | nil => simp [hi]
-  | cons op ops ih =>
-    have : i < (acc ++ op.witnesses acc).length := by rw [List.length_append]; linarith
-    rw [List.foldl_cons, ih this, List.getElem_append_left]
-
-lemma FlatOperation.getD_dynamic_witnesses_cons_right {op : FlatOperation F} {ops: List (FlatOperation F)} {init : List F} {i : ℕ} (hi : i < op.local_length) :
+lemma getD_dynamic_witnesses_cons_right {op : FlatOperation F} {ops: List (FlatOperation F)} {init : List F} {i : ℕ} (hi : i < op.local_length) :
     (dynamic_witnesses_list (op :: ops) init)[init.length + i]?.getD 0 = (op.dynamic_witnesses init)[i]'(dynamic_witnesses_length (F:=F) ▸ hi) := by
   rw [dynamic_witnesses_cons, getD_dynamic_witnesses_of_lt (by simp [hi, dynamic_witnesses_length]),
     List.getElem_append_right (by linarith)]
   simp only [add_tsub_cancel_left]
 
-lemma Operations.getD_witnesses_cons_right {op : Operation F} {ops: Operations F} {init : List F} {i : ℕ} (hi : i < op.local_length) :
-    (Operations.witnesses (op :: ops) init)[init.length + i]?.getD 0 = (op.witnesses init)[i]'(Operation.witnesses_length (F:=F) ▸ hi) := by
-  rw [witnesses_cons, Operations.getD_witnesses_of_lt (by simp [hi, Operation.witnesses_length]),
-    List.getElem_append_right (by linarith)]
-  simp only [add_tsub_cancel_left]
-
-theorem Operations.local_witnesses_cons (op : Operation F) (ops : Operations F) (env : Environment F) :
-  Operations.local_witnesses env (op :: ops) =
-    (op.local_witnesses env ++ ops.local_witnesses env).cast (Operations.local_length_cons.symm) := by
-  cases op <;> simp only [local_witnesses, Operation.local_witnesses, Vector.cast_rfl]
-  rw [Vector.empty_append]; simp
-  rw [Vector.empty_append]; simp
-
-theorem FlatOperation.only_accessed_below_all {ops : List (FlatOperation F)} (n : ℕ) :
+theorem only_accessed_below_all {ops : List (FlatOperation F)} (n : ℕ) :
   (∀ env env', forAll n { witness n _ c := Environment.only_accessed_below' n c env env' } ops) →
     Environment.only_accessed_below (n + witness_length ops) (witnesses · ops) := by
   intro h_comp env env' h_env
@@ -629,8 +607,8 @@ theorem FlatOperation.only_accessed_below_all {ops : List (FlatOperation F)} (n 
       intro i hi
       exact h_env i (by linarith)
 
-theorem FlatOperation.proverEnvironment_uses_local_witnesses {ops : List (FlatOperation F)} (init : List F) :
-  forAll init.length { witness n _ := Environment.only_accessed_below n } ops →
+theorem proverEnvironment_uses_local_witnesses {ops : List (FlatOperation F)} (init : List F) :
+  (∀ env env', forAll init.length { witness n _ c := Environment.only_accessed_below' n c env env' } ops) →
     (Environment.fromFlatOperations ops init).uses_local_witnesses_flat init.length ops := by
   simp only [Environment.fromFlatOperations, Environment.uses_local_witnesses_flat, Environment.extends_vector]
   intro h_computable
@@ -642,89 +620,41 @@ theorem FlatOperation.proverEnvironment_uses_local_witnesses {ops : List (FlatOp
     | assert | lookup  =>
       simp_all [dynamic_witnesses_cons, Operations.Condition.applyFlat, local_length, dynamic_witnesses]
     | witness m compute =>
-      simp_all only [Operations.Condition.applyFlat, local_length, dynamic_witnesses, Environment.only_accessed_below]
+      simp_all only [Operations.Condition.applyFlat, local_length, dynamic_witnesses, Environment.only_accessed_below']
       -- get rid of ih first
       constructor; case right =>
         specialize ih (init ++ (compute (.fromList init)).toList)
         simp only [List.length_append, Vector.length_toList] at ih
         ring_nf at *
-        exact ih h_computable.right
+        exact ih fun _ _ => (h_computable ..).right
       clear ih
+      replace h_computable := fun env env' => (h_computable env env').left
       intro i
       simp only [Environment.fromList]
-      rw [FlatOperation.getD_dynamic_witnesses_cons_right i.is_lt]
-      simp only [FlatOperation.dynamic_witnesses, Vector.getElem_toList]
+      rw [getD_dynamic_witnesses_cons_right i.is_lt]
+      simp only [dynamic_witnesses, Vector.getElem_toList]
       congr 1
-      apply h_computable.left
+      apply h_computable
       intro j hj
       simp [Environment.fromList, hj, getD_dynamic_witnesses_of_lt]
+end FlatOperation
 
 theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) (init : List F) :
   circuit.computable_witnesses init.length →
     (circuit.proverEnvironment init).uses_local_witnesses init.length (circuit.operations init.length) := by
   intro h_computable
-  simp only [proverEnvironment, Circuit.computable_witnesses] at *
+  simp_all only [proverEnvironment, Circuit.computable_witnesses]
   generalize circuit.operations init.length = ops at *
   clear circuit
-  induction ops generalizing init with
-  | nil => trivial
-  | cons op ops ih =>
-    simp only [Operations.computable_witnesses, Operations.forAll_cons] at h_computable
-    simp only [Environment.uses_local_witnesses_iff_forAll, Operations.forAll_cons]
-    constructor
-    -- get rid of ih first
-    case right =>
-      simp only [Operations.witnesses_cons]
-      set acc := init ++ op.witnesses init
-      have h_acc : acc.length = op.local_length + init.length := by rw [List.length_append, Operation.witnesses_length, add_comm]
-      specialize ih acc
-      rw [h_acc, Environment.uses_local_witnesses_iff_forAll] at ih
-      exact ih fun _ _ => (h_computable _ _).right
-    clear ih
-    replace h_computable := fun env env' => (h_computable env env').left
-    set env := Environment.fromList (Operations.witnesses (op :: ops) init) with h_env
-    nth_rw 1 3 [h_env]
-    simp only [Environment.fromList, add_tsub_cancel_left, add_lt_iff_neg_left, not_lt_zero', ↓reduceIte, Environment.extends_vector]
-    cases op with
-    | assert | lookup  => simp only [Operations.Condition.apply]
-    | witness m c =>
-      intro i
-      rw [Operations.getD_witnesses_cons_right i.is_lt]
-      simp only [Operation.witnesses, Vector.getElem_toList]
-      simp only [Operations.Condition.apply] at h_computable
-      congr 1
-      apply h_computable
-      intro j hj
-      simp only [Environment.fromList, hj, List.getElem?_eq_getElem, Option.getD_some, h_env,
-        Operations.getD_witnesses_of_lt]
-    | subcircuit s =>
-      simp only [Operations.Condition.apply] at h_computable ⊢
-      intro i
-      rw [Operations.getD_witnesses_cons_right i.is_lt]
-      simp only [Operation.witnesses, Vector.getElem_toList]
-      congr 1
-      set env' := Environment.fromFlatOperations s.ops init with h_env'
-      have h_env_eq : ∀ i < init.length + s.local_length, env'.get i = env.get i := by
-        intro i hi
-        simp only [h_env, h_env', Environment.fromList, Environment.fromFlatOperations]
-        by_cases hi' : i < init.length
-        · rw [Operations.getD_witnesses_of_lt hi', FlatOperation.getD_dynamic_witnesses_of_lt hi']
-        obtain ⟨ k, hk ⟩ : ∃ k, i = init.length + k := by
-          have : i ≥ init.length := by omega
-          exact Nat.exists_eq_add_of_le this
-        subst hk
-        have hk : k < s.local_length := Nat.lt_of_add_lt_add_left hi
-        rw [Operations.getD_witnesses_cons_right (by simp only [Operation.local_length]; exact hk)]
-        simp only [Operation.witnesses, Vector.getElem_toList]
-        simp only [Option.getD_some, Vector.getElem_cast]
-        suffices h_env_extends : env'.extends_vector (FlatOperation.witnesses env' s.ops) init.length by
-          simp only [Environment.extends_vector, env'] at h_env_extends
-          nth_rw 1 [Environment.fromFlatOperations] at h_env_extends
-          simp only [Environment.fromList] at h_env_extends
-          rw [s.local_length_eq] at hk
-          exact h_env_extends ⟨ k, hk ⟩
-        sorry
-      simp only [SubCircuit.witnesses, Vector.cast_eq_cast, Vector.cast_rfl]
-      rw [s.local_length_eq] at h_env_eq
-      apply FlatOperation.only_accessed_below_all init.length h_computable
-      exact h_env_eq
+  simp_all only [Operations.computable_witnesses]
+  simp only [←Operations.forAllFlat_iff'] at h_computable
+  replace h_computable := FlatOperation.proverEnvironment_uses_local_witnesses init h_computable
+  simp only [Environment.uses_local_witnesses_flat] at h_computable
+  rw [Environment.uses_local_witnesses_iff_forAll, Operations.forAllFlat_iff, FlatOperation.forAll_ignore_subcircuit]
+  exact h_computable
+  set env := (Environment.fromList (ops.witnesses init))
+  clear h_computable
+  simp only
+  intro n m s
+  -- TODO this is exactly `can_replace_local_witnesses` but in flat land
+  sorry

@@ -377,9 +377,7 @@ def Operation.witnesses (op : Operation F) (acc : List F) : List F := match op w
   | .subcircuit s => (s.witnesses (.fromFlatOperations s.ops acc)).toList
 
 def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
-  ops.foldl (fun (acc : List F) (op : Operation F) =>
-    acc ++ op.witnesses acc
-  ) init
+  FlatOperation.dynamic_witnesses_list (to_flat_operations ops) init
 
 def Environment.same_below (n : ℕ) (env env' : Environment F) :=
   ∀ i < n, env.get i = env'.get i
@@ -399,11 +397,8 @@ A circuit has _computable witnesses_ when witness generators only depend on the 
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.computable_witnesses (ops: Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
-   ops.forAll n {
+   ops.forAllFlat n {
     witness n _ compute := (∀ i < n, env.get i = env'.get i) → compute env = compute env',
-    subcircuit n _ s := FlatOperation.forAll n {
-      witness n _ compute := (∀ i < n, env.get i = env'.get i) → compute env = compute env',
-    } s.ops
   }
 
 def Circuit.computable_witnesses (circuit: Circuit F α) (n : ℕ) :=
