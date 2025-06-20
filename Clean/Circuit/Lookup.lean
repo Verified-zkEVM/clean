@@ -20,13 +20,24 @@ def FormalCircuit.toTable (circuit : FormalCircuit F α β) (name : String) (h_c
     TypedTable F (ProvablePair α β) where
   name
 
-  valid := fun (input, output) => circuit.assumptions input ∧ output = circuit.constantOutput input
-  contains := fun (input, output) => circuit.spec input output
+  contains := fun (input, output) => ∃ n env,
+    -- the circuit constraints hold
+    Circuit.constraints_hold env (circuit.main (const input) |>.operations n)
+    -- the output matches
+    ∧ output = eval env (circuit.output (const input) n)
 
-  implies := by
+  soundness := fun (input, output) => circuit.assumptions input → circuit.spec input output
+  completeness := fun (input, output) => circuit.assumptions input ∧ output = circuit.constantOutput input
+
+  imply_soundness := by
+    intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
+    simp only [h_output]
+    exact circuit.original_soundness n env (const input) input ProvableType.eval_const h_assumptions h_holds
+
+  implied_by_completeness := by
     intro (input, output) ⟨h_assumptions, h_output⟩
-    simp only [h_output, constantOutput]
-    set env := circuit.proverEnvironment input with env_def
-    apply circuit.original_soundness 0 env (const input) input ProvableType.eval_const h_assumptions
+    use 0, circuit.proverEnvironment input
+    simp only [h_output, constantOutput, and_true]
+    set env := circuit.proverEnvironment input
     apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
     exact circuit.proverEnvironment_uses_local_witnesses h_computable input
