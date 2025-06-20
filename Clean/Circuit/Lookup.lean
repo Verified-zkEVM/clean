@@ -1,30 +1,34 @@
 import Clean.Circuit.SubCircuit
 import Clean.Circuit.Foundations
 
-variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
+/--
+A `LookupCircuit` is a circuit that can be used to instantiate a lookup table.
 
-namespace FormalCircuit
-def proverEnvironment (circuit : FormalCircuit F α β) (input : α F) : Environment F :=
-  circuit.main (const input) |>.proverEnvironment
+It adds one additional requirement to `FormalCircuit`, which guarantees that an honest prover can actually
+instantiate an environment which uses the circuit's witness generators.
 
-theorem proverEnvironment_uses_local_witnesses (circuit : FormalCircuit F α β) :
-  circuit.computable_witnesses → ∀ input,
-    (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
-  intro h_computable input
-  apply Circuit.proverEnvironment_uses_local_witnesses
-  apply h_computable 0 (const input)
-  simp only [Environment.only_accessed_below, ProvableType.eval_const, implies_true]
-
-def constantOutput (circuit : FormalCircuit F α β) (input : α F) : β F :=
-  circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
-end FormalCircuit
-
+Besides that, a `name` is required, to identify the table created from this circuit.
+-/
 structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
   name : String
   computable_witnesses : circuit.computable_witnesses
 
 namespace LookupCircuit
+variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
+
+def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environment F :=
+  circuit.main (const input) |>.proverEnvironment
+
+theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β) (input : α F) :
+    (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
+  apply Circuit.proverEnvironment_uses_local_witnesses
+  apply circuit.computable_witnesses 0 (const input)
+  simp only [Environment.only_accessed_below, ProvableType.eval_const, implies_true]
+
+def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
+  circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
+
 def toTable (circuit : LookupCircuit F α β) : TypedTable F (ProvablePair α β) where
   name := circuit.name
 
@@ -48,10 +52,10 @@ def toTable (circuit : LookupCircuit F α β) : TypedTable F (ProvablePair α β
   implied_by_completeness := by
     intro (input, output) ⟨h_assumptions, h_output⟩
     use 0, circuit.proverEnvironment input
-    simp only [h_output, FormalCircuit.constantOutput, and_true]
+    simp only [h_output, LookupCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
     apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
-    exact circuit.proverEnvironment_uses_local_witnesses circuit.computable_witnesses input
+    exact circuit.proverEnvironment_uses_local_witnesses input
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `subcircuit circuit input`.
