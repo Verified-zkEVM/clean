@@ -80,7 +80,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify circuit
   dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, ByteLookup, U32.value, U32.is_normalized] at h ⊢
-  simp only [circuit_norm, subcircuit_norm, eval, h_inputs, ByteTable.equiv] at h ⊢
+  simp only [circuit_norm, subcircuit_norm, eval, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
   set z1 := env.get (i0 + 2)
@@ -138,11 +138,11 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   have add8_completeness {x y c_in z c_out : F p}
     (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv_256 (x + y + c_in)) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
-    ByteTable.contains (#v[z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
+    z.val < 256 ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
     have : z.val < 256 := hz ▸ ByteUtils.mod_256_lt (x + y + c_in)
-    use ByteTable.completeness z this
+    use this
     have carry_lt_2 : c_in.val < 2 := FieldUtils.boolean_lt_2 hc
     have : (x + y + c_in).val < 512 :=
       ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
