@@ -128,7 +128,7 @@ instance : ExplicitCircuits (F:=F) assert_zero where
 instance : ExplicitCircuits (F:=F) lookup where
   output _ _ := ()
   local_length _ _ := 0
-  operations l n := [.lookup l.toLookup]
+  operations l n := [.lookup l]
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where
