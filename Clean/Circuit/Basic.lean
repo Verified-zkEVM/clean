@@ -378,24 +378,36 @@ def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
     acc ++ op.witnesses acc
   ) init
 
+def Environment.same_below (n : ℕ) (env env' : Environment F) :=
+  ∀ i < n, env.get i = env'.get i
+
+lemma Environment.same_below_of_le {F} {n m : ℕ} {env env' : Environment F} :
+    env.same_below n env' → m ≤ n → env.same_below m env' :=
+  fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
+
 def Environment.only_accessed_below (n : ℕ) (f : Environment F → α) :=
   ∀ env env', (∀ i < n, env.get i = env'.get i) → f env = f env'
+
+def Environment.only_accessed_below' (n : ℕ) (f : Environment F → α) (env env' : Environment F) :=
+  (∀ i < n, env.get i = env'.get i) → f env = f env'
 
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Operations.computable_witnesses (ops: Operations F) (n : ℕ) : Prop :=
-  ops.forAll n {
-    witness n _ compute := Environment.only_accessed_below n compute,
-    -- TODO: this should be a property already known about subcircuits
+def Operations.computable_witnesses (ops: Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
+   ops.forAll n {
+    witness n _ compute := (∀ i < n, env.get i = env'.get i) → compute env = compute env',
     subcircuit n _ s := FlatOperation.forAll n {
-      witness n _ compute := Environment.only_accessed_below n compute,
+      witness n _ compute := (∀ i < n, env.get i = env'.get i) → compute env = compute env',
     } s.ops
   }
 
 def Circuit.computable_witnesses (circuit: Circuit F α) (n : ℕ) :=
-  (circuit.operations n).computable_witnesses n
+  ∀ (env env' : Environment F), (circuit.operations n).computable_witnesses n env env'
+
+def Circuit.computable_witnesses' (circuit: Circuit F α) (n : ℕ) (env env' : Environment F) :=
+  (circuit.operations n).computable_witnesses n env env'
 
 /--
 If a circuit satisfies `computable_witnesses`, we can construct a concrete environment

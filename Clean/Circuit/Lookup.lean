@@ -23,8 +23,9 @@ def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environ
 theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β) (input : α F) :
     (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_uses_local_witnesses
+  intro env env'
   apply circuit.computable_witnesses 0 (const input)
-  simp only [Environment.only_accessed_below, ProvableType.eval_const, implies_true]
+  simp only [Environment.only_accessed_below', ProvableType.eval_const, implies_true]
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)

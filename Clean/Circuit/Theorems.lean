@@ -522,7 +522,7 @@ theorem Operations.local_witnesses_cons (op : Operation F) (ops : Operations F) 
   rw [Vector.empty_append]; simp
 
 theorem FlatOperation.only_accessed_below_all {ops : List (FlatOperation F)} (n : ℕ) :
-  forAll n { witness n _ := Environment.only_accessed_below n } ops →
+  (∀ env env', forAll n { witness n _ c := Environment.only_accessed_below' n c env env' } ops) →
     Environment.only_accessed_below (n + witness_length ops) (witnesses · ops) := by
   intro h_comp env env' h_env
   simp only
@@ -530,7 +530,8 @@ theorem FlatOperation.only_accessed_below_all {ops : List (FlatOperation F)} (n 
   | nil => simp [witnesses]
   | cons op ops ih =>
     simp_all only [forAll_cons, witness_length_cons]
-    obtain ⟨ h_comp, h_ih ⟩ := h_comp
+    have h_ih := fun env env' => (h_comp env env').right
+    replace h_comp := fun env env' => (h_comp env env').left
     replace h_ih := ih (op.local_length + n) h_ih
     ring_nf at *
     specialize h_ih h_env
@@ -618,8 +619,9 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
       have h_acc : acc.length = op.local_length + init.length := by rw [List.length_append, Operation.witnesses_length, add_comm]
       specialize ih acc
       rw [h_acc, Environment.uses_local_witnesses_iff_forAll] at ih
-      exact ih h_computable.right
+      exact ih fun _ _ => (h_computable _ _).right
     clear ih
+    replace h_computable := fun env env' => (h_computable env env').left
     set env := Environment.fromList (Operations.witnesses (op :: ops) init) with h_env
     nth_rw 1 3 [h_env]
     simp only [Environment.fromList, add_tsub_cancel_left, add_lt_iff_neg_left, not_lt_zero', ↓reduceIte, Environment.extends_vector]
@@ -631,7 +633,7 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
       simp only [Operation.witnesses, Vector.getElem_toList]
       simp only [Operations.Condition.apply] at h_computable
       congr 1
-      apply h_computable.left
+      apply h_computable
       intro j hj
       simp only [Environment.fromList, hj, List.getElem?_eq_getElem, Option.getD_some, h_env,
         Operations.getD_witnesses_of_lt]
@@ -664,36 +666,5 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
         sorry
       simp only [SubCircuit.witnesses, Vector.cast_eq_cast, Vector.cast_rfl]
       rw [s.local_length_eq] at h_env_eq
-      apply FlatOperation.only_accessed_below_all _ h_computable.left
+      apply FlatOperation.only_accessed_below_all init.length h_computable
       exact h_env_eq
-
-theorem Operations.only_accessed_below_all (ops : Operations F) (n : ℕ) :
-  ops.computable_witnesses n →
-    Environment.only_accessed_below (n + ops.local_length) ops.local_witnesses := by
-  simp only [computable_witnesses]
-  induction ops generalizing n with
-  | nil => simp [Environment.only_accessed_below, local_witnesses, forAll_empty]
-  | cons op ops ih =>
-    simp only [local_witnesses, forAll_cons, and_congr_right_iff]
-    intro ⟨ h_comp, h_ih ⟩ env env' h_env
-    simp only [local_length_cons] at h_env
-    replace h_ih := ih (op.local_length + n) h_ih env env'
-    simp only at h_ih
-    clear ih
-    simp only [local_witnesses_cons, Vector.cast_eq_cast, Vector.cast_rfl]
-    ring_nf at *
-    congr 1
-    · cases op with
-      | assert | lookup =>
-        simp_all only [Condition.apply, Operation.local_witnesses, Operation.local_length, local_length]
-      | witness m c =>
-        simp_all only [Condition.apply, Operation.local_witnesses, Operation.local_length, local_length]
-        apply h_comp env env'
-        intro i hi
-        exact h_env i (by linarith)
-      | subcircuit s =>
-        simp_all only [Condition.apply, Operation.local_witnesses, Operation.local_length, local_length]
-        simp only [SubCircuit.witnesses, Vector.cast_eq_cast, Vector.cast_rfl]
-        clear h_ih
-        sorry
-    exact h_ih h_env

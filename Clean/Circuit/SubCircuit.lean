@@ -218,14 +218,16 @@ end Circuit
 -- subcircuit composability for `computable_witnesses`
 
 def FormalCircuit.computable_witnesses (circuit : FormalCircuit F β α) : Prop :=
-  ∀ (n : ℕ) (input : Var β F), Environment.only_accessed_below n (eval · input) → (circuit.main input).computable_witnesses n
+  ∀ (n : ℕ) (input : Var β F) env env',
+    Environment.only_accessed_below' n (eval · input) env env' → (circuit.main input).computable_witnesses' n env env'
 
 theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
   Environment.only_accessed_below n (eval · input) ∧ circuit.computable_witnesses →
     (subcircuit circuit input).computable_witnesses n := by
-  simp only [FormalCircuit.computable_witnesses, Circuit.computable_witnesses]
+  simp only [FormalCircuit.computable_witnesses, Circuit.computable_witnesses, Circuit.computable_witnesses']
   intro ⟨ h_input, h_computable ⟩
-  specialize h_computable n input h_input
+  intro env env'
+  specialize h_computable n input env env' (h_input env env')
   simp only [Operations.computable_witnesses, operations, subcircuit,
     FormalCircuit.to_subcircuit, Operations.forAll, and_true]
   rw [Operations.computable_witnesses, Operations.forAllFlat_iff, Operations.forAllFlat,
