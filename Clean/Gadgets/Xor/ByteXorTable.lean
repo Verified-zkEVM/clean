@@ -5,64 +5,61 @@ namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-def ByteXorTable: StaticTable (F p) where
+def ByteXorTable : Table (F p) := StaticTable.toTable {
   name := "ByteXor"
   length := 256*256
   arity := 3
   row i :=
     let (x, y) := split_two_bytes i
     #v[from_byte x, from_byte y, from_byte (x ^^^ y)]
+  index := fun ⟨⟨[x, y, z]⟩, _⟩ => x.val * 256 + y.val
 
-def ByteXorLookup (x y z: Expression (F p)) : StaticLookup (F p) := {
-  table := ByteXorTable
-  entry := #v[x, y, z]
-  index env := by
-    let x := x.eval env |>.val
-    let y := y.eval env |>.val
-    dsimp only [ByteXorTable]
-    exact x * 256 + y
+  soundness := fun ⟨⟨[x, y, z]⟩, _⟩ =>
+    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
+  completeness := fun ⟨⟨[x, y, z]⟩, _⟩ =>
+    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
+
+  imply_soundness := by
+    intro ⟨⟨[x, y, z]⟩, _⟩
+    dsimp only
+    rintro ⟨ i, h: #v[x, y, z] = _ ⟩
+    simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true] at h
+
+    rcases h with ⟨ hx, hy, hz ⟩
+
+    constructor
+    · rw [hx]
+      apply from_byte_lt
+    constructor
+    · rw [hy]
+      apply from_byte_lt
+
+    rw [hx, hy, hz]
+    repeat rw [from_byte, FieldUtils.val_of_nat_to_field_eq]
+    simp only [HXor.hXor, Xor.xor, Fin.xor]
+    rw [Nat.mod_eq_iff_lt (by norm_num)]
+    apply Nat.xor_lt_two_pow (n:=8)
+    exact (split_two_bytes i).1.is_lt
+    exact (split_two_bytes i).2.is_lt
+
+  implied_by_completeness := by
+    intro ⟨⟨[x, y, z]⟩, _⟩ ⟨ hx, hy, h ⟩
+    use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
+    simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
+    rw [concat_split]
+    simp [from_byte_eq, true_and, from_byte, FieldUtils.nat_to_field_of_val_eq_iff]
+    apply FieldUtils.ext
+    simp only [h, HXor.hXor, Xor.xor, Fin.xor, from_byte, FieldUtils.val_of_nat_to_field_eq]
 }
 
-def ByteXorTable.soundness (x y z: F p) :
-    ByteXorTable.contains #v[x, y, z] →
-    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val := by
-  dsimp [StaticTable.contains]
-  rintro ⟨ i, h: #v[x, y, z] = ByteXorTable.row i ⟩
-  simp [ByteXorTable] at h
-  simp only [ByteXorTable] at i
-
-  rcases h with ⟨ hx, hy, hz ⟩
-
-  constructor
-  · rw [hx]
-    apply from_byte_lt
-  constructor
-  · rw [hy]
-    apply from_byte_lt
-
-  rw [hx, hy, hz]
-  repeat rw [from_byte, FieldUtils.val_of_nat_to_field_eq]
-  simp only [HXor.hXor, Xor.xor, Fin.xor]
-  rw [Nat.mod_eq_iff_lt (by norm_num)]
-  apply Nat.xor_lt_two_pow (n:=8)
-  exact (split_two_bytes i).1.is_lt
-  exact (split_two_bytes i).2.is_lt
-
-def ByteXorTable.completeness (x y z: F p) :
-    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val →
-    ByteXorTable.contains #v[x, y, z] := by
-  intro ⟨ hx, hy, h ⟩
-  dsimp only [ByteXorTable, Table.contains]
-  use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
-  simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
-  rw [concat_split]
-  simp [from_byte_eq, true_and, from_byte, FieldUtils.nat_to_field_of_val_eq_iff]
-  apply FieldUtils.ext
-  simp only [h, HXor.hXor, Xor.xor, Fin.xor, from_byte, FieldUtils.val_of_nat_to_field_eq]
+def ByteXorLookup (x y z: Expression (F p)) : Lookup (F p) := {
+  table := ByteXorTable
+  entry := #v[x, y, z]
+}
 
 def ByteXorTable.equiv (x y z: F p) :
-    ByteXorTable.contains #v[x, y, z] ↔
+  ByteXorTable.contains #v[x, y, z] ↔
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
-  ⟨ByteXorTable.soundness x y z, ByteXorTable.completeness x y z⟩
+  ⟨ByteXorTable.imply_soundness #v[x,y,z], ByteXorTable.implied_by_completeness #v[x,y,z]⟩
 
 end Gadgets.Xor

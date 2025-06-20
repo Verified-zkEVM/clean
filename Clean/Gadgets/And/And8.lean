@@ -82,10 +82,10 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup, ByteXorTable]
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
-  rw [ByteXorTable.equiv, hx, hy] at h_holds
+  rw [hx, hy] at h_holds
   clear hx hy
   obtain ⟨ hx_byte, hy_byte, h_xor ⟩ := h_holds
   set w := env.get i
@@ -116,11 +116,11 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup, ByteXorTable]
   clear h_env
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
-  rw [ByteXorTable.equiv, hx, hy]
+  rw [hx, hy]
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
   let z := x + y + -(2 * w)
