@@ -1,9 +1,9 @@
 import Clean.Circuit.SubCircuit
 import Clean.Circuit.Foundations
 
-namespace FormalCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
 
+namespace FormalCircuit
 def proverEnvironment (circuit : FormalCircuit F α β) (input : α F) : Environment F :=
   circuit.main (const input) |>.proverEnvironment
 
@@ -17,15 +17,24 @@ theorem proverEnvironment_uses_local_witnesses (circuit : FormalCircuit F α β)
 
 def constantOutput (circuit : FormalCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
+end FormalCircuit
 
-def toTable (circuit : FormalCircuit F α β) (name : String) (h_computable : circuit.computable_witnesses) :
-    TypedTable F (ProvablePair α β) where
-  name
+structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
+    extends circuit : FormalCircuit F α β where
+  name : String
+  computable_witnesses : circuit.computable_witnesses
 
-  contains := fun (input, output) => ∃ n env,
+namespace LookupCircuit
+def toTable (circuit : LookupCircuit F α β) : TypedTable F (ProvablePair α β) where
+  name := circuit.name
+
+  -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
+  contains := fun (input, output) =>
+    -- there exists an environment, such that
+    ∃ n env,
     -- the circuit constraints hold
     Circuit.constraints_hold env (circuit.main (const input) |>.operations n)
-    -- the output matches
+    -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
   soundness := fun (input, output) => circuit.assumptions input → circuit.spec input output
@@ -39,28 +48,21 @@ def toTable (circuit : FormalCircuit F α β) (name : String) (h_computable : ci
   implied_by_completeness := by
     intro (input, output) ⟨h_assumptions, h_output⟩
     use 0, circuit.proverEnvironment input
-    simp only [h_output, constantOutput, and_true]
+    simp only [h_output, FormalCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
     apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
-    exact circuit.proverEnvironment_uses_local_witnesses h_computable input
+    exact circuit.proverEnvironment_uses_local_witnesses circuit.computable_witnesses input
 
--- we create another `FormalCircuit` that wraps a lookup into the input `FormalCircuit`
+-- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
+-- this gives `circuit.lookup input` _exactly_ the same interface as `subcircuit circuit input`.
 
-def lookupMain (circuit : FormalCircuit F α β) (name : String) (h_computable : circuit.computable_witnesses) (input : Var α F) : Circuit F (Var β F) := do
-  let output ← ProvableType.witness fun env => circuit.constantOutput (eval env input)
-
-  -- TODO: make `lookup` expect a `TypedTable`
-  lookup { table := (circuit.toTable name h_computable).toUntyped, entry := to_elements (input, output) }
-
-  return output
-
-def lookupCircuit (circuit : FormalCircuit F α β) (name : String) (h_computable : circuit.computable_witnesses) : FormalCircuit F α β where
+def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
     let output ← ProvableType.witness fun env => circuit.constantOutput (eval env input)
 
     -- TODO: make `lookup` expect a `TypedTable`
-    lookup { table := (circuit.toTable name h_computable).toUntyped, entry := to_elements (input, output) }
+    lookup { table := circuit.toTable.toUntyped, entry := to_elements (input, output) }
 
     return output
 
@@ -100,6 +102,6 @@ def lookupCircuit (circuit : FormalCircuit F α β) (name : String) (h_computabl
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_var_from_offset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
 
-def lookup (circuit : FormalCircuit F α β) (name : String) (h_computable : circuit.computable_witnesses) (input : Var α F) : Circuit F (Var β F) :=
-  subcircuit (lookupCircuit circuit name h_computable) input
-end FormalCircuit
+def lookup (circuit : LookupCircuit F α β) (input : Var α F) : Circuit F (Var β F) :=
+  subcircuit (lookupCircuit circuit) input
+end LookupCircuit
