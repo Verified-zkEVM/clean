@@ -139,7 +139,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | lookup =>
-    simp_all [constraints_hold.soundness, constraints_hold]
+    simp_all [constraints_hold.soundness, constraints_hold, Table.imply_soundness]
   | subcircuit circuit ops ih =>
     dsimp only [constraints_hold.soundness]
     dsimp only [constraints_hold] at h
@@ -328,20 +328,20 @@ namespace Circuit
 theorem constraints_hold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.contains (l.entry.map env),
+    lookup _ l := l.table.soundness (l.entry.map env),
     subcircuit _ _ s := s.soundness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all [soundness, Operations.forAll]
+    simp_all only [soundness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
 
 theorem constraints_hold.completeness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.valid (l.entry.map env),
+    lookup _ l := l.table.completeness (l.entry.map env),
     subcircuit _ _ s := s.completeness env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -364,7 +364,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
-    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll, Table.implies]
+    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll, Table.implied_by_completeness]
   | subcircuit n circuit ops ih =>
     simp_all only [constraints_hold, constraints_hold.completeness, Environment.uses_local_witnesses, and_true]
     intro h_env h_compl
@@ -404,7 +404,7 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
 theorem constraints_hold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   constraints_hold.soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.contains (l.entry.map env),
+    lookup _ l := l.table.soundness (l.entry.map env),
     subcircuit _ _ s := s.soundness env
   } := by
   rw [forAll_def, constraints_hold.soundness_iff_forAll n]
@@ -412,7 +412,7 @@ theorem constraints_hold.soundness_iff_forAll' {env : Environment F} {circuit : 
 theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   constraints_hold.completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.valid (l.entry.map env),
+    lookup _ l := l.table.completeness (l.entry.map env),
     subcircuit _ _ s := s.completeness env
   } := by
   rw [forAll_def, constraints_hold.completeness_iff_forAll n]
