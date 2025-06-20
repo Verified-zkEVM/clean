@@ -66,9 +66,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     -- we witness the output for the given input, and look up the pair in the table
     let output ← ProvableType.witness fun env => circuit.constantOutput (eval env input)
 
-    -- TODO: make `lookup` expect a `TypedTable`
-    lookup { table := circuit.toTable.toUntyped, entry := to_elements (input, output) }
-
+    lookup circuit.toTable (input, output)
     return output
 
   local_length n := size β

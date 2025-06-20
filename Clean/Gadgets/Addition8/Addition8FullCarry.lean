@@ -32,7 +32,7 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
 
   -- witness the result
   let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
-  lookup (ByteLookup z)
+  lookup ByteTable z
 
   -- witness the output carry
   let carry_out ← witness (fun eval => floordiv_256 (eval (x + y + carry_in)))
@@ -72,7 +72,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- simplify constraints, assumptions and goal
     simp_all only [circuit_norm, subcircuit_norm, h_inputs, spec, assumptions, add8_full_carry,
-      ByteLookup, ByteTable, Boolean.circuit]
+      ByteTable, Boolean.circuit]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
@@ -99,7 +99,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- simplify assumptions and goal
     simp only [circuit_norm, subcircuit_norm, h_inputs, assumptions, add8_full_carry,
-      ByteLookup, ByteTable, Boolean.circuit] at *
+      ByteTable, Boolean.circuit] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
