@@ -7,10 +7,21 @@ variable {F: Type} [Field F] {α : Type} {n : ℕ}
 structure Table (F : Type) where
   name : String
   arity : ℕ
-  valid : Vector F arity → Prop
+  /--
+  `contains` captures what it means to be in the table.
+  there should be a concrete way of instantiating the table where `contains` is proved to hold on every row.
+  -/
   contains : Vector F arity → Prop
-  /-- being valid implies being contained in the table -/
-  implies : ∀ (row : Vector F arity), valid row → contains row
+
+  /--
+  we allow to rewrite the `contains` property into two statements that are easier to work with
+  in the context of soundness and completeness proofs.
+  -/
+  soundness : Vector F arity → Prop
+  completeness : Vector F arity → Prop
+
+  imply_soundness : ∀ row, contains row → soundness row
+  implied_by_completeness : ∀ row, completeness row → contains row
 
 structure Lookup (F : Type) where
   table: Table F
@@ -23,39 +34,49 @@ variable {Row : TypeMap} [ProvableType Row]
 
 structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
-  valid : Row F → Prop
   contains : Row F → Prop
-  implies : ∀ (row: Row F), valid row → contains row
+  soundness : Row F → Prop
+  completeness : Row F → Prop
+  imply_soundness : ∀ row, contains row → soundness row
+  implied_by_completeness : ∀ row, completeness row → contains row
 
 def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
   name := table.name
   arity := size Row
-  valid row := table.valid (from_elements row)
   contains row := table.contains (from_elements row)
-  implies row := table.implies (from_elements row)
-
+  soundness row := table.soundness (from_elements row)
+  completeness row := table.completeness (from_elements row)
+  imply_soundness row := table.imply_soundness (from_elements row)
+  implied_by_completeness row := table.implied_by_completeness (from_elements row)
 end typed_table
 
+-- TODO move this somewhere else
 structure StaticTable (F : Type) where
   name: String
   arity: ℕ
   length: ℕ
   row: Fin length → Vector F arity
+  -- TODO this would make sense if we had separate input and output types,
+  -- and the lookup would automatically witness the output given the input.
+  -- then we could weaken completeness to be `index input < length`!
   index: Vector F arity → ℕ
+  soundness: Vector F arity → Prop
+  completeness: Vector F arity → Prop
+  imply_soundness : ∀ x, (∃ i, x = row i) → soundness x
+  implied_by_completeness : ∀ x, completeness x → (∃ i, x = row i)
 
-def StaticTable.contains (table: StaticTable F) row :=
-  ∃ (i : Fin table.length), row = table.row i
-
-def StaticTable.valid (table: StaticTable F) (row: Vector F table.arity) :=
-  ∃ i_lt : table.index row < table.length, row = table.row ⟨ table.index row, i_lt ⟩
+def StaticTable.contains (table: StaticTable F) (row: Vector F table.arity) :=
+  ∃ i : Fin table.length, row = table.row i
 
 @[circuit_norm]
 def StaticTable.toTable (table: StaticTable F) : Table F where
   name := table.name
   arity := table.arity
-  valid := table.valid
   contains := table.contains
-  implies row is_valid := ⟨ ⟨ table.index row, is_valid.1 ⟩, is_valid.2 ⟩
+  soundness := table.soundness
+  completeness := table.completeness
+  imply_soundness := table.imply_soundness
+  implied_by_completeness := table.implied_by_completeness
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
@@ -94,7 +115,7 @@ def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Pro
   | [] => True
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ constraints_hold_flat eval ops
-    | lookup { table, entry, .. } =>
+    | lookup { table, entry } =>
       table.contains (entry.map eval) ∧ constraints_hold_flat eval ops
     | _ => constraints_hold_flat eval ops
 
