@@ -28,6 +28,7 @@ instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
 -- usually we want lookups to be properly typed, with input and output types.
+variable {Row : TypeMap} [ProvableType Row]
 
 structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
@@ -37,10 +38,12 @@ structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   imply_soundness : ∀ row, contains row → soundness row
   implied_by_completeness : ∀ row, completeness row → contains row
 
-namespace TypedTable
-variable {Row : TypeMap} [ProvableType Row]
+structure TypedLookup (F : Type) (Row : TypeMap) [ProvableType Row] where
+  table: TypedTable F Row
+  entry: Row (Expression F)
 
-def toUntyped (table: TypedTable F Row) : Table F where
+@[circuit_norm]
+def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
   name := table.name
   arity := size Row
   contains row := table.contains (from_elements row)
@@ -48,30 +51,29 @@ def toUntyped (table: TypedTable F Row) : Table F where
   completeness row := table.completeness (from_elements row)
   imply_soundness row := table.imply_soundness (from_elements row)
   implied_by_completeness row := table.implied_by_completeness (from_elements row)
-end TypedTable
 
-structure StaticTable (F : Type) where
+variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+
+structure StaticTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   name: String
-  arity: ℕ
   length: ℕ
-  row: Fin length → Vector F arity
+  row: Fin length → Row F
   -- TODO this would make sense if we had separate input and output types,
   -- and the lookup would automatically witness the output given the input.
   -- then we could weaken completeness to be `index input < length`!
-  index: Vector F arity → ℕ
-  soundness: Vector F arity → Prop
-  completeness: Vector F arity → Prop
-  imply_soundness : ∀ x, (∃ i, x = row i) → soundness x
-  implied_by_completeness : ∀ x, completeness x → (∃ i, x = row i)
+  index: Row F → ℕ
+  soundness: Row F → Prop
+  completeness: Row F → Prop
+  imply_soundness : ∀ t, (∃ i, t = row i) → soundness t
+  implied_by_completeness : ∀ t, completeness t → ∃ i, t = row i
 
 namespace StaticTable
-def contains (table: StaticTable F) (row: Vector F table.arity) :=
+def contains (table: StaticTable F Row) (row: Row F) :=
   ∃ i : Fin table.length, row = table.row i
 
 @[circuit_norm]
-def toTable (table: StaticTable F) : Table F where
+def toTable (table: StaticTable F Row) : TypedTable F Row where
   name := table.name
-  arity := table.arity
   contains := table.contains
   soundness := table.soundness
   completeness := table.completeness

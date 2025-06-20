@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Xor (ByteXorLookup ByteXorTable)
+open Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -30,7 +30,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let and ← witness (fun eval => (eval x).val &&& (eval y).val)
   -- we prove AND correct using an XOR lookup and the following identity:
   let xor := x + y - 2 * and
-  lookup (ByteXorLookup x y xor)
+  lookup ByteXorTable (x, y, xor)
   return and
 
 -- AND / XOR identity that justifies the circuit
@@ -82,7 +82,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup, ByteXorTable]
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorTable]
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input
   rw [hx, hy] at h_holds
@@ -116,7 +116,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup, ByteXorTable]
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorTable]
   clear h_env
   simp only [Inputs.mk.injEq] at h_input
   obtain ⟨ hx, hy ⟩ := h_input

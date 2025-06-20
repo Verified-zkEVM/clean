@@ -182,7 +182,7 @@ lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p)
 end U32
 
 namespace U32.AssertNormalized
-open Gadgets (ByteLookup ByteTable)
+open Gadgets (ByteTable)
 
 /--
   Assert that a 32-bit unsigned integer is normalized.
@@ -190,10 +190,10 @@ open Gadgets (ByteLookup ByteTable)
 -/
 def u32_assert_normalized (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
   let ⟨ x0, x1, x2, x3 ⟩ := inputs
-  lookup (ByteLookup x0)
-  lookup (ByteLookup x1)
-  lookup (ByteLookup x2)
-  lookup (ByteLookup x3)
+  lookup ByteTable x0
+  lookup ByteTable x1
+  lookup ByteTable x2
+  lookup ByteTable x3
 
 def assumptions (_input : U32 (F p)) := True
 
@@ -206,12 +206,12 @@ def circuit : FormalAssertion (F p) U32 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp_all [spec, circuit_norm, u32_assert_normalized, ByteLookup, ByteTable, is_normalized, eval]
+    simp_all [spec, circuit_norm, u32_assert_normalized, ByteTable, is_normalized, eval]
 
   completeness := by
     rintro i0 env x_var
     rintro _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp_all [spec, circuit_norm, u32_assert_normalized, ByteLookup, ByteTable, is_normalized, eval]
+    simp_all [spec, circuit_norm, u32_assert_normalized, ByteTable, is_normalized, eval]
 
 end U32.AssertNormalized
 
