@@ -599,11 +599,10 @@ theorem FlatOperation.proverEnvironment_uses_local_witnesses {ops : List (FlatOp
     -- | assert | lookup  => simp only [Operations.Condition.apply]
 
 theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) (init : List F) :
-  circuit.computable_witnesses →
+  circuit.computable_witnesses init.length →
     (circuit.proverEnvironment init).uses_local_witnesses init.length (circuit.operations init.length) := by
   intro h_computable
-  specialize h_computable init.length
-  simp only [proverEnvironment]
+  simp only [proverEnvironment, Circuit.computable_witnesses] at *
   generalize circuit.operations init.length = ops at *
   clear circuit
   induction ops generalizing init with

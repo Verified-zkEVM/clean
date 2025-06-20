@@ -5,13 +5,13 @@ variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType 
 def FormalCircuit.proverEnvironment (circuit : FormalCircuit F α β) (input : α F) : Environment F :=
   circuit.main (const input) |>.proverEnvironment
 
-def FormalCircuit.computable_witnesses (circuit : FormalCircuit F α β) : Prop :=
-    ∀ (input : α F), (circuit.main (const input)).computable_witnesses
-
-theorem FormalCircuit.proverEnvironment_uses_local_witnesses (circuit : FormalCircuit F α β)
-  (h_computable : circuit.computable_witnesses) (input : α F) :
-    (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) :=
-  Circuit.proverEnvironment_uses_local_witnesses _ _ (h_computable input)
+theorem FormalCircuit.proverEnvironment_uses_local_witnesses (circuit : FormalCircuit F α β) :
+  circuit.computable_witnesses → ∀ input,
+    (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
+  intro h_computable input
+  apply Circuit.proverEnvironment_uses_local_witnesses
+  apply h_computable 0 (const input)
+  simp only [Environment.only_accessed_below, ProvableType.eval_const, implies_true]
 
 def FormalCircuit.constantOutput (circuit : FormalCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)

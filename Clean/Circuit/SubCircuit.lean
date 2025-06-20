@@ -213,19 +213,25 @@ lemma subcircuit_local_length_eq (circuit: FormalCircuit F β α) (input: Var β
 
 lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
   (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
-
-theorem subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) :
-    (subcircuit circuit input).computable_witnesses := by
-  intro n
-  simp only [Operations.computable_witnesses, operations, subcircuit, FormalCircuit.to_subcircuit,
-    Operations.forAll, and_true]
-  suffices h : ((circuit.main input).operations n).computable_witnesses n by
-    rw [Operations.computable_witnesses, Operations.forAllFlat_iff, Operations.forAllFlat, FlatOperation.forAll_ignore_subcircuit] at h
-    exact h
-    simp [FlatOperation.forAll_ignore_subcircuit]
-  sorry
 end Circuit
 
+-- subcircuit composability for `computable_witnesses`
+
+def FormalCircuit.computable_witnesses (circuit : FormalCircuit F β α) : Prop :=
+  ∀ (n : ℕ) (input : Var β F), Environment.only_accessed_below n (eval · input) → (circuit.main input).computable_witnesses n
+
+theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
+  Environment.only_accessed_below n (eval · input) ∧ circuit.computable_witnesses →
+    (subcircuit circuit input).computable_witnesses n := by
+  simp only [FormalCircuit.computable_witnesses, Circuit.computable_witnesses]
+  intro ⟨ h_input, h_computable ⟩
+  specialize h_computable n input h_input
+  simp only [Operations.computable_witnesses, operations, subcircuit,
+    FormalCircuit.to_subcircuit, Operations.forAll, and_true]
+  rw [Operations.computable_witnesses, Operations.forAllFlat_iff, Operations.forAllFlat,
+    FlatOperation.forAll_ignore_subcircuit] at h_computable
+  exact h_computable
+  simp [FlatOperation.forAll_ignore_subcircuit]
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]

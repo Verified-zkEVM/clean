@@ -394,8 +394,8 @@ def Operations.computable_witnesses (ops: Operations F) (n : ℕ) : Prop :=
     } s.ops
   }
 
-def Circuit.computable_witnesses (circuit: Circuit F α) :=
-  ∀ offset, (circuit.operations offset).computable_witnesses offset
+def Circuit.computable_witnesses (circuit: Circuit F α) (n : ℕ) :=
+  (circuit.operations n).computable_witnesses n
 
 /--
 If a circuit satisfies `computable_witnesses`, we can construct a concrete environment
