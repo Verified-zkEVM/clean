@@ -228,26 +228,14 @@ open FlatOperation (witness_length witnesses flat_witness_length_eq flat_witness
 what follows are relationships between different versions of `Environment.uses_local_witnesses`
 -/
 
-/-- equivalent, non-inductive statement of `Environment.uses_local_witnesses` (that is harder to unfold for a circuit) -/
-def uses_local_witnesses' (env: Environment F) (offset : ℕ) (ops: Operations F) :=
-  env.extends_vector (ops.local_witnesses env) offset
+-- /-- equivalent, non-inductive statement of `Environment.uses_local_witnesses_flat` (that is harder to unfold for a circuit) -/
+-- def uses_local_witnesses_flat' (env: Environment F) (offset : ℕ) (ops: List (FlatOperation F)) :=
+--   env.extends_vector (witnesses env ops) offset
 
-/-- An environment respects local witnesses iff it does so in the flattened variant. -/
-lemma env_extends_iff_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
-    env.extends_vector (witnesses env (to_flat_operations ops)) n ↔
-    env.uses_local_witnesses' n ops := by
-  simp only [extends_vector, uses_local_witnesses', Fin.forall_iff, flat_witness_length_eq]
-  constructor
-  · intro h i hi
-    rw [h i hi, Vector.getElem_mk]
-    simp [flat_witness_eq_witness]
-  · intro h i hi
-    rw [h i hi, Vector.getElem_mk, Vector.getElem_mk]
-    simp [flat_witness_eq_witness]
-
-lemma env_extends_witness {n: ℕ} {ops: Operations F} {env: Environment F} {m c} :
-    env.uses_local_witnesses' n (.witness m c :: ops) ↔ (env.extends_vector (c env) n ∧ env.uses_local_witnesses' (m + n) ops) := by
-  simp_all only [uses_local_witnesses', circuit_norm, Vector.getElem_append]
+lemma env_extends_witness {F} {n: ℕ} {ops: List (FlatOperation F)} {env: Environment F} {m c} :
+    env.extends_vector (witnesses env (.witness m c :: ops)) n ↔
+      (env.extends_vector (c env) n ∧ env.extends_vector (witnesses env ops) (m + n)) := by
+  simp_all only [extends_vector, witness_length, witnesses, Vector.getElem_append]
   constructor
   · intro h
     constructor
@@ -266,9 +254,11 @@ lemma env_extends_witness {n: ℕ} {ops: Operations F} {env: Environment F} {m c
       congr 1
       omega
 
+-- TODO: this is not used
 lemma env_extends_subcircuit {n: ℕ} {ops: Operations F} {env: Environment F} {n'} {s : SubCircuit F n'} :
-    env.uses_local_witnesses' n (.subcircuit s :: ops) ↔ (env.extends_vector (witnesses env s.ops) n ∧ env.uses_local_witnesses' (s.local_length + n) ops) := by
-  simp_all only [uses_local_witnesses', circuit_norm, witness_length, Vector.getElem_append, Fin.forall_iff]
+  env.extends_vector (Operations.local_witnesses env (.subcircuit s :: ops)) n ↔
+    (env.extends_vector (witnesses env s.ops) n ∧ env.extends_vector (Operations.local_witnesses env ops) (s.local_length + n)) := by
+  simp_all only [circuit_norm, witness_length, Vector.getElem_append, Fin.forall_iff]
   constructor
   · intro h
     constructor
@@ -288,6 +278,7 @@ lemma env_extends_subcircuit {n: ℕ} {ops: Operations F} {env: Environment F} {
       congr 1
       omega
 
+-- TODO: this is not used
 lemma extends_vector_subcircuit (env : Environment F) {n} {n'} {circuit : SubCircuit F n'} :
     env.extends_vector (circuit.witnesses env) n = env.extends_vector (FlatOperation.witnesses env circuit.ops) n := by
   have h_length : circuit.local_length = FlatOperation.witness_length circuit.ops := circuit.local_length_eq
@@ -295,30 +286,30 @@ lemma extends_vector_subcircuit (env : Environment F) {n} {n'} {circuit : SubCir
   rw [SubCircuit.witnesses]
   apply Vector.cast_heq
 
-theorem can_replace_local_witnesses {env: Environment F} (n: ℕ) {ops: Operations F}  :
-    env.uses_local_witnesses' n ops ↔ env.uses_local_witnesses n ops := by
-  induction ops using Operations.induct generalizing n with
-  | empty => simp [uses_local_witnesses, uses_local_witnesses', extends_vector, Operations.local_witnesses, Operations.local_length]
+theorem can_replace_local_witnesses_flat {env: Environment F} (n: ℕ) {ops: List (FlatOperation F)}  :
+    env.extends_vector (FlatOperation.witnesses env ops) n ↔ env.uses_local_witnesses_flat n ops := by
+  induction ops using FlatOperation.induct generalizing n with
+  | empty => simp [uses_local_witnesses_flat, FlatOperation.forAll_empty, witnesses, extends_vector, witness_length]
   | witness m _ _ ih =>
-    rw [uses_local_witnesses, env_extends_witness, ih (m + n)]
+    rw [uses_local_witnesses_flat, FlatOperation.forAll, Operations.Condition.applyFlat, env_extends_witness, ih (m + n)]
+    trivial
   | assert | lookup =>
-    simp_all [uses_local_witnesses', uses_local_witnesses, circuit_norm]
-  | subcircuit s _ ih =>
-    rw [uses_local_witnesses, env_extends_subcircuit, extends_vector_subcircuit, ih (_ + n)]
+    simp_all [uses_local_witnesses_flat, circuit_norm,
+      FlatOperation.forAll_cons, Operations.Condition.applyFlat, FlatOperation.local_length]
 
 theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Operations F} {n: ℕ} (h: ops.subcircuits_consistent n) :
     env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; trivial
   | witness | assert | lookup =>
-    simp_all +arith [uses_local_witnesses, uses_local_witnesses_completeness]
+    simp_all +arith [uses_local_witnesses, uses_local_witnesses_completeness, Operations.forAllFlat, Operations.forAll]
   | subcircuit n circuit ops ih =>
-    simp only [uses_local_witnesses, uses_local_witnesses_completeness]
+    simp only [uses_local_witnesses, uses_local_witnesses_completeness, Operations.forAllFlat, Operations.forAll_cons, Operations.Condition.apply]
     intro h
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
     apply circuit.implied_by_local_witnesses
-    rw [←extends_vector_subcircuit]
+    rw [can_replace_local_witnesses_flat]
     exact h.left
 
 theorem uses_local_witnesses_completeness_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
@@ -334,12 +325,9 @@ theorem uses_local_witnesses_completeness_iff_forAll (n: ℕ) {env: Environment 
 theorem uses_local_witnesses_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
   env.uses_local_witnesses n ops ↔ ops.forAll n {
     witness n _ c := env.extends_vector (c env) n,
-    subcircuit n _ s := env.extends_vector (s.witnesses env) n
+    subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.extends_vector (c env) n} s.ops
   } := by
-  induction ops using Operations.induct generalizing n with
-  | empty => trivial
-  | assert | lookup | witness | subcircuit =>
-    simp_all +arith [uses_local_witnesses, Operations.forAll]
+  simp only [uses_local_witnesses, Operations.forAllFlat]
 end Environment
 
 namespace Circuit
@@ -383,12 +371,12 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
-    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAll, Table.implied_by_completeness]
+    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAllFlat, Operations.forAll, Table.implied_by_completeness]
   | subcircuit n circuit ops ih =>
-    simp_all only [constraints_hold, constraints_hold.completeness, Environment.uses_local_witnesses, and_true]
+    simp_all only [constraints_hold, constraints_hold.completeness, Environment.uses_local_witnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
     apply circuit.implied_by_completeness env ?_ h_compl.left
-    rw [←env.extends_vector_subcircuit]
+    rw [Environment.can_replace_local_witnesses_flat]
     exact h_env.left
 end Circuit
 
@@ -549,6 +537,13 @@ lemma forAllFlat_iff {condition : Condition F} {ops : Operations F} (n : ℕ) :
   · simp_all only [Operations.forAllFlat_mpr, implies_true]
 end Operations
 
+/-- An environment respects local witnesses iff it does so in the flattened variant. -/
+lemma Environment.env_extends_iff_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
+    env.uses_local_witnesses_flat n (to_flat_operations ops) ↔
+    env.uses_local_witnesses n ops := by
+  simp only [uses_local_witnesses_flat, uses_local_witnesses]
+  rw [Operations.forAllFlat_iff']
+
 -- theorems about witness generation
 
 namespace FlatOperation
@@ -643,18 +638,6 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
   circuit.computable_witnesses init.length →
     (circuit.proverEnvironment init).uses_local_witnesses init.length (circuit.operations init.length) := by
   intro h_computable
-  simp_all only [proverEnvironment, Circuit.computable_witnesses]
-  generalize circuit.operations init.length = ops at *
-  clear circuit
-  simp_all only [Operations.computable_witnesses]
-  simp only [←Operations.forAllFlat_iff'] at h_computable
-  replace h_computable := FlatOperation.proverEnvironment_uses_local_witnesses init h_computable
-  simp only [Environment.uses_local_witnesses_flat] at h_computable
-  rw [Environment.uses_local_witnesses_iff_forAll, Operations.forAllFlat_iff, FlatOperation.forAll_ignore_subcircuit]
-  exact h_computable
-  set env := (Environment.fromList (ops.witnesses init))
-  clear h_computable
-  simp only
-  intro n m s
-  -- TODO this is exactly `can_replace_local_witnesses` but in flat land
-  sorry
+  simp_all only [proverEnvironment, Circuit.computable_witnesses, Operations.computable_witnesses,
+    ←Operations.forAllFlat_iff', Environment.uses_local_witnesses]
+  exact FlatOperation.proverEnvironment_uses_local_witnesses init h_computable

@@ -95,7 +95,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     have h_env : env.uses_local_witnesses n ops := by
       guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-      rw [←env.can_replace_local_witnesses, ←env.env_extends_iff_flat]
+      rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
       exact h_env
     have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
@@ -170,7 +170,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
       have h_env : env.uses_local_witnesses n ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        rw [←env.can_replace_local_witnesses, ←env.env_extends_iff_flat]
+        rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
         exact h_env
       have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 

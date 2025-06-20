@@ -130,6 +130,19 @@ def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (w
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ witnesses env ops
   | assert _ :: ops | lookup _ :: ops => witnesses env ops
+
+/-- Induction principle for `FlatOperation`s. -/
+def induct {motive : List (FlatOperation F) → Sort*}
+  (empty : motive [])
+  (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
+  (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
+  (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
+    (ops: List (FlatOperation F)) : motive ops :=
+  match ops with
+  | [] => empty
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup ops)
 end FlatOperation
 
 export FlatOperation (constraints_hold_flat)

@@ -178,12 +178,8 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
-  | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses (m + offset) ops
-  | .assert _ :: ops => env.uses_local_witnesses offset ops
-  | .lookup _ :: ops => env.uses_local_witnesses offset ops
-  | .subcircuit s :: ops => env.extends_vector (s.witnesses env) offset ∧ env.uses_local_witnesses (s.local_length + offset) ops
+def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
+  ops.forAllFlat offset { witness n _ compute := env.extends_vector (compute env) n }
 
 /--
 Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
@@ -196,6 +192,7 @@ def Environment.uses_local_witnesses_completeness (env: Environment F) (offset :
   | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
   | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
 
+/-- Same as `uses_local_witnesses`, but on flat operations -/
 def Environment.uses_local_witnesses_flat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
   FlatOperation.forAll n { witness n _ compute := env.extends_vector (compute env) n } ops
 
