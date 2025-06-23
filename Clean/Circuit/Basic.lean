@@ -374,7 +374,7 @@ def Operation.witnesses (op : Operation F) (acc : List F) : List F := match op w
   | .subcircuit s => (s.witnesses (.fromFlatOperations s.ops acc)).toList
 
 def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
-  FlatOperation.dynamic_witnesses_list (to_flat_operations ops) init
+  FlatOperation.dynamic_witnesses_list ops.toFlat init
 
 def Environment.agreesBelow (n : ℕ) (env env' : Environment F) :=
   ∀ i < n, env.get i = env'.get i

@@ -191,12 +191,12 @@ lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
 The witness length from flat and nested operations is the same
 -/
 lemma flat_witness_length_eq {ops: Operations F} :
-    local_length (to_flat_operations ops) = ops.local_length := by
+    local_length ops.toFlat = ops.local_length := by
   induction ops using Operations.induct with
   | empty => trivial
   | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih  | subcircuit _ ops ih =>
-    dsimp only [to_flat_operations, Operations.local_length]
-    generalize to_flat_operations ops = flat_ops at *
+    dsimp only [Operations.toFlat, Operations.local_length]
+    generalize ops.toFlat = flat_ops at *
     generalize Operations.local_length ops = n at *
     induction flat_ops using local_length.induct generalizing n with
     | case1 => simp_all [local_length, add_comm, List.nil_append, right_eq_add, SubCircuit.local_length_eq]
@@ -212,11 +212,11 @@ lemma flat_witness_length_eq {ops: Operations F} :
 The witnesses created from flat and nested operations are the same
 -/
 lemma flat_witness_eq_witness {ops: Operations F} {env} :
-  (local_witnesses env (to_flat_operations ops)).toArray = (ops.local_witnesses env).toArray := by
+  (local_witnesses env ops.toFlat).toArray = (ops.local_witnesses env).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp only [to_flat_operations, Operations.local_length, Operations.local_witnesses, Vector.toArray_append]
+    simp only [Operations.toFlat, Operations.local_length, Operations.local_witnesses, Vector.toArray_append]
     rw [←ih]
     try rw [witnesses_append]
     try simp only [local_length, local_witnesses, Vector.toArray_append, SubCircuit.witnesses, Vector.toArray_cast]
@@ -433,6 +433,7 @@ end Circuit
 -- more theorems about forAll / forAllFlat
 
 namespace FlatOperation
+-- TODO unused
 lemma forAll_ignore_subcircuit {condition : Condition F} {ops : List (FlatOperation F)} (n : ℕ) :
   FlatOperation.forAll n condition ops ↔
     FlatOperation.forAll n { condition with subcircuit _ _ _ := True } ops := by
@@ -463,50 +464,52 @@ theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : Operations F} :
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all [forAll_cons, forAll_append, Operations.local_length, h]
 
-lemma forAllFlat_iff' (n : ℕ) (condition : Condition F) (ops : Operations F) :
-    FlatOperation.forAll n condition (to_flat_operations ops) ↔ Operations.forAllFlat n condition ops := by
+lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F) :
+    FlatOperation.forAll n condition ops.toFlat ↔ ops.forAllFlat n condition := by
   induction ops using Operations.induct generalizing n with
-  | empty => simp only [forAllFlat, forAll, to_flat_operations, FlatOperation.forAll]
+  | empty => simp only [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | witness | assert | lookup =>
-    simp_all [forAllFlat, forAll, to_flat_operations, FlatOperation.forAll, Condition.applyFlat, FlatOperation.local_length]
+    simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll, Condition.applyFlat, FlatOperation.local_length]
   | subcircuit s ops ih =>
-    simp_all only [forAllFlat, forAll, to_flat_operations]
+    simp_all only [forAllFlat, forAll, toFlat]
     rw [FlatOperation.forAll_append, s.local_length_eq]
     simp_all
 
-lemma forAllFlat_mp {condition : Condition F} {ops : Operations F} (n : ℕ) :
+-- TODO the following three lemmas are currently not used
+
+lemma forAll_toFlat_of_forAll {condition : Condition F} {ops : Operations F} (n : ℕ) :
   (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s → FlatOperation.forAll n condition s.ops) →
-    (ops.forAll n condition → FlatOperation.forAll n condition (to_flat_operations ops)) := by
+    (ops.forAll n condition → FlatOperation.forAll n condition ops.toFlat) := by
   intro h
-  rw [Operations.forAllFlat_iff', forAllFlat]
+  rw [forAll_toFlat_iff, forAllFlat]
   apply forAll_implies
   intro n op
   cases op <;> simp_all only [Condition.apply, implies_true]
 
-lemma forAllFlat_mpr {condition : Condition F} {ops : Operations F} (n : ℕ) :
+lemma forAll_of_forAll_toFlat {condition : Condition F} {ops : Operations F} (n : ℕ) :
   (∀ n {m} (s : SubCircuit F m), FlatOperation.forAll n condition s.ops → condition.subcircuit n s) →
-    (FlatOperation.forAll n condition (to_flat_operations ops) → ops.forAll n condition) := by
+    (FlatOperation.forAll n condition ops.toFlat → ops.forAll n condition) := by
   intro h
-  rw [Operations.forAllFlat_iff', forAllFlat]
+  rw [forAll_toFlat_iff, forAllFlat]
   apply forAll_implies
   intro n op
   cases op <;> simp_all only [Condition.apply, implies_true]
 
-lemma forAllFlat_iff {condition : Condition F} {ops : Operations F} (n : ℕ) :
+lemma forAll_iff_forAll_toFlat {condition : Condition F} {ops : Operations F} (n : ℕ) :
   (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s ↔ FlatOperation.forAll n condition s.ops) →
-    (ops.forAll n condition ↔ FlatOperation.forAll n condition (to_flat_operations ops)) := by
+    (ops.forAll n condition ↔ FlatOperation.forAll n condition ops.toFlat) := by
   intro h
   constructor
-  · simp_all only [Operations.forAllFlat_mp, implies_true]
-  · simp_all only [Operations.forAllFlat_mpr, implies_true]
+  · simp_all only [forAll_toFlat_of_forAll, implies_true]
+  · simp_all only [forAll_of_forAll_toFlat, implies_true]
 end Operations
 
 /-- An environment respects local witnesses iff it does so in the flattened variant. -/
 lemma Environment.env_extends_iff_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
-    env.uses_local_witnesses_flat n (to_flat_operations ops) ↔
+    env.uses_local_witnesses_flat n ops.toFlat ↔
     env.uses_local_witnesses n ops := by
   simp only [uses_local_witnesses_flat, uses_local_witnesses]
-  rw [Operations.forAllFlat_iff']
+  rw [Operations.forAll_toFlat_iff]
 
 -- theorems about witness generation
 
@@ -583,7 +586,7 @@ theorem Circuit.proverEnvironment_uses_local_witnesses (circuit : Circuit F α) 
     (circuit.proverEnvironment init).uses_local_witnesses init.length (circuit.operations init.length) := by
   intro h_computable
   simp_all only [proverEnvironment, Circuit.computableWitnesses, Operations.computableWitnesses,
-    ←Operations.forAllFlat_iff', Environment.uses_local_witnesses]
+    ←Operations.forAll_toFlat_iff, Environment.uses_local_witnesses]
   exact FlatOperation.proverEnvironment_uses_local_witnesses init h_computable
 
 namespace FlatOperation

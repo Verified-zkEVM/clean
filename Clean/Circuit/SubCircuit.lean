@@ -44,14 +44,14 @@ Consistency theorem which proves that flattened constraints are equivalent to th
 constraints created from the inductive `Operations` type, using flat constraints for subcircuits.
 -/
 theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : Environment F},
-  constraints_hold env ops ↔ constraints_hold_flat env (to_flat_operations ops)
+  constraints_hold env ops ↔ constraints_hold_flat env ops.toFlat
 := by
   intro ops env
   induction ops using Operations.induct with
   | empty => trivial
   -- we can handle all non-empty cases at once
   | witness | assert | lookup | subcircuit =>
-    dsimp only [to_flat_operations]
+    dsimp only [Operations.toFlat]
     try rw [constraints_hold_cons]
     try rw [constraints_hold_append]
     simp_all only [constraints_hold, constraints_hold_flat, and_true, true_and]
@@ -62,7 +62,7 @@ Theorem and implementation that allows us to take a formal circuit and use it as
 def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
-  let flat_ops := to_flat_operations ops
+  let flat_ops := ops.toFlat
   have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
   have imply_soundness : ∀ env : Environment F,
@@ -133,7 +133,7 @@ Theorem and implementation that allows us to take a formal assertion and use it 
 def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
-  let flat_ops := to_flat_operations ops
+  let flat_ops := ops.toFlat
   have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
   {
@@ -232,12 +232,12 @@ theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α)
   rw [Operations.computableWitnesses] at h_computable
   simp only [Operations.computableWitnesses, operations, subcircuit,
     FormalCircuit.to_subcircuit, Operations.forAllFlat, Operations.forAll, and_true]
-  rw [Operations.forAllFlat_iff']
+  rw [Operations.forAll_toFlat_iff]
   exact h_computable
 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
-  FormalCircuit.to_subcircuit FormalAssertion.to_subcircuit to_flat_operations
+  FormalCircuit.to_subcircuit FormalAssertion.to_subcircuit
   Circuit.subcircuit_soundness Circuit.subcircuit_completeness
   Circuit.subassertion_soundness Circuit.subassertion_completeness
 

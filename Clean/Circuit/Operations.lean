@@ -154,17 +154,17 @@ methods on operations that take a self argument.
 @[reducible, circuit_norm]
 def Operations (F : Type) [Field F] := List (Operation F)
 
-def Operations.toList : Operations F → List (Operation F) := id
+namespace Operations
+def toList : Operations F → List (Operation F) := id
 
 /-- move from nested operations back to flat operations -/
-def to_flat_operations : Operations F → List (FlatOperation F)
+def toFlat : Operations F → List (FlatOperation F)
   | [] => []
-  | .witness m c :: ops => .witness m c :: to_flat_operations ops
-  | .assert e :: ops => .assert e :: to_flat_operations ops
-  | .lookup l :: ops => .lookup l :: to_flat_operations ops
-  | .subcircuit s :: ops => s.ops ++ to_flat_operations ops
+  | .witness m c :: ops => .witness m c :: toFlat ops
+  | .assert e :: ops => .assert e :: toFlat ops
+  | .lookup l :: ops => .lookup l :: toFlat ops
+  | .subcircuit s :: ops => s.ops ++ toFlat ops
 
-namespace Operations
 /--
 The number of witness variables introduced by these operations.
 -/
