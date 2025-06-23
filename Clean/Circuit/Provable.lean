@@ -25,8 +25,7 @@ class ProvableType (M : TypeMap) where
   to_elements {F: Type} : M F -> Vector F size
   from_elements {F: Type} : Vector F size -> M F
 
-  to_elements_from_elements {F: Type} : ∀ v: Vector F size, to_elements (from_elements v) = v
-    := by
+  to_elements_from_elements {F: Type} : ∀ v: Vector F size, to_elements (from_elements v) = v := by
     intro _
     try (simp; done)
     try (
@@ -114,20 +113,29 @@ def field : TypeMap := id
 instance : ProvableType field where
   size := 1
   to_elements x := #v[x]
-  from_elements v := let ⟨ .mk [x], _ ⟩ := v; x
+  from_elements := fun ⟨⟨[x]⟩, _⟩ => x
 instance : NonEmptyProvableType field where
 
 @[reducible]
 def ProvablePair (α β : TypeMap) := fun F => α F × β F
 
 @[reducible]
-def field2 := ProvablePair field field
+def fieldPair : TypeMap := fun F => F × F
 
-@[circuit_norm]
-instance : ProvableType field2 where
+@[reducible]
+def fieldTriple : TypeMap := fun F => F × F × F
+
+instance : ProvableType fieldPair where
   size := 2
-  to_elements pair := #v[pair.1, pair.2]
-  from_elements v := (v.get 0, v.get 1)
+  to_elements := fun (x, y) => #v[x, y]
+  from_elements := fun ⟨⟨[x, y]⟩, _ ⟩ => (x, y)
+instance : NonEmptyProvableType fieldPair where
+
+instance : ProvableType fieldTriple where
+  size := 3
+  to_elements := fun (x, y, z) => #v[x, y, z]
+  from_elements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
+instance : NonEmptyProvableType fieldTriple where
 
 variable {n: ℕ}
 @[reducible]
@@ -324,25 +332,40 @@ where
       ac_rfl
 end ProvableStruct
 
+namespace ProvableType
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
   ProvableType.eval env x = Expression.eval env x := by rfl
 
-omit [Field F] in
 @[circuit_norm ↓]
-theorem var_from_offset_field (offset : ℕ) :
+theorem var_from_offset_field {F} (offset : ℕ) :
   var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
 
 @[circuit_norm ↓]
 theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
   ProvableType.eval env x = x.map (Expression.eval env) := rfl
 
-omit [Field F] in
 @[circuit_norm ↓]
-theorem var_from_offset_fields (offset : ℕ) :
+theorem var_from_offset_fields {F} (offset : ℕ) :
   var_from_offset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
-namespace ProvableType
+@[circuit_norm ↓]
+theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
+  ProvableType.eval env t = (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := rfl
+
+@[circuit_norm ↓]
+theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : Var fieldTriple F) :
+  ProvableType.eval env t = (match t with
+    | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := rfl
+
+@[circuit_norm ↓]
+theorem var_from_offset_fieldPair {F} (offset : ℕ) :
+  var_from_offset (F:=F) fieldPair offset = (var ⟨offset⟩, var ⟨offset + 1⟩) := rfl
+
+@[circuit_norm ↓]
+theorem var_from_offset_fieldTriple {F} (offset : ℕ) :
+  var_from_offset (F:=F) fieldTriple offset = (var ⟨offset⟩, var ⟨offset + 1⟩, var ⟨offset + 2⟩) := rfl
+
 variable {α: TypeMap} [ProvableType α]
 
 omit [Field F] in
