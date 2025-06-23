@@ -107,8 +107,8 @@ def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup {Row : TypeMap} [ProvableType Row] (table : TypedTable F Row)  (entry: Row (Expression F)) : Circuit F Unit := fun _ =>
-  ((), [.lookup { table := table.toUntyped, entry := to_elements entry }])
+def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry: Row (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.lookup { table := table.toRaw, entry := to_elements entry }])
 
 end Circuit
 

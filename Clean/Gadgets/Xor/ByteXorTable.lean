@@ -5,7 +5,7 @@ namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-def ByteXorTable : TypedTable (F p) fieldTriple := StaticTable.toTable {
+def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
   name := "ByteXor"
   length := 256*256
 

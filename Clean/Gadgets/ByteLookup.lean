@@ -8,7 +8,7 @@ variable [p_large_enough: Fact (p > 512)]
 def from_byte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-def ByteTable : TypedTable (F p) field := StaticTable.toTable {
+def ByteTable : Table (F p) field := .fromStatic {
   name := "Bytes"
   length := 256
   row i := from_byte i

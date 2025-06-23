@@ -1,49 +1,61 @@
 import Clean.Circuit.Provable
 variable {F: Type} [Field F] {α : Type} {n : ℕ}
+variable {Row : TypeMap} [ProvableType Row]
 
-structure Table (F : Type) where
+/--
+`Table` models a lookup table, by letting you specify a defining property `contains`
+that all rows in the table must satisfy.
+
+This representation is deliberately not very concrete, to allow for cases where e.g. the table
+is only built after all lookups into it are defined.
+
+In principle, the type allows you to define "impossible" tables, e.g. `contains _ := False`, and use
+them in a circuit, yielding spurious correctness proofs. To avoid this, it is encouraged to only define
+tables via auxiliary constructions like `StaticTable` or `LookupCircuit`, which guarantee the table
+can be instantiated into a concrete table of field elements, such that `contains` can be proved to hold
+for every row.
+-/
+structure Table (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
-  arity : ℕ
   /--
   `contains` captures what it means to be in the table.
-  there should be a concrete way of instantiating the table where `contains` is proved to hold on every row.
   -/
-  contains : Vector F arity → Prop
+  contains : Row F → Prop
 
   /--
   we allow to rewrite the `contains` property into two statements that are easier to work with
   in the context of soundness and completeness proofs.
   -/
-  soundness : Vector F arity → Prop
-  completeness : Vector F arity → Prop
+  soundness : Row F → Prop
+  completeness : Row F → Prop
 
   imply_soundness : ∀ row, contains row → soundness row
   implied_by_completeness : ∀ row, completeness row → contains row
 
+/--
+`RawTable` replaces the custom `Row` type with plain vector-valued entries, which
+simplifies definitions and arguments in the core framework.
+
+User-facing code should use `Table` instead.
+-/
+structure RawTable (F : Type) where
+  name : String
+  arity : ℕ
+  contains : Vector F arity → Prop
+  soundness : Vector F arity → Prop
+  completeness : Vector F arity → Prop
+  imply_soundness : ∀ row, contains row → soundness row
+  implied_by_completeness : ∀ row, completeness row → contains row
+
 structure Lookup (F : Type) where
-  table: Table F
+  table: RawTable F
   entry: Vector (Expression F) table.arity
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
--- usually we want lookups to be properly typed, with input and output types.
-variable {Row : TypeMap} [ProvableType Row]
-
-structure TypedTable (F : Type) (Row : TypeMap) [ProvableType Row] where
-  name : String
-  contains : Row F → Prop
-  soundness : Row F → Prop
-  completeness : Row F → Prop
-  imply_soundness : ∀ row, contains row → soundness row
-  implied_by_completeness : ∀ row, completeness row → contains row
-
-structure TypedLookup (F : Type) (Row : TypeMap) [ProvableType Row] where
-  table: TypedTable F Row
-  entry: Row (Expression F)
-
 @[circuit_norm]
-def TypedTable.toUntyped (table: TypedTable F Row) : Table F where
+def Table.toRaw (table: Table F Row) : RawTable F where
   name := table.name
   arity := size Row
   contains row := table.contains (from_elements row)
@@ -72,12 +84,15 @@ def contains (table: StaticTable F Row) (row: Row F) :=
   ∃ i : Fin table.length, row = table.row i
 
 @[circuit_norm]
-def toTable (table: StaticTable F Row) : TypedTable F Row where
+def toTable (table: StaticTable F Row) : Table F Row where
   name := table.name
   contains := table.contains
   soundness := table.soundness
   completeness := table.completeness
   imply_soundness := table.imply_soundness
   implied_by_completeness := table.implied_by_completeness
-
 end StaticTable
+
+@[circuit_norm]
+def Table.fromStatic (table: StaticTable F Row) : Table F Row :=
+  StaticTable.toTable table

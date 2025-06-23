@@ -125,10 +125,10 @@ instance : ExplicitCircuits (F:=F) assert_zero where
   local_length _ _ := 0
   operations e n := [.assert e]
 
-instance {α: TypeMap} [ProvableType α] {table : TypedTable F α} : ExplicitCircuits (F:=F) (lookup table) where
+instance {α: TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
   output _ _ := ()
   local_length _ _ := 0
-  operations entry n := [.lookup { table := table.toUntyped, entry := to_elements entry }]
+  operations entry n := [.lookup { table := table.toRaw, entry := to_elements entry }]
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where

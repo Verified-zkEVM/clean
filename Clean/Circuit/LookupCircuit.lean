@@ -30,7 +30,7 @@ theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β)
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
 
-def toTable (circuit : LookupCircuit F α β) : TypedTable F (ProvablePair α β) where
+def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) where
   name := circuit.name
 
   -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
@@ -78,8 +78,8 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   soundness := by
     intro n env input_var input h_input h_assumptions h_holds
     -- TODO: remove `to_elements`, `from_elements` from `circuit_norm`
-    -- simp_all only [circuit_norm, toTable, TypedTable.toUntyped]
-    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, TypedTable.toUntyped, size,
+    -- simp_all only [circuit_norm, toTable, Table.toUntyped]
+    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, Table.toRaw, size,
       pure, Circuit.bind_def, lookup, List.cons_append, List.nil_append,
       ProvableType.witness, Circuit.constraints_hold.soundness, and_true, ElaboratedCircuit.output]
     set output_var := var_from_offset (F:=F) β n with h_output
@@ -92,8 +92,8 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   completeness := by
     intro n env input_var h_env input h_input h_assumptions
     -- TODO: remove `to_elements`, `from_elements` from `circuit_norm`
-    -- simp_all only [circuit_norm, toTable, TypedTable.toUntyped]
-    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, TypedTable.toUntyped, size,
+    -- simp_all only [circuit_norm, toTable, Table.toUntyped]
+    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, Table.toRaw, size,
       pure, Circuit.bind_def, lookup, List.cons_append, List.nil_append,
       ProvableType.witness, Environment.uses_local_witnesses_completeness,
       Environment.extends_vector, and_true, Circuit.constraints_hold.completeness]

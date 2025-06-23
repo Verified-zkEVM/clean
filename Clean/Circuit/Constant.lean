@@ -45,7 +45,7 @@ instance {α: TypeMap} [ProvableType α] : ConstantCircuits (ProvableType.witnes
 instance : ConstantCircuits (F:=F) assert_zero where
   local_length := 0
 
-instance {α: TypeMap} [ProvableType α] {table : TypedTable F α} : ConstantCircuits (F:=F) (lookup table) where
+instance {α: TypeMap} [ProvableType α] {table : Table F α} : ConstantCircuits (F:=F) (lookup table) where
   local_length := 0
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
