@@ -355,7 +355,7 @@ def Environment.fromList (witnesses: List F) : Environment F :=
   .mk fun i => witnesses[i]?.getD 0
 
 def FlatOperation.dynamic_witnesses (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ c => (c (.fromList acc)).toList
+  | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
 
@@ -368,7 +368,7 @@ def Environment.fromFlatOperations (ops : List (FlatOperation F)) (init : List F
   .fromList (FlatOperation.dynamic_witnesses_list ops init)
 
 def Operation.witnesses (op : Operation F) (acc : List F) : List F := match op with
-  | .witness _ c => (c (.fromList acc)).toList
+  | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
   | .subcircuit s => (s.witnesses (.fromFlatOperations s.ops acc)).toList
@@ -414,7 +414,7 @@ def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : E
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
 
-def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
+def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (local_length l)
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
   | .assert _ :: ops => witness_generators ops

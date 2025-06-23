@@ -86,7 +86,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     exact can_replace_subcircuits.mpr h_holds
 
   have implied_by_completeness : ∀ env : Environment F,
-      env.extends_vector (FlatOperation.witnesses env flat_ops) n →
+      env.extends_vector (FlatOperation.local_witnesses env flat_ops) n →
       subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
     -- we are given that the assumptions are true
     intro env h_env
@@ -94,7 +94,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     intro (as : circuit.assumptions b)
 
     have h_env : env.uses_local_witnesses n ops := by
-      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
+      guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
       rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
       exact h_env
     have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
@@ -169,7 +169,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
       have h_env : env.uses_local_witnesses n ops := by
-        guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
+        guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
         rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
         exact h_env
       have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env

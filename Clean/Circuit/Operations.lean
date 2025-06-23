@@ -40,16 +40,16 @@ def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Pro
     | _ => constraints_hold_flat eval ops
 
 @[circuit_norm]
-def witness_length : List (FlatOperation F) → ℕ
+def local_length : List (FlatOperation F) → ℕ
   | [] => 0
-  | witness m _ :: ops => m + witness_length ops
-  | assert _ :: ops | lookup _ :: ops => witness_length ops
+  | witness m _ :: ops => m + local_length ops
+  | assert _ :: ops | lookup _ :: ops => local_length ops
 
 @[circuit_norm]
-def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (witness_length l)
+def local_witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (local_length l)
   | [] => #v[]
-  | witness _ compute :: ops => compute env ++ witnesses env ops
-  | assert _ :: ops | lookup _ :: ops => witnesses env ops
+  | witness _ compute :: ops => compute env ++ local_witnesses env ops
+  | assert _ :: ops | lookup _ :: ops => local_witnesses env ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
@@ -71,6 +71,7 @@ export FlatOperation (constraints_hold_flat)
 def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
+open FlatOperation in
 /--
 This is a low-level way to model a subcircuit:
 A flat list of circuit operations, instantiated at a certain offset.
@@ -97,18 +98,19 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
     constraints_hold_flat env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+  implied_by_completeness : ∀ env, env.extends_vector (local_witnesses env ops) offset →
     completeness env → constraints_hold_flat env ops
 
   -- `uses_local_witnesses` needs to follow from the local witness generator condition
-  implied_by_local_witnesses : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+  implied_by_local_witnesses : ∀ env, env.extends_vector (local_witnesses env ops) offset →
     uses_local_witnesses env
 
   -- `local_length` must be consistent with the operations
-  local_length_eq : local_length = FlatOperation.witness_length ops
+  local_length_eq : local_length = FlatOperation.local_length ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
+def SubCircuit.witnesses (sc: SubCircuit F n) env :=
+  (FlatOperation.local_witnesses env sc.ops).cast sc.local_length_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -290,14 +292,16 @@ def Operations.Condition.applyFlat (condition: Condition F) (offset: ℕ) : Flat
 def Operations.Condition.impliesFlat (c c': Condition F) : Prop :=
   ∀ (offset : ℕ) (op : FlatOperation F), c.ignoreSubcircuit.applyFlat offset op → c'.applyFlat offset op
 
-def FlatOperation.local_length : FlatOperation F → ℕ
+def FlatOperation.single_local_length : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
 
 def FlatOperation.forAll (offset : ℕ) (condition : Operations.Condition F) : List (FlatOperation F) → Prop
   | [] => True
-  | op :: ops => condition.applyFlat offset op ∧ forAll (op.local_length + offset) condition ops
+  | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
+  | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
+  | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops } ops
