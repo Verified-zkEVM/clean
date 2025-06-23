@@ -77,30 +77,11 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
 
   soundness := by
     intro n env input_var input h_input h_assumptions h_holds
-    -- TODO: remove `to_elements`, `from_elements` from `circuit_norm`
-    -- simp_all only [circuit_norm, toTable, Table.toUntyped]
-    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, Table.toRaw, size,
-      pure, Circuit.bind_def, lookup, List.cons_append, List.nil_append,
-      ProvableType.witness, Circuit.constraints_hold.soundness, and_true, ElaboratedCircuit.output]
-    set output_var := var_from_offset (F:=F) β n with h_output
-    change circuit.assumptions (eval (α:=ProvablePair α β) env (input_var, output_var)).1
-      → circuit.spec (eval (α:=ProvablePair α β) env (input_var, output_var)).1 (eval (α:=ProvablePair α β) env (input_var, output_var)).2
-    at h_holds
-    simp only [circuit_norm, h_input, h_output] at h_holds ⊢
-    exact h_holds h_assumptions
+    simp_all only [circuit_norm, toTable]
 
   completeness := by
     intro n env input_var h_env input h_input h_assumptions
-    -- TODO: remove `to_elements`, `from_elements` from `circuit_norm`
-    -- simp_all only [circuit_norm, toTable, Table.toUntyped]
-    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, Table.toRaw, size,
-      pure, Circuit.bind_def, lookup, List.cons_append, List.nil_append,
-      ProvableType.witness, Environment.uses_local_witnesses_completeness,
-      Environment.extends_vector, and_true, Circuit.constraints_hold.completeness]
-    set output_var := var_from_offset (F:=F) β n with h_output
-    change circuit.assumptions (eval (α:=ProvablePair α β) env (input_var, output_var)).1 ∧
-      (eval (α:=ProvablePair α β) env (input_var, output_var)).2 = circuit.constantOutput (eval (α:=ProvablePair α β) env (input_var, output_var)).1
-    simp only [circuit_norm, h_input, h_assumptions, output_var]
+    simp_all only [circuit_norm, toTable]
     rw [ProvableType.ext_iff]
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_var_from_offset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
