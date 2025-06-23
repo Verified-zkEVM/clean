@@ -33,10 +33,10 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
     let z3 := (env x.x3).val ^^^ (env y.x3).val
     U32.mk z0 z1 z2 z3)
 
-  lookup (ByteXorLookup x.x0 y.x0 z.x0)
-  lookup (ByteXorLookup x.x1 y.x1 z.x1)
-  lookup (ByteXorLookup x.x2 y.x2 z.x2)
-  lookup (ByteXorLookup x.x3 y.x3 z.x3)
+  lookup ByteXorTable (x.x0, y.x0, z.x0)
+  lookup ByteXorTable (x.x1, y.x1, z.x1)
+  lookup ByteXorTable (x.x2, y.x2, z.x2)
+  lookup ByteXorTable (x.x3, y.x3, z.x3)
   return z
 
 def assumptions (input: Inputs (F p)) :=
@@ -86,14 +86,14 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
-  simp only [h_input, circuit_norm, main, ByteXorLookup, ByteXorTable,
+  simp only [h_input, circuit_norm, main, ByteXorTable,
     var_from_offset, Vector.mapRange] at h_holds
 
   apply soundness_to_u32 x_norm y_norm
   simp only [circuit_norm, var_from_offset, Vector.mapRange, eval]
   simp [h_holds]
 
-lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
+lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
   apply FieldUtils.val_lt_p
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
@@ -112,17 +112,10 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, main, ByteXorLookup, ByteXorTable,
-    var_from_offset, Vector.mapRange] at h_env ⊢
-  have h_env0 := by let h := h_env 0; simp at h; exact h
-  have h_env1 := by let h := h_env 1; simp at h; exact h
-  have h_env2 := by let h := h_env 2; simp at h; exact h
-  have h_env3 := by let h := h_env 3; simp [show ↑(3: Fin 4) = 3 from rfl] at h; exact h
-  rw [h_env0, h_env1, h_env2, h_env3]
-  rw [xor_cast x0_byte y0_byte, xor_cast x1_byte y1_byte,
-      xor_cast x2_byte y2_byte, xor_cast x3_byte y3_byte]
-  simp only [x0_byte, y0_byte, x1_byte, y1_byte, x2_byte, y2_byte,
-    x3_byte, y3_byte, and_true]
+  simp only [h_input, circuit_norm, main, ByteXorTable,
+    var_from_offset, Vector.mapRange, Fin.forall_iff] at h_env ⊢
+  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
+  simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
   assumptions
