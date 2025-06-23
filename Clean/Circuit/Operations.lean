@@ -18,13 +18,11 @@ inductive FlatOperation (F : Type) where
   | lookup : Lookup F → FlatOperation F
 
 namespace FlatOperation
-def toString [Repr F] : FlatOperation F → String
-  | witness m _ => "(Witness " ++ reprStr m ++ ")"
-  | assert e => "(Assert " ++ reprStr e ++ " == 0)"
-  | lookup l => reprStr l
-
 instance [Repr F] : Repr (FlatOperation F) where
-  reprPrec op _ := toString op
+  reprPrec
+  | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
+  | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
+  | lookup l, _ => reprStr l
 
 /--
 What it means that "constraints hold" on a list of flat operations:
@@ -203,6 +201,7 @@ def induct {motive : Operations F → Sort*}
   | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit ops)
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit ops)
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit ops)
+end Operations
 
 -- generic folding over `Operations` resulting in a proposition
 
@@ -226,6 +225,7 @@ def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Pro
 def Condition.implies (c c': Condition F) : Prop :=
   ∀ (offset : ℕ) (op : Operation F), c.apply offset op → c'.apply offset op
 
+namespace Operations
 /--
 Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
 The function expects the initial offset as an argument.
@@ -281,15 +281,15 @@ where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consi
     exact subcircuit n s ops (motive' ops _ h.right)
 end Operations
 
-def Operations.Condition.ignoreSubcircuit (condition : Operations.Condition F) : Operations.Condition F :=
+def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
   { condition with subcircuit := fun _ _ _ => True }
 
-def Operations.Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
+def Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
 
-def Operations.Condition.impliesFlat (c c': Condition F) : Prop :=
+def Condition.impliesFlat (c c': Condition F) : Prop :=
   ∀ (offset : ℕ) (op : FlatOperation F), c.ignoreSubcircuit.applyFlat offset op → c'.applyFlat offset op
 
 def FlatOperation.single_local_length : FlatOperation F → ℕ
@@ -297,7 +297,7 @@ def FlatOperation.single_local_length : FlatOperation F → ℕ
   | .assert _ => 0
   | .lookup _ => 0
 
-def FlatOperation.forAll (offset : ℕ) (condition : Operations.Condition F) : List (FlatOperation F) → Prop
+def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops

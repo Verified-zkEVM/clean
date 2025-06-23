@@ -161,14 +161,14 @@ lemma local_length_append {F} {a b: List (FlatOperation F)} :
   | case3 _ _ ih | case4 _ _ ih =>
     simp only [List.cons_append, local_length, ih]
 
-theorem forAll_empty {condition : Operations.Condition F} {n: ℕ} : forAll n condition [] = True := rfl
+theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
 
-theorem forAll_cons {condition : Operations.Condition F} {offset: ℕ} {op: FlatOperation F} {ops: List (FlatOperation F)} :
+theorem forAll_cons {condition : Condition F} {offset: ℕ} {op: FlatOperation F} {ops: List (FlatOperation F)} :
   forAll offset condition (op :: ops) ↔
     condition.applyFlat offset op ∧ forAll (op.single_local_length + offset) condition ops := by
-  cases op <;> simp [forAll, Operations.Condition.applyFlat, single_local_length]
+  cases op <;> simp [forAll, Condition.applyFlat, single_local_length]
 
-lemma forAll_append {condition : Operations.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
+lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
   forAll n condition (ops ++ ops') ↔
     forAll n condition ops ∧ forAll (local_length ops + n) condition ops' := by
   induction ops generalizing n with
@@ -259,7 +259,7 @@ theorem can_replace_local_witnesses_flat {env: Environment F} (n: ℕ) {ops: Lis
     trivial
   | assert | lookup =>
     simp_all [uses_local_witnesses_flat, circuit_norm,
-      FlatOperation.forAll_cons, Operations.Condition.applyFlat, FlatOperation.single_local_length]
+      FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.single_local_length]
 
 theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Operations F} {n: ℕ} (h: ops.subcircuits_consistent n) :
     env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
@@ -268,7 +268,7 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Oper
   | witness | assert | lookup =>
     simp_all +arith [uses_local_witnesses, uses_local_witnesses_completeness, Operations.forAllFlat, Operations.forAll]
   | subcircuit n circuit ops ih =>
-    simp only [uses_local_witnesses, uses_local_witnesses_completeness, Operations.forAllFlat, Operations.forAll_cons, Operations.Condition.apply]
+    simp only [uses_local_witnesses, uses_local_witnesses_completeness, Operations.forAllFlat, Operations.forAll_cons, Condition.apply]
     intro h
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
@@ -347,7 +347,7 @@ end Circuit
 namespace Circuit
 -- more theorems about forAll
 
-variable {α β : Type} {n : ℕ} {prop : Operations.Condition F} {env: Environment F}
+variable {α β : Type} {n : ℕ} {prop : Condition F} {env: Environment F}
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
@@ -359,7 +359,7 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
 -- definition of `forAll` for circuits which uses the same offset in two places
 
 @[reducible, circuit_norm]
-def forAll (circuit : Circuit F α) (n : ℕ) (prop : Operations.Condition F) :=
+def forAll (circuit : Circuit F α) (n : ℕ) (prop : Condition F) :=
   (circuit.operations n).forAll n prop
 
 lemma forAll_def {circuit : Circuit F α} {n : ℕ} :
@@ -433,24 +433,24 @@ end Circuit
 -- more theorems about forAll / forAllFlat
 
 namespace FlatOperation
-lemma forAll_ignore_subcircuit {condition : Operations.Condition F} {ops : List (FlatOperation F)} (n : ℕ) :
+lemma forAll_ignore_subcircuit {condition : Condition F} {ops : List (FlatOperation F)} (n : ℕ) :
   FlatOperation.forAll n condition ops ↔
     FlatOperation.forAll n { condition with subcircuit _ _ _ := True } ops := by
   induction ops generalizing n with
   | nil => simp only [forAll]
   | cons op ops ih =>
-    simp only [forAll_cons, Operations.Condition.applyFlat]
+    simp only [forAll_cons, Condition.applyFlat]
     split <;> simp_all
 
-theorem forAll_implies {c c' : Operations.Condition F} {n : ℕ} {ops : List (FlatOperation F)} :
+theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : List (FlatOperation F)} :
     c.impliesFlat c' → (forAll n c ops → forAll n c' ops) := by
-  simp only [Operations.Condition.impliesFlat, Operations.Condition.ignoreSubcircuit]
+  simp only [Condition.impliesFlat, Condition.ignoreSubcircuit]
   intro h
   induction ops generalizing n with
   | nil => simp [forAll_empty]
   | cons op ops ih =>
     specialize h n op
-    cases op <;> simp_all [forAll_cons, and_true, and_imp, Operations.Condition.applyFlat]
+    cases op <;> simp_all [forAll_cons, and_true, and_imp, Condition.applyFlat]
 end FlatOperation
 
 namespace Operations
@@ -558,9 +558,9 @@ theorem only_accessed_below_all {ops : List (FlatOperation F)} (n : ℕ) :
     clear ih
     cases op with
     | assert | lookup =>
-      simp_all only [Operations.Condition.applyFlat, local_witnesses]
+      simp_all only [Condition.applyFlat, local_witnesses]
     | witness m c =>
-      simp_all only [Operations.Condition.applyFlat, local_witnesses, Environment.only_accessed_below]
+      simp_all only [Condition.applyFlat, local_witnesses, Environment.only_accessed_below]
       congr 1
       apply h_comp env env'
       intro i hi
@@ -577,9 +577,9 @@ theorem proverEnvironment_uses_local_witnesses {ops : List (FlatOperation F)} (i
     simp only [forAll_cons] at h_computable ⊢
     cases op with
     | assert | lookup  =>
-      simp_all [dynamic_witnesses_cons, Operations.Condition.applyFlat, single_local_length, dynamic_witnesses]
+      simp_all [dynamic_witnesses_cons, Condition.applyFlat, single_local_length, dynamic_witnesses]
     | witness m compute =>
-      simp_all only [Operations.Condition.applyFlat, single_local_length, dynamic_witnesses, Environment.only_accessed_below']
+      simp_all only [Condition.applyFlat, single_local_length, dynamic_witnesses, Environment.only_accessed_below']
       -- get rid of ih first
       constructor; case right =>
         specialize ih (init ++ (compute (.fromList init)).toList)
