@@ -290,7 +290,8 @@ def Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F
   | .lookup l => condition.lookup offset l
 
 def Condition.impliesFlat (c c': Condition F) : Prop :=
-  ∀ (offset : ℕ) (op : FlatOperation F), c.ignoreSubcircuit.applyFlat offset op → c'.applyFlat offset op
+  ∀ (offset : ℕ) (op : FlatOperation F),
+    c.ignoreSubcircuit.applyFlat offset op → c'.ignoreSubcircuit.applyFlat offset op
 
 def FlatOperation.single_local_length : FlatOperation F → ℕ
   | .witness m _ => m

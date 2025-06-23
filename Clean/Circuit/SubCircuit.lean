@@ -95,7 +95,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     have h_env : env.uses_local_witnesses n ops := by
       guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
-      rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
+      rw [env.uses_local_witnesses_iff_flat, env.uses_local_witnesses_flat_iff_extends]
       exact h_env
     have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
@@ -170,7 +170,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
       have h_env : env.uses_local_witnesses n ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
-        rw [←env.env_extends_iff_flat, ←env.can_replace_local_witnesses_flat]
+        rw [env.uses_local_witnesses_iff_flat, env.uses_local_witnesses_flat_iff_extends]
         exact h_env
       have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
@@ -222,7 +222,7 @@ def FormalCircuit.computableWitnesses (circuit : FormalCircuit F β α) : Prop :
     (env.agreesBelow n env' → eval env input = eval env' input) →
     (circuit.main input |>.operations n).computableWitnesses n env env'
 
-theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
+theorem Circuit.subcircuit_computableWitnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
   Environment.onlyAccessedBelow n (eval · input) ∧ circuit.computableWitnesses →
     (subcircuit circuit input).computableWitnesses n := by
   simp only [FormalCircuit.computableWitnesses]
