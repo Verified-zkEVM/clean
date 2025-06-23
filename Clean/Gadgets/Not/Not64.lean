@@ -17,7 +17,7 @@ omit p_large_enough in
 lemma eval_not {env} {x_var : Var U64 (F p)} :
     eval env (not64_bytewise x_var) = not64_bytewise_value (eval env x_var) := by
   rw [not64_bytewise, not64_bytewise_value, U64.map, U64.map]
-  simp only [not64_bytewise, eval, circuit_norm]
+  simp only [not64_bytewise, circuit_norm, explicit_provable_type]
   ring_nf
 
 theorem not_zify (n : ℕ) {x : ℕ} (hx : x < n) : ((n - 1 - x : ℕ) : ℤ) = ↑n - 1 - ↑x := by

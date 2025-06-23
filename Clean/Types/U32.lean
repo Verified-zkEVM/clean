@@ -204,14 +204,12 @@ def circuit : FormalAssertion (F p) U32 where
   assumptions := assumptions
   spec := spec
   soundness := by
-    rintro i0 env x_var
-    rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp_all [spec, circuit_norm, u32_assert_normalized, ByteTable, is_normalized, eval]
+    rintro i0 env x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    simp_all [spec, circuit_norm, u32_assert_normalized, ByteTable, is_normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env x_var
-    rintro _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp_all [spec, circuit_norm, u32_assert_normalized, ByteTable, is_normalized, eval]
+    rintro i0 env x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    simp_all [spec, circuit_norm, u32_assert_normalized, ByteTable, is_normalized, explicit_provable_type]
 
 end U32.AssertNormalized
 
@@ -244,7 +242,7 @@ def circuit : FormalCircuit (F p) U32 U32 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp [circuit_norm, u32_copy, spec, h_eval, eval, var_from_offset]
+    simp [circuit_norm, u32_copy, spec, h_eval, explicit_provable_type]
     injections h_eval
     intros h0 h1 h2 h3
     aesop
@@ -253,7 +251,7 @@ def circuit : FormalCircuit (F p) U32 U32 where
     rintro h ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp [circuit_norm, u32_copy, spec, h_eval]
     simp [circuit_norm, u32_copy, Gadgets.Equality.elaborated] at h
-    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
+    simp_all [circuit_norm, explicit_provable_type]
     have h0 := h 0
     have h1 := h 1
     have h2 := h 2

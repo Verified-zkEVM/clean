@@ -81,7 +81,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   let ⟨⟨ x0, x1, x2, x3 ⟩,
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
 
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
@@ -90,7 +90,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     var_from_offset, Vector.mapRange] at h_holds
 
   apply soundness_to_u32 x_norm y_norm
-  simp only [circuit_norm, var_from_offset, Vector.mapRange, eval]
+  simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 
 lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
@@ -105,7 +105,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
        ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3 ⟩,
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
   simp only [assumptions, circuit_norm, U32.is_normalized] at as
   obtain ⟨ x_bytes, y_bytes ⟩ := as
@@ -113,7 +113,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
   simp only [h_input, circuit_norm, main, ByteXorTable,
-    var_from_offset, Vector.mapRange, Fin.forall_iff] at h_env ⊢
+    explicit_provable_type, Fin.forall_iff] at h_env ⊢
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 

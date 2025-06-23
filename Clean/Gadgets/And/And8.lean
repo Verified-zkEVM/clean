@@ -81,13 +81,9 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   output _ i := var ⟨i⟩
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorTable]
-  simp only [Inputs.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  rw [hx, hy] at h_holds
-  clear hx hy
-  obtain ⟨ hx_byte, hy_byte, h_xor ⟩ := h_holds
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorTable, Inputs.mk.injEq]
+  have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   set z := x + y + -(2 * w)
   show w.val = x.val &&& y.val
@@ -116,17 +112,11 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorTable]
-  clear h_env
-  simp only [Inputs.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  rw [hx, hy]
+  simp_all only [circuit_norm, main, assumptions, spec, ByteXorTable, Inputs.mk.injEq]
+  obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
   let z := x + y + -(2 * w)
-
-  obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  suffices h_xor : (x + y + -(2 * w)).val = x.val ^^^ y.val from ⟨ hx_byte, hy_byte, h_xor ⟩
 
   -- now it's pretty much the soundness proof in reverse
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte

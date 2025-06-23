@@ -95,7 +95,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
 
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
 
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
@@ -104,7 +104,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     var_from_offset, Vector.mapRange] at h_holds
 
   apply soundness_to_u64 x_norm y_norm
-  simp only [circuit_norm, var_from_offset, Vector.mapRange, eval]
+  simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 
 lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
@@ -116,10 +116,10 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
   simp only [assumptions, circuit_norm, U64.is_normalized] at as
   simp only [h_input, circuit_norm, main, ByteXorTable,
-    var_from_offset, Vector.mapRange, Fin.forall_iff] at h_env ⊢
+    explicit_provable_type, Fin.forall_iff] at h_env ⊢
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 
