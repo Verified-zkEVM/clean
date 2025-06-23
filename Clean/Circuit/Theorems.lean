@@ -250,38 +250,6 @@ lemma env_extends_witness {F} {n: ℕ} {ops: List (FlatOperation F)} {env: Envir
       congr 1
       omega
 
--- TODO: this is not used
-lemma env_extends_subcircuit {n: ℕ} {ops: Operations F} {env: Environment F} {n'} {s : SubCircuit F n'} :
-  env.extends_vector (Operations.local_witnesses env (.subcircuit s :: ops)) n ↔
-    (env.extends_vector (local_witnesses env s.ops) n ∧ env.extends_vector (Operations.local_witnesses env ops) (s.local_length + n)) := by
-  simp_all only [circuit_norm, local_length, Vector.getElem_append, Fin.forall_iff]
-  constructor
-  · intro h
-    constructor
-    · intro i hi
-      have : i < s.local_length := by rw [s.local_length_eq]; exact hi
-      specialize h i (by omega)
-      simp [h, this]
-    · intro i hi
-      specialize h (s.local_length + i) (by linarith [hi])
-      ring_nf at *
-      simp [h]
-  · intro ⟨ h_inner, h_outer ⟩ i hi
-    by_cases hi' : i < s.local_length <;> simp only [hi', reduceDIte]
-    · exact h_inner i (by rw [s.local_length_eq] at hi'; exact hi')
-    · specialize h_outer (i - s.local_length) (by omega)
-      simp only [←h_outer]
-      congr 1
-      omega
-
--- TODO: this is not used
-lemma extends_vector_subcircuit (env : Environment F) {n} {n'} {circuit : SubCircuit F n'} :
-    env.extends_vector (circuit.witnesses env) n = env.extends_vector (FlatOperation.local_witnesses env circuit.ops) n := by
-  have h_length : circuit.local_length = FlatOperation.local_length circuit.ops := circuit.local_length_eq
-  congr
-  rw [SubCircuit.witnesses]
-  apply Vector.cast_heq
-
 theorem can_replace_local_witnesses_flat {env: Environment F} (n: ℕ) {ops: List (FlatOperation F)}  :
     env.extends_vector (local_witnesses env ops) n ↔ env.uses_local_witnesses_flat n ops := by
   induction ops using FlatOperation.induct generalizing n with
