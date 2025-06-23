@@ -12,7 +12,7 @@ Besides that, a `name` is required, to identify the table created from this circ
 structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
   name : String
-  computable_witnesses : circuit.computable_witnesses
+  computableWitnesses : circuit.computableWitnesses
 
 namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
@@ -23,9 +23,8 @@ def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environ
 theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β) (input : α F) :
     (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_uses_local_witnesses
-  intro env env'
-  apply circuit.computable_witnesses 0 (const input)
-  simp only [Environment.only_accessed_below', ProvableType.eval_const, implies_true]
+  apply circuit.compose_computableWitnesses
+  simp [Environment.onlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
@@ -61,6 +60,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `subcircuit circuit input`.
 
+@[circuit_norm]
 def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
@@ -105,6 +105,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_var_from_offset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
 
+@[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (input : Var α F) : Circuit F (Var β F) :=
   subcircuit (lookupCircuit circuit) input
 end LookupCircuit

@@ -18,13 +18,11 @@ inductive FlatOperation (F : Type) where
   | lookup : Lookup F → FlatOperation F
 
 namespace FlatOperation
-def toString [Repr F] : FlatOperation F → String
-  | witness m _ => "(Witness " ++ reprStr m ++ ")"
-  | assert e => "(Assert " ++ reprStr e ++ " == 0)"
-  | lookup l => reprStr l
-
 instance [Repr F] : Repr (FlatOperation F) where
-  reprPrec op _ := toString op
+  reprPrec
+  | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
+  | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
+  | lookup l, _ => reprStr l
 
 /--
 What it means that "constraints hold" on a list of flat operations:
@@ -40,16 +38,16 @@ def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Pro
     | _ => constraints_hold_flat eval ops
 
 @[circuit_norm]
-def witness_length : List (FlatOperation F) → ℕ
+def local_length : List (FlatOperation F) → ℕ
   | [] => 0
-  | witness m _ :: ops => m + witness_length ops
-  | assert _ :: ops | lookup _ :: ops => witness_length ops
+  | witness m _ :: ops => m + local_length ops
+  | assert _ :: ops | lookup _ :: ops => local_length ops
 
 @[circuit_norm]
-def witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (witness_length l)
+def local_witnesses (env: Environment F) : (l: List (FlatOperation F)) → Vector F (local_length l)
   | [] => #v[]
-  | witness _ compute :: ops => compute env ++ witnesses env ops
-  | assert _ :: ops | lookup _ :: ops => witnesses env ops
+  | witness _ compute :: ops => compute env ++ local_witnesses env ops
+  | assert _ :: ops | lookup _ :: ops => local_witnesses env ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
@@ -71,6 +69,7 @@ export FlatOperation (constraints_hold_flat)
 def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
+open FlatOperation in
 /--
 This is a low-level way to model a subcircuit:
 A flat list of circuit operations, instantiated at a certain offset.
@@ -97,18 +96,19 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
     constraints_hold_flat env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+  implied_by_completeness : ∀ env, env.extends_vector (local_witnesses env ops) offset →
     completeness env → constraints_hold_flat env ops
 
   -- `uses_local_witnesses` needs to follow from the local witness generator condition
-  implied_by_local_witnesses : ∀ env, env.extends_vector (FlatOperation.witnesses env ops) offset →
+  implied_by_local_witnesses : ∀ env, env.extends_vector (local_witnesses env ops) offset →
     uses_local_witnesses env
 
   -- `local_length` must be consistent with the operations
-  local_length_eq : local_length = FlatOperation.witness_length ops
+  local_length_eq : local_length = FlatOperation.local_length ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env := (FlatOperation.witnesses env sc.ops).cast sc.local_length_eq.symm
+def SubCircuit.witnesses (sc: SubCircuit F n) env :=
+  (FlatOperation.local_witnesses env sc.ops).cast sc.local_length_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -154,17 +154,17 @@ methods on operations that take a self argument.
 @[reducible, circuit_norm]
 def Operations (F : Type) [Field F] := List (Operation F)
 
-def Operations.toList : Operations F → List (Operation F) := id
+namespace Operations
+def toList : Operations F → List (Operation F) := id
 
 /-- move from nested operations back to flat operations -/
-def to_flat_operations : Operations F → List (FlatOperation F)
+def toFlat : Operations F → List (FlatOperation F)
   | [] => []
-  | .witness m c :: ops => .witness m c :: to_flat_operations ops
-  | .assert e :: ops => .assert e :: to_flat_operations ops
-  | .lookup l :: ops => .lookup l :: to_flat_operations ops
-  | .subcircuit s :: ops => s.ops ++ to_flat_operations ops
+  | .witness m c :: ops => .witness m c :: toFlat ops
+  | .assert e :: ops => .assert e :: toFlat ops
+  | .lookup l :: ops => .lookup l :: toFlat ops
+  | .subcircuit s :: ops => s.ops ++ toFlat ops
 
-namespace Operations
 /--
 The number of witness variables introduced by these operations.
 -/
@@ -201,6 +201,7 @@ def induct {motive : Operations F → Sort*}
   | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit ops)
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit ops)
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit ops)
+end Operations
 
 -- generic folding over `Operations` resulting in a proposition
 
@@ -221,13 +222,18 @@ def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Pro
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
 
-def Condition.implies (c c': Condition F) : Prop :=
-  ∀ (offset : ℕ) (op : Operation F), c.apply offset op → c'.apply offset op
+def Condition.implies (c c': Condition F) : Condition F where
+  witness n m compute := c.witness n m compute → c'.witness n m compute
+  assert offset e := c.assert offset e → c'.assert offset e
+  lookup offset l := c.lookup offset l → c'.lookup offset l
+  subcircuit offset _ s := c.subcircuit offset s → c'.subcircuit offset s
 
+namespace Operations
 /--
 Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
 The function expects the initial offset as an argument.
 -/
+ @[circuit_norm]
 def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
@@ -279,25 +285,24 @@ where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consi
     exact subcircuit n s ops (motive' ops _ h.right)
 end Operations
 
-def Operations.Condition.ignoreSubcircuit (condition : Operations.Condition F) : Operations.Condition F :=
+def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
   { condition with subcircuit := fun _ _ _ => True }
 
-def Operations.Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
+def Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
 
-def Operations.Condition.impliesFlat (c c': Condition F) : Prop :=
-  ∀ (offset : ℕ) (op : FlatOperation F), c.ignoreSubcircuit.applyFlat offset op → c'.applyFlat offset op
-
-def FlatOperation.local_length : FlatOperation F → ℕ
+def FlatOperation.single_local_length : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
 
-def FlatOperation.forAll (offset : ℕ) (condition : Operations.Condition F) : List (FlatOperation F) → Prop
+def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
   | [] => True
-  | op :: ops => condition.applyFlat offset op ∧ forAll (op.local_length + offset) condition ops
+  | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
+  | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
+  | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops } ops

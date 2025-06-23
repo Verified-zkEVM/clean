@@ -349,72 +349,50 @@ end
 export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
 
 -- witness generation
--- TODO unify these names
 
 def Environment.fromList (witnesses: List F) : Environment F :=
   .mk fun i => witnesses[i]?.getD 0
 
-def FlatOperation.dynamic_witnesses (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ c => (c (.fromList acc)).toList
+def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
+  | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
 
-def FlatOperation.dynamic_witnesses_list (ops: List (FlatOperation F)) (init : List F) : List F :=
+def FlatOperation.dynamicWitnesses (ops: List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
-    acc ++ op.dynamic_witnesses acc
+    acc ++ op.dynamicWitness acc
   ) init
 
-def Environment.fromFlatOperations (ops : List (FlatOperation F)) (init : List F) : Environment F :=
-  .fromList (FlatOperation.dynamic_witnesses_list ops init)
+def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
+  .fromList (FlatOperation.dynamicWitnesses ops init)
 
-def Operation.witnesses (op : Operation F) (acc : List F) : List F := match op with
-  | .witness _ c => (c (.fromList acc)).toList
-  | .assert _ => []
-  | .lookup _ => []
-  | .subcircuit s => (s.witnesses (.fromFlatOperations s.ops acc)).toList
-
-def Operations.witnesses (ops: Operations F) (init : List F) : List F :=
-  FlatOperation.dynamic_witnesses_list (to_flat_operations ops) init
-
-def Environment.same_below (n : ℕ) (env env' : Environment F) :=
+def Environment.agreesBelow (n : ℕ) (env env' : Environment F) :=
   ∀ i < n, env.get i = env'.get i
 
-lemma Environment.same_below_of_le {F} {n m : ℕ} {env env' : Environment F} :
-    env.same_below n env' → m ≤ n → env.same_below m env' :=
-  fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
-
-def Environment.only_accessed_below (n : ℕ) (f : Environment F → α) :=
-  ∀ env env', (∀ i < n, env.get i = env'.get i) → f env = f env'
-
-def Environment.only_accessed_below' (n : ℕ) (f : Environment F → α) (env env' : Environment F) :=
-  (∀ i < n, env.get i = env'.get i) → f env = f env'
+def Environment.onlyAccessedBelow (n : ℕ) (f : Environment F → α) :=
+  ∀ env env', env.agreesBelow n env' → f env = f env'
 
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Operations.computable_witnesses (ops: Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
-   ops.forAllFlat n {
-    witness n _ compute := (∀ i < n, env.get i = env'.get i) → compute env = compute env',
-  }
+def Operations.computableWitnesses (ops: Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
+  ops.forAllFlat n { witness n _ compute := env.agreesBelow n env' → compute env = compute env' }
 
-def Circuit.computable_witnesses (circuit: Circuit F α) (n : ℕ) :=
-  ∀ (env env' : Environment F), (circuit.operations n).computable_witnesses n env env'
-
-def Circuit.computable_witnesses' (circuit: Circuit F α) (n : ℕ) (env env' : Environment F) :=
-  (circuit.operations n).computable_witnesses n env env'
+def Circuit.computableWitnesses (circuit: Circuit F α) (n : ℕ) :=
+  ∀ env env', (circuit.operations n).computableWitnesses n env env'
 
 /--
 If a circuit satisfies `computable_witnesses`, we can construct a concrete environment
 that satisfies `uses_local_witnesses`. (Proof in `Theorems`.)
 -/
 def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
-  .fromList ((circuit.operations init.length).witnesses init)
+  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
 
-def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (witness_length l)
+def FlatOperation.witness_generators : (l: List (FlatOperation F)) → Vector (Environment F → F) (local_length l)
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witness_generators ops
   | .assert _ :: ops => witness_generators ops
