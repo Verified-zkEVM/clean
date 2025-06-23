@@ -12,7 +12,7 @@ Besides that, a `name` is required, to identify the table created from this circ
 structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
   name : String
-  computable_witnesses : circuit.computable_witnesses
+  computableWitnesses : circuit.computableWitnesses
 
 namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
@@ -24,8 +24,8 @@ theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β)
     (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_uses_local_witnesses
   intro env env'
-  apply circuit.computable_witnesses 0 (const input)
-  simp only [Environment.only_accessed_below', ProvableType.eval_const, implies_true]
+  apply circuit.computableWitnesses 0 (const input)
+  simp only [Environment.agreesBelow, ProvableType.eval_const, implies_true]
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)

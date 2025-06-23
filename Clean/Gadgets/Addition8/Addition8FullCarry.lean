@@ -137,13 +137,13 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   -- TODO this is not very hard, but it could be made even easier with a tactic script,
   -- or even just restructuring the statement to include the inputs hypothesis in _every_ subgoal
-  computable_witnesses n input := by
+  computableWitnesses n input := by
     simp_all only [circuit_norm, subcircuit_norm, circuit, add8_full_carry, Boolean.circuit,
-      Operations.forAllFlat, FlatOperation.forAll, Condition.applyFlat,
-      Environment.only_accessed_below', Circuit.computable_witnesses', Operations.computable_witnesses,
+      Operations.forAllFlat, FlatOperation.forAll,
+      Operations.computableWitnesses, Environment.agreesBelow,
       Inputs.mk.injEq, Array.mk.injEq, List.cons.injEq]
-    intro env env' h_input env_same_below
-    specialize h_input (Environment.same_below_of_le env_same_below (by linarith))
+    intro env env' h_input env_agrees_below
+    specialize h_input (Environment.agreesBelow_of_le env_agrees_below (by linarith))
     simp_all
 }
 

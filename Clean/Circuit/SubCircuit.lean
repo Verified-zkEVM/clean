@@ -217,19 +217,20 @@ end Circuit
 
 -- subcircuit composability for `computable_witnesses`
 
-def FormalCircuit.computable_witnesses (circuit : FormalCircuit F β α) : Prop :=
+def FormalCircuit.computableWitnesses (circuit : FormalCircuit F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) env env',
-    Environment.only_accessed_below' n (eval · input) env env' → (circuit.main input).computable_witnesses' n env env'
+    (env.agreesBelow n env' → eval env input = eval env' input) →
+    (circuit.main input |>.operations n).computableWitnesses n env env'
 
 theorem Circuit.subcircuit_computable_witnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
-  Environment.only_accessed_below n (eval · input) ∧ circuit.computable_witnesses →
-    (subcircuit circuit input).computable_witnesses n := by
-  simp only [FormalCircuit.computable_witnesses, Circuit.computable_witnesses, Circuit.computable_witnesses']
+  Environment.onlyAccessedBelow n (eval · input) ∧ circuit.computableWitnesses →
+    (subcircuit circuit input).computableWitnesses n := by
+  simp only [FormalCircuit.computableWitnesses]
   intro ⟨ h_input, h_computable ⟩
   intro env env'
   specialize h_computable n input env env' (h_input env env')
-  rw [Operations.computable_witnesses] at h_computable
-  simp only [Operations.computable_witnesses, operations, subcircuit,
+  rw [Operations.computableWitnesses] at h_computable
+  simp only [Operations.computableWitnesses, operations, subcircuit,
     FormalCircuit.to_subcircuit, Operations.forAllFlat, Operations.forAll, and_true]
   rw [Operations.forAllFlat_iff']
   exact h_computable
