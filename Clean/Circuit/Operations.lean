@@ -222,8 +222,11 @@ def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Pro
   | .lookup l => condition.lookup offset l
   | .subcircuit s => condition.subcircuit offset s
 
-def Condition.implies (c c': Condition F) : Prop :=
-  ∀ (offset : ℕ) (op : Operation F), c.apply offset op → c'.apply offset op
+def Condition.implies (c c': Condition F) : Condition F where
+  witness n m compute := c.witness n m compute → c'.witness n m compute
+  assert offset e := c.assert offset e → c'.assert offset e
+  lookup offset l := c.lookup offset l → c'.lookup offset l
+  subcircuit offset _ s := c.subcircuit offset s → c'.subcircuit offset s
 
 namespace Operations
 /--
@@ -288,10 +291,6 @@ def Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
-
-def Condition.impliesFlat (c c': Condition F) : Prop :=
-  ∀ (offset : ℕ) (op : FlatOperation F),
-    c.ignoreSubcircuit.applyFlat offset op → c'.ignoreSubcircuit.applyFlat offset op
 
 def FlatOperation.single_local_length : FlatOperation F → ℕ
   | .witness m _ => m

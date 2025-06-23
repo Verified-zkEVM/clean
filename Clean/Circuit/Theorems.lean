@@ -443,21 +443,21 @@ lemma forAll_ignoreSubcircuit {condition : Condition F} {ops : List (FlatOperati
     simp only [forAll_cons, Condition.applyFlat]
     split <;> simp_all [Condition.ignoreSubcircuit]
 
-theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : List (FlatOperation F)} :
-    c.impliesFlat c' → (forAll n c ops → forAll n c' ops) := by
-  simp only [Condition.impliesFlat, Condition.ignoreSubcircuit]
+theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : List (FlatOperation F)} :
+    (forAll n (c.implies c').ignoreSubcircuit ops) → (forAll n c ops → forAll n c' ops) := by
+  simp only [Condition.implies, Condition.ignoreSubcircuit]
   intro h
   induction ops generalizing n with
   | nil => simp [forAll_empty]
   | cons op ops ih =>
-    specialize h n op
-    cases op <;> simp_all [forAll_cons, and_true, and_imp, Condition.applyFlat]
+    specialize ih (op.single_local_length + n)
+    cases op <;> simp_all [forAll_cons, Condition.applyFlat]
 end FlatOperation
 
 namespace Operations
 theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : Operations F} :
-  c.implies c' → (forAll n c ops → forAll n c' ops) := by
-  simp only [Condition.implies]
+  (∀ (offset : ℕ) (op : Operation F), c.apply offset op → c'.apply offset op)
+    → (forAll n c ops → forAll n c' ops) := by
   intro h
   induction ops using Operations.induct generalizing n with
   | empty => simp [forAll_empty]
