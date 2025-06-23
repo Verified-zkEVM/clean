@@ -79,7 +79,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, ByteLookup, U32.value, U32.is_normalized] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, U32.value, U32.is_normalized] at h ⊢
   simp only [circuit_norm, subcircuit_norm, eval, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)

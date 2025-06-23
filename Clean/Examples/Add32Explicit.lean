@@ -53,6 +53,6 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
   rw [ExplicitCircuit.operations_eq]
   dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
   -- simp `constraints_hold` expression
-  simp only [Circuit.constraints_hold.append_soundness, Circuit.constraints_hold.soundness, Gadgets.ByteLookup, Gadgets.ByteTable]
+  simp only [Circuit.constraints_hold.append_soundness, Circuit.constraints_hold.soundness, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
   simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd]
