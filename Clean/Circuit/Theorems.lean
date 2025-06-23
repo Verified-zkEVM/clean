@@ -433,16 +433,6 @@ end Circuit
 -- more theorems about forAll / forAllFlat
 
 namespace FlatOperation
--- TODO unused
-lemma forAll_ignoreSubcircuit {condition : Condition F} {ops : List (FlatOperation F)} (n : ℕ) :
-  FlatOperation.forAll n condition ops ↔
-    FlatOperation.forAll n condition.ignoreSubcircuit ops := by
-  induction ops generalizing n with
-  | nil => simp only [forAll]
-  | cons op ops ih =>
-    simp only [forAll_cons, Condition.applyFlat]
-    split <;> simp_all [Condition.ignoreSubcircuit]
-
 theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : List (FlatOperation F)} :
     (forAll n (c.implies c').ignoreSubcircuit ops) → (forAll n c ops → forAll n c' ops) := by
   simp only [Condition.implies, Condition.ignoreSubcircuit]
@@ -455,15 +445,6 @@ theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : List (FlatOperation
 end FlatOperation
 
 namespace Operations
-theorem forAll_implies {c c' : Condition F} {n : ℕ} {ops : Operations F} :
-  (∀ (offset : ℕ) (op : Operation F), c.apply offset op → c'.apply offset op)
-    → (forAll n c ops → forAll n c' ops) := by
-  intro h
-  induction ops using Operations.induct generalizing n with
-  | empty => simp [forAll_empty]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all [forAll_cons, forAll_append, Operations.local_length, h]
-
 lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F) :
     FlatOperation.forAll n condition ops.toFlat ↔ ops.forAllFlat n condition := by
   induction ops using Operations.induct generalizing n with
@@ -474,34 +455,6 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
     simp_all only [forAllFlat, forAll, toFlat]
     rw [FlatOperation.forAll_append, s.local_length_eq]
     simp_all
-
--- TODO the following three lemmas are currently not used
-
-lemma forAll_toFlat_of_forAll {condition : Condition F} {ops : Operations F} (n : ℕ) :
-  (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s → FlatOperation.forAll n condition s.ops) →
-    (ops.forAll n condition → FlatOperation.forAll n condition ops.toFlat) := by
-  intro h
-  rw [forAll_toFlat_iff, forAllFlat]
-  apply forAll_implies
-  intro n op
-  cases op <;> simp_all only [Condition.apply, implies_true]
-
-lemma forAll_of_forAll_toFlat {condition : Condition F} {ops : Operations F} (n : ℕ) :
-  (∀ n {m} (s : SubCircuit F m), FlatOperation.forAll n condition s.ops → condition.subcircuit n s) →
-    (FlatOperation.forAll n condition ops.toFlat → ops.forAll n condition) := by
-  intro h
-  rw [forAll_toFlat_iff, forAllFlat]
-  apply forAll_implies
-  intro n op
-  cases op <;> simp_all only [Condition.apply, implies_true]
-
-lemma forAll_iff_forAll_toFlat {condition : Condition F} {ops : Operations F} (n : ℕ) :
-  (∀ n {m} (s : SubCircuit F m), condition.subcircuit n s ↔ FlatOperation.forAll n condition s.ops) →
-    (ops.forAll n condition ↔ FlatOperation.forAll n condition ops.toFlat) := by
-  intro h
-  constructor
-  · simp_all only [forAll_toFlat_of_forAll, implies_true]
-  · simp_all only [forAll_of_forAll_toFlat, implies_true]
 end Operations
 
 /-- An environment respects local witnesses iff it does so in the flattened variant. -/
