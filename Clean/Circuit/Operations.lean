@@ -233,6 +233,7 @@ namespace Operations
 Given a `Condition`, `forAll` is true iff all operations in the list satisfy the condition, at their respective offsets.
 The function expects the initial offset as an argument.
 -/
+ @[circuit_norm]
 def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops

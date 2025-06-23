@@ -60,6 +60,7 @@ def toTable (circuit : LookupCircuit F α β) : TypedTable F (ProvablePair α β
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `subcircuit circuit input`.
 
+@[circuit_norm]
 def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
@@ -106,6 +107,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_var_from_offset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
 
+@[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (input : Var α F) : Circuit F (Var β F) :=
   subcircuit (lookupCircuit circuit) input
 end LookupCircuit
