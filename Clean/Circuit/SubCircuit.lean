@@ -7,16 +7,16 @@ namespace FlatOperation
 open Circuit (constraints_hold.completeness constraints_hold)
 
 lemma constraints_hold_cons : ∀ {op : FlatOperation F}, ∀ {ops: List (FlatOperation F)}, ∀ {env : Environment F},
-  constraints_hold_flat env (op :: ops) ↔ constraints_hold_flat env [op] ∧ constraints_hold_flat env ops := by
+  ConstraintsHoldFlat env (op :: ops) ↔ ConstraintsHoldFlat env [op] ∧ ConstraintsHoldFlat env ops := by
   intro op ops env
   constructor <;> (
     rintro h
-    dsimp only [constraints_hold_flat] at h
+    dsimp only [ConstraintsHoldFlat] at h
     split at h
-    <;> simp_all only [constraints_hold_flat, and_self])
+    <;> simp_all only [ConstraintsHoldFlat, and_self])
 
 lemma constraints_hold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Environment F},
-  constraints_hold_flat env (a ++ b) ↔ constraints_hold_flat env a ∧ constraints_hold_flat env b := by
+  ConstraintsHoldFlat env (a ++ b) ↔ ConstraintsHoldFlat env a ∧ ConstraintsHoldFlat env b := by
   intro a b env
   induction a with
   | nil => rw [List.nil_append]; tauto
@@ -44,7 +44,7 @@ Consistency theorem which proves that flattened constraints are equivalent to th
 constraints created from the inductive `Operations` type, using flat constraints for subcircuits.
 -/
 theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : Environment F},
-  constraints_hold env ops ↔ constraints_hold_flat env ops.toFlat
+  constraints_hold env ops ↔ ConstraintsHoldFlat env ops.toFlat
 := by
   intro ops env
   induction ops using Operations.induct with
@@ -54,7 +54,7 @@ theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : E
     dsimp only [Operations.toFlat]
     try rw [constraints_hold_cons]
     try rw [constraints_hold_append]
-    simp_all only [constraints_hold, constraints_hold_flat, and_true, true_and]
+    simp_all only [constraints_hold, ConstraintsHoldFlat, and_true, true_and]
 
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
@@ -63,10 +63,10 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := ops.toFlat
-  have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuits_consistent b_var n
 
   have imply_soundness : ∀ env : Environment F,
-      constraints_hold_flat env flat_ops → subcircuit_soundness circuit b_var n env := by
+      ConstraintsHoldFlat env flat_ops → subcircuit_soundness circuit b_var n env := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
     intro env h_holds
     show subcircuit_soundness circuit b_var n env
@@ -81,20 +81,20 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
       exact circuit.soundness n env b_var b rfl as h
 
     -- so we just need to go from flattened constraints to constraints
-    guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
+    guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env flat_ops
     apply can_replace_soundness
     exact can_replace_subcircuits.mpr h_holds
 
   have implied_by_completeness : ∀ env : Environment F,
-      env.extends_vector (FlatOperation.local_witnesses env flat_ops) n →
-      subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
+      env.ExtendsVector (FlatOperation.local_witnesses env flat_ops) n →
+      subcircuit_completeness circuit b_var env → ConstraintsHoldFlat env flat_ops := by
     -- we are given that the assumptions are true
     intro env h_env
     let b := eval env b_var
     intro (as : circuit.assumptions b)
 
     have h_env : env.UsesLocalWitnesses n ops := by
-      guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
+      guard_hyp h_env : env.ExtendsVector (FlatOperation.local_witnesses env flat_ops) n
       rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
       exact h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
@@ -134,7 +134,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := ops.toFlat
-  have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuits_consistent b_var n
 
   {
     ops := flat_ops,
@@ -157,7 +157,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
         exact circuit.soundness n env b_var b rfl as h
 
       -- so we just need to go from flattened constraints to constraints
-      guard_hyp h_holds : FlatOperation.constraints_hold_flat env flat_ops
+      guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env flat_ops
       apply can_replace_soundness
       exact can_replace_subcircuits.mpr h_holds
 
@@ -169,7 +169,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
       have h_env : env.UsesLocalWitnesses n ops := by
-        guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
+        guard_hyp h_env : env.ExtendsVector (FlatOperation.local_witnesses env flat_ops) n
         rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
         exact h_env
       have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
