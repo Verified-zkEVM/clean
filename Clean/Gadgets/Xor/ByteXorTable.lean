@@ -5,25 +5,26 @@ namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-def ByteXorTable : Table (F p) := StaticTable.toTable {
+def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
   name := "ByteXor"
   length := 256*256
-  arity := 3
+
   row i :=
     let (x, y) := split_two_bytes i
-    #v[from_byte x, from_byte y, from_byte (x ^^^ y)]
-  index := fun ⟨⟨[x, y, z]⟩, _⟩ => x.val * 256 + y.val
+    (from_byte x, from_byte y, from_byte (x ^^^ y))
 
-  soundness := fun ⟨⟨[x, y, z]⟩, _⟩ =>
+  index := fun (x, y, _) => x.val * 256 + y.val
+
+  soundness := fun (x, y, z) =>
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
-  completeness := fun ⟨⟨[x, y, z]⟩, _⟩ =>
+  completeness := fun (x, y, z) =>
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
 
   imply_soundness := by
-    intro ⟨⟨[x, y, z]⟩, _⟩
+    intro (x, y, z)
     dsimp only
-    rintro ⟨ i, h: #v[x, y, z] = _ ⟩
-    simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true] at h
+    rintro ⟨ i, h: (x, y, z) = _ ⟩
+    simp only [id_eq, Prod.mk.injEq] at h
 
     rcases h with ⟨ hx, hy, hz ⟩
 
@@ -43,7 +44,7 @@ def ByteXorTable : Table (F p) := StaticTable.toTable {
     exact (split_two_bytes i).2.is_lt
 
   implied_by_completeness := by
-    intro ⟨⟨[x, y, z]⟩, _⟩ ⟨ hx, hy, h ⟩
+    intro (x, y, z) ⟨ hx, hy, h ⟩
     use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
     simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
     rw [concat_split]
@@ -52,14 +53,8 @@ def ByteXorTable : Table (F p) := StaticTable.toTable {
     simp only [h, HXor.hXor, Xor.xor, Fin.xor, from_byte, FieldUtils.val_of_nat_to_field_eq]
 }
 
-def ByteXorLookup (x y z: Expression (F p)) : Lookup (F p) := {
-  table := ByteXorTable
-  entry := #v[x, y, z]
-}
-
 def ByteXorTable.equiv (x y z: F p) :
-  ByteXorTable.contains #v[x, y, z] ↔
-    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
-  ⟨ByteXorTable.imply_soundness #v[x,y,z], ByteXorTable.implied_by_completeness #v[x,y,z]⟩
+  ByteXorTable.contains (x, y, z) ↔ x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
+  ⟨ByteXorTable.imply_soundness (x, y, z), ByteXorTable.implied_by_completeness (x, y, z)⟩
 
 end Gadgets.Xor

@@ -70,7 +70,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
   dsimp only [assumptions, U32.is_normalized] at as
@@ -79,8 +79,8 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, ByteLookup, U32.value, U32.is_normalized] at h ⊢
-  simp only [circuit_norm, subcircuit_norm, eval, h_inputs, ByteTable] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, U32.value, U32.is_normalized] at h ⊢
+  simp only [circuit_norm, subcircuit_norm, explicit_provable_type, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
   set z1 := env.get (i0 + 2)
@@ -110,7 +110,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
   dsimp [assumptions, U32.is_normalized] at as

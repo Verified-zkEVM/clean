@@ -187,7 +187,7 @@ theorem value_from_u64_eq (x : UInt64) : value (from_u64 (p:=p) x) = x.toNat := 
 end U64
 
 namespace U64.AssertNormalized
-open Gadgets (ByteLookup ByteTable)
+open Gadgets (ByteTable)
 
 /--
   Assert that a 64-bit unsigned integer is normalized.
@@ -195,14 +195,14 @@ open Gadgets (ByteLookup ByteTable)
 -/
 def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
-  lookup (ByteLookup x0)
-  lookup (ByteLookup x1)
-  lookup (ByteLookup x2)
-  lookup (ByteLookup x3)
-  lookup (ByteLookup x4)
-  lookup (ByteLookup x5)
-  lookup (ByteLookup x6)
-  lookup (ByteLookup x7)
+  lookup ByteTable x0
+  lookup ByteTable x1
+  lookup ByteTable x2
+  lookup ByteTable x3
+  lookup ByteTable x4
+  lookup ByteTable x5
+  lookup ByteTable x6
+  lookup ByteTable x7
 
 def assumptions (_input : U64 (F p)) := True
 
@@ -215,12 +215,12 @@ def circuit : FormalAssertion (F p) U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp_all [spec, circuit_norm, u64_assert_normalized, ByteLookup, ByteTable, is_normalized, eval]
+    simp_all [spec, circuit_norm, u64_assert_normalized, ByteTable, is_normalized, explicit_provable_type]
 
   completeness := by
     rintro i0 env x_var
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp_all [spec, circuit_norm, u64_assert_normalized, ByteLookup, ByteTable, is_normalized, eval]
+    simp_all [spec, circuit_norm, u64_assert_normalized, ByteTable, is_normalized, explicit_provable_type]
 
 end U64.AssertNormalized
 
@@ -255,7 +255,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [circuit_norm, u64_copy, spec, h_eval, eval, var_from_offset]
+    simp [circuit_norm, u64_copy, spec, h_eval, explicit_provable_type]
     injections h_eval
     intros h0 h1 h2 h3 h4 h5 h6 h7
     aesop
@@ -263,31 +263,9 @@ def circuit : FormalCircuit (F p) U64 U64 where
   completeness := by
     rintro i0 env x_var
     rintro h ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [circuit_norm, u64_copy, spec, h_eval]
-    simp [circuit_norm, u64_copy, Gadgets.Equality.elaborated] at h
-    simp_all [eval, Expression.eval, circuit_norm, h, var_from_offset, Vector.mapRange]
-    have h0 := h 0
-    have h1 := h 1
-    have h2 := h 2
-    have h3 := h 3
-    have h4 := h 4
-    have h5 := h 5
-    have h6 := h 6
-    have h7 := h 7
-    simp only [Fin.isValue, Fin.val_zero, add_zero, List.getElem_cons_zero] at h0
-    simp only [Fin.isValue, Fin.val_one, List.getElem_cons_succ, List.getElem_cons_zero] at h1
-    simp only [Fin.isValue, Fin.val_two, List.getElem_cons_succ, List.getElem_cons_zero] at h2
-    simp only [Fin.isValue, show @Fin.val 8 3 = 3 by rfl, List.getElem_cons_succ,
-      List.getElem_cons_zero] at h3
-    simp only [Fin.isValue, show @Fin.val 8 4 = 4 by rfl, List.getElem_cons_succ,
-      List.getElem_cons_zero] at h4
-    simp only [Fin.isValue, show @Fin.val 8 5 = 5 by rfl, List.getElem_cons_succ,
-      List.getElem_cons_zero] at h5
-    simp only [Fin.isValue, show @Fin.val 8 6 = 6 by rfl, List.getElem_cons_succ,
-      List.getElem_cons_zero] at h6
-    simp only [Fin.isValue, show @Fin.val 8 7 = 7 by rfl, List.getElem_cons_succ,
-      List.getElem_cons_zero] at h7
-    simp_all
+    simp only [circuit_norm, u64_copy] at h
+    have h0 : env.get i0 = _ := h 0
+    simp_all [circuit_norm, u64_copy, explicit_provable_type, Fin.forall_iff]
 
 end Copy
 

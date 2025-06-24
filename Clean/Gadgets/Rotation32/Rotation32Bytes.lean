@@ -66,8 +66,8 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (
 
   simp [circuit_norm, spec, U32.value, -Nat.reducePow]
   constructor
-  · fin_cases off <;> (simp_all [eval, Expression.eval, rot_right32, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U32.is_normalized, eval, Expression.eval]
+  · fin_cases off <;> (simp_all [explicit_provable_type, rot_right32, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> simp_all [circuit_norm, U32.is_normalized, explicit_provable_type]
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _

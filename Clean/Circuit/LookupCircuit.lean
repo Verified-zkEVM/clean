@@ -29,7 +29,7 @@ theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β)
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
 
-def toTable (circuit : LookupCircuit F α β) : TypedTable F (ProvablePair α β) where
+def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) where
   name := circuit.name
 
   -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
@@ -66,9 +66,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     -- we witness the output for the given input, and look up the pair in the table
     let output ← ProvableType.witness fun env => circuit.constantOutput (eval env input)
 
-    -- TODO: make `lookup` expect a `TypedTable`
-    lookup { table := circuit.toTable.toUntyped, entry := to_elements (input, output) }
-
+    lookup circuit.toTable (input, output)
     return output
 
   local_length n := size β
@@ -79,30 +77,11 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
 
   soundness := by
     intro n env input_var input h_input h_assumptions h_holds
-    -- TODO: remove `to_elements`, `from_elements` from `circuit_norm`
-    -- simp_all only [circuit_norm, toTable, TypedTable.toUntyped]
-    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, TypedTable.toUntyped, size,
-      pure, Circuit.bind_def, lookup, List.cons_append, List.nil_append,
-      ProvableType.witness, Circuit.constraints_hold.soundness, and_true, ElaboratedCircuit.output]
-    set output_var := var_from_offset (F:=F) β n with h_output
-    change circuit.assumptions (eval (α:=ProvablePair α β) env (input_var, output_var)).1
-      → circuit.spec (eval (α:=ProvablePair α β) env (input_var, output_var)).1 (eval (α:=ProvablePair α β) env (input_var, output_var)).2
-    at h_holds
-    simp only [circuit_norm, h_input, h_output] at h_holds ⊢
-    exact h_holds h_assumptions
+    simp_all only [circuit_norm, toTable]
 
   completeness := by
     intro n env input_var h_env input h_input h_assumptions
-    -- TODO: remove `to_elements`, `from_elements` from `circuit_norm`
-    -- simp_all only [circuit_norm, toTable, TypedTable.toUntyped]
-    simp_all only [Circuit.operations, ElaboratedCircuit.main, toTable, TypedTable.toUntyped, size,
-      pure, Circuit.bind_def, lookup, List.cons_append, List.nil_append,
-      ProvableType.witness, Environment.uses_local_witnesses_completeness,
-      Environment.extends_vector, and_true, Circuit.constraints_hold.completeness]
-    set output_var := var_from_offset (F:=F) β n with h_output
-    change circuit.assumptions (eval (α:=ProvablePair α β) env (input_var, output_var)).1 ∧
-      (eval (α:=ProvablePair α β) env (input_var, output_var)).2 = circuit.constantOutput (eval (α:=ProvablePair α β) env (input_var, output_var)).1
-    simp only [circuit_norm, h_input, h_assumptions, output_var]
+    simp_all only [circuit_norm, toTable]
     rw [ProvableType.ext_iff]
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_var_from_offset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]

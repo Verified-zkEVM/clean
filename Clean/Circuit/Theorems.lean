@@ -137,7 +137,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   induction ops using Operations.induct with
   | empty => trivial
   | witness | assert | lookup =>
-    simp_all [constraints_hold.soundness, constraints_hold, Table.imply_soundness]
+    simp_all [constraints_hold.soundness, constraints_hold, RawTable.imply_soundness]
   | subcircuit circuit ops ih =>
     dsimp only [constraints_hold.soundness]
     dsimp only [constraints_hold] at h
@@ -335,7 +335,7 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.s
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
-    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAllFlat, Operations.forAll, Table.implied_by_completeness]
+    simp_all [circuit_norm, Environment.uses_local_witnesses, Operations.forAllFlat, Operations.forAll, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
     simp_all only [constraints_hold, constraints_hold.completeness, Environment.uses_local_witnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl

@@ -25,8 +25,7 @@ class ProvableType (M : TypeMap) where
   to_elements {F: Type} : M F -> Vector F size
   from_elements {F: Type} : Vector F size -> M F
 
-  to_elements_from_elements {F: Type} : ∀ v: Vector F size, to_elements (from_elements v) = v
-    := by
+  to_elements_from_elements {F: Type} : ∀ v: Vector F size, to_elements (from_elements v) = v := by
     intro _
     try (simp; done)
     try (
@@ -50,7 +49,9 @@ export ProvableType (size to_elements from_elements)
 
 attribute [circuit_norm] size
 -- tagged with low priority to prefer higher-level `ProvableStruct` decompositions
-attribute [circuit_norm low] to_elements from_elements
+-- note that this is not added to `circuit_norm`, since in general we won't need or want
+-- to explicitly unfold provable type definitions
+attribute [explicit_provable_type low] to_elements from_elements
 
 variable {M : TypeMap} [ProvableType M]
 
@@ -67,12 +68,18 @@ variable {α β γ: TypeMap} [ProvableType α] [ProvableType β] [ProvableType �
 Evaluate a variable in the given environment.
 
 Note: this is not tagged with `circuit_norm`, to enable higher-level `ProvableStruct`
-decompositions. Sometimes you will need to add `eval` to the simp set manually.
+decompositions. Sometimes you will need to add `explicit_provable_type` to the simp set.
 -/
+@[explicit_provable_type]
 def eval (env: Environment F) (x: Var α F) : α F :=
   let vars := to_vars x
   let values := vars.map (Expression.eval env)
   from_elements values
+
+/-- `ProvableType.eval` is the normal form. This is needed to simplify lookup constraints. -/
+@[circuit_norm]
+theorem from_elements_eval_to_elements {env : Environment F} (x : α (Expression F)) :
+  from_elements (Vector.map (Expression.eval env) (to_elements x)) = eval env x := rfl
 
 def const (x: α F) : Var α F :=
   let values : Vector F _ := to_elements x
@@ -92,9 +99,13 @@ def synthesize_const_var : Var α F :=
 instance [Field F] : Inhabited (Var α F) where
   default := synthesize_const_var
 
+@[explicit_provable_type]
 def var_from_offset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
   let vars := Vector.mapRange (size α) fun i => var ⟨offset + i⟩
   from_vars vars
+
+-- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
+attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
 end ProvableType
 
 export ProvableType (eval const var_from_offset)
@@ -114,20 +125,29 @@ def field : TypeMap := id
 instance : ProvableType field where
   size := 1
   to_elements x := #v[x]
-  from_elements v := let ⟨ .mk [x], _ ⟩ := v; x
+  from_elements := fun ⟨⟨[x]⟩, _⟩ => x
 instance : NonEmptyProvableType field where
 
 @[reducible]
 def ProvablePair (α β : TypeMap) := fun F => α F × β F
 
 @[reducible]
-def field2 := ProvablePair field field
+def fieldPair : TypeMap := fun F => F × F
 
-@[circuit_norm]
-instance : ProvableType field2 where
+@[reducible]
+def fieldTriple : TypeMap := fun F => F × F × F
+
+instance : ProvableType fieldPair where
   size := 2
-  to_elements pair := #v[pair.1, pair.2]
-  from_elements v := (v.get 0, v.get 1)
+  to_elements := fun (x, y) => #v[x, y]
+  from_elements := fun ⟨⟨[x, y]⟩, _ ⟩ => (x, y)
+instance : NonEmptyProvableType fieldPair where
+
+instance : ProvableType fieldTriple where
+  size := 3
+  to_elements := fun (x, y, z) => #v[x, y, z]
+  from_elements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
+instance : NonEmptyProvableType fieldTriple where
 
 variable {n: ℕ}
 @[reducible]
@@ -324,35 +344,52 @@ where
       ac_rfl
 end ProvableStruct
 
+namespace ProvableType
+variable {α: TypeMap} [ProvableType α]
+
+-- resolve `eval` and `var_from_offset` for a few basic types
+
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
   ProvableType.eval env x = Expression.eval env x := by rfl
 
-omit [Field F] in
 @[circuit_norm ↓]
-theorem var_from_offset_field (offset : ℕ) :
+theorem var_from_offset_field {F} (offset : ℕ) :
   var_from_offset (F:=F) field offset = var ⟨offset⟩ := by rfl
 
 @[circuit_norm ↓]
 theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
   ProvableType.eval env x = x.map (Expression.eval env) := rfl
 
-omit [Field F] in
 @[circuit_norm ↓]
-theorem var_from_offset_fields (offset : ℕ) :
+theorem var_from_offset_fields {F} (offset : ℕ) :
   var_from_offset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
-namespace ProvableType
-variable {α: TypeMap} [ProvableType α]
+@[circuit_norm ↓]
+theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
+  ProvableType.eval env t = (match t with | (x, y) => (Expression.eval env x, Expression.eval env y)) := rfl
 
-omit [Field F] in
-lemma comp_to_elements_from_elements :
+@[circuit_norm ↓]
+theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : Var fieldTriple F) :
+  ProvableType.eval env t = (match t with
+    | (x, y, z) => (Expression.eval env x, Expression.eval env y, Expression.eval env z)) := rfl
+
+@[circuit_norm ↓]
+theorem var_from_offset_fieldPair {F} (offset : ℕ) :
+  var_from_offset (F:=F) fieldPair offset = (var ⟨offset⟩, var ⟨offset + 1⟩) := rfl
+
+@[circuit_norm ↓]
+theorem var_from_offset_fieldTriple {F} (offset : ℕ) :
+  var_from_offset (F:=F) fieldTriple offset = (var ⟨offset⟩, var ⟨offset + 1⟩, var ⟨offset + 2⟩) := rfl
+
+-- a few general lemmas about provable types
+
+lemma comp_to_elements_from_elements {F} :
     to_elements ∘ @from_elements α _ F = id := by
   funext x
   simp [to_elements_from_elements]
 
-omit [Field F] in
-lemma comp_from_elements_to_elements :
+lemma comp_from_elements_to_elements {F} :
     from_elements ∘ @to_elements α _ F = id := by
   funext x
   simp [from_elements_to_elements]
@@ -360,7 +397,7 @@ lemma comp_from_elements_to_elements :
 @[circuit_norm]
 theorem eval_const {F : Type} [Field F] {α: TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
     eval env (const x) = x := by
-  simp only [circuit_norm, const, eval]
+  simp only [const, from_vars, explicit_provable_type, to_vars]
   rw [to_elements_from_elements, Vector.map_map]
   have : Expression.eval env ∘ Expression.const = id := by
     funext

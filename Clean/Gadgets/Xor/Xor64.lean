@@ -37,14 +37,14 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
     let z7 := (env x.x7).val ^^^ (env y.x7).val
     U64.mk z0 z1 z2 z3 z4 z5 z6 z7)
 
-  lookup (ByteXorLookup x.x0 y.x0 z.x0)
-  lookup (ByteXorLookup x.x1 y.x1 z.x1)
-  lookup (ByteXorLookup x.x2 y.x2 z.x2)
-  lookup (ByteXorLookup x.x3 y.x3 z.x3)
-  lookup (ByteXorLookup x.x4 y.x4 z.x4)
-  lookup (ByteXorLookup x.x5 y.x5 z.x5)
-  lookup (ByteXorLookup x.x6 y.x6 z.x6)
-  lookup (ByteXorLookup x.x7 y.x7 z.x7)
+  lookup ByteXorTable (x.x0, y.x0, z.x0)
+  lookup ByteXorTable (x.x1, y.x1, z.x1)
+  lookup ByteXorTable (x.x2, y.x2, z.x2)
+  lookup ByteXorTable (x.x3, y.x3, z.x3)
+  lookup ByteXorTable (x.x4, y.x4, z.x4)
+  lookup ByteXorTable (x.x5, y.x5, z.x5)
+  lookup ByteXorTable (x.x6, y.x6, z.x6)
+  lookup ByteXorTable (x.x7, y.x7, z.x7)
   return z
 
 def assumptions (input: Inputs (F p)) :=
@@ -95,55 +95,33 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
        ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
 
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
 
   simp only [circuit_norm, assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
-  simp only [h_input, circuit_norm, main, ByteXorLookup, ByteXorTable,
+  simp only [h_input, circuit_norm, main, ByteXorTable,
     var_from_offset, Vector.mapRange] at h_holds
 
   apply soundness_to_u64 x_norm y_norm
-  simp only [circuit_norm, var_from_offset, Vector.mapRange, eval]
+  simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 
-lemma xor_cast {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
-  (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
+lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
+    (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
   apply FieldUtils.val_lt_p
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env input_var h_env input h_input as
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var, y4_var, y5_var, y6_var, y7_var ⟩⟩ := input_var
-  let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩,
-       ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U64.mk.injEq] at h_input
-
+  let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
   simp only [assumptions, circuit_norm, U64.is_normalized] at as
-  obtain ⟨ x_bytes, y_bytes ⟩ := as
-  obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte, x4_byte, x5_byte, x6_byte, x7_byte ⟩ := x_bytes
-  obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte, y4_byte, y5_byte, y6_byte, y7_byte ⟩ := y_bytes
-
-  simp only [h_input, circuit_norm, main, ByteXorLookup, ByteXorTable,
-    var_from_offset, Vector.mapRange] at h_env ⊢
-  have h_env0 := by let h := h_env 0; simp at h; exact h
-  have h_env1 := by let h := h_env 1; simp at h; exact h
-  have h_env2 := by let h := h_env 2; simp at h; exact h
-  have h_env3 := by let h := h_env 3; simp [show ↑(3: Fin 8) = 3 from rfl] at h; exact h
-  have h_env4 := by let h := h_env 4; simp [show ↑(4: Fin 8) = 4 from rfl] at h; exact h
-  have h_env5 := by let h := h_env 5; simp [show ↑(5: Fin 8) = 5 from rfl] at h; exact h
-  have h_env6 := by let h := h_env 6; simp [show ↑(6: Fin 8) = 6 from rfl] at h; exact h
-  have h_env7 := by let h := h_env 7; simp [show ↑(7: Fin 8) = 7 from rfl] at h; exact h
-  rw [h_env0, h_env1, h_env2, h_env3, h_env4, h_env5, h_env6, h_env7]
-  rw [xor_cast x0_byte y0_byte, xor_cast x1_byte y1_byte,
-      xor_cast x2_byte y2_byte, xor_cast x3_byte y3_byte,
-      xor_cast x4_byte y4_byte, xor_cast x5_byte y5_byte,
-      xor_cast x6_byte y6_byte, xor_cast x7_byte y7_byte]
-  simp only [x0_byte, y0_byte, x1_byte, y1_byte, x2_byte, y2_byte,
-    x3_byte, y3_byte, x4_byte, y4_byte, x5_byte, y5_byte,
-    x6_byte, y6_byte, x7_byte, y7_byte, and_true]
+  simp only [h_input, circuit_norm, main, ByteXorTable,
+    explicit_provable_type, Fin.forall_iff] at h_env ⊢
+  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
+  simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U64 where
   assumptions

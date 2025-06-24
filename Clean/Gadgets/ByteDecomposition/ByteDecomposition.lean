@@ -27,8 +27,8 @@ def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) 
   let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
   let high ← witness fun env => floordiv (env x) (2^offset.val)
 
-  lookup (ByteLookup ((2^(8 - offset.val) : F p) * low))
-  lookup (ByteLookup high)
+  lookup ByteTable ((2^(8 - offset.val) : F p) * low)
+  lookup ByteTable high
 
   x.assert_equals (low + high * (2^offset.val : F p))
 
@@ -49,7 +49,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
-  simp only [circuit_norm, elaborated, byte_decomposition, spec, ByteLookup, ByteTable, h_input] at h_holds ⊢
+  simp only [circuit_norm, elaborated, byte_decomposition, spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
 
   obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
@@ -100,8 +100,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
-  simp only [eval_field] at h_input
-  simp only [circuit_norm, byte_decomposition, elaborated, h_input, ByteLookup, ByteTable] at henv ⊢
+  simp only [ProvableType.eval_field] at h_input
+  simp only [circuit_norm, byte_decomposition, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]
 
