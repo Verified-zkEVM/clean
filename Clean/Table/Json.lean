@@ -1,4 +1,5 @@
 import Clean.Table.Basic
+import Clean.Table.WitnessGeneration
 import Clean.Circuit.Json
 
 open Lean
@@ -17,11 +18,23 @@ instance : ToJson (Cell W S) where
     | .aux i => Json.mkObj [("aux", toJson i)]
 
 instance : ToJson (CellAssignment W S) where
-  toJson assignment := Json.mkObj [
-    ("offset", toJson assignment.offset),
-    ("aux_length", toJson assignment.aux_length),
-    ("vars", toJson assignment.vars.toArray)
-  ]
+  toJson assignment :=
+    let aux_map := build_aux_map assignment
+    -- iterate over the vars and convert aux cell to input cell with column from aux_map
+    let vars := assignment.vars.mapIdx fun idx cell =>
+      match cell with
+      | Cell.input off => Cell.input off
+      | Cell.aux _ =>
+        let col := aux_map[idx]!
+        if h: col < (size S)
+          then Cell.input { row := 1, column := ⟨col, h⟩ }
+          else cell -- todo: might be better to refactor the build_aux_map to return Fin (size S) instead
+
+    Json.mkObj [
+      ("offset", toJson assignment.offset),
+      ("aux_length", toJson assignment.aux_length),
+      ("vars", toJson vars.toArray),
+    ]
 
 
 instance : ToJson (TableContext W S F) where

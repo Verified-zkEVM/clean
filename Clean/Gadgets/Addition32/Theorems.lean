@@ -130,7 +130,7 @@ theorem add32_soundness {x0 x1 x2 x3 y0 y1 y2 y3 carry_in c0 c1 c2 c3 z0 z1 z2 z
     rw [Int.ediv_eq_zero_of_lt sum_pos (by linarith)]
     simp only [h_add, c3_zero, and_self]
   · simp only [c3_one, one_mul] at h_add
-    rw [←h_add, Int.add_emod_self, Int.emod_eq_of_lt z_pos (by linarith)]
+    rw [←h_add, Int.add_emod_right, Int.emod_eq_of_lt z_pos (by linarith)]
     rw [
       show z + 2^32 = z + 2^32 * 1 from rfl,
       Int.add_mul_ediv_left _ _ (by linarith),
