@@ -1,6 +1,4 @@
-import Mathlib.Tactic.Linarith.Frontend
 import Clean.Types.U64
-import Clean.Gadgets.Rotation64.Theorems
 namespace Specs.Keccak256
 
 open Bitwise (not64 rot_left64)
