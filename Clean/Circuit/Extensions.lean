@@ -7,8 +7,8 @@ instance {α: TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) wher
   default := ProvableType.witness default
 
 def copy_to_var (x: Expression F) : Circuit F (Variable F) := do
-  let x' ← witness_var x.eval
-  assert_zero (x - (var x'))
+  let x' ← witnessVar x.eval
+  assertZero (x - (var x'))
   return x'
 
 def to_var : Expression F → Circuit F (Variable F)

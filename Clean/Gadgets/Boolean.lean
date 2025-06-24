@@ -5,7 +5,7 @@ section
 variable {p : ℕ} [Fact p.Prime]
 
 def assert_bool (x: Expression (F p)) := do
-  assert_zero (x * (x - 1))
+  assertZero (x * (x - 1))
 
 inductive Boolean (F: Type) where
   | private mk : Variable F → Boolean F
@@ -14,7 +14,7 @@ namespace Boolean
 def var (b: Boolean (F p)) := Expression.var b.1
 
 def witness (compute : Environment (F p) → F p) := do
-  let x ← witness_var compute
+  let x ← witnessVar compute
   assert_bool (Expression.var x)
   return Boolean.mk x
 
@@ -31,7 +31,7 @@ theorem equiv : ∀ {x: F p},
 Asserts that x = 0 ∨ x = 1 by adding the constraint x * (x - 1) = 0
 -/
 def circuit : FormalAssertion (F p) field where
-  main (x : Expression (F p)) := assert_zero (x * (x - 1))
+  main (x : Expression (F p)) := assertZero (x * (x - 1))
   assumptions _ := True
   spec (x : F p) := x = 0 ∨ x = 1
 

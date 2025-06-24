@@ -19,7 +19,7 @@ def circuit : Circuit F Unit := do
   let x ← witness (fun _ => 1)
 
   -- add a constraint
-  assert_zero (x - 1) * x
+  assertZero (x - 1) * x
 
   -- or add a lookup
   lookup { table := MyTable, entry := [x], ... }
@@ -75,7 +75,7 @@ def local_length (circuit: Circuit F α) (offset := 0) : ℕ :=
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
+def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
     (var, [.witness 1 fun env => #v[compute env]])
@@ -83,26 +83,26 @@ def witness_var (compute : Environment F → F) : Circuit F (Variable F) :=
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
 def witness (compute : Environment F → F) := do
-  let v ← witness_var compute
+  let v ← witnessVar compute
   return var v
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
-def witness_vars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+def witnessVars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     (vars, [.witness m compute])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witness_vector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := var_from_offset (fields m) offset
     (vars, [.witness m compute])
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assert_zero (e: Expression F) : Circuit F Unit := fun _ =>
+def assertZero (e: Expression F) : Circuit F Unit := fun _ =>
   ((), [.assert e])
 
 /-- Add a lookup. -/
@@ -346,7 +346,7 @@ def subassertion_completeness (circuit: FormalAssertion F β) (b_var : Var β F)
 end Circuit
 end
 
-export Circuit (witness_var witness witness_vars witness_vector assert_zero lookup)
+export Circuit (witnessVar witness witnessVars witnessVector assertZero lookup)
 
 -- witness generation
 
