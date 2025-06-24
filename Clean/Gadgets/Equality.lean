@@ -1,5 +1,5 @@
 /-
-This file provides the built-in `assert_equals` gadget, which works for any provable type
+This file provides the built-in `assertEquals` gadget, which works for any provable type
 and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
 import Clean.Circuit.Loops
@@ -106,7 +106,7 @@ theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environme
   simp only [subcircuit_norm, circuit_norm, circuit]
 
 @[circuit_norm]
-theorem uses_local_witnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
+theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).to_subcircuit n (x, y)).uses_local_witnesses env = True := by
   simp only [FormalAssertion.to_subcircuit, circuit]
 
@@ -116,12 +116,12 @@ end Gadgets
 -- Defines a unified `===` notation for asserting equality in circuits.
 
 @[circuit_norm]
-def assert_equals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
   (x y : α (Expression F)) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit α) (x, y)
 
 @[circuit_norm, reducible]
-def Expression.assert_equals {F : Type} [Field F]
+def Expression.assertEquals {F : Type} [Field F]
   (x y : Expression F) : Circuit F Unit :=
   assertion (Gadgets.Equality.circuit id) (x, y)
 
@@ -129,11 +129,11 @@ class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
   assert_eq : β → β → Circuit F Unit
 
 instance {F : Type} [Field F] : HasAssertEq (Expression F) F where
-  assert_eq := Expression.assert_equals
+  assert_eq := Expression.assertEquals
 
 instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
   HasAssertEq (α (Expression F)) F where
-  assert_eq := @assert_equals F _ α _
+  assert_eq := @assertEquals F _ α _
 
 attribute [circuit_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq

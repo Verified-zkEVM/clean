@@ -261,7 +261,7 @@ theorem uses_local_witnesses_flat_iff_extends {env: Environment F} (n: ℕ) {ops
     simp_all [uses_local_witnesses_flat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.single_local_length]
 
-theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Operations F} {n: ℕ} (h: ops.subcircuits_consistent n) :
+theorem can_replace_usesLocalWitnesses_completeness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) :
     env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; trivial
@@ -276,7 +276,7 @@ theorem can_replace_local_witnesses_completeness {env: Environment F} {ops: Oper
     rw [←uses_local_witnesses_flat_iff_extends]
     exact h.left
 
-theorem uses_local_witnesses_completeness_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
+theorem usesLocalWitnesses_completeness_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
   env.uses_local_witnesses_completeness n ops ↔ ops.forAll n {
     witness m _ c := env.extends_vector (c env) m,
     subcircuit _ _ s := s.uses_local_witnesses env
@@ -330,7 +330,7 @@ Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only pr
 `constraints_hold.completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) : env.uses_local_witnesses n ops →
+theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) : env.UsesLocalWitnesses n ops →
     constraints_hold.completeness env ops → constraints_hold env ops := by
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; exact trivial
@@ -419,15 +419,15 @@ theorem constraints_hold.completeness_iff_forAll' {env : Environment F} {circuit
 @[circuit_norm] theorem constraints_hold.append_local_witnesses {as bs : Operations F} (n : ℕ) :
   env.uses_local_witnesses_completeness n (as ++ bs)
   ↔ env.uses_local_witnesses_completeness n as ∧ env.uses_local_witnesses_completeness (as.local_length + n) bs := by
-  rw [env.uses_local_witnesses_completeness_iff_forAll, Operations.forAll_append,
-    ←env.uses_local_witnesses_completeness_iff_forAll n, ←env.uses_local_witnesses_completeness_iff_forAll (as.local_length + n)]
+  rw [env.usesLocalWitnesses_completeness_iff_forAll, Operations.forAll_append,
+    ←env.usesLocalWitnesses_completeness_iff_forAll n, ←env.usesLocalWitnesses_completeness_iff_forAll (as.local_length + n)]
 
 @[circuit_norm] theorem constraints_hold.bind_uses_local_witnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
   env.uses_local_witnesses_completeness n ((f >>= g).operations n)
   ↔ env.uses_local_witnesses_completeness n (f.operations n) ∧
     env.uses_local_witnesses_completeness (n + f.local_length n) ((g (f.output n)).operations (n + f.local_length n)) := by
-  rw [env.uses_local_witnesses_completeness_iff_forAll, env.uses_local_witnesses_completeness_iff_forAll,
-    env.uses_local_witnesses_completeness_iff_forAll, bind_forAll]
+  rw [env.usesLocalWitnesses_completeness_iff_forAll, env.usesLocalWitnesses_completeness_iff_forAll,
+    env.usesLocalWitnesses_completeness_iff_forAll, bind_forAll]
 end Circuit
 
 -- more theorems about forAll / forAllFlat

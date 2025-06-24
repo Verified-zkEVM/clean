@@ -380,10 +380,10 @@ lemma forEach.completeness :
   rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
 
 @[circuit_norm ↓]
-lemma forEach.uses_local_witnesses :
+lemma forEach.usesLocalWitnesses :
   env.uses_local_witnesses_completeness n ((forEach xs body constant).operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
-  simp only [forEach, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  simp only [forEach, env.usesLocalWitnesses_completeness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantCircuits.local_length_eq]
 end forEach
 
@@ -424,10 +424,10 @@ lemma map.completeness :
   rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
 
 @[circuit_norm ↓]
-lemma map.uses_local_witnesses :
+lemma map.usesLocalWitnesses :
   env.uses_local_witnesses_completeness n (map xs body constant |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body default).local_length) (body xs[i.val] |>.operations (n + i*(body default).local_length)) := by
-  simp only [map, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  simp only [map, env.usesLocalWitnesses_completeness_iff_forAll, ←forAll_def]
   rw [MapM.forAll_iff, ConstantCircuits.local_length_eq]
 end map
 
@@ -470,10 +470,10 @@ lemma mapFinRange.completeness :
   rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
 
 @[circuit_norm ↓]
-lemma mapFinRange.uses_local_witnesses :
+lemma mapFinRange.usesLocalWitnesses :
   env.uses_local_witnesses_completeness n (mapFinRange m body constant |>.operations n) ↔
     ∀ i : Fin m, env.uses_local_witnesses_completeness (n + i*(body 0).local_length) (body i |>.operations (n + i*(body 0).local_length)) := by
-  simp only [mapFinRange, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  simp only [mapFinRange, env.usesLocalWitnesses_completeness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantCircuits.local_length_eq]
 end mapFinRange
 
@@ -534,14 +534,14 @@ lemma foldl.completeness [NeZero m] :
   rw [FoldlM.forAll_iff_const constant const_out]
 
 @[circuit_norm ↓]
-lemma foldl.uses_local_witnesses [NeZero m] :
+lemma foldl.usesLocalWitnesses [NeZero m] :
   env.uses_local_witnesses_completeness n (foldl xs init body const_out constant |>.operations n) ↔
     env.uses_local_witnesses_completeness n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).local_length;
       let acc := (body default xs[i]).output (n + i*k);
       env.uses_local_witnesses_completeness (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
-  simp only [foldl, env.uses_local_witnesses_completeness_iff_forAll, ←forAll_def]
+  simp only [foldl, env.usesLocalWitnesses_completeness_iff_forAll, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
 end foldl
 

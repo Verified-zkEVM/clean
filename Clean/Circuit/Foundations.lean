@@ -37,13 +37,13 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
 theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
     -- if the environment uses default witness generators (original definition)
-    env.uses_local_witnesses offset (circuit.main b_var |>.operations offset) →
+    env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
     constraints_hold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env
   apply Circuit.can_replace_completeness (circuit.subcircuits_consistent ..) h_env
-  have h_env' := Environment.can_replace_local_witnesses_completeness (circuit.subcircuits_consistent ..) h_env
+  have h_env' := Environment.can_replace_usesLocalWitnesses_completeness (circuit.subcircuits_consistent ..) h_env
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions
 
 /--
@@ -68,11 +68,11 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
 theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
     -- if the environment uses default witness generators (original definition)
-    env.uses_local_witnesses offset (circuit.main b_var |>.operations offset) →
+    env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)
     circuit.spec b → constraints_hold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env h_spec
   apply Circuit.can_replace_completeness (circuit.subcircuits_consistent ..) h_env
-  have h_env' := Environment.can_replace_local_witnesses_completeness (circuit.subcircuits_consistent ..) h_env
+  have h_env' := Environment.can_replace_usesLocalWitnesses_completeness (circuit.subcircuits_consistent ..) h_env
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec

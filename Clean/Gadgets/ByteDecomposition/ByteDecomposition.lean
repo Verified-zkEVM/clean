@@ -30,7 +30,7 @@ def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) 
   lookup ByteTable ((2^(8 - offset.val) : F p) * low)
   lookup ByteTable high
 
-  x.assert_equals (low + high * (2^offset.val : F p))
+  x.assertEquals (low + high * (2^offset.val : F p))
 
   return { low, high }
 

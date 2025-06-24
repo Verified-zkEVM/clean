@@ -178,14 +178,14 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
+def Environment.UsesLocalWitnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
   ops.forAllFlat offset { witness n _ compute := env.extends_vector (compute env) n }
 
 /--
-Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
+Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
+def Environment.uses_local_witnesses_completeness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
   | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
   | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
