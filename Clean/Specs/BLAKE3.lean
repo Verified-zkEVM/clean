@@ -152,23 +152,24 @@ Final state update that XORs the first 8 words with the last 8 words,
 and the last 8 words with the original chaining value.
 -/
 def finalStateUpdate (state: Vector Nat 16) (chaining_value: Vector Nat 8) : Vector Nat 16 :=
-  let state := state.set 0 (state[0] ^^^ state[8])
-  let state := state.set 1 (state[1] ^^^ state[9])
-  let state := state.set 2 (state[2] ^^^ state[10])
-  let state := state.set 3 (state[3] ^^^ state[11])
-  let state := state.set 4 (state[4] ^^^ state[12])
-  let state := state.set 5 (state[5] ^^^ state[13])
-  let state := state.set 6 (state[6] ^^^ state[14])
-  let state := state.set 7 (state[7] ^^^ state[15])
-  let state := state.set 8 (state[8] ^^^ chaining_value[0])
-  let state := state.set 9 (state[9] ^^^ chaining_value[1])
-  let state := state.set 10 (state[10] ^^^ chaining_value[2])
-  let state := state.set 11 (state[11] ^^^ chaining_value[3])
-  let state := state.set 12 (state[12] ^^^ chaining_value[4])
-  let state := state.set 13 (state[13] ^^^ chaining_value[5])
-  let state := state.set 14 (state[14] ^^^ chaining_value[6])
-  let state := state.set 15 (state[15] ^^^ chaining_value[7])
-  state
+  #v[
+    state[0] ^^^ state[8],
+    state[1] ^^^ state[9],
+    state[2] ^^^ state[10],
+    state[3] ^^^ state[11],
+    state[4] ^^^ state[12],
+    state[5] ^^^ state[13],
+    state[6] ^^^ state[14],
+    state[7] ^^^ state[15],
+    chaining_value[0] ^^^ state[8],
+    chaining_value[1] ^^^ state[9],
+    chaining_value[2] ^^^ state[10],
+    chaining_value[3] ^^^ state[11],
+    chaining_value[4] ^^^ state[12],
+    chaining_value[5] ^^^ state[13],
+    chaining_value[6] ^^^ state[14],
+    chaining_value[7] ^^^ state[15]
+  ]
 
 /--
 The compression function, which takes a chaining value, block words, counter,
