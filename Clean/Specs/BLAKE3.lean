@@ -90,20 +90,28 @@ def g (state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
         |>.set d state_d
 
 /--
+The constants a b c d for the G applications in the round, together with the indices
+of the message words mx and my
+-/
+def roundConstants : Vector (Fin 16 × Fin 16 × Fin 16 × Fin 16 × Fin 16 × Fin 16) 8 := #v[
+  (0, 4, 8, 12, 0, 1),
+  (1, 5, 9, 13, 2, 3),
+  (2, 6, 10, 14, 4, 5),
+  (3, 7, 11, 15, 6, 7),
+  (0, 5, 10, 15, 8, 9),
+  (1, 6, 11, 12, 10, 11),
+  (2, 7, 8, 13, 12, 13),
+  (3, 4, 9, 14, 14, 15)
+]
+
+/--
 The round function, which applies the mixing function G
 to mix the state's columns and diagonals.
 -/
 def round (state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
-  let state := g state 0 4 8 12 m[0] m[1]
-  let state := g state 1 5 9 13 m[2] m[3]
-  let state := g state 2 6 10 14 m[4] m[5]
-  let state := g state 3 7 11 15 m[6] m[7]
-
-  let state := g state 0 5 10 15 m[8] m[9]
-  let state := g state 1 6 11 12 m[10] m[11]
-  let state := g state 2 7 8 13 m[12] m[13]
-  let state := g state 3 4 9 14 m[14] m[15]
-  state
+  roundConstants.foldl (fun state (a, b, c, d, i, j) =>
+    g state a b c d m[i] m[j]
+  ) state
 
 
 /--
@@ -135,17 +143,28 @@ def applyRounds (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (cou
   let counter_high := counter / 2^32
 
   -- Initialize state with chaining value, IV, counter, block length and flags
-  let initial_state := #v[
+  let state := #v[
     chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
     chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
     iv[0], iv[1], iv[2], iv[3],
     counter_low, counter_high, block_len, flags
   ]
 
-  -- Apply 7 rounds using foldl over round numbers [0,1,2,3,4,5,6]
-  let round_numbers := List.finRange 7
-  let (final_state, _) := round_numbers.foldl roundWithPermute (initial_state, block_words)
-  final_state
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+  let block_words := permute block_words
+  let state := round state block_words
+
+  state
 
 /--
 Final state update that XORs the first 8 words with the last 8 words,
