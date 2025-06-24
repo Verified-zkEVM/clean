@@ -137,11 +137,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with
-  assumptions := assumptions
-  spec := spec
-  soundness := soundness
-  completeness := completeness
+  elaborated with assumptions, spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.FinalStateUpdate
