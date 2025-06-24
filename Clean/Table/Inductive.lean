@@ -49,7 +49,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
       (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
       (eval env acc_var = acc) ∧ (eval env x_var = x) →
     -- when using honest-prover witnesses
-    env.uses_local_witnesses_completeness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
+    env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- assuming the spec on the current row, and the input_spec on the input
     spec row_index acc xs xs_len ∧ input_assumptions row_index x →
     -- the constraints hold

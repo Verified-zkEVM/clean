@@ -107,7 +107,7 @@ theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environme
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).to_subcircuit n (x, y)).uses_local_witnesses env = True := by
+    ((circuit α).to_subcircuit n (x, y)).UsesLocalWitnesses env = True := by
   simp only [FormalAssertion.to_subcircuit, circuit]
 
 end Equality

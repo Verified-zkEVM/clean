@@ -20,9 +20,9 @@ variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType 
 def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environment F :=
   circuit.main (const input) |>.proverEnvironment
 
-theorem proverEnvironment_uses_local_witnesses (circuit : LookupCircuit F α β) (input : α F) :
-    (circuit.proverEnvironment input).uses_local_witnesses 0 ((circuit.main (const input)).operations 0) := by
-  apply Circuit.proverEnvironment_uses_local_witnesses
+theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β) (input : α F) :
+    (circuit.proverEnvironment input).UsesLocalWitnesses 0 ((circuit.main (const input)).operations 0) := by
+  apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
   simp [Environment.onlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
@@ -55,7 +55,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     simp only [h_output, LookupCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
     apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
-    exact circuit.proverEnvironment_uses_local_witnesses input
+    exact circuit.proverEnvironment_usesLocalWitnesses input
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `subcircuit circuit input`.

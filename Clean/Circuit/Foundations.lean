@@ -1,7 +1,7 @@
 /-
 This file provides a justification for our definitions of `FormalCircuit` and `FormalAssertion`.
 
-In those definitions, we use modified statements for `constraints_hold` and `uses_local_witnesses`,
+In those definitions, we use modified statements for `constraints_hold` and `UsesLocalWitnesses`,
 where subcircuits replace the original statement with a new one that is easier to reason about during proofs.
 
 Here, we prove soundness and completeness using the _original_ statements.
@@ -31,7 +31,7 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
   exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
 
 /--
-  Justification for using modified statements for `uses_local_witnesses`
+  Justification for using modified statements for `UsesLocalWitnesses`
   and `constraints_hold` in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
@@ -62,7 +62,7 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
   exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
 
 /--
-  Justification for using modified statements for `uses_local_witnesses`
+  Justification for using modified statements for `UsesLocalWitnesses`
   and `constraints_hold` in the `FormalAssertion` definition.
 -/
 theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :

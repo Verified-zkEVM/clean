@@ -110,7 +110,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     ops := flat_ops,
     soundness := subcircuit_soundness circuit b_var n,
     completeness := subcircuit_completeness circuit b_var,
-    uses_local_witnesses := subcircuit_soundness circuit b_var n,
+    UsesLocalWitnesses := subcircuit_soundness circuit b_var n,
     local_length := circuit.local_length b_var
 
     imply_soundness
@@ -140,7 +140,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     ops := flat_ops,
     soundness := subassertion_soundness circuit b_var,
     completeness := subassertion_completeness circuit b_var,
-    uses_local_witnesses _ := True,
+    UsesLocalWitnesses _ := True,
     local_length := circuit.local_length b_var
 
     imply_soundness := by
