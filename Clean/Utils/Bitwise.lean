@@ -1,5 +1,4 @@
-import Mathlib.Tactic
-import Mathlib.Algebra.Field.ZMod
+import Mathlib.Analysis.Normed.Ring.Lemmas
 import Clean.Utils.Field
 
 namespace Bitwise

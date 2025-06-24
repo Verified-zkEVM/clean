@@ -1,7 +1,7 @@
 /-
 Miscellaneous utility lemmas/methods that don't fit anywhere else.
 -/
-import Mathlib.Tactic
+import Mathlib.Data.Fin.Basic
 variable {α : Type}
 
 theorem funext_heq {α α' β : Type} (h : α = α') {f : α → β} {g : α' → β} :

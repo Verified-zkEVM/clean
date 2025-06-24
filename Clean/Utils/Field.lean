@@ -1,5 +1,6 @@
-import Mathlib.Tactic
 import Mathlib.Algebra.Field.ZMod
+import Mathlib.Algebra.Order.Star.Basic
+import Mathlib.Analysis.Normed.Ring.Lemmas
 
 -- main field definition
 def F p := ZMod p

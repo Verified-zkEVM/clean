@@ -1,4 +1,5 @@
-import Mathlib.Tactic
+import Mathlib.Analysis.Normed.Ring.Lemmas
+import Mathlib.Combinatorics.Enumerative.Composition
 import Init.Data.List.Find
 
 variable {α β : Type} {n m : ℕ}
