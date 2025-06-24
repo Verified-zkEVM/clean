@@ -38,21 +38,20 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 section
 open Circuit
 open FlatOperation (constraints_hold_cons constraints_hold_append)
-open Environment (env_extends_of_flat)
 
 /--
 Consistency theorem which proves that flattened constraints are equivalent to the
 constraints created from the inductive `Operations` type, using flat constraints for subcircuits.
 -/
 theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : Environment F},
-  constraints_hold env ops ↔ constraints_hold_flat env (to_flat_operations ops)
+  constraints_hold env ops ↔ constraints_hold_flat env ops.toFlat
 := by
   intro ops env
   induction ops using Operations.induct with
   | empty => trivial
   -- we can handle all non-empty cases at once
   | witness | assert | lookup | subcircuit =>
-    dsimp only [to_flat_operations]
+    dsimp only [Operations.toFlat]
     try rw [constraints_hold_cons]
     try rw [constraints_hold_append]
     simp_all only [constraints_hold, constraints_hold_flat, and_true, true_and]
@@ -63,7 +62,7 @@ Theorem and implementation that allows us to take a formal circuit and use it as
 def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
-  let flat_ops := to_flat_operations ops
+  let flat_ops := ops.toFlat
   have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
   have imply_soundness : ∀ env : Environment F,
@@ -87,7 +86,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     exact can_replace_subcircuits.mpr h_holds
 
   have implied_by_completeness : ∀ env : Environment F,
-      env.extends_vector (FlatOperation.witnesses env flat_ops) n →
+      env.extends_vector (FlatOperation.local_witnesses env flat_ops) n →
       subcircuit_completeness circuit b_var env → constraints_hold_flat env flat_ops := by
     -- we are given that the assumptions are true
     intro env h_env
@@ -95,9 +94,9 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     intro (as : circuit.assumptions b)
 
     have h_env : env.uses_local_witnesses n ops := by
-      guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-      apply env.can_replace_local_witnesses
-      exact env_extends_of_flat h_env
+      guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
+      rw [env.uses_local_witnesses_iff_flat, env.uses_local_witnesses_flat_iff_extends]
+      exact h_env
     have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
@@ -125,7 +124,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+      exact FlatOperation.flat_witness_length_eq |>.symm
   }
 
 /--
@@ -134,7 +133,7 @@ Theorem and implementation that allows us to take a formal assertion and use it 
 def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
-  let flat_ops := to_flat_operations ops
+  let flat_ops := ops.toFlat
   have h_consistent : ops.subcircuits_consistent n := circuit.subcircuits_consistent b_var n
 
   {
@@ -170,9 +169,9 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
       have h_env : env.uses_local_witnesses n ops := by
-        guard_hyp h_env : env.extends_vector (FlatOperation.witnesses env flat_ops) n
-        apply env.can_replace_local_witnesses
-        exact env_extends_of_flat h_env
+        guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
+        rw [env.uses_local_witnesses_iff_flat, env.uses_local_witnesses_flat_iff_extends]
+        exact h_env
       have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
@@ -186,7 +185,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
 
     local_length_eq := by
       rw [← circuit.local_length_eq b_var n]
-      exact Environment.flat_witness_length_eq |>.symm
+      exact FlatOperation.flat_witness_length_eq |>.symm
   }
 end
 
@@ -216,9 +215,79 @@ lemma assertion_local_length_eq (circuit: FormalAssertion F β) (input: Var β F
   (circuit.to_subcircuit offset input).local_length = circuit.local_length input := by rfl
 end Circuit
 
+-- subcircuit composability for `computable_witnesses`
+
+namespace ElaboratedCircuit
+/--
+For formal circuits, to prove `computableWitnesses`, we assume that the input
+only contains variables below the current offset `n`.
+ -/
+def computableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
+  ∀ (n : ℕ) (input : Var β F),
+    Environment.onlyAccessedBelow n (eval · input) →
+      (circuit.main input).computableWitnesses n
+
+/--
+This reformulation of `computableWitnesses'` is easier to prove in a formal circuit,
+because we have all necessary assumptions at each circuit operation step.
+ -/
+def computableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
+  ∀ (n : ℕ) (input : Var β F) env env',
+  circuit.main input |>.operations n |>.forAllFlat n {
+    witness n _ compute :=
+      env.agreesBelow n env' → eval env input = eval env' input → compute env = compute env' }
+
+/--
+`computableWitnesses` is stronger than `computableWitnesses'` (so it's fine to only prove the former).
+-/
+lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
+    circuit.computableWitnesses → circuit.computableWitnesses' := by
+  simp only [computableWitnesses, computableWitnesses']
+  intro h_computable n input input_only_accesses_n
+  intro env env'
+  specialize h_computable n input env env'
+  specialize input_only_accesses_n env env'
+  simp only [Operations.computableWitnesses, ←Operations.forAll_toFlat_iff] at *
+  generalize ((circuit.main input).operations n).toFlat = ops at *
+  revert h_computable
+  apply FlatOperation.forAll_implies
+  simp only [Condition.implies, Condition.ignoreSubcircuit, imp_self]
+  induction ops using FlatOperation.induct generalizing n with
+  | empty => trivial
+  | assert | lookup => simp_all [FlatOperation.forAll]
+  | witness m c ops ih =>
+    simp_all only [FlatOperation.forAll, forall_const, implies_true, true_and]
+    apply ih (m + n)
+    intro h_agrees
+    apply input_only_accesses_n
+    exact Environment.agreesBelow_of_le h_agrees (by linarith)
+
+/--
+Composability for `computableWitnesses`: If
+- in the parent circuit, we prove that input variables are < `n`,
+- and the child circuit provides `ElaboratedCircuit.computableWitnesses`,
+then we can conclude that the subcircuit, evaluated at this particular input,
+satisfies `computableWitnesses` in the original sense.
+-/
+theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input: Var β F) (n : ℕ) :
+  Environment.onlyAccessedBelow n (eval · input) ∧ circuit.computableWitnesses →
+    (circuit.main input).computableWitnesses n := by
+  intro ⟨ h_input, h_computable ⟩
+  apply ElaboratedCircuit.computableWitnesses_implies h_computable
+  exact h_input
+end ElaboratedCircuit
+
+theorem Circuit.subcircuit_computableWitnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
+  Environment.onlyAccessedBelow n (eval · input) ∧ circuit.computableWitnesses →
+    (subcircuit circuit input).computableWitnesses n := by
+  intro h env env'
+  simp only [circuit_norm, FormalCircuit.to_subcircuit, Operations.computableWitnesses,
+    Operations.forAllFlat, Operations.forAll_toFlat_iff]
+  exact circuit.compose_computableWitnesses input n h env env'
+
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
-  FormalCircuit.to_subcircuit FormalAssertion.to_subcircuit to_flat_operations
+  FormalCircuit.to_subcircuit FormalAssertion.to_subcircuit
   Circuit.subcircuit_soundness Circuit.subcircuit_completeness
   Circuit.subassertion_soundness Circuit.subassertion_completeness
 

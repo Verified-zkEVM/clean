@@ -1,11 +1,10 @@
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.LookupCircuit
 import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
 
 namespace Gadgets.Addition8FullCarry
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 open ByteUtils (mod_256 floordiv_256)
 
@@ -73,7 +72,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- simplify constraints, assumptions and goal
     simp_all only [circuit_norm, subcircuit_norm, h_inputs, spec, assumptions, add8_full_carry,
-      ByteLookup, Boolean.circuit, ByteTable.equiv]
+      ByteLookup, ByteTable, Boolean.circuit]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
@@ -100,7 +99,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     -- simplify assumptions and goal
     simp only [circuit_norm, subcircuit_norm, h_inputs, assumptions, add8_full_carry,
-      ByteLookup, Boolean.circuit, ByteTable.equiv] at *
+      ByteLookup, ByteTable, Boolean.circuit] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -131,5 +130,14 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       repeat assumption
 
     exact ⟨completeness1, completeness2, completeness3⟩
+
+def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
+  circuit with
+  name := "Addition8FullCarry"
+
+  computableWitnesses n input := by
+    simp_all only [circuit_norm, subcircuit_norm, circuit, add8_full_carry, Boolean.circuit,
+      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
+}
 
 end Gadgets.Addition8FullCarry

@@ -49,7 +49,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
-  simp only [circuit_norm, elaborated, byte_decomposition, spec, ByteLookup, ByteTable.equiv, h_input] at h_holds ⊢
+  simp only [circuit_norm, elaborated, byte_decomposition, spec, ByteLookup, ByteTable, h_input] at h_holds ⊢
   clear h_input
 
   obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
@@ -101,7 +101,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [eval_field] at h_input
-  simp only [circuit_norm, byte_decomposition, elaborated, h_input, ByteLookup, ByteTable.equiv] at henv ⊢
+  simp only [circuit_norm, byte_decomposition, elaborated, h_input, ByteLookup, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]
 
