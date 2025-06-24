@@ -82,10 +82,10 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`,
-  -- `completeness` and `uses_local_witnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
+  -- `completeness` and `usesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   soundness : Environment F → Prop
   completeness : Environment F → Prop
-  uses_local_witnesses : Environment F → Prop
+  UsesLocalWitnesses : Environment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
@@ -99,9 +99,9 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   implied_by_completeness : ∀ env, env.extends_vector (local_witnesses env ops) offset →
     completeness env → constraints_hold_flat env ops
 
-  -- `uses_local_witnesses` needs to follow from the local witness generator condition
+  -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
   implied_by_local_witnesses : ∀ env, env.extends_vector (local_witnesses env ops) offset →
-    uses_local_witnesses env
+    UsesLocalWitnesses env
 
   -- `local_length` must be consistent with the operations
   local_length_eq : local_length = FlatOperation.local_length ops

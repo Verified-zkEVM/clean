@@ -93,11 +93,11 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     let b := eval env b_var
     intro (as : circuit.assumptions b)
 
-    have h_env : env.uses_local_witnesses n ops := by
+    have h_env : env.UsesLocalWitnesses n ops := by
       guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
-      rw [env.uses_local_witnesses_iff_flat, env.uses_local_witnesses_flat_iff_extends]
+      rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
       exact h_env
-    have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
+    have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
     have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
@@ -110,7 +110,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     ops := flat_ops,
     soundness := subcircuit_soundness circuit b_var n,
     completeness := subcircuit_completeness circuit b_var,
-    uses_local_witnesses := subcircuit_soundness circuit b_var n,
+    UsesLocalWitnesses := subcircuit_soundness circuit b_var n,
     local_length := circuit.local_length b_var
 
     imply_soundness
@@ -140,7 +140,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     ops := flat_ops,
     soundness := subassertion_soundness circuit b_var,
     completeness := subassertion_completeness circuit b_var,
-    uses_local_witnesses _ := True,
+    UsesLocalWitnesses _ := True,
     local_length := circuit.local_length b_var
 
     imply_soundness := by
@@ -168,11 +168,11 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
       let b := eval env b_var
       have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
 
-      have h_env : env.uses_local_witnesses n ops := by
+      have h_env : env.UsesLocalWitnesses n ops := by
         guard_hyp h_env : env.extends_vector (FlatOperation.local_witnesses env flat_ops) n
-        rw [env.uses_local_witnesses_iff_flat, env.uses_local_witnesses_flat_iff_extends]
+        rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
         exact h_env
-      have h_env_completeness := env.can_replace_local_witnesses_completeness h_consistent h_env
+      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
       have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right

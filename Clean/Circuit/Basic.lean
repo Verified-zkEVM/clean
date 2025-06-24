@@ -178,22 +178,22 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.uses_local_witnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
+def Environment.UsesLocalWitnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
   ops.forAllFlat offset { witness n _ compute := env.extends_vector (compute env) n }
 
 /--
-Modification of `uses_local_witnesses` where subcircuits replace the condition with a custom statement.
+Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.uses_local_witnesses_completeness (env: Environment F) (offset : ℕ) : List (Operation F) → Prop
+def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.uses_local_witnesses_completeness (offset + m) ops
-  | .assert _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .lookup _ :: ops => env.uses_local_witnesses_completeness offset ops
-  | .subcircuit s :: ops => s.uses_local_witnesses env ∧ env.uses_local_witnesses_completeness (offset + s.local_length) ops
+  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
+  | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.local_length) ops
 
-/-- Same as `uses_local_witnesses`, but on flat operations -/
-def Environment.uses_local_witnesses_flat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
+/-- Same as `UsesLocalWitnesses`, but on flat operations -/
+def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
   FlatOperation.forAll n { witness n _ compute := env.extends_vector (compute env) n } ops
 
 section
@@ -249,7 +249,7 @@ def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
     (assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
-  env.uses_local_witnesses_completeness offset (circuit.main b_var |>.operations offset) →
+  env.UsesLocalWitnessesCompleteness offset (circuit.main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β F, eval env b_var = b →
   assumptions b →
@@ -321,7 +321,7 @@ structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
   completeness:
     -- for all environments which _use the default witness generators for local variables_
     ∀ offset, ∀ env, ∀ b_var : Var β F,
-    env.uses_local_witnesses_completeness offset (main b_var |>.operations offset) →
+    env.UsesLocalWitnessesCompleteness offset (main b_var |>.operations offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β F, eval env b_var = b →
     assumptions b → spec b →
@@ -383,8 +383,8 @@ def Circuit.computableWitnesses (circuit: Circuit F α) (n : ℕ) :=
   ∀ env env', (circuit.operations n).computableWitnesses n env env'
 
 /--
-If a circuit satisfies `computable_witnesses`, we can construct a concrete environment
-that satisfies `uses_local_witnesses`. (Proof in `Theorems`.)
+If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
+that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
 def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
   .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
