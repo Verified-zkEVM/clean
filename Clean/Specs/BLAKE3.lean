@@ -114,39 +114,44 @@ def permute (state: Vector Nat 16) : Vector Nat 16 :=
   Vector.ofFn (fun i => state[msgPermutation[i]])
 
 /--
-The compression function, which takes a chaining value, block words, counter,
-block length, and flags as input and produces a new state vector.
-This is the core function of BLAKE3.
+Apply a single round of mixing with optional message permutation.
+Used in the fold operation for applying multiple rounds.
 -/
-def compress (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector Nat 16 :=
+def roundWithPermute (acc : Vector Nat 16 × Vector Nat 16) (round_num : Nat) : Vector Nat 16 × Vector Nat 16 :=
+  let (state, block_words) := acc
+  let new_state := round state block_words
+  -- Permute block words except for the last round (round 6, 0-indexed)
+  let new_block_words := if round_num < 6 then permute block_words else block_words
+  (new_state, new_block_words)
+
+/--
+Apply 7 rounds of mixing to the initialized state with message permutation.
+Takes chaining value, block words, counter, block length, and flags,
+initializes the state, and applies the rounds using foldl.
+-/
+def applyRounds (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector Nat 16 :=
   -- Split counter into low and high parts
   let counter_low := counter % 2^32
   let counter_high := counter / 2^32
 
   -- Initialize state with chaining value, IV, counter, block length and flags
-  let state := #v[
+  let initial_state := #v[
     chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
     chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
     iv[0], iv[1], iv[2], iv[3],
     counter_low, counter_high, block_len, flags
   ]
 
-  -- Apply 7 rounds of mixing with message permutation
-  let state := round state block_words
-  let block_words := permute block_words
-  let state := round state block_words
-  let block_words := permute block_words
-  let state := round state block_words
-  let block_words := permute block_words
-  let state := round state block_words
-  let block_words := permute block_words
-  let state := round state block_words
-  let block_words := permute block_words
-  let state := round state block_words
-  let block_words := permute block_words
-  let state := round state block_words
+  -- Apply 7 rounds using foldl over round numbers [0,1,2,3,4,5,6]
+  let round_numbers := List.finRange 7
+  let (final_state, _) := round_numbers.foldl roundWithPermute (initial_state, block_words)
+  final_state
 
-  -- Final state update
+/--
+Final state update that XORs the first 8 words with the last 8 words,
+and the last 8 words with the original chaining value.
+-/
+def finalStateUpdate (state: Vector Nat 16) (chaining_value: Vector Nat 8) : Vector Nat 16 :=
   let state := state.set 0 (state[0] ^^^ state[8])
   let state := state.set 1 (state[1] ^^^ state[9])
   let state := state.set 2 (state[2] ^^^ state[10])
@@ -164,6 +169,15 @@ def compress (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counte
   let state := state.set 14 (state[14] ^^^ chaining_value[6])
   let state := state.set 15 (state[15] ^^^ chaining_value[7])
   state
+
+/--
+The compression function, which takes a chaining value, block words, counter,
+block length, and flags as input and produces a new state vector.
+This is the core function of BLAKE3.
+-/
+def compress (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector Nat 16 :=
+  let state := applyRounds chaining_value block_words counter block_len flags
+  finalStateUpdate state chaining_value
 
 end Specs.BLAKE3
 
@@ -198,7 +212,7 @@ def counter : Nat := 953581910
 def blockLen : Nat := 2437728858
 def flags : Nat := 2498436276
 -- Necessary to avoid 'maximum recursion depth has been reached' error during 'rfl'.
-set_option maxRecDepth 738
+set_option maxRecDepth 800
 example : compress chainingValue blockWords counter blockLen flags = #v[2723421452, 2900812491, 409287158, 2844031487, 1256578214, 2677699013, 2070649829, 3853882973, 2869165109, 1080268436, 1942754410, 576800287, 963977849, 584425189, 1029827681, 3685994844] := rfl
 
 end Specs.BLAKE3.Tests
