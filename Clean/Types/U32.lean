@@ -238,7 +238,7 @@ def circuit : FormalCircuit (F p) U32 U32 where
   assumptions := assumptions
   spec := spec
   local_length _ := 4
-  output inputs i0 := var_from_offset U32 i0
+  output inputs i0 := varFromOffset U32 i0
   soundness := by
     rintro i0 env x_var
     rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as

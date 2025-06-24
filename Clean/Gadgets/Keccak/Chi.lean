@@ -28,7 +28,7 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   local_length _ := 400
-  output _ i0 := Vector.mapRange 25 fun i => var_from_offset U64 (i0 + i*16 + 8)
+  output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
 
   local_length_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit]
   subcircuits_consistent state i0 := by

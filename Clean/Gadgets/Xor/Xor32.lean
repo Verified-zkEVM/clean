@@ -50,7 +50,7 @@ def spec (input: Inputs (F p)) (z : U32 (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
   local_length _ := 4
-  output _ i0 := var_from_offset U32 i0
+  output _ i0 := varFromOffset U32 i0
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u32 {x y z : U32 (F p)}
@@ -87,7 +87,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
   simp only [h_input, circuit_norm, main, ByteXorTable,
-    var_from_offset, Vector.mapRange] at h_holds
+    varFromOffset, Vector.mapRange] at h_holds
 
   apply soundness_to_u32 x_norm y_norm
   simp only [circuit_norm, explicit_provable_type]
