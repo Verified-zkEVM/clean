@@ -262,7 +262,7 @@ theorem uses_local_witnesses_flat_iff_extends {env: Environment F} (n: ℕ) {ops
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.single_local_length]
 
 theorem can_replace_usesLocalWitnesses_completeness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) :
-    env.uses_local_witnesses n ops → env.uses_local_witnesses_completeness n ops := by
+  env.UsesLocalWitnesses n ops → env.uses_local_witnesses_completeness n ops := by
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; trivial
   | witness | assert | lookup =>
