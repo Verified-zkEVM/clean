@@ -20,7 +20,7 @@ class ExplicitCircuit (circuit : Circuit F α) where
   operations_eq : ∀ n : ℕ, circuit.operations n = operations n := by intro _; rfl
 
   /-- same condition as in `ElaboratedCircuit`: subcircuits must be consistent with the current offset -/
-  subcircuits_consistent : ∀ n : ℕ, (circuit.operations n).subcircuits_consistent n := by
+  subcircuits_consistent : ∀ n : ℕ, (circuit.operations n).SubcircuitsConsistent n := by
     intro _; and_intros <;> try first | ac_rfl | trivial
 
 /-- family of explicit circuits -/
@@ -31,7 +31,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
   local_length_eq : ∀ (a : α) (n: ℕ), (circuit a).local_length n = local_length a n := by intro _ _; rfl
   operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
-  subcircuits_consistent : ∀ (a : α) (n: ℕ), ((circuit a).operations n).subcircuits_consistent n := by
+  subcircuits_consistent : ∀ (a : α) (n: ℕ), ((circuit a).operations n).SubcircuitsConsistent n := by
     intro _ _; and_intros <;> try first | ac_rfl | trivial
 
 -- move between family and single explicit circuit
@@ -86,7 +86,7 @@ instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
   local_length_eq n := by rw [Circuit.bind_local_length_eq, local_length_eq, output_eq, local_length_eq]
   operations_eq n := by rw [Circuit.bind_operations_eq, operations_eq, output_eq, local_length_eq, operations_eq]
   subcircuits_consistent n := by
-    rw [Operations.subcircuits_consistent, Circuit.bind_forAll]
+    rw [Operations.SubcircuitsConsistent, Circuit.bind_forAll]
     exact ⟨ f_explicit.subcircuits_consistent .., (g_explicit _).subcircuits_consistent .. ⟩
 
 -- `map` of an explicit circuit yields an explicit circuit

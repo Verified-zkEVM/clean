@@ -142,7 +142,7 @@ def constraints_hold (eval : Environment F) : List (Operation F) → Prop
   | .lookup { table, entry, .. } :: ops =>
     table.contains (entry.map eval) ∧ constraints_hold eval ops
   | .subcircuit s :: ops =>
-    constraints_hold_flat eval s.ops ∧ constraints_hold eval ops
+    ConstraintsHoldFlat eval s.ops ∧ constraints_hold eval ops
 
 /--
 Version of `constraints_hold` that replaces the statement of subcircuits with their `soundness`.
@@ -178,8 +178,8 @@ for all variables declared locally within the circuit.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.UsesLocalWitnesses (env: Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
-  ops.forAllFlat offset { witness n _ compute := env.extends_vector (compute env) n }
+def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
+  ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
 
 /--
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
@@ -187,14 +187,14 @@ Modification of `UsesLocalWitnesses` where subcircuits replace the condition wit
 @[circuit_norm]
 def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops => env.extends_vector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
+  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.local_length) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.extends_vector (compute env) n } ops
+  FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
 
 section
 open Circuit (constraints_hold)
@@ -224,7 +224,7 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
     := by intros; rfl
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
-  subcircuits_consistent : ∀ input offset, ((main input).operations offset).subcircuits_consistent offset
+  subcircuits_consistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial

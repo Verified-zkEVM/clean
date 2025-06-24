@@ -29,13 +29,13 @@ What it means that "constraints hold" on a list of flat operations:
 - For assertions, the expression must evaluate to 0
 - For lookups, the evaluated entry must be in the table
 -/
-def constraints_hold_flat (eval: Environment F) : List (FlatOperation F) → Prop
+def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
   | [] => True
   | op :: ops => match op with
-    | assert e => (eval e = 0) ∧ constraints_hold_flat eval ops
+    | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
     | lookup { table, entry } =>
-      table.contains (entry.map eval) ∧ constraints_hold_flat eval ops
-    | _ => constraints_hold_flat eval ops
+      table.contains (entry.map eval) ∧ ConstraintsHoldFlat eval ops
+    | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
 def local_length : List (FlatOperation F) → ℕ
@@ -63,10 +63,10 @@ def induct {motive : List (FlatOperation F) → Sort*}
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup ops)
 end FlatOperation
 
-export FlatOperation (constraints_hold_flat)
+export FlatOperation (ConstraintsHoldFlat)
 
 @[circuit_norm]
-def Environment.extends_vector (env: Environment F) (wit: Vector F n) (offset: ℕ) : Prop :=
+def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
   ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
 
 open FlatOperation in
@@ -93,14 +93,14 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
-    constraints_hold_flat env ops → soundness env
+    ConstraintsHoldFlat env ops → soundness env
 
   -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.extends_vector (local_witnesses env ops) offset →
-    completeness env → constraints_hold_flat env ops
+  implied_by_completeness : ∀ env, env.ExtendsVector (local_witnesses env ops) offset →
+    completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  implied_by_local_witnesses : ∀ env, env.extends_vector (local_witnesses env ops) offset →
+  implied_by_local_witnesses : ∀ env, env.ExtendsVector (local_witnesses env ops) offset →
     UsesLocalWitnesses env
 
   -- `local_length` must be consistent with the operations
@@ -245,8 +245,8 @@ def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
 Subcircuits start at the same variable offset that the circuit currently is.
 In practice, this is always true since subcircuits are instantiated using `subcircuit` or `assertion`.
  -/
- @[circuit_norm]
-def subcircuits_consistent (offset : ℕ) (ops : Operations F) := ops.forAll offset {
+@[circuit_norm]
+def SubcircuitsConsistent (offset : ℕ) (ops : Operations F) := ops.forAll offset {
   subcircuit offset {n} _ := n = offset
 }
 
@@ -257,29 +257,29 @@ The differences to `induct` are:
 - in addition to the operations, we also pass along the initial offset `n`
 - in the subcircuit case, the subcircuit offset is the same as the initial offset
 -/
-def induct_consistent {motive : (ops : Operations F) → (n : ℕ) → ops.subcircuits_consistent n → Sort*}
+def induct_consistent {motive : (ops : Operations F) → (n : ℕ) → ops.SubcircuitsConsistent n → Sort*}
   (empty : ∀ n, motive [] n trivial)
   (witness : ∀ n m c ops {h}, motive ops (m + n) h →
-    motive (.witness m c :: ops) n (by simp_all [subcircuits_consistent, forAll]))
+    motive (.witness m c :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (assert : ∀ n e ops {h}, motive ops n h →
-    motive (.assert e :: ops) n (by simp_all [subcircuits_consistent, forAll]))
+    motive (.assert e :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (lookup : ∀ n l ops {h}, motive ops n h →
-    motive (.lookup l :: ops) n (by simp_all [subcircuits_consistent, forAll]))
+    motive (.lookup l :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (subcircuit : ∀ n (s: SubCircuit F n) ops {h}, motive ops (s.local_length + n) h →
-    motive (.subcircuit s :: ops) n (by simp_all [subcircuits_consistent, forAll]))
-    (ops : Operations F) (n : ℕ) (h: ops.subcircuits_consistent n) : motive ops n h :=
+    motive (.subcircuit s :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
+    (ops : Operations F) (n : ℕ) (h: ops.SubcircuitsConsistent n) : motive ops n h :=
   motive' ops n h
-where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.subcircuits_consistent n) → motive ops n h
+where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsistent n) → motive ops n h
   | [], n, _ => empty n
   | .witness m c :: ops, n, h | .assert e :: ops, n, h | .lookup e :: ops, n, h => by
-    rw [subcircuits_consistent, forAll] at h
+    rw [SubcircuitsConsistent, forAll] at h
     first
     | exact witness _ _ _ _ (motive' ops _ h.right)
     | exact assert _ _ _ (motive' ops _ h.right)
     | exact lookup _ _ _ (motive' ops _ h.right)
   | .subcircuit s :: ops, n', h => by
     rename_i n
-    rw [subcircuits_consistent, forAll] at h
+    rw [SubcircuitsConsistent, forAll] at h
     have n_eq : n = n' := h.left
     subst n_eq
     exact subcircuit n s ops (motive' ops _ h.right)

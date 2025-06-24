@@ -229,9 +229,9 @@ what follows are relationships between different versions of `Environment.UsesLo
 -/
 
 lemma env_extends_witness {F} {n: ℕ} {ops: List (FlatOperation F)} {env: Environment F} {m c} :
-    env.extends_vector (local_witnesses env (.witness m c :: ops)) n ↔
-      (env.extends_vector (c env) n ∧ env.extends_vector (local_witnesses env ops) (m + n)) := by
-  simp_all only [extends_vector, local_length, local_witnesses, Vector.getElem_append]
+    env.ExtendsVector (local_witnesses env (.witness m c :: ops)) n ↔
+      (env.ExtendsVector (c env) n ∧ env.ExtendsVector (local_witnesses env ops) (m + n)) := by
+  simp_all only [ExtendsVector, local_length, local_witnesses, Vector.getElem_append]
   constructor
   · intro h
     constructor
@@ -250,10 +250,10 @@ lemma env_extends_witness {F} {n: ℕ} {ops: List (FlatOperation F)} {env: Envir
       congr 1
       omega
 
-theorem usesLocalWitnessesFlat_iff_extends {env: Environment F} (n: ℕ) {ops: List (FlatOperation F)}  :
-    env.UsesLocalWitnessesFlat n ops ↔ env.extends_vector (local_witnesses env ops) n := by
+theorem usesLocalWitnessesFlat_iff_extends {env: Environment F} (n : ℕ) {ops : List (FlatOperation F)}  :
+    env.UsesLocalWitnessesFlat n ops ↔ env.ExtendsVector (local_witnesses env ops) n := by
   induction ops using FlatOperation.induct generalizing n with
-  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, extends_vector, local_length]
+  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, ExtendsVector, local_length]
   | witness m _ _ ih =>
     rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
     trivial
@@ -261,7 +261,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env: Environment F} (n: ℕ) {ops: L
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.single_local_length]
 
-theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) :
+theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
   env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness n ops := by
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; trivial
@@ -278,7 +278,7 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
 
 theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
-    witness m _ c := env.extends_vector (c env) m,
+    witness m _ c := env.ExtendsVector (c env) m,
     subcircuit _ _ s := s.UsesLocalWitnesses env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -288,8 +288,8 @@ theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F
 
 theorem usesLocalWitnesses_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
   env.UsesLocalWitnesses n ops ↔ ops.forAll n {
-    witness n _ c := env.extends_vector (c env) n,
-    subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.extends_vector (c env) n} s.ops
+    witness n _ c := env.ExtendsVector (c env) n,
+    subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env) n} s.ops
   } := by
   simp only [UsesLocalWitnesses, Operations.forAllFlat]
 end Environment
@@ -330,7 +330,7 @@ Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only pr
 `constraints_hold.completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.subcircuits_consistent n) : env.UsesLocalWitnesses n ops →
+theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) : env.UsesLocalWitnesses n ops →
     constraints_hold.completeness env ops → constraints_hold env ops := by
   induction ops, n, h using Operations.induct_consistent with
   | empty => intros; exact trivial
@@ -504,7 +504,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
   (∀ (env env' : Environment F),
     forAll init.length { witness n _ c := env.agreesBelow n env' → c env = c env' } ops) →
     (proverEnvironment ops init).UsesLocalWitnessesFlat init.length ops := by
-  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Environment.extends_vector]
+  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Environment.ExtendsVector]
   intro h_computable
   induction ops generalizing init with
   | nil => trivial
