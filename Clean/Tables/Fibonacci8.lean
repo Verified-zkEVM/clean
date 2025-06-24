@@ -33,7 +33,7 @@ instance : ProvableType RowType where
 -/
 def fib_relation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.get_curr_row
-  let next_x ← copy_to_var curr.y
+  let next_x ← copyToVar curr.y
   let next_y ← subcircuit Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
   assign_var (.next 0) next_x
   assign (.next 1) next_y
@@ -129,7 +129,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
       set env := fib_relation.window_env ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
 
-      simp only [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
+      simp only [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at constraints_hold
       simp only [circuit_norm, subcircuit_norm, eval, var_from_offset, Vector.mapRange] at constraints_hold
 
