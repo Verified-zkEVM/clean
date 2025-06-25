@@ -34,9 +34,9 @@ def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) 
 
   return { low, high }
 
-def assumptions (x : F p) := x.val < 256
+def Assumptions (x : F p) := x.val < 256
 
-def spec (offset : Fin 8) (x : F p) (out: Outputs (F p)) :=
+def Spec (offset : Fin 8) (x : F p) (out: Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8 - offset.val))
@@ -46,10 +46,10 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
-  simp only [circuit_norm, elaborated, byte_decomposition, spec, ByteTable, h_input] at h_holds ⊢
+  simp only [circuit_norm, elaborated, byte_decomposition, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
 
   obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
@@ -98,7 +98,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   use ⟨ low_eq, high_eq ⟩, h_lt_low
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, byte_decomposition, elaborated, h_input, ByteTable] at henv ⊢
@@ -126,8 +126,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
   main := byte_decomposition offset
-  assumptions
-  spec := spec offset
+  Assumptions
+  Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

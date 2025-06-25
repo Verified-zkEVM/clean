@@ -233,26 +233,26 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 def Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
-    (assumptions: β F → Prop) (spec: β F → α F → Prop) :=
+    (Assumptions: β F → Prop) (Spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs that satisfy the assumptions
   ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
-  assumptions b →
+  Assumptions b →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) →
   -- the spec holds on the input and output
   let a := eval env (circuit.output b_var offset)
-  spec b a
+  Spec b a
 
 def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
-    (assumptions: β F → Prop) :=
+    (Assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β F, eval env b_var = b →
-  assumptions b →
+  Assumptions b →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main b_var |>.operations offset)
 
@@ -271,10 +271,10 @@ This means that, when viewed as a black box, the circuit acts similar to a funct
 structure FormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
   extends elaborated : ElaboratedCircuit F β α where
   -- β = inputs, α = outputs
-  assumptions: β F → Prop
-  spec: β F → α F → Prop
-  soundness: Soundness F elaborated assumptions spec
-  completeness: Completeness F elaborated assumptions
+  Assumptions: β F → Prop
+  Spec: β F → α F → Prop
+  soundness: Soundness F elaborated Assumptions Spec
+  completeness: Completeness F elaborated Assumptions
 
 namespace Circuit
 @[circuit_norm]
@@ -282,12 +282,12 @@ def SubcircuitSoundness (circuit: FormalCircuit F β α) (b_var : Var β F) (off
   let b := eval env b_var
   let a_var := circuit.output b_var offset
   let a := eval env a_var
-  circuit.assumptions b → circuit.spec b a
+  circuit.Assumptions b → circuit.Spec b a
 
 @[circuit_norm]
 def SubcircuitCompleteness (circuit: FormalCircuit F β α) (b_var : Var β F) (env : Environment F) :=
   let b := eval env b_var
-  circuit.assumptions b
+  circuit.Assumptions b
 end Circuit
 
 /--
@@ -304,19 +304,19 @@ In other words, for `FormalAssertion`s the spec must be an equivalent reformulat
 -/
 structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
   extends ElaboratedCircuit F β unit where
-  assumptions: β F → Prop
-  spec: β F → Prop
+  Assumptions: β F → Prop
+  Spec: β F → Prop
 
   soundness:
     -- for all environments that determine witness generation
     ∀ offset, ∀ env,
     -- for all inputs that satisfy the assumptions
     ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
-    assumptions b →
+    Assumptions b →
     -- if the constraints hold
     ConstraintsHold.Soundness env (main b_var |>.operations offset) →
     -- the spec holds
-    spec b
+    Spec b
 
   completeness:
     -- for all environments which _use the default witness generators for local variables_
@@ -324,7 +324,7 @@ structure FormalAssertion (F: Type) (β: TypeMap) [Field F] [ProvableType β]
     env.UsesLocalWitnessesCompleteness offset (main b_var |>.operations offset) →
     -- for all inputs that satisfy the assumptions AND the spec
     ∀ b : β F, eval env b_var = b →
-    assumptions b → spec b →
+    Assumptions b → Spec b →
     -- the constraints hold
     ConstraintsHold.Completeness env (main b_var |>.operations offset)
 
@@ -337,12 +337,12 @@ namespace Circuit
 @[circuit_norm]
 def SubassertionSoundness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
-  circuit.assumptions b → circuit.spec b
+  circuit.Assumptions b → circuit.Spec b
 
 @[circuit_norm]
 def SubassertionCompleteness (circuit: FormalAssertion F β) (b_var : Var β F) (env: Environment F) :=
   let b := eval env b_var
-  circuit.assumptions b ∧ circuit.spec b
+  circuit.Assumptions b ∧ circuit.Spec b
 end Circuit
 end
 

@@ -39,11 +39,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   lookup ByteXorTable (x.x3, y.x3, z.x3)
   return z
 
-def assumptions (input: Inputs (F p)) :=
+def Assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def spec (input: Inputs (F p)) (z : U32 (F p)) :=
+def Spec (input: Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
@@ -59,8 +59,8 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
     z.x0.val = x.x0.val ^^^ y.x0.val ∧
     z.x1.val = x.x1.val ^^^ y.x1.val ∧
     z.x2.val = x.x2.val ^^^ y.x2.val ∧
-    z.x3.val = x.x3.val ^^^ y.x3.val) : spec { x, y } z := by
-  simp only [spec]
+    z.x3.val = x.x3.val ^^^ y.x3.val) : Spec { x, y } z := by
+  simp only [Spec]
   have ⟨ hx0, hx1, hx2, hx3 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3 ⟩ := y_norm
 
@@ -73,7 +73,7 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
   simp only [U32.value_xor_horner, x_norm, y_norm, z_norm, h_eq, Bitwise.xor_mul_two_pow]
   ac_rfl
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var input h_input h_as h_holds
 
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
@@ -83,7 +83,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
-  simp only [circuit_norm, assumptions] at h_as
+  simp only [circuit_norm, Assumptions] at h_as
   obtain ⟨ x_norm, y_norm ⟩ := h_as
 
   simp only [h_input, circuit_norm, main, ByteXorTable,
@@ -99,7 +99,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
@@ -107,7 +107,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
-  simp only [assumptions, circuit_norm, U32.Normalized] at as
+  simp only [Assumptions, circuit_norm, U32.Normalized] at as
   obtain ⟨ x_bytes, y_bytes ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
@@ -118,8 +118,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
-  assumptions
-  spec
+  Assumptions
+  Spec
   soundness
   completeness
 end Gadgets.Xor32

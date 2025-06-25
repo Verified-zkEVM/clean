@@ -73,23 +73,23 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input
   state.Normalized ∧ x.Normalized ∧ y.Normalized
 
-def spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
-theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assumptions (spec a b c d) := by
+theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
   intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [assumptions, BLAKE3State.Normalized] at h_normalized
+  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
   simp only [circuit_norm, subcircuit_norm, and_imp,
-    Addition32.assumptions, Addition32.spec, Rotation32.assumptions, Rotation32.spec,
-    Xor32.assumptions, Xor32.spec, getElem_eval_vector, h_input] at h_holds
+    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
+    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector, h_input] at h_holds
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
@@ -104,7 +104,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
   -- case-by-case reasoning on the indices.
   -- NOTE: This is not a bug, we are following the BLAKE specification of the g function verbatim.
   -- See, for example, https://www.ietf.org/archive/id/draft-aumasson-blake3-00.html#name-quarter-round-function-g
-  simp only [spec, ElaboratedCircuit.output]
+  simp only [Spec, ElaboratedCircuit.output]
   constructor
   · ext i hi
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
@@ -125,23 +125,23 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
     · exact c9.right
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_normalized]
 
-theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
+theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
   rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [assumptions, BLAKE3State.Normalized] at h_normalized
+  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
   simp only [h_input, circuit_norm, subcircuit_norm, and_imp,
-    Addition32.assumptions, Addition32.spec, Rotation32.assumptions, Rotation32.spec,
-    Xor32.assumptions, Xor32.spec, getElem_eval_vector] at henv ⊢
+    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
+    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
 
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const, and_true]
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated a b c d with
-  assumptions := assumptions
-  spec := spec a b c d
+  Assumptions
+  Spec := Spec a b c d
   soundness := soundness a b c d
   completeness := completeness a b c d
 }

@@ -55,7 +55,7 @@ def fib8 : ℕ -> ℕ
   | 1 => 1
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
-def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.ForAllRowsOfTraceWithIndex (fun row index =>
     (row.x.val = fib8 index) ∧
     (row.y.val = fib8 (index + 1))
@@ -96,18 +96,18 @@ lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p))
 
 def formal_fib_table : FormalTable (F p) RowType := {
   constraints := fib_table
-  spec := spec
+  Spec := Spec
 
   soundness := by
     intro N trace envs _
     simp only [gt_iff_lt, TraceOfLength.ForAllRowsOfTrace, TableConstraintsHold,
-      fib_table, spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, and_imp]
+      fib_table, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, and_imp]
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
     · simp [table_norm]
     · simp [table_norm]
       exact boundary_step first_row (envs 0 0)
-    · -- first, we prove the inductive part of the spec
+    · -- first, we prove the inductive part of the Spec
       -- TODO this should be easier, or there should be a custom induction for it
       unfold Trace.ForAllRowsOfTraceWithIndex.inner
       intros ConstraintsHold

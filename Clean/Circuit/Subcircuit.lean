@@ -72,8 +72,8 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
 
     let b : β F := eval env b_var
     let a : α F := eval env (circuit.output b_var n)
-    rintro (as : circuit.assumptions b)
-    show circuit.spec b a
+    rintro (as : circuit.Assumptions b)
+    show circuit.Spec b a
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
     suffices h: ConstraintsHold.Soundness env ops by
@@ -90,7 +90,7 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
     -- we are given that the assumptions are true
     intro env h_env
     let b := eval env b_var
-    intro (as : circuit.assumptions b)
+    intro (as : circuit.Assumptions b)
 
     have h_env : env.UsesLocalWitnesses n ops := by
       guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env flat_ops) n
@@ -147,8 +147,8 @@ def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
       show SubassertionSoundness circuit b_var env
 
       let b : β F := eval env b_var
-      rintro (as : circuit.assumptions b)
-      show circuit.spec b
+      rintro (as : circuit.Assumptions b)
+      show circuit.Spec b
 
       -- by soundness of the circuit, the spec is satisfied if only the constraints hold
       suffices h: ConstraintsHold.Soundness env ops by
@@ -164,7 +164,7 @@ def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
       intro env h_env h_completeness
 
       let b := eval env b_var
-      have as : circuit.assumptions b ∧ circuit.spec b := h_completeness
+      have as : circuit.Assumptions b ∧ circuit.Spec b := h_completeness
 
       have h_env : env.UsesLocalWitnesses n ops := by
         guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env flat_ops) n

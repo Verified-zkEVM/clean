@@ -201,8 +201,8 @@ def main (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
 def circuit : FormalAssertion (F p) U64 where
   main
 
-  assumptions _ := True
-  spec inputs := inputs.Normalized
+  Assumptions _ := True
+  Spec inputs := inputs.Normalized
 
   soundness := by
     rintro i0 env x_var
@@ -232,20 +232,20 @@ def main (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p))  := do
   x === y
   return y
 
-def assumptions (_input : U64 (F p)) := True
+def Assumptions (_input : U64 (F p)) := True
 
-def spec (x y : U64 (F p)) := x = y
+def Spec (x y : U64 (F p)) := x = y
 
 def circuit : FormalCircuit (F p) U64 U64 where
   main := main
-  assumptions := assumptions
-  spec := spec
+  Assumptions
+  Spec
   localLength _ := 8
   output inputs i0 := varFromOffset U64 i0
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [circuit_norm, main, spec, h_eval, explicit_provable_type]
+    simp [circuit_norm, main, Spec, h_eval, explicit_provable_type]
     injections h_eval
     intros h0 h1 h2 h3 h4 h5 h6 h7
     aesop

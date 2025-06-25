@@ -28,7 +28,7 @@ partial def getMaxMatchingHyp (e : Lean.Expr) : Lean.Elab.Tactic.TacticM (List L
   | _ => return []
 
 
-partial def specializeAuto (e_term : Lean.Term): Lean.Elab.Tactic.TacticM Unit := do
+partial def SpecializeAuto (e_term : Lean.Term): Lean.Elab.Tactic.TacticM Unit := do
   let (e, mvarIds') ← elabTermWithHoles e_term none `specialize_auto (allowNaturalHoles := true)
 
   -- e must be a free variable in the local context

@@ -31,9 +31,9 @@ def rot64_bytes (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U6
   else
     return ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
 
-def assumptions (input : U64 (F p)) := input.Normalized
+def Assumptions (input : U64 (F p)) := input.Normalized
 
-def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
+def Spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
@@ -63,7 +63,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (spec off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -77,23 +77,23 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (
   clear h_inputs
   clear h
 
-  dsimp only [assumptions, U64.Normalized] at as
+  dsimp only [Assumptions, U64.Normalized] at as
   obtain ⟨ h0, h1, h2, h3, h4, h5, h6, h7 ⟩ := as
 
-  simp [circuit_norm, spec, U64.value, -Nat.reducePow]
+  simp [circuit_norm, Spec, U64.value, -Nat.reducePow]
   constructor
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ assumptions
+theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [elaborated, rot64_bytes, circuit_norm]
 
 def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated off with
   main := rot64_bytes off
-  assumptions := assumptions
-  spec := spec off
+  Assumptions
+  Spec := Spec off
   soundness := soundness off
   completeness := completeness off
 }

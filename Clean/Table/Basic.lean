@@ -559,7 +559,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   assumption : ℕ → Prop := fun _ => True
 
   /-- specification for the table -/
-  spec {N : ℕ} : TraceOfLength F S N → Prop
+  Spec {N : ℕ} : TraceOfLength F S N → Prop
 
   /-- the soundness states that if the assumptions hold, then
       the constraints hold implies that the spec holds. -/
@@ -567,7 +567,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
     assumption N →
     TableConstraintsHold constraints trace env →
-    spec trace
+    Spec trace
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/
@@ -580,7 +580,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     := by repeat constructor
 
 def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace: TraceOfLength F S N) : Prop :=
-  table.assumption N → table.spec trace
+  table.assumption N → table.Spec trace
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go

@@ -9,9 +9,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .foldl roundConstants state
     fun state rc => subcircuit (KeccakRound.circuit rc) state
 
-def assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccak_permutation state.value
 
@@ -37,13 +37,13 @@ example (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccak_round state roundConstants[j]) state
   = roundConstants.foldl keccak_round state := rfl
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
-  simp only [main, circuit_norm, subcircuit_norm, spec,
+  simp only [main, circuit_norm, subcircuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.spec, KeccakRound.assumptions] at h_holds ⊢
+    KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
   simp only [zero_add, h_input] at h_holds
   obtain ⟨ h_init, h_succ ⟩ := h_holds
   specialize h_init h_assumptions
@@ -74,14 +74,14 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
       simp
   exact h_inductive 23 (by norm_num)
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
-  dsimp only [assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, subcircuit_norm, spec,
+  dsimp only [Assumptions] at h_assumptions
+  simp only [main, h_input, h_assumptions, circuit_norm, subcircuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.spec, KeccakRound.assumptions] at h_env ⊢
+    KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
 
   -- only keep the statements about normalization
   obtain ⟨ h_init, h_succ ⟩ := h_env
@@ -113,7 +113,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with
-  assumptions, spec, soundness
+  Assumptions, Spec, soundness
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
