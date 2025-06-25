@@ -39,9 +39,9 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
-  assumptions _ := True
+  Assumptions _ := True
 
-  spec : α F × α F → Prop
+  Spec : α F × α F → Prop
   | (x, y) => x = y
 
   soundness := by

@@ -191,8 +191,8 @@ def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
 
 def circuit : FormalAssertion (F p) U32 where
   main
-  assumptions _ := True
-  spec inputs := inputs.Normalized
+  Assumptions _ := True
+  Spec inputs := inputs.Normalized
 
   soundness := by
     rintro i0 env x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
@@ -226,8 +226,8 @@ def spec (x y : U32 (F p)) := x = y
 
 def circuit : FormalCircuit (F p) U32 U32 where
   main := main
-  assumptions := assumptions
-  spec := spec
+  Assumptions := assumptions
+  Spec := spec
   localLength _ := 4
   output inputs i0 := varFromOffset U32 i0
   soundness := by

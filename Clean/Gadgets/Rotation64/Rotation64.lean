@@ -102,8 +102,8 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) 
 
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with
-  assumptions := assumptions
-  spec := spec offset
+  Assumptions := assumptions
+  Spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

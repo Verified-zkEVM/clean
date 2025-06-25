@@ -116,5 +116,9 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
 def circuit : FormalCircuit (F p) Input KeccakState :=
-  { elaborated with assumptions, spec, soundness, completeness }
+  { elaborated with
+      Assumptions := assumptions,
+      Spec := spec,
+      soundness := soundness,
+      completeness := completeness }
 end Gadgets.Keccak256.AbsorbBlock

@@ -65,7 +65,11 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
 def circuit : FormalCircuit (F p) Inputs KeccakState := {
-  elaborated with assumptions, spec, soundness, completeness
+  elaborated with
+    Assumptions := assumptions,
+    Spec := spec,
+    soundness := soundness,
+    completeness := completeness
 }
 
 end Gadgets.Keccak256.ThetaXor

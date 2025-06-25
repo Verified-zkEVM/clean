@@ -126,8 +126,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
   main := byte_decomposition offset
-  assumptions
-  spec := spec offset
+  Assumptions := assumptions
+  Spec := spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

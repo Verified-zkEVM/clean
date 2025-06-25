@@ -87,9 +87,9 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   simp_all
 
 def circuit : FormalCircuit (F p) Inputs U64 where
-  assumptions
-  spec
-  soundness
-  completeness
+  Assumptions := assumptions
+  Spec := spec
+  soundness := soundness
+  completeness := completeness
 
 end Gadgets.And.And64

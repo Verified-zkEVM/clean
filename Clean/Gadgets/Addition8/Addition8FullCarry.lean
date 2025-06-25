@@ -57,8 +57,8 @@ def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
-  assumptions
-  spec
+  Assumptions := assumptions
+  Spec := spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
 

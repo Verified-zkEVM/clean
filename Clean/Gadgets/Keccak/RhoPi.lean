@@ -69,6 +69,10 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated with assumptions, spec, soundness, completeness
+  elaborated with
+    Assumptions := assumptions,
+    Spec := spec,
+    soundness := soundness,
+    completeness := completeness
 }
 end Gadgets.Keccak256.RhoPi

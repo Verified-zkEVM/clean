@@ -100,8 +100,8 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumpti
 
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated rc with
-  spec := spec rc
-  assumptions,
+  Spec := spec rc
+  Assumptions := assumptions
   soundness := soundness rc,
   completeness := completeness rc,
 }

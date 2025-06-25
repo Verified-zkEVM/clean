@@ -36,6 +36,10 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated with assumptions, spec, soundness, completeness
+  elaborated with
+    Assumptions := assumptions,
+    Spec := spec,
+    soundness := soundness,
+    completeness := completeness
 }
 end Gadgets.Keccak256.Theta

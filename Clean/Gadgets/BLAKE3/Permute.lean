@@ -40,7 +40,11 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
 
 def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State := {
-  elaborated with assumptions, spec, soundness, completeness
+  elaborated with
+    Assumptions := assumptions,
+    Spec := spec,
+    soundness := soundness,
+    completeness := completeness
 }
 
 end Gadgets.BLAKE3.Permute

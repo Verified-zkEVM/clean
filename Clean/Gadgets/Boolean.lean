@@ -32,8 +32,8 @@ Asserts that x = 0 ∨ x = 1 by adding the constraint x * (x - 1) = 0
 -/
 def circuit : FormalAssertion (F p) field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
-  assumptions _ := True
-  spec (x : F p) := x = 0 ∨ x = 1
+  Assumptions _ := True
+  Spec (x : F p) := x = 0 ∨ x = 1
 
   soundness := by simp_all only [circuit_norm, equiv]
   completeness := by simp_all only [circuit_norm, equiv]

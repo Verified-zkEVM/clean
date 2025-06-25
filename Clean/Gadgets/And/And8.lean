@@ -139,6 +139,9 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit : FormalCircuit (F p) Inputs field :=
-  { assumptions, spec, soundness, completeness }
+  { Assumptions := assumptions,
+    Spec := spec,
+    soundness := soundness,
+    completeness := completeness }
 
 end Gadgets.And.And8

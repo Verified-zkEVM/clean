@@ -79,8 +79,8 @@ theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumpt
 def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
   elaborated off with
   main := rot32_bytes off
-  assumptions := assumptions
-  spec := spec off
+  Assumptions := assumptions
+  Spec := spec off
   soundness := soundness off
   completeness := completeness off
 }

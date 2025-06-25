@@ -71,5 +71,9 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     Xor64.assumptions, Xor64.spec, And.And64.assumptions, And.And64.spec, Nat.reduceAdd]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=
-  { elaborated with assumptions, spec, soundness, completeness }
+  { elaborated with
+      Assumptions := assumptions,
+      Spec := spec,
+      soundness := soundness,
+      completeness := completeness }
 end Gadgets.Keccak256.Chi

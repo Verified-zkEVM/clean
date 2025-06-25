@@ -51,8 +51,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   Addition32Full.assumptions, Addition32Full.spec, assumptions]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
-  assumptions
-  spec
-  soundness
-  completeness
+  Assumptions := assumptions
+  Spec := spec
+  soundness := soundness
+  completeness := completeness
 end Gadgets.Addition32

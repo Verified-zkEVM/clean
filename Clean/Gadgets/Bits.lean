@@ -28,9 +28,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
-  assumptions (x : F p) := x.val < 2^n
+  Assumptions (x : F p) := x.val < 2^n
 
-  spec (x : F p) (bits : Vector (F p) n) :=
+  Spec (x : F p) (bits : Vector (F p) n) :=
     bits = field_to_bits n x
 
   soundness := by
@@ -81,8 +81,8 @@ def range_check (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   subcircuitsConsistent _ n := by simp +arith only [main, circuit_norm]
   localLength_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
 
-  assumptions _ := True
-  spec (x : F p) := x.val < 2^n
+  Assumptions _ := True
+  Spec (x : F p) := x.val < 2^n
 
   soundness := by
     simp only [circuit_norm, main, Boolean.circuit]

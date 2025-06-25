@@ -118,8 +118,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
-  assumptions
-  spec
-  soundness
-  completeness
+  Assumptions := assumptions
+  Spec := spec
+  soundness := soundness
+  completeness := completeness
 end Gadgets.Xor32
