@@ -13,10 +13,10 @@ instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
   localLength _ := 0
   output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
 
-def assumptions (state : BLAKE3State (F p)) := state.is_normalized
+def assumptions (state : BLAKE3State (F p)) := state.Normalized
 
 def spec (state : BLAKE3State (F p)) (out: BLAKE3State (F p)) :=
-  out.value = permute state.value ∧ out.is_normalized
+  out.value = permute state.value ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
   intro i0 env state_var state h_input h_normalized h_holds
@@ -28,10 +28,10 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     · simp only [Array.size_map, Array.size_ofFn]
     simp only [Array.getElem_map, Array.getElem_ofFn]
     rw [Function.comp_apply, getElem_eval_vector, h_input]
-  · simp [BLAKE3State.is_normalized]
+  · simp [BLAKE3State.Normalized]
     intro i
     rw [getElem_eval_vector, h_input]
-    simp only [assumptions, BLAKE3State.is_normalized] at h_normalized
+    simp only [assumptions, BLAKE3State.Normalized] at h_normalized
     fin_cases i <;> simp only [msgPermutation, h_normalized]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by

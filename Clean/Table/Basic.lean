@@ -19,7 +19,7 @@ variable {F : Type} {S : Type → Type} [ProvableType S]
 
 @[table_norm, table_assignment_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
-  let elems := to_elements row
+  let elems := toElements row
   elems.get i
 
 /--
@@ -429,13 +429,13 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
 
 @[table_norm, table_assignment_norm]
 def assign_curr_row {W: ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
-  let vars := to_vars curr
+  let vars := toVars curr
   forM (List.finRange (size S)) fun i =>
     assign (.curr i) (vars.get i)
 
 @[table_norm, table_assignment_norm]
 def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
-  let vars := to_vars next
+  let vars := toVars next
   forM (List.finRange (size S)) fun i =>
     assign (.next i) (vars.get i)
 end TableConstraint
@@ -584,8 +584,8 @@ def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace: TraceOfLen
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
-attribute [table_norm low] size from_elements to_elements to_vars from_vars
-attribute [table_assignment_norm low] to_elements
+attribute [table_norm low] size fromElements toElements toVars fromVars
+attribute [table_assignment_norm low] toElements
 attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
@@ -614,5 +614,5 @@ macro_rules
     rw [Fin.foldr_zero]
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
-    simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+    simp only [seval, toVars, toElements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
       List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))

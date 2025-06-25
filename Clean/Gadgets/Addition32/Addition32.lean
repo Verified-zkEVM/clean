@@ -14,8 +14,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [U32, U32]
-  to_components := fun {x, y} => .cons x ( .cons y .nil)
-  from_components := fun (.cons x ( .cons y .nil)) => ⟨ x, y ⟩
+  toComponents := fun {x, y} => .cons x ( .cons y .nil)
+  fromComponents := fun (.cons x ( .cons y .nil)) => ⟨ x, y ⟩
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x, y⟩ := input
@@ -24,11 +24,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
 
 def assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
-  x.is_normalized ∧ y.is_normalized
+  x.Normalized ∧ y.Normalized
 
 def spec (input : Inputs (F p)) (z: U32 (F p)) :=
   let ⟨x, y⟩ := input
-  z.value = (x.value + y.value) % 2^32 ∧ z.is_normalized
+  z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
 
 
 -- def c := main (p:=p_babybear) default

@@ -292,20 +292,20 @@ theorem byte_plus_256_do_not_wrap (x: F p) [Fact (p > 512)]:
 section
 variable [p_large_enough: Fact (p > 512)]
 
-def from_byte (x: Fin 256) : F p :=
+def fromByte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-lemma from_byte_lt (x: Fin 256) : (from_byte (p:=p) x).val < 256 := by
-  dsimp [from_byte]
+lemma fromByte_lt (x: Fin 256) : (fromByte (p:=p) x).val < 256 := by
+  dsimp [fromByte]
   rw [FieldUtils.val_of_nat_to_field_eq]
   exact x.is_lt
 
-lemma from_byte_eq (x : F p) (x_lt : x.val < 256) : from_byte ⟨ x.val, x_lt ⟩ = x := by
-  dsimp [from_byte]
+lemma fromByte_eq (x : F p) (x_lt : x.val < 256) : fromByte ⟨ x.val, x_lt ⟩ = x := by
+  dsimp [fromByte]
   apply FieldUtils.nat_to_field_of_val_eq_iff
 
-lemma from_byte_cast_eq {z: F p} (z_lt : z.val < 256) : from_byte z.cast = z := by
-  simp only [from_byte]
+lemma fromByte_cast_eq {z: F p} (z_lt : z.val < 256) : fromByte z.cast = z := by
+  simp only [fromByte]
   have : (z.cast : Fin 256).val = z.val := ZMod.val_cast_eq_val_of_lt z_lt
   simp only [this]
   apply FieldUtils.nat_to_field_of_val_eq_iff

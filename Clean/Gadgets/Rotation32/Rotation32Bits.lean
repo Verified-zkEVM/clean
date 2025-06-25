@@ -22,23 +22,23 @@ open ByteDecomposition.Theorems (byte_decomposition_lt)
   Rotate the 32-bit integer by `offset` bits
 -/
 def rot32_bits (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 (F p)) := do
-  let parts ← Circuit.map x.to_limbs (subcircuit (ByteDecomposition.circuit offset))
+  let parts ← Circuit.map x.toLimbs (subcircuit (ByteDecomposition.circuit offset))
   let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
 
   let rotated := highs.zip (lows.rotate 1) |>.map fun (high, low) =>
     high + low * ((2^(8 - offset.val) : ℕ) : F p)
 
-  return U32.from_limbs rotated
+  return U32.fromLimbs rotated
 
-def assumptions (input : U32 (F p)) := input.is_normalized
+def assumptions (input : U32 (F p)) := input.Normalized
 
 def spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
   y.value = rot_right32 x.value offset.val
-  ∧ y.is_normalized
+  ∧ y.Normalized
 
 def output (offset : Fin 8) (i0 : Nat) : U32 (Expression (F p)) :=
-  U32.from_limbs (.ofFn fun ⟨i,_⟩ =>
+  U32.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
 
 -- #eval rot32_bits (p:=p_babybear) 1 default |>.output
@@ -50,7 +50,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp only [circuit_norm, rot32_bits, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, rot32_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
-    apply congrArg U32.from_limbs
+    apply congrArg U32.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
   subcircuitsConsistent _ _ := by
     simp +arith only [circuit_norm, rot32_bits,
@@ -66,8 +66,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     ByteDecomposition.assumptions, ByteDecomposition.spec] at h_holds ⊢
 
   -- targeted rewriting of the assumptions
-  rw [assumptions, U32.ByteVector.is_normalized_iff] at x_normalized
-  simp only [U32.ByteVector.getElem_eval_to_limbs, h_input, x_normalized, true_implies,
+  rw [assumptions, U32.ByteVector.normalized_iff] at x_normalized
+  simp only [U32.ByteVector.getElem_eval_toLimbs, h_input, x_normalized, true_implies,
     Fin.forall_iff] at h_holds
 
   set base := ((2^(8 - offset.val) : ℕ) : F p)
@@ -76,14 +76,14 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
 
   -- capture the rotation relation in terms of byte vectors
   set y := eval env (output offset i0)
-  set xs := x.to_limbs
-  set ys := y.to_limbs
+  set xs := x.toLimbs
+  set ys := y.toLimbs
   set o := offset.val
 
   have h_rot_vector (i : ℕ) (hi : i < 4) :
       ys[i].val < 2^8 ∧
       ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 4].val % 2^o) * 2^(8-o) := by
-    simp only [ys, y, output, U32.ByteVector.eval_from_limbs, U32.ByteVector.to_limbs_from_limbs,
+    simp only [ys, y, output, U32.ByteVector.eval_fromLimbs, U32.ByteVector.toLimbs_fromLimbs,
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
     set high := env.get (i0 + i * 2 + 1)
     set next_low := env.get (i0 + (i + 1) % 4 * 2)
@@ -95,8 +95,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     rw [eq, high_eq, next_low_eq]
 
   -- prove that the output is normalized
-  have y_norm : y.is_normalized := by
-    rw [U32.ByteVector.is_normalized_iff]
+  have y_norm : y.Normalized := by
+    rw [U32.ByteVector.normalized_iff]
     intro i hi
     exact (h_rot_vector i hi).left
 
@@ -104,10 +104,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   have h_rot_vector' : y.vals = rot_right32_u32 x.vals o := by
     rw [U32.ByteVector.ext_iff, ←rot_right32_bytes_u32_eq]
     intro i hi
-    simp only [U32.vals, U32.ByteVector.to_limbs_map, Vector.getElem_map, rot_right32_bytes, size, Vector.getElem_ofFn]
+    simp only [U32.vals, U32.ByteVector.toLimbs_map, Vector.getElem_map, rot_right32_bytes, size, Vector.getElem_ofFn]
     exact (h_rot_vector i hi).right
 
-  rw [←U32.vals_value, ←U32.vals_value, h_rot_vector']
+  rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']
   exact ⟨ rotation32_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
@@ -118,8 +118,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
     ByteDecomposition.circuit, ByteDecomposition.assumptions]
 
   -- we only have to prove the byte decomposition assumptions
-  rw [assumptions, U32.ByteVector.is_normalized_iff] at x_normalized
-  simp_all only [size, U32.ByteVector.getElem_eval_to_limbs, forall_const]
+  rw [assumptions, U32.ByteVector.normalized_iff] at x_normalized
+  simp_all only [size, U32.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 := {
   elaborated offset with

@@ -12,8 +12,8 @@ structure Input (F : Type) where
 
 instance : ProvableStruct Input where
   components := [KeccakState, KeccakBlock]
-  to_components := fun { state, block } => .cons state (.cons block .nil)
-  from_components := fun (.cons state (.cons block .nil)) => { state, block }
+  toComponents := fun { state, block } => .cons state (.cons block .nil)
+  fromComponents := fun (.cons state (.cons block .nil)) => { state, block }
 
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let { state, block } := input
@@ -37,10 +37,10 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
 @[reducible] def assumptions (input : Input (F p)) :=
-  input.state.is_normalized ∧ input.block.is_normalized
+  input.state.Normalized ∧ input.block.Normalized
 
 @[reducible] def spec (input : Input (F p)) (out_state : KeccakState (F p)) :=
-  out_state.is_normalized ∧
+  out_state.Normalized ∧
   out_state.value = absorb_block input.state.value input.block.value
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
@@ -57,7 +57,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
-  suffices goal : (eval env state_after_absorb).is_normalized
+  suffices goal : (eval env state_after_absorb).Normalized
     ∧ (eval env state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all
@@ -88,7 +88,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     Input.mk.injEq] at *
   simp only [getElem_eval_vector, h_input] at h_env ⊢
 
-  have assumptions' (i : Fin 17) : state[i.val].is_normalized ∧ block[i.val].is_normalized := by
+  have assumptions' (i : Fin 17) : state[i.val].Normalized ∧ block[i.val].Normalized := by
     simp [h_assumptions.left ⟨i, by linarith [i.is_lt]⟩, h_assumptions.right i]
   simp only [assumptions', and_true, true_implies, implies_true, true_and] at h_env ⊢
 
@@ -97,7 +97,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
-  suffices goal : (eval env state_after_absorb).is_normalized
+  suffices goal : (eval env state_after_absorb).Normalized
     ∧ (eval env state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all

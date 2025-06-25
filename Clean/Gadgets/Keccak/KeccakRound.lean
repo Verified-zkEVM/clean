@@ -14,13 +14,13 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
   let state ← subcircuit Chi.circuit state
 
   -- add the round constant
-  let s0 ← subcircuit Xor64.circuit ⟨state[0], const (U64.from_u64 rc)⟩
+  let s0 ← subcircuit Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
-def assumptions (state : KeccakState (F p)) := state.is_normalized
+def assumptions (state : KeccakState (F p)) := state.Normalized
 
 def spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
-  out_state.is_normalized
+  out_state.Normalized
   ∧ out_state.value = keccak_round state.value rc
 
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
@@ -56,22 +56,22 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
 
   -- simplify round constant constraint
   set state0_before_rc := eval env (varFromOffset U64 (i0 + 888))
-  have h_rc_norm : state0_before_rc.is_normalized := by
-    simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at chi_norm
+  have h_rc_norm : state0_before_rc.Normalized := by
+    simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
     exact chi_norm 0
   have h_rc_eq : state0_before_rc.value = (chi (rho_pi (theta state.value)))[0] := by
     simp only [Vector.ext_iff] at chi_eq
     specialize chi_eq 0 (by linarith)
     rw [←chi_eq]
     simp only [state0_before_rc, KeccakState.value, eval_vector, circuit_norm]
-  simp only [h_rc_norm, U64.from_u64_normalized, forall_const] at h_rc
-  rw [h_rc_eq, U64.value_from_u64_eq] at h_rc
+  simp only [h_rc_norm, U64.fromUInt64_normalized, forall_const] at h_rc
+  rw [h_rc_eq, U64.value_fromUInt64] at h_rc
 
   -- prove goal, treating the i=0 case separately
   intro i
   by_cases hi : 0 = i.val <;> simp only [hi, reduceIte]
   · simp [←hi, h_rc]
-  simp only [KeccakState.value, KeccakState.is_normalized, eval_vector,
+  simp only [KeccakState.value, KeccakState.Normalized, eval_vector,
     Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapRange] at chi_norm chi_eq
   specialize chi_eq i i.is_lt
   specialize chi_norm i
@@ -89,13 +89,13 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumpti
     Chi.assumptions, Chi.spec, Xor64.assumptions, Xor64.spec
   ] at h_env ⊢
   simp_all only [main, h_input, state_norm, circuit_norm,
-    U64.from_u64_normalized]
+    U64.fromUInt64_normalized]
 
   -- `simp_all` left one goal to pull out of hypotheses
   obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
   have ⟨ rhopi_norm, _ ⟩ := h_rhopi theta_norm
   have ⟨ chi_norm, _ ⟩ := h_chi rhopi_norm
-  simp only [KeccakState.is_normalized, eval_vector, circuit_norm] at chi_norm
+  simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {

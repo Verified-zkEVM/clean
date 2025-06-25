@@ -22,9 +22,9 @@ structure RowType (F : Type) where
 
 instance : ProvableStruct RowType where
   components := [U32, U32]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
-  combined_size := 8 -- explicit size to enable casting indices to `Fin size`
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+  combinedSize := 8 -- explicit size to enable casting indices to `Fin size`
 
 @[reducible]
 def next_row_off : RowType (CellOffset 2 RowType) := {
@@ -55,8 +55,8 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.get_curr_row
-  row.x === (const (U32.from_byte 0))
-  row.y === (const (U32.from_byte 1))
+  row.x === (const (U32.fromByte 0))
+  row.y === (const (U32.fromByte 1))
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
@@ -76,7 +76,7 @@ def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTraceWithIndex (fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
-    row.x.is_normalized ∧ row.y.is_normalized
+    row.x.Normalized ∧ row.y.Normalized
   )
 
 /-
@@ -123,7 +123,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
 lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
   : recursive_relation.constraintsHold_on_window ⟨<+> +> curr +> next, rfl⟩ aux_env →
   curr.y = next.x ∧
-  (curr.x.is_normalized → curr.y.is_normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized)
+  (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
    := by
   simp only [table_norm]
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
@@ -145,7 +145,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
   Circuit.ConstraintsHold.Soundness (window_env boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
-  first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.is_normalized ∧ first_row.y.is_normalized
+  first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
@@ -156,7 +156,7 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   clear hx hy
   intro x_zero y_one
   rw [x_zero, y_one]
-  simp only [U32.from_byte_is_normalized, U32.from_byte_value, fib32]
+  simp only [U32.fromByte_normalized, U32.fromByte_value, fib32]
   trivial
 
 /--

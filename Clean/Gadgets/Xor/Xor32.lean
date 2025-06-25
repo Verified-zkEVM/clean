@@ -21,8 +21,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [U32, U32]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
@@ -41,11 +41,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
 
 def assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
-  x.is_normalized ∧ y.is_normalized
+  x.Normalized ∧ y.Normalized
 
 def spec (input: Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
-  z.value = x.value ^^^ y.value ∧ z.is_normalized
+  z.value = x.value ^^^ y.value ∧ z.Normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
@@ -54,7 +54,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u32 {x y z : U32 (F p)}
-  (x_norm : x.is_normalized) (y_norm : y.is_normalized)
+  (x_norm : x.Normalized) (y_norm : y.Normalized)
   (h_eq :
     z.x0.val = x.x0.val ^^^ y.x0.val ∧
     z.x1.val = x.x1.val ^^^ y.x1.val ∧
@@ -64,8 +64,8 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
   have ⟨ hx0, hx1, hx2, hx3 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3 ⟩ := y_norm
 
-  have z_norm : z.is_normalized := by
-    simp only [U32.is_normalized, h_eq]
+  have z_norm : z.Normalized := by
+    simp only [U32.Normalized, h_eq]
     exact ⟨ Nat.xor_lt_two_pow (n:=8) hx0 hy0, Nat.xor_lt_two_pow (n:=8) hx1 hy1,
       Nat.xor_lt_two_pow (n:=8) hx2 hy2, Nat.xor_lt_two_pow (n:=8) hx3 hy3 ⟩
 
@@ -107,7 +107,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
-  simp only [assumptions, circuit_norm, U32.is_normalized] at as
+  simp only [assumptions, circuit_norm, U32.Normalized] at as
   obtain ⟨ x_bytes, y_bytes ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes

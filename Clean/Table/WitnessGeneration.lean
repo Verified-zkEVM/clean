@@ -88,7 +88,7 @@ def witnesses
 
   -- append auxiliary columns to the current row
   let aux_cols := Array.replicate tc.final_assignment.num_aux 0
-  let cur_row := (to_elements init_row).toArray ++ aux_cols
+  let cur_row := (toElements init_row).toArray ++ aux_cols
 
   let mut trace := #[cur_row]
   let mut current := cur_row
