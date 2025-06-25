@@ -55,7 +55,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- the constraints hold
     Circuit.constraints_hold.completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 
-  subcircuits_consistent : ∀ acc x, ((step acc x).operations ((size State) + (size Input))).SubcircuitsConsistent ((size State) + (size Input))
+  subcircuits_consistent : ∀ acc x, ((step acc x).operations ((size State) + (size Input))).subcircuits_consistent ((size State) + (size Input))
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial

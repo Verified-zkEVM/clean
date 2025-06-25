@@ -20,7 +20,7 @@ class ExplicitCircuit (circuit : Circuit F α) where
   operations_eq : ∀ n : ℕ, circuit.operations n = operations n := by intro _; rfl
 
   /-- same condition as in `ElaboratedCircuit`: subcircuits must be consistent with the current offset -/
-  subcircuits_consistent : ∀ n : ℕ, (circuit.operations n).SubcircuitsConsistent n := by
+  subcircuits_consistent : ∀ n : ℕ, (circuit.operations n).subcircuits_consistent n := by
     intro _; and_intros <;> try first | ac_rfl | trivial
 
 /-- family of explicit circuits -/
@@ -31,7 +31,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
   local_length_eq : ∀ (a : α) (n: ℕ), (circuit a).local_length n = local_length a n := by intro _ _; rfl
   operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
-  subcircuits_consistent : ∀ (a : α) (n: ℕ), ((circuit a).operations n).SubcircuitsConsistent n := by
+  subcircuits_consistent : ∀ (a : α) (n: ℕ), ((circuit a).operations n).subcircuits_consistent n := by
     intro _ _; and_intros <;> try first | ac_rfl | trivial
 
 -- move between family and single explicit circuit
@@ -86,7 +86,7 @@ instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
   local_length_eq n := by rw [Circuit.bind_local_length_eq, local_length_eq, output_eq, local_length_eq]
   operations_eq n := by rw [Circuit.bind_operations_eq, operations_eq, output_eq, local_length_eq, operations_eq]
   subcircuits_consistent n := by
-    rw [Operations.SubcircuitsConsistent, Circuit.bind_forAll]
+    rw [Operations.subcircuits_consistent, Circuit.bind_forAll]
     exact ⟨ f_explicit.subcircuits_consistent .., (g_explicit _).subcircuits_consistent .. ⟩
 
 -- `map` of an explicit circuit yields an explicit circuit
@@ -105,12 +105,12 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
 
 -- basic operations are explicit circuits
 
-instance : ExplicitCircuits (F:=F) witnessVar where
+instance : ExplicitCircuits (F:=F) witness_var where
   output _ n := ⟨ n ⟩
   local_length _ _ := 1
   operations c n := [.witness 1 fun env => #v[c env]]
 
-instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
+instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witness_vars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   local_length _ := k
   operations n := [.witness k c]
@@ -120,7 +120,7 @@ instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witnes
   local_length _ _ := size α
   operations c n := [.witness (size α) (to_elements ∘ c)]
 
-instance : ExplicitCircuits (F:=F) assertZero where
+instance : ExplicitCircuits (F:=F) assert_zero where
   output _ _ := ()
   local_length _ _ := 0
   operations e n := [.assert e]
@@ -173,7 +173,7 @@ example :
     let x : Expression F ← witness (fun _ => 0)
     let y ← witness (fun _ => 1)
     let z ← witness (fun eval => eval (x + y))
-    assertZero (x + y - z)
+    assert_zero (x + y - z)
     pure z
 
   ExplicitCircuit add := by infer_explicit_circuit
@@ -185,7 +185,7 @@ example :
   let add (x : Expression F) := do
     let y ← witness (fun _ => (1 : F))
     let z ← witness (fun eval => eval (x + y))
-    assertZero (x + y - z)
+    assert_zero (x + y - z)
     pure z
 
   ExplicitCircuits add := by infer_explicit_circuits

@@ -423,8 +423,8 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assign_var off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witnessVar x.eval
-    assertZero (x - var new_var)
+    let new_var ← witness_var x.eval
+    assert_zero (x - var new_var)
     assign_var off new_var
 
 @[table_norm, table_assignment_norm]

@@ -21,7 +21,7 @@ example : ExplicitCircuit.output (circuit32 default) 0
   -- rfl -- also works
   dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
 
-example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
+example : ((circuit32 default).operations 0).subcircuits_consistent 0 :=
   ExplicitCircuits.subcircuits_consistent ..
 
 example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :

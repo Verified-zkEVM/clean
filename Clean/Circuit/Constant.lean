@@ -33,16 +33,16 @@ instance Constantircuits.from_pure {f : α → β} : ConstantCircuits (fun a => 
 
 -- basic operations are constant circuits
 
-instance : ConstantCircuits (F:=F) witnessVar where
+instance : ConstantCircuits (F:=F) witness_var where
   local_length := 1
 
-instance {k : ℕ} {c : Environment F → Vector F k} : ConstantCircuit (witnessVars k c) where
+instance {k : ℕ} {c : Environment F → Vector F k} : ConstantCircuit (witness_vars k c) where
   local_length := k
 
 instance {α: TypeMap} [ProvableType α] : ConstantCircuits (ProvableType.witness (α:=α) (F:=F)) where
   local_length := size α
 
-instance : ConstantCircuits (F:=F) assertZero where
+instance : ConstantCircuits (F:=F) assert_zero where
   local_length := 0
 
 instance {α: TypeMap} [ProvableType α] {table : Table F α} : ConstantCircuits (F:=F) (lookup table) where
@@ -94,7 +94,7 @@ example :
   let add (x : Expression F) := do
     let y ← witness (fun _ => (1 : F))
     let z ← witness (fun eval => eval (x + y))
-    assertZero (x + y - z)
+    assert_zero (x + y - z)
     pure z
 
   ConstantCircuits add := by infer_constant_circuits

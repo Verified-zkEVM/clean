@@ -6,9 +6,9 @@ variable {F : Type} [Field F] {α: TypeMap} [ProvableType α]
 instance {α: TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
   default := ProvableType.witness default
 
-def copyToVar (x : Expression F) : Circuit F (Variable F) := do
-  let x' ← witnessVar x.eval
-  assertZero (x - (var x'))
+def copyToVar (x: Expression F) : Circuit F (Variable F) := do
+  let x' ← witness_var x.eval
+  assert_zero (x - (var x'))
   return x'
 
 def toVar : Expression F → Circuit F (Variable F)
