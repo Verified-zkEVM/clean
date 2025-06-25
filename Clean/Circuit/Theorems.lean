@@ -2,7 +2,7 @@
 This file contains theorems that immediately follow from the definitions in `Circuit.Operations` and `Circuit.Basic`.
 
 For more complicated interconnected theorems, we have separate files,
-such as `Circuit.SubCircuit` which focuses on establishing the foundation for subcircuit composition.
+such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
 import Clean.Circuit.Basic
 
@@ -127,7 +127,7 @@ instance : LawfulMonad (Circuit F) where
 Soundness theorem which proves that we can replace constraints in subcircuits
 with their `soundness` statement.
 
-Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies assuming the nested version
+Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assuming the nested version
 `ConstraintsHold.Soundness` when defining soundness for formal circuits,
 because it is implied by the flat version.
 -/
@@ -199,7 +199,7 @@ lemma localLength_toFlat {ops: Operations F} :
     generalize ops.toFlat = flat_ops at *
     generalize Operations.localLength ops = n at *
     induction flat_ops using localLength.induct generalizing n with
-    | case1 => simp_all [localLength, add_comm, List.nil_append, right_eq_add, SubCircuit.localLength_eq]
+    | case1 => simp_all [localLength, add_comm, List.nil_append, right_eq_add, Subcircuit.localLength_eq]
     | case2 m' _ ops' ih' =>
       dsimp only [localLength, witness] at *
       specialize ih' (n - m') (by rw [←ih]; omega)
@@ -219,7 +219,7 @@ lemma localWitnesses_toFlat {ops: Operations F} {env} :
     simp only [Operations.toFlat, Operations.localLength, Operations.localWitnesses, Vector.toArray_append]
     rw [←ih]
     try rw [localWitnesses_append]
-    try simp only [localLength, localWitnesses, Vector.toArray_append, SubCircuit.witnesses, Vector.toArray_cast]
+    try simp only [localLength, localWitnesses, Vector.toArray_append, Subcircuit.witnesses, Vector.toArray_cast]
 end FlatOperation
 
 namespace Environment
@@ -326,7 +326,7 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
 Completeness theorem which proves that we can replace constraints in subcircuits
 with their `completeness` statement.
 
-Together with `Circuit.SubCircuit.can_replace_subcircuits`, it justifies only proving the nested version
+Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only proving the nested version
 `ConstraintsHold.Completeness` when defining formal circuits,
 because it already implies the flat version.
 -/

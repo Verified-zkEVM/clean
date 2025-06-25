@@ -60,7 +60,7 @@ theorem Circuit.can_replace_subcircuits : ∀ {ops : Operations F}, ∀ {env : E
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
 def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
-    (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
+    (n: ℕ) (b_var : Var β F) : Subcircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := ops.toFlat
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent b_var n
@@ -130,7 +130,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
 def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
-    (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
+    (n: ℕ) (b_var : Var β F) : Subcircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := ops.toFlat
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent b_var n

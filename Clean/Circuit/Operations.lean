@@ -9,7 +9,7 @@ variable {F: Type} [Field F] {α : Type} {n : ℕ}
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
 
 This is an intermediary type on the way to defining the full inductive `Operation` type.
-It is needed because we already need to talk about operations in the `SubCircuit` definition,
+It is needed because we already need to talk about operations in the `Subcircuit` definition,
 which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
@@ -77,7 +77,7 @@ A flat list of circuit operations, instantiated at a certain offset.
 To enable composition of formal proofs, subcircuits come with custom `soundness` and `completeness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
-structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
+structure Subcircuit (F: Type) [Field F] (offset: ℕ) where
   ops: List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
@@ -107,7 +107,7 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   localLength_eq : localLength = FlatOperation.localLength ops
 
 @[reducible, circuit_norm]
-def SubCircuit.witnesses (sc: SubCircuit F n) env :=
+def Subcircuit.witnesses (sc: Subcircuit F n) env :=
   (FlatOperation.localWitnesses env sc.ops).cast sc.localLength_eq.symm
 
 /--
@@ -120,7 +120,7 @@ inductive Operation (F : Type) [Field F] where
   | witness : (m: ℕ) → (compute : Environment F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
-  | subcircuit : {n : ℕ} → SubCircuit F n → Operation F
+  | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
 
 namespace Operation
 instance [Repr F] : Repr (Operation F) where
@@ -128,7 +128,7 @@ instance [Repr F] : Repr (Operation F) where
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
-    | subcircuit { ops, .. } => "(SubCircuit " ++ reprStr ops ++ ")"
+    | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops ++ ")"
 
 /--
 The number of witness variables introduced by this operation.
@@ -193,7 +193,7 @@ def induct {motive : Operations F → Sort*}
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
   (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
-  (subcircuit : ∀ {n} (s: SubCircuit F n) ops, motive ops → motive (.subcircuit s :: ops))
+  (subcircuit : ∀ {n} (s: Subcircuit F n) ops, motive ops → motive (.subcircuit s :: ops))
     (ops: Operations F) : motive ops :=
   match ops with
   | [] => empty
@@ -213,7 +213,7 @@ structure Condition (F: Type) [Field F] where
   witness (offset: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
   assert (offset: ℕ) : Expression F → Prop := fun _ => True
   lookup (offset: ℕ) : Lookup F → Prop := fun _ => True
-  subcircuit (offset: ℕ) : {m : ℕ} → SubCircuit F m → Prop := fun _ => True
+  subcircuit (offset: ℕ) : {m : ℕ} → Subcircuit F m → Prop := fun _ => True
 
 @[circuit_norm]
 def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Prop
@@ -265,7 +265,7 @@ def inductConsistent {motive : (ops : Operations F) → (n : ℕ) → ops.Subcir
     motive (.assert e :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (lookup : ∀ n l ops {h}, motive ops n h →
     motive (.lookup l :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
-  (subcircuit : ∀ n (s: SubCircuit F n) ops {h}, motive ops (s.localLength + n) h →
+  (subcircuit : ∀ n (s: Subcircuit F n) ops {h}, motive ops (s.localLength + n) h →
     motive (.subcircuit s :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
     (ops : Operations F) (n : ℕ) (h: ops.SubcircuitsConsistent n) : motive ops n h :=
   motive' ops n h
