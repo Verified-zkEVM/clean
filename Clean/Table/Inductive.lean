@@ -74,21 +74,21 @@ for any given public `input` and `ouput`.
 -/
 
 def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
-  let (acc, x) ← get_curr_row
+  let (acc, x) ← getCurrRow
   let output ← table.step acc x
-  let (output', _) ← get_next_row
+  let (output', _) ← getNextRow
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
   output' === output
 
 def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
-  let (actual, _) ← get_curr_row
+  let (actual, _) ← getCurrRow
   actual === (const target)
 
 def tableConstraints (table : InductiveTable F State Input) (input_state output_state: State F) :
   List (TableOperation (ProvablePair State Input) F) := [
-    .EveryRowExceptLast table.inductiveConstraint,
-    .Boundary (.fromStart 0) (equalityConstraint Input input_state),
-    .Boundary (.fromEnd 0) (equalityConstraint Input output_state),
+    .everyRowExceptLast table.inductiveConstraint,
+    .boundary (.fromStart 0) (equalityConstraint Input input_state),
+    .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
 
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
@@ -120,19 +120,19 @@ lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State 
     (traceInputs trace).length = N := by
   rw [traceInputs, List.length_map, trace.val.toList_length, trace.prop]
 
-lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: State F)
+lemma table_soundness_aux (table : InductiveTable F State Input) (input output: State F)
   (N : ℕ+) (trace: TraceOfLength F (ProvablePair State Input) N) (env: ℕ → ℕ → Environment F) :
   table.spec 0 input [] rfl →
-  table_constraintsHold (table.tableConstraints input output) trace env →
-    trace.forAllRowsWithPrevious (fun row i rest => table.spec i row.1 (traceInputs rest) (traceInputs_length rest))
+  TableConstraintsHold (table.tableConstraints input output) trace env →
+    trace.ForAllRowsWithPrevious (fun row i rest => table.spec i row.1 (traceInputs rest) (traceInputs_length rest))
     ∧ trace.lastRow.1 = output := by
   intro input_spec
 
   -- add a condition on the trace length to the goal,
   -- so that we can change the induction to not depend on `N` (which would make it unprovable)
   rcases trace with ⟨ trace, h_trace ⟩
-  suffices goal : table_constraintsHold (table.tableConstraints input output) ⟨ trace, h_trace ⟩ env →
-    trace.forAllRowsWithPrevious (fun row rest => table.spec rest.len row.1 (traceInputs ⟨ rest, rfl ⟩) (traceInputs_length ⟨ rest, rfl ⟩)) ∧
+  suffices goal : TableConstraintsHold (table.tableConstraints input output) ⟨ trace, h_trace ⟩ env →
+    trace.ForAllRowsWithPrevious (fun row rest => table.spec rest.len row.1 (traceInputs ⟨ rest, rfl ⟩) (traceInputs_length ⟨ rest, rfl ⟩)) ∧
     (∀ (h_len : trace.len = N), (trace.lastRow (by rw [h_len]; exact N.pos)).1 = output) by
       intro constraints
       specialize goal constraints
@@ -144,7 +144,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
 
   case zero =>
     intro constraints
-    simp only [Trace.forAllRowsWithPrevious, true_and]
+    simp only [Trace.ForAllRowsWithPrevious, true_and]
     intros
     nomatch N
 
@@ -155,7 +155,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
       List.length_cons, zero_add, List.cons_append, reduceIte, and_true] at constraints
     obtain ⟨ input_eq, output_eq ⟩ := constraints
     rw [equalityConstraint.soundness] at input_eq output_eq
-    simp only [table_norm, and_true, Trace.lastRow, Trace.forAllRowsWithPrevious]
+    simp only [table_norm, and_true, Trace.lastRow, Trace.ForAllRowsWithPrevious]
     constructor
     · rw [input_eq]
       exact input_spec
@@ -169,7 +169,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     simp only [table_norm, tableConstraints, List.size_toArray, List.length_nil, List.push_toArray,
       List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
       and_false, reduceIte, PNat.mk_coe, Nat.add_one_sub_one, tsub_zero, Nat.add_left_inj,
-      Nat.reduceAdd, true_and, Trace.forAllRowsWithPrevious] at constraints ih1 ih2 ⊢
+      Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious] at constraints ih1 ih2 ⊢
     rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
     specialize ih2 h_rest
     have spec_previous : table.spec rest.len curr.1 (traceInputs ⟨rest, rfl⟩) (traceInputs_length ⟨rest, rfl⟩) := by
@@ -270,12 +270,12 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     simp only [add_tsub_cancel_right, Nat.add_left_inj, reduceIte] at output_eq
     exact output_eq
 
-theorem tableSoundness (table : InductiveTable F State Input) (input output: State F)
+theorem table_soundness (table : InductiveTable F State Input) (input output: State F)
   (N : ℕ+) (trace: TraceOfLength F (ProvablePair State Input) N) (env: ℕ → ℕ → Environment F) :
-  table.spec 0 input [] rfl → table_constraintsHold (table.tableConstraints input output) trace env →
+  table.spec 0 input [] rfl → TableConstraintsHold (table.tableConstraints input output) trace env →
     table.spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail) := by
   intro h_input h_constraints
-  have ⟨ h_spec, h_output ⟩ := table.tableSoundnessAux input output N trace env h_input h_constraints
+  have ⟨ h_spec, h_output ⟩ := table.table_soundness_aux input output N trace env h_input h_constraints
   rw [←h_output]
   exact TraceOfLength.lastRow_of_forAllWithPrevious trace h_spec
 
@@ -285,7 +285,7 @@ def toFormal (table : InductiveTable F State Input) (input output: State F) : Fo
   spec {N} trace := table.spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail)
 
   soundness N trace env assumption constraints :=
-    table.tableSoundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
+    table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
