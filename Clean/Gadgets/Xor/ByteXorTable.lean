@@ -11,7 +11,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
 
   row i :=
     let (x, y) := splitTwoBytes i
-    (from_byte x, from_byte y, from_byte (x ^^^ y))
+    (fromByte x, fromByte y, fromByte (x ^^^ y))
 
   index := fun (x, y, _) => x.val * 256 + y.val
 
@@ -27,11 +27,11 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
       rcases h with ⟨ hx, hy, hz ⟩
       and_intros
       · rw [hx]
-        apply from_byte_lt
+        apply fromByte_lt
       · rw [hy]
-        apply from_byte_lt
+        apply fromByte_lt
       rw [hx, hy, hz]
-      repeat rw [from_byte, FieldUtils.val_of_natToField_eq]
+      repeat rw [fromByte, FieldUtils.val_of_natToField_eq]
       simp only [HXor.hXor, Xor.xor, Fin.xor]
       rw [Nat.mod_eq_iff_lt (by norm_num)]
       apply Nat.xor_lt_two_pow (n:=8)
@@ -40,7 +40,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
     intro ⟨ hx, hy, h ⟩
     · use concatTwoBytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
       rw [splitTwoBytes_concatTwoBytes]
-      simp only [from_byte, FieldUtils.natToField_of_val_eq_iff, Fin.xor_val_of_uInt8Size,
+      simp only [fromByte, FieldUtils.natToField_of_val_eq_iff, Fin.xor_val_of_uInt8Size,
         Prod.mk.injEq, true_and]
       apply FieldUtils.ext
       simp [h, FieldUtils.val_of_natToField_eq]

@@ -55,7 +55,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated,
     Vector.getElem_zip] at h_holds ⊢
-  simp_all [rhoPiConstants, Bitwise.rot_left_eq_rot_right]
+  simp_all [rhoPiConstants, Bitwise.rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
