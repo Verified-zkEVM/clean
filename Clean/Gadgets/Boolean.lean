@@ -4,7 +4,7 @@ import Clean.Utils.Field
 section
 variable {p : ℕ} [Fact p.Prime]
 
-def assert_bool (x: Expression (F p)) := do
+def assertBool (x: Expression (F p)) := do
   assertZero (x * (x - 1))
 
 inductive Boolean (F: Type) where
@@ -15,7 +15,7 @@ def var (b: Boolean (F p)) := Expression.var b.1
 
 def witness (compute : Environment (F p) → F p) := do
   let x ← witnessVar compute
-  assert_bool (Expression.var x)
+  assertBool (Expression.var x)
   return Boolean.mk x
 
 instance : Coe (Boolean (F p)) (Expression (F p)) where

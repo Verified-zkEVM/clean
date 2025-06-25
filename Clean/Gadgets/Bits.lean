@@ -74,7 +74,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
-def range_check (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
+def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do _ ← main n x -- discard the output
   localLength _ := n
 
