@@ -15,10 +15,10 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     subcircuit AbsorbBlock.circuit { state, block }
 
   spec i state blocks _ : Prop :=
-    state.is_normalized
+    state.Normalized
     ∧ state.value = absorb_blocks (blocks.map KeccakBlock.value)
 
-  input_assumptions i block := block.is_normalized
+  input_assumptions i block := block.Normalized
 
   soundness := by
     intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
@@ -32,15 +32,15 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
       subcircuit_norm, AbsorbBlock.assumptions, AbsorbBlock.spec]
 
 -- the input is hard-coded to the initial keccak state of all zeros
-def initialState : KeccakState (F p) := .fill 25 (U64.from_byte 0)
+def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)
 
 lemma initialState_value : (initialState (p:=p)).value = .fill 25 0 := by
   ext i hi
   simp only [initialState, KeccakState.value]
-  rw [Vector.getElem_map, Vector.getElem_fill, Vector.getElem_fill, U64.from_byte_value, Fin.val_zero]
+  rw [Vector.getElem_map, Vector.getElem_fill, Vector.getElem_fill, U64.fromByte_value, Fin.val_zero]
 
-lemma initialState_normalized : (initialState (p:=p)).is_normalized := by
-  simp only [initialState, KeccakState.is_normalized, Vector.getElem_fill, U64.from_byte_is_normalized]
+lemma initialState_normalized : (initialState (p:=p)).Normalized := by
+  simp only [initialState, KeccakState.Normalized, Vector.getElem_fill, U64.fromByte_normalized]
   trivial
 
 def formalTable (output : KeccakState (F p)) := table.toFormal initialState output
@@ -48,7 +48,7 @@ def formalTable (output : KeccakState (F p)) := table.toFormal initialState outp
 -- The table's statement implies that the output state is the result of keccak-hashing some list of input blocks
 theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace, ∃ blocks, blocks.length = n - 1 ∧
   (formalTable output).statement n trace →
-    output.is_normalized ∧ output.value = absorb_blocks blocks := by
+    output.Normalized ∧ output.value = absorb_blocks blocks := by
   intro n hn trace
   use (InductiveTable.traceInputs trace.tail).map KeccakBlock.value
   intro spec

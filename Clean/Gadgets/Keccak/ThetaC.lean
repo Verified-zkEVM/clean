@@ -17,10 +17,10 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-def assumptions (state : KeccakState (F p)) := state.is_normalized
+def assumptions (state : KeccakState (F p)) := state.Normalized
 
 def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
-  out.is_normalized
+  out.Normalized
   ∧ out.value = Specs.Keccak256.theta_c state.value
 
 -- #eval! theta_c (p:=p_babybear) default |>.localLength
@@ -49,7 +49,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, subcircuit_norm, h_input, eval_vector,
     main, Xor64.circuit, Xor64.assumptions, Xor64.spec] at h_holds
   simp only [and_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
-  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized :=
+  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
 
@@ -61,8 +61,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm, subcircuit_norm, assumptions, eval_vector,
-    main, Xor64.circuit, Xor64.assumptions, Xor64.spec, KeccakState.is_normalized] at h_env ⊢
-  have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].is_normalized := fun i hi => state_norm ⟨ i, hi ⟩
+    main, Xor64.circuit, Xor64.assumptions, Xor64.spec, KeccakState.Normalized] at h_env ⊢
+  have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
 def circuit : FormalCircuit (F p) KeccakState KeccakRow := {

@@ -49,11 +49,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
 
 def assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
-  x.is_normalized ∧ y.is_normalized
+  x.Normalized ∧ y.Normalized
 
 def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
-  z.value = x.value ^^^ y.value ∧ z.is_normalized
+  z.value = x.value ^^^ y.value ∧ z.Normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main := main
@@ -62,7 +62,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}
-  (x_norm : x.is_normalized) (y_norm : y.is_normalized)
+  (x_norm : x.Normalized) (y_norm : y.Normalized)
   (h_eq :
     z.x0.val = x.x0.val ^^^ y.x0.val ∧
     z.x1.val = x.x1.val ^^^ y.x1.val ∧
@@ -76,8 +76,8 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm
 
-  have z_norm : z.is_normalized := by
-    simp only [U64.is_normalized, h_eq]
+  have z_norm : z.Normalized := by
+    simp only [U64.Normalized, h_eq]
     exact ⟨ Nat.xor_lt_two_pow (n:=8) hx0 hy0, Nat.xor_lt_two_pow (n:=8) hx1 hy1,
       Nat.xor_lt_two_pow (n:=8) hx2 hy2, Nat.xor_lt_two_pow (n:=8) hx3 hy3,
       Nat.xor_lt_two_pow (n:=8) hx4 hy4, Nat.xor_lt_two_pow (n:=8) hx5 hy5,
@@ -117,7 +117,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
-  simp only [assumptions, circuit_norm, U64.is_normalized] at as
+  simp only [assumptions, circuit_norm, U64.Normalized] at as
   simp only [h_input, circuit_norm, main, ByteXorTable,
     explicit_provable_type, Fin.forall_iff] at h_env ⊢
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0

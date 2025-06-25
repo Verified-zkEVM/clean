@@ -28,11 +28,11 @@ def rot64 (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) 
   let byte_rotated ← subcircuit (Rotation64Bytes.circuit byte_offset) x
   subcircuit (Rotation64Bits.circuit bit_offset) byte_rotated
 
-def assumptions (input : U64 (F p)) := input.is_normalized
+def assumptions (input : U64 (F p)) := input.Normalized
 
 def spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rot_right64 x.value offset.val
-  ∧ y.is_normalized
+  ∧ y.Normalized
 
 def output (offset : Fin 64) (i0 : Nat) : U64 (Expression (F p)) :=
   Rotation64Bits.output (offset % 8).val i0

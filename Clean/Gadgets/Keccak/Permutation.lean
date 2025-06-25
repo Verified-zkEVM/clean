@@ -9,10 +9,10 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .foldl roundConstants state
     fun state rc => subcircuit (KeccakRound.circuit rc) state
 
-def assumptions (state : KeccakState (F p)) := state.is_normalized
+def assumptions (state : KeccakState (F p)) := state.Normalized
 
 def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
-  out_state.is_normalized
+  out_state.Normalized
   ∧ out_state.value = keccak_permutation state.value
 
 /-- state in the ith round, starting from offset n -/
@@ -51,17 +51,17 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env (state_var n i)
 
-  change (state 0).is_normalized ∧
+  change (state 0).Normalized ∧
     (state 0).value = keccak_round initial_state.value roundConstants[0]
   at h_init
 
-  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).is_normalized → (state (i + 1)).is_normalized ∧
+  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → (state (i + 1)).Normalized ∧
     (state (i + 1)).value = keccak_round (state i).value roundConstants[i + 1]
   at h_succ
 
   -- inductive proof
   have h_inductive (i : ℕ) (hi : i < 24) :
-    (state i).is_normalized ∧ (state i).value =
+    (state i).Normalized ∧ (state i).value =
       Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[j.val]) initial_state.value := by
     induction i with
     | zero => simp [Fin.foldl_succ, h_init]
@@ -93,16 +93,16 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env (state_var n i)
 
-  change (state 0).is_normalized at h_init
+  change (state 0).Normalized at h_init
 
   change ∀ (i : ℕ) (hi : i + 1 < 24),
-    (state i).is_normalized → (state (i + 1)).is_normalized
+    (state i).Normalized → (state (i + 1)).Normalized
   at h_succ
 
-  change (state i).is_normalized
+  change (state i).Normalized
 
   -- inductive proof
-  have h_norm (i : ℕ) (hi : i < 24) : (state i).is_normalized := by
+  have h_norm (i : ℕ) (hi : i < 24) : (state i).Normalized := by
     induction i with
     | zero => exact h_init
     | succ i ih =>

@@ -30,11 +30,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
 
 def assumptions (input: Inputs (F p)) :=
   let ⟨x, y⟩ := input
-  x.is_normalized ∧ y.is_normalized
+  x.Normalized ∧ y.Normalized
 
 def spec (input: Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
-  z.value = x.value &&& y.value ∧ z.is_normalized
+  z.value = x.value &&& y.value ∧ z.Normalized
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main
@@ -43,7 +43,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}
-  (x_norm : x.is_normalized) (y_norm : y.is_normalized)
+  (x_norm : x.Normalized) (y_norm : y.Normalized)
   (h_eq :
     z.x0.val = x.x0.val &&& y.x0.val ∧
     z.x1.val = x.x1.val &&& y.x1.val ∧
@@ -57,8 +57,8 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm
 
-  have z_norm : z.is_normalized := by
-    simp only [U64.is_normalized, h_eq]
+  have z_norm : z.Normalized := by
+    simp only [U64.Normalized, h_eq]
     exact ⟨ Nat.and_lt_two_pow (n:=8) _ hy0, Nat.and_lt_two_pow (n:=8) _ hy1,
       Nat.and_lt_two_pow (n:=8) _ hy2, Nat.and_lt_two_pow (n:=8) _ hy3,
       Nat.and_lt_two_pow (n:=8) _ hy4, Nat.and_lt_two_pow (n:=8) _ hy5,
@@ -75,7 +75,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
   simp only [circuit_norm, subcircuit_norm, explicit_provable_type, Vector.mapRange,
     main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
-    U64.is_normalized] at h_assumptions h_holds h_input ⊢
+    U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
@@ -83,7 +83,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   cases x; cases y
   simp only [circuit_norm, subcircuit_norm, explicit_provable_type,
     main, assumptions, spec, And8.circuit, And8.assumptions, And8.spec,
-    U64.is_normalized] at h_assumptions h_input ⊢
+    U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
 def circuit : FormalCircuit (F p) Inputs U64 where

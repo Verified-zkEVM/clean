@@ -75,16 +75,16 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
 
 def assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input
-  state.is_normalized ∧ x.is_normalized ∧ y.is_normalized
+  state.Normalized ∧ x.Normalized ∧ y.Normalized
 
 def spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   let { state, x, y } := input
-  out.value = g state.value a b c d x.value y.value ∧ out.is_normalized
+  out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assumptions (spec a b c d) := by
   intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [assumptions, BLAKE3State.is_normalized] at h_normalized
+  dsimp only [assumptions, BLAKE3State.Normalized] at h_normalized
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
   simp only [circuit_norm, subcircuit_norm, and_imp,
@@ -128,7 +128,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
   rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [assumptions, BLAKE3State.is_normalized] at h_normalized
+  dsimp only [assumptions, BLAKE3State.Normalized] at h_normalized
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
   simp only [h_input, circuit_norm, subcircuit_norm, and_imp,

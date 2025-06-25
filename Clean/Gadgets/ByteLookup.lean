@@ -5,14 +5,14 @@ namespace Gadgets
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-def from_byte (x: Fin 256) : F p :=
+def fromByte (x: Fin 256) : F p :=
   FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
 
 def ByteTable : Table (F p) field := .fromStatic {
   name := "Bytes"
   length := 256
 
-  row i := from_byte i
+  row i := fromByte i
   index x := x.val
 
   Spec x := x.val < 256
@@ -26,7 +26,7 @@ def ByteTable : Table (F p) field := .fromStatic {
       exact i.is_lt
     · intro h
       use x.val
-      simp only [from_byte, Fin.val_natCast]
+      simp only [fromByte, Fin.val_natCast]
       have h' : (x.val) % 256 = x.val := by
         rw [Nat.mod_eq_iff_lt]; assumption; norm_num
       simp only [h', List.cons.injEq]

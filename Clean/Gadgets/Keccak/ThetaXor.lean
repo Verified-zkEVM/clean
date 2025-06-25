@@ -28,11 +28,11 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  state.is_normalized ∧ d.is_normalized
+  state.Normalized ∧ d.Normalized
 
 def spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
-  out.is_normalized
+  out.Normalized
   ∧ out.value = Specs.Keccak256.theta_xor state.value d.value
 
 -- rewrite theta_xor as a loop

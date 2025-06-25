@@ -35,8 +35,8 @@ instance (T: Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 
 namespace U64
-def to_limbs {F} (x : U64 F) : Vector F 8 := toElements x
-def from_limbs {F} (v : Vector F 8) : U64 F := fromElements v
+def toLimbs {F} (x : U64 F) : Vector F 8 := toElements x
+def fromLimbs {F} (v : Vector F 8) : U64 F := fromElements v
 
 def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
   ⟨ f x.x0, f x.x1, f x.x2, f x.x3, f x.x4, f x.x5, f x.x6, f x.x7 ⟩
@@ -67,7 +67,7 @@ lemma ext {x y : U64 (F p)}
 /--
   A 64-bit unsigned integer is normalized if all its limbs are less than 256.
 -/
-def is_normalized (x: U64 (F p)) :=
+def Normalized (x: U64 (F p)) :=
   x.x0.val < 256 ∧ x.x1.val < 256 ∧ x.x2.val < 256 ∧ x.x3.val < 256 ∧
   x.x4.val < 256 ∧ x.x5.val < 256 ∧ x.x6.val < 256 ∧ x.x7.val < 256
 
@@ -79,8 +79,8 @@ def value (x: U64 (F p)) :=
   x.x4.val * 256^4 + x.x5.val * 256^5 + x.x6.val * 256^6 + x.x7.val * 256^7
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem value_lt_of_normalized {x : U64 (F p)} (hx: x.is_normalized) : x.value < 2^64 := by
-  simp_all only [value, is_normalized]
+theorem value_lt_of_normalized {x : U64 (F p)} (hx: x.Normalized) : x.value < 2^64 := by
+  simp_all only [value, Normalized]
   linarith
 
 omit [Fact (Nat.Prime p)] p_large_enough in
@@ -91,27 +91,27 @@ theorem value_horner (x : U64 (F p)) : x.value =
   ring
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem value_xor_horner {x : U64 (F p)} (hx: x.is_normalized) : x.value =
+theorem value_xor_horner {x : U64 (F p)} (hx: x.Normalized) : x.value =
     x.x0.val ^^^ 2^8 * (x.x1.val ^^^ 2^8 * (x.x2.val ^^^ 2^8 * (x.x3.val ^^^
       2^8 * (x.x4.val ^^^ 2^8 * (x.x5.val ^^^ 2^8 * (x.x6.val ^^^ 2^8 * x.x7.val)))))) := by
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
-  simp_all only [is_normalized, value_horner]
+  simp_all only [Normalized, value_horner]
   let ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := hx
   repeat rw [Bitwise.xor_eq_add 8]
   repeat assumption
 
-def value_nat (x: U64 ℕ) :=
+def valueNat (x: U64 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
   x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-lemma vals_value (x : U64 (F p)) : x.vals.value_nat = x.value := rfl
+lemma vals_valueNat (x : U64 (F p)) : x.vals.valueNat = x.value := rfl
 
 /--
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decompose_nat (x: ℕ) : U64 (F p) :=
+def decomposeNat (x: ℕ) : U64 (F p) :=
   let x0 := x % 256
   let x1 : ℕ := (x / 256) % 256
   let x2 : ℕ := (x / 256^2) % 256
@@ -126,7 +126,7 @@ def decompose_nat (x: ℕ) : U64 (F p) :=
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decompose_nat_nat (x: ℕ) : U64 ℕ :=
+def decomposeNatNat (x: ℕ) : U64 ℕ :=
   let x0 := x % 256
   let x1 := (x / 256) % 256
   let x2 := (x / 256^2) % 256
@@ -141,24 +141,18 @@ def decompose_nat_nat (x: ℕ) : U64 ℕ :=
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decompose_nat_expr (x: ℕ) : U64 (Expression (F p)) :=
-  let (⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ : U64 (F p)) := decompose_nat x
+def decomposeNatExpr (x: ℕ) : U64 (Expression (F p)) :=
+  let (⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ : U64 (F p)) := decomposeNat x
   ⟨ x0, x1, x2, x3 , x4, x5, x6, x7 ⟩
 
-omit [Fact (Nat.Prime p)] p_large_enough in
-lemma normalized_u64 (x : U64 (F p)) : x.is_normalized → x.value < 2^64 := by
-  simp [is_normalized, value]
-  intros
-  linarith
+def fromUInt64 (x : UInt64) : U64 (F p) :=
+  decomposeNat x.toFin
 
-def from_u64 (x : UInt64) : U64 (F p) :=
-  decompose_nat x.toFin
+def value_u64 (x : U64 (F p)) (h : x.Normalized) : UInt64 :=
+  UInt64.ofNatLT x.value (value_lt_of_normalized h)
 
-def value_u64 (x : U64 (F p)) (h : x.is_normalized) : UInt64 :=
-  UInt64.ofNatLT x.value (normalized_u64 x h)
-
-lemma from_u64_normalized (x : UInt64) : (from_u64 (p:=p) x).is_normalized := by
-  simp only [is_normalized, from_u64, decompose_nat]
+lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := by
+  simp only [Normalized, fromUInt64, decomposeNat]
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
     have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
     rw [FieldUtils.val_lt_p]
@@ -166,8 +160,8 @@ lemma from_u64_normalized (x : UInt64) : (from_u64 (p:=p) x).is_normalized := by
     linarith [p_large_enough.elim]
   simp [h]
 
-theorem value_from_u64_eq (x : UInt64) : value (from_u64 (p:=p) x) = x.toNat := by
-  simp only [value_u64, value_horner, from_u64, decompose_nat, UInt64.toFin_val]
+theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
+  simp only [value_u64, value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
     rw [ZMod.val_cast_of_lt]
@@ -193,7 +187,7 @@ open Gadgets (ByteTable)
   Assert that a 64-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
+def main (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
@@ -204,26 +198,23 @@ def u64_assert_normalized (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   lookup ByteTable x6
   lookup ByteTable x7
 
-def assumptions (_input : U64 (F p)) := True
-
-def spec (inputs : U64 (F p)) := inputs.is_normalized
-
 def circuit : FormalAssertion (F p) U64 where
-  main := u64_assert_normalized
-  assumptions := assumptions
-  spec := spec
+  main
+
+  assumptions _ := True
+  spec inputs := inputs.Normalized
+
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp_all [spec, circuit_norm, u64_assert_normalized, ByteTable, is_normalized, explicit_provable_type]
+    simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
     rintro i0 env x_var
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp_all [spec, circuit_norm, u64_assert_normalized, ByteTable, is_normalized, explicit_provable_type]
+    simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
 end U64.AssertNormalized
-
 
 /--
   Witness a 64-bit unsigned integer.
@@ -233,10 +224,9 @@ def U64.witness (compute : Environment (F p) → U64 (F p)) := do
   assertion U64.AssertNormalized.circuit x
   return x
 
-
 namespace U64.Copy
 
-def u64_copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p))  := do
+def main (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let y ← ProvableType.witness fun env =>
     U64.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3) (env x.x4) (env x.x5) (env x.x6) (env x.x7)
   x === y
@@ -247,7 +237,7 @@ def assumptions (_input : U64 (F p)) := True
 def spec (x y : U64 (F p)) := x = y
 
 def circuit : FormalCircuit (F p) U64 U64 where
-  main := u64_copy
+  main := main
   assumptions := assumptions
   spec := spec
   localLength _ := 8
@@ -255,7 +245,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [circuit_norm, u64_copy, spec, h_eval, explicit_provable_type]
+    simp [circuit_norm, main, spec, h_eval, explicit_provable_type]
     injections h_eval
     intros h0 h1 h2 h3 h4 h5 h6 h7
     aesop
@@ -263,9 +253,9 @@ def circuit : FormalCircuit (F p) U64 U64 where
   completeness := by
     rintro i0 env x_var
     rintro h ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp only [circuit_norm, u64_copy] at h
+    simp only [circuit_norm, main] at h
     have h0 : env.get i0 = _ := h 0
-    simp_all [circuit_norm, u64_copy, explicit_provable_type, Fin.forall_iff]
+    simp_all [circuit_norm, main, explicit_provable_type, Fin.forall_iff]
 
 end Copy
 
@@ -273,37 +263,37 @@ end Copy
 def copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   subcircuit U64.Copy.circuit x
 
-def from_byte (x: Fin 256) : U64 (F p) :=
+def fromByte (x: Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 
-lemma from_byte_value {x : Fin 256} : (from_byte x).value (p:=p) = x := by
-  simp [value, from_byte]
+lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
+  simp [value, fromByte]
   apply FieldUtils.val_lt_p x
   linarith [x.is_lt, p_large_enough.elim]
 
-lemma from_byte_is_normalized {x : Fin 256} : (from_byte x).is_normalized (p:=p) := by
-  simp [is_normalized, from_byte]
+lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
+  simp [Normalized, fromByte]
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
 
 namespace ByteVector
--- results about U64 when viewed as a vector of bytes, via `to_limbs` and `from_limbs`
+-- results about U64 when viewed as a vector of bytes, via `toLimbs` and `fromLimbs`
 
-theorem from_limbs_to_limbs {F} (x : U64 F) :
-    U64.from_limbs x.to_limbs = x := rfl
+theorem fromLimbs_toLimbs {F} (x : U64 F) :
+    U64.fromLimbs x.toLimbs = x := rfl
 
-theorem to_limbs_from_limbs {F} (v : Vector F 8) :
-    (U64.from_limbs v).to_limbs = v := ProvableType.toElements_fromElements ..
+theorem toLimbs_fromLimbs {F} (v : Vector F 8) :
+    (U64.fromLimbs v).toLimbs = v := ProvableType.toElements_fromElements ..
 
 theorem ext_iff {F} {x y : U64 F} :
-    x = y ↔ ∀ i (_ : i < 8), x.to_limbs[i] = y.to_limbs[i] := by
-  simp only [U64.to_limbs, ProvableType.ext_iff, size]
+    x = y ↔ ∀ i (_ : i < 8), x.toLimbs[i] = y.toLimbs[i] := by
+  simp only [U64.toLimbs, ProvableType.ext_iff, size]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem is_normalized_iff {x : U64 (F p)} :
-    x.is_normalized ↔ ∀ i (_ : i < 8), x.to_limbs[i].val < 256 := by
+theorem normalized_iff {x : U64 (F p)} :
+    x.Normalized ↔ ∀ i (_ : i < 8), x.toLimbs[i].val < 256 := by
   rcases x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
-  simp only [to_limbs, is_normalized, toElements, size, Vector.getElem_mk, List.getElem_toArray]
+  simp only [toLimbs, Normalized, toElements, size, Vector.getElem_mk, List.getElem_toArray]
   constructor
   · intro h i hi
     repeat (rcases hi with _ | hi; try simp [*, size])
@@ -319,15 +309,15 @@ theorem is_normalized_iff {x : U64 (F p)} :
     simp only [List.getElem_cons_zero, List.getElem_cons_succ] at h0 h1 h2 h3 h4 h5 h6 h7
     simp_all
 
-lemma to_limbs_map {α β : Type} (x : U64 α) (f : α → β) :
-  to_limbs (map x f) = (to_limbs x).map f := rfl
+lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
+  toLimbs (map x f) = (toLimbs x).map f := rfl
 
-lemma getElem_eval_to_limbs {F} [Field F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
-    Expression.eval env x.to_limbs[i] = (eval env x).to_limbs[i] := by
-  simp only [to_limbs, eval, size, toVars, ProvableType.toElements_fromElements, Vector.getElem_map]
+lemma getElem_eval_toLimbs {F} [Field F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
+    Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
+  simp only [toLimbs, eval, size, toVars, ProvableType.toElements_fromElements, Vector.getElem_map]
 
-lemma eval_from_limbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 8} :
-    eval env (U64.from_limbs v) = .from_limbs (v.map env) := by
-  simp only [U64.from_limbs, ProvableType.eval_fromElements]
+lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 8} :
+    eval env (U64.fromLimbs v) = .fromLimbs (v.map env) := by
+  simp only [U64.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector
 end U64
