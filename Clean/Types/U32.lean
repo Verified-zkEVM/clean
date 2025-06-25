@@ -307,6 +307,6 @@ lemma getElem_eval_to_limbs {F} [Field F] {env : Environment F} {x : U32 (Expres
 
 lemma eval_from_limbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 4} :
     eval env (U32.from_limbs v) = .from_limbs (v.map env) := by
-  simp only [U32.from_limbs, ProvableType.eval_from_elements]
+  simp only [U32.from_limbs, ProvableType.eval_fromElements]
 end ByteVector
 end U32

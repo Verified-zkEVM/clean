@@ -127,8 +127,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
   rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
-  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, fromComponents,
-    ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
+  simp only [circuit_norm, Inputs.mk.injEq] at h_input
   dsimp only [assumptions, BLAKE3State.is_normalized] at h_normalized
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
