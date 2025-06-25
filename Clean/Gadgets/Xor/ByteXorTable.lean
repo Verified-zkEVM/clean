@@ -3,7 +3,7 @@ import Clean.Utils.Field
 
 namespace Gadgets.Xor
 open ByteUtils
-variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
   name := "ByteXor"
@@ -15,46 +15,34 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
 
   index := fun (x, y, _) => x.val * 256 + y.val
 
-  Soundness := fun (x, y, z) =>
-    x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
-  Completeness := fun (x, y, z) =>
+  Spec := fun (x, y, z) =>
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
 
-  imply_soundness := by
+  contains_iff := by
     intro (x, y, z)
     dsimp only
-    rintro ⟨ i, h: (x, y, z) = _ ⟩
-    simp only [id_eq, Prod.mk.injEq] at h
-
-    rcases h with ⟨ hx, hy, hz ⟩
-
     constructor
-    · rw [hx]
-      apply from_byte_lt
-    constructor
-    · rw [hy]
-      apply from_byte_lt
-
-    rw [hx, hy, hz]
-    repeat rw [from_byte, FieldUtils.val_of_nat_to_field_eq]
-    simp only [HXor.hXor, Xor.xor, Fin.xor]
-    rw [Nat.mod_eq_iff_lt (by norm_num)]
-    apply Nat.xor_lt_two_pow (n:=8)
-    exact (split_two_bytes i).1.is_lt
-    exact (split_two_bytes i).2.is_lt
-
-  implied_by_completeness := by
-    intro (x, y, z) ⟨ hx, hy, h ⟩
-    use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
-    simp only [Vector.eq_mk, Array.mk.injEq, List.cons.injEq, and_true]
-    rw [concat_split]
-    simp [from_byte_eq, true_and, from_byte, FieldUtils.nat_to_field_of_val_eq_iff]
-    apply FieldUtils.ext
-    simp only [h, HXor.hXor, Xor.xor, Fin.xor, from_byte, FieldUtils.val_of_nat_to_field_eq]
+    · rintro ⟨ i, h: (x, y, z) = _ ⟩
+      simp only [id_eq, Prod.mk.injEq] at h
+      rcases h with ⟨ hx, hy, hz ⟩
+      and_intros
+      · rw [hx]
+        apply from_byte_lt
+      · rw [hy]
+        apply from_byte_lt
+      rw [hx, hy, hz]
+      repeat rw [from_byte, FieldUtils.val_of_nat_to_field_eq]
+      simp only [HXor.hXor, Xor.xor, Fin.xor]
+      rw [Nat.mod_eq_iff_lt (by norm_num)]
+      apply Nat.xor_lt_two_pow (n:=8)
+      exact (split_two_bytes i).1.is_lt
+      exact (split_two_bytes i).2.is_lt
+    intro ⟨ hx, hy, h ⟩
+    · use concat_two_bytes ⟨ x.val, hx ⟩ ⟨ y.val, hy ⟩
+      rw [concat_split]
+      simp only [from_byte, FieldUtils.nat_to_field_of_val_eq_iff, Fin.xor_val_of_uInt8Size,
+        Prod.mk.injEq, true_and]
+      apply FieldUtils.ext
+      simp [h, FieldUtils.val_of_nat_to_field_eq]
 }
-
-def ByteXorTable.equiv (x y z: F p) :
-  ByteXorTable.Contains (x, y, z) ↔ x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
-  ⟨ByteXorTable.imply_soundness (x, y, z), ByteXorTable.implied_by_completeness (x, y, z)⟩
-
 end Gadgets.Xor

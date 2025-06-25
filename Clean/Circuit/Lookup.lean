@@ -3,27 +3,27 @@ variable {F: Type} [Field F] {α : Type} {n : ℕ}
 variable {Row : TypeMap} [ProvableType Row]
 
 /--
-`Table` models a lookup table, by letting you specify a defining property `contains`
+`Table` models a lookup table, by letting you specify a defining property `Contains`
 that all rows in the table must satisfy.
 
 This representation is deliberately not very concrete, to allow for cases where e.g. the table
 is only built after all lookups into it are defined.
 
-In principle, the type allows you to define "impossible" tables, e.g. `contains _ := False`, and use
+In principle, the type allows you to define "impossible" tables, e.g. `Contains _ := False`, and use
 them in a circuit, yielding spurious correctness proofs. To avoid this, it is encouraged to only define
 tables via auxiliary constructions like `StaticTable` or `LookupCircuit`, which guarantee the table
-can be instantiated into a concrete table of field elements, such that `contains` can be proved to hold
+can be instantiated into a concrete table of field elements, such that `Contains` can be proved to hold
 for every row.
 -/
 structure Table (F : Type) (Row : TypeMap) [ProvableType Row] where
   name : String
   /--
-  `contains` captures what it means to be in the table.
+  `Contains` captures what it means to be in the table.
   -/
   Contains : Row F → Prop
 
   /--
-  we allow to rewrite the `contains` property into two statements that are easier to work with
+  we allow to rewrite the `Contains` property into two statements that are easier to work with
   in the context of soundness and completeness proofs.
   -/
   Soundness : Row F → Prop
@@ -74,10 +74,8 @@ structure StaticTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   -- and the lookup would automatically witness the output given the input.
   -- then we could weaken completeness to be `index input < length`!
   index: Row F → ℕ
-  Soundness: Row F → Prop
-  Completeness: Row F → Prop
-  imply_soundness : ∀ t, (∃ i, t = row i) → Soundness t
-  implied_by_completeness : ∀ t, Completeness t → ∃ i, t = row i
+  Spec : Row F → Prop
+  contains_iff : ∀ t, (∃ i, t = row i) ↔ Spec t
 
 namespace StaticTable
 def Contains (table: StaticTable F Row) (row: Row F) :=
@@ -87,10 +85,10 @@ def Contains (table: StaticTable F Row) (row: Row F) :=
 def toTable (table: StaticTable F Row) : Table F Row where
   name := table.name
   Contains := table.Contains
-  Soundness := table.Soundness
-  Completeness := table.Completeness
-  imply_soundness := table.imply_soundness
-  implied_by_completeness := table.implied_by_completeness
+  Soundness := table.Spec
+  Completeness := table.Spec
+  imply_soundness t := (table.contains_iff t).mp
+  implied_by_completeness t := (table.contains_iff t).mpr
 end StaticTable
 
 @[circuit_norm]
