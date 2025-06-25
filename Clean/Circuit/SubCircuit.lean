@@ -123,8 +123,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
       exact imply_soundness env h_holds as
 
     localLength_eq := by
-      rw [← circuit.localLength_eq b_var n]
-      exact FlatOperation.flat_witnessLength_eq |>.symm
+      rw [← circuit.localLength_eq b_var n, FlatOperation.localLength_toFlat]
   }
 
 /--
@@ -184,8 +183,7 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     implied_by_localWitnesses := by intros; exact trivial
 
     localLength_eq := by
-      rw [← circuit.localLength_eq b_var n]
-      exact FlatOperation.flat_witnessLength_eq |>.symm
+      rw [← circuit.localLength_eq b_var n, FlatOperation.localLength_toFlat]
   }
 end
 
@@ -215,11 +213,11 @@ lemma assertion_localLength_eq (circuit: FormalAssertion F β) (input: Var β F)
   (circuit.to_subcircuit offset input).localLength = circuit.localLength input := by rfl
 end Circuit
 
--- subcircuit composability for `computable_witnesses`
+-- subcircuit composability for `ComputableWitnesses`
 
 namespace ElaboratedCircuit
 /--
-For formal circuits, to prove `computableWitnesses`, we assume that the input
+For formal circuits, to prove `ComputableWitnesses`, we assume that the input
 only contains variables below the current offset `n`.
  -/
 def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
@@ -228,7 +226,7 @@ def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
       (circuit.main input).ComputableWitnesses n
 
 /--
-This reformulation of `computableWitnesses'` is easier to prove in a formal circuit,
+This reformulation of `ComputableWitnesses'` is easier to prove in a formal circuit,
 because we have all necessary assumptions at each circuit operation step.
  -/
 def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
@@ -238,7 +236,7 @@ def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
       env.AgreesBelow n env' → eval env input = eval env' input → compute env = compute env' }
 
 /--
-`computableWitnesses` is stronger than `computableWitnesses'` (so it's fine to only prove the former).
+`ComputableWitnesses` is stronger than `ComputableWitnesses'` (so it's fine to only prove the former).
 -/
 lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
     circuit.ComputableWitnesses → circuit.ComputableWitnesses' := by
@@ -260,14 +258,14 @@ lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
     apply ih (m + n)
     intro h_agrees
     apply input_only_accesses_n
-    exact Environment.AgreesBelow_of_le h_agrees (by linarith)
+    exact Environment.agreesBelow_of_le h_agrees (by linarith)
 
 /--
-Composability for `computableWitnesses`: If
+Composability for `ComputableWitnesses`: If
 - in the parent circuit, we prove that input variables are < `n`,
 - and the child circuit provides `ElaboratedCircuit.ComputableWitnesses`,
 then we can conclude that the subcircuit, evaluated at this particular input,
-satisfies `computableWitnesses` in the original sense.
+satisfies `ComputableWitnesses` in the original sense.
 -/
 theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input: Var β F) (n : ℕ) :
   Environment.OnlyAccessedBelow n (eval · input) ∧ circuit.ComputableWitnesses →

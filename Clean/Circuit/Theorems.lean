@@ -177,7 +177,7 @@ lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)
     specialize ih (n + op.singleLocalLength)
     simp_all +arith [forAll_cons, localLength_cons, and_assoc]
 
-lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
+lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {env} :
     (localWitnesses env (a ++ b)).toArray = (localWitnesses env a).toArray ++ (localWitnesses env b).toArray := by
   induction a using FlatOperation.localLength.induct with
   | case1 => simp only [List.nil_append, localLength, localWitnesses, Vector.toArray_empty,
@@ -190,7 +190,7 @@ lemma witnesses_append {F} {a b: List (FlatOperation F)} {env} :
 /--
 The witness length from flat and nested operations is the same
 -/
-lemma flat_witnessLength_eq {ops: Operations F} :
+lemma localLength_toFlat {ops: Operations F} :
     localLength ops.toFlat = ops.localLength := by
   induction ops using Operations.induct with
   | empty => trivial
@@ -211,19 +211,19 @@ lemma flat_witnessLength_eq {ops: Operations F} :
 /--
 The witnesses created from flat and nested operations are the same
 -/
-lemma flat_witness_eqWitness {ops: Operations F} {env} :
+lemma localWitnesses_toFlat {ops: Operations F} {env} :
   (localWitnesses env ops.toFlat).toArray = (ops.localWitnesses env).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp only [Operations.toFlat, Operations.localLength, Operations.localWitnesses, Vector.toArray_append]
     rw [←ih]
-    try rw [witnesses_append]
+    try rw [localWitnesses_append]
     try simp only [localLength, localWitnesses, Vector.toArray_append, SubCircuit.witnesses, Vector.toArray_cast]
 end FlatOperation
 
 namespace Environment
-open FlatOperation (localLength localWitnesses flat_witnessLength_eq flat_witness_eqWitness)
+open FlatOperation (localLength localWitnesses)
 /-
 what follows are relationships between different versions of `Environment.UsesLocalWitnesses`
 -/
@@ -545,7 +545,7 @@ theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (i
     ←Operations.forAll_toFlat_iff, Environment.UsesLocalWitnesses]
   exact FlatOperation.proverEnvironment_usesLocalWitnesses init h_computable
 
-lemma Environment.AgreesBelow_of_le {F} {n m : ℕ} {env env' : Environment F} :
+lemma Environment.agreesBelow_of_le {F} {n m : ℕ} {env env' : Environment F} :
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
   fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
 
