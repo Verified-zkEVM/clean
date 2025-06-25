@@ -5,7 +5,7 @@ open Lean.Elab.Tactic
 open Lean.Meta
 
 
-partial def get_max_matching_hyp (e : Lean.Expr) : Lean.Elab.Tactic.TacticM (List Lean.Expr) := do
+partial def getMaxMatchingHyp (e : Lean.Expr) : Lean.Elab.Tactic.TacticM (List Lean.Expr) := do
   -- it suffices to reduce to whnf to look at the outer structure
   let e ← whnf e
   match e with
@@ -22,7 +22,7 @@ partial def get_max_matching_hyp (e : Lean.Expr) : Lean.Elab.Tactic.TacticM (Lis
     -- if we found one, keep it and recurse on the body
     match option_matching_expr with
     | some res => do
-      let other_hyps ← get_max_matching_hyp body
+      let other_hyps ← getMaxMatchingHyp body
       return [res] ++ other_hyps
     | none => do return []
   | _ => return []
@@ -37,7 +37,7 @@ partial def specializeAuto (e_term : Lean.Term): Lean.Elab.Tactic.TacticM Unit :
     let declType ← Lean.Meta.inferType localDecl.toExpr
 
     -- get the maximum number of matching hypotheses
-    let matching ← get_max_matching_hyp declType
+    let matching ← getMaxMatchingHyp declType
 
     -- construct an application expr `t e1 e2 ... en` where `t` is the term we want to specialize
     let h' := Lean.mkAppN e matching.toArray

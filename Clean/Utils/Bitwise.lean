@@ -6,35 +6,35 @@ def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
 
-def rot_right8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
+def rotRight8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
   let high := x / (2^offset.val)
   low * (2^(8 - offset.val)) + high
 
-def rot_left8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
+def rotLeft8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^(8 - offset.val))
   let high := x / (2^(8 - offset.val))
   low * (2^offset.val) + high
 
-def rot_right64 (x : ℕ) (offset : ℕ) : ℕ :=
+def rotRight64 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 64
   let low := x % (2^offset)
   let high := x / (2^offset)
   low * (2^(64 - offset)) + high
 
-def rot_right32 (x : ℕ) (offset : ℕ) : ℕ :=
+def rotRight32 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 32
   let low := x % (2^offset)
   let high := x / (2^offset)
   low * (2^(32 - offset)) + high
 
-def rot_left64 (value : ℕ) (left : Fin 64) : ℕ:=
+def rotLeft64 (value : ℕ) (left : Fin 64) : ℕ:=
   let right := (64 - left) % 64
-  rot_right64 value right
+  rotRight64 value right
 
-lemma rot_left_eq_rot_right (x : ℕ) (offset : Fin 64) :
-    rot_left64 x offset = rot_right64 x (-offset).val := by
-  simp [rot_left64]
+lemma rotLeft64_eq_rotRight64 (x : ℕ) (offset : Fin 64) :
+    rotLeft64 x offset = rotRight64 x (-offset).val := by
+  simp [rotLeft64]
 
 theorem eq_of_mod_eq_and_div_eq (m : ℕ) {x y : ℕ} (mod : x % m = y % m) (div : x / m = y / m) : x = y := by
   rw [←Nat.mod_add_div x m, ←Nat.mod_add_div y m, mod, div]
@@ -61,7 +61,7 @@ theorem xor_mul_two_pow {x y n : Nat} : 2 ^ n * (x ^^^ y) =  2 ^ n * x ^^^  2 ^ 
   simp only [mul_comm]
   exact Nat.bitwise_mul_two_pow
 
-lemma and_mul_pow_two_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^n * y = 0 := by
+lemma and_mul_two_pow_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^n * y = 0 := by
   apply Nat.eq_of_testBit_eq
   intro i
   rw [Nat.testBit_and, Nat.zero_testBit, Nat.testBit_two_pow_mul]
@@ -77,8 +77,8 @@ lemma and_mul_pow_two_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^
 lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
   (x0 ^^^ (2^8 * x1)) &&& (y0 ^^^ (2^8 * y1)) = (x0 &&& y0) ^^^ 2^8 * (x1 &&& y1) := by
   simp only [Nat.and_xor_distrib_left, Nat.and_xor_distrib_right]
-  have zero0 : 2 ^ 8 * x1 &&& y0 = 0 := by rw [Nat.and_comm]; apply and_mul_pow_two_lt hy0
-  have zero1 : x0 &&& 2 ^ 8 * y1 = 0 := and_mul_pow_two_lt hx0 _
+  have zero0 : 2 ^ 8 * x1 &&& y0 = 0 := by rw [Nat.and_comm]; apply and_mul_two_pow_lt hy0
+  have zero1 : x0 &&& 2 ^ 8 * y1 = 0 := and_mul_two_pow_lt hx0 _
   rw [zero0, zero1, Nat.xor_zero, Nat.zero_xor]
   congr; symm
   exact and_mul_two_pow
