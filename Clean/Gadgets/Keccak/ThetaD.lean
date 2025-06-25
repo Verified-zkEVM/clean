@@ -81,12 +81,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, h_assumptions, true_and, true_implies]
 
-def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
-  elaborated with
-  Assumptions
-  Spec
-  soundness
-  completeness
-}
+def circuit : FormalCircuit (F p) KeccakRow KeccakRow :=
+  { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaD

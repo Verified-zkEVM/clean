@@ -39,12 +39,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
     Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
 
-def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State := {
-  elaborated with
-    Assumptions,
-    Spec,
-    soundness,
-    completeness
-}
+def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State :=
+  { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.BLAKE3.Permute

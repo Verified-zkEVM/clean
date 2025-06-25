@@ -113,9 +113,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with
-  Assumptions,
-  Spec,
-  soundness
+  Assumptions, Spec, soundness
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
