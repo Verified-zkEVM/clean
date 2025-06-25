@@ -12,8 +12,8 @@ variable [p_large_enough: Fact (p > 512)]
 
 @[reducible] def BLAKE3State := ProvableVector U32 16
 
-def BLAKE3State.is_normalized (state : BLAKE3State (F p)) :=
-  ∀ i : Fin 16, state[i.val].is_normalized
+def BLAKE3State.Normalized (state : BLAKE3State (F p)) :=
+  ∀ i : Fin 16, state[i.val].Normalized
 
 def BLAKE3State.value (state : BLAKE3State (F p)) := state.map U32.value
 

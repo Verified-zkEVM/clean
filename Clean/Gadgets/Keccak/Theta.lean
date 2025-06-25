@@ -17,10 +17,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := theta
   localLength _ := 480
 
-def assumptions (state : KeccakState (F p)) := state.is_normalized
+def assumptions (state : KeccakState (F p)) := state.Normalized
 
 def spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
-  out_state.is_normalized
+  out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by

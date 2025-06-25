@@ -27,11 +27,11 @@ def rot32 (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) 
   let byte_rotated ← subcircuit (Rotation32Bytes.circuit byte_offset) x
   subcircuit (Rotation32Bits.circuit bit_offset) byte_rotated
 
-def assumptions (input : U32 (F p)) := input.is_normalized
+def assumptions (input : U32 (F p)) := input.Normalized
 
 def spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
-  ∧ y.is_normalized
+  ∧ y.Normalized
 
 def output (offset : Fin 32) (i0 : Nat) : U32 (Expression (F p)) :=
   Rotation32Bits.output (offset % 8).val i0

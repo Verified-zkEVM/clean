@@ -15,8 +15,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [field, field, field]
-  to_components := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
-  from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
+  toComponents := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
+  fromComponents := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
 
 structure Outputs (F : Type) where
   z: F
@@ -24,8 +24,8 @@ structure Outputs (F : Type) where
 
 instance : ProvableStruct Outputs where
   components := [field, field]
-  to_components := fun { z, carry_out } => .cons z (.cons carry_out .nil)
-  from_components := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
+  toComponents := fun { z, carry_out } => .cons z (.cons carry_out .nil)
+  fromComponents := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
 
 def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input

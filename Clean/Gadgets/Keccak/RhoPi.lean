@@ -20,10 +20,10 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .map rhoPiConstants fun (i, s) =>
     subcircuit (Rotation64.circuit (-s)) state[i.val]
 
-def assumptions := KeccakState.is_normalized (p:=p)
+def assumptions := KeccakState.Normalized (p:=p)
 
 def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
-  out_state.is_normalized
+  out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rho_pi state.value
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
@@ -51,7 +51,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [assumptions, KeccakState.is_normalized] at state_norm
+  simp only [assumptions, KeccakState.Normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated,
     Vector.getElem_zip] at h_holds ⊢
@@ -62,7 +62,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [assumptions, KeccakState.is_normalized] at state_norm
+  simp only [assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [main, circuit_norm, subcircuit_norm,

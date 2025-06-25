@@ -14,8 +14,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [field, field]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
 def assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input

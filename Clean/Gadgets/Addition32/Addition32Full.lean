@@ -15,8 +15,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [U32, U32, field]
-  to_components := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
-  from_components := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
+  toComponents := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
+  fromComponents := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
 
 structure Outputs (F : Type) where
   z: U32 F
@@ -25,8 +25,8 @@ deriving Repr
 
 instance : ProvableStruct Outputs where
   components := [U32, field]
-  to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
-  from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
+  toComponents := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
+  fromComponents := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
 open Addition8FullCarry (add8_full_carry)
 
@@ -40,14 +40,14 @@ def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) :=
 
 def assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
-  x.is_normalized ∧ y.is_normalized ∧ (carry_in = 0 ∨ carry_in = 1)
+  x.Normalized ∧ y.Normalized ∧ (carry_in = 0 ∨ carry_in = 1)
 
 def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   let ⟨z, carry_out⟩ := out
   z.value = (x.value + y.value + carry_in.val) % 2^32
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
-  ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
+  ∧ z.Normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
 /--
 Elaborated circuit data can be found as follows:
@@ -73,13 +73,13 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
-  dsimp only [assumptions, U32.is_normalized] at as
+  dsimp only [assumptions, U32.Normalized] at as
   obtain ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, U32.value, U32.is_normalized] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
   simp only [circuit_norm, subcircuit_norm, explicit_provable_type, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -113,7 +113,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
-  dsimp [assumptions, U32.is_normalized] at as
+  dsimp [assumptions, U32.Normalized] at as
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm

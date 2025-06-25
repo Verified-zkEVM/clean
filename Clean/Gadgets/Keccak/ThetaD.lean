@@ -30,10 +30,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main := theta_d
   localLength _ := 120
 
-def assumptions (state : KeccakRow (F p)) := state.is_normalized
+def assumptions (state : KeccakRow (F p)) := state.Normalized
 
 def spec (row : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
-  out.is_normalized
+  out.Normalized
   ∧ out.value = Specs.Keccak256.theta_d row.value
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by
@@ -43,7 +43,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   dsimp only [circuit_norm, spec, theta_d, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
   simp only [circuit_norm, subcircuit_norm, Xor64.assumptions, Xor64.spec, Rotation64.assumptions, Rotation64.spec] at h_holds
   simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
-  simp only [circuit_norm, KeccakRow.is_normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
+  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
 
   have s (i : ℕ) (hi : i < 5) : eval env (row_var[i]) = row[i] := by
     rw [←h_input, Vector.getElem_map]
@@ -75,7 +75,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions
-  simp only [assumptions, KeccakRow.is_normalized_iff] at h_assumptions
+  simp only [assumptions, KeccakRow.normalized_iff] at h_assumptions
   dsimp only [circuit_norm, theta_d, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
   simp_all only [circuit_norm, subcircuit_norm, getElem_eval_vector, h_input,
     Xor64.assumptions, Xor64.spec, Rotation64.assumptions, Rotation64.spec,

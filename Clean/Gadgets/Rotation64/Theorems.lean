@@ -35,7 +35,7 @@ def rotRight64_u64 : U64 ℕ → ℕ → U64 ℕ
 
 -- these two are definitionally equal
 lemma rotRight64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
-  rotRight64_bytes x.to_limbs o = (rotRight64_u64 x o).to_limbs := rfl
+  rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := rfl
 
 lemma h_mod {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %
@@ -65,9 +65,9 @@ lemma h_x0_const {o : ℕ} (ho : o < 8) :
   omega
 
 theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
-    (rotRight64_u64 x o).value_nat = rotRight64 x.value_nat o := by
+    (rotRight64_u64 x o).valueNat = rotRight64 x.valueNat o := by
   -- simplify the goal
-  simp only [rotRight64, rotRight64_u64, U64.value_nat]
+  simp only [rotRight64, rotRight64_u64, U64.valueNat]
 
   have offset_mod_64 : o % 64 = o := Nat.mod_eq_of_lt (by linarith)
   simp only [offset_mod_64]

@@ -33,7 +33,7 @@ def rotRight32_u32 : U32 ℕ → ℕ → U32 ℕ
 
 -- these two are definitionally equal
 lemma rotRight32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
-  rotRight32_bytes x.to_limbs o = (rotRight32_u32 x o).to_limbs := rfl
+  rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := rfl
 
 lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) % 2^o = x0 % 2^o := by
@@ -58,9 +58,9 @@ lemma h_x0_const32 {o : ℕ} (ho : o < 8) :
   omega
 
 theorem rotation32_bits_soundness {o : ℕ} (ho : o < 8) {x : U32 ℕ} :
-    (rotRight32_u32 x o).value_nat = rotRight32 x.value_nat o := by
+    (rotRight32_u32 x o).valueNat = rotRight32 x.valueNat o := by
   -- simplify the goal
-  simp only [rotRight32, rotRight32_u32, U32.value_nat]
+  simp only [rotRight32, rotRight32_u32, U32.valueNat]
 
   have offset_mod_32 : o % 32 = o := Nat.mod_eq_of_lt (by linarith)
   simp only [offset_mod_32]

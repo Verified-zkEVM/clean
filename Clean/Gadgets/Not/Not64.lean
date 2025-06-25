@@ -30,9 +30,9 @@ theorem not_lt (n : ℕ) {x : ℕ} (hx : x < n) : n - 1 - (x : ℤ) < n := by
   rw [←not_zify n hx, Int.ofNat_lt]
   exact Nat.sub_one_sub_lt_of_lt hx
 
-theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.is_normalized) :
+theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
     (not64_bytewise_value x).value = not64 x.value
-    ∧ (not64_bytewise_value x).is_normalized := by
+    ∧ (not64_bytewise_value x).Normalized := by
 
   rw [not64_eq_sub (U64.value_lt_of_normalized x_lt)]
 
@@ -43,7 +43,7 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.is_normalized) :
     rw [ZMod.val_sub hx', val_255]
     exact not_zify 256 hx
 
-  rw [U64.value, U64.is_normalized, not64_bytewise_value, U64.map]
+  rw [U64.value, U64.Normalized, not64_bytewise_value, U64.map]
   zify
   rw [not_zify (2^64) (U64.value_lt_of_normalized x_lt), U64.value]
   zify
@@ -55,8 +55,8 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.is_normalized) :
 
 def circuit : FormalCircuit (F p) U64 U64 where
   main x := pure (not64_bytewise x)
-  assumptions x := x.is_normalized
-  spec x z := z.value = not64 x.value ∧ z.is_normalized
+  assumptions x := x.Normalized
+  spec x z := z.value = not64 x.value ∧ z.Normalized
 
   localLength _ := 0
   output x _ := not64_bytewise x

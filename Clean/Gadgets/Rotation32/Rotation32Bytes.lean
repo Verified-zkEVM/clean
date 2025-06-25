@@ -22,10 +22,10 @@ def rot32_bytes (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) (Var U3
   else
     return ⟨ x3, x0, x1, x2 ⟩
 
-def assumptions (input : U32 (F p)) := input.is_normalized
+def assumptions (input : U32 (F p)) := input.Normalized
 
 def spec (offset : Fin 4) (x : U32 (F p)) (y: U32 (F p)) :=
-  y.value = rotRight32 x.value (offset.val * 8) ∧ y.is_normalized
+  y.value = rotRight32 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bytes off
@@ -61,13 +61,13 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (
   clear h_inputs
   clear h
 
-  dsimp only [assumptions, U32.is_normalized] at as
+  dsimp only [assumptions, U32.Normalized] at as
   obtain ⟨ h0, h1, h2, h3 ⟩ := as
 
   simp [circuit_norm, spec, U32.value, -Nat.reducePow]
   constructor
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U32.is_normalized, explicit_provable_type]
+  · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
