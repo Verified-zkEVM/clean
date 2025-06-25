@@ -74,7 +74,7 @@ lemma boundary_fib_eq : boundary_fib (p:=p) = (do
 
 omit p_large_enough in
 lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.constraints_hold.soundness (boundary_fib.window_env ⟨<+> +> first_row, rfl⟩ aux_env) boundary_fib.operations
+  Circuit.ConstraintsHold.Soundness (boundary_fib.window_env ⟨<+> +> first_row, rfl⟩ aux_env) boundary_fib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
   set env := boundary_fib.window_env ⟨<+> +> first_row, rfl⟩ aux_env
@@ -100,7 +100,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
   soundness := by
     intro N trace envs _
-    simp only [gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraints_hold,
+    simp only [gt_iff_lt, TraceOfLength.forAllRowsOfTrace, table_constraintsHold,
       fib_table, spec, TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, and_imp]
 
     induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
@@ -110,37 +110,37 @@ def formal_fib_table : FormalTable (F p) RowType := {
     · -- first, we prove the inductive part of the spec
       -- TODO this should be easier, or there should be a custom induction for it
       unfold Trace.forAllRowsOfTraceWithIndex.inner
-      intros constraints_hold
+      intros ConstraintsHold
 
-      simp only [table_norm] at constraints_hold
-      simp at constraints_hold
-      unfold table_constraints_hold.foldl at constraints_hold
-      unfold table_constraints_hold.foldl at constraints_hold
-      unfold table_constraints_hold.foldl at constraints_hold
-      simp [Trace.len] at constraints_hold
-      specialize ih2 constraints_hold.right
+      simp only [table_norm] at ConstraintsHold
+      simp at ConstraintsHold
+      unfold table_constraintsHold.foldl at ConstraintsHold
+      unfold table_constraintsHold.foldl at ConstraintsHold
+      unfold table_constraintsHold.foldl at ConstraintsHold
+      simp [Trace.len] at ConstraintsHold
+      specialize ih2 ConstraintsHold.right
       simp only [ih2, and_self, and_true, Trace.len]
 
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
       -- simplify constraints
-      replace constraints_hold := constraints_hold.left
-      simp [table_norm] at constraints_hold
+      replace ConstraintsHold := ConstraintsHold.left
+      simp [table_norm] at ConstraintsHold
 
       set env := fib_relation.window_env ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
 
       simp only [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
-          Gadgets.Addition8.circuit] at constraints_hold
-      simp only [circuit_norm, subcircuit_norm, eval, var_from_offset, Vector.mapRange] at constraints_hold
+          Gadgets.Addition8.circuit] at ConstraintsHold
+      simp only [circuit_norm, subcircuit_norm, eval, var_from_offset, Vector.mapRange] at ConstraintsHold
 
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl
       have hx_next : env.get 2 = next.x := by rfl
       have hy_next : env.get (2 + 1) = next.y := by rfl
-      rw [hx_curr, hy_curr, hx_next, hy_next] at constraints_hold
+      rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
       clear hx_curr hy_curr hx_next hy_next
 
-      have ⟨eq_holds, add_holds⟩ := constraints_hold
+      have ⟨eq_holds, add_holds⟩ := ConstraintsHold
       rw [add_neg_eq_zero] at eq_holds
 
       -- and finally now we prove the actual relations

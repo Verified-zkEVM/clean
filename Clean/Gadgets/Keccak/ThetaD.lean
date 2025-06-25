@@ -28,7 +28,7 @@ def theta_d (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main := theta_d
-  local_length _ := 120
+  localLength _ := 120
 
 def assumptions (state : KeccakRow (F p)) := state.is_normalized
 

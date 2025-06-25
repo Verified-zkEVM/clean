@@ -15,7 +15,7 @@ def theta (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := theta
-  local_length _ := 480
+  localLength _ := 480
 
 def assumptions (state : KeccakState (F p)) := state.is_normalized
 

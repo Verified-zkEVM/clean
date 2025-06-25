@@ -52,15 +52,15 @@ def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
 /--
 Elaborated circuit data can be found as follows:
 ```
-#eval (add32_full (p:=p_babybear) default).local_length
+#eval (add32_full (p:=p_babybear) default).localLength
 #eval (add32_full (p:=p_babybear) default).output
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main := add32_full
-  local_length _ := 8
+  localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
-  local_length_eq _ i0 := by
+  localLength_eq _ i0 := by
     simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by

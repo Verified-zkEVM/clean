@@ -28,8 +28,8 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
-  local_length _ := 400
-  local_length_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
+  localLength _ := 400
+  localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
   subcircuits_consistent _ _ := by simp only [main, circuit_norm]
 
 -- recharacterize rho_phi as a loop

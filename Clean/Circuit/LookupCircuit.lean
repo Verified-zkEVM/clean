@@ -24,7 +24,7 @@ theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β) (
     (circuit.proverEnvironment input).UsesLocalWitnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
-  simp [Environment.onlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
+  simp [Environment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
   circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
@@ -37,7 +37,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- there exists an environment, such that
     ∃ n env,
     -- the circuit constraints hold
-    Circuit.constraints_hold env (circuit.main (const input) |>.operations n)
+    Circuit.ConstraintsHold env (circuit.main (const input) |>.operations n)
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
@@ -69,7 +69,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     lookup circuit.toTable (input, output)
     return output
 
-  local_length n := size β
+  localLength n := size β
   output _ n := var_from_offset β n
 
   assumptions := circuit.assumptions

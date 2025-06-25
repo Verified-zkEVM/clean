@@ -15,7 +15,7 @@ def circuit := do
 
 -- #eval circuit.witnesses
 
--- #eval Gadgets.Addition32Full.circuit (p:=p) |>.local_length default
+-- #eval Gadgets.Addition32Full.circuit (p:=p) |>.localLength default
 
 -- #eval (do Gadgets.Addition32Full.add32_full (p:=p) (← default)).operations
 end

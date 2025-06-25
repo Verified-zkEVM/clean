@@ -77,7 +77,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
 
 instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
-  local_length _ := 1
+  localLength _ := 1
   output _ i := var ⟨i⟩
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by

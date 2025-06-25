@@ -29,7 +29,7 @@ def spec (offset : Fin 4) (x : U32 (F p)) (y: U32 (F p)) :=
 
 instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bytes off
-  local_length _ := 0
+  localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3⟩ := input
     match off with
@@ -46,7 +46,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     intros
     fin_cases off
     repeat rfl
-  local_length_eq := by
+  localLength_eq := by
     intros
     fin_cases off
     repeat rfl

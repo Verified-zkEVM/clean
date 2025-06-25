@@ -10,7 +10,7 @@ def main (state : Var BLAKE3State (F p)) : Circuit (F p) (Var BLAKE3State (F p))
 
 instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
   main := main
-  local_length _ := 0
+  localLength _ := 0
   output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
 
 def assumptions (state : BLAKE3State (F p)) := state.is_normalized
@@ -37,7 +37,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 theorem completeness : Completeness (F p) elaborated assumptions := by
   rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
-    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.constraints_hold.completeness.eq_1]
+    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
 
 def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State := {
   elaborated with assumptions, spec, soundness, completeness

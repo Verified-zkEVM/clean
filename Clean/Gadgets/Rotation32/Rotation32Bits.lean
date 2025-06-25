@@ -44,9 +44,9 @@ def output (offset : Fin 8) (i0 : Nat) : U32 (Expression (F p)) :=
 -- #eval rot32_bits (p:=p_babybear) 1 default |>.output
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bits off
-  local_length _ := 8
+  localLength _ := 8
   output _inputs i0 := output off i0
-  local_length_eq _ i0 := by
+  localLength_eq _ i0 := by
     simp only [circuit_norm, rot32_bits, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, rot32_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]

@@ -23,11 +23,11 @@ def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
   out.is_normalized
   ∧ out.value = Specs.Keccak256.theta_c state.value
 
--- #eval! theta_c (p:=p_babybear) default |>.local_length
+-- #eval! theta_c (p:=p_babybear) default |>.localLength
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
-  local_length _ := 160
-  local_length_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
+  localLength _ := 160
+  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuits_consistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
 -- rewrite theta_c as a loop

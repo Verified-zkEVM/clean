@@ -37,7 +37,7 @@ def generate_next_row (tc : TableConstraint W S F Unit) (cur_row: Array F) : Arr
   let ctx := (tc .empty).2
 
   let assignment := ctx.assignment
-  let generators := ctx.circuit.witness_generators
+  let generators := ctx.circuit.witnessGenerators
 
   let aux_map := build_aux_map assignment
   let next_row := Array.replicate cur_row.size 0

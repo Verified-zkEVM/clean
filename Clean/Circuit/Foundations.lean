@@ -1,7 +1,7 @@
 /-
 This file provides a justification for our definitions of `FormalCircuit` and `FormalAssertion`.
 
-In those definitions, we use modified statements for `constraints_hold` and `UsesLocalWitnesses`,
+In those definitions, we use modified statements for `ConstraintsHold` and `UsesLocalWitnesses`,
 where subcircuits replace the original statement with a new one that is easier to reason about during proofs.
 
 Here, we prove soundness and completeness using the _original_ statements.
@@ -12,16 +12,16 @@ import Clean.Circuit.Theorems
 
 variable {F: Type} [Field F]
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
-open Circuit (constraints_hold)
+open Circuit (ConstraintsHold)
 
 /--
-  Justification for using a modified statement for `constraints_hold`
+  Justification for using a modified statement for `ConstraintsHold`
   in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
     -- if the constraints hold (original definition)
-    constraints_hold env (circuit.main b_var |>.operations offset) →
+    ConstraintsHold env (circuit.main b_var |>.operations offset) →
     -- the spec holds
     let a := eval env (circuit.output b_var offset)
     circuit.spec b a := by
@@ -32,14 +32,14 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
-  and `constraints_hold` in the `FormalCircuit` definition.
+  and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
-    constraints_hold env (circuit.main b_var |>.operations offset) := by
+    ConstraintsHold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env
   apply Circuit.can_replace_completeness (circuit.subcircuits_consistent ..) h_env
@@ -47,13 +47,13 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions
 
 /--
-  Justification for using a modified statement for `constraints_hold`
+  Justification for using a modified statement for `ConstraintsHold`
   in the `FormalAssertion` definition.
 -/
 theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
     -- if the constraints hold (original definition)
-    constraints_hold env (circuit.main b_var |>.operations offset) →
+    ConstraintsHold env (circuit.main b_var |>.operations offset) →
     -- the spec holds
     circuit.spec b := by
 
@@ -63,14 +63,14 @@ theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
-  and `constraints_hold` in the `FormalAssertion` definition.
+  and `ConstraintsHold` in the `FormalAssertion` definition.
 -/
 theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)
-    circuit.spec b → constraints_hold env (circuit.main b_var |>.operations offset) := by
+    circuit.spec b → ConstraintsHold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env h_spec
   apply Circuit.can_replace_completeness (circuit.subcircuits_consistent ..) h_env
