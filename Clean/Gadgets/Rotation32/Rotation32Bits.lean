@@ -1,5 +1,5 @@
 import Clean.Types.U32
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Rotation32.Theorems
 import Clean.Gadgets.Rotation32.Rotation32Bytes
 import Clean.Gadgets.ByteDecomposition.ByteDecomposition
@@ -44,15 +44,15 @@ def output (offset : Fin 8) (i0 : Nat) : U32 (Expression (F p)) :=
 -- #eval rot32_bits (p:=p_babybear) 1 default |>.output
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bits off
-  local_length _ := 8
+  localLength _ := 8
   output _inputs i0 := output off i0
-  local_length_eq _ i0 := by
+  localLength_eq _ i0 := by
     simp only [circuit_norm, rot32_bits, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, rot32_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U32.from_limbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
-  subcircuits_consistent _ _ := by
+  subcircuitsConsistent _ _ := by
     simp +arith only [circuit_norm, rot32_bits,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 

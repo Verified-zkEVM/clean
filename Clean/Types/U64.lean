@@ -2,7 +2,7 @@ import Clean.Gadgets.ByteLookup
 import Clean.Utils.Bitwise
 import Clean.Circuit.Provable
 import Clean.Utils.Primes
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
 section
@@ -250,7 +250,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   main := u64_copy
   assumptions := assumptions
   spec := spec
-  local_length _ := 8
+  localLength _ := 8
   output inputs i0 := varFromOffset U64 i0
   soundness := by
     rintro i0 env x_var

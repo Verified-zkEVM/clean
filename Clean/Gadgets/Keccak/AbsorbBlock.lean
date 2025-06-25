@@ -29,12 +29,12 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
 
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   main
-  local_length _ := 31048
+  localLength _ := 31048
   output _ i0 := Permutation.state_var (i0 + 136) 23
 
-  local_length_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  subcircuits_consistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+  subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
 @[reducible] def assumptions (input : Input (F p)) :=
   input.state.is_normalized ∧ input.block.is_normalized

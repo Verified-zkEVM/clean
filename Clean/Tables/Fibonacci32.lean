@@ -121,7 +121,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   then the spec of add32 and equality are satisfied
 -/
 lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
-  : recursive_relation.constraints_hold_on_window ⟨<+> +> curr +> next, rfl⟩ aux_env →
+  : recursive_relation.constraintsHold_on_window ⟨<+> +> curr +> next, rfl⟩ aux_env →
   curr.y = next.x ∧
   (curr.x.is_normalized → curr.y.is_normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.is_normalized)
    := by
@@ -144,7 +144,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   exact ⟨h_add_mod, h_norm_next_y⟩
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.constraints_hold.soundness (window_env boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+  Circuit.ConstraintsHold.Soundness (window_env boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.is_normalized ∧ first_row.y.is_normalized
   := by
   set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ aux_env
@@ -169,7 +169,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
   soundness := by
     intro N trace envs _
     simp only [fib32_table, spec]
-    rw [TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, table_constraints_hold]
+    rw [TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, table_constraintsHold]
 
     /-
       We prove the soundness of the table by induction on the trace.
@@ -184,7 +184,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
 
     -- inductive step
     · simp [table_norm] at ih2 ⊢
-      intro constraints_hold boundary rest
+      intro ConstraintsHold boundary rest
       -- first of all, we prove the inductive part of the spec
 
       specialize ih2 boundary rest
@@ -193,7 +193,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
 
       -- simplfy constraints
-      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) constraints_hold
+      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) ConstraintsHold
 
       -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y

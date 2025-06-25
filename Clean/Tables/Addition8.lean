@@ -53,7 +53,7 @@ def formal_add8_table : FormalTable (F p) RowType := {
 
         -- first, abstract away `env` to avoid blow-up of expression size
         let env := add8_inline.window_env ⟨<+> +> row, rfl⟩ (envs 0 rest.len)
-        change Circuit.constraints_hold.soundness env _ at h_holds
+        change Circuit.ConstraintsHold.Soundness env _ at h_holds
 
         -- this is the slowest step, but still ok
         simp [table_norm, circuit_norm, subcircuit_norm, varFromOffset, Vector.mapRange,

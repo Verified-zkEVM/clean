@@ -5,20 +5,20 @@ and smoothly simplifies to an equality statement under `circuit_norm`.
 import Clean.Circuit.Loops
 
 variable {F : Type} [Field F]
-open Circuit (constraints_hold)
+open Circuit (ConstraintsHold)
 
 namespace Gadgets
 def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
 theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+    ConstraintsHold.Soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   simp only [all_zero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
 theorem all_zero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    (∀ x ∈ xs, x.eval env = 0) → constraints_hold.completeness env ((all_zero xs).operations offset) := by
+    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((all_zero xs).operations offset) := by
   simp only [all_zero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
@@ -32,11 +32,11 @@ def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circu
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
   main
-  local_length _ := 0
+  localLength _ := 0
   output _ _ := ()
 
-  local_length_eq _ n := by simp only [main, circuit_norm, mul_zero]
-  subcircuits_consistent n := by simp only [main, circuit_norm]
+  localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
+  subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
   assumptions _ := True
@@ -97,18 +97,18 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).toEla
 
 @[circuit_norm]
 theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).to_subcircuit n (x, y)).soundness env = (eval env x = eval env y) := by
+    ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
   simp only [subcircuit_norm, circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).to_subcircuit n (x, y)).completeness env = (eval env x = eval env y) := by
+    ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
   simp only [subcircuit_norm, circuit_norm, circuit]
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).to_subcircuit n (x, y)).UsesLocalWitnesses env = True := by
-  simp only [FormalAssertion.to_subcircuit, circuit]
+    ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
+  simp only [FormalAssertion.toSubcircuit, circuit]
 
 end Equality
 end Gadgets

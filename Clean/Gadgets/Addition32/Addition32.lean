@@ -32,11 +32,11 @@ def spec (input : Inputs (F p)) (z: U32 (F p)) :=
 
 
 -- def c := main (p:=p_babybear) default
--- #eval c.local_length
+-- #eval c.localLength
 -- #eval c.output
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
-  local_length _ := 8
+  localLength _ := 8
   output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
 
 theorem soundness : Soundness (F p) elaborated assumptions spec := by

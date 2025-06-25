@@ -27,7 +27,7 @@ def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α 
   let offset ← getOffset
   ProvableType.witness (computeValueFromOffset α offset)
 
-theorem ProvableType.witnessAny.local_witnesses (n : ℕ) (env : Environment F) :
+theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) :
     env.UsesLocalWitnessesCompleteness n (ProvableType.witnessAny α |>.operations n) ↔ True := by
   simp only [circuit_norm, getOffset, ProvableType.witnessAny, computeValueFromOffset,
     ProvableType.to_elements_from_elements]

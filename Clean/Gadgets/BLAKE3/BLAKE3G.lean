@@ -58,18 +58,18 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
 
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
-  local_length _ := 96
+  localLength _ := 96
   output inputs i0 := (inputs.state : Vector (U32 (Expression (F p))) 16)
     |>.set a (⟨var ⟨i0 + 56⟩, var ⟨i0 + 58⟩, var ⟨i0 + 60⟩, var ⟨i0 + 62⟩⟩) a.is_lt
     |>.set b (Rotation32.output 7 (i0 + 88)) b.is_lt
     |>.set c (⟨var ⟨i0 + 76⟩, var ⟨i0 + 78⟩, var ⟨i0 + 80⟩, var ⟨i0 + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i0 + 68)) d.is_lt
 
-  local_length_eq _ n := by
+  localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
   output_eq _ _ := by
     dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
-  subcircuits_consistent _ _ := by
+  subcircuitsConsistent _ _ := by
     simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 

@@ -58,7 +58,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   assumptions x := x.is_normalized
   spec x z := z.value = not64 x.value ∧ z.is_normalized
 
-  local_length _ := 0
+  localLength _ := 0
   output x _ := not64_bytewise x
 
   soundness := by

@@ -133,19 +133,19 @@ lemma push_row_offset (assignment: CellAssignment W S) (row: Fin W) :
   (assignment.push_row row).offset = assignment.offset + size S := by rfl
 
 theorem assignment_from_circuit_offset (as: CellAssignment W S) (ops: Operations F) :
-    (assignment_from_circuit as ops).offset = as.offset + ops.local_length := by
+    (assignment_from_circuit as ops).offset = as.offset + ops.localLength := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit =>
-    simp_all +arith [assignment_from_circuit, CellAssignment.push_vars_aux, Operations.local_length]
+    simp_all +arith [assignment_from_circuit, CellAssignment.push_vars_aux, Operations.localLength]
 
 theorem assignment_from_circuit_vars (as: CellAssignment W S) (ops: Operations F) :
-    (assignment_from_circuit as ops).vars = (as.vars ++ (.mapRange ops.local_length fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
+    (assignment_from_circuit as ops).vars = (as.vars ++ (.mapRange ops.localLength fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
       ).cast (assignment_from_circuit_offset ..).symm := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit =>
-    simp_all +arith [assignment_from_circuit, push_vars_aux, Operations.local_length,
+    simp_all +arith [assignment_from_circuit, push_vars_aux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Array.append_assoc]
 
 end CellAssignment

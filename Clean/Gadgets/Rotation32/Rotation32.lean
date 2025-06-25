@@ -1,5 +1,5 @@
 import Clean.Types.U32
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Utils.Rotation
 import Clean.Gadgets.Rotation32.Rotation32Bytes
 import Clean.Gadgets.Rotation32.Rotation32Bits
@@ -36,11 +36,11 @@ def spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
 def output (offset : Fin 32) (i0 : Nat) : U32 (Expression (F p)) :=
   Rotation32Bits.output (offset % 8).val i0
 
--- #eval! (rot32 (p:=p_babybear) 0) default |>.local_length
+-- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32 off
-  local_length _ := 8
+  localLength _ := 8
   output _inputs i0 := output off i0
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by

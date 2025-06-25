@@ -43,7 +43,7 @@ def spec (offset : Fin 8) (x : F p) (out: Outputs (F p)) :=
 
 def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := byte_decomposition offset
-  local_length _ := 2
+  localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by

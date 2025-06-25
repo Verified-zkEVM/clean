@@ -12,7 +12,7 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
     let { z, .. } ← subcircuit Addition8FullCarry.circuit inputs
     return z
 
-  local_length _ := 2
+  localLength _ := 2
   output _ i0 := var ⟨i0⟩
 
   assumptions := fun { x, y, carry_in } =>
@@ -46,7 +46,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := fun { x, y } =>
     subcircuit Addition8Full.circuit { x, y, carry_in := 0 }
 
-  local_length _ := 2
+  localLength _ := 2
   output _ i0 := var ⟨i0⟩
 
   assumptions | { x, y } => x.val < 256 ∧ y.val < 256

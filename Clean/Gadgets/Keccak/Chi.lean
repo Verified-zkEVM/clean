@@ -23,15 +23,15 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.is_normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
--- #eval! main (p:=p_babybear) default |>.local_length
+-- #eval! main (p:=p_babybear) default |>.localLength
 -- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
-  local_length _ := 400
+  localLength _ := 400
   output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
 
-  local_length_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit]
-  subcircuits_consistent state i0 := by
+  localLength_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit]
+  subcircuitsConsistent state i0 := by
     simp only [main, circuit_norm]
     intro i
     and_intros <;> ac_rfl

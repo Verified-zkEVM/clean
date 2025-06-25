@@ -18,43 +18,28 @@ def from_byte_limb {two_exponent : Fin 9} (x: Fin (2 ^ two_exponent.val)) : F p 
   where `two_exponent` is a (compile-time) parameter of the table.
   Supports `two_exponent` values from `0` to `8` included.
 -/
-def ByteLessThanTwoPower (two_exponent : Fin 9) : Table (F p) := StaticTable.toTable {
+def ByteLessThanTwoPower (two_exponent : Fin 9) : Table (F p) field := .fromStatic {
   name := "ByteLessThanTwoPower"
   length := 2^two_exponent.val
-  arity := 1
-  row i := #v[from_byte_limb i]
-  index := fun ⟨⟨[x]⟩, _⟩ => x.val
 
-  soundness := fun ⟨⟨[x]⟩, _⟩ => x.val < 2^two_exponent.val
-  completeness := fun ⟨⟨[x]⟩, _⟩ => x.val < 2^two_exponent.val
+  row i := from_byte_limb i
+  index x := x.val
 
-  imply_soundness := by
-    intro ⟨⟨[x]⟩, _⟩
-    dsimp only [StaticTable.toTable, StaticTable.contains]
-    rintro ⟨ i, h: #v[x] = #v[from_byte_limb i] ⟩
-    have h' : x = from_byte_limb i := by repeat injection h with h
-    rw [FieldUtils.nat_to_field_eq x h']
-    exact i.is_lt
+  Spec x := x.val < 2^two_exponent.val
 
-  implied_by_completeness := by
-    intro ⟨⟨[x]⟩, _⟩
-    dsimp only [StaticTable.toTable, StaticTable.contains]
-    rintro h
-    use x.val
-    simp only [from_byte_limb, Fin.val_natCast]
-    ext1
-    have h' : (x.val) % 2^two_exponent.val = x.val := by
-      rw [Nat.mod_eq_iff_lt]; assumption; norm_num
-    simp only [h', List.cons.injEq, and_true]
-    simp [FieldUtils.nat_to_field_of_val_eq_iff]
-}
-
-def equiv (two_exponent : Fin 9) (x: F p) :
-    (ByteLessThanTwoPower two_exponent).contains (#v[x]) ↔ x.val < 2^two_exponent.val :=
-  ⟨(ByteLessThanTwoPower two_exponent).imply_soundness #v[x], (ByteLessThanTwoPower two_exponent).implied_by_completeness #v[x]⟩
-
-def lookup (two_exponent : Fin 9) (x: Expression (F p)) : Lookup (F p) := {
-  table := ByteLessThanTwoPower two_exponent
-  entry := #v[x]
+  contains_iff x := by
+    constructor
+    · dsimp only
+      rintro ⟨ i, h ⟩
+      rw [FieldUtils.nat_to_field_eq x h]
+      exact i.is_lt
+    · dsimp only
+      rintro h
+      use x.val
+      simp only [from_byte_limb, Fin.val_natCast]
+      have h' : (x.val) % 2^two_exponent.val = x.val := by
+        rw [Nat.mod_eq_iff_lt]; assumption; norm_num
+      simp only [h', List.cons.injEq, and_true]
+      simp [FieldUtils.nat_to_field_of_val_eq_iff]
 }
 end Gadgets.TwoPowerLookup

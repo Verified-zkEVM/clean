@@ -1,5 +1,5 @@
 import Clean.Types.U64
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Circuit.Provable
 import Clean.Gadgets.ByteDecomposition.ByteDecomposition
@@ -41,15 +41,15 @@ def output (offset : Fin 8) (i0 : Nat) : U64 (Expression (F p)) :=
 
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bits off
-  local_length _ := 16
+  localLength _ := 16
   output _ i0 := output off i0
-  local_length_eq _ i0 := by
+  localLength_eq _ i0 := by
     simp only [circuit_norm, rot64_bits, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, rot64_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.from_limbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
-  subcircuits_consistent _ _ := by
+  subcircuitsConsistent _ _ := by
     simp +arith only [circuit_norm, rot64_bits,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 

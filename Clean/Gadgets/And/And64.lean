@@ -1,5 +1,5 @@
 import Clean.Utils.Primes
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Types.U64
 import Clean.Gadgets.And.And8
 
@@ -38,7 +38,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main
-  local_length _ := 8
+  localLength _ := 8
   output _ i := varFromOffset U64 i
 
 omit [Fact (Nat.Prime p)] p_large_enough in

@@ -3,7 +3,7 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Utils.Field
@@ -300,7 +300,7 @@ def empty : TableContext W S F where
   assignment := .empty W
 
 @[reducible, table_norm, table_assignment_norm]
-def offset (table : TableContext W S F) : ℕ := table.circuit.local_length
+def offset (table : TableContext W S F) : ℕ := table.circuit.localLength
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
@@ -322,12 +322,12 @@ def assignment_from_circuit (as: CellAssignment W S) : Operations F → CellAssi
   | .witness m _ :: ops => assignment_from_circuit (as.push_vars_aux m) ops
   | .assert _ :: ops => assignment_from_circuit as ops
   | .lookup _ :: ops => assignment_from_circuit as ops
-  | .subcircuit s :: ops => assignment_from_circuit (as.push_vars_aux s.local_length) ops
+  | .subcircuit s :: ops => assignment_from_circuit (as.push_vars_aux s.localLength) ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(window_env ..).get i = ..`
 def assignment_from_circuit' (as: CellAssignment W S) (ops : Operations F) : CellAssignment W S where
-  offset := as.offset + ops.local_length
-  aux_length := as.aux_length + ops.local_length
+  offset := as.offset + ops.localLength
+  aux_length := as.aux_length + ops.localLength
   vars := as.vars ++ (.mapRange _ fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
 
 /--
@@ -337,7 +337,7 @@ all circuit operations inside a table constraint.
 @[reducible, table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
-    let (a, ops) := circuit ctx.circuit.local_length
+    let (a, ops) := circuit ctx.circuit.localLength
     (a, {
       circuit := ctx.circuit ++ ops,
       assignment := assignment_from_circuit ctx.assignment ops
@@ -346,7 +346,7 @@ instance : MonadLift (Circuit F) (TableConstraint W S F) where
 namespace TableConstraint
 @[reducible, table_norm, table_assignment_norm]
 def final_offset (table : TableConstraint W S F α) : ℕ :=
-  table .empty |>.snd.circuit.local_length
+  table .empty |>.snd.circuit.localLength
 
 @[table_norm]
 def operations (table : TableConstraint W S F α) : Operations F :=
@@ -378,10 +378,10 @@ def window_env (table : TableConstraint W S F Unit)
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def constraints_hold_on_window (table : TableConstraint W S F Unit)
+def constraintsHold_on_window (table : TableConstraint W S F Unit)
   (window: TraceOfLength F S W) (aux_env : Environment F) : Prop :=
   let env := window_env table window aux_env
-  Circuit.constraints_hold.soundness env table.operations
+  Circuit.ConstraintsHold.Soundness env table.operations
 
 @[table_norm]
 def output {α: Type} (table : TableConstraint W S F α) : α :=
@@ -492,7 +492,7 @@ export TableOperation (Boundary EveryRow EveryRowExceptLast)
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 @[table_norm]
-def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
+def table_constraintsHold {N : ℕ} (constraints : List (TableOperation S F))
   (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F) : Prop :=
   let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
   foldl N constraints_and_envs trace.val constraints_and_envs
@@ -521,7 +521,7 @@ def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
     | trace +> curr +> next, (⟨.EveryRowExceptLast constraint, env⟩)::rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.constraints_hold_on_window window (env (trace.len + 1)) ∧ others
+        constraint.constraintsHold_on_window window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
@@ -531,13 +531,13 @@ def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then constraint.constraints_hold_on_window window (env trace.len) else True) ∧ others
+        (if trace.len = targetIdx then constraint.constraintsHold_on_window window (env trace.len) else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
     | trace +> row, (⟨.EveryRow constraint, env⟩)::rest =>
         let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.constraints_hold_on_window window (env trace.len) ∧ others
+        constraint.constraintsHold_on_window window (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
     | trace, (⟨.EveryRowExceptLast _, _⟩)::rest =>
@@ -566,7 +566,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   soundness :
     ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
     assumption N →
-    table_constraints_hold constraints trace env →
+    table_constraintsHold constraints trace env →
     spec trace
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
@@ -586,7 +586,7 @@ def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace: TraceOfLen
 attribute [table_norm] List.mapIdx List.mapIdx.go
 attribute [table_norm low] size from_elements to_elements to_vars from_vars
 attribute [table_assignment_norm low] to_elements
-attribute [table_norm] Circuit.constraints_hold.soundness
+attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
 

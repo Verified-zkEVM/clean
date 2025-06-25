@@ -59,7 +59,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
   assumptions
   spec
-  local_length _ := 2
+  localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
 
   soundness := by

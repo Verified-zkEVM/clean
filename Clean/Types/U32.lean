@@ -3,7 +3,7 @@ import Clean.Circuit.Extensions
 import Clean.Utils.Bitwise
 import Clean.Circuit.Provable
 import Clean.Utils.Primes
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
 section
@@ -237,7 +237,7 @@ def circuit : FormalCircuit (F p) U32 U32 where
   main := u32_copy
   assumptions := assumptions
   spec := spec
-  local_length _ := 4
+  localLength _ := 4
   output inputs i0 := varFromOffset U32 i0
   soundness := by
     rintro i0 env x_var

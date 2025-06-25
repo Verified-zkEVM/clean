@@ -38,7 +38,7 @@ def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
 
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bytes off
-  local_length _ := 0
+  localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
     match off with
@@ -50,7 +50,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     | 5 => ⟨ x5, x6, x7, x0, x1, x2, x3, x4 ⟩
     | 6 => ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
     | 7 => ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
-  subcircuits_consistent x i0 := by
+  subcircuitsConsistent x i0 := by
     simp only [rot64_bytes]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
@@ -58,7 +58,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     intros
     fin_cases off
     repeat rfl
-  local_length_eq := by
+  localLength_eq := by
     intros
     fin_cases off
     repeat rfl

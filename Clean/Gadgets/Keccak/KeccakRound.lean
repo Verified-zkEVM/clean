@@ -25,10 +25,10 @@ def spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
 
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := main rc
-  local_length _ := 1288
+  localLength _ := 1288
   output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
 
-  local_length_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
+  localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 

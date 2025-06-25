@@ -57,7 +57,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main := main
-  local_length _ := 8
+  localLength _ := 8
   output _ i0 := varFromOffset U64 i0
 
 omit [Fact (Nat.Prime p)] p_large_enough in
