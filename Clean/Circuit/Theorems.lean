@@ -272,7 +272,7 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
     intro h
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
-    apply circuit.implied_by_localWitnesses
+    apply circuit.imply_usesLocalWitnesses
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 

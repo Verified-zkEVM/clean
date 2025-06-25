@@ -100,7 +100,7 @@ structure Subcircuit (F: Type) [Field F] (offset: ℕ) where
     Completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  implied_by_localWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
+  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
     UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations

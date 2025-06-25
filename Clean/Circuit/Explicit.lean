@@ -134,13 +134,13 @@ instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalC
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
-  operations n := [.subcircuit (circuit.to_subcircuit n input)]
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
 
 instance {β: TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
     ExplicitCircuit (assertion circuit input) where
   output n := ()
   localLength _ := circuit.localLength input
-  operations n := [.subcircuit (circuit.to_subcircuit n input)]
+  operations n := [.subcircuit (circuit.toSubcircuit n input)]
 
 syntax "infer_explicit_circuit" : tactic
 
