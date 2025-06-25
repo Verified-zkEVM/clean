@@ -15,8 +15,8 @@ structure Outputs (F : Type) where
 
 instance : ProvableStruct Outputs where
   components := [field, field]
-  to_components := fun { low, high } => .cons low (.cons high .nil)
-  from_components := fun (.cons low (.cons high .nil)) => { low, high }
+  toComponents := fun { low, high } => .cons low (.cons high .nil)
+  fromComponents := fun (.cons low (.cons high .nil)) => { low, high }
 
 /--
   Decompose a byte into a low and a high part.

@@ -23,8 +23,8 @@ structure RowType (F : Type) where
 
 instance : ProvableType RowType where
   size := 2
-  to_elements x := #v[x.x, x.y]
-  from_elements v :=
+  toElements x := #v[x.x, x.y]
+  fromElements v :=
     let ⟨ .mk [x, y], _ ⟩ := v
     ⟨ x, y ⟩
 

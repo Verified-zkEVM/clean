@@ -15,8 +15,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [U32, U32, field]
-  to_components := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
-  from_components := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
+  toComponents := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
+  fromComponents := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
 
 structure Outputs (F : Type) where
   z: U32 F
@@ -25,8 +25,8 @@ deriving Repr
 
 instance : ProvableStruct Outputs where
   components := [U32, field]
-  to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
-  from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
+  toComponents := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
+  fromComponents := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
 open Addition8FullCarry (add8_full_carry)
 

@@ -108,7 +108,7 @@ def assertZero (e: Expression F) : Circuit F Unit := fun _ =>
 /-- Add a lookup. -/
 @[circuit_norm]
 def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry: Row (Expression F)) : Circuit F Unit := fun _ =>
-  ((), [.lookup { table := table.toRaw, entry := to_elements entry }])
+  ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
 end Circuit
 
@@ -117,7 +117,7 @@ end Circuit
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
-    (var, [.witness (size α) (fun env => compute env |> to_elements)])
+    (var, [.witness (size α) (fun env => compute env |> toElements)])
 
 @[circuit_norm]
 def ProvableVector.witness {α: TypeMap} [NonEmptyProvableType α] (m: ℕ)

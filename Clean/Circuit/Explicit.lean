@@ -118,7 +118,7 @@ instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witness
 instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
-  operations c n := [.witness (size α) (to_elements ∘ c)]
+  operations c n := [.witness (size α) (toElements ∘ c)]
 
 instance : ExplicitCircuits (F:=F) assertZero where
   output _ _ := ()
@@ -128,7 +128,7 @@ instance : ExplicitCircuits (F:=F) assertZero where
 instance {α: TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
   output _ _ := ()
   localLength _ _ := 0
-  operations entry n := [.lookup { table := table.toRaw, entry := to_elements entry }]
+  operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
 
 instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where

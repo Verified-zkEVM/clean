@@ -21,8 +21,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [U32, U32]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input

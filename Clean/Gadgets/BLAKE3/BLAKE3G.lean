@@ -18,8 +18,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [BLAKE3State, U32, U32]
-  to_components := fun { state, x, y } => .cons state (.cons x (.cons y .nil))
-  from_components := fun (.cons state (.cons x (.cons y .nil))) => { state, x, y }
+  toComponents := fun { state, x, y } => .cons state (.cons x (.cons y .nil))
+  fromComponents := fun (.cons state (.cons x (.cons y .nil))) => { state, x, y }
 
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, x, y } := input
@@ -127,7 +127,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) assu
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) assumptions := by
   rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
-  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, from_components,
+  simp only [↓ProvableStruct.eval_eq_eval_struct, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
   dsimp only [assumptions, BLAKE3State.is_normalized] at h_normalized
 

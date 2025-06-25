@@ -17,8 +17,8 @@ structure Row (F : Type) where
 
 instance : ProvableStruct Row where
   components := [U32, U32]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
 def table : InductiveTable (F p) Row unit where
   step row _ := do

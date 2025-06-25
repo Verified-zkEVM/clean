@@ -22,9 +22,9 @@ structure RowType (F : Type) where
 
 instance : ProvableStruct RowType where
   components := [U32, U32]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
-  combined_size := 8 -- explicit size to enable casting indices to `Fin size`
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+  combinedSize := 8 -- explicit size to enable casting indices to `Fin size`
 
 @[reducible]
 def next_row_off : RowType (CellOffset 2 RowType) := {

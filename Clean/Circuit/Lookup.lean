@@ -58,11 +58,11 @@ instance [Repr F] : Repr (Lookup F) where
 def Table.toRaw (table: Table F Row) : RawTable F where
   name := table.name
   arity := size Row
-  Contains row := table.Contains (from_elements row)
-  Soundness row := table.Soundness (from_elements row)
-  Completeness row := table.Completeness (from_elements row)
-  imply_soundness row := table.imply_soundness (from_elements row)
-  implied_by_completeness row := table.implied_by_completeness (from_elements row)
+  Contains row := table.Contains (fromElements row)
+  Soundness row := table.Soundness (fromElements row)
+  Completeness row := table.Completeness (fromElements row)
+  imply_soundness row := table.imply_soundness (fromElements row)
+  implied_by_completeness row := table.implied_by_completeness (fromElements row)
 
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 

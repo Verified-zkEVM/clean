@@ -20,8 +20,8 @@ structure U32 (T: Type) where
 
 instance : ProvableType U32 where
   size := 4
-  to_elements x := #v[x.x0, x.x1, x.x2, x.x3]
-  from_elements v :=
+  toElements x := #v[x.x0, x.x1, x.x2, x.x3]
+  fromElements v :=
     let ⟨ .mk [x0, x1, x2, x3], _ ⟩ := v
     ⟨ x0, x1, x2, x3 ⟩
 
@@ -35,8 +35,8 @@ instance (T: Type) [Repr T] : Repr (U32 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ "⟩"
 
 namespace U32
-def to_limbs {F} (x : U32 F) : Vector F 4 := to_elements x
-def from_limbs {F} (v : Vector F 4) : U32 F := from_elements v
+def to_limbs {F} (x : U32 F) : Vector F 4 := toElements x
+def from_limbs {F} (v : Vector F 4) : U32 F := fromElements v
 
 def map {α β : Type} (x : U32 α) (f : α → β) : U32 β :=
   ⟨ f x.x0, f x.x1, f x.x2, f x.x3 ⟩
@@ -276,7 +276,7 @@ theorem from_limbs_to_limbs {F} (x : U32 F) :
     U32.from_limbs x.to_limbs = x := rfl
 
 theorem to_limbs_from_limbs {F} (v : Vector F 4) :
-    (U32.from_limbs v).to_limbs = v := ProvableType.to_elements_from_elements ..
+    (U32.from_limbs v).to_limbs = v := ProvableType.toElements_fromElements ..
 
 theorem ext_iff {F} {x y : U32 F} :
     x = y ↔ ∀ i (_ : i < 4), x.to_limbs[i] = y.to_limbs[i] := by
@@ -286,7 +286,7 @@ omit [Fact (Nat.Prime p)] p_large_enough in
 theorem is_normalized_iff {x : U32 (F p)} :
     x.is_normalized ↔ ∀ i (_ : i < 4), x.to_limbs[i].val < 256 := by
   rcases x with ⟨ x0, x1, x2, x3 ⟩
-  simp only [to_limbs, is_normalized, to_elements, size, Vector.getElem_mk, List.getElem_toArray]
+  simp only [to_limbs, is_normalized, toElements, size, Vector.getElem_mk, List.getElem_toArray]
   constructor
   · intro h i hi
     repeat (rcases hi with _ | hi; try simp [*, size])
@@ -303,7 +303,7 @@ lemma to_limbs_map {α β : Type} (x : U32 α) (f : α → β) :
 
 lemma getElem_eval_to_limbs {F} [Field F] {env : Environment F} {x : U32 (Expression F)} {i : ℕ} (hi : i < 4) :
     Expression.eval env x.to_limbs[i] = (eval env x).to_limbs[i] := by
-  simp only [to_limbs, eval, size, to_vars, ProvableType.to_elements_from_elements, Vector.getElem_map]
+  simp only [to_limbs, eval, size, toVars, ProvableType.toElements_fromElements, Vector.getElem_map]
 
 lemma eval_from_limbs {F} [Field F] {env : Environment F} {v : Vector (Expression F) 4} :
     eval env (U32.from_limbs v) = .from_limbs (v.map env) := by

@@ -12,8 +12,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [KeccakState, KeccakRow]
-  to_components := fun { state, d } => .cons state (.cons d .nil)
-  from_components := fun (.cons state (.cons d .nil)) => { state, d }
+  toComponents := fun { state, d } => .cons state (.cons d .nil)
+  fromComponents := fun (.cons state (.cons d .nil)) => { state, d }
 
 def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>

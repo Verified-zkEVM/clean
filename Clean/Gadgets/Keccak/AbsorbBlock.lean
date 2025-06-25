@@ -12,8 +12,8 @@ structure Input (F : Type) where
 
 instance : ProvableStruct Input where
   components := [KeccakState, KeccakBlock]
-  to_components := fun { state, block } => .cons state (.cons block .nil)
-  from_components := fun (.cons state (.cons block .nil)) => { state, block }
+  toComponents := fun { state, block } => .cons state (.cons block .nil)
+  fromComponents := fun (.cons state (.cons block .nil)) => { state, block }
 
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let { state, block } := input

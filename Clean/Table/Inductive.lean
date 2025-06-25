@@ -98,7 +98,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
   set env' := window_env (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
   simp only [equalityConstraint, circuit_norm, table_norm]
 
-  have h_env_in i (hi : i < size State) : (to_elements row.1)[i] = env'.get i := by
+  have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
     have h_env' : env' = window_env (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
     simp only [window_env, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
     have hi' : i < size State + size Input := by linarith
@@ -109,7 +109,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
     rw [ProvableType.ext_iff]
     intro i hi
     rw [h_env_in i hi, ProvableType.eval_varFromOffset,
-      ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
+      ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
   rw [h_env]
 
 def traceInputs {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) : List (Input F) :=
@@ -189,7 +189,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
     set t := main_ops.localLength
 
-    have h_env_input_1 i (hi : i < s) : (to_elements curr.1)[i] = env'.get i := by
+    have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
       have hi' : i < s + x + t + (s + x) := by linarith
       have hi'' : i < 0 + (s + x) := by linarith
       have hi''' : i < 0 + (s + x) + t := by linarith
@@ -198,7 +198,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
         CellAssignment.assignment_from_circuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
 
-    have h_env_input_2 i (hi : i < x) : (to_elements curr.2)[i] = env'.get (i + s) := by
+    have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
       have hi' : i + s < s + x + t + (s + x) := by linarith
       have hi'' : i + s < 0 + (s + x) := by linarith
       have hi''' : i + s < 0 + (s + x) + t := by linarith
@@ -208,7 +208,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       congr; omega
 
-    have h_env_output i (hi : i < s) : (to_elements next.1)[i] = env'.get (i + (s + x) + t) := by
+    have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) := by
       have hi' : i + (s + x) + t < s + x + t + (s + x) := by linarith
       have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
       have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
@@ -225,7 +225,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
       simp only [curr_var, varFromOffset_pair]
       rw [h_env_input_1 i hi]
       simp only [ProvableType.eval_varFromOffset,
-        ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
+        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
 
     have input_eq_2 : eval env' curr_var.2 = curr.2 := by
       rw [ProvableType.ext_iff]
@@ -233,14 +233,14 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
       simp only [curr_var, varFromOffset_pair]
       rw [h_env_input_2 i hi]
       simp only [s, ProvableType.eval_varFromOffset,
-        ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
+        ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
       ac_rfl
 
     have next_eq : eval env' (varFromOffset State (size State + size Input + main_ops.localLength)) = next.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
       rw [h_env_output i hi, ProvableType.eval_varFromOffset,
-        ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
+        ProvableType.toElements_fromElements, Vector.getElem_mapRange]
       simp only [t, s, x]
       ac_rfl
 

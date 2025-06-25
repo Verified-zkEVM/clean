@@ -21,7 +21,7 @@ def toVar : Expression F → Circuit F (Variable F)
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
 def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
-  from_elements <| .mapRange _ fun i => env.get (offset + i)
+  fromElements <| .mapRange _ fun i => env.get (offset + i)
 
 def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset
@@ -30,4 +30,4 @@ def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α 
 theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) :
     env.UsesLocalWitnessesCompleteness n (ProvableType.witnessAny α |>.operations n) ↔ True := by
   simp only [circuit_norm, getOffset, ProvableType.witnessAny, computeValueFromOffset,
-    ProvableType.to_elements_from_elements]
+    ProvableType.toElements_fromElements]
