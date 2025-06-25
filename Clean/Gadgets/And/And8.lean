@@ -122,8 +122,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
   have p_large := p_large_enough.elim
   have and_lt : x.val &&& y.val < p := by linarith
-  rw [nat_to_field_eq_natcast and_lt] at hw
-  have h_and : w.val = x.val &&& y.val := nat_to_field_eq w hw
+  rw [natToField_eq_natCast and_lt] at hw
+  have h_and : w.val = x.val &&& y.val := natToField_eq w hw
 
   have two_and_val : (2 * w).val = 2 * (x.val &&& y.val) := by
     rw [ZMod.val_mul_of_lt, val_two, h_and]

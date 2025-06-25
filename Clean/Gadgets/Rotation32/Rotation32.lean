@@ -13,8 +13,8 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Bitwise (rot_right32)
-open Utils.Rotation (rot_right32_composition)
+open Bitwise (rotRight32)
+open Utils.Rotation (rotRight32_composition)
 
 /--
   Rotate the 32-bit integer by `offset` bits
@@ -30,7 +30,7 @@ def rot32 (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) 
 def assumptions (input : U32 (F p)) := input.Normalized
 
 def spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
-  y.value = rot_right32 x.value offset.val
+  y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
 def output (offset : Fin 32) (i0 : Nat) : U32 (Expression (F p)) :=
@@ -73,7 +73,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   rw [h_input] at hy x_normalized
 
   -- reason about rotation
-  rw [rot_right32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
+  rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy]
   rw [show(offset.val / 8) % 4 = offset.val / 8 by
     apply Nat.mod_eq_of_lt
