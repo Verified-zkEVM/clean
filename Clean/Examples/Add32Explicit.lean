@@ -7,10 +7,10 @@ open Gadgets.Addition8FullCarry (add8_full_carry)
 open Gadgets.Addition32Full (add32_full Inputs)
 
 -- `infer_explicit_circuit(s)` seem to work for all circuits
-instance explicit : ExplicitCircuits (add32_full (p:=p)) := by
+instance explicit : ExplicitCircuits (add32_full (p:=pBabybear)) := by
   infer_explicit_circuits
 
-@[reducible] def circuit32 input := add32_full (p:=p) input
+@[reducible] def circuit32 input := add32_full (p:=pBabybear) input
 
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
   -- rfl -- also works
@@ -24,7 +24,7 @@ example : ExplicitCircuit.output (circuit32 default) 0
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
 
-example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
+example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F pBabybear)) env (i0 : ℕ) :
   Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩).operations i0)
   ↔
   (ZMod.val (env.get i0) < 256 ∧ (env.get (i0 + 1) = 0 ∨ env.get (i0 + 1) = 1) ∧

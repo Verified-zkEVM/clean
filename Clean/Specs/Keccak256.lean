@@ -1,7 +1,7 @@
 import Clean.Types.U64
 namespace Specs.Keccak256
 
-open Bitwise (not64 rot_left64)
+open Bitwise (not64 rotLeft64)
 
 def roundConstants : Vector UInt64 24 := #v[
   0x0000000000000001, 0x0000000000008082,
@@ -32,11 +32,11 @@ def theta_c (state : Vector ℕ 25) : Vector ℕ 5 :=
 
 def theta_d (c : Vector ℕ 5) : Vector ℕ 5 :=
   #v[
-    c[4] ^^^ (rot_left64 c[1] 1),
-    c[0] ^^^ (rot_left64 c[2] 1),
-    c[1] ^^^ (rot_left64 c[3] 1),
-    c[2] ^^^ (rot_left64 c[4] 1),
-    c[3] ^^^ (rot_left64 c[0] 1)
+    c[4] ^^^ (rotLeft64 c[1] 1),
+    c[0] ^^^ (rotLeft64 c[2] 1),
+    c[1] ^^^ (rotLeft64 c[3] 1),
+    c[2] ^^^ (rotLeft64 c[4] 1),
+    c[3] ^^^ (rotLeft64 c[0] 1)
   ]
 
 def theta_xor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
@@ -75,31 +75,31 @@ def theta (state : Vector ℕ 25) : Vector ℕ 25 :=
 
 def rho_pi (state : Vector ℕ 25) : Vector ℕ 25 :=
   #v[
-    rot_left64 state[0] 0,
-    rot_left64 state[15] 28,
-    rot_left64 state[5] 1,
-    rot_left64 state[20] 27,
-    rot_left64 state[10] 62,
-    rot_left64 state[6] 44,
-    rot_left64 state[21] 20,
-    rot_left64 state[11] 6,
-    rot_left64 state[1] 36,
-    rot_left64 state[16] 55,
-    rot_left64 state[12] 43,
-    rot_left64 state[2] 3,
-    rot_left64 state[17] 25,
-    rot_left64 state[7] 10,
-    rot_left64 state[22] 39,
-    rot_left64 state[18] 21,
-    rot_left64 state[8] 45,
-    rot_left64 state[23] 8,
-    rot_left64 state[13] 15,
-    rot_left64 state[3] 41,
-    rot_left64 state[24] 14,
-    rot_left64 state[14] 61,
-    rot_left64 state[4] 18,
-    rot_left64 state[19] 56,
-    rot_left64 state[9] 2
+    rotLeft64 state[0] 0,
+    rotLeft64 state[15] 28,
+    rotLeft64 state[5] 1,
+    rotLeft64 state[20] 27,
+    rotLeft64 state[10] 62,
+    rotLeft64 state[6] 44,
+    rotLeft64 state[21] 20,
+    rotLeft64 state[11] 6,
+    rotLeft64 state[1] 36,
+    rotLeft64 state[16] 55,
+    rotLeft64 state[12] 43,
+    rotLeft64 state[2] 3,
+    rotLeft64 state[17] 25,
+    rotLeft64 state[7] 10,
+    rotLeft64 state[22] 39,
+    rotLeft64 state[18] 21,
+    rotLeft64 state[8] 45,
+    rotLeft64 state[23] 8,
+    rotLeft64 state[13] 15,
+    rotLeft64 state[3] 41,
+    rotLeft64 state[24] 14,
+    rotLeft64 state[14] 61,
+    rotLeft64 state[4] 18,
+    rotLeft64 state[19] 56,
+    rotLeft64 state[9] 2
   ]
 
 def chi (b : Vector ℕ 25) : Vector ℕ 25 :=

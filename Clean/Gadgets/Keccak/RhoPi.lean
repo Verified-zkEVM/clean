@@ -6,7 +6,7 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
-open Bitwise (rot_left64)
+open Bitwise (rotLeft64)
 
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
@@ -34,7 +34,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 
 -- recharacterize rho_phi as a loop
 lemma rho_pi_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.rho_pi state = rhoPiConstants.map fun (i, s) => rot_left64 state[i.val] s := by
+    Specs.Keccak256.rho_pi state = rhoPiConstants.map fun (i, s) => rotLeft64 state[i.val] s := by
   simp only [Specs.Keccak256.rho_pi, circuit_norm]
   rw [Vector.map_mk]
   simp only
@@ -55,7 +55,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
     Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated,
     Vector.getElem_zip] at h_holds ⊢
-  simp_all [rhoPiConstants, Bitwise.rot_left_eq_rot_right]
+  simp_all [rhoPiConstants, Bitwise.rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated assumptions := by
   intro i0 env state_var h_env state h_input state_norm

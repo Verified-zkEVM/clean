@@ -6,7 +6,7 @@ import Clean.Utils.Primes
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod_256 floordiv_256)
+open ByteUtils (mod256 floorDiv256)
 
 structure Inputs (F : Type) where
   x: U32 F
@@ -136,18 +136,18 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
-    (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv_256 (x + y + c_in)) :
+    (hz: z = mod256 (x + y + c_in)) (hc_out: c_out = floorDiv256 (x + y + c_in)) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
     z.val < 256 ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
-    have : z.val < 256 := hz ▸ ByteUtils.mod_256_lt (x + y + c_in)
+    have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
     use this
     have carry_lt_2 : c_in.val < 2 := FieldUtils.boolean_lt_2 hc
     have : (x + y + c_in).val < 512 :=
       ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
-    use (hc_out ▸ ByteUtils.floordiv_256_bool this)
-    rw [ByteUtils.mod_add_div_256 (x + y + c_in), hz, hc_out]
+    use (hc_out ▸ ByteUtils.floorDiv256_bool this)
+    rw [ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
     ring
 
   have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness hz0 hc0 x0_byte y0_byte carry_in_bool
