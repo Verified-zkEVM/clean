@@ -6,7 +6,7 @@ import Clean.Utils.Primes
 namespace Gadgets.Addition32
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod_256 floordiv_256)
+open ByteUtils (mod256 floorDiv256)
 
 structure Inputs (F : Type) where
   x: U32 F

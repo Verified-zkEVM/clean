@@ -1,7 +1,7 @@
 import Clean.Utils.Bitwise
 
 namespace Specs.BLAKE3
-open Bitwise (add32 rot_right32)
+open Bitwise (add32 rotRight32)
 
 ------------
 -- CONSTANTS
@@ -75,14 +75,14 @@ def msgPermutation : Vector (Fin 16) 16 :=
 -- The mixing function, G, which mixes either a column or a diagonal.
 def g (state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
   let state_a := add32 (state[a]) (add32 state[b] mx)
-  let state_d := rot_right32 (state[d] ^^^ state_a) 16
+  let state_d := rotRight32 (state[d] ^^^ state_a) 16
   let state_c := add32 (state[c]) state_d
-  let state_b := rot_right32 (state[b] ^^^ state_c) 12
+  let state_b := rotRight32 (state[b] ^^^ state_c) 12
 
   let state_a := add32 state_a (add32 state_b my)
-  let state_d := rot_right32 (state_d ^^^ state_a) 8
+  let state_d := rotRight32 (state_d ^^^ state_a) 8
   let state_c := add32 state_c state_d
-  let state_b := rot_right32 (state_b ^^^ state_c) 7
+  let state_b := rotRight32 (state_b ^^^ state_c) 7
 
   state.set a state_a
         |>.set b state_b

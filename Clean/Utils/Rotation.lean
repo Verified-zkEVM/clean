@@ -4,8 +4,8 @@ import Mathlib.Data.Nat.Bitwise
 import Clean.Utils.Bits
 
 namespace Utils.Rotation
-open Bitwise (rot_right64 rot_right32)
-open Bits (to_bits to_bits_injective)
+open Bitwise (rotRight64 rotRight32)
+open Bits (toBits toBits_injective)
 
 -- Theorems about 64-bit rotation
 
@@ -13,9 +13,9 @@ open Bits (to_bits to_bits_injective)
   Our definition of right rotation of a 64-bit integer is equal to
   the one provided by `BitVec.rotateRight`
 -/
-def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
-    rot_right64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
-  simp only [rot_right64]
+def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
+    rotRight64 x offset = (x.toUInt64.toBitVec.rotateRight offset).toNat := by
+  simp only [rotRight64]
   simp only [BitVec.toNat_rotateRight]
   simp only [Nat.shiftLeft_eq, Nat.mul_mod, dvd_refl, Nat.mod_mod_of_dvd]
   simp only [Nat.mod_mod, UInt64.toNat_toBitVec, UInt64.toNat_ofNat]
@@ -137,37 +137,37 @@ def rot_right64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     rw [h_eq3]
 
 /--
-  Alternative definition of rot_right64 using bitwise operations.
+  Alternative definition of rotRight64 using bitwise operations.
 -/
-lemma rot_right64_def (x : ℕ) (off : ℕ) (hx : x < 2^64) :
-    rot_right64 x off = x >>> (off % 64) ||| x <<< (64 - off % 64) % 2 ^ 64 := by
-  rw [rot_right64_eq_bv_rotate _ hx]
+lemma rotRight64_def (x : ℕ) (off : ℕ) (hx : x < 2^64) :
+    rotRight64 x off = x >>> (off % 64) ||| x <<< (64 - off % 64) % 2 ^ 64 := by
+  rw [rotRight64_eq_bv_rotate _ hx]
   simp only [Nat.toUInt64_eq, BitVec.toNat_rotateRight, UInt64.toNat_toBitVec, UInt64.toNat_ofNat']
   rw [show x % 2^64 = x by apply Nat.mod_eq_of_lt hx]
 
 /--
   The rotation operation is invariant when taking the offset modulo 64.
 -/
-lemma rot_right_64_off_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
-    rot_right64 x off1 = rot_right64 x off2 := by
-  simp only [rot_right64]
+lemma rotRight64_off_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
+    rotRight64 x off1 = rotRight64 x off2 := by
+  simp only [rotRight64]
   rw [←h]
   have h' : off2 % 64 < 64 := Nat.mod_lt off2 (by linarith)
   rw [←h] at h'
   rw [Nat.mod_eq_of_lt h']
 
-lemma rot_right64_fin (x : ℕ) (offset : Fin 64) :
-    rot_right64 x offset.val = x % (2^offset.val) * (2^(64 - offset.val)) + x / (2^offset.val) := by
-  simp only [rot_right64]
+lemma rotRight64_fin (x : ℕ) (offset : Fin 64) :
+    rotRight64 x offset.val = x % (2^offset.val) * (2^(64 - offset.val)) + x / (2^offset.val) := by
+  simp only [rotRight64]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
 /--
   Testing a bit of the result of a rotation in the range [0, r % 64) is equivalent to testing
   the bit of the original number in the range [i, r % 64 + i).
 -/
-lemma rot_right64_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 64) :
-    (rot_right64 x r).testBit i = x.testBit (r % 64 + i) := by
-  rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
+lemma rotRight64_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 64) :
+    (rotRight64 x r).testBit i = x.testBit (r % 64 + i) := by
+  rw [rotRight64_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
     Nat.testBit_shiftLeft]
   have h_i : 64 - r % 64 ≤ 64 := by apply Nat.sub_le
   have h_i' : i < 64 := by linarith
@@ -178,9 +178,9 @@ lemma rot_right64_testBit_of_lt (x r i : ℕ) (h : x < 2^64) (hi : i < 64 - r % 
   Testing a bit of the result of a rotation in the range [64 - r % 64, 64) is equivalent to
   testing the bit of the original number in the range [i - (64 - r % 64), i).
 -/
-lemma rot_right64_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r % 64) :
-    (rot_right64 x r).testBit i = (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
-  rw [rot_right64_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
+lemma rotRight64_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r % 64) :
+    (rotRight64 x r).testBit i = (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
+  rw [rotRight64_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
   suffices (x >>> (r % 64)).testBit i = false by
     simp [this]
     by_cases h : i < 64 <;> simp [h]; omega
@@ -193,37 +193,37 @@ lemma rot_right64_testBit_of_ge (x r i : ℕ) (h : x < 2^64) (hi : i ≥ 64 - r 
     omega
   linarith
 
-lemma rot_right64_testBit (x r i : ℕ) (h : x < 2^64) :
-    (rot_right64 x r).testBit i =
+lemma rotRight64_testBit (x r i : ℕ) (h : x < 2^64) :
+    (rotRight64 x r).testBit i =
     if i < 64 - r % 64 then
       x.testBit (r % 64 + i)
     else (decide (i < 64) && x.testBit (i - (64 - r % 64))) := by
 
   split
-  · rw [rot_right64_testBit_of_lt]
+  · rw [rotRight64_testBit_of_lt]
     repeat omega
-  · rw [rot_right64_testBit_of_ge]
+  · rw [rotRight64_testBit_of_ge]
     repeat omega
 
 
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
-theorem rot_right64_to_bits (x r : ℕ) (h : x < 2^64):
-    to_bits 64 (rot_right64 x r) = (to_bits 64 x).rotate r := by
-  simp [to_bits, Vector.rotate]
+theorem rotRight64_toBits (x r : ℕ) (h : x < 2^64):
+    toBits 64 (rotRight64 x r) = (toBits 64 x).rotate r := by
+  simp [toBits, Vector.rotate]
   ext i hi
   · simp
   simp at ⊢ hi
-  rw [rot_right64_testBit]
+  rw [rotRight64_testBit]
   simp [List.getElem_rotate, hi]
   split <;> (congr; omega)
   linarith
 
 
-theorem rot_right64_lt (x r : ℕ) (h : x < 2^64) :
-    rot_right64 x r < 2^64 := by
-  rw [rot_right64_def _ _ h]
+theorem rotRight64_lt (x r : ℕ) (h : x < 2^64) :
+    rotRight64 x r < 2^64 := by
+  rw [rotRight64_def _ _ h]
   have := Nat.shiftRight_le x (r % 64)
   apply Nat.or_lt_two_pow <;> omega
 
@@ -231,24 +231,24 @@ theorem rot_right64_lt (x r : ℕ) (h : x < 2^64) :
   Rotating a 64-bit value by `n` bits and then by `m` bits is the same
   as rotating it by `n + m` bits.
 -/
-theorem rot_right64_composition (x n m : ℕ) (h : x < 2^64) :
-    rot_right64 (rot_right64 x n) m = rot_right64 x (n + m) := by
-  have h1 : (rot_right64 (rot_right64 x n) m) < 2^64 := by
-    repeat apply rot_right64_lt
+theorem rotRight64_composition (x n m : ℕ) (h : x < 2^64) :
+    rotRight64 (rotRight64 x n) m = rotRight64 x (n + m) := by
+  have h1 : (rotRight64 (rotRight64 x n) m) < 2^64 := by
+    repeat apply rotRight64_lt
     assumption
 
-  have h2 : (rot_right64 x (n + m)) < 2^64 := by
-    apply rot_right64_lt
+  have h2 : (rotRight64 x (n + m)) < 2^64 := by
+    apply rotRight64_lt
     assumption
 
   -- suffices to show equality over bits
-  suffices to_bits 64 (rot_right64 (rot_right64 x n) m) = to_bits 64 (rot_right64 x (n + m)) by
-    exact to_bits_injective 64 h1 h2 this
+  suffices toBits 64 (rotRight64 (rotRight64 x n) m) = toBits 64 (rotRight64 x (n + m)) by
+    exact toBits_injective 64 h1 h2 this
 
   -- rewrite rotation over bits
-  rw [rot_right64_to_bits _ _ h,
-    rot_right64_to_bits _ _ (by apply rot_right64_lt; assumption),
-    rot_right64_to_bits _ _ h]
+  rw [rotRight64_toBits _ _ h,
+    rotRight64_toBits _ _ (by apply rotRight64_lt; assumption),
+    rotRight64_toBits _ _ h]
 
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
@@ -260,9 +260,9 @@ theorem rot_right64_composition (x n m : ℕ) (h : x < 2^64) :
   Our definition of right rotation of a 32-bit integer is equal to
   the one provided by `BitVec.rotateRight`
 -/
-def rot_right32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
-    rot_right32 x offset = (x.toUInt32.toBitVec.rotateRight offset).toNat := by
-  simp only [rot_right32]
+def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
+    rotRight32 x offset = (x.toUInt32.toBitVec.rotateRight offset).toNat := by
+  simp only [rotRight32]
   simp only [BitVec.toNat_rotateRight]
   simp only [Nat.shiftLeft_eq, Nat.mul_mod, dvd_refl, Nat.mod_mod_of_dvd]
   simp only [Nat.mod_mod, UInt32.toNat_toBitVec, UInt32.toNat_ofNat]
@@ -384,37 +384,37 @@ def rot_right32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
     rw [h_eq3]
 
 /--
-  Alternative definition of rot_right32 using bitwise operations.
+  Alternative definition of rotRight32 using bitwise operations.
 -/
-lemma rot_right32_def (x : ℕ) (off : ℕ) (hx : x < 2^32) :
-    rot_right32 x off = x >>> (off % 32) ||| x <<< (32 - off % 32) % 2 ^ 32 := by
-  rw [rot_right32_eq_bv_rotate _ hx]
+lemma rotRight32_def (x : ℕ) (off : ℕ) (hx : x < 2^32) :
+    rotRight32 x off = x >>> (off % 32) ||| x <<< (32 - off % 32) % 2 ^ 32 := by
+  rw [rotRight32_eq_bv_rotate _ hx]
   simp only [Nat.toUInt32_eq, BitVec.toNat_rotateRight, UInt32.toNat_toBitVec, UInt32.toNat_ofNat']
   rw [show x % 2^32 = x by apply Nat.mod_eq_of_lt hx]
 
 /--
   The rotation operation is invariant when taking the offset modulo 32.
 -/
-lemma rot_right_32_off_mod_32 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 32) :
-    rot_right32 x off1 = rot_right32 x off2 := by
-  simp only [rot_right32]
+lemma rotRight32_off_mod_32 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 32) :
+    rotRight32 x off1 = rotRight32 x off2 := by
+  simp only [rotRight32]
   rw [←h]
   have h' : off2 % 32 < 32 := Nat.mod_lt off2 (by linarith)
   rw [←h] at h'
   rw [Nat.mod_eq_of_lt h']
 
-lemma rot_right32_fin (x : ℕ) (offset : Fin 32) :
-    rot_right32 x offset.val = x % (2^offset.val) * (2^(32 - offset.val)) + x / (2^offset.val) := by
-  simp only [rot_right32]
+lemma rotRight32_fin (x : ℕ) (offset : Fin 32) :
+    rotRight32 x offset.val = x % (2^offset.val) * (2^(32 - offset.val)) + x / (2^offset.val) := by
+  simp only [rotRight32]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
 /--
   Testing a bit of the result of a rotation in the range [0, r % 32) is equivalent to testing
   the bit of the original number in the range [i, r % 32 + i).
 -/
-lemma rot_right32_testBit_of_lt (x r i : ℕ) (h : x < 2^32) (hi : i < 32 - r % 32) :
-    (rot_right32 x r).testBit i = x.testBit (r % 32 + i) := by
-  rw [rot_right32_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
+lemma rotRight32_testBit_of_lt (x r i : ℕ) (h : x < 2^32) (hi : i < 32 - r % 32) :
+    (rotRight32 x r).testBit i = x.testBit (r % 32 + i) := by
+  rw [rotRight32_def _ _ h, Nat.testBit_or, Nat.testBit_shiftRight, Nat.testBit_mod_two_pow,
     Nat.testBit_shiftLeft]
   have h_i : 32 - r % 32 ≤ 32 := by apply Nat.sub_le
   have h_i' : i < 32 := by linarith
@@ -425,9 +425,9 @@ lemma rot_right32_testBit_of_lt (x r i : ℕ) (h : x < 2^32) (hi : i < 32 - r % 
   Testing a bit of the result of a rotation in the range [32 - r % 32, 32) is equivalent to
   testing the bit of the original number in the range [i - (32 - r % 32), i).
 -/
-lemma rot_right32_testBit_of_ge (x r i : ℕ) (h : x < 2^32) (hi : i ≥ 32 - r % 32) :
-    (rot_right32 x r).testBit i = (decide (i < 32) && x.testBit (i - (32 - r % 32))) := by
-  rw [rot_right32_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
+lemma rotRight32_testBit_of_ge (x r i : ℕ) (h : x < 2^32) (hi : i ≥ 32 - r % 32) :
+    (rotRight32 x r).testBit i = (decide (i < 32) && x.testBit (i - (32 - r % 32))) := by
+  rw [rotRight32_def _ _ h, Nat.testBit_or, Nat.testBit_mod_two_pow]
   suffices (x >>> (r % 32)).testBit i = false by
     simp [this]
     by_cases h : i < 32 <;> simp [h]; omega
@@ -440,37 +440,37 @@ lemma rot_right32_testBit_of_ge (x r i : ℕ) (h : x < 2^32) (hi : i ≥ 32 - r 
     omega
   linarith
 
-lemma rot_right32_testBit (x r i : ℕ) (h : x < 2^32) :
-    (rot_right32 x r).testBit i =
+lemma rotRight32_testBit (x r i : ℕ) (h : x < 2^32) :
+    (rotRight32 x r).testBit i =
     if i < 32 - r % 32 then
       x.testBit (r % 32 + i)
     else (decide (i < 32) && x.testBit (i - (32 - r % 32))) := by
 
   split
-  · rw [rot_right32_testBit_of_lt]
+  · rw [rotRight32_testBit_of_lt]
     repeat omega
-  · rw [rot_right32_testBit_of_ge]
+  · rw [rotRight32_testBit_of_ge]
     repeat omega
 
 
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
-theorem rot_right32_to_bits (x r : ℕ) (h : x < 2^32):
-    to_bits 32 (rot_right32 x r) = (to_bits 32 x).rotate r := by
-  simp [to_bits, Vector.rotate]
+theorem rotRight32_toBits (x r : ℕ) (h : x < 2^32):
+    toBits 32 (rotRight32 x r) = (toBits 32 x).rotate r := by
+  simp [toBits, Vector.rotate]
   ext i hi
   · simp
   simp at ⊢ hi
-  rw [rot_right32_testBit]
+  rw [rotRight32_testBit]
   simp [List.getElem_rotate, hi]
   split <;> (congr; omega)
   linarith
 
 
-theorem rot_right32_lt (x r : ℕ) (h : x < 2^32) :
-    rot_right32 x r < 2^32 := by
-  rw [rot_right32_def _ _ h]
+theorem rotRight32_lt (x r : ℕ) (h : x < 2^32) :
+    rotRight32 x r < 2^32 := by
+  rw [rotRight32_def _ _ h]
   have := Nat.shiftRight_le x (r % 32)
   apply Nat.or_lt_two_pow <;> omega
 
@@ -478,24 +478,24 @@ theorem rot_right32_lt (x r : ℕ) (h : x < 2^32) :
   Rotating a 32-bit value by `n` bits and then by `m` bits is the same
   as rotating it by `n + m` bits.
 -/
-theorem rot_right32_composition (x n m : ℕ) (h : x < 2^32) :
-    rot_right32 (rot_right32 x n) m = rot_right32 x (n + m) := by
-  have h1 : (rot_right32 (rot_right32 x n) m) < 2^32 := by
-    repeat apply rot_right32_lt
+theorem rotRight32_composition (x n m : ℕ) (h : x < 2^32) :
+    rotRight32 (rotRight32 x n) m = rotRight32 x (n + m) := by
+  have h1 : (rotRight32 (rotRight32 x n) m) < 2^32 := by
+    repeat apply rotRight32_lt
     assumption
 
-  have h2 : (rot_right32 x (n + m)) < 2^32 := by
-    apply rot_right32_lt
+  have h2 : (rotRight32 x (n + m)) < 2^32 := by
+    apply rotRight32_lt
     assumption
 
   -- suffices to show equality over bits
-  suffices to_bits 32 (rot_right32 (rot_right32 x n) m) = to_bits 32 (rot_right32 x (n + m)) by
-    exact to_bits_injective 32 h1 h2 this
+  suffices toBits 32 (rotRight32 (rotRight32 x n) m) = toBits 32 (rotRight32 x (n + m)) by
+    exact toBits_injective 32 h1 h2 this
 
   -- rewrite rotation over bits
-  rw [rot_right32_to_bits _ _ h,
-    rot_right32_to_bits _ _ (by apply rot_right32_lt; assumption),
-    rot_right32_to_bits _ _ h]
+  rw [rotRight32_toBits _ _ h,
+    rotRight32_toBits _ _ (by apply rotRight32_lt; assumption),
+    rotRight32_toBits _ _ h]
 
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
@@ -510,7 +510,7 @@ lemma two_power_val {p : ℕ} {offset : Fin 8} [p_large_enough: Fact (p > 2^16 +
   have h : 2 ^ (8 - offset.val) % 256 < 256 := by apply Nat.mod_lt; linarith
   linarith [h, p_large_enough.elim]
 
-lemma mul_mod_256_off {offset : ℕ} (ho : offset < 8) (x i : ℕ) (h : i > 0):
+lemma mul_mod256_off {offset : ℕ} (ho : offset < 8) (x i : ℕ) (h : i > 0):
     (x * 256^i) % 2^offset = 0 := by
   rw [Nat.mul_mod, Nat.pow_mod]
   repeat (
