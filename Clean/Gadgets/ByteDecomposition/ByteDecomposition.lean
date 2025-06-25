@@ -7,7 +7,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 namespace Gadgets.ByteDecomposition
-open FieldUtils (mod floordiv two_lt two_pow_lt two_val two_pow_val)
+open FieldUtils (mod floorDiv two_lt two_pow_lt two_val two_pow_val)
 
 structure Outputs (F : Type) where
   low : F
@@ -25,7 +25,7 @@ instance : ProvableStruct Outputs where
 -/
 def byte_decomposition (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
-  let high ← witness fun env => floordiv (env x) (2^offset.val)
+  let high ← witness fun env => floorDiv (env x) (2^offset.val)
 
   lookup ByteTable ((2^(8 - offset.val) : F p) * low)
   lookup ByteTable high
@@ -113,15 +113,15 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) a
     rw [two_pow_val _ (by omega), pow_8_nat]
     exact Nat.mul_lt_mul_of_pos_left FieldUtils.mod_lt (Nat.pow_pos (by norm_num))
 
-  · show (floordiv x (2^offset.val)).val < 2^8
-    apply FieldUtils.floordiv_lt
+  · show (floorDiv x (2^offset.val)).val < 2^8
+    apply FieldUtils.floorDiv_lt
     rw [PNat.pow_coe, PNat.val_ofNat]
     suffices 1 * 2^8 ≤ 2^offset.val * 2^8 by linarith
     apply Nat.mul_le_mul_right
     exact Nat.succ_le_of_lt (by norm_num)
 
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
-    rw [this, mul_comm, FieldUtils.mod_add_floordiv]
+    rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with

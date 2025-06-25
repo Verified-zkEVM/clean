@@ -95,7 +95,7 @@ variable {circuit : α → Circuit F β} {xs : Vector α m} [constant: ConstantC
   {prop : Condition F}
 
 theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLength := by
-  induction xs using Vector.induct_push
+  induction xs using Vector.inductPush
   case nil =>
     rw [Vector.mapM_mk_empty, pure_localLength_eq, zero_mul]
   case push xs x ih =>
@@ -104,7 +104,7 @@ theorem localLength_eq : (xs.mapM circuit).localLength n = m * constant.localLen
 
 theorem output_eq : (xs.mapM circuit).output n =
     xs.mapIdx fun i x => (circuit x).output (n + i * constant.localLength) := by
-  induction xs using Vector.induct_push
+  induction xs using Vector.inductPush
   case nil => simp
   case push xs x ih =>
     rw [Vector.mapM_push, bind_output_eq, bind_output_eq, pure_output_eq, ih, localLength_eq]

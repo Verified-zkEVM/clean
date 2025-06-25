@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 
-open Bitwise (rot_right64)
+open Bitwise (rotRight64)
 
 /--
   Rotate the 64-bit integer by increments of 8 positions
@@ -34,7 +34,7 @@ def rot64_bytes (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U6
 def assumptions (input : U64 (F p)) := input.is_normalized
 
 def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
-  y.value = rot_right64 x.value (offset.val * 8) ∧ y.is_normalized
+  y.value = rotRight64 x.value (offset.val * 8) ∧ y.is_normalized
 
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
   main := rot64_bytes off
@@ -82,7 +82,7 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) assumptions (
 
   simp [circuit_norm, spec, U64.value, -Nat.reducePow]
   constructor
-  · fin_cases off <;> (simp_all [explicit_provable_type, rot_right64, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U64.is_normalized, explicit_provable_type]
 
 theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) assumptions := by

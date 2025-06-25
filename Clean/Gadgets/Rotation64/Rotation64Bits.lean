@@ -12,7 +12,7 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Bitwise (rot_right64)
+open Bitwise (rotRight64)
 open Rotation64.Theorems
 open ByteDecomposition (Outputs)
 open ByteDecomposition.Theorems (byte_decomposition_lt)
@@ -32,7 +32,7 @@ def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F 
 def assumptions (input : U64 (F p)) := input.is_normalized
 
 def spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
-  y.value = rot_right64 x.value offset.val
+  y.value = rotRight64 x.value offset.val
   ∧ y.is_normalized
 
 def output (offset : Fin 8) (i0 : Nat) : U64 (Expression (F p)) :=
@@ -98,10 +98,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
     exact (h_rot_vector i hi).left
 
   -- finish the proof using our characerization of rotation on byte vectors
-  have h_rot_vector' : y.vals = rot_right64_u64 x.vals o := by
-    rw [U64.ByteVector.ext_iff, ←rot_right64_bytes_u64_eq]
+  have h_rot_vector' : y.vals = rotRight64_u64 x.vals o := by
+    rw [U64.ByteVector.ext_iff, ←rotRight64_bytes_u64_eq]
     intro i hi
-    simp only [U64.vals, U64.ByteVector.to_limbs_map, Vector.getElem_map, rot_right64_bytes, size, Vector.getElem_ofFn]
+    simp only [U64.vals, U64.ByteVector.to_limbs_map, Vector.getElem_map, rotRight64_bytes, size, Vector.getElem_ofFn]
     exact (h_rot_vector i hi).right
 
   rw [←U64.vals_value, ←U64.vals_value, h_rot_vector']

@@ -6,7 +6,7 @@ variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
 def from_byte_limb {two_exponent : Fin 9} (x: Fin (2 ^ two_exponent.val)) : F p :=
-  FieldUtils.nat_to_field x.val (by
+  FieldUtils.natToField x.val (by
     have two_exponent_small : 2^two_exponent.val < 2 ^ 9 := by
       apply Nat.pow_lt_pow_of_lt
       · simp only [Nat.one_lt_ofNat]
@@ -31,7 +31,7 @@ def ByteLessThanTwoPower (two_exponent : Fin 9) : Table (F p) field := .fromStat
     constructor
     · dsimp only
       rintro ⟨ i, h ⟩
-      rw [FieldUtils.nat_to_field_eq x h]
+      rw [FieldUtils.natToField_eq x h]
       exact i.is_lt
     · dsimp only
       rintro h
@@ -40,6 +40,6 @@ def ByteLessThanTwoPower (two_exponent : Fin 9) : Table (F p) field := .fromStat
       have h' : (x.val) % 2^two_exponent.val = x.val := by
         rw [Nat.mod_eq_iff_lt]; assumption; norm_num
       simp only [h', List.cons.injEq, and_true]
-      simp [FieldUtils.nat_to_field_of_val_eq_iff]
+      simp [FieldUtils.natToField_of_val_eq_iff]
 }
 end Gadgets.TwoPowerLookup

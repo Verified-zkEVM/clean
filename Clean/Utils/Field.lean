@@ -14,16 +14,16 @@ variable {p : ℕ} [p_prime: Fact p.Prime]
 
 instance : NeZero p := ⟨p_prime.elim.ne_zero⟩
 
-theorem p_neq_zero : p ≠ 0 := p_prime.elim.ne_zero
+theorem p_ne_zero : p ≠ 0 := p_prime.elim.ne_zero
 
 theorem ext {x y : F p} (h : x.val = y.val) : x = y := by
-  cases p; cases p_neq_zero rfl
+  cases p; cases p_ne_zero rfl
   exact Fin.ext h
 
 theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
   intro x_lt_p
-  have p_neq_zero : p ≠ 0 := Nat.ne_zero_of_lt x_lt_p
-  have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt p_neq_zero).mpr x_lt_p
+  have p_ne_zero : p ≠ 0 := Nat.ne_zero_of_lt x_lt_p
+  have x_mod_is_x : x % p = x := (Nat.mod_eq_iff_lt p_ne_zero).mpr x_lt_p
   rw [ZMod.val_natCast, x_mod_is_x]
 
 lemma val_eq_256 [p_large_enough: Fact (p > 512)] : (256 : F p).val = 256 := val_lt_p 256 (by linarith [p_large_enough.elim])
@@ -67,32 +67,32 @@ theorem boolean_lt_2 {b : F p} (hb : b = 0 ∨ b = 1) : b.val < 2 := by
   · rw [h0]; simp
   · rw [h1]; simp only [ZMod.val_one, Nat.one_lt_ofNat]
 
-def nat_to_field (n: ℕ) (lt: n < p) : F p :=
+def natToField (n: ℕ) (lt: n < p) : F p :=
   match p with
   | 0 => False.elim (Nat.not_lt_zero n lt)
   | _ + 1 => ⟨ n, lt ⟩
 
-theorem nat_to_field_zero : nat_to_field 0 (p_prime.elim.pos) = 0 := by
-  dsimp [nat_to_field]
+theorem natToField_zero : natToField 0 (p_prime.elim.pos) = 0 := by
+  dsimp [natToField]
   cases p
   · exact False.elim (Nat.not_lt_zero 0 p_prime.elim.pos)
   · simp only
 
-theorem nat_to_field_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = nat_to_field n lt) : x.val = n := by
+theorem natToField_eq {n: ℕ} {lt: n < p} (x : F p) (hx: x = natToField n lt) : x.val = n := by
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)
   · rw [hx]; rfl
 
-theorem nat_to_field_of_val_eq_iff {x : F p} {lt: x.val < p} : nat_to_field (x.val) lt = x := by
+theorem natToField_of_val_eq_iff {x : F p} {lt: x.val < p} : natToField (x.val) lt = x := by
   cases p
   · exact False.elim (Nat.not_lt_zero x.val lt)
-  · dsimp only [nat_to_field]; rfl
+  · dsimp only [natToField]; rfl
 
-theorem nat_to_field_eq_natcast {n: ℕ} (lt: n < p) : ↑n = FieldUtils.nat_to_field n lt := by
+theorem natToField_eq_natCast {n: ℕ} (lt: n < p) : ↑n = FieldUtils.natToField n lt := by
   cases p with
   | zero => exact False.elim (Nat.not_lt_zero n lt)
   | succ n' => {
-    simp only [FieldUtils.nat_to_field]
+    simp only [FieldUtils.natToField]
     rw [Fin.natCast_def]
     apply_fun Fin.val
     · simp only [Nat.mod_succ_eq_iff_lt, Nat.succ_eq_add_one]
@@ -100,47 +100,47 @@ theorem nat_to_field_eq_natcast {n: ℕ} (lt: n < p) : ↑n = FieldUtils.nat_to_
     · apply Fin.val_injective
   }
 
-theorem val_of_nat_to_field_eq {n: ℕ} (lt: n < p) : (nat_to_field n lt).val = n := by
+theorem val_of_natToField_eq {n: ℕ} (lt: n < p) : (natToField n lt).val = n := by
   cases p
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
 
 def less_than_p (x: F p) : x.val < p := by
-  rcases p with _ | n; cases p_neq_zero rfl
+  rcases p with _ | n; cases p_ne_zero rfl
   exact x.is_lt
 
 def mod (x: F p) (c: ℕ+) (lt: c < p) : F p :=
-  FieldUtils.nat_to_field (x.val % c) (by linarith [Nat.mod_lt x.val c.pos, lt])
+  FieldUtils.natToField (x.val % c) (by linarith [Nat.mod_lt x.val c.pos, lt])
 
-def floordiv (x: F p) (c: ℕ+) : F p :=
-  FieldUtils.nat_to_field (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
+def floorDiv (x: F p) (c: ℕ+) : F p :=
+  FieldUtils.natToField (x.val / c) (by linarith [Nat.div_le_self x.val c, less_than_p x])
 
 theorem mod_lt {x : F p} {c: ℕ+} {lt : c < p} : (mod x c lt).val < c := by
-  rcases p with _ | p; cases p_neq_zero rfl
+  rcases p with _ | p; cases p_ne_zero rfl
   show (x.val % c) < c
   exact Nat.mod_lt x.val (by norm_num)
 
-theorem floordiv_lt {x : F p} {c: ℕ+} {d : ℕ} (h : x.val < c * d) : (floordiv x c).val < d := by
-  rcases p with _ | n; cases p_neq_zero rfl
+theorem floorDiv_lt {x : F p} {c: ℕ+} {d : ℕ} (h : x.val < c * d) : (floorDiv x c).val < d := by
+  rcases p with _ | n; cases p_ne_zero rfl
   exact Nat.div_lt_of_lt_mul h
 
-lemma val_mul_floordiv_self {x : F p} {c: ℕ+} (lt : c < p) : (c * (floordiv x c)).val = c * (x.val / c) := by
-  rcases p with _ | n; cases p_neq_zero rfl
+lemma val_mul_floorDiv_self {x : F p} {c: ℕ+} (lt : c < p) : (c * (floorDiv x c)).val = c * (x.val / c) := by
+  rcases p with _ | n; cases p_ne_zero rfl
   have : c * (x.val / c) ≤ x.val := Nat.mul_div_le (ZMod.val x) ↑c
   have h : x.val < n + 1 := x.is_lt
   rw [ZMod.val_mul, ZMod.val_cast_of_lt lt,
-    show ZMod.val (floordiv x c) = x.val / c by rfl, Nat.mod_eq_of_lt (by linarith)]
+    show ZMod.val (floorDiv x c) = x.val / c by rfl, Nat.mod_eq_of_lt (by linarith)]
 
-theorem mod_add_floordiv {x : F p} {c: ℕ+} (lt : c < p) :
-    mod x c lt + c * (floordiv x c) = x := by
-  rcases p with _ | n; cases p_neq_zero rfl
+theorem mod_add_floorDiv {x : F p} {c: ℕ+} (lt : c < p) :
+    mod x c lt + c * (floorDiv x c) = x := by
+  rcases p with _ | n; cases p_ne_zero rfl
   have h : x.val < n + 1 := x.is_lt
   apply ext
-  suffices x.val % c + (c * (floordiv x c)).val = x.val by
+  suffices x.val % c + (c * (floorDiv x c)).val = x.val by
     change (mod x c lt).val + _ = _ at this
     rwa [ZMod.val_add_of_lt]
     rwa [this]
-  rw [val_mul_floordiv_self lt, Nat.mod_add_div x.val c]
+  rw [val_mul_floorDiv_self lt, Nat.mod_add_div x.val c]
 
 theorem mul_val_of_dvd {x c : F p} :
     c.val ∣ (c * x).val → (c * x).val = c.val * x.val := by
@@ -155,8 +155,8 @@ theorem mul_val_of_dvd {x c : F p} :
     _ = 1 * x' := by ring
     _ ≤ c.val * x' := by apply Nat.mul_le_mul_right x' (Nat.succ_le_of_lt c_pos)
     _ < p := h_lt
-  let x'_f : F p := nat_to_field x' x'_lt
-  have x'_val_eq : x'_f.val = x' := nat_to_field_eq x'_f rfl
+  let x'_f : F p := natToField x' x'_lt
+  have x'_val_eq : x'_f.val = x' := natToField_eq x'_f rfl
   have cx_val_eq : (c * x'_f).val = c.val * x' := by
     rw [←x'_val_eq]
     apply ZMod.val_mul_of_lt
@@ -219,16 +219,16 @@ namespace ByteUtils
 open FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
 
-def mod_256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
+def mod256 (x: F p) [p_large_enough: Fact (p > 512)] : F p :=
   mod x 256 (by linarith [p_large_enough.elim])
 
-def floordiv_256 (x: F p) : F p := floordiv x 256
+def floorDiv256 (x: F p) : F p := floorDiv x 256
 
-theorem mod_256_lt [Fact (p > 512)] (x : F p) : (mod_256 x).val < 256 := mod_lt
+theorem mod256_lt [Fact (p > 512)] (x : F p) : (mod256 x).val < 256 := mod_lt
 
-theorem floordiv_256_bool [Fact (p > 512)] {x: F p} (h : x.val < 512) :
-  floordiv_256 x = 0 ∨ floordiv_256 x = 1 := by
-  rcases p with _ | n; cases p_neq_zero rfl
+theorem floorDiv256_bool [Fact (p > 512)] {x: F p} (h : x.val < 512) :
+  floorDiv256 x = 0 ∨ floorDiv256 x = 1 := by
+  rcases p with _ | n; cases p_ne_zero rfl
   let z := x.val / 256
   have : z < 2 := Nat.div_lt_of_lt_mul h
   -- show z = 0 ∨ z = 1
@@ -237,8 +237,8 @@ theorem floordiv_256_bool [Fact (p > 512)] {x: F p} (h : x.val < 512) :
   · right; apply ext; show z = ZMod.val 1; rw [h1, ZMod.val_one]
   · linarith -- contradiction
 
-theorem mod_add_div_256 [Fact (p > 512)] (x : F p) : x = mod_256 x + 256 * (floordiv_256 x) := by
-  rcases p with _ | n; cases p_neq_zero rfl
+theorem mod_add_div256 [Fact (p > 512)] (x : F p) : x = mod256 x + 256 * (floorDiv256 x) := by
+  rcases p with _ | n; cases p_ne_zero rfl
   let p := n + 1
   apply ext
   rw [ZMod.val_add, ZMod.val_mul]
@@ -247,22 +247,22 @@ theorem mod_add_div_256 [Fact (p > 512)] (x : F p) : x = mod_256 x + 256 * (floo
   show x.val = (x.val % 256 + 256 * (x.val / 256)) % p
   rw [Nat.mod_add_div, (Nat.mod_eq_of_lt x.is_lt : x.val % p = x.val)]
 
-def split_two_bytes (i : Fin (256 * 256)) : Fin 256 × Fin 256 :=
+def splitTwoBytes (i : Fin (256 * 256)) : Fin 256 × Fin 256 :=
   let x := i.val / 256
   let y := i.val % 256
   have x_lt : x < 256 := by simp [x, Nat.div_lt_iff_lt_mul]
   have y_lt : y < 256 := Nat.mod_lt i.val (by norm_num)
   (⟨ x, x_lt ⟩, ⟨ y, y_lt ⟩)
 
-def concat_two_bytes (x y : Fin 256) : Fin (256 * 256) :=
+def concatTwoBytes (x y : Fin 256) : Fin (256 * 256) :=
   let i := x.val * 256 + y.val
   have i_lt : i < 256 * 256 := by
     unfold i
     linarith [x.is_lt, y.is_lt]
   ⟨ i, i_lt ⟩
 
-theorem concat_split (x y : Fin 256) : split_two_bytes (concat_two_bytes x y) = (x, y) := by
-  dsimp [split_two_bytes, concat_two_bytes]
+theorem splitTwoBytes_concatTwoBytes (x y : Fin 256) : splitTwoBytes (concatTwoBytes x y) = (x, y) := by
+  dsimp [splitTwoBytes, concatTwoBytes]
   ext
   simp only
   rw [mul_comm]
@@ -292,23 +292,23 @@ theorem byte_plus_256_do_not_wrap (x: F p) [Fact (p > 512)]:
 section
 variable [p_large_enough: Fact (p > 512)]
 
-def from_byte (x: Fin 256) : F p :=
-  FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
+def fromByte (x: Fin 256) : F p :=
+  FieldUtils.natToField x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-lemma from_byte_lt (x: Fin 256) : (from_byte (p:=p) x).val < 256 := by
-  dsimp [from_byte]
-  rw [FieldUtils.val_of_nat_to_field_eq]
+lemma fromByte_lt (x: Fin 256) : (fromByte (p:=p) x).val < 256 := by
+  dsimp [fromByte]
+  rw [FieldUtils.val_of_natToField_eq]
   exact x.is_lt
 
-lemma from_byte_eq (x : F p) (x_lt : x.val < 256) : from_byte ⟨ x.val, x_lt ⟩ = x := by
-  dsimp [from_byte]
-  apply FieldUtils.nat_to_field_of_val_eq_iff
+lemma fromByte_eq (x : F p) (x_lt : x.val < 256) : fromByte ⟨ x.val, x_lt ⟩ = x := by
+  dsimp [fromByte]
+  apply FieldUtils.natToField_of_val_eq_iff
 
-lemma from_byte_cast_eq {z: F p} (z_lt : z.val < 256) : from_byte z.cast = z := by
-  simp only [from_byte]
+lemma fromByte_cast_eq {z: F p} (z_lt : z.val < 256) : fromByte z.cast = z := by
+  simp only [fromByte]
   have : (z.cast : Fin 256).val = z.val := ZMod.val_cast_eq_val_of_lt z_lt
   simp only [this]
-  apply FieldUtils.nat_to_field_of_val_eq_iff
+  apply FieldUtils.natToField_of_val_eq_iff
 
 end
 end ByteUtils

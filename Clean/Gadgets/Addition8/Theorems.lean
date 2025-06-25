@@ -143,20 +143,20 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
-    let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
-    let z := ByteUtils.mod_256 (x + y + carry_in)
+    let carry_out := FieldUtils.floorDiv (x + y + carry_in) 256
+    let z := ByteUtils.mod256 (x + y + carry_in)
     x + y + carry_in + -z + -(carry_out * 256) = 0 := by
   intro as_x as_y carry_in_bound
   simp
   rw [←sub_eq_add_neg, sub_eq_zero, add_eq_of_eq_sub]
   ring_nf
-  dsimp only [ByteUtils.mod_256, FieldUtils.mod, PNat.val_ofNat]
+  dsimp only [ByteUtils.mod256, FieldUtils.mod, PNat.val_ofNat]
 
   -- lift everything to the naturals
   apply_fun ZMod.val
-  · simp only [ZMod.val_add (FieldUtils.floordiv (x + y + carry_in) 256 * 256)]
-    dsimp only [FieldUtils.floordiv, PNat.val_ofNat]
-    rw [ZMod.val_mul, FieldUtils.val_of_nat_to_field_eq, FieldUtils.val_of_nat_to_field_eq]
+  · simp only [ZMod.val_add (FieldUtils.floorDiv (x + y + carry_in) 256 * 256)]
+    dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
+    rw [ZMod.val_mul, FieldUtils.val_of_natToField_eq, FieldUtils.val_of_natToField_eq]
     repeat rw [ZMod.val_add]
     simp
 
@@ -196,10 +196,10 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
-    let carry_out := FieldUtils.floordiv (x + y + carry_in) 256
+    let carry_out := FieldUtils.floorDiv (x + y + carry_in) 256
     carry_out = 0 ∨ carry_out = 1 := by
   intro as_x as_y carry_in_bound
-  dsimp only [FieldUtils.floordiv, PNat.val_ofNat]
+  dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
 
   -- we show that the carry_out is either 0 or 1 by explicitly
   -- constructing the two cases
@@ -208,7 +208,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
   · -- we want to show that the carry is 0
     apply Or.inl
     apply_fun ZMod.val
-    · rw [FieldUtils.val_of_nat_to_field_eq]
+    · rw [FieldUtils.val_of_natToField_eq]
       have h : (x + y + carry_in).val = x.val + y.val + carry_in.val := by
         rw [ZMod.val_add, ZMod.val_add x]
         simp
@@ -231,7 +231,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
     -- we want to show that the carry is 1
     apply Or.inr
     apply_fun ZMod.val
-    · rw [FieldUtils.val_of_nat_to_field_eq]
+    · rw [FieldUtils.val_of_natToField_eq]
       have div_one : (x.val + y.val + carry_in.val) / 256 = 1 := by
         apply Nat.div_eq_of_lt_le
         · simp; apply sum_ge_256
