@@ -20,8 +20,8 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
   /-- the `step` circuit encodes the transition logic from one state to the next -/
   step : Var State F → Var Input F → Circuit F (Var State F)
 
-  /-- the `spec` characterizes the `i`th state, possibly in relation to the full list of inputs up to that point -/
-  spec : (i : ℕ) → State F → (xs : List (Input F)) → (xs.length = i) → Prop
+  /-- the `Spec` characterizes the `i`th state, possibly in relation to the full list of inputs up to that point -/
+  Spec : (i : ℕ) → State F → (xs : List (Input F)) → (xs.length = i) → Prop
 
   /--
     assumptions on inputs for completeness.
@@ -39,9 +39,9 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- if the constraints hold
     Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- and assuming the spec on the current row and previous inputs
-    spec row_index acc xs xs_len →
+    Spec row_index acc xs xs_len →
     -- we can conclude the spec on the next row and inputs including the current input
-    spec (row_index + 1) (eval env (step acc_var x_var |>.output ((size State) + (size Input)))) (xs.concat x) (xs_len ▸ List.length_concat)
+    Spec (row_index + 1) (eval env (step acc_var x_var |>.output ((size State) + (size Input)))) (xs.concat x) (xs_len ▸ List.length_concat)
 
   completeness : ∀ (row_index : ℕ) (env : Environment F),
     -- for all rows and inputs
@@ -51,7 +51,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- when using honest-prover witnesses
     env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- assuming the spec on the current row, and the input_spec on the input
-    spec row_index acc xs xs_len ∧ input_assumptions row_index x →
+    Spec row_index acc xs xs_len ∧ input_assumptions row_index x →
     -- the constraints hold
     Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 
@@ -68,7 +68,7 @@ variable {F : Type} [Field F] {State Input : TypeMap} [ProvableType State] [Prov
 we show that every `InductiveTable` can be used to define a `FormalTable`,
 that encodes the following statement:
 
-`table.spec 0 input → table.spec (N-1) output`
+`table.Spec 0 input → table.Spec (N-1) output`
 
 for any given public `input` and `ouput`.
 -/
@@ -122,9 +122,9 @@ lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State 
 
 lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: State F)
   (N : ℕ+) (trace: TraceOfLength F (ProvablePair State Input) N) (env: ℕ → ℕ → Environment F) :
-  table.spec 0 input [] rfl →
+  table.Spec 0 input [] rfl →
   table_constraintsHold (table.tableConstraints input output) trace env →
-    trace.forAllRowsWithPrevious (fun row i rest => table.spec i row.1 (traceInputs rest) (traceInputs_length rest))
+    trace.forAllRowsWithPrevious (fun row i rest => table.Spec i row.1 (traceInputs rest) (traceInputs_length rest))
     ∧ trace.lastRow.1 = output := by
   intro input_spec
 
@@ -132,7 +132,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
   -- so that we can change the induction to not depend on `N` (which would make it unprovable)
   rcases trace with ⟨ trace, h_trace ⟩
   suffices goal : table_constraintsHold (table.tableConstraints input output) ⟨ trace, h_trace ⟩ env →
-    trace.forAllRowsWithPrevious (fun row rest => table.spec rest.len row.1 (traceInputs ⟨ rest, rfl ⟩) (traceInputs_length ⟨ rest, rfl ⟩)) ∧
+    trace.forAllRowsWithPrevious (fun row rest => table.Spec rest.len row.1 (traceInputs ⟨ rest, rfl ⟩) (traceInputs_length ⟨ rest, rfl ⟩)) ∧
     (∀ (h_len : trace.len = N), (trace.lastRow (by rw [h_len]; exact N.pos)).1 = output) by
       intro constraints
       specialize goal constraints
@@ -172,7 +172,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
       Nat.reduceAdd, true_and, Trace.forAllRowsWithPrevious] at constraints ih1 ih2 ⊢
     rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
     specialize ih2 h_rest
-    have spec_previous : table.spec rest.len curr.1 (traceInputs ⟨rest, rfl⟩) (traceInputs_length ⟨rest, rfl⟩) := by
+    have spec_previous : table.Spec rest.len curr.1 (traceInputs ⟨rest, rfl⟩) (traceInputs_length ⟨rest, rfl⟩) := by
       simp [ih2]
     simp only [ih2, and_self, and_true, Trace.lastRow]
     clear ih1 ih2
@@ -272,8 +272,8 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
 
 theorem tableSoundness (table : InductiveTable F State Input) (input output: State F)
   (N : ℕ+) (trace: TraceOfLength F (ProvablePair State Input) N) (env: ℕ → ℕ → Environment F) :
-  table.spec 0 input [] rfl → table_constraintsHold (table.tableConstraints input output) trace env →
-    table.spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail) := by
+  table.Spec 0 input [] rfl → table_constraintsHold (table.tableConstraints input output) trace env →
+    table.Spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail) := by
   intro h_input h_constraints
   have ⟨ h_spec, h_output ⟩ := table.tableSoundnessAux input output N trace env h_input h_constraints
   rw [←h_output]
@@ -281,8 +281,8 @@ theorem tableSoundness (table : InductiveTable F State Input) (input output: Sta
 
 def toFormal (table : InductiveTable F State Input) (input output: State F) : FormalTable F (ProvablePair State Input) where
   constraints := table.tableConstraints input output
-  assumption N := N > 0 ∧ table.spec 0 input [] rfl
-  spec {N} trace := table.spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail)
+  assumption N := N > 0 ∧ table.Spec 0 input [] rfl
+  Spec {N} trace := table.Spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail)
 
   soundness N trace env assumption constraints :=
     table.tableSoundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints

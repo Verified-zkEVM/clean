@@ -72,7 +72,7 @@ def fib32_table : List (TableOperation RowType (F p)) := [
   - the second U32 value is the (i+1)-th fibonacci number
   - both U32 values are normalized
 -/
-def spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
+def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
   trace.forAllRowsOfTraceWithIndex (fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
@@ -118,7 +118,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window,
-  then the spec of add32 and equality are satisfied
+  then the Spec of add32 and equality are satisfied
 -/
 lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
   : recursive_relation.constraintsHold_on_window ⟨<+> +> curr +> next, rfl⟩ aux_env →
@@ -137,7 +137,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   clear hcurr_x hcurr_y hnext_x hnext_y
   constructor
   · exact h_eq
-  rw [Gadgets.Addition32.assumptions, Gadgets.Addition32.spec] at h_add
+  rw [Gadgets.Addition32.Assumptions, Gadgets.Addition32.Spec] at h_add
   intro h_norm_x h_norm_y
   specialize h_add ⟨ h_norm_x, h_norm_y ⟩
   obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
@@ -164,11 +164,11 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
 -/
 def formal_fib32_table : FormalTable (F p) RowType := {
   constraints := fib32_table,
-  spec := spec,
+  Spec := Spec,
 
   soundness := by
     intro N trace envs _
-    simp only [fib32_table, spec]
+    simp only [fib32_table, Spec]
     rw [TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, table_constraintsHold]
 
     /-
@@ -185,7 +185,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
     -- inductive step
     · simp [table_norm] at ih2 ⊢
       intro ConstraintsHold boundary rest
-      -- first of all, we prove the inductive part of the spec
+      -- first of all, we prove the inductive part of the Spec
 
       specialize ih2 boundary rest
       simp only [ih2, and_self, and_true]

@@ -21,7 +21,7 @@ def witness (compute : Environment (F p) → F p) := do
 instance : Coe (Boolean (F p)) (Expression (F p)) where
   coe x := x.var
 
-def spec (x: F p) := x = 0 ∨ x = 1
+def Spec (x: F p) := x = 0 ∨ x = 1
 
 theorem equiv : ∀ {x: F p},
     x * (x + -1) = 0 ↔ x = 0 ∨ x = 1 := by

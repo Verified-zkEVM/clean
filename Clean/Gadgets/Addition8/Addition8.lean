@@ -23,10 +23,10 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
   soundness := by simp_all [Soundness, circuit_norm, subcircuit_norm,
-    Addition8FullCarry.circuit, Addition8FullCarry.assumptions, Addition8FullCarry.spec]
+    Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
   completeness := by simp_all [Completeness, circuit_norm, subcircuit_norm,
-    Addition8FullCarry.circuit, Addition8FullCarry.assumptions]
+    Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
 
 namespace Addition8
 structure Inputs (F : Type) where

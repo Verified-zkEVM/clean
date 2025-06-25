@@ -14,7 +14,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     assertion KeccakBlock.normalized block
     subcircuit AbsorbBlock.circuit { state, block }
 
-  spec i state blocks _ : Prop :=
+  Spec i state blocks _ : Prop :=
     state.Normalized
     ∧ state.value = absorb_blocks (blocks.map KeccakBlock.value)
 
@@ -23,13 +23,13 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
   soundness := by
     intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
     simp_all only [circuit_norm, subcircuit_norm,
-      AbsorbBlock.circuit, AbsorbBlock.assumptions, AbsorbBlock.spec,
+      AbsorbBlock.circuit, AbsorbBlock.Assumptions, AbsorbBlock.Spec,
       KeccakBlock.normalized, absorb_blocks]
     rw [List.concat_eq_append, List.map_append, List.map_cons, List.map_nil, List.foldl_concat]
 
   completeness := by
     simp_all only [circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
-      subcircuit_norm, AbsorbBlock.assumptions, AbsorbBlock.spec]
+      subcircuit_norm, AbsorbBlock.Assumptions, AbsorbBlock.Spec]
 
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)
@@ -51,10 +51,10 @@ theorem tableStatement (output : KeccakState (F p)) : ∀ n > 0, ∀ trace, ∃ 
     output.Normalized ∧ output.value = absorb_blocks blocks := by
   intro n hn trace
   use (InductiveTable.traceInputs trace.tail).map KeccakBlock.value
-  intro spec
-  simp only [formalTable, FormalTable.statement, table, InductiveTable.toFormal] at spec
-  simp only [List.length_map, Trace.toList_length, trace.tail.prop, InductiveTable.traceInputs, hn] at spec
-  simp only [initialState_value, initialState_normalized, absorb_blocks, initial_state, true_and] at spec
-  exact spec rfl
+  intro Spec
+  simp only [formalTable, FormalTable.statement, table, InductiveTable.toFormal] at Spec
+  simp only [List.length_map, Trace.toList_length, trace.tail.prop, InductiveTable.traceInputs, hn] at Spec
+  simp only [initialState_value, initialState_normalized, absorb_blocks, initial_state, true_and] at Spec
+  exact Spec rfl
 
 end Tables.KeccakInductive

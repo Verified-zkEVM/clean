@@ -31,9 +31,9 @@ def rot32_bits (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Va
 
   return U32.fromLimbs rotated
 
-def assumptions (input : U32 (F p)) := input.Normalized
+def Assumptions (input : U32 (F p)) := input.Normalized
 
-def spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
+def Spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
@@ -56,17 +56,17 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp +arith only [circuit_norm, rot32_bits,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   -- simplify statements
   dsimp only [circuit_norm, elaborated, rot32_bits,
     ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
-  simp only [spec, circuit_norm, elaborated, subcircuit_norm,
-    ByteDecomposition.assumptions, ByteDecomposition.spec] at h_holds ⊢
+  simp only [Spec, circuit_norm, elaborated, subcircuit_norm,
+    ByteDecomposition.Assumptions, ByteDecomposition.Spec] at h_holds ⊢
 
   -- targeted rewriting of the assumptions
-  rw [assumptions, U32.ByteVector.normalized_iff] at x_normalized
+  rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized
   simp only [U32.ByteVector.getElem_eval_toLimbs, h_input, x_normalized, true_implies,
     Fin.forall_iff] at h_holds
 
@@ -110,21 +110,21 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) assumpt
   rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']
   exact ⟨ rotation32_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
   simp only [rot32_bits, elaborated, circuit_norm, subcircuit_norm,
-    ByteDecomposition.circuit, ByteDecomposition.assumptions]
+    ByteDecomposition.circuit, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions
-  rw [assumptions, U32.ByteVector.normalized_iff] at x_normalized
+  rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized
   simp_all only [size, U32.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 := {
   elaborated offset with
-  Assumptions := assumptions
-  Spec := spec offset
+  Assumptions
+  Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

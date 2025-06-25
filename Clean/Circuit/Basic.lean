@@ -233,26 +233,26 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 def Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
-    (assumptions: β F → Prop) (spec: β F → α F → Prop) :=
+    (Assumptions: β F → Prop) (Spec: β F → α F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs that satisfy the assumptions
   ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
-  assumptions b →
+  Assumptions b →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) →
   -- the spec holds on the input and output
   let a := eval env (circuit.output b_var offset)
-  spec b a
+  Spec b a
 
 def Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α)
-    (assumptions: β F → Prop) :=
+    (Assumptions: β F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main b_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ b : β F, eval env b_var = b →
-  assumptions b →
+  Assumptions b →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main b_var |>.operations offset)
 

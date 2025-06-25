@@ -17,29 +17,29 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := theta
   localLength _ := 480
 
-def assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
+def Spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
-  simp_all [Soundness, circuit_norm, subcircuit_norm, spec, theta, assumptions,
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+  simp_all [Soundness, circuit_norm, subcircuit_norm, Spec, theta, Assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
-    ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,
-    ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
+    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
+    ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
-  simp_all [Completeness, circuit_norm, subcircuit_norm, theta, assumptions, spec,
+theorem completeness : Completeness (F p) elaborated Assumptions := by
+  simp_all [Completeness, circuit_norm, subcircuit_norm, theta, Assumptions, Spec,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
-    ThetaC.assumptions, ThetaD.assumptions, ThetaXor.assumptions,
-    ThetaC.spec, ThetaD.spec, ThetaXor.spec, Specs.Keccak256.theta]
+    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
+    ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with
-    Assumptions := assumptions,
-    Spec := spec,
-    soundness := soundness,
-    completeness := completeness
+    Assumptions,
+    Spec,
+    soundness,
+    completeness
 }
 end Gadgets.Keccak256.Theta

@@ -42,11 +42,11 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
 
   return { z, carry_out }
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   out.z.val = (x.val + y.val + carry_in.val) % 256 ∧
   out.carry_out.val = (x.val + y.val + carry_in.val) / 256
@@ -57,8 +57,8 @@ def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
-  Assumptions := assumptions
-  Spec := spec
+  Assumptions
+  Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
 
@@ -71,7 +71,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, subcircuit_norm, h_inputs, spec, assumptions, add8_full_carry,
+    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, add8_full_carry,
       ByteTable, Boolean.circuit]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -98,7 +98,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, subcircuit_norm, h_inputs, assumptions, add8_full_carry,
+    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, add8_full_carry,
       ByteTable, Boolean.circuit] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0

@@ -38,11 +38,11 @@ def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) :=
   let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.Normalized ∧ y.Normalized ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
+def Spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   let ⟨z, carry_out⟩ := out
   z.value = (x.value + y.value + carry_in.val) % 2^32
@@ -63,7 +63,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength_eq _ i0 := by
     simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
@@ -73,13 +73,13 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
-  dsimp only [assumptions, U32.Normalized] at as
+  dsimp only [Assumptions, U32.Normalized] at as
   obtain ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
   simp only [circuit_norm, subcircuit_norm, explicit_provable_type, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -104,7 +104,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
@@ -113,7 +113,7 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
-  dsimp [assumptions, U32.Normalized] at as
+  dsimp [Assumptions, U32.Normalized] at as
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
@@ -158,8 +158,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  Assumptions := assumptions
-  Spec := spec
-  soundness := soundness
-  completeness := completeness
+  Assumptions
+  Spec
+  soundness
+  completeness
 end Gadgets.Addition32Full

@@ -17,9 +17,9 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
   let s0 ← subcircuit Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
-def assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccak_round state.value rc
 
@@ -32,7 +32,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 
-theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (spec rc) := by
+theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (Spec rc) := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
@@ -40,11 +40,11 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   simp only [circuit_norm, elaborated, eval_vector, keccak_round, iota]
 
   -- simplify constraints
-  simp only [assumptions] at state_norm
+  simp only [Assumptions] at state_norm
   simp only [main, h_input, state_norm, circuit_norm, subcircuit_norm,
     Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
-    Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
-    Chi.assumptions, Chi.spec, Xor64.assumptions, Xor64.spec
+    Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
   ] at h_holds
   simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
@@ -78,15 +78,15 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) assumptions (s
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumptions := by
+theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
 
   -- simplify goal and witness hypotheses
-  simp only [assumptions] at state_norm
+  simp only [Assumptions] at state_norm
   dsimp only [main, circuit_norm, subcircuit_norm,
     Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
-    Theta.assumptions, Theta.spec, RhoPi.assumptions, RhoPi.spec,
-    Chi.assumptions, Chi.spec, Xor64.assumptions, Xor64.spec
+    Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
   ] at h_env ⊢
   simp_all only [main, h_input, state_norm, circuit_norm,
     U64.fromUInt64_normalized]
@@ -100,8 +100,8 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) assumpti
 
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated rc with
-  Spec := spec rc
-  Assumptions := assumptions
+  Spec := Spec rc
+  Assumptions
   soundness := soundness rc,
   completeness := completeness rc,
 }

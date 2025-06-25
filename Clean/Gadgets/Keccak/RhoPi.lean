@@ -20,9 +20,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .map rhoPiConstants fun (i, s) =>
     subcircuit (Rotation64.circuit (-s)) state[i.val]
 
-def assumptions := KeccakState.Normalized (p:=p)
+def Assumptions := KeccakState.Normalized (p:=p)
 
-def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rho_pi state.value
 
@@ -41,7 +41,7 @@ lemma rho_pi_loop (state : Vector ℕ 25) :
   rw [List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- simplify goal
@@ -51,28 +51,28 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [assumptions, KeccakState.Normalized] at state_norm
+  simp only [Assumptions, KeccakState.Normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
-    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec, Rotation64.elaborated,
+    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated,
     Vector.getElem_zip] at h_holds ⊢
   simp_all [rhoPiConstants, Bitwise.rotLeft64_eq_rotRight64]
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [assumptions, KeccakState.Normalized] at state_norm
+  simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [main, circuit_norm, subcircuit_norm,
-    Rotation64.circuit, Rotation64.assumptions, Rotation64.spec]
+    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with
-    Assumptions := assumptions,
-    Spec := spec,
-    soundness := soundness,
-    completeness := completeness
+    Assumptions,
+    Spec,
+    soundness,
+    completeness
 }
 end Gadgets.Keccak256.RhoPi
