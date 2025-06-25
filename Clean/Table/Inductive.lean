@@ -92,15 +92,15 @@ def tableConstraints (table : InductiveTable F State Input) (input_state output_
   ]
 
 theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
-  Circuit.ConstraintsHold.Soundness (window_env (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
+  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
-  set env' := window_env (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
+  set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
   simp only [equalityConstraint, circuit_norm, table_norm]
 
   have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
-    have h_env' : env' = window_env (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
-    simp only [window_env, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
+    have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
+    simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
     have hi' : i < size State + size Input := by linarith
     simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
@@ -176,13 +176,13 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output: 
       simp [ih2]
     simp only [ih2, and_self, and_true, Trace.lastRow]
     clear ih1 ih2
-    set env' := window_env table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1))
+    set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1))
     simp only [table_norm, circuit_norm, inductiveConstraint] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
-    have h_env' : env' = window_env table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1)) := rfl
-    simp only [window_env, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
+    have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1)) := rfl
+    simp only [windowEnv, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
-      CellAssignment.assignment_from_circuit_offset, CellAssignment.assignment_from_circuit_vars] at h_env'
+      CellAssignment.assignmentFromCircuit_offset, CellAssignment.assignmentFromCircuit_vars] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
     set x := size Input
@@ -195,7 +195,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output: 
       have hi''' : i < 0 + (s + x) + t := by linarith
       rw [h_env']
       simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
-        CellAssignment.assignment_from_circuit_offset,
+        CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
 
     have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
@@ -204,7 +204,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output: 
       have hi''' : i + s < 0 + (s + x) + t := by linarith
       rw [h_env']
       simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
-        CellAssignment.assignment_from_circuit_offset,
+        CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       congr; omega
 
@@ -214,7 +214,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output: 
       have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
       rw [h_env']
       simp +arith only [main_ops, hi, hi', hi'', hi''', s, t, x, table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
-        CellAssignment.assignment_from_circuit_offset,
+        CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       simp +arith [hi, s, add_assoc]
     clear h_env'
@@ -289,6 +289,6 @@ def toFormal (table : InductiveTable F State Input) (input output: State F) : Fo
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
-      table_assignment_norm, circuit_norm, CellAssignment.assignment_from_circuit_offset]
+      table_assignment_norm, circuit_norm, CellAssignment.assignmentFromCircuit_offset]
 
 end InductiveTable
