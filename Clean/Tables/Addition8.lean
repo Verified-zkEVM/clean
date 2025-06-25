@@ -56,7 +56,7 @@ def formal_add8_table : FormalTable (F p) RowType := {
         change Circuit.constraints_hold.soundness env _ at h_holds
 
         -- this is the slowest step, but still ok
-        simp [table_norm, circuit_norm, subcircuit_norm, var_from_offset, Vector.mapRange,
+        simp [table_norm, circuit_norm, subcircuit_norm, varFromOffset, Vector.mapRange,
           add8_inline, Gadgets.Addition8.circuit, ByteLookup
         ] at h_holds
 

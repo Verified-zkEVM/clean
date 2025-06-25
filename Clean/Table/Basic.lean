@@ -397,7 +397,7 @@ def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
       circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
       assignment := ctx.assignment.push_row row
     }
-    (var_from_offset S ctx.offset, ctx')
+    (varFromOffset S ctx.offset, ctx')
 
 /--
   Get a fresh variable for each cell in the current row

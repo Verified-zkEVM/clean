@@ -97,7 +97,7 @@ def witnessVars (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (V
 @[circuit_norm]
 def witnessVector (m: ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
-    let vars := var_from_offset (fields m) offset
+    let vars := varFromOffset (fields m) offset
     (vars, [.witness m compute])
 
 /-- Add a constraint. -/
@@ -116,7 +116,7 @@ end Circuit
 @[circuit_norm]
 def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
-    let var := var_from_offset α offset
+    let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> to_elements)])
 
 @[circuit_norm]

@@ -105,10 +105,10 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
     simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
 
-  have h_env : eval env' (var_from_offset State 0) = row.1 := by
+  have h_env : eval env' (varFromOffset State 0) = row.1 := by
     rw [ProvableType.ext_iff]
     intro i hi
-    rw [h_env_in i hi, ProvableType.eval_var_from_offset,
+    rw [h_env_in i hi, ProvableType.eval_varFromOffset,
       ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
   rw [h_env]
 
@@ -183,10 +183,10 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     simp only [window_env, table_assignment_norm, inductiveConstraint, circuit_norm] at h_env'
     simp only [zero_add, Nat.add_zero, Fin.isValue, PNat.val_ofNat, Nat.reduceAdd, Nat.add_one_sub_one,
       CellAssignment.assignment_from_circuit_offset, CellAssignment.assignment_from_circuit_vars] at h_env'
-    set curr_var : Var State F × Var Input F := var_from_offset (ProvablePair State Input) 0
+    set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
     set x := size Input
-    set main_ops : Operations F := (table.step (var_from_offset State 0) (var_from_offset Input s) (s + x)).2
+    set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
     set t := main_ops.local_length
 
     have h_env_input_1 i (hi : i < s) : (to_elements curr.1)[i] = env'.get i := by
@@ -222,24 +222,24 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     have input_eq_1 : eval env' curr_var.1 = curr.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
-      simp only [curr_var, var_from_offset_pair]
+      simp only [curr_var, varFromOffset_pair]
       rw [h_env_input_1 i hi]
-      simp only [ProvableType.eval_var_from_offset,
+      simp only [ProvableType.eval_varFromOffset,
         ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
 
     have input_eq_2 : eval env' curr_var.2 = curr.2 := by
       rw [ProvableType.ext_iff]
       intro i hi
-      simp only [curr_var, var_from_offset_pair]
+      simp only [curr_var, varFromOffset_pair]
       rw [h_env_input_2 i hi]
-      simp only [s, ProvableType.eval_var_from_offset,
+      simp only [s, ProvableType.eval_varFromOffset,
         ProvableType.to_elements_from_elements, Vector.getElem_mapRange, zero_add]
       ac_rfl
 
-    have next_eq : eval env' (var_from_offset State (size State + size Input + main_ops.local_length)) = next.1 := by
+    have next_eq : eval env' (varFromOffset State (size State + size Input + main_ops.local_length)) = next.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
-      rw [h_env_output i hi, ProvableType.eval_var_from_offset,
+      rw [h_env_output i hi, ProvableType.eval_varFromOffset,
         ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
       simp only [t, s, x]
       ac_rfl
@@ -247,7 +247,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
     simp only [t, x] at main_constraints
     have constraints : Circuit.constraints_hold.soundness
         env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
-      simp only [curr_var, var_from_offset_pair]
+      simp only [curr_var, varFromOffset_pair]
       exact main_constraints
 
     let xs := traceInputs ⟨ rest, rfl ⟩
@@ -257,7 +257,7 @@ lemma tableSoundnessAux (table : InductiveTable F State Input) (input output: St
 
     have h_soundness := table.soundness rest.len env' curr_var.1 curr_var.2 curr.1 curr.2 xs xs_len
       ⟨ input_eq_1, input_eq_2 ⟩ constraints spec_previous
-    simp only [curr_var, var_from_offset_pair] at h_soundness
+    simp only [curr_var, varFromOffset_pair] at h_soundness
     simp only [s, x, t, main_ops] at *
     simp +arith only at return_eq h_soundness
     rw [←return_eq, next_eq] at h_soundness

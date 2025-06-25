@@ -251,7 +251,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   assumptions := assumptions
   spec := spec
   local_length _ := 8
-  output inputs i0 := var_from_offset U64 i0
+  output inputs i0 := varFromOffset U64 i0
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as

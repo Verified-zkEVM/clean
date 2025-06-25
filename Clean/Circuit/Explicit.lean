@@ -116,7 +116,7 @@ instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witness
   operations n := [.witness k c]
 
 instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
-  output _ n := var_from_offset α n
+  output _ n := varFromOffset α n
   local_length _ _ := size α
   operations c n := [.witness (size α) (to_elements ∘ c)]
 

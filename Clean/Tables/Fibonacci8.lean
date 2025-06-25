@@ -131,7 +131,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
 
       simp only [fib_table, fib_relation, circuit_norm, table_norm, table_assignment_norm, copy_to_var,
           Gadgets.Addition8.circuit] at constraints_hold
-      simp only [circuit_norm, subcircuit_norm, eval, var_from_offset, Vector.mapRange] at constraints_hold
+      simp only [circuit_norm, subcircuit_norm, eval, varFromOffset, Vector.mapRange] at constraints_hold
 
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl
