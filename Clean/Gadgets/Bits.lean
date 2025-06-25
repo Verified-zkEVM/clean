@@ -22,7 +22,7 @@ def main (n: ℕ) (x : Expression (F p)) := do
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
-  output _ i := var_from_offset (fields n) i
+  output _ i := varFromOffset (fields n) i
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
   subcircuits_consistent x i0 := by simp +arith only [main, circuit_norm]

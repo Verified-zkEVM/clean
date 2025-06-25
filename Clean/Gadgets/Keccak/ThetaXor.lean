@@ -45,7 +45,7 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
-  simp only [main, circuit_norm, theta_xor_loop, Xor64.circuit, var_from_offset_vector, eval_vector,
+  simp only [main, circuit_norm, theta_xor_loop, Xor64.circuit, varFromOffset_vector, eval_vector,
     mul_comm, KeccakState.value, KeccakRow.value]
 
   -- simplify constraints

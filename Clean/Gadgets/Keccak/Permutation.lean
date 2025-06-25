@@ -17,8 +17,8 @@ def spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 /-- state in the ith round, starting from offset n -/
 def state_var (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
-  Vector.mapRange 25 (fun j => var_from_offset U64 (n + i * 1288 + j * 16 + 888))
-  |>.set 0 (var_from_offset U64 (n + i * 1288 + 1280))
+  Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
+  |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
 -- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false

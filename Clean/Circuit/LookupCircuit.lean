@@ -70,7 +70,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     return output
 
   localLength n := size β
-  output _ n := var_from_offset β n
+  output _ n := varFromOffset β n
 
   assumptions := circuit.assumptions
   spec := circuit.spec
@@ -84,7 +84,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
     simp_all only [circuit_norm, toTable]
     rw [ProvableType.ext_iff]
     intro i hi
-    rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_var_from_offset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
+    rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.to_elements_from_elements, Vector.getElem_mapRange]
 
 @[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (input : Var α F) : Circuit F (Var β F) :=

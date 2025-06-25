@@ -39,7 +39,7 @@ def spec (input: Inputs (F p)) (z : U64 (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main
   localLength _ := 8
-  output _ i := var_from_offset U64 i
+  output _ i := varFromOffset U64 i
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}
