@@ -42,8 +42,8 @@ def assign_U32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRows
   inductive contraints that are applied every two rows of the trace.
 -/
 def recursive_relation : TwoRowsConstraint RowType (F p) := do
-  let curr ← TableConstraint.get_curr_row
-  let next ← TableConstraint.get_next_row
+  let curr ← TableConstraint.getCurrRow
+  let next ← TableConstraint.getNextRow
 
   let z ← subcircuit Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
 
@@ -54,7 +54,7 @@ def recursive_relation : TwoRowsConstraint RowType (F p) := do
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
-  let row ← TableConstraint.get_curr_row
+  let row ← TableConstraint.getCurrRow
   row.x === (const (U32.fromByte 0))
   row.y === (const (U32.fromByte 1))
 
@@ -62,8 +62,8 @@ def boundary : SingleRowConstraint RowType (F p) := do
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
 def fib32_table : List (TableOperation RowType (F p)) := [
-  Boundary (.fromStart 0) boundary,
-  EveryRowExceptLast recursive_relation,
+  .boundary (.fromStart 0) boundary,
+  .everyRowExceptLast recursive_relation,
 ]
 
 /--
@@ -73,7 +73,7 @@ def fib32_table : List (TableOperation RowType (F p)) := [
   - both U32 values are normalized
 -/
 def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTraceWithIndex (fun row index =>
+  trace.ForAllRowsOfTraceWithIndex (fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
     row.x.Normalized ∧ row.y.Normalized
@@ -88,8 +88,8 @@ def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 variable {α : Type}
 
 -- assignment copied from eval:
--- #eval! (recursive_relation (p:=p_babybear)).final_assignment.vars
-lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
+-- #eval! (recursive_relation (p:=p_babybear)).finalAssignment.vars
+lemma fib_assignment : (recursive_relation (p:=p)).finalAssignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
@@ -98,15 +98,15 @@ lemma fib_assignment : (recursive_relation (p:=p)).final_assignment.vars =
   simp only [table_assignment_norm, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero, Vector.mapRange_succ]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
-    let env := recursive_relation.window_env ⟨<+> +> curr +> next, rfl⟩ aux_env;
+    let env := recursive_relation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
     eval env (varFromOffset U32 0) = curr.x ∧
     eval env (varFromOffset U32 4) = curr.y ∧
     eval env (varFromOffset U32 8) = next.x ∧
     eval env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
   := by
   intro env
-  dsimp only [env, window_env]
-  have h_offset : (recursive_relation (p:=p)).final_assignment.offset = 24 := rfl
+  dsimp only [env, windowEnv]
+  have h_offset : (recursive_relation (p:=p)).finalAssignment.offset = 24 := rfl
   simp only [h_offset]
   rw [fib_assignment]
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
@@ -121,13 +121,13 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   then the Spec of add32 and equality are satisfied
 -/
 lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
-  : recursive_relation.constraintsHold_on_window ⟨<+> +> curr +> next, rfl⟩ aux_env →
+  : recursive_relation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env →
   curr.y = next.x ∧
   (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
    := by
   simp only [table_norm]
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
-  set env := recursive_relation.window_env  ⟨<+> +> curr +> next, rfl⟩ aux_env
+  set env := recursive_relation.windowEnv  ⟨<+> +> curr +> next, rfl⟩ aux_env
   simp only [table_norm, circuit_norm, recursive_relation,
     assign_U32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
@@ -144,10 +144,10 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   exact ⟨h_add_mod, h_norm_next_y⟩
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (window_env boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
-  set env := boundary.window_env ⟨<+> +> first_row, rfl⟩ aux_env
+  set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
   have hx : eval env (varFromOffset U32 0) = first_row.x := by rfl
@@ -169,7 +169,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
   soundness := by
     intro N trace envs _
     simp only [fib32_table, Spec]
-    rw [TraceOfLength.forAllRowsOfTraceWithIndex, Trace.forAllRowsOfTraceWithIndex, table_constraintsHold]
+    rw [TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, TableConstraintsHold]
 
     /-
       We prove the soundness of the table by induction on the trace.

@@ -19,7 +19,7 @@ instance : ToJson (Cell W S) where
 
 instance : ToJson (CellAssignment W S) where
   toJson assignment :=
-    let aux_map := build_aux_map assignment
+    let aux_map := buildAuxMap assignment
     -- iterate over the vars and convert aux cell to input cell with column from aux_map
     let vars := assignment.vars.mapIdx fun idx cell =>
       match cell with
@@ -28,7 +28,7 @@ instance : ToJson (CellAssignment W S) where
         let col := aux_map[idx]!
         if h: col < (size S)
           then Cell.input { row := 1, column := ⟨col, h⟩ }
-          else cell -- todo: might be better to refactor the build_aux_map to return Fin (size S) instead
+          else cell -- todo: might be better to refactor the buildAuxMap to return Fin (size S) instead
 
     Json.mkObj [
       ("offset", toJson assignment.offset),
@@ -48,16 +48,16 @@ instance : ToJson (TableConstraint W S F α) where
 
 instance : ToJson (TableOperation S F) where
   toJson
-    | .Boundary i c => Json.mkObj [
+    | .boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),
       ("row", reprStr i),
       ("context", toJson c)
     ]
-    | .EveryRow c => Json.mkObj [
+    | .everyRow c => Json.mkObj [
       ("type", Json.str "EveryRow"),
       ("context", toJson c)
     ]
-    | .EveryRowExceptLast c => Json.mkObj [
+    | .everyRowExceptLast c => Json.mkObj [
       ("type", Json.str "EveryRowExceptLast"),
       ("context", toJson c)
     ]
