@@ -8,7 +8,7 @@ variable {F : Type} [Field F]
 open Circuit (constraints_hold)
 
 namespace Gadgets
-def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assert_zero
+def all_zero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
 theorem all_zero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
     constraints_hold.soundness env ((all_zero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
@@ -27,7 +27,7 @@ namespace Equality
 def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circuit F Unit := do
   let (x, y) := input
   let diffs := (to_vars x).zip (to_vars y) |>.map (fun (xi, yi) => xi - yi)
-  .forEach diffs assert_zero
+  .forEach diffs assertZero
 
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
