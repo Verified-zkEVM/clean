@@ -140,7 +140,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output: 
 
   simp only [table_norm, tableConstraints]
   clear h_trace
-  induction trace using Trace.everyRowTwoRowsInduction
+  induction trace using Trace.every_row_two_rows_induction
 
   case zero =>
     intro constraints
