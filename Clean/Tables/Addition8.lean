@@ -21,7 +21,7 @@ instance : ProvableType RowType where
     ⟨ x, y, z ⟩
 
 def add8_inline : SingleRowConstraint RowType (F p) := do
-  let row ← TableConstraint.get_curr_row
+  let row ← TableConstraint.getCurrRow
   lookup (ByteLookup row.x)
   lookup (ByteLookup row.y)
   let z ← subcircuit Gadgets.Addition8.circuit { x := row.x, y := row.y }
@@ -32,7 +32,7 @@ def add8_table : List (TableOperation RowType (F p)) := [
 ]
 
 def spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.forAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
+  trace.ForAllRowsOfTrace (fun row => (row.z.val = (row.x.val + row.y.val) % 256))
 
 def formal_add8_table : FormalTable (F p) RowType := {
   constraints := add8_table,
@@ -52,7 +52,7 @@ def formal_add8_table : FormalTable (F p) RowType := {
         -- simplify constraints
 
         -- first, abstract away `env` to avoid blow-up of expression size
-        let env := add8_inline.window_env ⟨<+> +> row, rfl⟩ (envs 0 rest.len)
+        let env := add8_inline.windowEnv ⟨<+> +> row, rfl⟩ (envs 0 rest.len)
         change Circuit.ConstraintsHold.Soundness env _ at h_holds
 
         -- this is the slowest step, but still ok
