@@ -13,8 +13,8 @@ def ByteTable : Table (F p) field := .fromStatic {
   length := 256
   row i := from_byte i
   index x := x.val
-  soundness x := x.val < 256
-  completeness x := x.val < 256
+  Soundness x := x.val < 256
+  Completeness x := x.val < 256
 
   imply_soundness := by
     intro x ⟨ i, h ⟩
@@ -32,6 +32,6 @@ def ByteTable : Table (F p) field := .fromStatic {
     simp [FieldUtils.nat_to_field_of_val_eq_iff]
 }
 
-def ByteTable.equiv (x: F p) : ByteTable.contains x ↔ x.val < 256 :=
+def ByteTable.equiv (x: F p) : ByteTable.Contains x ↔ x.val < 256 :=
   ⟨ByteTable.imply_soundness x, ByteTable.implied_by_completeness x⟩
 end Gadgets

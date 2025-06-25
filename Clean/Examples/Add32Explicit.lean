@@ -22,7 +22,7 @@ example : ExplicitCircuit.output (circuit32 default) 0
   dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
 
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
-  ExplicitCircuits.subcircuits_consistent ..
+  ExplicitCircuits.subcircuitsConsistent ..
 
 example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
   Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩).operations i0)

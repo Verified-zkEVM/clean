@@ -49,7 +49,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp only [circuit_norm, rot64_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.from_limbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
-  subcircuits_consistent _ _ := by
+  subcircuitsConsistent _ _ := by
     simp +arith only [circuit_norm, rot64_bits,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 

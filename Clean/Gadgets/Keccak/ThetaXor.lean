@@ -24,7 +24,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   localLength _ := 200
 
   localLength_eq _ n := by simp only [main, circuit_norm, Xor64.circuit]
-  subcircuits_consistent _ i := by simp only [main, circuit_norm]
+  subcircuitsConsistent _ i := by simp only [main, circuit_norm]
 
 def assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs

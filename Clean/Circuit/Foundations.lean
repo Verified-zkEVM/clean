@@ -42,8 +42,8 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     ConstraintsHold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env
-  apply Circuit.can_replace_completeness (circuit.subcircuits_consistent ..) h_env
-  have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuits_consistent ..) h_env
+  apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
+  have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions
 
 /--
@@ -73,6 +73,6 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     circuit.spec b → ConstraintsHold env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env h_spec
-  apply Circuit.can_replace_completeness (circuit.subcircuits_consistent ..) h_env
-  have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuits_consistent ..) h_env
+  apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
+  have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
   exact circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec

@@ -63,7 +63,7 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := ops.toFlat
-  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuits_consistent b_var n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent b_var n
 
   have imply_soundness : ∀ env : Environment F,
       ConstraintsHoldFlat env flat_ops → SubcircuitSoundness circuit b_var n env := by
@@ -108,8 +108,8 @@ def FormalCircuit.to_subcircuit (circuit: FormalCircuit F β α)
 
   {
     ops := flat_ops,
-    soundness := SubcircuitSoundness circuit b_var n,
-    completeness := SubcircuitCompleteness circuit b_var,
+    Soundness := SubcircuitSoundness circuit b_var n,
+    Completeness := SubcircuitCompleteness circuit b_var,
     UsesLocalWitnesses := SubcircuitSoundness circuit b_var n,
     localLength := circuit.localLength b_var
 
@@ -134,12 +134,12 @@ def FormalAssertion.to_subcircuit (circuit: FormalAssertion F β)
     (n: ℕ) (b_var : Var β F) : SubCircuit F n :=
   let ops := circuit.main b_var |>.operations n
   let flat_ops := ops.toFlat
-  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuits_consistent b_var n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent b_var n
 
   {
     ops := flat_ops,
-    soundness := SubassertionSoundness circuit b_var,
-    completeness := SubassertionCompleteness circuit b_var,
+    Soundness := SubassertionSoundness circuit b_var,
+    Completeness := SubassertionCompleteness circuit b_var,
     UsesLocalWitnesses _ := True,
     localLength := circuit.localLength b_var
 
@@ -222,7 +222,7 @@ namespace ElaboratedCircuit
 For formal circuits, to prove `computableWitnesses`, we assume that the input
 only contains variables below the current offset `n`.
  -/
-def computableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
+def ComputableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F),
     Environment.OnlyAccessedBelow n (eval · input) →
       (circuit.main input).ComputableWitnesses n
@@ -231,7 +231,7 @@ def computableWitnesses' (circuit : ElaboratedCircuit F β α) : Prop :=
 This reformulation of `computableWitnesses'` is easier to prove in a formal circuit,
 because we have all necessary assumptions at each circuit operation step.
  -/
-def computableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
+def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
   ∀ (n : ℕ) (input : Var β F) env env',
   circuit.main input |>.operations n |>.forAllFlat n {
     witness n _ compute :=
@@ -241,8 +241,8 @@ def computableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
 `computableWitnesses` is stronger than `computableWitnesses'` (so it's fine to only prove the former).
 -/
 lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
-    circuit.computableWitnesses → circuit.computableWitnesses' := by
-  simp only [computableWitnesses, computableWitnesses']
+    circuit.ComputableWitnesses → circuit.ComputableWitnesses' := by
+  simp only [ComputableWitnesses, ComputableWitnesses']
   intro h_computable n input input_only_accesses_n
   intro env env'
   specialize h_computable n input env env'
@@ -270,7 +270,7 @@ then we can conclude that the subcircuit, evaluated at this particular input,
 satisfies `computableWitnesses` in the original sense.
 -/
 theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input: Var β F) (n : ℕ) :
-  Environment.OnlyAccessedBelow n (eval · input) ∧ circuit.computableWitnesses →
+  Environment.OnlyAccessedBelow n (eval · input) ∧ circuit.ComputableWitnesses →
     (circuit.main input).ComputableWitnesses n := by
   intro ⟨ h_input, h_computable ⟩
   apply ElaboratedCircuit.computableWitnesses_implies h_computable
@@ -278,7 +278,7 @@ theorem compose_computableWitnesses (circuit : ElaboratedCircuit F β α) (input
 end ElaboratedCircuit
 
 theorem Circuit.subcircuit_computableWitnesses (circuit: FormalCircuit F β α) (input: Var β F) (n : ℕ) :
-  Environment.OnlyAccessedBelow n (eval · input) ∧ circuit.computableWitnesses →
+  Environment.OnlyAccessedBelow n (eval · input) ∧ circuit.ComputableWitnesses →
     (subcircuit circuit input).ComputableWitnesses n := by
   intro h env env'
   simp only [circuit_norm, FormalCircuit.to_subcircuit, Operations.ComputableWitnesses,

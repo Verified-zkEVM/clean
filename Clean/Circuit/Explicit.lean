@@ -20,7 +20,7 @@ class ExplicitCircuit (circuit : Circuit F α) where
   operations_eq : ∀ n : ℕ, circuit.operations n = operations n := by intro _; rfl
 
   /-- same condition as in `ElaboratedCircuit`: subcircuits must be consistent with the current offset -/
-  subcircuits_consistent : ∀ n : ℕ, (circuit.operations n).SubcircuitsConsistent n := by
+  subcircuitsConsistent : ∀ n : ℕ, (circuit.operations n).SubcircuitsConsistent n := by
     intro _; and_intros <;> try first | ac_rfl | trivial
 
 /-- family of explicit circuits -/
@@ -31,7 +31,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
   output_eq : ∀ (a : α) (n: ℕ), (circuit a).output n = output a n := by intro _ _; rfl
   localLength_eq : ∀ (a : α) (n: ℕ), (circuit a).localLength n = localLength a n := by intro _ _; rfl
   operations_eq : ∀ (a : α) (n: ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
-  subcircuits_consistent : ∀ (a : α) (n: ℕ), ((circuit a).operations n).SubcircuitsConsistent n := by
+  subcircuitsConsistent : ∀ (a : α) (n: ℕ), ((circuit a).operations n).SubcircuitsConsistent n := by
     intro _ _; and_intros <;> try first | ac_rfl | trivial
 
 -- move between family and single explicit circuit
@@ -44,7 +44,7 @@ instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
   output_eq a n := (explicit a).output_eq n
   localLength_eq a n := (explicit a).localLength_eq n
   operations_eq a n := (explicit a).operations_eq n
-  subcircuits_consistent a n := (explicit a).subcircuits_consistent n
+  subcircuitsConsistent a n := (explicit a).subcircuitsConsistent n
 
 instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
@@ -54,7 +54,7 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
   output_eq n := output_eq a n
   localLength_eq n := localLength_eq a n
   operations_eq n := operations_eq a n
-  subcircuits_consistent n := subcircuits_consistent a n
+  subcircuitsConsistent n := subcircuitsConsistent a n
 
 -- `pure` is an explicit circuit
 instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
@@ -85,9 +85,9 @@ instance ExplicitCircuit.from_bind {f: Circuit F α} {g : α → Circuit F β}
   output_eq n := by rw [Circuit.bind_output_eq, output_eq, output_eq, localLength_eq]
   localLength_eq n := by rw [Circuit.bind_localLength_eq, localLength_eq, output_eq, localLength_eq]
   operations_eq n := by rw [Circuit.bind_operations_eq, operations_eq, output_eq, localLength_eq, operations_eq]
-  subcircuits_consistent n := by
+  subcircuitsConsistent n := by
     rw [Operations.SubcircuitsConsistent, Circuit.bind_forAll]
-    exact ⟨ f_explicit.subcircuits_consistent .., (g_explicit _).subcircuits_consistent .. ⟩
+    exact ⟨ f_explicit.subcircuitsConsistent .., (g_explicit _).subcircuitsConsistent .. ⟩
 
 -- `map` of an explicit circuit yields an explicit circuit
 instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
@@ -99,9 +99,9 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
   output_eq n := by rw [Circuit.map_output_eq, output_eq]
   localLength_eq n := by rw [Circuit.map_localLength_eq, localLength_eq]
   operations_eq n := by rw [Circuit.map_operations_eq, operations_eq]
-  subcircuits_consistent n := by
+  subcircuitsConsistent n := by
     rw [Circuit.map_operations_eq]
-    exact g_explicit.subcircuits_consistent n
+    exact g_explicit.subcircuitsConsistent n
 
 -- basic operations are explicit circuits
 

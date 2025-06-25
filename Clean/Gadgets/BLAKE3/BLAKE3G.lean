@@ -69,7 +69,7 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
   output_eq _ _ := by
     dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
-  subcircuits_consistent _ _ := by
+  subcircuitsConsistent _ _ := by
     simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 

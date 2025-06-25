@@ -52,7 +52,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp only [circuit_norm, rot32_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U32.from_limbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
-  subcircuits_consistent _ _ := by
+  subcircuitsConsistent _ _ := by
     simp +arith only [circuit_norm, rot32_bits,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 

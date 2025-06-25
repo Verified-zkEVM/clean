@@ -15,9 +15,9 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
 
   index := fun (x, y, _) => x.val * 256 + y.val
 
-  soundness := fun (x, y, z) =>
+  Soundness := fun (x, y, z) =>
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
-  completeness := fun (x, y, z) =>
+  Completeness := fun (x, y, z) =>
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val
 
   imply_soundness := by
@@ -54,7 +54,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
 }
 
 def ByteXorTable.equiv (x y z: F p) :
-  ByteXorTable.contains (x, y, z) ↔ x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
+  ByteXorTable.Contains (x, y, z) ↔ x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ^^^ y.val :=
   ⟨ByteXorTable.imply_soundness (x, y, z), ByteXorTable.implied_by_completeness (x, y, z)⟩
 
 end Gadgets.Xor

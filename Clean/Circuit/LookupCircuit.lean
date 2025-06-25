@@ -12,7 +12,7 @@ Besides that, a `name` is required, to identify the table created from this circ
 structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α] [ProvableType β]
     extends circuit : FormalCircuit F α β where
   name : String
-  computableWitnesses : circuit.computableWitnesses
+  computableWitnesses : circuit.ComputableWitnesses
 
 namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
@@ -33,7 +33,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
   name := circuit.name
 
   -- for `(input, output)` to be contained in the lookup table defined by a circuit, means that:
-  contains := fun (input, output) =>
+  Contains := fun (input, output) =>
     -- there exists an environment, such that
     ∃ n env,
     -- the circuit constraints hold
@@ -41,8 +41,8 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
-  soundness := fun (input, output) => circuit.assumptions input → circuit.spec input output
-  completeness := fun (input, output) => circuit.assumptions input ∧ output = circuit.constantOutput input
+  Soundness := fun (input, output) => circuit.assumptions input → circuit.spec input output
+  Completeness := fun (input, output) => circuit.assumptions input ∧ output = circuit.constantOutput input
 
   imply_soundness := by
     intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions

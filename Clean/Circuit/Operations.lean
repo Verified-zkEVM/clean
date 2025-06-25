@@ -34,7 +34,7 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
     | lookup { table, entry } =>
-      table.contains (entry.map eval) ∧ ConstraintsHoldFlat eval ops
+      table.Contains (entry.map eval) ∧ ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
@@ -83,8 +83,8 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `soundness`,
   -- `completeness` and `usesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  soundness : Environment F → Prop
-  completeness : Environment F → Prop
+  Soundness : Environment F → Prop
+  Completeness : Environment F → Prop
   UsesLocalWitnesses : Environment F → Prop
 
   -- for faster simplification, the subcircuit records its local witness length separately
@@ -93,11 +93,11 @@ structure SubCircuit (F: Type) [Field F] (offset: ℕ) where
 
   -- `soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops → soundness env
+    ConstraintsHoldFlat env ops → Soundness env
 
   -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
-    completeness env → ConstraintsHoldFlat env ops
+    Completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
   implied_by_localWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →

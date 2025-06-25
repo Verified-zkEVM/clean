@@ -299,8 +299,8 @@ namespace Circuit
 theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.soundness (l.entry.map env),
-    subcircuit _ _ s := s.soundness env
+    lookup _ l := l.table.Soundness (l.entry.map env),
+    subcircuit _ _ s := s.Soundness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -312,8 +312,8 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
 theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.completeness (l.entry.map env),
-    subcircuit _ _ s := s.completeness env
+    lookup _ l := l.table.Completeness (l.entry.map env),
+    subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -375,16 +375,16 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
 theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.soundness (l.entry.map env),
-    subcircuit _ _ s := s.soundness env
+    lookup _ l := l.table.Soundness (l.entry.map env),
+    subcircuit _ _ s := s.Soundness env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
 theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
-    lookup _ l := l.table.completeness (l.entry.map env),
-    subcircuit _ _ s := s.completeness env
+    lookup _ l := l.table.Completeness (l.entry.map env),
+    subcircuit _ _ s := s.Completeness env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]
 

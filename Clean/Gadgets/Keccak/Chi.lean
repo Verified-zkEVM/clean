@@ -31,7 +31,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
 
   localLength_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit]
-  subcircuits_consistent state i0 := by
+  subcircuitsConsistent state i0 := by
     simp only [main, circuit_norm]
     intro i
     and_intros <;> ac_rfl

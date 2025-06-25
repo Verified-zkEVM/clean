@@ -140,7 +140,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .witness _ _ :: ops => ConstraintsHold eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup { table, entry, .. } :: ops =>
-    table.contains (entry.map eval) ∧ ConstraintsHold eval ops
+    table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
 
@@ -153,9 +153,9 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup { table, entry } :: ops =>
-    table.soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
-    s.soundness eval ∧ ConstraintsHold.Soundness eval ops
+    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `completeness`.
@@ -166,9 +166,9 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup { table, entry } :: ops =>
-    table.completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
+    table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
-    s.completeness eval ∧ ConstraintsHold.Completeness eval ops
+    s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
 
 /--
@@ -224,7 +224,7 @@ class ElaboratedCircuit (F: Type) [Field F] (β α: TypeMap) [ProvableType β] [
     := by intros; rfl
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
-  subcircuits_consistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
+  subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
     := by intros; and_intros <;> (
       try simp only [circuit_norm]
       try first | ac_rfl | trivial

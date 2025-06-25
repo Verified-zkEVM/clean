@@ -29,7 +29,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := state_var i0 23
 
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
-  subcircuits_consistent state i0 := by simp only [main, circuit_norm]
+  subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, state_var, circuit_norm, KeccakRound.circuit]
 
 -- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!

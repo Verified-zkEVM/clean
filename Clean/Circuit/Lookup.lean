@@ -20,17 +20,17 @@ structure Table (F : Type) (Row : TypeMap) [ProvableType Row] where
   /--
   `contains` captures what it means to be in the table.
   -/
-  contains : Row F → Prop
+  Contains : Row F → Prop
 
   /--
   we allow to rewrite the `contains` property into two statements that are easier to work with
   in the context of soundness and completeness proofs.
   -/
-  soundness : Row F → Prop
-  completeness : Row F → Prop
+  Soundness : Row F → Prop
+  Completeness : Row F → Prop
 
-  imply_soundness : ∀ row, contains row → soundness row
-  implied_by_completeness : ∀ row, completeness row → contains row
+  imply_soundness : ∀ row, Contains row → Soundness row
+  implied_by_completeness : ∀ row, Completeness row → Contains row
 
 /--
 `RawTable` replaces the custom `Row` type with plain vector-valued entries, which
@@ -41,11 +41,11 @@ User-facing code should use `Table` instead.
 structure RawTable (F : Type) where
   name : String
   arity : ℕ
-  contains : Vector F arity → Prop
-  soundness : Vector F arity → Prop
-  completeness : Vector F arity → Prop
-  imply_soundness : ∀ row, contains row → soundness row
-  implied_by_completeness : ∀ row, completeness row → contains row
+  Contains : Vector F arity → Prop
+  Soundness : Vector F arity → Prop
+  Completeness : Vector F arity → Prop
+  imply_soundness : ∀ row, Contains row → Soundness row
+  implied_by_completeness : ∀ row, Completeness row → Contains row
 
 structure Lookup (F : Type) where
   table: RawTable F
@@ -58,9 +58,9 @@ instance [Repr F] : Repr (Lookup F) where
 def Table.toRaw (table: Table F Row) : RawTable F where
   name := table.name
   arity := size Row
-  contains row := table.contains (from_elements row)
-  soundness row := table.soundness (from_elements row)
-  completeness row := table.completeness (from_elements row)
+  Contains row := table.Contains (from_elements row)
+  Soundness row := table.Soundness (from_elements row)
+  Completeness row := table.Completeness (from_elements row)
   imply_soundness row := table.imply_soundness (from_elements row)
   implied_by_completeness row := table.implied_by_completeness (from_elements row)
 
@@ -74,21 +74,21 @@ structure StaticTable (F : Type) (Row : TypeMap) [ProvableType Row] where
   -- and the lookup would automatically witness the output given the input.
   -- then we could weaken completeness to be `index input < length`!
   index: Row F → ℕ
-  soundness: Row F → Prop
-  completeness: Row F → Prop
-  imply_soundness : ∀ t, (∃ i, t = row i) → soundness t
-  implied_by_completeness : ∀ t, completeness t → ∃ i, t = row i
+  Soundness: Row F → Prop
+  Completeness: Row F → Prop
+  imply_soundness : ∀ t, (∃ i, t = row i) → Soundness t
+  implied_by_completeness : ∀ t, Completeness t → ∃ i, t = row i
 
 namespace StaticTable
-def contains (table: StaticTable F Row) (row: Row F) :=
+def Contains (table: StaticTable F Row) (row: Row F) :=
   ∃ i : Fin table.length, row = table.row i
 
 @[circuit_norm]
 def toTable (table: StaticTable F Row) : Table F Row where
   name := table.name
-  contains := table.contains
-  soundness := table.soundness
-  completeness := table.completeness
+  Contains := table.Contains
+  Soundness := table.Soundness
+  Completeness := table.Completeness
   imply_soundness := table.imply_soundness
   implied_by_completeness := table.implied_by_completeness
 end StaticTable

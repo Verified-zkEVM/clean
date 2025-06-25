@@ -28,7 +28,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
   localLength _ := 160
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
-  subcircuits_consistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
+  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
 -- rewrite theta_c as a loop
 lemma theta_c_loop (state : Vector ℕ 25) :
