@@ -3,7 +3,7 @@ import Clean.Circuit.Extensions
 import Clean.Utils.Bitwise
 import Clean.Circuit.Provable
 import Clean.Utils.Primes
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
 section

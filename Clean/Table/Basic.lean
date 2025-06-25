@@ -3,7 +3,7 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Utils.Field

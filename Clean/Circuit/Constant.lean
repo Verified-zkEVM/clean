@@ -1,4 +1,4 @@
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 /--

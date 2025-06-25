@@ -1,5 +1,5 @@
 import Clean.Types.U32
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Rotation32.Theorems
 import Clean.Gadgets.Rotation32.Rotation32Bytes
 import Clean.Gadgets.ByteDecomposition.ByteDecomposition

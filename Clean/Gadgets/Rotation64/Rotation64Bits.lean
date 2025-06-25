@@ -1,5 +1,5 @@
 import Clean.Types.U64
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Rotation64.Theorems
 import Clean.Circuit.Provable
 import Clean.Gadgets.ByteDecomposition.ByteDecomposition

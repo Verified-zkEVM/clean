@@ -1,5 +1,5 @@
 import Clean.Utils.Primes
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Types.U64
 import Clean.Gadgets.And.And8
 

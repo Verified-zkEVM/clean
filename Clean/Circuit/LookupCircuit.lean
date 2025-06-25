@@ -1,4 +1,4 @@
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Circuit.Foundations
 
 /--
