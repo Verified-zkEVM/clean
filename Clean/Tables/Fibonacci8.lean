@@ -103,7 +103,7 @@ def formal_fib_table : FormalTable (F p) RowType := {
     simp only [gt_iff_lt, TraceOfLength.ForAllRowsOfTrace, TableConstraintsHold,
       fib_table, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, and_imp]
 
-    induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
+    induction' trace.val using Trace.every_row_two_rows_rec with first_row curr next rest _ ih2
     · simp [table_norm]
     · simp [table_norm]
       exact boundary_step first_row (envs 0 0)

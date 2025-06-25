@@ -174,7 +174,7 @@ def formal_fib32_table : FormalTable (F p) RowType := {
     /-
       We prove the soundness of the table by induction on the trace.
     -/
-    induction' trace.val using Trace.everyRowTwoRowsInduction with first_row curr next rest _ ih2
+    induction' trace.val using Trace.every_row_two_rows_rec with first_row curr next rest _ ih2
     -- base case 1
     · simp [table_norm]
 

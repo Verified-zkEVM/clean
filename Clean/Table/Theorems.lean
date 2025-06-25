@@ -7,7 +7,7 @@ variable {F : Type} {S : Type → Type} [ProvableType S]
   Induction principle that applies for every row in the trace, where the inductive step takes into
   account the previous two rows.
 -/
-def everyRowTwoRowsInduction {P : Trace F S → Sort*}
+def every_row_two_rows_rec {P : Trace F S → Sort*}
     (zero : P (<+>))
     (one : ∀ row : Row F S, P (empty +> row))
     (more : ∀ curr next : Row F S,
@@ -16,15 +16,15 @@ def everyRowTwoRowsInduction {P : Trace F S → Sort*}
   | <+> => zero
   | <+> +> first => one first
   | rest +> curr +> _ => more _ _ _
-    (everyRowTwoRowsInduction zero one more (rest))
-    (everyRowTwoRowsInduction zero one more (rest +> curr))
+    (every_row_two_rows_rec zero one more (rest))
+    (every_row_two_rows_rec zero one more (rest +> curr))
 
 /--
   This induction principle states that if a trace length is at least two, then to prove a property
   about the whole trace, we can provide just a proof for the first two rows, and then a proof
   for the inductive step.
 -/
-def everyRowTwoRowsInduction' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
+def every_row_two_rows_rec' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
     (base : ∀ first second, P (<+> +> first +> second) (show 2 ≤ 2 by norm_num))
     (more : ∀ (row : Row F S) (rest : Trace F S) (h : rest.len ≥ 2),
       P rest h → P (rest +> row) (Nat.le_succ_of_le h))
@@ -36,7 +36,7 @@ def everyRowTwoRowsInduction' {P : (t : Trace F S) → t.len ≥ 2 → Sort*}
   | <+> +> first +> second => fun _ => base first second
   | rest +> prev +> curr +> next => fun h =>
     have h_len : 2 ≤ rest.len + 2 := by simp
-    let ih := everyRowTwoRowsInduction' base more (rest +> prev +> curr) h_len
+    let ih := every_row_two_rows_rec' base more (rest +> prev +> curr) h_len
     more next (rest +> prev +> curr) h_len ih
 
 end Trace
@@ -47,7 +47,7 @@ variable {F : Type} {S : Type → Type} [ProvableType S] (N : ℕ)
   Induction principle that applies for every row in the trace, where the inductive step takes into
   account the previous two rows.
 -/
-def everyRowTwoRowsInduction {P : (N : ℕ) → TraceOfLength F S N → Sort*}
+def every_row_two_rows_rec {P : (N : ℕ) → TraceOfLength F S N → Sort*}
     (zero : P 0 ⟨<+>, rfl⟩)
     (one : ∀ row : Row F S, P 1 ⟨<+> +> row, rfl⟩)
     (more : ∀ (N : ℕ) (curr next : Row F S),
@@ -60,8 +60,8 @@ def everyRowTwoRowsInduction {P : (N : ℕ) → TraceOfLength F S N → Sort*}
   | N + 2, ⟨rest +> curr +> next, (h : rest.len + 2 = N + 2)⟩ => by
     have eq : rest.len = N := by rw [Nat.add_left_inj] at h; exact h
     exact more N curr next ⟨rest, eq⟩
-      (everyRowTwoRowsInduction zero one more N ⟨rest, eq⟩)
-      (everyRowTwoRowsInduction zero one more (N + 1) ⟨rest +> curr, by rw [Trace.len, eq]⟩)
+      (every_row_two_rows_rec zero one more N ⟨rest, eq⟩)
+      (every_row_two_rows_rec zero one more (N + 1) ⟨rest +> curr, by rw [Trace.len, eq]⟩)
 
 def everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
     (one : ∀ row : Row F S, P 1 ⟨<+> +> row, rfl⟩)
@@ -72,7 +72,7 @@ def everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
   intro N trace
   let P' (N : ℕ) (trace : TraceOfLength F S N) : Prop :=
     if h : N = 0 then True else P ⟨N, Nat.pos_iff_ne_zero.mpr h⟩ trace
-  have goal' := everyRowTwoRowsInduction (P:=P') trivial one (by
+  have goal' := every_row_two_rows_rec (P:=P') trivial one (by
     intro N curr next rest h_rest h_curr
     exact more N curr next rest h_curr) N trace
   simpa [P', N.pos] using goal'
@@ -83,7 +83,7 @@ def two_row_induction {prop : Row F S → ℕ → Prop}
     : ∀ N (trace : TraceOfLength F S N), ForAllRowsOfTraceWithIndex trace prop := by
   intro N trace
   simp only [ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex]
-  induction trace.val using Trace.everyRowTwoRowsInduction with
+  induction trace.val using Trace.every_row_two_rows_rec with
   | zero => trivial
   | one first_row =>
     simp only [Trace.ForAllRowsOfTraceWithIndex.inner]
