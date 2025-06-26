@@ -14,12 +14,12 @@ def main (n: ℕ) (x : Expression (F p)) := do
   Circuit.forEach bits (assertion Boolean.circuit)
 
   -- check that the bits correctly sum to `x`
-  x === (fieldFromBitsExpr bits)
+  x === fieldFromBitsExpr bits
   return bits
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
+def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -34,10 +34,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     bits = fieldToBits n x
 
   soundness := by
-    intro k eval x_var x h_input _h_assumptions h_holds
+    intro k eval x_var x h_input h_holds
     simp only [main, circuit_norm, Boolean.circuit] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
-    clear h_input _h_assumptions
+    clear h_input
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
 
