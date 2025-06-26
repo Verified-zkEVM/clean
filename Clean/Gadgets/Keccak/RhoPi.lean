@@ -24,7 +24,7 @@ def Assumptions := KeccakState.Normalized (p:=p)
 
 def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
-  ∧ out_state.value = Specs.Keccak256.rho_pi state.value
+  ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
@@ -32,10 +32,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
 
--- recharacterize rho_phi as a loop
-lemma rho_pi_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.rho_pi state = rhoPiConstants.map fun (i, s) => rotLeft64 state[i.val] s := by
-  simp only [Specs.Keccak256.rho_pi, circuit_norm]
+-- recharacterize rhoPi as a loop
+lemma rhoPi_loop (state : Vector ℕ 25) :
+    Specs.Keccak256.rhoPi state = rhoPiConstants.map fun (i, s) => rotLeft64 state[i.val] s := by
+  simp only [Specs.Keccak256.rhoPi, circuit_norm]
   rw [Vector.map_mk]
   simp only
   rw [List.map_toArray]
@@ -47,7 +47,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- simplify goal
   apply KeccakState.normalized_value_ext
   simp only [elaborated, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,
-    KeccakState.value, rho_pi_loop]
+    KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

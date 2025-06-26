@@ -21,7 +21,7 @@ def Assumptions (state : KeccakState (F p)) := state.Normalized
 
 def Spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
   out.Normalized
-  ∧ out.value = Specs.Keccak256.theta_c state.value
+  ∧ out.value = Specs.Keccak256.thetaC state.value
 
 -- #eval! theta_c (p:=p_babybear) default |>.localLength
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
@@ -30,11 +30,11 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
--- rewrite theta_c as a loop
-lemma theta_c_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.theta_c state = .mapFinRange 5 fun i =>
+-- rewrite thetaC as a loop
+lemma thetaC_loop (state : Vector ℕ 25) :
+    Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
-  rw [Specs.Keccak256.theta_c, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+  rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
@@ -42,7 +42,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [main, theta_c_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit]
+  simp only [main, thetaC_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

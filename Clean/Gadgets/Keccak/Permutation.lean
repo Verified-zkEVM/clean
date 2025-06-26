@@ -13,7 +13,7 @@ def Assumptions (state : KeccakState (F p)) := state.Normalized
 
 def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
-  ∧ out_state.value = keccak_permutation state.value
+  ∧ out_state.value = keccakPermutation state.value
 
 /-- state in the ith round, starting from offset n -/
 def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
@@ -34,8 +34,8 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 
 -- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
 example (state : Vector ℕ 25) :
-  Fin.foldl 24 (fun state j => keccak_round state roundConstants[j]) state
-  = roundConstants.foldl keccak_round state := rfl
+  Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
+  = roundConstants.foldl keccakRound state := rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
@@ -52,17 +52,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
 
   change (state 0).Normalized ∧
-    (state 0).value = keccak_round initial_state.value roundConstants[0]
+    (state 0).value = keccakRound initial_state.value roundConstants[0]
   at h_init
 
   change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → (state (i + 1)).Normalized ∧
-    (state (i + 1)).value = keccak_round (state i).value roundConstants[i + 1]
+    (state (i + 1)).value = keccakRound (state i).value roundConstants[i + 1]
   at h_succ
 
   -- inductive proof
   have h_inductive (i : ℕ) (hi : i < 24) :
     (state i).Normalized ∧ (state i).value =
-      Fin.foldl (i + 1) (fun state j => keccak_round state roundConstants[j.val]) initial_state.value := by
+      Fin.foldl (i + 1) (fun state j => keccakRound state roundConstants[j.val]) initial_state.value := by
     induction i with
     | zero => simp [Fin.foldl_succ, h_init]
     | succ i ih =>

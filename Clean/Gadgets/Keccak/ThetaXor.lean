@@ -33,19 +33,19 @@ def Assumptions (inputs : Inputs (F p)) : Prop :=
 def Spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
-  ∧ out.value = Specs.Keccak256.theta_xor state.value d.value
+  ∧ out.value = Specs.Keccak256.thetaXor state.value d.value
 
--- rewrite theta_xor as a loop
-lemma theta_xor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
-    Specs.Keccak256.theta_xor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
-  simp only [Specs.Keccak256.theta_xor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+-- rewrite thetaXor as a loop
+lemma thetaXor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
+    Specs.Keccak256.thetaXor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
+  simp only [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
-  simp only [main, circuit_norm, theta_xor_loop, Xor64.circuit, varFromOffset_vector, eval_vector,
+  simp only [main, circuit_norm, thetaXor_loop, Xor64.circuit, varFromOffset_vector, eval_vector,
     mul_comm, KeccakState.value, KeccakRow.value]
 
   -- simplify constraints
