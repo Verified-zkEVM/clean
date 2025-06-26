@@ -21,7 +21,7 @@ def Assumptions (state : KeccakState (F p)) := state.Normalized
 
 def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
-  ∧ out_state.value = keccak_round state.value rc
+  ∧ out_state.value = keccakRound state.value rc
 
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := main rc
@@ -37,7 +37,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, elaborated, eval_vector, keccak_round, iota]
+  simp only [circuit_norm, elaborated, eval_vector, keccakRound, iota]
 
   -- simplify constraints
   simp only [Assumptions] at state_norm
@@ -59,7 +59,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
   have h_rc_norm : state0_before_rc.Normalized := by
     simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
     exact chi_norm 0
-  have h_rc_eq : state0_before_rc.value = (chi (rho_pi (theta state.value)))[0] := by
+  have h_rc_eq : state0_before_rc.value = (chi (rhoPi (theta state.value)))[0] := by
     simp only [Vector.ext_iff] at chi_eq
     specialize chi_eq 0 (by linarith)
     rw [←chi_eq]

@@ -21,7 +21,7 @@ def roundConstants : Vector UInt64 24 := #v[
 def bits2bytes (x : Nat) : Nat :=
   (x + 7) / 8
 
-def theta_c (state : Vector ℕ 25) : Vector ℕ 5 :=
+def thetaC (state : Vector ℕ 25) : Vector ℕ 5 :=
   #v[
     state[0] ^^^ state[1] ^^^ state[2] ^^^ state[3] ^^^ state[4],
     state[5] ^^^ state[6] ^^^ state[7] ^^^ state[8] ^^^ state[9],
@@ -30,7 +30,7 @@ def theta_c (state : Vector ℕ 25) : Vector ℕ 5 :=
     state[20] ^^^ state[21] ^^^ state[22] ^^^ state[23] ^^^ state[24]
   ]
 
-def theta_d (c : Vector ℕ 5) : Vector ℕ 5 :=
+def thetaD (c : Vector ℕ 5) : Vector ℕ 5 :=
   #v[
     c[4] ^^^ (rotLeft64 c[1] 1),
     c[0] ^^^ (rotLeft64 c[2] 1),
@@ -39,7 +39,7 @@ def theta_d (c : Vector ℕ 5) : Vector ℕ 5 :=
     c[3] ^^^ (rotLeft64 c[0] 1)
   ]
 
-def theta_xor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
+def thetaXor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
   #v[
     state[0] ^^^ d[0],
     state[1] ^^^ d[0],
@@ -69,11 +69,11 @@ def theta_xor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
   ]
 
 def theta (state : Vector ℕ 25) : Vector ℕ 25 :=
-  let c := theta_c state
-  let d := theta_d c
-  theta_xor state d
+  let c := thetaC state
+  let d := thetaD c
+  thetaXor state d
 
-def rho_pi (state : Vector ℕ 25) : Vector ℕ 25 :=
+def rhoPi (state : Vector ℕ 25) : Vector ℕ 25 :=
   #v[
     rotLeft64 state[0] 0,
     rotLeft64 state[15] 28,
@@ -134,29 +134,29 @@ def chi (b : Vector ℕ 25) : Vector ℕ 25 :=
 def iota (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   state.set 0 ((state.get 0) ^^^ rc.toFin)
 
-def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
+def keccakRound (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   let theta_state := theta state
-  let rho_pi_state := rho_pi theta_state
+  let rho_pi_state := rhoPi theta_state
   let chi_state := chi rho_pi_state
   iota chi_state rc
 
-def keccak_permutation (state : Vector ℕ 25): Vector ℕ 25 :=
-  roundConstants.foldl keccak_round state
+def keccakPermutation (state : Vector ℕ 25): Vector ℕ 25 :=
+  roundConstants.foldl keccakRound state
 
 @[reducible] def CAPACITY := 8
 @[reducible] def RATE := 17
 example : RATE + CAPACITY = 25 := rfl
 
-def initial_state : Vector ℕ 25 := .fill 25 0
+def initialState : Vector ℕ 25 := .fill 25 0
 
-def absorb_block (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 25 :=
+def absorbBlock (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 25 :=
   -- absorb the block into the state by XORing with the first RATE elements
   let state' := Vector.mapFinRange 25 fun i => state[i] ^^^ (if _ : i.val < RATE then block[i] else 0)
   -- apply the permutation
-  keccak_permutation state'
+  keccakPermutation state'
 
-def absorb_blocks (blocks : List (Vector ℕ RATE)) : Vector ℕ 25 :=
-  blocks.foldl absorb_block initial_state
+def absorbBlocks (blocks : List (Vector ℕ RATE)) : Vector ℕ 25 :=
+  blocks.foldl absorbBlock initialState
 
 end Specs.Keccak256
 
