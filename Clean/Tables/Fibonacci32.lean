@@ -27,12 +27,12 @@ instance : ProvableStruct RowType where
   combinedSize := 8 -- explicit size to enable casting indices to `Fin size`
 
 @[reducible]
-def next_row_off : RowType (CellOffset 2 RowType) := {
+def nextRowOff : RowType (CellOffset 2 RowType) := {
   x := ⟨.next 0, .next 1, .next 2, .next 3⟩,
   y := ⟨.next 4, .next 5, .next 6, .next 7⟩
 }
 
-def assign_U32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsConstraint RowType (F p) := do
+def assignU32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRowsConstraint RowType (F p) := do
   assign offs.x0 x.x0
   assign offs.x1 x.x1
   assign offs.x2 x.x2
@@ -41,13 +41,13 @@ def assign_U32 (offs : U32 (CellOffset 2 RowType)) (x : Var U32 (F p)) : TwoRows
 /--
   inductive contraints that are applied every two rows of the trace.
 -/
-def recursive_relation : TwoRowsConstraint RowType (F p) := do
+def recursiveRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
   let next ← TableConstraint.getNextRow
 
   let z ← subcircuit Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
 
-  assign_U32 next_row_off.y z
+  assignU32 nextRowOff.y z
   curr.y === next.x
 
 /--
@@ -61,9 +61,9 @@ def boundary : SingleRowConstraint RowType (F p) := do
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
 -/
-def fib32_table : List (TableOperation RowType (F p)) := [
+def fib32Table : List (TableOperation RowType (F p)) := [
   .boundary (.fromStart 0) boundary,
-  .everyRowExceptLast recursive_relation,
+  .everyRowExceptLast recursiveRelation,
 ]
 
 /--
@@ -89,16 +89,16 @@ variable {α : Type}
 
 -- assignment copied from eval:
 -- #eval! (recursive_relation (p:=p_babybear)).finalAssignment.vars
-lemma fib_assignment : (recursive_relation (p:=p)).finalAssignment.vars =
+lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [table_assignment_norm, circuit_norm, recursive_relation, Gadgets.Addition32.circuit, assign_U32]
+  dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32]
   simp only [table_assignment_norm, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero, Vector.mapRange_succ]
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
-    let env := recursive_relation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
+    let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
     eval env (varFromOffset U32 0) = curr.x ∧
     eval env (varFromOffset U32 4) = curr.y ∧
     eval env (varFromOffset U32 8) = next.x ∧
@@ -106,7 +106,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   := by
   intro env
   dsimp only [env, windowEnv]
-  have h_offset : (recursive_relation (p:=p)).finalAssignment.offset = 24 := rfl
+  have h_offset : (recursiveRelation (p:=p)).finalAssignment.offset = 24 := rfl
   simp only [h_offset]
   rw [fib_assignment]
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
@@ -121,15 +121,15 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   then the Spec of add32 and equality are satisfied
 -/
 lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
-  : recursive_relation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env →
+  : recursiveRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env →
   curr.y = next.x ∧
   (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
    := by
   simp only [table_norm]
   obtain ⟨ hcurr_x, hcurr_y, hnext_x, hnext_y ⟩ := fib_vars curr next aux_env
-  set env := recursive_relation.windowEnv  ⟨<+> +> curr +> next, rfl⟩ aux_env
-  simp only [table_norm, circuit_norm, recursive_relation,
-    assign_U32, Gadgets.Addition32.circuit]
+  set env := recursiveRelation.windowEnv  ⟨<+> +> curr +> next, rfl⟩ aux_env
+  simp only [table_norm, circuit_norm, recursiveRelation,
+    assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
   simp only [table_norm, circuit_norm, subcircuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
@@ -162,13 +162,13 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
 /--
   Definition of the formal table for fibonacci32
 -/
-def formal_fib32_table : FormalTable (F p) RowType := {
-  constraints := fib32_table,
+def formalFib32Table : FormalTable (F p) RowType := {
+  constraints := fib32Table,
   Spec := Spec,
 
   soundness := by
     intro N trace envs _
-    simp only [fib32_table, Spec]
+    simp only [fib32Table, Spec]
     rw [TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, TableConstraintsHold]
 
     /-
