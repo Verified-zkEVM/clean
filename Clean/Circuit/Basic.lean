@@ -145,7 +145,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
 
 /--
-Version of `ConstraintsHold` that replaces the statement of subcircuits with their `soundness`.
+Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
 -/
 @[circuit_norm]
 def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
@@ -158,7 +158,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
 /--
-Version of `ConstraintsHold` that replaces the statement of subcircuits with their `completeness`.
+Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
 -/
 @[circuit_norm]
 def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) → Prop
