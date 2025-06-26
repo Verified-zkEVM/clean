@@ -16,7 +16,7 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   ∧ out_state.value = keccak_permutation state.value
 
 /-- state in the ith round, starting from offset n -/
-def state_var (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
+def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
   Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
@@ -26,11 +26,11 @@ set_option linter.constructorNameAsVariable false
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 30912
-  output _ i0 := state_var i0 23
+  output _ i0 := stateVar i0 23
 
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [main, state_var, circuit_norm, KeccakRound.circuit]
+  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 
 -- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
 example (state : Vector ℕ 25) :
@@ -49,7 +49,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_init h_assumptions
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (state_var n i)
+  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
 
   change (state 0).Normalized ∧
     (state 0).value = keccak_round initial_state.value roundConstants[0]
@@ -91,7 +91,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i hi
 
   -- clean up formulation
-  let state (i : ℕ) : KeccakState (F p) := eval env (state_var n i)
+  let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
 
   change (state 0).Normalized at h_init
 

@@ -75,7 +75,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
-def range_check (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
+def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
     let _ ← subcircuitWithAssertion (toBits n hn) x
