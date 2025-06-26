@@ -130,7 +130,7 @@ def decomposeNatExpr (x: ℕ) : U32 (Expression (F p)) :=
 def fromUInt32 (x : UInt32) : U32 (F p) :=
   decomposeNat x.toFin
 
-def value_u32 (x : U32 (F p)) (h : x.Normalized) : UInt32 :=
+def valueU32 (x : U32 (F p)) (h : x.Normalized) : UInt32 :=
   UInt32.ofNatLT x.value (value_lt_of_normalized h)
 
 lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := by
@@ -143,7 +143,7 @@ lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := b
   simp [h]
 
 theorem value_fromUInt32 (x : UInt32) : value (fromUInt32 (p:=p) x) = x.toNat := by
-  simp only [value_u32, value_horner, fromUInt32, decomposeNat, UInt32.toFin_val]
+  simp only [valueU32, value_horner, fromUInt32, decomposeNat, UInt32.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
     rw [ZMod.val_cast_of_lt]
