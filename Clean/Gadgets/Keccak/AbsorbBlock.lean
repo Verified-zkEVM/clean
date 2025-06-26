@@ -30,7 +30,7 @@ def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   main
   localLength _ := 31048
-  output _ i0 := Permutation.state_var (i0 + 136) 23
+  output _ i0 := Permutation.stateVar (i0 + 136) 23
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
