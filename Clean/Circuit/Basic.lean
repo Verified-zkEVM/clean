@@ -344,6 +344,50 @@ def SubassertionCompleteness (circuit: FormalAssertion F β) (b_var : Var β F) 
   let b := eval env b_var
   circuit.Assumptions b ∧ circuit.Spec b
 end Circuit
+
+def GeneralFormalCircuit.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α) (Spec: β F → α F → Prop) :=
+  -- for all environments that determine witness generation
+  ∀ offset : ℕ, ∀ env,
+  -- for all inputs
+  ∀ b_var : Var β F, ∀ b : β F, eval env b_var = b →
+  -- if the constraints hold
+  ConstraintsHold.Soundness env (circuit.main b_var |>.operations offset) →
+  -- the spec holds on the input and output
+  let a := eval env (circuit.output b_var offset)
+  Spec b a
+
+def GeneralFormalCircuit.Completeness (F: Type) [Field F] (circuit : ElaboratedCircuit F β α) (Assumptions: β F → Prop) :=
+  -- for all environments which _use the default witness generators for local variables_
+  ∀ offset : ℕ, ∀ env, ∀ b_var : Var β F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main b_var |>.operations offset) →
+  -- for all inputs that satisfy the "honest prover" assumptions
+  ∀ b : β F, eval env b_var = b →
+  Assumptions b →
+  -- the constraints hold
+  ConstraintsHold.Completeness env (circuit.main b_var |>.operations offset)
+
+/--
+`GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
+_mix_ of "assertion-like" and "function-like". It allows you flexibility in specifying separate statements
+to be proved in the soundness and completeness proofs, by
+- only using the `Spec` in the soundness statement
+- only using the `Assumptions` in the completeness statement
+i.e. the two statements are not "coupled".
+
+For example, take the `toBits n` circuit, which outputs the `n`-bit decomposition of the input.
+To do so, the circuit, as a side effect, constrains the input to be representable in `n` bits.
+Consequently, the input being `n` bits is a necessary assumption _for completeness_. However, _for soundness_,
+this assumption is not needed as the circuit adds that constraint itself. Using `FormalCircuit` would unnecessarily
+add the range assumption to the soundness statement, thus making the circuit hard to use
+(in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
+-/
+structure GeneralFormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType β] [ProvableType α]
+    extends elaborated : ElaboratedCircuit F β α where
+  Assumptions: β F → Prop -- the statement to be assumed for completeness
+  Spec: β F → α F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
+
+  soundness: GeneralFormalCircuit.Soundness F elaborated Spec
+  completeness: GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
 export Circuit (witnessVar witness witnessVars witnessVector assertZero lookup)

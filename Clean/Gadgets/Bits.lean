@@ -14,12 +14,12 @@ def main (n: ℕ) (x : Expression (F p)) := do
   Circuit.forEach bits (assertion Boolean.circuit)
 
   -- check that the bits correctly sum to `x`
-  x === (fieldFromBitsExpr bits)
+  x === fieldFromBitsExpr bits
   return bits
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
+def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -31,13 +31,13 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   Assumptions (x : F p) := x.val < 2^n
 
   Spec (x : F p) (bits : Vector (F p) n) :=
-    bits = fieldToBits n x
+    x.val < 2^n ∧ bits = fieldToBits n x
 
   soundness := by
-    intro k eval x_var x h_input _h_assumptions h_holds
+    intro k eval x_var x h_input h_holds
     simp only [main, circuit_norm, Boolean.circuit] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
-    clear h_input _h_assumptions
+    clear h_input
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
 
@@ -50,6 +50,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
 
     change x = eval (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
+    use fieldFromBits_lt hn _ h_bits
 
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
@@ -59,7 +60,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
     constructor
     · intro i
       rw [h_env i]
-      simp [fieldToBits, toBits]
+      simp [fieldToBits, Utils.Bits.toBits]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
 
@@ -75,46 +76,16 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
 def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
-  main x := do _ ← main n x -- discard the output
-  localLength _ := n
+  main x := do
+    -- we wrap the toBits circuit but ignore the output
+    let _ ← subcircuitWithAssertion (toBits n hn) x
 
-  subcircuitsConsistent _ n := by simp +arith only [main, circuit_norm]
-  localLength_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
+  localLength _ := n
 
   Assumptions _ := True
   Spec (x : F p) := x.val < 2^n
 
-  soundness := by
-    simp only [circuit_norm, main, Boolean.circuit]
-    simp only [circuit_norm, subcircuit_norm]
-    intro k eval x_var x h_input ⟨ h_bits, h_eq ⟩
-    rw [h_input] at h_eq
-    change x = eval _ at h_eq
-    rw [h_eq, fieldFromBits_eval]
-    apply fieldFromBits_lt hn
-    intro i hi
-    simp only [circuit_norm, h_bits ⟨ i, hi ⟩]
-
-  completeness := by
-    simp only [circuit_norm, main, Boolean.circuit]
-    simp only [circuit_norm, subcircuit_norm]
-    intro k eval x_var h_env x h_input h_assumptions
-    simp only [h_input] at h_env ⊢
-
-    constructor
-    · intro i
-      rw [h_env i]
-      simp [fieldToBits, toBits]
-
-    let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
-
-    have h_bits_eq : bit_vars.map eval = fieldToBits n x := by
-      rw [Vector.ext_iff]
-      intro i hi
-      simp only [circuit_norm, bit_vars]
-      exact h_env ⟨ i, hi ⟩
-
-    show _ = eval _
-    rw [fieldFromBits_eval, h_bits_eq, fieldFromBits_fieldToBits hn h_assumptions]
+  soundness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
+  completeness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
 
 end Gadgets.ToBits
