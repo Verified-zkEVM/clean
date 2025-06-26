@@ -125,7 +125,7 @@ instance : LawfulMonad (Circuit F) where
 
 /--
 Soundness theorem which proves that we can replace constraints in subcircuits
-with their `soundness` statement.
+with their `Soundness` statement.
 
 Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assuming the nested version
 `ConstraintsHold.Soundness` when defining soundness for formal circuits,

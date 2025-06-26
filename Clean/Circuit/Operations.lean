@@ -74,15 +74,15 @@ open FlatOperation in
 This is a low-level way to model a subcircuit:
 A flat list of circuit operations, instantiated at a certain offset.
 
-To enable composition of formal proofs, subcircuits come with custom `soundness` and `completeness`
+To enable composition of formal proofs, subcircuits come with custom `Soundness` and `Completeness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
 structure Subcircuit (F: Type) [Field F] (offset: ℕ) where
   ops: List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
-  -- for convenience, we allow the framework to transform that into custom `soundness`,
-  -- `completeness` and `usesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
+  -- for convenience, we allow the framework to transform that into custom `Soundness`,
+  -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   Soundness : Environment F → Prop
   Completeness : Environment F → Prop
   UsesLocalWitnesses : Environment F → Prop
@@ -91,11 +91,11 @@ structure Subcircuit (F: Type) [Field F] (offset: ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  -- `soundness` needs to follow from the constraints for any witness
+  -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops → Soundness env
 
-  -- `completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
+  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
     Completeness env → ConstraintsHoldFlat env ops
 
