@@ -37,7 +37,7 @@ def main (n: ℕ) [NeZero n] (input : Expression (F p)) := do
   return bits
 
 def circuit n [NeZero n] (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main input := main n input
+  main := main n
   localLength _ := n
   localLength_eq := by simp +arith only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith only [circuit_norm, main]
@@ -52,6 +52,49 @@ def circuit n [NeZero n] (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fiel
   completeness := by
     simp only [circuit_norm, main]
     sorry
-
 end Num2Bits
+
+namespace Bits2Num
+/-
+template Bits2Num(n) {
+    signal input in[n];
+    signal output out;
+    var lc1=0;
+
+    var e2 = 1;
+    for (var i = 0; i<n; i++) {
+        lc1 += in[i] * e2;
+        e2 = e2 + e2;
+    }
+
+    lc1 ==> out;
+}
+-/
+def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
+  let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
+    let lc1 := lc1 + input[i] * e2
+    let e2 := e2 + e2
+    (lc1, e2)) (0, 1)
+  let out ← witnessField fun env => lc1.eval env
+  out === lc1
+  return out
+
+def circuit n (hn : 2^n < p) : GeneralFormalCircuit (F p) (fields n) field where
+  main := main n
+  localLength _ := 1
+  localLength_eq := by simp +arith only [circuit_norm, main]
+  subcircuitsConsistent := by simp +arith only [circuit_norm, main]
+
+  Assumptions input := sorry
+  Spec input output := sorry
+
+  soundness := by
+    simp only [circuit_norm, main]
+    sorry
+
+  completeness := by
+    simp only [circuit_norm, main]
+    sorry
+end Bits2Num
+
 end Circomlib
