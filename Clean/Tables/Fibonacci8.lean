@@ -56,10 +56,9 @@ def fib8 : ℕ -> ℕ
   | (n + 2) => (fib8 n + fib8 (n + 1)) % 256
 
 def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.ForAllRowsOfTraceWithIndex (fun row index =>
+  trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.val = fib8 index) ∧
     (row.y.val = fib8 (index + 1))
-  )
 
 lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
   induction' n using Nat.twoStepInduction

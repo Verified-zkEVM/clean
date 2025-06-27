@@ -73,11 +73,10 @@ def fib32Table : List (TableOperation RowType (F p)) := [
   - both U32 values are normalized
 -/
 def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
-  trace.ForAllRowsOfTraceWithIndex (fun row index =>
+  trace.ForAllRowsOfTraceWithIndex fun row index =>
     (row.x.value = fib32 index) ∧
     (row.y.value = fib32 (index + 1)) ∧
     row.x.Normalized ∧ row.y.Normalized
-  )
 
 /-
   First of all, we prove some lemmas about the mapping variables -> cell offsets

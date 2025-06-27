@@ -556,7 +556,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   constraints : List (TableOperation S F)
 
   /-- optional assumption on the table length -/
-  assumption : ℕ → Prop := fun _ => True
+  Assumption : ℕ → Prop := fun _ => True
 
   /-- specification for the table -/
   Spec {N : ℕ} : TraceOfLength F S N → Prop
@@ -565,7 +565,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
       the constraints hold implies that the spec holds. -/
   soundness :
     ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
-    assumption N →
+    Assumption N →
     TableConstraintsHold constraints trace env →
     Spec trace
 
@@ -580,7 +580,7 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
     := by repeat constructor
 
 def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace: TraceOfLength F S N) : Prop :=
-  table.assumption N → table.Spec trace
+  table.Assumption N → table.Spec trace
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go

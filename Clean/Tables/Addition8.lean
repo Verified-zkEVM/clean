@@ -22,13 +22,13 @@ instance : ProvableType RowType where
 
 def add8Inline : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.getCurrRow
-  lookup (ByteLookup row.x)
-  lookup (ByteLookup row.y)
+  lookup ByteTable row.x
+  lookup ByteTable row.y
   let z ← subcircuit Gadgets.Addition8.circuit { x := row.x, y := row.y }
   assign (.curr 2) z
 
 def add8Table : List (TableOperation RowType (F p)) := [
-  EveryRow add8Inline
+  .everyRow add8Inline
 ]
 
 def Spec_add8 {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
@@ -57,7 +57,7 @@ def formalAdd8Table : FormalTable (F p) RowType := {
 
         -- this is the slowest step, but still ok
         simp [table_norm, circuit_norm, subcircuit_norm, varFromOffset, Vector.mapRange,
-          add8Inline, Gadgets.Addition8.circuit, ByteLookup
+          add8Inline, Gadgets.Addition8.circuit, ByteTable
         ] at h_holds
 
         change _ ∧ _ ∧ (_ → _) at h_holds
@@ -70,11 +70,7 @@ def formalAdd8Table : FormalTable (F p) RowType := {
 
         -- now we prove a local property about the current row, from the constraints
         obtain ⟨ lookup_x, lookup_y, h_add⟩ := h_holds
-
-        replace lookup_x := ByteTable.soundness row.x lookup_x
-        replace lookup_y := ByteTable.soundness row.y lookup_y
-        rw [Gadgets.Addition8.Assumptions, Gadgets.Addition8.Spec] at h_add
-        exact h_add ⟨ lookup_x, lookup_y ⟩
+        exact h_add lookup_x lookup_y
 }
 
 end Tables.Addition8
