@@ -275,20 +275,6 @@ structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableTyp
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
 
-namespace Circuit
-@[circuit_norm]
-def SubcircuitSoundness (circuit: FormalCircuit F Input Output) (input_var : Var Input F) (offset: ℕ) (env : Environment F) :=
-  let input := eval env input_var
-  let output_var := circuit.output input_var offset
-  let output := eval env output_var
-  circuit.Assumptions input → circuit.Spec input output
-
-@[circuit_norm]
-def SubcircuitCompleteness (circuit: FormalCircuit F Input Output) (input_var : Var Input F) (env : Environment F) :=
-  let input := eval env input_var
-  circuit.Assumptions input
-end Circuit
-
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
 - it doesn't return anything
@@ -331,18 +317,6 @@ structure FormalAssertion (F: Type) (Input: TypeMap) [Field F] [ProvableType Inp
   localLength := fun _ => 0
 
   output := fun _ _ => ()
-
-namespace Circuit
-@[circuit_norm]
-def SubassertionSoundness (circuit: FormalAssertion F Input) (input_var : Var Input F) (env: Environment F) :=
-  let input := eval env input_var
-  circuit.Assumptions input → circuit.Spec input
-
-@[circuit_norm]
-def SubassertionCompleteness (circuit: FormalAssertion F Input) (input_var : Var Input F) (env: Environment F) :=
-  let input := eval env input_var
-  circuit.Assumptions input ∧ circuit.Spec input
-end Circuit
 
 def GeneralFormalCircuit.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec: Input F → Output F → Prop) :=
   -- for all environments that determine witness generation

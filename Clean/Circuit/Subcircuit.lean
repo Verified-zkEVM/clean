@@ -65,12 +65,10 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
 
   have imply_soundness : ∀ env : Environment F,
     let input := eval env input_var
-    let output_var := circuit.output input_var n
-    let output := eval env output_var
+    let output := eval env (circuit.output input_var n)
     ConstraintsHoldFlat env ops.toFlat → circuit.Assumptions input → circuit.Spec input output := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env input output_var output h_holds
-    rintro (as : circuit.Assumptions input)
+    intro env input output h_holds (as : circuit.Assumptions input)
     show circuit.Spec input output
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
@@ -135,16 +133,14 @@ def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
 
   {
     ops := ops.toFlat,
-    Soundness := SubassertionSoundness circuit input_var,
-    Completeness := SubassertionCompleteness circuit input_var,
+    Soundness env := circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var),
+    Completeness env := circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var),
     UsesLocalWitnesses _ := True,
     localLength := circuit.localLength input_var
 
     imply_soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
       intro env h_holds
-      show SubassertionSoundness circuit input_var env
-
       let input : β F := eval env input_var
       rintro (as : circuit.Assumptions input)
       show circuit.Spec input
@@ -341,7 +337,6 @@ theorem Circuit.subcircuit_computableWitnesses (circuit: FormalCircuit F β α) 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
   FormalCircuit.toSubcircuit FormalAssertion.toSubcircuit GeneralFormalCircuit.toSubcircuit
-  Circuit.SubassertionSoundness Circuit.SubassertionCompleteness
 
 -- to just reduce offsets, it's much better to _not_ use `subcircuit_norm`
 -- instead, `circuit_norm` will use these theorems to unfold subcircuits
