@@ -89,7 +89,7 @@ def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witness (compute : Environment F → F) := do
+def witnessField (compute : Environment F → F) := do
   let v ← witnessVar compute
   return var v
 
@@ -125,6 +125,8 @@ def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment 
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> toElements)])
+
+export ProvableType (witness)
 
 @[circuit_norm]
 def ProvableVector.witness {α: TypeMap} [NonEmptyProvableType α] (m: ℕ)
@@ -379,7 +381,7 @@ structure GeneralFormalCircuit (F: Type) (Input Output: TypeMap) [Field F] [Prov
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
-export Circuit (witnessVar witness witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
 
 -- witness generation
 
