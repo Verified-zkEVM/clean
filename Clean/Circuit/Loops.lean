@@ -237,6 +237,40 @@ theorem forAll_iff {constant : ConstantLength (prod circuit)} :
     ∀ i : Fin m, (circuit (foldlAcc n xs circuit init i) xs[i.val]).forAll (n + i * (circuit default default).localLength) prop := by
   rw [forAll_def, operations_eq, forAll_flatten_foldl, constant.localLength_eq (_, _)]
 
+-- specialization to xs := Vector.finRange m
+section
+variable {env : Environment F} {prop : Condition F} {m : ℕ} [NeZero m]
+  {Acc : ℕ → Type}
+  {circuit : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
+
+-- TODO not sure if we need this
+def foldlRangeAcc (m : ℕ) [NeZero m] (n : ℕ) (circuit : β → Fin m → Circuit F β) (init : β) (j : Fin m) : β :=
+  Fin.foldl j (fun acc i => (circuit acc i).output (n + i * (circuit default default).localLength)) init
+
+lemma foldlRangeAcc_zero : foldlRangeAcc m n circuit init 0 = init := by
+  simp [foldlRangeAcc, Fin.foldl_zero]
+
+lemma foldlRangeAcc_cons_succ (i : ℕ) (hi : i < m) {circuit : β → Fin (m + 1) → Circuit F β} [constant : ConstantLength (prod circuit)] :
+  foldlRangeAcc (m + 1) n circuit init ⟨ i + 1, by omega ⟩ =
+  foldlRangeAcc m (n + (circuit init 0).localLength n) (fun b i => circuit b (i + 1)) ((circuit init 0).output n) i := by
+  rw [constant.localLength_eq (init, 0), ←constant.localLength_eq (default, default) 0]
+  simp only [foldlRangeAcc]
+  have hi' : i < m := by linarith
+  simp only [Fin.default_eq_zero, Fin.foldl_succ, Fin.val_succ, Nat.cast_add, Nat.cast_one, add_mul,
+    one_mul, Fin.val_zero, Nat.cast_zero, zero_mul, add_zero, Fin.val_natCast, prod]
+  rw [Nat.mod_eq_of_lt hi']
+  congr
+  funext acc ⟨ i, hi ⟩
+  have hi' : i < m := by linarith
+  simp only [zero_add]
+  rw [Nat.mod_eq_of_lt hi', constant.localLength_eq (default, 1), ←constant.localLength_eq (default, 0) 0]
+  ac_rfl
+
+theorem forAll_iff_finRange {constant : ConstantLength (prod circuit)} :
+  ((Vector.finRange m).foldlM circuit init).forAll n prop ↔
+    ∀ i : Fin m, (circuit (foldlAcc n (Vector.finRange m) circuit init i) i).forAll (n + i * (circuit default default).localLength) prop := by
+  simp only [forAll_iff, Vector.getElem_finRange]
+end
 -- we can massively simplify the foldlM theory when assuming the body's output is independent of the input
 
 variable {h_const_out : ConstantOutput fun (t : β × α) => circuit t.1 t.2}
@@ -335,6 +369,10 @@ def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β)
   (_constant : ConstantLength (fun (s, a) => body s a) := by infer_constant_length)
    : Circuit F β :=
   xs.foldlM body init
+
+def foldlRange (m : ℕ) [NeZero m] [Inhabited β] (init : β) (body : β → Fin m → Circuit F β)
+  (_constant : ConstantLength (fun (s, a) => body s a) := by infer_constant_length) : Circuit F β :=
+  (Vector.finRange m).foldlM body init
 
 section forEach
 variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
@@ -544,5 +582,47 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
   simp only [foldl, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
 end foldl
+
+section foldlRange
+variable {env : Environment F} {m n : ℕ} [NeZero m] [Inhabited β]
+  {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
+
+@[circuit_norm ↓]
+lemma foldlRange.localLength_eq :
+    (foldlRange m init body constant).localLength n = m * (body default 0).localLength := by
+  rw [foldlRange, FoldlM.localLength_eq, constant.localLength_eq (_, _)]
+
+@[circuit_norm ↓]
+lemma foldlRange.output_eq :
+  (foldlRange m init body constant).output n =
+    Fin.foldl m (fun acc i => (body acc i).output (n + i*(body default 0).localLength)) init := by
+  -- rw [foldlRange, FoldlM.output_eq]
+  sorry
+
+@[circuit_norm ↓]
+lemma foldlRange.forAll :
+  Operations.forAll n prop (foldlRange m init body constant |>.operations n) ↔
+    ∀ i : Fin m, (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).forAll (n + i * (body default 0).localLength) prop := by
+  sorry
+
+@[circuit_norm ↓]
+lemma foldlRange.soundness :
+  ConstraintsHold.Soundness env (foldlRange m init body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i |>.operations (n + i * (body default 0).localLength)) := by
+  sorry
+
+@[circuit_norm ↓]
+lemma foldlRange.completeness :
+  ConstraintsHold.Completeness env (foldlRange m init body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Completeness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i |>.operations (n + i * (body default 0).localLength)) := by
+  sorry
+
+@[circuit_norm ↓]
+lemma foldlRange.usesLocalWitnesses :
+  env.UsesLocalWitnessesCompleteness n (foldlRange m init body constant |>.operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i * (body default 0).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i |>.operations (n + i * (body default 0).localLength)) := by
+  sorry
+
+end foldlRange
 
 end Circuit
