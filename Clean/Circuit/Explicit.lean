@@ -5,7 +5,7 @@ using the `infer_explicit_circuit(s)` tactic.
 This could be useful to simplify circuit statements with less user intervention.
 -/
 
-import Clean.Circuit.Constant
+import Clean.Circuit.Subcircuit
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where

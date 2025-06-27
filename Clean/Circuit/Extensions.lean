@@ -1,5 +1,5 @@
 /- This file contains experimental additions to the Circuit DSL -/
-import Clean.Circuit.Constant
+import Clean.Circuit.Subcircuit
 
 variable {F : Type} [Field F] {α: TypeMap} [ProvableType α]
 
