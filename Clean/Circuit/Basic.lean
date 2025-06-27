@@ -396,25 +396,22 @@ end
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
 def FormalCircuit.isGeneralFormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-  (orig: FormalCircuit F β α): GeneralFormalCircuit F β α := by
-  let Spec := fun input output => orig.Assumptions input -> orig.Spec input output
-  refine {
+    (orig: FormalCircuit F β α): GeneralFormalCircuit F β α := by
+  let Spec input output := orig.Assumptions input → orig.Spec input output
+  exact {
     elaborated := orig.elaborated,
     Assumptions := orig.Assumptions,
     Spec,
     soundness := by
-      simp[GeneralFormalCircuit.Soundness]
-      intros
-      simp[Spec]
+      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
       intros
       apply orig.soundness <;> trivial
     ,
     completeness := by
-      simp[GeneralFormalCircuit.Completeness]
+      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
       intros
       apply orig.completeness <;> trivial
   }
-
 
 export Circuit (witnessVar witness witnessVars witnessVector assertZero lookup)
 
