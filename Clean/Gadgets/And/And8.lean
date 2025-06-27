@@ -82,7 +82,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
-  simp_all only [main, elaborated]
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
