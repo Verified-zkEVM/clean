@@ -1,7 +1,7 @@
 import Clean.Circuit.Operations
 import Mathlib.Control.Monad.Writer
 
-variable {F: Type} [Field F] {α : Type} {n : ℕ}
+variable {F: Type} [Field F] {α β : Type} {n : ℕ}
 
 /--
 The monad to write circuits. Lets you use `do` notation while in the background
@@ -439,6 +439,47 @@ def Operations.witnessGenerators : (ops: Operations F) → Vector (Environment F
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
+
+-- statements about constant length or output
+
+namespace Circuit
+/--
+The given family of circuits all share the same `localLength`, for all inputs.
+
+This is a bit stronger than the assumption on local length implicit in `ElaboratedCircuit`,
+but still the typical case.
+-/
+class ConstantLength (circuit : α → Circuit F β) where
+  localLength : ℕ
+  localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength
+
+def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
+    (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) : ConstantLength circuit where
+  localLength := (circuit default).localLength 0
+  localLength_eq a n := h a n
+
+/-- The output of this circuit does not depend on the input. -/
+@[circuit_norm]
+def ConstantOutput (circuit : α → Circuit F β) [Inhabited α] :=
+  ∀ (x : α) (n : ℕ), (circuit x).output n = (circuit default).output n
+
+syntax "infer_constant_length" : tactic
+
+macro_rules
+  | `(tactic|infer_constant_length) => `(tactic|(
+    apply ConstantLength.fromConstantLength
+    try simp only [circuit_norm]
+    try intros
+    try ac_rfl))
+
+example :
+  let add (x : Expression F) := do
+    let y : fieldVar F ← witness fun _ => 1
+    let z : fieldVar F ← witness fun eval => eval (x + y)
+    assertZero (x + y - z)
+    pure z
+  ConstantLength add := by infer_constant_length
+end Circuit
 
 -- `circuit_norm` attributes
 
