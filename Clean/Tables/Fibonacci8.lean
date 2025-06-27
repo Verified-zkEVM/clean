@@ -81,9 +81,8 @@ lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p))
   -- simplify constraints
   simp only [boundaryFib]
   simp_assign_row
-  simp only [circuit_norm, table_norm]
-  simp only [zero_add, neg_eq_zero, and_imp]
-  intro boundary1 boundary2
+  simp only [circuit_norm, table_norm, Nat.reduceAdd, Nat.reduceMod, zero_add, neg_eq_zero]
+  intro ⟨ boundary1, boundary2 ⟩
 
   have hx : first_row.x = env.get 0 := by rfl
   have hy : first_row.y = env.get 1 := by rfl

@@ -478,9 +478,8 @@ attribute [circuit_norm]
 -- simplify stuff like (3 : Fin 8).val = 3 % 8
 attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 
--- simplify `vector.get i` (which occurs in ProvableType definitions) and similar
-attribute [circuit_norm] Vector.get Fin.val_eq_zero
-  Fin.cast_eq_self Fin.coe_cast Fin.isValue
+-- simplify `vector[i]` (which occurs in ProvableType definitions) and similar
+attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero

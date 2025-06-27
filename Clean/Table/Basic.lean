@@ -19,8 +19,7 @@ variable {F : Type} {S : Type → Type} [ProvableType S]
 
 @[table_norm, table_assignment_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
-  let elems := toElements row
-  elems.get i
+  (toElements row)[i.val]
 
 /--
   A trace is an inductive list of rows. It can be viewed as a structured
@@ -431,13 +430,13 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
 def assignCurrRow {W: ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
   let vars := toVars curr
   forM (List.finRange (size S)) fun i =>
-    assign (.curr i) (vars.get i)
+    assign (.curr i) vars[i]
 
 @[table_norm, table_assignment_norm]
 def assignNextRow {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
   let vars := toVars next
   forM (List.finRange (size S)) fun i =>
-    assign (.next i) (vars.get i)
+    assign (.next i) vars[i]
 end TableConstraint
 
 export TableConstraint (windowEnv getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
@@ -614,5 +613,5 @@ macro_rules
     rw [Fin.foldr_zero]
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
-    simp only [seval, toVars, toElements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+    simp only [seval, toVars, toElements, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
       List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))

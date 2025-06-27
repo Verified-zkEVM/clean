@@ -102,7 +102,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
     have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
     simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
     have hi' : i < size State + size Input := by linarith
-    simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
+    simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
 
   have h_env : eval env' (varFromOffset State 0) = row.1 := by

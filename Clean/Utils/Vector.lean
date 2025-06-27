@@ -17,18 +17,6 @@ def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
 theorem toList_cons {a: α} {v: Vector α n} : (cons a v).toList = a :: v.toList := by
   simp [cons]
 
-def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.toArray[i.val] := by
-  simp only [get, List.get_eq_getElem, Fin.coe_cast]
-
-/-- this is exactly what's needed to rewrite `v.get i` into a `List.getElem` if `n` is a concrete Nat -/
-def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num) :
-  v.get ((Fin.instOfNat (i:=i)).ofNat : Fin n) = v.toArray[i]'(by rw [v.size_toArray]; exact h) := by
-  simp only [get_eq, OfNat.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt h]
-
-@[simp]
-theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
-  simp only [get, map, Fin.coe_cast, Array.getElem_map, getElem_toArray]
-
 @[simp]
 def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
   ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, ← Array.size_eq_length_toList, v.size_toArray] ⟩
