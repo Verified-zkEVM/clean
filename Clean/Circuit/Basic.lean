@@ -43,7 +43,7 @@ instance : Monad (Circuit F) where
   bind := bind
 
 /--
-in proofs, we rewrite `bind` into a definition that is more efficient to
+In proofs, we rewrite `bind` into a definition that is more efficient to
 reason about (because it avoids the duplicated `f n` term).
  -/
 @[circuit_norm]
@@ -52,6 +52,13 @@ theorem bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
     let (a, ops) := f n
     let (b, ops') := g a (n + Operations.localLength ops)
     (b, ops ++ ops') := rfl
+
+@[circuit_norm]
+theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := rfl
+
+@[circuit_norm]
+theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
+  f <$> circuit = fun n => let (a, ops) := circuit n; (f a, ops) := rfl
 
 -- normalize `bind` to `>>=`
 @[circuit_norm]
@@ -420,24 +427,18 @@ def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : E
 
 def FlatOperation.witnessGenerators : (l: List (FlatOperation F)) → Vector (Environment F → F) (localLength l)
   | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops: Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env).get i) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
 
 -- `circuit_norm` attributes
-
--- `circuit_norm` has to expand monad operations, so we need to add them to the simp set
-attribute [circuit_norm] modify modifyGet MonadStateOf.modifyGet StateT.modifyGet
-attribute [circuit_norm] pure StateT.pure
-attribute [circuit_norm] StateT.run
-  Functor.map StateT.map
 
 -- basic logical simplifcations
 attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
