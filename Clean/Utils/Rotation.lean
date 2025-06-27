@@ -214,9 +214,10 @@ theorem rotRight64_toBits (x r : ℕ) (h : x < 2^64):
   simp [toBits, Vector.rotate]
   ext i hi
   · simp
-  simp at ⊢ hi
+  simp only [Vector.size_toArray, Vector.getElem_toArray, Array.getElem_toList,
+    Vector.getElem_mapRange, List.getElem_toArray, List.getElem_rotate] at ⊢ hi
   rw [rotRight64_testBit]
-  simp [List.getElem_rotate, hi]
+  simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
   split <;> (congr; omega)
   linarith
 
@@ -461,9 +462,10 @@ theorem rotRight32_toBits (x r : ℕ) (h : x < 2^32):
   simp [toBits, Vector.rotate]
   ext i hi
   · simp
-  simp at ⊢ hi
+  simp only [Vector.size_toArray, Vector.getElem_toArray, Array.getElem_toList,
+    Vector.getElem_mapRange, List.getElem_toArray, List.getElem_rotate] at ⊢ hi
   rw [rotRight32_testBit]
-  simp [List.getElem_rotate, hi]
+  simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
   split <;> (congr; omega)
   linarith
 

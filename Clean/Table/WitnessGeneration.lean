@@ -45,7 +45,7 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row: Array F) : Array
   -- rules for fetching the values for expression variables
   let env i :=
     if h : i < assignment.offset then
-      match assignment.vars.get ⟨i, h⟩ with
+      match assignment.vars[i] with
       | .input ⟨r, c⟩ =>
         -- fetch input values
           if r = 0 then cur_row[c]! else next_row[c]!
@@ -63,7 +63,7 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row: Array F) : Array
 
       -- insert the witness value to the next row
       let next_row := if h : idx < assignment.offset then
-        let var := assignment.vars.get ⟨idx, h⟩
+        let var := assignment.vars[idx]
 
         match var with
           | .input ⟨r, c⟩ => if r = 1 then next_row.set! c wit else next_row

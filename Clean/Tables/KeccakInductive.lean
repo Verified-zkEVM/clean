@@ -18,7 +18,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     state.Normalized
     ∧ state.value = absorbBlocks (blocks.map KeccakBlock.value)
 
-  input_assumptions i block := block.Normalized
+  InputAssumptions i block := block.Normalized
 
   soundness := by
     intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
