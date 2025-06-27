@@ -39,7 +39,7 @@ instance : ConstantCircuits (F:=F) witnessVar where
 instance {k : ℕ} {c : Environment F → Vector F k} : ConstantCircuit (witnessVars k c) where
   localLength := k
 
-instance {α: TypeMap} [ProvableType α] : ConstantCircuits (ProvableType.witness (α:=α) (F:=F)) where
+instance {α: TypeMap} [ProvableType α] : ConstantCircuits (witness (α:=α) (F:=F)) where
   localLength := size α
 
 instance : ConstantCircuits (F:=F) assertZero where
@@ -87,13 +87,13 @@ macro_rules
     try ac_rfl))
 
 section
-example : ConstantCircuits (witness (F:=F))
+example : ConstantCircuits (witnessField (F:=F))
   := by infer_constant_circuits
 
 example :
   let add (x : Expression F) := do
-    let y ← witness (fun _ => (1 : F))
-    let z ← witness (fun eval => eval (x + y))
+    let y : fieldVar F ← witness fun _ => 1
+    let z : fieldVar F ← witness fun eval => eval (x + y)
     assertZero (x + y - z)
     pure z
 

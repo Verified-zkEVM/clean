@@ -25,9 +25,9 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
-  let and ← witness (fun eval => (eval x).val &&& (eval y).val)
+  let and ← witness fun eval => (eval x).val &&& (eval y).val
   -- we prove AND correct using an XOR lookup and the following identity:
   let xor := x + y - 2 * and
   lookup ByteXorTable (x, y, xor)

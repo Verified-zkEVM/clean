@@ -31,11 +31,11 @@ def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (fun eval => mod256 (eval (x + y + carry_in)))
+  let z ← witness fun eval => mod256 (eval (x + y + carry_in))
   lookup ByteTable z
 
   -- witness the output carry
-  let carry_out ← witness (fun eval => floorDiv256 (eval (x + y + carry_in)))
+  let carry_out ← witness fun eval => floorDiv256 (eval (x + y + carry_in))
   assertion Boolean.circuit carry_out
 
   assertZero (x + y + carry_in - z - carry_out * 256)
