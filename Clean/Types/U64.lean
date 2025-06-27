@@ -148,7 +148,7 @@ def decomposeNatExpr (x: ℕ) : U64 (Expression (F p)) :=
 def fromUInt64 (x : UInt64) : U64 (F p) :=
   decomposeNat x.toFin
 
-def value_u64 (x : U64 (F p)) (h : x.Normalized) : UInt64 :=
+def valueU64 (x : U64 (F p)) (h : x.Normalized) : UInt64 :=
   UInt64.ofNatLT x.value (value_lt_of_normalized h)
 
 lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := by
@@ -161,7 +161,7 @@ lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := b
   simp [h]
 
 theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
-  simp only [value_u64, value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
+  simp only [valueU64, value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
     rw [ZMod.val_cast_of_lt]
