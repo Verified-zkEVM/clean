@@ -15,8 +15,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [BLAKE3State, ProvableVector U32 16]
-  to_components := fun { state, message } => .cons state (.cons message .nil)
-  from_components := fun (.cons state (.cons message .nil)) => { state, message }
+  toComponents := fun { state, message } => .cons state (.cons message .nil)
+  fromComponents := fun (.cons state (.cons message .nil)) => { state, message }
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, message } := input
@@ -34,19 +34,19 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 -- #eval! main (p:=p_babybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
-  local_length _ := 768
-  local_length_eq input i0 := by
+  localLength _ := 768
+  localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, subcircuit_norm, G.elaborated]
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
-  state.is_normalized ∧ (∀ i : Fin 16, message[i].is_normalized)
+  state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 
-def spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   let { state, message } := input
-  out.value = round state.value (message.map U32.value) ∧ out.is_normalized
+  out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, message_var⟩ ⟨state, message⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
@@ -54,12 +54,12 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
 
   sorry
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env input_var henv input h_input h_normalized
   sorry
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with assumptions, spec, soundness, completeness
+  elaborated with Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.Round
