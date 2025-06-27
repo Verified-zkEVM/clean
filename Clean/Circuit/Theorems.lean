@@ -582,3 +582,29 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
       intro i hi
       exact h_env i (by linarith)
 end FlatOperation
+
+-- theorem about relationship between FormalCircuit and GeneralFormalCircuit
+
+
+/--
+`FormalCircuit.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` a generalization of
+`FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
+by assuming it within `GeneralFormalCircuit.Spec`.
+-/
+def FormalCircuit.isGeneralFormalCircuit (F: Type) (Input Output: TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
+    (orig: FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
+  let Spec input output := orig.Assumptions input → orig.Spec input output
+  exact {
+    elaborated := orig.elaborated,
+    Assumptions := orig.Assumptions,
+    Spec,
+    soundness := by
+      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
+      intros
+      apply orig.soundness <;> trivial
+    ,
+    completeness := by
+      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
+      intros
+      apply orig.completeness <;> trivial
+  }

@@ -390,29 +390,6 @@ structure GeneralFormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableTyp
   completeness: GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
-/--
-`FormalCircuit.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` a generalization of
-`FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
-by assuming it within `GeneralFormalCircuit.Spec`.
--/
-def FormalCircuit.isGeneralFormalCircuit (F: Type) (β α: TypeMap) [Field F] [ProvableType α] [ProvableType β]
-    (orig: FormalCircuit F β α): GeneralFormalCircuit F β α := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
-  exact {
-    elaborated := orig.elaborated,
-    Assumptions := orig.Assumptions,
-    Spec,
-    soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
-    ,
-    completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
-      intros
-      apply orig.completeness <;> trivial
-  }
-
 export Circuit (witnessVar witness witnessVars witnessVector assertZero lookup)
 
 -- witness generation
