@@ -5,45 +5,31 @@ namespace Gadgets
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-def from_byte (x: Fin 256) : F p :=
-  FieldUtils.nat_to_field x.val (by linarith [x.is_lt, p_large_enough.elim])
+def fromByte (x: Fin 256) : F p :=
+  FieldUtils.natToField x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-def ByteTable : Table (F p) where
+def ByteTable : Table (F p) field := .fromStatic {
   name := "Bytes"
   length := 256
-  arity := 1
-  row i := #v[from_byte i]
 
-def ByteTable.soundness (x: F p) : ByteTable.contains (#v[x]) → x.val < 256 := by
-  dsimp only [ByteTable, Table.contains]
-  rintro ⟨ i, h: #v[x] = #v[from_byte i] ⟩
-  have h' : x = from_byte i := by repeat injection h with h
-  have h'' : x.val = i.val := FieldUtils.nat_to_field_eq x h'
-  rw [h'']
-  exact i.is_lt
+  row i := fromByte i
+  index x := x.val
 
-def ByteTable.completeness (x: F p) : x.val < 256 → ByteTable.contains (#v[x]) := by
-  intro h
-  dsimp only [ByteTable, Table.contains]
-  use x.val
-  simp only [from_byte, Fin.val_natCast]
-  ext1
-  have h' : (x.val) % 256 = x.val := by
-    rw [Nat.mod_eq_iff_lt]; assumption; norm_num
-  simp only [h', List.cons.injEq, and_true]
-  simp [FieldUtils.nat_to_field_of_val_eq_iff]
+  Spec x := x.val < 256
 
-def ByteTable.equiv (x: F p) : ByteTable.contains (#v[x]) ↔ x.val < 256 :=
-  ⟨ByteTable.soundness x, ByteTable.completeness x⟩
-
-def ByteLookup (x: Expression (F p)) : Lookup (F p) := {
-  table := ByteTable
-  entry := #v[x]
-  -- to make this work, we need to pass an `eval` function to the callback!!
-  index := fun env =>
-    let x := x.eval env |>.val
-    if h : (x < 256)
-    then ⟨x, h⟩
-    else ⟨0, by show 0 < 256; norm_num⟩
+  contains_iff := by
+    intro x
+    constructor
+    · intro ⟨ i, h ⟩
+      have h'' : x.val = i.val := FieldUtils.natToField_eq x h
+      rw [h'']
+      exact i.is_lt
+    · intro h
+      use x.val
+      simp only [fromByte, Fin.val_natCast]
+      have h' : (x.val) % 256 = x.val := by
+        rw [Nat.mod_eq_iff_lt]; assumption; norm_num
+      simp only [h', List.cons.injEq]
+      simp [FieldUtils.natToField_of_val_eq_iff]
 }
 end Gadgets

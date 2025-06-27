@@ -7,12 +7,12 @@ open Gadgets.Addition8FullCarry (add8_full_carry)
 open Gadgets.Addition32Full (add32_full Inputs)
 
 -- `infer_explicit_circuit(s)` seem to work for all circuits
-instance explicit : ExplicitCircuits (add32_full (p:=p)) := by
+instance explicit : ExplicitCircuits (add32_full (p:=pBabybear)) := by
   infer_explicit_circuits
 
-@[reducible] def circuit32 input := add32_full (p:=p) input
+@[reducible] def circuit32 input := add32_full (p:=pBabybear) input
 
-example : ExplicitCircuit.local_length (circuit32 default) 0 = 8 := by
+example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
   -- rfl -- also works
   dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
 
@@ -21,11 +21,11 @@ example : ExplicitCircuit.output (circuit32 default) 0
   -- rfl -- also works
   dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
 
-example : ((circuit32 default).operations 0).subcircuits_consistent 0 :=
-  ExplicitCircuits.subcircuits_consistent ..
+example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
+  ExplicitCircuits.subcircuitsConsistent ..
 
-example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
-  Circuit.constraints_hold.soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩).operations i0)
+example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F pBabybear)) env (i0 : ℕ) :
+  Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩).operations i0)
   ↔
   (ZMod.val (env.get i0) < 256 ∧ (env.get (i0 + 1) = 0 ∨ env.get (i0 + 1) = 1) ∧
     Expression.eval env x0 + Expression.eval env y0 + Expression.eval env carry_in + -env.get i0 + -(env.get (i0 + 1) * 256) = 0) ∧
@@ -46,15 +46,13 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F p)) env (i0 : ℕ) :
   -- first version: using `circuit_norm`
   -- dsimp only [circuit_norm, circuit32, add32_full, add8_full_carry, Boolean.circuit, Gadgets.ByteLookup]
   -- simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd, and_assoc]
-  -- simp only [Gadgets.ByteTable.equiv]
+  -- simp only [Gadgets.ByteTable]
 
   -- second version: using `ExplicitCircuit`
   -- resolve explicit circuit operations
   rw [ExplicitCircuit.operations_eq]
   dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
-  -- simp `constraints_hold` expression
-  simp only [Circuit.constraints_hold.append_soundness, Circuit.constraints_hold.soundness, Gadgets.ByteLookup]
+  -- simp `ConstraintsHold` expression
+  simp only [Circuit.ConstraintsHold.append_soundness, Circuit.ConstraintsHold.Soundness, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
   simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd]
-  -- finish
-  simp only [Gadgets.ByteTable.equiv]

@@ -3,7 +3,7 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Utils.Primes
 import Clean.Utils.Vector
 import Clean.Circuit.Basic
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Utils.Field
@@ -19,7 +19,7 @@ variable {F : Type} {S : Type → Type} [ProvableType S]
 
 @[table_norm, table_assignment_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
-  let elems := to_elements row
+  let elems := toElements row
   elems.get i
 
 /--
@@ -67,7 +67,7 @@ lemma tail_len : (trace : Trace F S) → trace.tail.len = trace.len - 1
   | rest +> _ => by rw [tail, len, Nat.succ_sub_one]
 
 @[table_norm]
-def forAllRowsOfTraceWithIndex
+def ForAllRowsOfTraceWithIndex
     (trace : Trace F S) (prop : Row F S → ℕ → Prop) : Prop :=
   inner trace prop
   where
@@ -77,9 +77,9 @@ def forAllRowsOfTraceWithIndex
     | rest +> row, prop => (prop row rest.len) ∧ inner rest prop
 
 /-- variant where the condition receives the entire previous trace instead of just the length -/
-def forAllRowsWithPrevious  : Trace F S → (Row F S → Trace F S → Prop) → Prop
+def ForAllRowsWithPrevious  : Trace F S → (Row F S → Trace F S → Prop) → Prop
   | <+>, _ => true
-  | rest +> row, prop => (prop row rest) ∧ forAllRowsWithPrevious rest prop
+  | rest +> row, prop => (prop row rest) ∧ ForAllRowsWithPrevious rest prop
 
 def toList : Trace F S → List (Row F S)
   | <+> => []
@@ -124,7 +124,7 @@ def tail {M : ℕ} (trace : TraceOfLength F S M) : TraceOfLength F S (M - 1) :=
   Apply a proposition to every row in the trace
 -/
 @[table_norm]
-def forAllRowsOfTrace {N : ℕ}
+def ForAllRowsOfTrace {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → Prop) : Prop :=
   inner trace.val prop
   where
@@ -137,7 +137,7 @@ def forAllRowsOfTrace {N : ℕ}
   Apply a proposition to every row in the trace except the last one
 -/
 @[table_norm]
-def forAllRowsOfTraceExceptLast {N : ℕ}
+def ForAllRowsOfTraceExceptLast {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → Prop) : Prop :=
   inner trace.val prop
   where
@@ -150,13 +150,13 @@ def forAllRowsOfTraceExceptLast {N : ℕ}
   Apply a proposition, which could be dependent on the row index, to every row of the trace
 -/
 @[table_norm]
-def forAllRowsOfTraceWithIndex {N : ℕ}
+def ForAllRowsOfTraceWithIndex {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → ℕ → Prop) : Prop :=
-  trace.val.forAllRowsOfTraceWithIndex prop
+  trace.val.ForAllRowsOfTraceWithIndex prop
 
-def forAllRowsWithPrevious {N : ℕ}
+def ForAllRowsWithPrevious {N : ℕ}
     (trace : TraceOfLength F S N) (prop : Row F S → (i : ℕ) → TraceOfLength F S i → Prop) : Prop :=
-  trace.val.forAllRowsWithPrevious fun row rest => prop row rest.len ⟨ rest, rfl ⟩
+  trace.val.ForAllRowsWithPrevious fun row rest => prop row rest.len ⟨ rest, rfl ⟩
 
 def toList {N : ℕ} (trace : TraceOfLength F S N) : List.Vector (Row F S) N :=
   ⟨ trace.val.toList, by rw [trace.val.toList_length, trace.prop] ⟩
@@ -237,25 +237,25 @@ def empty (W: ℕ+) : CellAssignment W S where
   vars := #v[]
 
 @[table_assignment_norm]
-def push_var_aux (assignment: CellAssignment W S) : CellAssignment W S where
+def pushVarAux (assignment: CellAssignment W S) : CellAssignment W S where
   offset := assignment.offset + 1
   aux_length := assignment.aux_length + 1
   vars := assignment.vars.push (.aux assignment.aux_length)
 
 @[table_assignment_norm]
-def push_vars_aux (assignment: CellAssignment W S) (n : ℕ) : CellAssignment W S where
+def pushVarsAux (assignment: CellAssignment W S) (n : ℕ) : CellAssignment W S where
   offset := assignment.offset + n
   aux_length := assignment.aux_length + n
   vars := assignment.vars ++ (.mapRange n fun i => .aux (assignment.aux_length + i) : Vector (Cell W S) n)
 
 @[table_assignment_norm]
-def push_var_input (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S where
+def pushVarInput (assignment: CellAssignment W S) (off: CellOffset W S) : CellAssignment W S where
   offset := assignment.offset + 1
   aux_length := assignment.aux_length
   vars := assignment.vars.push (.input off)
 
 @[table_assignment_norm]
-def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
+def pushRow (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S :=
   let row_vars : Vector (Cell W S) (size S) := .mapFinRange _ fun col => .input ⟨ row, col ⟩
   {
     offset := assignment.offset + size S
@@ -264,7 +264,7 @@ def push_row (assignment: CellAssignment W S) (row: Fin W) : CellAssignment W S 
   }
 
 @[table_assignment_norm]
-def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: ℕ) : CellAssignment W S :=
+def setVarInput (assignment: CellAssignment W S) (off: CellOffset W S) (var: ℕ) : CellAssignment W S :=
   let vars := assignment.vars.set? var (.input off)
   -- note that we don't change the `aux_length` and the indices of existing aux variables.
   -- that would unnecessarily complicate reasoning about the assignment
@@ -273,7 +273,7 @@ def set_var_input (assignment: CellAssignment W S) (off: CellOffset W S) (var: �
 /--
   The number of auxiliary cells in the final assignment
 -/
-def num_aux (assignment: CellAssignment W S) : ℕ :=
+def numAux (assignment: CellAssignment W S) : ℕ :=
   assignment.vars.foldl (fun acc cell =>
     match cell with
     | .input _ => acc
@@ -300,7 +300,7 @@ def empty : TableContext W S F where
   assignment := .empty W
 
 @[reducible, table_norm, table_assignment_norm]
-def offset (table : TableContext W S F) : ℕ := table.circuit.local_length
+def offset (table : TableContext W S F) : ℕ := table.circuit.localLength
 end TableContext
 
 @[reducible, table_norm, table_assignment_norm]
@@ -317,17 +317,17 @@ instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
 
 @[table_assignment_norm]
-def assignment_from_circuit (as: CellAssignment W S) : Operations F → CellAssignment W S
+def assignmentFromCircuit (as: CellAssignment W S) : Operations F → CellAssignment W S
   | [] => as
-  | .witness m _ :: ops => assignment_from_circuit (as.push_vars_aux m) ops
-  | .assert _ :: ops => assignment_from_circuit as ops
-  | .lookup _ :: ops => assignment_from_circuit as ops
-  | .subcircuit s :: ops => assignment_from_circuit (as.push_vars_aux s.local_length) ops
+  | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
+  | .assert _ :: ops => assignmentFromCircuit as ops
+  | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
 
--- alternative, simpler definition, but makes it harder for lean to check defeq `(window_env ..).get i = ..`
-def assignment_from_circuit' (as: CellAssignment W S) (ops : Operations F) : CellAssignment W S where
-  offset := as.offset + ops.local_length
-  aux_length := as.aux_length + ops.local_length
+-- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
+def assignmentFromCircuit' (as: CellAssignment W S) (ops : Operations F) : CellAssignment W S where
+  offset := as.offset + ops.localLength
+  aux_length := as.aux_length + ops.localLength
   vars := as.vars ++ (.mapRange _ fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
 
 /--
@@ -337,34 +337,34 @@ all circuit operations inside a table constraint.
 @[reducible, table_norm, table_assignment_norm]
 instance : MonadLift (Circuit F) (TableConstraint W S F) where
   monadLift circuit ctx :=
-    let (a, ops) := circuit ctx.circuit.local_length
+    let (a, ops) := circuit ctx.circuit.localLength
     (a, {
       circuit := ctx.circuit ++ ops,
-      assignment := assignment_from_circuit ctx.assignment ops
+      assignment := assignmentFromCircuit ctx.assignment ops
     })
 
 namespace TableConstraint
 @[reducible, table_norm, table_assignment_norm]
-def final_offset (table : TableConstraint W S F α) : ℕ :=
-  table .empty |>.snd.circuit.local_length
+def finalOffset (table : TableConstraint W S F α) : ℕ :=
+  table .empty |>.snd.circuit.localLength
 
 @[table_norm]
 def operations (table : TableConstraint W S F α) : Operations F :=
   table .empty |>.snd.circuit
 
 @[table_assignment_norm]
-def final_assignment (table : TableConstraint W S F α) : CellAssignment W S :=
+def finalAssignment (table : TableConstraint W S F α) : CellAssignment W S :=
   table .empty |>.snd.assignment
 
 @[table_assignment_norm]
-def offset_consistent (table : TableConstraint W S F α) : Prop :=
-  table.final_offset = table.final_assignment.offset
+def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
+  table.finalOffset = table.finalAssignment.offset
 
 -- construct an env by taking the result of the assignment function for input/output cells,
 -- and allowing arbitrary values for aux cells and invalid variables
-def window_env (table : TableConstraint W S F Unit)
+def windowEnv (table : TableConstraint W S F Unit)
   (window: TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
-  let assignment := table.final_assignment
+  let assignment := table.finalAssignment
   .mk fun i =>
     if hi : i < assignment.offset then
       match assignment.vars[i] with
@@ -378,10 +378,10 @@ def window_env (table : TableConstraint W S F Unit)
   so that every variable evaluate to the trace cell value which is assigned to
 -/
 @[table_norm]
-def constraints_hold_on_window (table : TableConstraint W S F Unit)
+def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window: TraceOfLength F S W) (aux_env : Environment F) : Prop :=
-  let env := window_env table window aux_env
-  Circuit.constraints_hold.soundness env table.operations
+  let env := windowEnv table window aux_env
+  Circuit.ConstraintsHold.Soundness env table.operations
 
 @[table_norm]
 def output {α: Type} (table : TableConstraint W S F α) : α :=
@@ -391,56 +391,56 @@ def output {α: Type} (table : TableConstraint W S F α) : α :=
   Get a fresh variable for each cell in a given row
 -/
 @[table_norm, table_assignment_norm]
-def get_row (row : Fin W) : TableConstraint W S F (Var S F) :=
+def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
       circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
-      assignment := ctx.assignment.push_row row
+      assignment := ctx.assignment.pushRow row
     }
-    (var_from_offset S ctx.offset, ctx')
+    (varFromOffset S ctx.offset, ctx')
 
 /--
   Get a fresh variable for each cell in the current row
 -/
 @[table_norm, table_assignment_norm]
-def get_curr_row : TableConstraint W S F (Var S F) := get_row 0
+def getCurrRow : TableConstraint W S F (Var S F) := getRow 0
 
 /--
   Get a fresh variable for each cell in the next row
 -/
 @[table_norm, table_assignment_norm]
-def get_next_row : TableConstraint W S F (Var S F) := get_row 1
+def getNextRow : TableConstraint W S F (Var S F) := getRow 1
 
 @[table_norm, table_assignment_norm]
-def assign_var (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
+def assignVar (off : CellOffset W S) (v : Variable F) : TableConstraint W S F Unit :=
   modify fun ctx =>
-    let assignment := ctx.assignment.set_var_input off v.index
+    let assignment := ctx.assignment.setVarInput off v.index
     { ctx with assignment }
 
 @[table_norm, table_assignment_norm]
 def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   -- a variable is assigned directly
-  | .var v => assign_var off v
+  | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witness_var x.eval
-    assert_zero (x - var new_var)
-    assign_var off new_var
+    let new_var ← witnessVar x.eval
+    assertZero (x - var new_var)
+    assignVar off new_var
 
 @[table_norm, table_assignment_norm]
-def assign_curr_row {W: ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
-  let vars := to_vars curr
+def assignCurrRow {W: ℕ+} (curr : Var S F) : TableConstraint W S F Unit :=
+  let vars := toVars curr
   forM (List.finRange (size S)) fun i =>
     assign (.curr i) (vars.get i)
 
 @[table_norm, table_assignment_norm]
-def assign_next_row {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
-  let vars := to_vars next
+def assignNextRow {W: ℕ+} (next : Var S F) : TableConstraint W S F Unit :=
+  let vars := toVars next
   forM (List.finRange (size S)) fun i =>
     assign (.next i) (vars.get i)
 end TableConstraint
 
-export TableConstraint (window_env get_curr_row get_next_row assign_var assign assign_next_row assign_curr_row)
+export TableConstraint (windowEnv getCurrRow getNextRow assignVar assign assignNextRow assignCurrRow)
 
 @[reducible]
 def SingleRowConstraint (S : Type → Type) (F : Type) [Field F] [ProvableType S] := TableConstraint 1 S F Unit
@@ -457,13 +457,13 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
   /--
     A `Boundary` constraint is a constraint that is applied only to a specific row
   -/
-  | Boundary: RowIndex → SingleRowConstraint S F → TableOperation S F
+  | boundary: RowIndex → SingleRowConstraint S F → TableOperation S F
 
   /--
     An `EveryRow` constraint is a constraint that is applied to every row.
     It can only reference cells on the same row
   -/
-  | EveryRow: SingleRowConstraint S F → TableOperation S F
+  | everyRow: SingleRowConstraint S F → TableOperation S F
 
   /--
     An `EveryRowExceptLast` constraint is a constraint that is applied to every row except the last.
@@ -471,7 +471,7 @@ inductive TableOperation (S : Type → Type) (F : Type) [Field F] [ProvableType 
 
     Note that this will not apply any constraints to a trace of length one.
   -/
-  | EveryRowExceptLast: TwoRowsConstraint S F → TableOperation S F
+  | everyRowExceptLast: TwoRowsConstraint S F → TableOperation S F
 
 instance : Repr RowIndex where
   reprPrec
@@ -480,11 +480,11 @@ instance : Repr RowIndex where
 
 instance [Repr F] : Repr (TableOperation S F) where
   reprPrec op _ := match op with
-    | .Boundary i c => "Boundary " ++ reprStr i ++ " " ++ reprStr c
-    | .EveryRow c => "EveryRow " ++ reprStr c
-    | .EveryRowExceptLast c => "EveryRowExceptLast " ++ reprStr c
+    | .boundary i c => "boundary " ++ reprStr i ++ " " ++ reprStr c
+    | .everyRow c => "everyRow " ++ reprStr c
+    | .everyRowExceptLast c => "everyRowExceptLast " ++ reprStr c
 
-export TableOperation (Boundary EveryRow EveryRowExceptLast)
+export TableOperation (boundary everyRow everyRowExceptLast)
 
 /--
   The constraints hold over a trace if the hold individually in a suitable environment, where the
@@ -492,7 +492,7 @@ export TableOperation (Boundary EveryRow EveryRowExceptLast)
   is assigned to a field element in the trace `y: F` using a `CellAssignment` function, then ` env x = y`
 -/
 @[table_norm]
-def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
+def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
   (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F) : Prop :=
   let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
   foldl N constraints_and_envs trace.val constraints_and_envs
@@ -518,29 +518,29 @@ def table_constraints_hold {N : ℕ} (constraints : List (TableOperation S F))
   foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator: List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
-    | trace +> curr +> next, (⟨.EveryRowExceptLast constraint, env⟩)::rest =>
+    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩)::rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.constraints_hold_on_window window (env (trace.len + 1)) ∧ others
+        constraint.ConstraintsHoldOnWindow window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
-    | trace +> row, (⟨.Boundary idx constraint, env⟩)::rest =>
+    | trace +> row, (⟨.boundary idx constraint, env⟩)::rest =>
         let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then constraint.constraints_hold_on_window window (env trace.len) else True) ∧ others
+        (if trace.len = targetIdx then constraint.ConstraintsHoldOnWindow window (env trace.len) else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
-    | trace +> row, (⟨.EveryRow constraint, env⟩)::rest =>
+    | trace +> row, (⟨.everyRow constraint, env⟩)::rest =>
         let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.constraints_hold_on_window window (env trace.len) ∧ others
+        constraint.ConstraintsHoldOnWindow window (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
-    | trace, (⟨.EveryRowExceptLast _, _⟩)::rest =>
+    | trace, (⟨.everyRowExceptLast _, _⟩)::rest =>
         foldl N cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
@@ -559,34 +559,34 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   assumption : ℕ → Prop := fun _ => True
 
   /-- specification for the table -/
-  spec {N : ℕ} : TraceOfLength F S N → Prop
+  Spec {N : ℕ} : TraceOfLength F S N → Prop
 
   /-- the soundness states that if the assumptions hold, then
       the constraints hold implies that the spec holds. -/
   soundness :
     ∀ (N : ℕ) (trace: TraceOfLength F S N) (env: ℕ → ℕ → Environment F),
     assumption N →
-    table_constraints_hold constraints trace env →
-    spec trace
+    TableConstraintsHold constraints trace env →
+    Spec trace
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each
       constraint is consistent with the number of variables introduced in the circuit. -/
   offset_consistent :
     constraints.Forall fun cs =>
       match cs with
-      | .Boundary _ constraint => constraint.offset_consistent
-      | .EveryRow constraint => constraint.offset_consistent
-      | .EveryRowExceptLast constraint => constraint.offset_consistent
+      | .boundary _ constraint => constraint.OffsetConsistent
+      | .everyRow constraint => constraint.OffsetConsistent
+      | .everyRowExceptLast constraint => constraint.OffsetConsistent
     := by repeat constructor
 
 def FormalTable.statement (table : FormalTable F S) (N : ℕ) (trace: TraceOfLength F S N) : Prop :=
-  table.assumption N → table.spec trace
+  table.assumption N → table.Spec trace
 
 -- add some important lemmas to simp sets
 attribute [table_norm] List.mapIdx List.mapIdx.go
-attribute [table_norm low] size from_elements to_elements to_vars from_vars
-attribute [table_assignment_norm low] to_elements
-attribute [table_norm] Circuit.constraints_hold.soundness
+attribute [table_norm low] size fromElements toElements toVars fromVars
+attribute [table_assignment_norm low] toElements
+attribute [table_norm] Circuit.ConstraintsHold.Soundness
 
 attribute [table_norm, table_assignment_norm] Vector.set? List.set_cons_succ List.set_cons_zero
 
@@ -596,11 +596,11 @@ attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modi
 
 -- simp lemma to simplify updated circuit after an assignment
 @[table_norm, table_assignment_norm]
-theorem TableConstraint.assign_var_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
-  (assign_var off v ctx).snd.circuit = ctx.circuit := by intros; rfl
+theorem TableConstraint.assignVar_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
+  (assignVar off v ctx).snd.circuit = ctx.circuit := by intros; rfl
 
 /--
-Tactic script to unfold `assign_curr_row` and `assign_next_row` in a `TableConstraint`.
+Tactic script to unfold `assignCurrRow` and `assignNextRow` in a `TableConstraint`.
 
 TODO this is fairly useless without support for `at h` syntax
 -/
@@ -608,11 +608,11 @@ syntax "simp_assign_row" : tactic
 macro_rules
   | `(tactic|simp_assign_row) =>
     `(tactic|(
-    simp only [assign_curr_row, assign_next_row, size]
+    simp only [assignCurrRow, assignNextRow, size]
     rw [List.finRange, List.ofFn]
     repeat rw [Fin.foldr_succ]
     rw [Fin.foldr_zero]
     repeat rw [List.forM_cons]
     rw [List.forM_nil, bind_pure_unit]
-    simp only [seval, to_vars, to_elements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
+    simp only [seval, toVars, toElements, Vector.get, Fin.cast_eq_self, Fin.val_zero, Fin.val_one, Fin.isValue,
       List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ, Fin.succ_zero_eq_one]))

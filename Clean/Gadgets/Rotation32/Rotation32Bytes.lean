@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 namespace Gadgets.Rotation32Bytes
 variable {p : ℕ} [Fact p.Prime]
 
-open Bitwise (rot_right32)
+open Bitwise (rotRight32)
 /--
   Rotate the 32-bit integer by increments of 8 positions
   This gadget does not introduce constraints
@@ -22,14 +22,14 @@ def rot32_bytes (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) (Var U3
   else
     return ⟨ x3, x0, x1, x2 ⟩
 
-def assumptions (input : U32 (F p)) := input.is_normalized
+def Assumptions (input : U32 (F p)) := input.Normalized
 
-def spec (offset : Fin 4) (x : U32 (F p)) (y: U32 (F p)) :=
-  y.value = rot_right32 x.value (offset.val * 8) ∧ y.is_normalized
+def Spec (offset : Fin 4) (x : U32 (F p)) (y: U32 (F p)) :=
+  y.value = rotRight32 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := rot32_bytes off
-  local_length _ := 0
+  localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3⟩ := input
     match off with
@@ -38,7 +38,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     | 2 => ⟨ x2, x3, x0, x1 ⟩
     | 3 => ⟨ x3, x0, x1, x2 ⟩
 
-  subcircuits_consistent x i0 := by
+  subcircuitsConsistent x i0 := by
     simp only [rot32_bytes]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
@@ -46,12 +46,12 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     intros
     fin_cases off
     repeat rfl
-  local_length_eq := by
+  localLength_eq := by
     intros
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (spec off) := by
+theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
@@ -61,26 +61,26 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) assumptions (
   clear h_inputs
   clear h
 
-  dsimp only [assumptions, U32.is_normalized] at as
+  dsimp only [Assumptions, U32.Normalized] at as
   obtain ⟨ h0, h1, h2, h3 ⟩ := as
 
-  simp [circuit_norm, spec, U32.value, -Nat.reducePow]
+  simp [circuit_norm, Spec, U32.value, -Nat.reducePow]
   constructor
-  · fin_cases off <;> (simp_all [eval, Expression.eval, rot_right32, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U32.is_normalized, eval, Expression.eval]
+  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) assumptions := by
+theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
-    intro assumptions
+    intro Assumptions
     simp [elaborated, rot32_bytes, circuit_norm]
 
 def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
   elaborated off with
   main := rot32_bytes off
-  assumptions := assumptions
-  spec := spec off
+  Assumptions
+  Spec := Spec off
   soundness := soundness off
   completeness := completeness off
 }

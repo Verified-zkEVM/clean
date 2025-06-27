@@ -1,5 +1,5 @@
 import Clean.Types.U32
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.Subcircuit
 import Clean.Utils.Rotation
 import Clean.Gadgets.Rotation32.Rotation32Bytes
 import Clean.Gadgets.Rotation32.Rotation32Bits
@@ -13,8 +13,8 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Bitwise (rot_right32)
-open Utils.Rotation (rot_right32_composition)
+open Bitwise (rotRight32)
+open Utils.Rotation (rotRight32_composition)
 
 /--
   Rotate the 32-bit integer by `offset` bits
@@ -27,23 +27,23 @@ def rot32 (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) 
   let byte_rotated ← subcircuit (Rotation32Bytes.circuit byte_offset) x
   subcircuit (Rotation32Bits.circuit bit_offset) byte_rotated
 
-def assumptions (input : U32 (F p)) := input.is_normalized
+def Assumptions (input : U32 (F p)) := input.Normalized
 
-def spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
-  y.value = rot_right32 x.value offset.val
-  ∧ y.is_normalized
+def Spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
+  y.value = rotRight32 x.value offset.val
+  ∧ y.Normalized
 
 def output (offset : Fin 32) (i0 : Nat) : U32 (Expression (F p)) :=
   Rotation32Bits.output (offset % 8).val i0
 
--- #eval! (rot32 (p:=p_babybear) 0) default |>.local_length
+-- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := rot32 off
-  local_length _ := 8
+  localLength _ := 8
   output _inputs i0 := output off i0
 
-theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) assumptions (spec offset) := by
+theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   simp [circuit_norm, rot32, elaborated, U32.copy, subcircuit_norm,
@@ -54,14 +54,14 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   let bit_offset : ℕ := (offset % 8).val
   set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation32Bytes.elaborated byte_offset) (x_var : Var U32 _) i0)
 
-  simp [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.spec, Rotation32Bytes.assumptions,
-    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.spec, Rotation32Bits.assumptions,
+  simp [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Spec, Rotation32Bytes.Assumptions,
+    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Spec, Rotation32Bits.Assumptions,
     Vector.finRange] at h_holds
 
-  simp [circuit_norm, spec, output, h_holds, elaborated]
+  simp [circuit_norm, Spec, output, h_holds, elaborated]
   set y := eval env (Rotation32Bits.output (offset.val % 8 : ℕ) i0)
 
-  simp [assumptions] at x_normalized
+  simp [Assumptions] at x_normalized
   rw [←h_input] at x_normalized
   obtain ⟨h0, h1⟩ := h_holds
   specialize h0 x_normalized
@@ -73,7 +73,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   rw [h_input] at hy x_normalized
 
   -- reason about rotation
-  rw [rot_right32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
+  rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy]
   rw [show(offset.val / 8) % 4 = offset.val / 8 by
     apply Nat.mod_eq_of_lt
@@ -81,28 +81,28 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
     exact offset.is_lt]
   rw [Nat.div_add_mod']
 
-theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) assumptions := by
+theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
   simp [circuit_norm, rot32, elaborated, subcircuit_norm,
-    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.assumptions,
-    Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.assumptions]
+    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Assumptions,
+    Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions]
   simp [circuit_norm, elaborated, rot32, subcircuit_norm,
-    Rotation32Bytes.circuit, Rotation32Bytes.assumptions, Rotation32Bytes.spec] at h_env
+    Rotation32Bytes.circuit, Rotation32Bytes.Assumptions, Rotation32Bytes.Spec] at h_env
 
   obtain ⟨h0, _⟩ := h_env
   rw [h_eval] at h0
   specialize h0 x_normalized
   obtain ⟨h_rot, h_norm⟩ := h0
 
-  simp only [assumptions] at x_normalized
+  simp only [Assumptions] at x_normalized
   rw [h_eval]
   simp only [x_normalized, true_and, h_norm]
 
 def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
   elaborated offset with
-  assumptions := assumptions
-  spec := spec offset
+  Assumptions
+  Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

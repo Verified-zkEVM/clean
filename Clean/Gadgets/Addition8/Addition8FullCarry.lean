@@ -1,13 +1,12 @@
-import Clean.Circuit.SubCircuit
+import Clean.Circuit.LookupCircuit
 import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
 
 namespace Gadgets.Addition8FullCarry
-variable {p : ℕ} [Fact p.Prime]
-variable [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod_256 floordiv_256)
+open ByteUtils (mod256 floorDiv256)
 
 structure Inputs (F : Type) where
   x: F
@@ -16,8 +15,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [field, field, field]
-  to_components := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
-  from_components := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
+  toComponents := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
+  fromComponents := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
 
 structure Outputs (F : Type) where
   z: F
@@ -25,29 +24,29 @@ structure Outputs (F : Type) where
 
 instance : ProvableStruct Outputs where
   components := [field, field]
-  to_components := fun { z, carry_out } => .cons z (.cons carry_out .nil)
-  from_components := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
+  toComponents := fun { z, carry_out } => .cons z (.cons carry_out .nil)
+  fromComponents := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
 
 def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
-  let z ← witness (fun eval => mod_256 (eval (x + y + carry_in)))
-  lookup (ByteLookup z)
+  let z ← witness (fun eval => mod256 (eval (x + y + carry_in)))
+  lookup ByteTable z
 
   -- witness the output carry
-  let carry_out ← witness (fun eval => floordiv_256 (eval (x + y + carry_in)))
+  let carry_out ← witness (fun eval => floorDiv256 (eval (x + y + carry_in)))
   assertion Boolean.circuit carry_out
 
-  assert_zero (x + y + carry_in - z - carry_out * 256)
+  assertZero (x + y + carry_in - z - carry_out * 256)
 
   return { z, carry_out }
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   out.z.val = (x.val + y.val + carry_in.val) % 256 ∧
   out.carry_out.val = (x.val + y.val + carry_in.val) / 256
@@ -58,9 +57,9 @@ def spec (input : Inputs (F p)) (out : Outputs (F p)) :=
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main := add8_full_carry
-  assumptions
-  spec
-  local_length _ := 2
+  Assumptions
+  Spec
+  localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
 
   soundness := by
@@ -72,8 +71,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, subcircuit_norm, h_inputs, spec, assumptions, add8_full_carry,
-      ByteLookup, Boolean.circuit, ByteTable.equiv]
+    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, add8_full_carry,
+      ByteTable, Boolean.circuit]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
@@ -99,8 +98,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, subcircuit_norm, h_inputs, assumptions, add8_full_carry,
-      ByteLookup, Boolean.circuit, ByteTable.equiv] at *
+    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, add8_full_carry,
+      ByteTable, Boolean.circuit] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -115,7 +114,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
     have completeness1 : z.val < 256 := by
       rw [hz]
-      apply ByteUtils.mod_256_lt
+      apply ByteUtils.mod256_lt
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
@@ -131,5 +130,14 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       repeat assumption
 
     exact ⟨completeness1, completeness2, completeness3⟩
+
+def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
+  circuit with
+  name := "Addition8FullCarry"
+
+  computableWitnesses n input := by
+    simp_all only [circuit_norm, subcircuit_norm, circuit, add8_full_carry, Boolean.circuit,
+      Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
+}
 
 end Gadgets.Addition8FullCarry

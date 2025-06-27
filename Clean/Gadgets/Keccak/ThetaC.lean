@@ -17,39 +17,39 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← subcircuit Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-def assumptions (state : KeccakState (F p)) := state.is_normalized
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
-  out.is_normalized
-  ∧ out.value = Specs.Keccak256.theta_c state.value
+def Spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
+  out.Normalized
+  ∧ out.value = Specs.Keccak256.thetaC state.value
 
--- #eval! theta_c (p:=p_babybear) default |>.local_length
+-- #eval! theta_c (p:=p_babybear) default |>.localLength
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
-  local_length _ := 160
-  local_length_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
-  subcircuits_consistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
+  localLength _ := 160
+  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
+  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
--- rewrite theta_c as a loop
-lemma theta_c_loop (state : Vector ℕ 25) :
-    Specs.Keccak256.theta_c state = .mapFinRange 5 fun i =>
+-- rewrite thetaC as a loop
+lemma thetaC_loop (state : Vector ℕ 25) :
+    Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
-  rw [Specs.Keccak256.theta_c, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+  rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env state_var state h_input state_norm h_holds
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [main, theta_c_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit]
+  simp only [main, thetaC_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [circuit_norm, subcircuit_norm, h_input, eval_vector,
-    main, Xor64.circuit, Xor64.assumptions, Xor64.spec] at h_holds
+    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
   simp only [and_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
-  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].is_normalized :=
+  have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
 
@@ -57,16 +57,15 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   specialize h_holds i
   aesop
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [h_input, circuit_norm, subcircuit_norm, assumptions, eval_vector,
-    main, Xor64.circuit, Xor64.assumptions, Xor64.spec, KeccakState.is_normalized] at h_env ⊢
-  have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].is_normalized := fun i hi => state_norm ⟨ i, hi ⟩
+  simp only [h_input, circuit_norm, subcircuit_norm, Assumptions, eval_vector,
+    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec, KeccakState.Normalized] at h_env ⊢
+  have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
-def circuit : FormalCircuit (F p) KeccakState KeccakRow := {
-  elaborated with assumptions, spec, soundness, completeness
-}
+def circuit : FormalCircuit (F p) KeccakState KeccakRow :=
+ { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaC

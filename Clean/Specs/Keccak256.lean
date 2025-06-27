@@ -1,9 +1,7 @@
-import Mathlib.Tactic.Linarith.Frontend
 import Clean.Types.U64
-import Clean.Gadgets.Rotation64.Theorems
 namespace Specs.Keccak256
 
-open Bitwise (not64 rot_left64)
+open Bitwise (not64 rotLeft64)
 
 def roundConstants : Vector UInt64 24 := #v[
   0x0000000000000001, 0x0000000000008082,
@@ -23,7 +21,7 @@ def roundConstants : Vector UInt64 24 := #v[
 def bits2bytes (x : Nat) : Nat :=
   (x + 7) / 8
 
-def theta_c (state : Vector ℕ 25) : Vector ℕ 5 :=
+def thetaC (state : Vector ℕ 25) : Vector ℕ 5 :=
   #v[
     state[0] ^^^ state[1] ^^^ state[2] ^^^ state[3] ^^^ state[4],
     state[5] ^^^ state[6] ^^^ state[7] ^^^ state[8] ^^^ state[9],
@@ -32,16 +30,16 @@ def theta_c (state : Vector ℕ 25) : Vector ℕ 5 :=
     state[20] ^^^ state[21] ^^^ state[22] ^^^ state[23] ^^^ state[24]
   ]
 
-def theta_d (c : Vector ℕ 5) : Vector ℕ 5 :=
+def thetaD (c : Vector ℕ 5) : Vector ℕ 5 :=
   #v[
-    c[4] ^^^ (rot_left64 c[1] 1),
-    c[0] ^^^ (rot_left64 c[2] 1),
-    c[1] ^^^ (rot_left64 c[3] 1),
-    c[2] ^^^ (rot_left64 c[4] 1),
-    c[3] ^^^ (rot_left64 c[0] 1)
+    c[4] ^^^ (rotLeft64 c[1] 1),
+    c[0] ^^^ (rotLeft64 c[2] 1),
+    c[1] ^^^ (rotLeft64 c[3] 1),
+    c[2] ^^^ (rotLeft64 c[4] 1),
+    c[3] ^^^ (rotLeft64 c[0] 1)
   ]
 
-def theta_xor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
+def thetaXor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
   #v[
     state[0] ^^^ d[0],
     state[1] ^^^ d[0],
@@ -71,37 +69,37 @@ def theta_xor (state : Vector ℕ 25) (d : Vector ℕ 5) : Vector ℕ 25 :=
   ]
 
 def theta (state : Vector ℕ 25) : Vector ℕ 25 :=
-  let c := theta_c state
-  let d := theta_d c
-  theta_xor state d
+  let c := thetaC state
+  let d := thetaD c
+  thetaXor state d
 
-def rho_pi (state : Vector ℕ 25) : Vector ℕ 25 :=
+def rhoPi (state : Vector ℕ 25) : Vector ℕ 25 :=
   #v[
-    rot_left64 state[0] 0,
-    rot_left64 state[15] 28,
-    rot_left64 state[5] 1,
-    rot_left64 state[20] 27,
-    rot_left64 state[10] 62,
-    rot_left64 state[6] 44,
-    rot_left64 state[21] 20,
-    rot_left64 state[11] 6,
-    rot_left64 state[1] 36,
-    rot_left64 state[16] 55,
-    rot_left64 state[12] 43,
-    rot_left64 state[2] 3,
-    rot_left64 state[17] 25,
-    rot_left64 state[7] 10,
-    rot_left64 state[22] 39,
-    rot_left64 state[18] 21,
-    rot_left64 state[8] 45,
-    rot_left64 state[23] 8,
-    rot_left64 state[13] 15,
-    rot_left64 state[3] 41,
-    rot_left64 state[24] 14,
-    rot_left64 state[14] 61,
-    rot_left64 state[4] 18,
-    rot_left64 state[19] 56,
-    rot_left64 state[9] 2
+    rotLeft64 state[0] 0,
+    rotLeft64 state[15] 28,
+    rotLeft64 state[5] 1,
+    rotLeft64 state[20] 27,
+    rotLeft64 state[10] 62,
+    rotLeft64 state[6] 44,
+    rotLeft64 state[21] 20,
+    rotLeft64 state[11] 6,
+    rotLeft64 state[1] 36,
+    rotLeft64 state[16] 55,
+    rotLeft64 state[12] 43,
+    rotLeft64 state[2] 3,
+    rotLeft64 state[17] 25,
+    rotLeft64 state[7] 10,
+    rotLeft64 state[22] 39,
+    rotLeft64 state[18] 21,
+    rotLeft64 state[8] 45,
+    rotLeft64 state[23] 8,
+    rotLeft64 state[13] 15,
+    rotLeft64 state[3] 41,
+    rotLeft64 state[24] 14,
+    rotLeft64 state[14] 61,
+    rotLeft64 state[4] 18,
+    rotLeft64 state[19] 56,
+    rotLeft64 state[9] 2
   ]
 
 def chi (b : Vector ℕ 25) : Vector ℕ 25 :=
@@ -136,29 +134,29 @@ def chi (b : Vector ℕ 25) : Vector ℕ 25 :=
 def iota (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   state.set 0 ((state.get 0) ^^^ rc.toFin)
 
-def keccak_round (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
+def keccakRound (state : Vector ℕ 25) (rc : UInt64) : Vector ℕ 25 :=
   let theta_state := theta state
-  let rho_pi_state := rho_pi theta_state
+  let rho_pi_state := rhoPi theta_state
   let chi_state := chi rho_pi_state
   iota chi_state rc
 
-def keccak_permutation (state : Vector ℕ 25): Vector ℕ 25 :=
-  roundConstants.foldl keccak_round state
+def keccakPermutation (state : Vector ℕ 25): Vector ℕ 25 :=
+  roundConstants.foldl keccakRound state
 
 @[reducible] def CAPACITY := 8
 @[reducible] def RATE := 17
 example : RATE + CAPACITY = 25 := rfl
 
-def initial_state : Vector ℕ 25 := .fill 25 0
+def initialState : Vector ℕ 25 := .fill 25 0
 
-def absorb_block (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 25 :=
+def absorbBlock (state : Vector ℕ 25) (block : Vector ℕ RATE) : Vector ℕ 25 :=
   -- absorb the block into the state by XORing with the first RATE elements
   let state' := Vector.mapFinRange 25 fun i => state[i] ^^^ (if _ : i.val < RATE then block[i] else 0)
   -- apply the permutation
-  keccak_permutation state'
+  keccakPermutation state'
 
-def absorb_blocks (blocks : List (Vector ℕ RATE)) : Vector ℕ 25 :=
-  blocks.foldl absorb_block initial_state
+def absorbBlocks (blocks : List (Vector ℕ RATE)) : Vector ℕ 25 :=
+  blocks.foldl absorbBlock initialState
 
 end Specs.Keccak256
 
@@ -194,11 +192,11 @@ def state : Vector (U64 ℕ) 25 := #v[
 ]
 -- state = [[67, 168, 144, 181, 2, 173, 144, 47], [114, 52, 107, 105, 171, 22, 114, 75], [196, 118, 22, 253, 100, 162, 87, 52], [50, 65, 171, 81, 229, 6, 172, 155], [178, 167, 68, 225, 82, 73, 216, 194], [193, 5, 52, 193, 148, 168, 64, 147], [212, 142, 107, 244, 55, 237, 100, 203], [101, 34, 195, 62, 133, 216, 64, 34], [240, 214, 204, 27, 17, 231, 66, 179], [136, 37, 228, 137, 64, 208, 27, 90], [177, 229, 130, 4, 191, 7, 25, 117], [124, 168, 245, 7, 222, 138, 168, 16], [115, 130, 213, 74, 217, 123, 172, 109], [128, 149, 137, 6, 45, 133, 77, 101], [104, 90, 153, 237, 72, 44, 164, 84], [129, 177, 235, 28, 82, 30, 150, 201], [52, 55, 32, 241, 142, 211, 246, 68], [149, 124, 124, 204, 34, 220, 229, 69], [215, 168, 47, 96, 70, 5, 220, 2], [53, 224, 38, 18, 110, 66, 70, 9], [213, 122, 200, 196, 186, 122, 207, 42], [141, 103, 32, 88, 244, 160, 37, 76], [99, 242, 138, 24, 4, 30, 100, 196], [141, 253, 136, 54, 8, 21, 204, 152], [93, 161, 29, 12, 44, 252, 49, 57]]
 
-def state' := state.map U64.value_nat
+def state' := state.map U64.valueNat
 
 def rc : U64 ℕ := ⟨235, 226, 178, 113, 2, 17, 87, 249⟩
 -- #eval theta state' |> rho_pi |> chi
--- #eval keccak_permutation state' |>.map U64.decompose_nat_nat
+-- #eval keccak_permutation state' |>.map U64.decomposeNatNat
 -- [[158, 112, 239, 65, 247, 184, 42, 29],[18, 33, 104, 153, 4, 113, 230, 164], [203, 128, 138, 52, 66, 249, 134, 137], [204, 130, 87, 203, 75, 229, 26, 49], [101, 124, 134, 181, 193, 247, 248, 194], [170, 160, 115, 17, 65, 59, 26, 242], [211, 14, 202, 60, 11, 138, 72, 44], [21, 90, 64, 58, 127, 167, 131, 94], [242, 160, 171, 170, 232, 135, 11, 166], [172, 234, 194, 74, 41, 176, 182, 229], [174, 35, 251, 95, 139, 151, 128, 196], [140, 76, 0, 166, 43, 181, 26, 214], [15, 95, 132, 163, 192, 11, 248, 213], [99, 110, 8, 73, 127, 107, 70, 240], [208, 251, 207, 18, 172, 113, 72, 220], [166, 119, 55, 190, 184, 224, 76, 193], [132, 182, 193, 105, 46, 92, 159, 3], [161, 219, 100, 118, 249, 82, 69, 168], [3, 191, 204, 13, 134, 22, 134, 93], [250, 46, 70, 133, 112, 75, 14, 27], [230, 133, 192, 229, 9, 245, 148, 47], [41, 51, 79, 61, 157, 210, 157, 201], [81, 88, 205, 113, 250, 141, 5, 116], [137, 227, 13, 73, 228, 151, 175, 151], [62, 184, 103, 254, 5, 201, 102, 121]]
 
 end Specs.Keccak256.Tests

@@ -1,4 +1,5 @@
-import Mathlib.Tactic
+import Mathlib.Analysis.Normed.Ring.Lemmas
+import Mathlib.Combinatorics.Enumerative.Composition
 import Init.Data.List.Find
 
 variable {α β : Type} {n m : ℕ}
@@ -77,7 +78,7 @@ structure ToPush (v : Vector α (n + 1)) where
   a : α
   eq : v = as.push a
 
-def to_push (v : Vector α (n + 1)) : ToPush v where
+def toPush (v : Vector α (n + 1)) : ToPush v where
   as := v.take n |>.cast Nat.min_add_right_self
   a := v[n]
   eq := by
@@ -96,7 +97,7 @@ def to_push (v : Vector α (n + 1)) : ToPush v where
 
 
 /- induction principle for Vector.push -/
-def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
+def inductPush {motive : {n: ℕ} → Vector α n → Sort u}
   (nil: motive #v[])
   (push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a))
   {n: ℕ} (v: Vector α n) : motive v :=
@@ -105,52 +106,52 @@ def induct_push {motive : {n: ℕ} → Vector α n → Sort u}
     cast (by subst h; rfl) nil
   | ⟨ .mk (a::as), h ⟩ =>
     have hlen : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
-    let ⟨ as', a', is_push ⟩ := to_push ⟨.mk (a :: as), rfl⟩
-    cast (by subst hlen; rw [is_push]) (push as' a' (induct_push nil push as'))
+    let ⟨ as', a', is_push ⟩ := toPush ⟨.mk (a :: as), rfl⟩
+    cast (by subst hlen; rw [is_push]) (push as' a' (inductPush nil push as'))
 
 theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
 
 theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
 
-theorem induct_push_nil {motive : {n: ℕ} → Vector α n → Sort u}
+theorem inductPush_nil {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
-    induct_push nil push #v[] = nil := by simp only [induct_push]; rfl
+    inductPush nil push #v[] = nil := by simp only [inductPush]; rfl
 
-lemma induct_push_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
+lemma inductPush_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push': ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
   {n: ℕ} (xs: Vector α n) (x a: α) :
-    induct_push nil push' (cons x (xs.push a)) = push' (cons x xs) a (induct_push nil push' (cons x xs)) := by
-  conv => lhs; simp only [cons, induct_push]
+    inductPush nil push' (cons x (xs.push a)) = push' (cons x xs) a (inductPush nil push' (cons x xs)) := by
+  conv => lhs; simp only [cons, inductPush]
   rw [cast_eq_iff_heq]
   have h_push_len : (xs.push a).toList.length = n + 1 := by simp
-  have h_to_push_cons : HEq (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).as (cons x xs) := by
-    have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).as = (cons x xs).cast h_push_len.symm := by
-      simp [cons, to_push, List.dropLast]
+  have h_to_push_cons : HEq (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).as (cons x xs) := by
+    have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).as = (cons x xs).cast h_push_len.symm := by
+      simp [cons, toPush, List.dropLast]
     rw [this]; apply cast_heq
   congr
-  · have : (to_push ⟨.mk (x :: (xs.push a).toList), rfl⟩).a = a := by
-      simp [cons, to_push]
+  · have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).a = a := by
+      simp [cons, toPush]
     rw [this]
 
-theorem induct_push_push {motive : {n: ℕ} → Vector α n → Sort u}
+theorem inductPush_push {motive : {n: ℕ} → Vector α n → Sort u}
   {nil: motive #v[]}
   {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
   {n: ℕ} (as: Vector α n) (a: α) :
-    induct_push nil push (as.push a) = push as a (induct_push nil push as) := by
+    inductPush nil push (as.push a) = push as a (inductPush nil push as) := by
   induction as using Vector.induct
   case nil =>
-    suffices induct_push nil push #v[a] = push #v[] a (induct_push nil push #v[]) by congr
-    simp only [induct_push, List.length_nil, Nat.reduceAdd, to_push, take_eq_extract, extract_mk,
+    suffices inductPush nil push #v[a] = push #v[] a (inductPush nil push #v[]) by congr
+    simp only [inductPush, List.length_nil, Nat.reduceAdd, toPush, take_eq_extract, extract_mk,
       Nat.sub_zero, cast_mk, getElem_mk, id_eq, Int.reduceNeg,
       Int.reduceAdd, Int.reduceSub, List.getElem_toArray, List.length_cons, eq_mp_eq_cast, cast_eq,
       List.getElem_cons_zero, push_mk, eq_mpr_eq_cast]
     congr
-    exact induct_push_nil
+    exact inductPush_nil
   case cons x xs ih =>
     simp only [cons_push]
-    rw [induct_push_cons_push]
+    rw [inductPush_cons_push]
 
 theorem getElemFin_finRange {n} (i : Fin n) : (finRange n)[i] = i := by
   simp only [Fin.getElem_fin, getElem_finRange, Fin.eta]

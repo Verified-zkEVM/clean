@@ -6,7 +6,7 @@ import Clean.Utils.Primes
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-open ByteUtils (mod_256 floordiv_256)
+open ByteUtils (mod256 floorDiv256)
 
 structure Inputs (F : Type) where
   x: U32 F
@@ -15,8 +15,8 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [U32, U32, field]
-  to_components := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
-  from_components := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
+  toComponents := fun {x, y, carry_in} => .cons x ( .cons y ( .cons carry_in .nil))
+  fromComponents := fun (.cons x ( .cons y ( .cons carry_in .nil))) => ⟨ x, y, carry_in ⟩
 
 structure Outputs (F : Type) where
   z: U32 F
@@ -25,8 +25,8 @@ deriving Repr
 
 instance : ProvableStruct Outputs where
   components := [U32, field]
-  to_components := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
-  from_components := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
+  toComponents := fun {z, carry_out} => .cons z ( .cons carry_out .nil)
+  fromComponents := fun (.cons z ( .cons carry_out .nil)) => ⟨ z, carry_out ⟩
 
 open Addition8FullCarry (add8_full_carry)
 
@@ -38,49 +38,49 @@ def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) :=
   let { z := z3, carry_out := c3 } ← add8_full_carry ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carry_out := c3 }
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
-  x.is_normalized ∧ y.is_normalized ∧ (carry_in = 0 ∨ carry_in = 1)
+  x.Normalized ∧ y.Normalized ∧ (carry_in = 0 ∨ carry_in = 1)
 
-def spec (input : Inputs (F p)) (out: Outputs (F p)) :=
+def Spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨x, y, carry_in⟩ := input
   let ⟨z, carry_out⟩ := out
   z.value = (x.value + y.value + carry_in.val) % 2^32
   ∧ carry_out.val = (x.value + y.value + carry_in.val) / 2^32
-  ∧ z.is_normalized ∧ (carry_out = 0 ∨ carry_out = 1)
+  ∧ z.Normalized ∧ (carry_out = 0 ∨ carry_out = 1)
 
 /--
 Elaborated circuit data can be found as follows:
 ```
-#eval (add32_full (p:=p_babybear) default).local_length
+#eval (add32_full (p:=p_babybear) default).localLength
 #eval (add32_full (p:=p_babybear) default).output
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main := add32_full
-  local_length _ := 8
+  localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
-  local_length_eq _ i0 := by
+  localLength_eq _ i0 := by
     simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
 
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
-  dsimp only [assumptions, U32.is_normalized] at as
+  dsimp only [Assumptions, U32.Normalized] at as
   obtain ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, spec, Boolean.circuit, ByteLookup, U32.value, U32.is_normalized] at h ⊢
-  simp only [circuit_norm, subcircuit_norm, eval, h_inputs, ByteTable.equiv] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
+  simp only [circuit_norm, subcircuit_norm, explicit_provable_type, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
   set z1 := env.get (i0 + 2)
@@ -104,16 +104,16 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
     h0 h1 h2 h3
 
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   let ⟨ x0, x1, x2, x3 ⟩ := x
   let ⟨ y0, y1, y2, y3 ⟩ := y
   let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := x_var
   let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := y_var
-  simp only [circuit_norm, eval, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_inputs
 
   -- simplify assumptions
-  dsimp [assumptions, U32.is_normalized] at as
+  dsimp [Assumptions, U32.Normalized] at as
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := as
   have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
@@ -136,18 +136,18 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
-    (hz: z = mod_256 (x + y + c_in)) (hc_out: c_out = floordiv_256 (x + y + c_in)) :
+    (hz: z = mod256 (x + y + c_in)) (hc_out: c_out = floorDiv256 (x + y + c_in)) :
     x.val < 256 → y.val < 256 → c_in = 0 ∨ c_in = 1 →
-    ByteTable.contains (#v[z]) ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
+    z.val < 256 ∧ (c_out = 0 ∨ c_out = 1) ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
-    have : z.val < 256 := hz ▸ ByteUtils.mod_256_lt (x + y + c_in)
-    use ByteTable.completeness z this
+    have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
+    use this
     have carry_lt_2 : c_in.val < 2 := FieldUtils.boolean_lt_2 hc
     have : (x + y + c_in).val < 512 :=
       ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
-    use (hc_out ▸ ByteUtils.floordiv_256_bool this)
-    rw [ByteUtils.mod_add_div_256 (x + y + c_in), hz, hc_out]
+    use (hc_out ▸ ByteUtils.floorDiv256_bool this)
+    rw [ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
     ring
 
   have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness hz0 hc0 x0_byte y0_byte carry_in_bool
@@ -158,8 +158,8 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  assumptions
-  spec
+  Assumptions
+  Spec
   soundness
   completeness
 end Gadgets.Addition32Full

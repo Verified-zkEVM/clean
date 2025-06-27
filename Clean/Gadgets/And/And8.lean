@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Xor (ByteXorLookup ByteXorTable)
+open Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -14,14 +14,14 @@ structure Inputs (F : Type) where
 
 instance : ProvableStruct Inputs where
   components := [field, field]
-  to_components := fun { x, y } => .cons x (.cons y .nil)
-  from_components := fun (.cons x (.cons y .nil)) => { x, y }
+  toComponents := fun { x, y } => .cons x (.cons y .nil)
+  fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
-def assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def spec (input : Inputs (F p)) (z : F p) :=
+def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
@@ -30,7 +30,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let and ← witness (fun eval => (eval x).val &&& (eval y).val)
   -- we prove AND correct using an XOR lookup and the following identity:
   let xor := x + y - 2 * and
-  lookup (ByteXorLookup x y xor)
+  lookup ByteXorTable (x, y, xor)
   return and
 
 -- AND / XOR identity that justifies the circuit
@@ -77,17 +77,13 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
 
 instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
-  local_length _ := 1
+  localLength _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness : Soundness (F p) elaborated assumptions spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_holds
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
-  simp only [Inputs.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  rw [ByteXorTable.equiv, hx, hy] at h_holds
-  clear hx hy
-  obtain ⟨ hx_byte, hy_byte, h_xor ⟩ := h_holds
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
+  simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
+  have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   set z := x + y + -(2 * w)
   show w.val = x.val &&& y.val
@@ -114,26 +110,20 @@ theorem soundness : Soundness (F p) elaborated assumptions spec := by
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
   exact two_and
 
-theorem completeness : Completeness (F p) elaborated assumptions := by
+theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, assumptions, spec, ByteXorLookup]
-  clear h_env
-  simp only [Inputs.mk.injEq] at h_input
-  obtain ⟨ hx, hy ⟩ := h_input
-  rw [ByteXorTable.equiv, hx, hy]
+  simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
+  obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
   let z := x + y + -(2 * w)
-
-  obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  suffices h_xor : (x + y + -(2 * w)).val = x.val ^^^ y.val from ⟨ hx_byte, hy_byte, h_xor ⟩
 
   -- now it's pretty much the soundness proof in reverse
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
   have p_large := p_large_enough.elim
   have and_lt : x.val &&& y.val < p := by linarith
-  rw [nat_to_field_eq_natcast and_lt] at hw
-  have h_and : w.val = x.val &&& y.val := nat_to_field_eq w hw
+  rw [natToField_eq_natCast and_lt] at hw
+  have h_and : w.val = x.val &&& y.val := natToField_eq w hw
 
   have two_and_val : (2 * w).val = 2 * (x.val &&& y.val) := by
     rw [ZMod.val_mul_of_lt, val_two, h_and]
@@ -149,6 +139,6 @@ theorem completeness : Completeness (F p) elaborated assumptions := by
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit : FormalCircuit (F p) Inputs field :=
-  { assumptions, spec, soundness, completeness }
+  { Assumptions, Spec, soundness, completeness }
 
 end Gadgets.And.And8

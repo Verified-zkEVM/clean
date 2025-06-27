@@ -8,8 +8,8 @@ variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation32.Theorems
-open Bitwise (rot_right32)
-open Gadgets.ByteDecomposition.Theorems (byte_decomposition_lift)
+open Bitwise (rotRight32)
+open Gadgets.ByteDecomposition.Theorems (byteDecomposition_lift)
 open Utils.Rotation
 
 /--
@@ -17,13 +17,13 @@ We define a bit rotation on byte vectors like U32 by splitting each byte
 into low and high bits, and moving the lowest low bits to the top and concatenating
 each resulting (high, low) pair again.
 
-The ultimate goal is to prove that this is equivalent to `rot_right32`.
+The ultimate goal is to prove that this is equivalent to `rotRight32`.
 -/
-def rot_right32_bytes (xs : Vector ℕ 4) (o : ℕ) : Vector ℕ 4 :=
+def rotRight32_bytes (xs : Vector ℕ 4) (o : ℕ) : Vector ℕ 4 :=
   .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 4] % 2^o) * 2^(8-o)
 
--- unfold what rot_right32_bytes does on a U32
-def rot_right32_u32 : U32 ℕ → ℕ → U32 ℕ
+-- unfold what rotRight32_bytes does on a U32
+def rotRight32_u32 : U32 ℕ → ℕ → U32 ℕ
   | ⟨ x0, x1, x2, x3 ⟩, o => ⟨
     (x0 / 2^o) + (x1 % 2^o) * 2^(8-o),
     (x1 / 2^o) + (x2 % 2^o) * 2^(8-o),
@@ -32,13 +32,13 @@ def rot_right32_u32 : U32 ℕ → ℕ → U32 ℕ
   ⟩
 
 -- these two are definitionally equal
-lemma rot_right32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
-  rot_right32_bytes x.to_limbs o = (rot_right32_u32 x o).to_limbs := rfl
+lemma rotRight32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
+  rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := rfl
 
 lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) % 2^o = x0 % 2^o := by
   nth_rw 1 [←Nat.pow_one 256]
-  repeat rw [Nat.add_mod, mul_mod_256_off ho _ _ (by trivial), add_zero, Nat.mod_mod]
+  repeat rw [Nat.add_mod, mul_mod256_off ho _ _ (by trivial), add_zero, Nat.mod_mod]
 
 lemma h_div32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3: ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) / 2^o
@@ -58,9 +58,9 @@ lemma h_x0_const32 {o : ℕ} (ho : o < 8) :
   omega
 
 theorem rotation32_bits_soundness {o : ℕ} (ho : o < 8) {x : U32 ℕ} :
-    (rot_right32_u32 x o).value_nat = rot_right32 x.value_nat o := by
+    (rotRight32_u32 x o).valueNat = rotRight32 x.valueNat o := by
   -- simplify the goal
-  simp only [rot_right32, rot_right32_u32, U32.value_nat]
+  simp only [rotRight32, rotRight32_u32, U32.valueNat]
 
   have offset_mod_32 : o % 32 = o := Nat.mod_eq_of_lt (by linarith)
   simp only [offset_mod_32]
