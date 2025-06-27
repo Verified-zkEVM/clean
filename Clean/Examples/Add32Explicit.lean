@@ -19,7 +19,7 @@ example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
 example : ExplicitCircuit.output (circuit32 default) 0
     = { z := ⟨ var ⟨0⟩, var ⟨2⟩, var ⟨4⟩, var ⟨6⟩ ⟩, carry_out := var ⟨7⟩ } := by
   -- rfl -- also works
-  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
+  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit, ProvableType.varFromOffset_field]
 
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..

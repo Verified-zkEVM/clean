@@ -10,8 +10,8 @@ namespace Gadgets.ByteDecomposition
 open FieldUtils (mod floorDiv two_lt two_pow_lt two_val two_pow_val)
 
 structure Outputs (F : Type) where
-  low : F
-  high : F
+  low : field F
+  high : field F
 
 instance : ProvableStruct Outputs where
   components := [field, field]
