@@ -17,7 +17,6 @@ def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
 theorem toList_cons {a: α} {v: Vector α n} : (cons a v).toList = a :: v.toList := by
   simp [cons]
 
-@[simp]
 def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
   ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, ← Array.size_eq_length_toList, v.size_toArray] ⟩
 
@@ -180,7 +179,6 @@ theorem cast_mapRange {n} {create: ℕ → α} (h : n = m) :
     mapRange n create = (mapRange m create).cast h.symm := by
   subst h; simp
 
-@[simp]
 theorem getElem_mapRange {n} {create: ℕ → α} :
     ∀ (i : ℕ) (hi : i < n), (mapRange n create)[i] = create i := by
   intros i hi
@@ -200,7 +198,6 @@ theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
   | zero => simp only [Nat.add_zero, mapRange, append_empty]
   | succ m ih => simp only [mapRange, Nat.add_eq, append_push, ih]
 
-@[simp]
 def fill (n : ℕ) (a: α) : Vector α n :=
   match n with
   | 0 => #v[]
