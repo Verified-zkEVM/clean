@@ -59,24 +59,23 @@ theorem Circuit.constraintsHold_toFlat_iff : ∀ {ops : Operations F}, ∀ {env 
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
 def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
-    (n: ℕ) (b_var : Var β F) : Subcircuit F n :=
-  let ops := circuit.main b_var |>.operations n
-  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent b_var n
+    (n: ℕ) (input_var : Var β F) : Subcircuit F n :=
+  let ops := circuit.main input_var |>.operations n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have imply_soundness : ∀ env : Environment F,
-      ConstraintsHoldFlat env ops.toFlat → SubcircuitSoundness circuit b_var n env := by
+    let input := eval env input_var
+    let output_var := circuit.output input_var n
+    let output := eval env output_var
+    ConstraintsHoldFlat env ops.toFlat → circuit.Assumptions input → circuit.Spec input output := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env h_holds
-    show SubcircuitSoundness circuit b_var n env
-
-    let b : β F := eval env b_var
-    let a : α F := eval env (circuit.output b_var n)
-    rintro (as : circuit.Assumptions b)
-    show circuit.Spec b a
+    intro env input output_var output h_holds
+    rintro (as : circuit.Assumptions input)
+    show circuit.Spec input output
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
     suffices h: ConstraintsHold.Soundness env ops by
-      exact circuit.soundness n env b_var b rfl as h
+      exact circuit.soundness n env input_var input rfl as h
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
@@ -85,11 +84,11 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
 
   have implied_by_completeness : ∀ env : Environment F,
       env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
-      SubcircuitCompleteness circuit b_var env → ConstraintsHoldFlat env ops.toFlat := by
+      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env ops.toFlat := by
     -- we are given that the assumptions are true
     intro env h_env
-    let b := eval env b_var
-    intro (as : circuit.Assumptions b)
+    let input := eval env input_var
+    intro (as : circuit.Assumptions input)
 
     have h_env : env.UsesLocalWitnesses n ops := by
       guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
@@ -98,7 +97,7 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as
+    have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as
 
     -- so we just need to go from constraints to flattened constraints
     apply constraintsHold_toFlat_iff.mpr
@@ -106,10 +105,12 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
 
   {
     ops := ops.toFlat,
-    Soundness := SubcircuitSoundness circuit b_var n,
-    Completeness := SubcircuitCompleteness circuit b_var,
-    UsesLocalWitnesses := SubcircuitSoundness circuit b_var n,
-    localLength := circuit.localLength b_var
+    Soundness env := circuit.Assumptions (eval env input_var) →
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+    Completeness env := circuit.Assumptions (eval env input_var),
+    UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+    localLength := circuit.localLength input_var
 
     imply_soundness
     implied_by_completeness
@@ -121,36 +122,36 @@ def FormalCircuit.toSubcircuit (circuit: FormalCircuit F β α)
       exact imply_soundness env h_holds as
 
     localLength_eq := by
-      rw [← circuit.localLength_eq b_var n, FlatOperation.localLength_toFlat]
+      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
   }
 
 /--
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
 def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
-    (n: ℕ) (b_var : Var β F) : Subcircuit F n :=
-  let ops := circuit.main b_var |>.operations n
-  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent b_var n
+    (n: ℕ) (input_var : Var β F) : Subcircuit F n :=
+  let ops := circuit.main input_var |>.operations n
+  have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   {
     ops := ops.toFlat,
-    Soundness := SubassertionSoundness circuit b_var,
-    Completeness := SubassertionCompleteness circuit b_var,
+    Soundness := SubassertionSoundness circuit input_var,
+    Completeness := SubassertionCompleteness circuit input_var,
     UsesLocalWitnesses _ := True,
-    localLength := circuit.localLength b_var
+    localLength := circuit.localLength input_var
 
     imply_soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
       intro env h_holds
-      show SubassertionSoundness circuit b_var env
+      show SubassertionSoundness circuit input_var env
 
-      let b : β F := eval env b_var
-      rintro (as : circuit.Assumptions b)
-      show circuit.Spec b
+      let input : β F := eval env input_var
+      rintro (as : circuit.Assumptions input)
+      show circuit.Spec input
 
       -- by soundness of the circuit, the spec is satisfied if only the constraints hold
       suffices h: ConstraintsHold.Soundness env ops by
-        exact circuit.soundness n env b_var b rfl as h
+        exact circuit.soundness n env input_var input rfl as h
 
       -- so we just need to go from flattened constraints to constraints
       guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
@@ -161,8 +162,8 @@ def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
       -- we are given that the assumptions and the spec are true
       intro env h_env h_completeness
 
-      let b := eval env b_var
-      have as : circuit.Assumptions b ∧ circuit.Spec b := h_completeness
+      let input := eval env input_var
+      have as : circuit.Assumptions input ∧ circuit.Spec input := h_completeness
 
       have h_env : env.UsesLocalWitnesses n ops := by
         guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
@@ -171,7 +172,7 @@ def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
       have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env b_var h_env_completeness b rfl as.left as.right
+      have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
       apply constraintsHold_toFlat_iff.mpr
@@ -180,7 +181,7 @@ def FormalAssertion.toSubcircuit (circuit: FormalAssertion F β)
     imply_usesLocalWitnesses := by intros; exact trivial
 
     localLength_eq := by
-      rw [← circuit.localLength_eq b_var n, FlatOperation.localLength_toFlat]
+      rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
   }
 
 /--
@@ -340,7 +341,6 @@ theorem Circuit.subcircuit_computableWitnesses (circuit: FormalCircuit F β α) 
 -- simp set to unfold subcircuits
 attribute [subcircuit_norm]
   FormalCircuit.toSubcircuit FormalAssertion.toSubcircuit GeneralFormalCircuit.toSubcircuit
-  Circuit.SubcircuitSoundness Circuit.SubcircuitCompleteness
   Circuit.SubassertionSoundness Circuit.SubassertionCompleteness
 
 -- to just reduce offsets, it's much better to _not_ use `subcircuit_norm`
