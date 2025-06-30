@@ -73,9 +73,23 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       simp_all [circuit_norm, Fin.foldl_succ_last, pow_succ', two_mul]
 
   completeness := by
-    simp only [circuit_norm, main]
+    intro i env input_var h_env input h_input h_holds
+    simp only [circuit_norm, main] at *
+    simp only [h_input, Nat.and_one_is_mod, Vector.getElem_ofFn,
+      id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+    constructor
+    · intro i
+      simp_all only
+      set k := (input.val >>> i.val) % 2 with hk
+      have lt_2 : k < 2 := Nat.mod_lt (input.val >>> i.val) (by linarith)
+      match k with
+      | 0 => simp
+      | 1 => simp
+      | k + 2 => nomatch lt_2
     sorry
 end Num2Bits
+
+#check List.foldl_hom
 
 namespace Bits2Num
 /-
