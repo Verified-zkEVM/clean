@@ -255,7 +255,7 @@ theorem forAll_iff {constant : ConstantLength (prod circuit)} :
 
 -- specialization to xs := Vector.finRange m
 section
-variable {env : Environment F} {prop : Condition F} {m : ℕ} [NeZero m]
+variable {env : Environment F} {prop : Condition F} {m : ℕ}
   {Acc : ℕ → Type}
   {circuit : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
@@ -263,10 +263,10 @@ variable {env : Environment F} {prop : Condition F} {m : ℕ} [NeZero m]
 def foldlRangeAcc (m : ℕ) [NeZero m] (n : ℕ) (circuit : β → Fin m → Circuit F β) (init : β) (j : Fin m) : β :=
   Fin.foldl j (fun acc i => (circuit acc i).output (n + i * (circuit acc default).localLength)) init
 
-lemma foldlRangeAcc_zero : foldlRangeAcc m n circuit init 0 = init := by
+lemma foldlRangeAcc_zero  [NeZero m] : foldlRangeAcc m n circuit init 0 = init := by
   simp [foldlRangeAcc, Fin.foldl_zero]
 
-lemma foldlRangeAcc_cons_succ (i : ℕ) (hi : i < m) {circuit : β → Fin (m + 1) → Circuit F β} [constant : ConstantLength (prod circuit)] :
+lemma foldlRangeAcc_cons_succ (i : ℕ) (hi : i < m) [NeZero m] {circuit : β → Fin (m + 1) → Circuit F β} [constant : ConstantLength (prod circuit)] :
   foldlRangeAcc (m + 1) n circuit init ⟨ i + 1, by omega ⟩ =
   foldlRangeAcc m (n + (circuit init 0).localLength n) (fun b i => circuit b (i + 1)) ((circuit init 0).output n) i := by
   simp only [foldlRangeAcc]
@@ -284,10 +284,9 @@ lemma foldlRangeAcc_cons_succ (i : ℕ) (hi : i < m) {circuit : β → Fin (m + 
 
 theorem forAll_iff_finRange {constant : ConstantLength (prod circuit)} :
   ((Vector.finRange m).foldlM circuit init).forAll n prop ↔
-    ∀ i : Fin m, (circuit (foldlAcc n (Vector.finRange m) circuit init i) i).forAll (n + i * (circuit init default).localLength) prop := by
+    ∀ i : Fin m, (circuit (foldlAcc n (Vector.finRange m) circuit init i) i)
+    |>.forAll (n + i * (circuit init i).localLength) prop := by
   simp only [forAll_iff, Vector.getElem_finRange]
-  congr! 4
-  simp [constant.localLength_eq (_,_)]
 end
 -- we can massively simplify the foldlM theory when assuming the body's output is independent of the input
 
@@ -631,8 +630,10 @@ lemma foldlRange.localLength_eq :
 lemma foldlRange.output_eq :
   (foldlRange m init body constant).output n =
     Fin.foldl m (fun acc i => (body acc i).output (n + i*(body default i).localLength)) init := by
-  -- rw [foldlRange, FoldlM.output_eq]
-  sorry
+  rw [foldlRange, FoldlM.output_eq (constant:=constant)]
+  simp only [Vector.getElem_finRange, Fin.eta]
+  congr! 6
+  rw [constant.localLength_eq (_, _)]
 
 @[circuit_norm ↓]
 lemma foldlRange.forAll :
@@ -640,15 +641,18 @@ lemma foldlRange.forAll :
     ∀ i : Fin m,
       body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
       |>.forAll (n + i * (body default i).localLength) prop := by
-  sorry
+  simp only [foldlRange, ←forAll_def]
+  rw [FoldlM.forAll_iff_finRange (constant:=constant)]
+  congr! 4
+  rw [constant.localLength_eq (_, _), constant.localLength_eq (_, _)]
 
 @[circuit_norm ↓]
 lemma foldlRange.soundness :
   ConstraintsHold.Soundness env (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-      ConstraintsHold.Soundness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
-      |>.operations (n + i * (body default i).localLength)) := by
-  sorry
+    ConstraintsHold.Soundness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+    |>.operations (n + i * (body default i).localLength)) := by
+  simp only [ConstraintsHold.soundness_iff_forAll', foldlRange.forAll]
 
 @[circuit_norm ↓]
 lemma foldlRange.completeness :
@@ -656,7 +660,7 @@ lemma foldlRange.completeness :
     ∀ i : Fin m,
     ConstraintsHold.Completeness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
     |>.operations (n + i * (body default i).localLength)) := by
-  sorry
+  simp only [ConstraintsHold.completeness_iff_forAll', foldlRange.forAll]
 
 @[circuit_norm ↓]
 lemma foldlRange.usesLocalWitnesses :
@@ -664,7 +668,7 @@ lemma foldlRange.usesLocalWitnesses :
     ∀ i : Fin m,
       env.UsesLocalWitnessesCompleteness (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
       |>.operations (n + i * (body default i).localLength)) := by
-  sorry
+  simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
 end foldlRange
 

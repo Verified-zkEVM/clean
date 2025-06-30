@@ -48,8 +48,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   soundness := by
     intro i env input_var input h_input h_holds
-    apply (Gadgets.ToBits.toBits n hn).soundness i env input_var input h_input
-    simp_all only [circuit_norm, main, Gadgets.ToBits.toBits, Gadgets.ToBits.main, fieldFromBitsExpr]
+    apply (Gadgets.toBits n hn).soundness i env input_var input h_input
+    simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main, fieldFromBitsExpr]
     constructor
     · intro i
       simp only [circuit_norm, subcircuit_norm, Boolean.circuit]
