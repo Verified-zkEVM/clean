@@ -22,9 +22,9 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-def main (n: ℕ) [NeZero n] (input : Expression (F p)) := do
+def main (n: ℕ) (inp : Expression (F p)) := do
   let out ← witnessVector n fun env =>
-    .ofFn fun i => ((input.eval env).val >>> i.val) &&& (1 : ℕ)
+    .ofFn fun i => ((inp.eval env).val >>> i.val) &&& (1 : ℕ)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
@@ -32,13 +32,13 @@ def main (n: ℕ) [NeZero n] (input : Expression (F p)) := do
     let e2 := e2 + e2
     return (lc1, e2)
 
-  lc1 === input
+  lc1 === inp
   return out
 
-def circuit n [NeZero n] (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
+def circuit n (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
-  localLength_eq := by simp +arith only [circuit_norm, main]
+  localLength_eq := by simp +arith [circuit_norm, main]
   subcircuitsConsistent := by simp +arith only [circuit_norm, main]
 
   Assumptions input := sorry
