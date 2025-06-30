@@ -40,7 +40,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   main := main n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith only [circuit_norm, main]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := input.val < 2^n
   Spec input output :=
@@ -101,8 +101,8 @@ def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) (fields n) field where
   main := main n
   localLength _ := 1
-  localLength_eq := by simp only [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith only [circuit_norm, main]
+  localLength_eq := by simp [circuit_norm, main]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := sorry
   Spec input output := sorry
