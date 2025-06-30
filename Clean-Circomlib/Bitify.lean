@@ -6,6 +6,11 @@ namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
+/-
+Note: `Num2Bits_strict` and `Bits2Num_strict` are moved to `AliasCheck.lean` because
+having them here would have caused a cyclic import dependency, which Lean does not allow.
+-/
+
 namespace Num2Bits
 /-
 template Num2Bits(n) {
