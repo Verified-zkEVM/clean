@@ -105,13 +105,13 @@ theorem fromBits_toBits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
 variable {p : ℕ} [prime: Fact p.Prime]
 
 /--
-  Convert a field element to a vector of bits, which are themselves field elements.
+Convert a field element to a vector of bits, which are themselves field elements.
 -/
 def fieldToBits (n : ℕ) (x : F p) : Vector (F p) n :=
   .map (↑) (toBits n x.val)
 
 /--
-  Convert a vector of bits to a field element.
+Convert a vector of bits to a field element.
 -/
 def fieldFromBits {n : ℕ} (bits : Vector (F p) n) : F p :=
   fromBits <| bits.map ZMod.val
@@ -135,8 +135,8 @@ theorem fieldFromBits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (E
     rw [ZMod.cast_id]
 
 /--
-  Define the behaviour of `fieldFromBits` and `fieldToBits` by
-  lifting `toBits_fromBits_aux`
+Define the behaviour of `fieldFromBits` and `fieldToBits` by
+lifting `toBits_fromBits_aux`
 -/
 lemma fieldToBits_fieldFromBits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
