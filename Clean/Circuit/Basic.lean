@@ -458,8 +458,15 @@ def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited
   localLength := (circuit default).localLength 0
   localLength_eq a n := h a n
 
+def ConstantLength.fromEmpty {circuit : α → Circuit F β} [IsEmpty α] : ConstantLength circuit where
+  localLength := 0
+  localLength_eq a _ := isEmptyElim a
+
+lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_: ConstantLength circuit) [Inhabited α] (a : α) (n : ℕ) :
+   (circuit a).localLength n = (circuit default).localLength 0 := by
+  simp only [ConstantLength.localLength_eq]
+
 /-- The output of this circuit does not depend on the input. -/
-@[circuit_norm]
 def ConstantOutput (circuit : α → Circuit F β) [Inhabited α] :=
   ∀ (x : α) (n : ℕ), (circuit x).output n = (circuit default).output n
 
