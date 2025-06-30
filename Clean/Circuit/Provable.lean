@@ -12,6 +12,18 @@ import Clean.Circuit.SimpGadget
 @[reducible]
 def TypeMap := Type → Type
 
+/--
+`Var M F` is the type of variables that appear in the monadic notation of
+`Circuit F _`s. Most elements of `Var M F`, especially interesting ones, are not
+constant values of `M F` because variables in a circuit can depend on contents of
+the environment.
+
+An element of `Var M F` represents a `M F` that's polynomially dependent
+on the environment. More concretely, an element of `Var M F` is a value of `M F`
+with missing holes, and each hole contains a polynomial that can refer to fixed
+positions of the environment. Given an environment, `Var M F` can be evaluated
+to a `M F` (see `eval` below).
+-/
 @[reducible] def Var (M : TypeMap) (F : Type) := M (Expression F)
 
 variable {F : Type} [Field F]
