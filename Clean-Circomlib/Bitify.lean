@@ -30,8 +30,7 @@ template Num2Bits(n) {
 }
 -/
 def main (n: ℕ) (inp : Expression (F p)) := do
-  let out ← witnessVector n fun env =>
-    .ofFn fun i => ((inp.eval env).val >>> i.val) &&& (1 : ℕ)
+  let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
@@ -40,6 +39,24 @@ def main (n: ℕ) (inp : Expression (F p)) := do
 
   lc1 === inp
   return out
+
+-- helper for proofs below: the linear combination is equivalent `fieldFromBits`
+lemma lc_eq {env} {n : ℕ} (bits : Vector (Expression (F p)) n) :
+  (eval (α:=fieldPair) env <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + bits[i] * e2, e2 + e2)) (0, 1))
+    = (fieldFromBits (bits.map env), 2^n) := by
+  simp only [fieldFromBits, fromBits, Vector.getElem_map]
+  induction n with
+  | zero => simp [circuit_norm]
+  | succ n ih =>
+    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq]
+    specialize ih bits.pop
+    simp only [Vector.getElem_pop'] at ih
+    simp only [Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
+      Nat.cast_pow, Nat.cast_ofNat]
+    rw [ih.left, ih.right]; clear ih
+    simp_all [circuit_norm, Fin.foldl_succ_last, pow_succ', two_mul]
+    sorry
 
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
@@ -52,8 +69,8 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
-    intro i env input_var input h_input h_holds
-    apply (Gadgets.toBits n hn).soundness i env input_var input h_input
+    intro i0 env input_var input h_input h_holds
+    apply (Gadgets.toBits n hn).soundness i0 env input_var input h_input
     simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main, fieldFromBitsExpr]
     constructor
     · intro i
@@ -62,30 +79,40 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     rw [←h_holds.right]; clear h_holds
     -- we have to strengthen the goal for the induction
     suffices (eval (α:=fieldPair) env <| Fin.foldl n (fun ((lc1, e2) :  Expression (F p) × Expression (F p)) j =>
-      (lc1 + (var ⟨i + j.val⟩) * e2, e2 + e2)) (0, 1))
-        = (Expression.eval env <| Fin.foldl n (fun acc j => acc + var ⟨i + j.val⟩ * Expression.const (2^j.val)) 0, 2^n) by
-      simp only [circuit_norm, Prod.mk.injEq] at this; exact this.left
+      (lc1 + (var ⟨i0 + j.val⟩) * e2, e2 + e2)) (0, 1))
+        = (Expression.eval env <| Fin.foldl n (fun acc j => acc + var ⟨i0 + j.val⟩ * Expression.const (2^j.val)) 0, 2^n) by
+      simp only [circuit_norm, Prod.mk.injEq, Fin.foldl_eq_foldl_finRange] at this ⊢
+      exact this.left
     induction n with
     | zero => simp [circuit_norm]
     | succ n ih =>
-      have : 2^n ≤ 2^(n+1) := by gcongr; repeat simp
+      have : 2^n < 2^(n+1) := by gcongr; repeat simp
       specialize ih (by linarith)
       simp_all [circuit_norm, Fin.foldl_succ_last, pow_succ', two_mul]
 
   completeness := by
-    intro i env input_var h_env input h_input h_holds
-    simp only [circuit_norm, main] at *
+    intro i0 env input_var h_env input h_input h_holds
+    simp only [circuit_norm, main, fieldToBits, toBits] at *
     simp only [h_input, Nat.and_one_is_mod, Vector.getElem_ofFn,
-      id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+      id_eq, mul_eq_zero, add_neg_eq_zero, fieldToBits] at h_env ⊢
+    clear h_input
     constructor
     · intro i
       simp_all only
       set k := (input.val >>> i.val) % 2 with hk
       have lt_2 : k < 2 := Nat.mod_lt (input.val >>> i.val) (by linarith)
       match k with
-      | 0 => simp
-      | 1 => simp
+      | 0 | 1 => simp [fieldToBits, toBits, Vector.getElem_mapRange]
       | k + 2 => nomatch lt_2
+    -- move the .1 outside to we can use `List.foldl_hom`
+    suffices (eval (α:=fieldPair) env (List.foldl (fun ((lc1, e2) :  Expression (F p) × Expression (F p)) i =>
+        (lc1 + (var ⟨i0 + i.val⟩) * e2, e2 + e2)) (0, 1) (List.finRange n))).1 = input by
+      stop
+      simpa [circuit_norm]
+    rw [←List.foldl_hom (eval env) (g₂ := fun (lc1, e2) i => (lc1 + env.get (i0 + i.val) * e2, e2 + e2))]
+    rotate_left
+    · simp only [circuit_norm]
+    simp only [h_env]; clear h_env
     sorry
 end Num2Bits
 
