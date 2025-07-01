@@ -42,7 +42,7 @@ def main (n: ℕ) (inp : Expression (F p)) := do
 
 -- helper for proofs below: the linear combination is equivalent to `fieldFromBits`
 omit [Fact (p > 2)] in
-lemma lc_eq {env} {n : ℕ} :
+lemma lc_eq {i0} {env} {n : ℕ} :
   (Expression.eval env <| Prod.fst <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
@@ -54,13 +54,9 @@ lemma lc_eq {env} {n : ℕ} :
   induction n with
   | zero => simp [circuit_norm]
   | succ n ih =>
-    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, Fin.coe_castSucc, Fin.val_last]
-    specialize ih bits.pop
-    simp only [Vector.getElem_pop'] at ih
-    rw [ih.left, ih.right]; clear ih
-    simp_all only [gt_iff_lt, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
-      Nat.cast_ofNat, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, pow_succ',
-      two_mul, and_true]
+    simp_all only [circuit_norm, Prod.mk.injEq, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last,
+      Expression.eval, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow, Nat.cast_ofNat,
+      pow_succ', two_mul, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, and_true]
     left
     rw [ZMod.cast_id]
 
@@ -77,48 +73,32 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   soundness := by
     intro i0 env input_var input h_input h_holds
     apply (Gadgets.toBits n hn).soundness i0 env input_var input h_input
-    simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main, fieldFromBitsExpr]
+    simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main]
     constructor
     · intro i
       simp only [circuit_norm, subcircuit_norm, Boolean.circuit]
       simpa [add_neg_eq_zero] using h_holds.left i
-    rw [←h_holds.right]; clear h_holds
-    -- we have to strengthen the goal for the induction
-    suffices (eval (α:=fieldPair) env <| Fin.foldl n (fun ((lc1, e2) :  Expression (F p) × Expression (F p)) j =>
-      (lc1 + (var ⟨i0 + j.val⟩) * e2, e2 + e2)) (0, 1))
-        = (Expression.eval env <| Fin.foldl n (fun acc j => acc + var ⟨i0 + j.val⟩ * Expression.const (2^j.val)) 0, 2^n) by
-      simp only [circuit_norm, Prod.mk.injEq, Fin.foldl_eq_foldl_finRange] at this ⊢
-      exact this.left
-    induction n with
-    | zero => simp [circuit_norm]
-    | succ n ih =>
-      have : 2^n < 2^(n+1) := by gcongr; repeat simp
-      specialize ih (by linarith)
-      simp_all [circuit_norm, Fin.foldl_succ_last, pow_succ', two_mul]
+    rw [←h_holds.right, lc_eq]; clear h_holds
+    show _ = env (fieldFromBitsExpr _)
+    rw [fieldFromBits_eval]
+    congr
+    rw [Vector.ext_iff]
+    simp [circuit_norm]
 
   completeness := by
     intro i0 env input_var h_env input h_input h_holds
-    simp only [circuit_norm, main, fieldToBits, toBits] at *
-    simp only [h_input, Nat.and_one_is_mod, Vector.getElem_ofFn,
-      id_eq, mul_eq_zero, add_neg_eq_zero, fieldToBits] at h_env ⊢
-    simp only [lc_eq]
-    clear h_input
+    simp only [circuit_norm, main] at *
+    simp only [lc_eq, h_input, id_eq, mul_eq_zero, add_neg_eq_zero, Fin.forall_iff] at h_env ⊢
+    let bits := Vector.mapRange n fun i => env.get (i0 + i)
     constructor
-    · intro i
-      simp_all only
-      set k := (input.val >>> i.val) % 2 with hk
-      have lt_2 : k < 2 := Nat.mod_lt (input.val >>> i.val) (by linarith)
-      match k with
-      | 0 | 1 => simp [fieldToBits, toBits, Vector.getElem_mapRange]
-      | k + 2 => nomatch lt_2
-    rw [←List.foldl_hom (eval env) (g₂ := fun (lc1, e2) i => (lc1 + env.get (i0 + i.val) * e2, e2 + e2))]
-    rotate_left
-    · simp only [circuit_norm]
-    simp only [h_env]; clear h_env
-    sorry
+    · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
+    show fieldFromBits bits = input
+    suffices bits = fieldToBits n input by
+      rw [this, fieldFromBits_fieldToBits hn h_holds]
+    rw [Vector.ext_iff]
+    intro i hi
+    simp only [← h_env i hi, bits, Vector.getElem_mapRange]
 end Num2Bits
-
-#check List.foldl_hom
 
 namespace Bits2Num
 /-
