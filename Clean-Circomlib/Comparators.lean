@@ -1,6 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Bits
--- import Clean-Circomlib.Bitify
+import Clean-Circomlib.Bitify
 
 namespace Circomlib
 open Utils.Bits
@@ -31,10 +31,8 @@ def main (input : Expression (F p)) := do
   return out
 
 def circuit : FormalCircuit (F p) field field where
-  main := main
+  main
   localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := sorry
   Spec input output := sorry
@@ -61,16 +59,14 @@ template IsEqual() {
     isz.out ==> out;
 }
 -/
-def main (input : Vector (Expression (F p)) 2) := do
-  let diff := input[1] - input[0]
-  let out ← IsZero.main diff
+def main (input : Expression (F p) × Expression (F p)) := do
+  let diff := input.1 - input.2
+  let out ← subcircuit IsZero.circuit diff
   return out
 
-def circuit : FormalCircuit (F p) (fields 2) field where
-  main := main
+def circuit : FormalCircuit (F p) fieldPair field where
+  main
   localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := sorry
   Spec input output := sorry
@@ -97,20 +93,26 @@ template ForceEqualIfEnabled() {
     (1 - isz.out)*enabled === 0;
 }
 -/
-def main (enabled : Expression (F p)) (input : Vector (Expression (F p)) 2) := do
-  let diff := input[1] - input[0]
-  let isz_out ← IsZero.main diff
-  (1 - isz_out) * enabled === 0
-  return ()
+structure Inputs (F : Type) where
+  enabled : F
+  inp : fieldPair F
 
-def circuit : FormalCircuit (F p) (fieldPair (fields 2)) unit where
-  main := fun ⟨enabled, input⟩ => main enabled input
+instance : ProvableStruct Inputs where
+  components := [field, fieldPair]
+  toComponents := fun { enabled, inp } => .cons enabled (.cons inp .nil)
+  fromComponents := fun (.cons enabled (.cons inp .nil)) => { enabled, inp }
+
+def main (inputs : Var Inputs (F p)) := do
+  let { enabled, inp } := inputs
+  let isz_out ← subcircuit IsZero.circuit (inp.2 - inp.1)
+  ((1 : Expression (F p)) - isz_out) * enabled === 0
+
+def circuit : FormalAssertion (F p) Inputs where
+  main
   localLength _ := 2
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := sorry
-  Spec input output := sorry
+  Spec input := sorry
 
   soundness := by
     simp only [circuit_norm, main]
@@ -130,14 +132,14 @@ template LessThan(n) {
 
     component n2b = Num2Bits(n+1);
 
-    n2b.in <== in[0]+ (1<<n) - in[1];
+    n2b.in <== in[0]+ (1 << n) - in[1];
 
     out <== 1-n2b.out[n];
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) 2) := do
-  let diff := input[0] + (2^n : F p) - input[1]
-  let bits ← Num2Bits.main (n+1) diff
+def main (n : ℕ) (input : Expression (F p) × Expression (F p)) := do
+  let diff := input.1 + (2^n : F p) - input.2
+  let bits ← subcircuitWithAssertion (Num2Bits.circuit (n+1)) diff
   let out ← witnessField fun env => (1 - bits[n]).eval env
   out === 1 - bits[n]
   return out
