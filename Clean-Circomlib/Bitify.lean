@@ -40,23 +40,29 @@ def main (n: ℕ) (inp : Expression (F p)) := do
   lc1 === inp
   return out
 
--- helper for proofs below: the linear combination is equivalent `fieldFromBits`
-lemma lc_eq {env} {n : ℕ} (bits : Vector (Expression (F p)) n) :
-  (eval (α:=fieldPair) env <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + bits[i] * e2, e2 + e2)) (0, 1))
-    = (fieldFromBits (bits.map env), 2^n) := by
+-- helper for proofs below: the linear combination is equivalent to `fieldFromBits`
+omit [Fact (p > 2)] in
+lemma lc_eq {env} {n : ℕ} :
+  (Expression.eval env <| Prod.fst <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+    = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
+  suffices (eval (α:=fieldPair) env <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+    = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
+    simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map]
   induction n with
   | zero => simp [circuit_norm]
   | succ n ih =>
-    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq]
+    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, Fin.coe_castSucc, Fin.val_last]
     specialize ih bits.pop
     simp only [Vector.getElem_pop'] at ih
-    simp only [Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
-      Nat.cast_pow, Nat.cast_ofNat]
     rw [ih.left, ih.right]; clear ih
-    simp_all [circuit_norm, Fin.foldl_succ_last, pow_succ', two_mul]
-    sorry
+    simp_all only [gt_iff_lt, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
+      Nat.cast_ofNat, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, pow_succ',
+      two_mul, and_true]
+    left
+    rw [ZMod.cast_id]
 
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
@@ -95,6 +101,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     simp only [circuit_norm, main, fieldToBits, toBits] at *
     simp only [h_input, Nat.and_one_is_mod, Vector.getElem_ofFn,
       id_eq, mul_eq_zero, add_neg_eq_zero, fieldToBits] at h_env ⊢
+    simp only [lc_eq]
     clear h_input
     constructor
     · intro i
@@ -104,11 +111,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       match k with
       | 0 | 1 => simp [fieldToBits, toBits, Vector.getElem_mapRange]
       | k + 2 => nomatch lt_2
-    -- move the .1 outside to we can use `List.foldl_hom`
-    suffices (eval (α:=fieldPair) env (List.foldl (fun ((lc1, e2) :  Expression (F p) × Expression (F p)) i =>
-        (lc1 + (var ⟨i0 + i.val⟩) * e2, e2 + e2)) (0, 1) (List.finRange n))).1 = input by
-      stop
-      simpa [circuit_norm]
     rw [←List.foldl_hom (eval env) (g₂ := fun (lc1, e2) i => (lc1 + env.get (i0 + i.val) * e2, e2 + e2))]
     rotate_left
     · simp only [circuit_norm]
