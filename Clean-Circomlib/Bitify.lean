@@ -126,7 +126,7 @@ def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
   out === lc1
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) (fields n) field where
+def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
