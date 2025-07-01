@@ -1,6 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Bits
-import Clean-Circomlib.Bitify
+import Clean.Circomlib.Bitify
 
 namespace Circomlib
 open Utils.Bits
@@ -34,11 +34,11 @@ def circuit : FormalCircuit (F p) field field where
   main
   localLength _ := 2
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions _ := sorry
+  Spec input output := output = if input.val = 0 then 1 else 0
 
   soundness := by
-    simp only [circuit_norm, main]
+    simp_all only [circuit_norm, main]
     sorry
 
   completeness := by
@@ -137,18 +137,17 @@ template LessThan(n) {
     out <== 1-n2b.out[n];
 }
 -/
-def main (n : ℕ) (input : Expression (F p) × Expression (F p)) := do
+def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits ← subcircuitWithAssertion (Num2Bits.circuit (n+1)) diff
+  let bits ← subcircuitWithAssertion (Num2Bits.circuit (n+1) hn) diff
   let out ← witnessField fun env => (1 - bits[n]).eval env
   out === 1 - bits[n]
   return out
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) (fields 2) field where
-  main := main n
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+  main := main n hn
   localLength _ := 1 + (n + 1)
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  localLength_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
   Assumptions input := sorry
   Spec input output := sorry
