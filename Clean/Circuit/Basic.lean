@@ -334,9 +334,9 @@ structure FormalAssertion (F: Type) (Input: TypeMap) [Field F] [ProvableType Inp
   completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
-  localLength := fun _ => 0
+  localLength _ := 0
   -- the output has to be unit
-  output := fun _ _ => ()
+  output _ _ := ()
 
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec: Input F → Output F → Prop) :=
