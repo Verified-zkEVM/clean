@@ -562,3 +562,6 @@ instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
   coe n : F := n
 instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
   coe n : F := n
+
+instance [DecidableEq F] : DecidableEq (field F) :=
+  inferInstanceAs (DecidableEq F)

@@ -35,7 +35,8 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 2
 
   Assumptions _ := True
-  Spec input output := output = if input.val = 0 then 1 else 0
+  Spec input output :=
+    output = (if input = 0 then 1 else 0)
 
   soundness := by
     simp only [circuit_norm, main]
@@ -68,8 +69,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 2
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions _ := True
+  Spec := fun (x, y) output =>
+    output = (if x = y then 1 else 0)
 
   soundness := by
     simp only [circuit_norm, main]
@@ -104,15 +106,18 @@ instance : ProvableStruct Inputs where
 
 def main (inputs : Var Inputs (F p)) := do
   let { enabled, inp } := inputs
-  let isz_out ← subcircuit IsZero.circuit (inp.2 - inp.1)
-  ((1 : Expression (F p)) - isz_out) * enabled === 0
+  let isz ← subcircuit IsZero.circuit (inp.2 - inp.1)
+  enabled * (1 - isz) === 0
 
 def circuit : FormalAssertion (F p) Inputs where
   main
   localLength _ := 2
 
-  Assumptions input := sorry
-  Spec input := sorry
+  Assumptions := fun { enabled, inp } =>
+    enabled = 0 ∨ enabled = 1
+
+  Spec := fun { enabled, inp } =>
+    enabled = 1 → inp.1 = inp.2
 
   soundness := by
     simp only [circuit_norm, main]
@@ -148,9 +153,13 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   main := main n hn
   localLength _ := n + 2
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
+  output _ i := var ⟨ i + n + 1 ⟩
+  output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+
+  Spec := fun (x, y) output =>
+    output = (if x.val < y.val then 1 else 0)
 
   soundness := by
     simp only [circuit_norm, main]
@@ -174,22 +183,34 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :=
-  subcircuit (LessThan.circuit n hn) (input.1, input.2 + 1)
-
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := main n hn
+  main := fun (x, y) =>
+    subcircuit (LessThan.circuit n hn) (x, y + 1)
+
   localLength _ := n + 2
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  Spec := fun (x, y) output =>
+    output = (if x.val <= y.val then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm, main]
+    intro i env input (x, y) h_input assumptions h_holds
+    simp_all only [circuit_norm, subcircuit_norm, LessThan.circuit, Prod.mk.injEq]
+    have : 2^n < 2^(n + 1) := by gcongr; repeat linarith
+    have hy : y.val + (1 : F p).val < p := by
+      simp only [ZMod.val_one]; linarith
+    rw [ZMod.val_add_of_lt hy, ZMod.val_one] at h_holds
+    by_cases hy : y.val + 1 = 2^n
+    case neg =>
+      specialize h_holds (by omega)
+      simp_all [Nat.lt_add_one_iff]
+    -- TODO the spec of LessThan is not strong enough to handle this case
     sorry
 
   completeness := by
-    simp only [circuit_norm, main]
+    intro i env input h_env (x, y) h_input assumptions
+    simp_all only [circuit_norm, subcircuit_norm, LessThan.circuit, Prod.mk.injEq]
+    -- TODO impossible to prove
     sorry
 end LessEqThan
 
@@ -206,23 +227,22 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :=
-  subcircuit (LessThan.circuit n hn) (input.2, input.1)
-
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := main n hn
+  main := fun (x, y) =>
+    subcircuit (LessThan.circuit n hn) (y, x)
+
   localLength _ := n + 2
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+
+  Spec := fun (x, y) output =>
+    output = (if x.val > y.val then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    simp_all [circuit_norm, subcircuit_norm, LessThan.circuit]
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    simp_all [circuit_norm, subcircuit_norm, LessThan.circuit]
 end GreaterThan
 
 namespace GreaterEqThan
@@ -238,22 +258,22 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :=
-  subcircuit (LessThan.circuit n hn) (input.2, input.1 + 1)
-
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := main n hn
+  main := fun (x, y) =>
+    subcircuit (LessThan.circuit n hn) (y, x + 1)
+
   localLength _ := n + 2
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  Spec := fun (x, y) output =>
+    output = (if x.val >= y.val then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm, main]
+    simp only [circuit_norm]
     sorry
 
   completeness := by
-    simp only [circuit_norm, main]
+    simp only [circuit_norm]
     sorry
 end GreaterEqThan
 
