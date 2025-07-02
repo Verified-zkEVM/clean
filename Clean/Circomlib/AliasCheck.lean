@@ -35,15 +35,19 @@ def circuit (h135 : 2^135 < p) : FormalAssertion (F p) (fields 254) where
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec input := sorry
+  Spec bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [subcircuit_norm, circuit_norm]
+    simp_all
+    omega
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [subcircuit_norm, circuit_norm]
+    simp_all
+    omega
 end AliasCheck
 
 end Circomlib

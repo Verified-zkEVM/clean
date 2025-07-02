@@ -112,8 +112,8 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
-    output = if (fieldFromBits input).val > c then 1 else 0
+  Spec bits output :=
+    output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by
     simp only [circuit_norm, main, Num2Bits.circuit]
