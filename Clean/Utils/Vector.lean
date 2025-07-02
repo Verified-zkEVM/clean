@@ -17,19 +17,6 @@ def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
 theorem toList_cons {a: α} {v: Vector α n} : (cons a v).toList = a :: v.toList := by
   simp [cons]
 
-def get_eq {n} (v: Vector α n) (i: Fin n) : v.get i = v.toArray[i.val] := by
-  simp only [get, List.get_eq_getElem, Fin.coe_cast]
-
-/-- this is exactly what's needed to rewrite `v.get i` into a `List.getElem` if `n` is a concrete Nat -/
-def get_eq_lt {n} [NeZero n] (v: Vector α n) (i : ℕ) (h: i < n := by norm_num) :
-  v.get ((Fin.instOfNat (i:=i)).ofNat : Fin n) = v.toArray[i]'(by rw [v.size_toArray]; exact h) := by
-  simp only [get_eq, OfNat.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt h]
-
-@[simp]
-theorem get_map {n} {f: α → β} {v: Vector α n} {i: Fin n} : get (map f v) i = f (get v i) := by
-  simp only [get, map, Fin.coe_cast, Array.getElem_map, getElem_toArray]
-
-@[simp]
 def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
   ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, ← Array.size_eq_length_toList, v.size_toArray] ⟩
 
@@ -192,7 +179,6 @@ theorem cast_mapRange {n} {create: ℕ → α} (h : n = m) :
     mapRange n create = (mapRange m create).cast h.symm := by
   subst h; simp
 
-@[simp]
 theorem getElem_mapRange {n} {create: ℕ → α} :
     ∀ (i : ℕ) (hi : i < n), (mapRange n create)[i] = create i := by
   intros i hi
@@ -212,7 +198,6 @@ theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
   | zero => simp only [Nat.add_zero, mapRange, append_empty]
   | succ m ih => simp only [mapRange, Nat.add_eq, append_push, ih]
 
-@[simp]
 def fill (n : ℕ) (a: α) : Vector α n :=
   match n with
   | 0 => #v[]

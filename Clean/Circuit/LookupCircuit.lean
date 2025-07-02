@@ -64,7 +64,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
 def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
-    let output ← ProvableType.witness fun env => circuit.constantOutput (eval env input)
+    let output ← witness fun env => circuit.constantOutput (eval env input)
 
     lookup circuit.toTable (input, output)
     return output

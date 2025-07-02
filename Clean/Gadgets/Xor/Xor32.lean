@@ -26,12 +26,12 @@ instance : ProvableStruct Inputs where
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← ProvableType.witness (fun env =>
+  let z ← witness fun env =>
     let z0 := (env x.x0).val ^^^ (env y.x0).val
     let z1 := (env x.x1).val ^^^ (env y.x1).val
     let z2 := (env x.x2).val ^^^ (env y.x2).val
     let z3 := (env x.x3).val ^^^ (env y.x3).val
-    U32.mk z0 z1 z2 z3)
+    U32.mk z0 z1 z2 z3
 
   lookup ByteXorTable (x.x0, y.x0, z.x0)
   lookup ByteXorTable (x.x1, y.x1, z.x1)

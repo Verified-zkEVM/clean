@@ -5,7 +5,7 @@ using the `infer_explicit_circuit(s)` tactic.
 This could be useful to simplify circuit statements with less user intervention.
 -/
 
-import Clean.Circuit.Constant
+import Clean.Circuit.Subcircuit
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
 class ExplicitCircuit (circuit : Circuit F α) where
@@ -115,7 +115,7 @@ instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witness
   localLength _ := k
   operations n := [.witness k c]
 
-instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
+instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (witness (α:=α) (F:=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
   operations c n := [.witness (size α) (toElements ∘ c)]
@@ -166,25 +166,25 @@ macro_rules
 section
 
 -- single
-example : ExplicitCircuit (witness (fun _ => (0 : F))) := by infer_explicit_circuit
+example : ExplicitCircuit (witnessField fun _ => (0 : F)) := by infer_explicit_circuit
 
 example :
   let add := do
-    let x : Expression F ← witness (fun _ => 0)
-    let y ← witness (fun _ => 1)
-    let z ← witness (fun eval => eval (x + y))
+    let x : Expression F ← witnessField fun _ => 0
+    let y ← witnessField fun _ => 1
+    let z ← witnessField fun eval => eval (x + y)
     assertZero (x + y - z)
     pure z
 
   ExplicitCircuit add := by infer_explicit_circuit
 
 -- family
-example : ExplicitCircuits (witness (F:=F)) := by infer_explicit_circuits
+example : ExplicitCircuits (witnessField (F:=F)) := by infer_explicit_circuits
 
 example :
   let add (x : Expression F) := do
-    let y ← witness (fun _ => (1 : F))
-    let z ← witness (fun eval => eval (x + y))
+    let y ← witnessField fun _ => (1 : F)
+    let z ← witnessField fun eval => eval (x + y)
     assertZero (x + y - z)
     pure z
 
@@ -195,3 +195,4 @@ attribute [explicit_circuit_norm] ExplicitCircuit.localLength ExplicitCircuit.op
 attribute [explicit_circuit_norm] ExplicitCircuits.localLength ExplicitCircuits.operations ExplicitCircuits.output
 attribute [explicit_circuit_norm] ExplicitCircuits.to_single ExplicitCircuits.from_single
 attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircuit.output
+attribute [explicit_circuit_norm] size

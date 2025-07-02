@@ -96,7 +96,7 @@ theorem toBits_injective (n: ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
 theorem fromBits_toBits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
     fromBits (toBits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (toBits n x)[i] = 0 ∨ (toBits n x)[i] = 1 := by
-    intro i hi; simp [toBits]
+    intro i hi; simp [toBits, Vector.getElem_mapRange]
   apply toBits_injective n (fromBits_lt _ h_bits) hx
   rw [toBits_fromBits _ h_bits]
 
@@ -208,7 +208,7 @@ theorem fieldFromBits_fieldToBits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val 
     fieldFromBits (fieldToBits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (fieldToBits n x)[i] = 0 ∨ (fieldToBits n x)[i] = 1 := by
     intro i hi
-    simp [fieldToBits, toBits]
+    simp [fieldToBits, toBits, Vector.getElem_mapRange]
 
   apply fieldToBits_injective n (fieldFromBits_lt hn _ h_bits) hx
   rw [fieldToBits_fieldFromBits hn _ h_bits]

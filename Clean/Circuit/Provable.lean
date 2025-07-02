@@ -12,6 +12,18 @@ import Clean.Circuit.SimpGadget
 @[reducible]
 def TypeMap := Type → Type
 
+/--
+`Var M F` is the type of variables that appear in the monadic notation of
+`Circuit F _`s. Most elements of `Var M F`, especially interesting ones, are not
+constant values of `M F` because variables in a circuit can depend on contents of
+the environment.
+
+An element of `Var M F` represents a `M F` that's polynomially dependent
+on the environment. More concretely, an element of `Var M F` is a value of `M F`
+with missing holes, and each hole contains a polynomial that can refer to fixed
+positions of the environment. Given an environment, `Var M F` can be evaluated
+to a `M F` (see `eval` below).
+-/
 @[reducible] def Var (M : TypeMap) (F : Type) := M (Expression F)
 
 variable {F : Type} [Field F]
@@ -118,8 +130,9 @@ instance : ProvableType unit where
   toElements _ := #v[]
   fromElements _ := ()
 
-@[reducible]
-def field : TypeMap := id
+@[reducible] def field : TypeMap := id
+
+@[reducible] def fieldVar (F : Type) := field (Expression F)
 
 @[circuit_norm]
 instance : ProvableType field where
@@ -528,3 +541,36 @@ theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] 
   simp only [varFromOffset, fromVars, ProvablePair.instance]
   rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
   ac_rfl
+
+-- be able to use `field (Expression F)` in expressions
+
+instance : HAdd (field (Expression F)) (Expression F) (Expression F) where
+  hAdd (x : Expression F) y := x + y
+instance : HAdd (Expression F) (field (Expression F)) (Expression F) where
+  hAdd x (y : Expression F) := x + y
+
+instance : HSub (field (Expression F)) (Expression F) (Expression F) where
+  hSub (x : Expression F) y := x - y
+instance : HSub (Expression F) (field (Expression F)) (Expression F) where
+  hSub x (y : Expression F) := x - y
+
+instance : HMul (field (Expression F)) (Expression F) (Expression F) where
+  hMul (x : Expression F) y := x * y
+instance : HMul (Expression F) (field (Expression F)) (Expression F) where
+  hMul x (y : Expression F) := x * y
+instance : HMul F (field (Expression F)) (field (Expression F)) where
+  hMul x y : Expression F := x * y
+instance : HMul (field (Expression F)) F (field (Expression F)) where
+  hMul x y : Expression F := x * y
+
+instance {n: ℕ} [OfNat F n] : OfNat (field F) n where
+  ofNat : F := OfNat.ofNat n
+
+instance [Coe ℕ F] : Coe ℕ (field F) where
+  coe n : F := n
+instance [CoeOut ℕ F] : CoeOut ℕ (field F) where
+  coe n : F := n
+instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
+  coe n : F := n
+instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
+  coe n : F := n

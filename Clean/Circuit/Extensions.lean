@@ -1,10 +1,10 @@
 /- This file contains experimental additions to the Circuit DSL -/
-import Clean.Circuit.Constant
+import Clean.Circuit.Subcircuit
 
 variable {F : Type} [Field F] {α: TypeMap} [ProvableType α]
 
 instance {α: TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
-  default := ProvableType.witness default
+  default := witness default
 
 def copyToVar (x: Expression F) : Circuit F (Variable F) := do
   let x' ← witnessVar x.eval
@@ -25,7 +25,7 @@ def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env 
 
 def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset
-  ProvableType.witness (computeValueFromOffset α offset)
+  witness (computeValueFromOffset α offset)
 
 theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) :
     env.UsesLocalWitnessesCompleteness n (ProvableType.witnessAny α |>.operations n) ↔ True := by

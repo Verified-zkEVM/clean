@@ -27,9 +27,9 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     assumptions on inputs for completeness.
     explanation: in general, we expect the `step` circuit to impose some constraints on the `input`.
     in the completeness proof, we therefore need to restrict the possible inputs a prover can provide in order to satisfy the constraints.
-    by design, completeness for the full table holds for any list of inputs that satisfy the `input_assumptions`.
+    by design, completeness for the full table holds for any list of inputs that satisfy the `InputAssumptions`.
   -/
-  input_assumptions : ℕ → Input F → Prop := fun _ _ => True
+  InputAssumptions : ℕ → Input F → Prop := fun _ _ => True
 
   soundness : ∀ (row_index : ℕ) (env : Environment F),
     -- for all rows and inputs
@@ -51,7 +51,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     -- when using honest-prover witnesses
     env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- assuming the spec on the current row, and the input_spec on the input
-    Spec row_index acc xs xs_len ∧ input_assumptions row_index x →
+    Spec row_index acc xs xs_len ∧ InputAssumptions row_index x →
     -- the constraints hold
     Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
 
@@ -102,7 +102,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
     have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
     simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
     have hi' : i < size State + size Input := by linarith
-    simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get, Vector.get_eq,
+    simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
 
   have h_env : eval env' (varFromOffset State 0) = row.1 := by
@@ -281,7 +281,7 @@ theorem table_soundness (table : InductiveTable F State Input) (input output: St
 
 def toFormal (table : InductiveTable F State Input) (input output: State F) : FormalTable F (ProvablePair State Input) where
   constraints := table.tableConstraints input output
-  assumption N := N > 0 ∧ table.Spec 0 input [] rfl
+  Assumption N := N > 0 ∧ table.Spec 0 input [] rfl
   Spec {N} trace := table.Spec (N-1) output (traceInputs trace.tail) (traceInputs_length trace.tail)
 
   soundness N trace env assumption constraints :=

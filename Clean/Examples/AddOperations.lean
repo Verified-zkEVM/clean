@@ -4,8 +4,8 @@ import Clean.Gadgets.Addition32.Addition32Full
 
 section
 def circuit := do
-  let x ← witness (F := F pBabybear) (fun _ => 246)
-  let y ← witness (fun _ => 20)
+  let x ← witnessField (F := F pBabybear) fun _ => 246
+  let y ← witnessField fun _ => 20
   let z ← Gadgets.Addition8.circuit.main { x, y }
   Gadgets.Addition8.circuit.main { x, y := z }
 
