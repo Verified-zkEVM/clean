@@ -263,29 +263,6 @@ variable {env : Environment F} {prop : Condition F} {m : ℕ}
   {Acc : ℕ → Type}
   {circuit : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
--- TODO not sure if we need this
-def foldlRangeAcc (m : ℕ) [NeZero m] (n : ℕ) (circuit : β → Fin m → Circuit F β) (init : β) (j : Fin m) : β :=
-  Fin.foldl j (fun acc i => (circuit acc i).output (n + i * (circuit acc default).localLength)) init
-
-lemma foldlRangeAcc_zero  [NeZero m] : foldlRangeAcc m n circuit init 0 = init := by
-  simp [foldlRangeAcc, Fin.foldl_zero]
-
-lemma foldlRangeAcc_cons_succ (i : ℕ) (hi : i < m) [NeZero m] {circuit : β → Fin (m + 1) → Circuit F β} [constant : ConstantLength (prod circuit)] :
-  foldlRangeAcc (m + 1) n circuit init ⟨ i + 1, by omega ⟩ =
-  foldlRangeAcc m (n + (circuit init 0).localLength n) (fun b i => circuit b (i + 1)) ((circuit init 0).output n) i := by
-  simp only [foldlRangeAcc]
-  have hi' : i < m := by linarith
-  simp only [Fin.default_eq_zero, Fin.foldl_succ, Fin.val_succ, Nat.cast_add, Nat.cast_one, add_mul,
-    one_mul, Fin.val_zero, Nat.cast_zero, zero_mul, add_zero, Fin.val_natCast, prod]
-  rw [Nat.mod_eq_of_lt hi']
-  congr
-  funext acc ⟨ i, hi ⟩
-  rw [constant.localLength_eq (init, 0), ←constant.localLength_eq (acc, default) 0]
-  have hi' : i < m := by linarith
-  simp only [zero_add]
-  rw [Nat.mod_eq_of_lt hi', constant.localLength_eq (acc, 1), ←constant.localLength_eq (acc, 0) 0]
-  ac_rfl
-
 theorem forAll_iff_finRange {constant : ConstantLength (prod circuit)} :
   ((Vector.finRange m).foldlM circuit init).forAll n prop ↔
     ∀ i : Fin m, (circuit (foldlAcc n (Vector.finRange m) circuit init i) i)
