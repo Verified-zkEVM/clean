@@ -1,6 +1,6 @@
 # Clean-Circomlib
 
-This project aims to formally verify all of circomlib in clean.
+This project aims to formally verify all of [circomlib](https://github.com/iden3/circomlib) in clean.
 
 ## License
 
