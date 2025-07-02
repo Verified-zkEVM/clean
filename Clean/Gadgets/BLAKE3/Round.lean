@@ -20,6 +20,7 @@ instance : ProvableStruct Inputs where
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, message } := input
+  -- TODO: refactor using a for loop
   let state ← subcircuit (G.circuit 0 4 8 12) ⟨state, message[0], message[1]⟩
   let state ← subcircuit (G.circuit 1 5 9 13) ⟨state, message[2], message[3]⟩
   let state ← subcircuit (G.circuit 2 6 10 14) ⟨state, message[4], message[5]⟩
@@ -59,7 +60,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     Fin.val_one, Fin.val_two, pure, Circuit.bind_def, subcircuit.eq_1, ElaboratedCircuit.output,
     FormalCircuit.toSubcircuit.eq_1, Circuit.operations, ElaboratedCircuit.localLength,
     List.cons_append, List.nil_append, Operations.localLength.eq_5, Operations.localLength.eq_1,
-    Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5, Circuit.SubcircuitSoundness,
+    Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
     Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
   simp only [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, h_eval_state, getElem_eval_vector, h_eval_message, G.Spec, Fin.isValue,
@@ -104,8 +105,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨state_var, message_var⟩ henv ⟨state, message⟩ h_input h_normalized
 
-  simp [circuit_norm, main, elaborated, subcircuit_norm, G.circuit,
-    G.Assumptions, G.Spec, Assumptions, getElem_eval_vector] at ⊢ henv h_input
+  dsimp only [elaborated, main, Fin.isValue, G.circuit, Circuit.pure_def, Circuit.bind_def,
+    subcircuit.eq_1, ElaboratedCircuit.output, Fin.coe_ofNat_eq_mod, Nat.reduceMod,
+    FormalCircuit.toSubcircuit.eq_1, ElaboratedCircuit.main, Circuit.operations, G.Assumptions,
+    G.Spec, ElaboratedCircuit.localLength, List.cons_append, List.nil_append, Fin.val_two,
+    Operations.localLength.eq_5, Operations.localLength.eq_1, Nat.add_zero, Fin.val_one,
+    Fin.val_zero, Circuit.output, Circuit.ConstraintsHold.Completeness.eq_5,
+    Circuit.ConstraintsHold.Completeness.eq_1] at ⊢ henv h_input
+  simp only [↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
+    ProvableStruct.eval.go, Inputs.mk.injEq, Environment.UsesLocalWitnessesCompleteness,
+    getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢
+
   rw [h_input.left, h_input.right] at henv
   simp [Assumptions] at h_normalized
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
