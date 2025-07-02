@@ -7,8 +7,12 @@ open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 /-
-Note: `Num2Bits_strict` and `Bits2Num_strict` are moved to `AliasCheck.lean` because
-having them here would have caused a cyclic import dependency, which Lean does not allow.
+Original source code:
+https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/bitify.circom
+
+Note: `Num2Bits_strict`, `Bits2Num_strict` and `Num2BitsNeg` are in `Bitify2.lean`,
+because having them here would have caused cyclic import dependencies,
+which Lean does not allow.
 -/
 
 namespace Num2Bits
