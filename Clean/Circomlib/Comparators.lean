@@ -22,8 +22,8 @@ template IsZero() {
 -/
 def main (input : Expression (F p)) := do
   let inv ← witnessField fun env =>
-    let in_val := input.eval env
-    if in_val.val ≠ 0 then in_val⁻¹ else 0
+    let x := input.eval env
+    if x ≠ 0 then x⁻¹ else 0
 
   let out ← witnessField fun env => (-input * inv + 1).eval env
   out === -input * inv + 1
@@ -140,14 +140,14 @@ template LessThan(n) {
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
   let bits ← subcircuitWithAssertion (Num2Bits.circuit (n+1) hn) diff
-  let out ← witnessField fun env => (1 - bits[n]).eval env
+  let out ← witnessField fun env => 1 - (bits[n]).eval env
   out === 1 - bits[n]
   return out
 
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
-  localLength _ := 1 + (n + 1)
-  localLength_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
+  localLength _ := n + 2
+  localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
 
   Assumptions input := sorry
   Spec input output := sorry
@@ -174,17 +174,12 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) 2) := do
-  let modified_input : Vector (Expression (F p)) 2 :=
-    Vector.ofFn fun i => if i = 0 then input[0] else input[1] + 1
-  let out ← LessThan.main n modified_input
-  return out
+def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :=
+  subcircuit (LessThan.circuit n hn) (input.1, input.2 + 1)
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) (fields 2) field where
-  main := main n
-  localLength _ := 1 + (n + 1)
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+  main := main n hn
+  localLength _ := n + 2
 
   Assumptions input := sorry
   Spec input output := sorry
@@ -211,17 +206,12 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) 2) := do
-  let swapped_input : Vector (Expression (F p)) 2 :=
-    Vector.ofFn fun i => if i = 0 then input[1] else input[0]
-  let out ← LessThan.main n swapped_input
-  return out
+def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :=
+  subcircuit (LessThan.circuit n hn) (input.2, input.1)
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) (fields 2) field where
-  main := main n
-  localLength _ := 1 + (n + 1)
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+  main := main n hn
+  localLength _ := n + 2
 
   Assumptions input := sorry
   Spec input output := sorry
@@ -248,17 +238,12 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) 2) := do
-  let modified_input : Vector (Expression (F p)) 2 :=
-    Vector.ofFn fun i => if i = 0 then input[1] else input[0] + 1
-  let out ← LessThan.main n modified_input
-  return out
+def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) :=
+  subcircuit (LessThan.circuit n hn) (input.2, input.1 + 1)
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) (fields 2) field where
-  main := main n
-  localLength _ := 1 + (n + 1)
-  localLength_eq := by simp [circuit_norm, main]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+  main := main n hn
+  localLength _ := n + 2
 
   Assumptions input := sorry
   Spec input output := sorry
