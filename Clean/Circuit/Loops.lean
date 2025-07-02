@@ -24,6 +24,10 @@ lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (bod
 namespace Circuit
 variable {prop : Condition F}
 
+lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_: ConstantLength circuit) [Inhabited α] (a : α) (n : ℕ) :
+   (circuit a).localLength n = (circuit default).localLength 0 := by
+  simp only [ConstantLength.localLength_eq]
+
 def ConstantLength.fromConstantLength' [Inhabited β] (body : β × Fin m → Circuit F β)
     (h : ∀ (acc : β) (i i' : Fin m) n,
       (body (acc, i)).localLength n = (body (default, i')).localLength 0) :
