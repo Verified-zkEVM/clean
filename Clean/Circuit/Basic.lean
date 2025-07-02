@@ -281,7 +281,7 @@ This means that, when viewed as a black box, the circuit acts similar to a funct
 -/
 structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop
+  Assumptions (_ : Input F) : Prop := True
   Spec : Input F → Output F → Prop
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
