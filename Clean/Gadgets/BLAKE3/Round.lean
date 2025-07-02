@@ -105,20 +105,20 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨state_var, message_var⟩ henv ⟨state, message⟩ h_input h_normalized
 
   simp [circuit_norm, main, elaborated, subcircuit_norm, G.circuit,
-    G.Assumptions, G.Spec, Assumptions] at ⊢ henv h_input
-
+    G.Assumptions, G.Spec, Assumptions, getElem_eval_vector] at ⊢ henv h_input
+  rw [h_input.left, h_input.right] at henv
   simp [Assumptions] at h_normalized
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
 
 
-  specialize c1 sorry sorry sorry
-  specialize c2 sorry sorry sorry
-  specialize c3 sorry sorry sorry
-  specialize c4 sorry sorry sorry
-  specialize c5 sorry sorry sorry
-  specialize c6 sorry sorry sorry
-  specialize c7 sorry sorry sorry
-  specialize c8 sorry sorry sorry
+  specialize c1 h_normalized.left (h_normalized.right 0) (h_normalized.right 1)
+  specialize c2 c1.right (h_normalized.right 2) (h_normalized.right 3)
+  specialize c3 c2.right (h_normalized.right 4) (h_normalized.right 5)
+  specialize c4 c3.right (h_normalized.right 6) (h_normalized.right 7)
+  specialize c5 c4.right (h_normalized.right 8) (h_normalized.right 9)
+  specialize c6 c5.right (h_normalized.right 10) (h_normalized.right 11)
+  specialize c7 c6.right (h_normalized.right 12) (h_normalized.right 13)
+  specialize c8 c7.right (h_normalized.right 14) (h_normalized.right 15)
 
   simp only [Fin.isValue, c1.right, true_and, c2.right, c3.right, c4.right, c5.right, c6.right,
     c7.right]
@@ -127,6 +127,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rw [h_input.left]
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_normalized
+
   simp only [h_normalized, getElem_eval_vector, h_input.right, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
