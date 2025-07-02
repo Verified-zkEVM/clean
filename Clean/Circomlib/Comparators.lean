@@ -34,11 +34,11 @@ def circuit : FormalCircuit (F p) field field where
   main
   localLength _ := 2
 
-  Assumptions _ := sorry
+  Assumptions _ := True
   Spec input output := output = if input.val = 0 then 1 else 0
 
   soundness := by
-    simp_all only [circuit_norm, main]
+    simp only [circuit_norm, main]
     sorry
 
   completeness := by
