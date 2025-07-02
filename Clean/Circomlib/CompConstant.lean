@@ -65,43 +65,9 @@ template CompConstant(ct) {
 }
 -/
 def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
-  let parts ← witnessVector 127 fun env =>
-    Vector.ofFn fun i =>
-      let clsb := (ct >>> (i.val * 2)) &&& 1
-      let cmsb := (ct >>> (i.val * 2 + 1)) &&& 1
-      have hi2 : i.val * 2 < 254 := by
-        have : i.val < 127 := i.isLt
-        omega
-      have hi2p1 : i.val * 2 + 1 < 254 := by
-        have : i.val < 127 := i.isLt
-        omega
-      let slsb := input[i.val * 2].eval env
-      let smsb := input[i.val * 2 + 1].eval env
-
-      -- Compute b, a values for this iteration
-      let e_val : ℤ := 2^i.val
-      let b_val : ℤ := (1 <<< 128) - 1 - (2^(i.val + 1) - 1)
-      let a_val : ℤ := 2^i.val
-
-      if cmsb == 0 && clsb == 0 then
-        -(b_val : F p) * smsb * slsb + (b_val : F p) * smsb + (b_val : F p) * slsb
-      else if cmsb == 0 && clsb == 1 then
-        (a_val : F p) * smsb * slsb - (a_val : F p) * slsb + (b_val : F p) * smsb - (a_val : F p) * smsb + (a_val : F p)
-      else if cmsb == 1 && clsb == 0 then
-        (b_val : F p) * smsb * slsb - (a_val : F p) * smsb + (a_val : F p)
-      else
-        -(a_val : F p) * smsb * slsb + (a_val : F p)
-
-  -- Compute parts constraints using Clean forEach
-  Circuit.forEach (Vector.finRange 127) fun i => do
+  let parts' : fields 127 (Expression (F p)) := Vector.ofFn fun i =>
     let clsb := (ct >>> (i.val * 2)) &&& 1
     let cmsb := (ct >>> (i.val * 2 + 1)) &&& 1
-    have hi2 : i.val * 2 < 254 := by
-      have : i.val < 127 := i.isLt
-      omega
-    have hi2p1 : i.val * 2 + 1 < 254 := by
-      have : i.val < 127 := i.isLt
-      omega
     let slsb := input[i.val * 2]
     let smsb := input[i.val * 2 + 1]
 
@@ -110,18 +76,17 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
     let b_val : ℤ := (1 <<< 128) - 1 - (2^(i.val + 1) - 1)
     let a_val : ℤ := 2^i.val
 
-    -- Each case produces exactly one constraint, so all paths have the same length
-    let constraint_expr :=
-      if cmsb == 0 && clsb == 0 then
-        -(b_val : F p) * smsb * slsb + (b_val : F p) * smsb + (b_val : F p) * slsb
-      else if cmsb == 0 && clsb == 1 then
-        (a_val : F p) * smsb * slsb - (a_val : F p) * slsb + (b_val : F p) * smsb - (a_val : F p) * smsb + (a_val : F p)
-      else if cmsb == 1 && clsb == 0 then
-        (b_val : F p) * smsb * slsb - (a_val : F p) * smsb + (a_val : F p)
-      else
-        -(a_val : F p) * smsb * slsb + (a_val : F p)
+    if cmsb == 0 && clsb == 0 then
+      -(b_val : F p) * smsb * slsb + (b_val : F p) * smsb + (b_val : F p) * slsb
+    else if cmsb == 0 && clsb == 1 then
+      (a_val : F p) * smsb * slsb - (a_val : F p) * slsb + (b_val : F p) * smsb - (a_val : F p) * smsb + (a_val : F p)
+    else if cmsb == 1 && clsb == 0 then
+      (b_val : F p) * smsb * slsb - (a_val : F p) * smsb + (a_val : F p)
+    else
+      -(a_val : F p) * smsb * slsb + (a_val : F p)
 
-    parts[i] === constraint_expr
+  let parts : fields 127 (Expression (F p)) ← witness fun env => eval env parts'
+  parts === parts'
 
   -- Compute sum
   let sout ← witnessField fun env => (parts.map (Expression.eval env)).sum
@@ -136,23 +101,27 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   out === bits[127]
   return out
 
-def circuit (ct : ℕ) : FormalCircuit (F p) (fields 254) field where
-  main := main ct
-  localLength _ := 127 + 127 * 1 + 1 + 135 + 1  -- parts witness + forEach constraints + sout witness + Num2Bits + out witness
-  localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit, Circuit.forEach.localLength_eq]; sorry
-  subcircuitsConsistent := sorry
+def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
+  main := main c
+  localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
+  localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
+  subcircuitsConsistent input n := by
+    simp only [circuit_norm, main, Num2Bits.circuit]
+    and_intros <;> ac_rfl
 
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output := sorry
+  Spec input output :=
+    output = if (fieldFromBits input).val > c then 1 else 0
 
   soundness := by
-    simp only [circuit_norm, main]
+    simp only [circuit_norm, main, Num2Bits.circuit]
+    simp only [circuit_norm, subcircuit_norm]
     sorry
 
   completeness := by
-    simp only [circuit_norm, main]
+    simp only [circuit_norm, main, Num2Bits.circuit]
     sorry
 end CompConstant
 
