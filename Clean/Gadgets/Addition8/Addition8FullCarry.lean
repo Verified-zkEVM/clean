@@ -27,7 +27,7 @@ instance : ProvableStruct Outputs where
   toComponents := fun { z, carry_out } => .cons z (.cons carry_out .nil)
   fromComponents := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
 
-def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
 
   -- witness the result
@@ -56,7 +56,7 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Returns the sum and the output carry bit.
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := add8_full_carry
+  main
   Assumptions
   Spec
   localLength _ := 2
@@ -71,7 +71,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, add8_full_carry,
+    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, main,
       ByteTable, Boolean.circuit]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -98,7 +98,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, add8_full_carry,
+    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, main,
       ByteTable, Boolean.circuit] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
@@ -136,7 +136,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, subcircuit_norm, circuit, add8_full_carry, Boolean.circuit,
+    simp_all only [circuit_norm, subcircuit_norm, circuit, main, Boolean.circuit,
       Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
