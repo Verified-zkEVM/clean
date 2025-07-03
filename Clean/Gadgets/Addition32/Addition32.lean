@@ -19,7 +19,7 @@ instance : ProvableStruct Inputs where
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨x, y⟩ := input
-  let ⟨z, _⟩ ← Addition32Full.circuit {x, y, carry_in := 0}
+  let ⟨z, _⟩ ← Addition32Full.circuit {x, y, carryIn := 0}
   return z
 
 def Assumptions (input : Inputs (F p)) :=
