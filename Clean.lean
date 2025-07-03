@@ -9,3 +9,5 @@ import Clean.Tables.KeccakInductive
 import Clean.Gadgets.Bits
 import Clean.Gadgets.BLAKE3.BLAKE3G
 import Clean.Gadgets.BLAKE3.Permute
+import Clean.Gadgets.BLAKE3.FinalStateUpdate
+import Clean.Gadgets.BLAKE3.Round

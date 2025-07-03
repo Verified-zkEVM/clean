@@ -20,7 +20,7 @@ open Utils.Rotation (rotRight64_composition)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def rot64 (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let byte_offset : ℕ := offset.val / 8
   let bit_offset : ℕ := (offset % 8).val
 
@@ -37,17 +37,17 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
 def output (offset : Fin 64) (i0 : Nat) : U64 (Expression (F p)) :=
   Rotation64Bits.output (offset % 8).val i0
 
--- #eval! (rot64 (p:=p_babybear) 0) default |>.localLength
--- #eval! (rot64 (p:=p_babybear) 0) default |>.output
+-- #eval! (main (p:=p_babybear) 0) default |>.localLength
+-- #eval! (main (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
-  main := rot64 off
+  main := main off
   localLength _ := 16
   output _ i0 := output off i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
-  simp [circuit_norm, rot64, elaborated, U64.copy, subcircuit_norm,
+  simp [circuit_norm, main, elaborated, U64.copy, subcircuit_norm,
     Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
 
   -- abstract away intermediate U64
@@ -85,10 +85,10 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
 theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
-  simp [circuit_norm, rot64, elaborated, subcircuit_norm,
+  simp [circuit_norm, main, elaborated, subcircuit_norm,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
     Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions]
-  simp [circuit_norm, elaborated, rot64, subcircuit_norm,
+  simp [circuit_norm, elaborated, main, subcircuit_norm,
     Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env
 
   obtain ⟨h0, _⟩ := h_env

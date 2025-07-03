@@ -11,7 +11,7 @@ open Bitwise (rotRight64)
   Rotate the 64-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def rot64_bytes (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+def main (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let ⟨x0, x1, x2, x3 , x4, x5, x6, x7⟩ := input
 
   if offset = 0 then
@@ -37,7 +37,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
-  main := rot64_bytes off
+  main := main off
   localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
@@ -51,7 +51,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     | 6 => ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
     | 7 => ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
   subcircuitsConsistent x i0 := by
-    simp only [rot64_bytes]
+    simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
@@ -87,11 +87,11 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (
 
 theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
-  fin_cases off <;> simp [elaborated, rot64_bytes, circuit_norm]
+  fin_cases off <;> simp [elaborated, main, circuit_norm]
 
 def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated off with
-  main := rot64_bytes off
+  main := main off
   Assumptions
   Spec := Spec off
   soundness := soundness off

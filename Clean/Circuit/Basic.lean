@@ -274,10 +274,11 @@ It requires you to provide
 - a spec, which is a relationship between inputs and outputs
 - assumptions, which are the conditions that must hold for the circuit to make sense
 - a proof of _soundness_: assumptions ∧ constraints → spec, for any witnesses
-- a proof of _completeness_: assumptions → constraints, when using the correct witnesses
+- a proof of _completeness_: assumptions → constraints, using some witnesses that exist
 
 Note that soundness and completeness, taken together, show that the spec will hold for _all_ inputs.
-This means that, when viewed as a black box, the circuit acts similar to a function.
+This means that, when viewed as a black box, the circuit acts similar to a function. The assumptions act as
+preconditions, and the spec acts as the postcondition.
 -/
 structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
@@ -291,7 +292,7 @@ def FormalAssertion.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
-  -- for all inputs hat satisfy the assumptions
+  -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
@@ -314,14 +315,16 @@ def FormalAssertion.Completeness (F: Type) [Field F] (circuit : ElaboratedCircui
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
 - it doesn't return anything
-- by design, it is not complete: it further constrains its inputs
+- by design, it does not have `FormalCircuit`'s completeness. `FormalAssertion` further constrains its inputs.
 
 The notion of _soundness_ is the same as for `FormalCircuit`: assumptions ∧ constraints → spec.
 
 However, the _completeness_ statement is weaker: assumptions ∧ spec → constraints.
 
-In other words, for `FormalAssertion`s the spec must be an equivalent reformulation of the constraints.
-(In the case of `FormalCircuit`, the spec can be strictly weaker than the constraints.)
+Given assumptions, the constraints might not be satisfiable and the spec must be an equivalent reformulation
+of the constraints.
+(In the case of `FormalCircuit`, given assumptions, the constraints are always satisfiable and the spec can be
+strictly weaker than the constraints.)
 -/
 structure FormalAssertion (F: Type) (Input: TypeMap) [Field F] [ProvableType Input]
     extends elaborated : ElaboratedCircuit F Input unit where
@@ -331,9 +334,9 @@ structure FormalAssertion (F: Type) (Input: TypeMap) [Field F] [ProvableType Inp
   completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
-  localLength := fun _ => 0
+  localLength _ := 0
   -- the output has to be unit
-  output := fun _ _ => ()
+  output _ _ := ()
 
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec: Input F → Output F → Prop) :=
