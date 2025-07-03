@@ -215,9 +215,7 @@ def U32.witness (compute : Environment (F p) → U32 (F p)) := do
 namespace U32.Copy
 
 def main (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p))  := do
-  let y ← ProvableType.witness fun env =>
-    U32.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3)
-  x === y
+  let y <== x
   return y
 
 def Assumptions (_input : U32 (F p)) := True
