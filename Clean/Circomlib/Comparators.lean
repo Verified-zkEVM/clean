@@ -67,7 +67,7 @@ template IsEqual() {
 -/
 def main (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 - input.2
-  let out ← subcircuit IsZero.circuit diff
+  let out ← IsZero.circuit diff
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where
@@ -111,7 +111,7 @@ instance : ProvableStruct Inputs where
 
 def main (inputs : Var Inputs (F p)) := do
   let { enabled, inp } := inputs
-  let isz ← subcircuit IsZero.circuit (inp.2 - inp.1)
+  let isz ← IsZero.circuit (inp.2 - inp.1)
   enabled * (1 - isz) === 0
 
 def circuit : FormalAssertion (F p) Inputs where
@@ -149,7 +149,7 @@ template LessThan(n) {
 -/
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits ← subcircuitWithAssertion (Num2Bits.circuit (n+1) hn) diff
+  let bits ← Num2Bits.circuit (n+1) hn diff
   let out ← witnessField fun env => 1 - (bits[n]).eval env
   out === 1 - bits[n]
   return out
@@ -190,7 +190,7 @@ template LessEqThan(n) {
 -/
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
-    subcircuit (LessThan.circuit n hn) (x, y + 1)
+    LessThan.circuit n hn (x, y + 1)
 
   localLength _ := n + 2
 
@@ -234,7 +234,7 @@ template GreaterThan(n) {
 -/
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
-    subcircuit (LessThan.circuit n hn) (y, x)
+    LessThan.circuit n hn (y, x)
 
   localLength _ := n + 2
 
@@ -265,7 +265,7 @@ template GreaterEqThan(n) {
 -/
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
-    subcircuit (LessThan.circuit n hn) (y, x + 1)
+    LessThan.circuit n hn (y, x + 1)
 
   localLength _ := n + 2
 

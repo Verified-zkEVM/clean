@@ -221,7 +221,7 @@ end U64.AssertNormalized
 -/
 def U64.witness (compute : Environment (F p) → U64 (F p)) := do
   let x ← ProvableType.witness compute
-  assertion U64.AssertNormalized.circuit x
+  U64.AssertNormalized.circuit x
   return x
 
 namespace U64.Copy

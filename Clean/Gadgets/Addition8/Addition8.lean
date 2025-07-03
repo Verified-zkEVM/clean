@@ -9,7 +9,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 -/
 def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
   main := fun inputs => do
-    let { z, .. } ← subcircuit Addition8FullCarry.circuit inputs
+    let { z, .. } ← Addition8FullCarry.circuit inputs
     return z
 
   localLength _ := 2
@@ -44,7 +44,7 @@ instance : ProvableStruct Inputs where
 -/
 def circuit : FormalCircuit (F p) Inputs field where
   main := fun { x, y } =>
-    subcircuit Addition8Full.circuit { x, y, carry_in := 0 }
+    Addition8Full.circuit { x, y, carry_in := 0 }
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
