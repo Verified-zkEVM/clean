@@ -7,7 +7,7 @@ https://github.com/iden3/circomlib/blob/master/circuits/gates.circom
 -/
 
 namespace Circomlib
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+variable {p : ℕ} [Fact p.Prime]
 
 namespace XOR
 /-
@@ -32,13 +32,29 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions _ := True
-  Spec input output := 
-    output = (if input.1 = 0 then input.2 else if input.2 = 0 then 1 else 0)
+  Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
+  Spec input output :=
+    output.val = input.1.val ^^^ input.2.val
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    rintro offset env ⟨ a_var, b_var ⟩ ⟨ a, b ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩
+    · simp only [circuit_norm, main, explicit_provable_type] at h_env ⊢
+      rcases h_env with ⟨ h_env_a, h_env_b ⟩
+      simp_all only [ZMod.val_zero, Nat.xor_self, ZMod.val_eq_zero]
+      aesop
+    · simp only [circuit_norm, main, explicit_provable_type] at h_env ⊢
+      rcases h_env with ⟨ h_env_a, h_env_b ⟩
+      simp_all only [ZMod.val_zero, Nat.xor_self, ZMod.val_eq_zero]
+      aesop
+    · simp only [circuit_norm, main, explicit_provable_type] at h_env ⊢
+      rcases h_env with ⟨ h_env_a, h_env_b ⟩
+      simp_all only [ZMod.val_zero, Nat.xor_self, ZMod.val_eq_zero]
+      aesop
+    · simp only [circuit_norm, main, explicit_provable_type] at h_env ⊢
+      rcases h_env with ⟨ h_env_a, h_env_b ⟩
+      simp_all only [ZMod.val_zero, Nat.xor_self, ZMod.val_eq_zero]
+      intros _
+      ring
 
   completeness := by
     simp only [circuit_norm, main]
