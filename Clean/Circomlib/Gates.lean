@@ -37,13 +37,12 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output.val = input.1.val ^^^ input.2.val
 
   soundness := by
-    rintro offset env ⟨ a_var, b_var ⟩ ⟨ a, b ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩
     all_goals {
-      simp only [circuit_norm, main, explicit_provable_type] at h_env ⊢
-      rcases h_env with ⟨ h_env_a, h_env_b ⟩
-      simp_all only [ZMod.val_zero, Nat.xor_self, ZMod.val_eq_zero, h_a, h_b]
-      ring_nf
-      simp
+      simp only [circuit_norm, main] at h_env ⊢
+      rcases h_env with ⟨ _, _ ⟩
+      simp_all only [h_a, h_b]
+      ring_nf; simp
     }
 
   completeness := by
