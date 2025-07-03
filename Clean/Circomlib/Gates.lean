@@ -22,8 +22,7 @@ template XOR() {
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
-  let out ← witnessField fun env => (a + b - 2*a*b).eval env
-  out === a + b - 2*a*b
+  let out <== a + b - 2*a*b
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where
@@ -35,14 +34,17 @@ def circuit : FormalCircuit (F p) fieldPair field where
   Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
   Spec input output :=
     output.val = input.1.val ^^^ input.2.val
+    ∧ (output = 0 ∨ output = 1)
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩ h_hold
     all_goals {
-      simp only [circuit_norm, main] at h_env ⊢
+      simp only [circuit_norm, main] at h_env h_hold ⊢
       rcases h_env with ⟨ _, _ ⟩
-      simp_all only [h_a, h_b]
-      ring_nf; simp
+      simp_all only [h_a, h_b, h_hold]
+      constructor
+      · ring_nf; simp
+      · ring_nf; simp
     }
 
   completeness := by
