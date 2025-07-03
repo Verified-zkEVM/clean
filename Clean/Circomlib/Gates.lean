@@ -46,8 +46,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     }
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    simp_all only [circuit_norm, main]
 end XOR
 
 end Circomlib
