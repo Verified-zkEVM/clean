@@ -17,7 +17,7 @@ instance : ProvableStruct Inputs where
 
 def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
   | { state, d } => .mapFinRange 25 fun i =>
-    subcircuit Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
+    Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   main

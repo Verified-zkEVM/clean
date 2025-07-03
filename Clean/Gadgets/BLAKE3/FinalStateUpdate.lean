@@ -22,24 +22,24 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let { state, chaining_value } := input
 
   -- XOR first 8 words with last 8 words
-  let s0 ← subcircuit (Xor32.circuit) ⟨state[0], state[8]⟩
-  let s1 ← subcircuit (Xor32.circuit) ⟨state[1], state[9]⟩
-  let s2 ← subcircuit (Xor32.circuit) ⟨state[2], state[10]⟩
-  let s3 ← subcircuit (Xor32.circuit) ⟨state[3], state[11]⟩
-  let s4 ← subcircuit (Xor32.circuit) ⟨state[4], state[12]⟩
-  let s5 ← subcircuit (Xor32.circuit) ⟨state[5], state[13]⟩
-  let s6 ← subcircuit (Xor32.circuit) ⟨state[6], state[14]⟩
-  let s7 ← subcircuit (Xor32.circuit) ⟨state[7], state[15]⟩
+  let s0 ← Xor32.circuit ⟨state[0], state[8]⟩
+  let s1 ← Xor32.circuit ⟨state[1], state[9]⟩
+  let s2 ← Xor32.circuit ⟨state[2], state[10]⟩
+  let s3 ← Xor32.circuit ⟨state[3], state[11]⟩
+  let s4 ← Xor32.circuit ⟨state[4], state[12]⟩
+  let s5 ← Xor32.circuit ⟨state[5], state[13]⟩
+  let s6 ← Xor32.circuit ⟨state[6], state[14]⟩
+  let s7 ← Xor32.circuit ⟨state[7], state[15]⟩
 
   -- XOR last 8 words with chaining value
-  let s8 ← subcircuit (Xor32.circuit) ⟨chaining_value[0], state[8]⟩
-  let s9 ← subcircuit (Xor32.circuit) ⟨chaining_value[1], state[9]⟩
-  let s10 ← subcircuit (Xor32.circuit) ⟨chaining_value[2], state[10]⟩
-  let s11 ← subcircuit (Xor32.circuit) ⟨chaining_value[3], state[11]⟩
-  let s12 ← subcircuit (Xor32.circuit) ⟨chaining_value[4], state[12]⟩
-  let s13 ← subcircuit (Xor32.circuit) ⟨chaining_value[5], state[13]⟩
-  let s14 ← subcircuit (Xor32.circuit) ⟨chaining_value[6], state[14]⟩
-  let s15 ← subcircuit (Xor32.circuit) ⟨chaining_value[7], state[15]⟩
+  let s8 ← Xor32.circuit ⟨chaining_value[0], state[8]⟩
+  let s9 ← Xor32.circuit ⟨chaining_value[1], state[9]⟩
+  let s10 ← Xor32.circuit ⟨chaining_value[2], state[10]⟩
+  let s11 ← Xor32.circuit ⟨chaining_value[3], state[11]⟩
+  let s12 ← Xor32.circuit ⟨chaining_value[4], state[12]⟩
+  let s13 ← Xor32.circuit ⟨chaining_value[5], state[13]⟩
+  let s14 ← Xor32.circuit ⟨chaining_value[6], state[14]⟩
+  let s15 ← Xor32.circuit ⟨chaining_value[7], state[15]⟩
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
