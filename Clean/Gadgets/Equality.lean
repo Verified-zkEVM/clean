@@ -157,4 +157,9 @@ instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
     return witness
 
 attribute [circuit_norm] HasAssignEq.assign_eq
-prefix:max " <== " => HasAssignEq.assign_eq
+
+-- Custom syntax to allow `let var <== expr` without monadic arrow
+syntax "let " ident " <== " term : doElem
+
+macro_rules
+  | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assign_eq $e)
