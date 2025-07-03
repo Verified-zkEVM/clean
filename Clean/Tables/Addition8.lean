@@ -24,7 +24,7 @@ def add8Inline : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.getCurrRow
   lookup ByteTable row.x
   lookup ByteTable row.y
-  let z ← subcircuit Gadgets.Addition8.circuit { x := row.x, y := row.y }
+  let z ← Gadgets.Addition8.circuit { x := row.x, y := row.y }
   assign (.curr 2) z
 
 def add8Table : List (TableOperation RowType (F p)) := [
