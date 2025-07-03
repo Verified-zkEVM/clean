@@ -65,7 +65,7 @@ template CompConstant(ct) {
 }
 -/
 def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
-  let parts' : fields 127 (Expression (F p)) := Vector.ofFn fun i =>
+  let parts : fields 127 (Expression (F p)) <== Vector.ofFn fun i =>
     let clsb := (ct >>> (i.val * 2)) &&& 1
     let cmsb := (ct >>> (i.val * 2 + 1)) &&& 1
     let slsb := input[i.val * 2]
@@ -85,20 +85,14 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
     else
       -(a_val : F p) * smsb * slsb + (a_val : F p)
 
-  let parts : fields 127 (Expression (F p)) ← witness fun env => eval env parts'
-  parts === parts'
-
   -- Compute sum
-  let sout ← witnessField fun env => (parts.map (Expression.eval env)).sum
-
-  sout === parts.sum
+  let sout <== parts.sum
 
   -- Convert sum to bits
   have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
   let bits ← subcircuitWithAssertion (Num2Bits.circuit 135 hp) sout
 
-  let out ← witnessField fun env => bits[127].eval env
-  out === bits[127]
+  let out <== bits[127]
   return out
 
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
