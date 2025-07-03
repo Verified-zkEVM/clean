@@ -30,7 +30,7 @@ instance : ProvableStruct Outputs where
 
 open Addition8FullCarry (add8_full_carry)
 
-def add32_full (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carry_in⟩ := input
   let { z := z0, carry_out := c0 } ← add8_full_carry ⟨ x.x0, y.x0, carry_in ⟩
   let { z := z1, carry_out := c1 } ← add8_full_carry ⟨ x.x1, y.x1, c0 ⟩
@@ -52,16 +52,16 @@ def Spec (input : Inputs (F p)) (out: Outputs (F p)) :=
 /--
 Elaborated circuit data can be found as follows:
 ```
-#eval (add32_full (p:=p_babybear) default).localLength
-#eval (add32_full (p:=p_babybear) default).output
+#eval (main (p:=p_babybear) default).localLength
+#eval (main (p:=p_babybear) default).output
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
-  main := add32_full
+  main := main
   localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
-    simp only [circuit_norm, add32_full, add8_full_carry, Boolean.circuit]
+    simp only [circuit_norm, main, add8_full_carry, Boolean.circuit]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
@@ -79,7 +79,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, main, add8_full_carry, Spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
   simp only [circuit_norm, subcircuit_norm, explicit_provable_type, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -119,7 +119,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, add32_full, add8_full_carry, Boolean.circuit] at henv ⊢
+  dsimp only [circuit_norm, subcircuit_norm, main, add8_full_carry, Boolean.circuit] at henv ⊢
   simp only [h_inputs, circuit_norm, subcircuit_norm] at henv ⊢
 
   -- characterize local witnesses
