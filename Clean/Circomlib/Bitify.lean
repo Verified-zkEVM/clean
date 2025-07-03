@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Gadgets.Bits
+import Clean.Gadgets.Equality
 
 namespace Circomlib
 open Utils.Bits
@@ -126,8 +127,7 @@ def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
     let e2 := e2 + e2
     (lc1, e2)) (0, 1)
 
-  let out ← witnessField fun env => lc1.eval env
-  out === lc1
+  let out ← <== lc1
   return out
 
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) (fields n) field where
