@@ -254,6 +254,13 @@ def circuit : FormalCircuit (F p) U32 U32 where
       List.getElem_cons_zero] at h3
     simp_all
 
+def circuitWithUniqueOutput : FormalCircuitWithUniqueOutput (F p) U32 U32 where
+  circuit
+  uniqueness := by
+    intro _ _ _ _ h₁ h₂
+    simp only [circuit, Spec] at h₁ h₂
+    rw[←h₁, ←h₂]
+
 end Copy
 
 @[reducible]
