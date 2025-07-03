@@ -88,4 +88,6 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   soundness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
   completeness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
 
-end Gadgets.ToBits
+end ToBits
+export ToBits (toBits)
+end Gadgets

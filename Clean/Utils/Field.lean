@@ -9,6 +9,8 @@ instance (p : ℕ) [Fact p.Prime] : Fintype (F p) := ZMod.fintype p
 instance (p : ℕ) [Fact p.Prime] : Inhabited (F p) := ⟨0⟩
 instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
+instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
+
 namespace FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
 
