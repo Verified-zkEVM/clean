@@ -254,7 +254,7 @@ def circuit : FormalCircuit (F p) U32 U32 where
       List.getElem_cons_zero] at h3
     simp_all
 
-def circuitWithUniqueOutput : FormalCircuitWithUniqueOutput (F p) U32 U32 where
+def deterministicCircuit : DeterministicFormalCircuit (F p) U32 U32 where
   circuit
   uniqueness := by
     intro _ _ _ _ h₁ h₂
