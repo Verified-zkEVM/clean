@@ -8,13 +8,13 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-def theta (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
+def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let c ← subcircuit ThetaC.circuit state
   let d ← subcircuit ThetaD.circuit c
   subcircuit ThetaXor.circuit ⟨state, d⟩
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main := theta
+  main := main
   localLength _ := 480
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
@@ -24,13 +24,13 @@ def Spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  simp_all [circuit_norm, subcircuit_norm, Spec, theta, Assumptions,
+  simp_all [circuit_norm, subcircuit_norm, Spec, main, Assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  simp_all [circuit_norm, subcircuit_norm, theta, Assumptions, Spec,
+  simp_all [circuit_norm, subcircuit_norm, main, Assumptions, Spec,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
