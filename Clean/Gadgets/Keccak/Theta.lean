@@ -14,7 +14,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   subcircuit ThetaXor.circuit ⟨state, d⟩
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main := main
+  main
   localLength _ := 480
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized

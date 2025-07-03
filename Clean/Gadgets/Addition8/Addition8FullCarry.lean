@@ -56,7 +56,7 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Returns the sum and the output carry bit.
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := main
+  main
   Assumptions
   Spec
   localLength _ := 2

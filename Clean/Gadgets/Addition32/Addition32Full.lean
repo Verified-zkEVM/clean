@@ -56,7 +56,7 @@ Elaborated circuit data can be found as follows:
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
-  main := main
+  main
   localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by

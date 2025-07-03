@@ -27,7 +27,7 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   return #v[c0, c1, c2, c3, c4]
 
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
-  main := main
+  main
   localLength _ := 120
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
