@@ -8,7 +8,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-def thetaD (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
+def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← subcircuit (Rotation64.circuit (64 - 1)) row[1]
   let c0 ← subcircuit Xor64.circuit ⟨row[4], c0⟩
 
@@ -27,7 +27,7 @@ def thetaD (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := 
   return #v[c0, c1, c2, c3, c4]
 
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
-  main := thetaD
+  main := main
   localLength _ := 120
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
@@ -40,7 +40,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env row_var row h_input row_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
-  dsimp only [circuit_norm, Spec, thetaD, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
+  dsimp only [circuit_norm, Spec, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
   simp only [circuit_norm, subcircuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
   simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
   simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
@@ -76,7 +76,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions
   simp only [Assumptions, KeccakRow.normalized_iff] at h_assumptions
-  dsimp only [circuit_norm, thetaD, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
+  dsimp only [circuit_norm, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
   simp_all only [circuit_norm, subcircuit_norm, getElem_eval_vector, h_input,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, h_assumptions, true_and, true_implies]
