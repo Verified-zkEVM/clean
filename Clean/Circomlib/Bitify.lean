@@ -1,7 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Gadgets.Bits
-import Clean.Gadgets.Equality
 
 namespace Circomlib
 open Utils.Bits
