@@ -103,14 +103,33 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
 
-  obtain ⟨c1, h_holds⟩ := h_holds
+  obtain ⟨round1, h_holds⟩ := h_holds
 
+  simp [circuit_norm, subcircuit_norm, Round.circuit, Round.Assumptions, Round.Spec] at round1
 
-  simp [circuit_norm, subcircuit_norm, Round.circuit, Round.Assumptions, Round.Spec,
-    Fin.forall_fin_succ] at c1
+  rw [eval_vector, BLAKE3State.Normalized] at round1
+  -- prove all the assumptions of the first round invocation
+  specialize round1 (by
+    simp [eval_vector, BLAKE3State.Normalized, Fin.forall_fin_succ]
+    sorry)
+  specialize round1 sorry
 
-  rw [eval_vector, BLAKE3State.Normalized] at c1
-  simp [circuit_norm, BLAKE3State.value, Fin.forall_fin_succ] at c1
+  -- permute 1
+  obtain ⟨permute1, h_holds⟩ := h_holds
+  simp [circuit_norm, subcircuit_norm, Permute.circuit, Permute.Assumptions, Permute.Spec] at permute1
+  specialize permute1 sorry
+
+  -- round 2
+  obtain ⟨round2, h_holds⟩ := h_holds
+  simp [circuit_norm, subcircuit_norm, Round.circuit, Round.Assumptions, Round.Spec] at round2
+  rw [round1.left] at round2
+  specialize round2 round1.right permute1.right
+
+  -- permute 2
+  obtain ⟨permute2, h_holds⟩ := h_holds
+  simp [circuit_norm, subcircuit_norm, Permute.circuit, Permute.Assumptions, Permute.Spec] at permute2
+  rw [permute1.left] at permute2
+  specialize permute2 permute1.right
 
   sorry
 
