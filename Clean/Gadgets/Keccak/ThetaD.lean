@@ -9,20 +9,20 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
-  let c0 ← subcircuit (Rotation64.circuit (64 - 1)) row[1]
-  let c0 ← subcircuit Xor64.circuit ⟨row[4], c0⟩
+  let c0 ← Rotation64.circuit (64 - 1) row[1]
+  let c0 ← Xor64.circuit ⟨row[4], c0⟩
 
-  let c1 ← subcircuit (Rotation64.circuit (64 - 1)) row[2]
-  let c1 ← subcircuit Xor64.circuit ⟨row[0], c1⟩
+  let c1 ← Rotation64.circuit (64 - 1) row[2]
+  let c1 ← Xor64.circuit ⟨row[0], c1⟩
 
-  let c2 ← subcircuit (Rotation64.circuit (64 - 1)) row[3]
-  let c2 ← subcircuit Xor64.circuit ⟨row[1], c2⟩
+  let c2 ← Rotation64.circuit (64 - 1) row[3]
+  let c2 ← Xor64.circuit ⟨row[1], c2⟩
 
-  let c3 ← subcircuit (Rotation64.circuit (64 - 1)) row[4]
-  let c3 ← subcircuit Xor64.circuit ⟨row[2], c3⟩
+  let c3 ← Rotation64.circuit (64 - 1) row[4]
+  let c3 ← Xor64.circuit ⟨row[2], c3⟩
 
-  let c4 ← subcircuit (Rotation64.circuit (64 - 1)) row[0]
-  let c4 ← subcircuit Xor64.circuit ⟨row[3], c4⟩
+  let c4 ← Rotation64.circuit (64 - 1) row[0]
+  let c4 ← Xor64.circuit ⟨row[3], c4⟩
 
   return #v[c0, c1, c2, c3, c4]
 

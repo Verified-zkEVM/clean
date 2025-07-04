@@ -13,9 +13,9 @@ open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i => do
-    let state_not ← subcircuit Not.circuit (state[i + 5])
-    let state_and ← subcircuit And.And64.circuit ⟨state_not, state[i + 10]⟩
-    subcircuit Xor64.circuit ⟨state[i], state_and⟩
+    let state_not ← Not.circuit (state[i + 5])
+    let state_and ← And.And64.circuit ⟨state_not, state[i + 10]⟩
+    Xor64.circuit ⟨state[i], state_and⟩
 
 def Assumptions := KeccakState.Normalized (p:=p)
 

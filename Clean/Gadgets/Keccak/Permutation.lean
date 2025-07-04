@@ -7,7 +7,7 @@ open Specs.Keccak256
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .foldl roundConstants state
-    fun state rc => subcircuit (KeccakRound.circuit rc) state
+    fun state rc => KeccakRound.circuit rc state
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 

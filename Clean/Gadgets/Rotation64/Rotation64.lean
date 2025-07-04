@@ -25,8 +25,8 @@ def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :
   let bit_offset : ℕ := (offset % 8).val
 
   -- rotation is performed by combining a bit and a byte rotation
-  let byte_rotated ← subcircuit (Rotation64Bytes.circuit byte_offset) x
-  subcircuit (Rotation64Bits.circuit bit_offset) byte_rotated
+  let byte_rotated ← Rotation64Bytes.circuit byte_offset x
+  Rotation64Bits.circuit bit_offset byte_rotated
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 

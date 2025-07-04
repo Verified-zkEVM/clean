@@ -24,8 +24,8 @@ def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) :
   let bit_offset : ℕ := (offset % 8).val
 
   -- rotation is performed by combining a bit and a byte rotation
-  let byte_rotated ← subcircuit (Rotation32Bytes.circuit byte_offset) x
-  subcircuit (Rotation32Bits.circuit bit_offset) byte_rotated
+  let byte_rotated ← Rotation32Bytes.circuit byte_offset x
+  Rotation32Bits.circuit bit_offset byte_rotated
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 

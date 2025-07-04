@@ -250,6 +250,17 @@ def subcircuitWithAssertion (circuit: GeneralFormalCircuit F β α) (b: Var β F
     let subcircuit := circuit.toSubcircuit offset b
     (a, [.subcircuit subcircuit])
 
+-- we'd like to use subcircuits like functions
+
+instance : CoeFun (FormalCircuit F β α) (fun _ => Var β F → Circuit F (Var α F)) where
+  coe circuit input := subcircuit circuit input
+
+instance : CoeFun (FormalAssertion F β) (fun _ => Var β F → Circuit F Unit) where
+  coe circuit input := assertion circuit input
+
+instance : CoeFun (GeneralFormalCircuit F β α) (fun _ => Var β F → Circuit F (Var α F)) where
+  coe circuit input := subcircuitWithAssertion circuit input
+
 namespace Circuit
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
