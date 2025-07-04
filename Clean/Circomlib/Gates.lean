@@ -166,7 +166,7 @@ def circuit : FormalCircuit (F p) field field where
       simp only [circuit_norm, main] at h_env h_hold ⊢
       simp_all only [h_in, h_hold]
       constructor
-      · ring_nf; simp [ZMod.val_zero, tsub_zero, ZMod.val_one]
+      · ring_nf; simp [ZMod.val_one]
       · ring_nf; simp
     }
 
@@ -208,7 +208,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rcases h_env with ⟨ _, _ ⟩
       simp_all only [h_a, h_b, h_hold]
       constructor
-      · ring_nf; simp [ZMod.val_zero, tsub_zero, ZMod.val_one]
+      · ring_nf; simp [ZMod.val_one]
       · ring_nf; simp
     }
 
@@ -250,7 +250,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rcases h_env with ⟨ _, _ ⟩
       simp_all only [h_a, h_b, h_hold]
       constructor
-      · ring_nf; simp [ZMod.val_zero, tsub_zero, ZMod.val_one]
+      · ring_nf; simp [ZMod.val_one]
       · ring_nf; simp
     }
 
