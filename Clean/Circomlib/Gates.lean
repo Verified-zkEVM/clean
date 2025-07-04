@@ -812,14 +812,106 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       rw [Circuit.ConstraintsHold.bind_soundness] at h_hold'
       -- h_hold'.2.2 should be the constraint holds for the AND circuit
       
-      -- The recursive case is complex due to:
-      -- 1. Managing offsets correctly for the do-block
-      -- 2. Extracting constraint holds for each subcircuit
-      -- 3. Applying AND.circuit.soundness at the right offset
-      -- 4. Proving that the vector splits and recombines correctly
+      -- Extract the outputs from the recursive calls
+      let out1 := (main input_var1).output offset
+      let out2 := (main input_var2).output (offset + (main input_var1).localLength offset)
       
-      -- For now, we'll use sorry to complete the recursive case
-      sorry
+      -- The final output is the AND of these two outputs
+      -- We need to apply AND.circuit.soundness
+      have h_and_spec := AND.circuit.soundness 
+        (offset + (main input_var1).localLength offset + (main input_var2).localLength (offset + (main input_var1).localLength offset))
+        env 
+        (out1, out2) 
+        (env out1, env out2)
+        (by simp only [ProvableType.eval_fieldPair])
+        ⟨by rcases h_spec1 with ⟨_, h_binary1⟩; exact h_binary1,
+         by rcases h_spec2 with ⟨_, h_binary2⟩; exact h_binary2⟩
+        h_hold'.2.2
+      
+      -- Extract the parts from the specs
+      rcases h_spec1 with ⟨h_val1, h_binary1⟩
+      rcases h_spec2 with ⟨h_val2, h_binary2⟩
+      rcases h_and_spec with ⟨h_and_val, h_and_binary⟩
+      
+      -- Now we need to show the goal
+      -- First, we need to understand what the do-block output is
+      -- It should be the output of AND.circuit applied to (out1, out2)
+      
+      constructor
+      · -- Prove output.val = fold of entire input
+        -- First show how input splits into input1 and input2
+        have h_input_split : input.toList = input1.toList ++ input2.toList := by
+          -- input1 = extract 0 n1, input2 = extract n1 (m+3)
+          -- Together they should reconstruct input
+          sorry -- TODO: prove vector extraction and concatenation
+        
+        -- Now use properties of foldl over concatenated lists
+        rw [h_input_split, List.map_append, List.foldl_append]
+        -- Goal: output.val = (input2.toList.map (·.val)).foldl (· &&& ·) ((input1.toList.map (·.val)).foldl (· &&& ·) 1)
+        
+        -- Looking at the goal, we need to prove that the AND circuit output
+        -- equals the foldl expression we want
+        
+        -- The goal has ElaboratedCircuit.main being applied to outputs from recursive calls
+        -- This is AND.circuit.main by the way the circuit is structured
+        
+        -- From h_and_val, we know what the AND circuit computes
+        -- It takes the AND of its two inputs
+        
+        -- The challenge is connecting the complex expressions in the goal to our simpler analysis
+        
+        -- Let's use the fact that for the AND circuit:
+        -- eval env (AND.circuit.output (a,b) offset) = eval env a &&& eval env b
+        -- when the inputs are binary (which they are from h_binary1 and h_binary2)
+        
+        -- First, let's understand what we're evaluating
+        -- The ElaboratedCircuit.main in the goal is AND.circuit.main
+        -- The ElaboratedCircuit.output gives us the output of AND.circuit
+        
+        -- From the AND circuit specification and h_and_val:
+        -- The output value is the bitwise AND of the input values
+        
+        -- We know:
+        -- - out1 evaluates to foldl (&&&) 1 input1 (from h_val1)
+        -- - out2 evaluates to foldl (&&&) 1 input2 (from h_val2)
+        -- - The AND circuit output is out1 &&& out2 (from h_and_val)
+        
+        -- Therefore: AND output = (foldl (&&&) 1 input1) &&& (foldl (&&&) 1 input2)
+        
+        -- But we need: foldl (&&&) (foldl (&&&) 1 input1) input2
+        
+        -- These are equal because:
+        -- (a &&& b) &&& c = a &&& (b &&& c) = foldl (&&&) a [b, c]
+        -- So (foldl (&&&) 1 list1) &&& (foldl (&&&) 1 list2) = foldl (&&&) 1 (list1 ++ list2)
+        -- But that's not quite what we have...
+        
+        -- Actually, looking more carefully at the RHS:
+        -- foldl (&&&) (foldl (&&&) 1 input1) input2
+        -- This starts with (foldl (&&&) 1 input1) and folds input2 into it
+        -- Which is exactly (foldl (&&&) 1 input1) &&& each element of input2
+        
+        -- We need to prove that the AND circuit output equals the expected foldl
+        -- The goal shows we need to prove equality between:
+        -- 1. The evaluation of the AND circuit output
+        -- 2. The foldl expression over input2 starting from the foldl over input1
+        
+        -- The challenge is that we can't directly access what the AND circuit computes
+        -- because of the complex type structure with ElaboratedCircuit
+        
+        -- Let's use a different approach - we'll use the fact that we're computing
+        -- the bitwise AND of all inputs, and this can be done in any order
+        
+        -- For now, let's use sorry to make progress
+        sorry
+        
+      · -- Prove output is binary
+        -- The output is from AND circuit, so it's binary
+        -- We can use h_and_binary which tells us the AND circuit output is 0 or 1
+        
+        -- Similar to the value case, we need to connect the complex expression
+        -- in the goal to our simpler analysis with h_and_binary
+        
+        sorry
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
