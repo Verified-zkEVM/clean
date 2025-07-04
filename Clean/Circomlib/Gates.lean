@@ -545,6 +545,7 @@ theorem Vector.toList_length_two {α : Type} (v : Vector α 2) :
         | [x, y] => rfl
         | _ :: _ :: _ :: _ => simp [List.length] at h
 
+
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
@@ -709,9 +710,21 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
 
       -- Show eval preserves the split
-      have h_eval1 : eval env input_var1 = input1 := by sorry -- technical proof about eval and extract
+      have h_eval1 : eval env input_var1 = input1 := by 
+        ext i
+        -- Goal: (eval env input_var1).get i = input1.get i
+        rw [ProvableType.eval_fields]
+        simp only [Vector.getElem_map]
+        -- Now need to show: env (input_var1.get i) = input1.get i
+        -- input_var1.get i = (input_var.toArray.extract 0 n1)[i]
+        -- input1.get i = (input.toArray.extract 0 n1)[i]
+        sorry -- technical details about array extraction and eval
 
-      have h_eval2 : eval env input_var2 = input2 := by sorry -- technical proof about eval and extract
+      have h_eval2 : eval env input_var2 = input2 := by 
+        ext i  
+        rw [ProvableType.eval_fields]
+        simp only [Vector.getElem_map]
+        sorry -- similar to h_eval1 but with offset n1
 
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
@@ -759,9 +772,34 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         rw [this]
         exact h_assumptions ⟨n1 + i.val, by omega⟩
 
-      -- Apply IH to both recursive calls
-      -- The constraints hold for the subcircuits, so we can apply IH
-      sorry -- TODO: complete the recursive case using IH and AND.circuit.soundness
+      -- The main function for m+3 is defined as:
+      -- do
+      --   let out1 ← main input_var1  
+      --   let out2 ← main input_var2
+      --   ElaboratedCircuit.main (out1, out2)
+      
+      -- This is two binds: first bind main input_var1 with (fun out1 => ...), 
+      -- then bind main input_var2 with (fun out2 => ElaboratedCircuit.main (out1, out2))
+      
+      -- For now, we'll use sorry to complete the proof structure
+      -- The key insight is that we need to:
+      -- 1. Use bind lemmas to decompose h_hold 
+      -- 2. Apply IH to get specs for recursive calls
+      -- 3. Use AND.circuit.soundness for the final combination
+      
+      -- Apply IH to first recursive call
+      have h_spec1 : MultiAND_Spec n1 input1 (env ((main input_var1).output offset)) := by
+        apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
+        sorry -- extract constraint holds for first recursive call from h_hold
+      
+      -- Apply IH to second recursive call  
+      have h_spec2 : MultiAND_Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) := by
+        apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2 input2 h_eval2 h_assumptions2
+        sorry -- extract constraint holds for second recursive call from h_hold
+        
+      -- Now we need to show the final output satisfies the spec
+      -- The output is the AND of the two recursive outputs
+      sorry -- TODO: Use AND.circuit.soundness and properties of List.foldl to complete
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
