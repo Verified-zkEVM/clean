@@ -338,7 +338,65 @@ theorem Operations.localLength_append (ops1 ops2 : Operations (F p)) :
 -- Key lemma: foldl with AND over binary values gives binary result
 theorem List.foldl_and_binary (l : List ℕ) :
     (∀ x ∈ l, x = 0 ∨ x = 1) → (List.foldl (· &&& ·) 1 l = 0 ∨ List.foldl (· &&& ·) 1 l = 1) := by
-  sorry
+  intro h_all_binary
+  induction l with
+  | nil => 
+    simp only [List.foldl_nil]
+    right; trivial
+  | cons x xs ih =>
+    simp only [List.foldl_cons]
+    have h_x_binary : x = 0 ∨ x = 1 := h_all_binary x (List.Mem.head xs)
+    have h_xs_binary : ∀ y ∈ xs, y = 0 ∨ y = 1 := fun y hy => 
+      h_all_binary y (List.Mem.tail x hy)
+    have h_tail_binary := ih h_xs_binary
+    -- Need to show: (1 &&& x) &&& (foldl 1 xs) is binary
+    -- Case split on x
+    cases h_x_binary with
+    | inl h_x_zero =>
+      -- x = 0, so 1 &&& 0 = 0
+      rw [h_x_zero]
+      simp only [HAnd.hAnd, AndOp.and]
+      -- 0 &&& anything = 0
+      left
+      -- Need to prove: 0 &&& (foldl 1 xs) = 0
+      -- Since x = 0 and 0 &&& anything = 0, the result is 0
+      -- We'll use the fact that (1 &&& 0) = 0 and folding with 0 gives 0
+      suffices h : List.foldl (· &&& ·) (1 &&& 0) xs = 0 by
+        simp only [List.foldl_cons, HAnd.hAnd, AndOp.and] at h ⊢
+        exact h
+      -- First: 1 &&& 0 = 0
+      have h_one_zero : (1 : ℕ) &&& 0 = 0 := by
+        simp only [HAnd.hAnd, AndOp.and]
+        rfl
+      rw [h_one_zero]
+      -- Now we need: foldl 0 xs = 0
+      -- Since 0 &&& anything = 0, folding with 0 always gives 0
+      clear h_one_zero h_x_zero h_all_binary h_xs_binary h_tail_binary ih
+      generalize hxs : xs = xs'
+      clear xs hxs
+      induction xs' with
+      | nil => simp [List.foldl_nil]
+      | cons y ys ih => 
+        simp only [List.foldl_cons, HAnd.hAnd, AndOp.and]
+        -- We need: List.foldl (fun x1 x2 => x1.land x2) (0.land y) ys = 0
+        -- Since 0.land y = 0, this reduces to: List.foldl _ 0 ys = 0
+        have h_zero_y : (0 : ℕ).land y = 0 := by
+          -- 0 AND anything is 0
+          unfold Nat.land
+          simp [Nat.bitwise]
+        rw [h_zero_y]
+        exact ih
+    | inr h_x_one =>
+      -- x = 1, so 1 &&& 1 = 1
+      rw [h_x_one]
+      -- Goal: List.foldl (· &&& ·) (1 &&& 1) xs is binary
+      -- Since 1 &&& 1 = 1, this simplifies to: List.foldl (· &&& ·) 1 xs is binary
+      have h_one_one : (1 : ℕ) &&& 1 = 1 := by
+        simp only [HAnd.hAnd, AndOp.and]
+        rfl
+      rw [h_one_one]
+      -- This is exactly h_tail_binary
+      exact h_tail_binary
 
 -- Key lemma: for binary values, a &&& foldl = foldl starting from a
 theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
@@ -349,7 +407,15 @@ theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
 theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
     (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) → 
     (∀ x ∈ v.toList, x = 0 ∨ x = 1) := by
-  sorry
+  intro h_vec x h_mem
+  -- v.toList contains exactly the elements v.get i for i : Fin n
+  -- Since x ∈ v.toList, there exists some index i such that v.get i = x
+  have h_exists : ∃ i : Fin n, v.get i = x := by
+    -- This follows from the definition of Vector.toList
+    sorry
+  rcases h_exists with ⟨i, hi⟩
+  rw [← hi]
+  exact h_vec i
 
 -- Helper lemma: localLength of bind
 theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
@@ -933,17 +999,30 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         conv_rhs => rw [← List.and_foldl_eq_foldl_of_binary _ _ h_foldl1_binary]
         
         -- Now we need to show LHS = (foldl input1) &&& (foldl input2)
-        -- This follows from understanding what the AND circuit computes
-        sorry
+        -- The LHS is the evaluation of the do-block output
+        -- The do-block computes: main input_var1, main input_var2, then AND.circuit.main
+        
+        -- From h_val1 and h_val2, we know:
+        -- - out1 evaluates to foldl input1
+        -- - out2 evaluates to foldl input2
+        
+        -- From h_and_val, we know the AND circuit output equals out1.val &&& out2.val
+        -- But we need to connect the complex do-block expression to this
+        
+        -- The key is that the do-block output IS the AND circuit output
+        -- We just need to show they evaluate to the same thing
+        
+        sorry -- TODO: Connect do-block evaluation to AND circuit evaluation
         
       · -- Prove output is binary
         -- The output is from AND circuit, so it's binary
         -- We can use h_and_binary which tells us the AND circuit output is 0 or 1
         
-        -- Similar to the value case, we need to connect the complex expression
-        -- in the goal to our simpler analysis with h_and_binary
+        -- The goal asks about the do-block output
+        -- We know from h_and_binary that the AND circuit output is binary
+        -- Since the do-block output IS the AND circuit output, we're done
         
-        sorry
+        sorry -- TODO: Connect do-block output to AND circuit output
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
@@ -961,7 +1040,16 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   soundness := by
     intro offset env input_var input h_env h_assumptions h_hold
     exact main_soundness n offset env input_var input h_env h_assumptions h_hold
-  completeness := by sorry
+  completeness := by
+    intro offset env input_var h_local_witnesses input h_env h_assumptions
+    -- Completeness: if inputs are binary, then constraints hold
+    -- We need to show that the constraints generated by the circuit are satisfied
+    
+    -- The proof structure will be similar to soundness:
+    -- 1. Base cases (n=1, n=2) are straightforward
+    -- 2. Recursive case uses the IH on the two halves
+    
+    sorry -- TODO: Implement completeness proof
 
 end MultiAND
 
