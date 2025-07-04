@@ -1185,20 +1185,20 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- Similar to the value case, this requires connecting do-block to AND circuit
         sorry
 
--- Helper theorem for completeness
-theorem main_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
+-- Helper theorem for circuit completeness  
+theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
+      (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
       (input : fields n (F p)),
     eval env input_var = input →
     MultiAND_Assumptions n input →
-    MultiAND_Spec n input (env ((main input_var).output offset)) →
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
-  -- Use strong induction on n
+  -- Use strong induction on n to handle the recursive structure
   induction n using Nat.strong_induction_on with
   | _ n IH =>
-    intro offset env input_var input h_env h_assumptions h_spec
+    intro offset env input_var h_local_witnesses input h_env h_assumptions
     match n with
-    | 0 =>
+    | 0 => 
       -- No constraints for n = 0
       simp [main, Circuit.ConstraintsHold.Completeness]
     | 1 =>
@@ -1206,23 +1206,15 @@ theorem main_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       simp [main, Circuit.ConstraintsHold.Completeness]
     | 2 =>
       -- For n = 2, we use the AND gate
-      simp [main] at h_spec ⊢
-      -- The AND circuit's completeness follows from the specification
-      -- This requires connecting the MultiAND_Spec to AND circuit constraints
-      sorry -- TODO: Complete n = 2 case - requires proving AND circuit completeness from spec
+      simp [main]
+      -- The AND circuit's completeness requires computing the output
+      -- and showing it satisfies the spec, then using that to prove constraints hold
+      sorry -- TODO: Complete n = 2 case
     | m + 3 =>
       -- Recursive case: split into two halves and apply IH
       simp [main]
-      -- The circuit is: do { out1 ← main v1; out2 ← main v2; AND (out1, out2) }
-      -- We need to show constraints hold for all three parts
-
-      -- This requires:
-      -- 1. Completeness for the first recursive call (main v1)
-      -- 2. Completeness for the second recursive call (main v2)
-      -- 3. Completeness for the AND gate with outputs from 1 and 2
-
-      -- The challenge is properly handling the offsets and connecting the pieces
-      sorry -- TODO: Apply IH and AND completeness with proper offset management
+      -- Need to handle the recursive structure with proper offset management
+      sorry -- TODO: Apply IH for recursive case
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
@@ -1242,15 +1234,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     exact main_soundness n offset env input_var input h_env h_assumptions h_hold
   completeness := by
     intro offset env input_var h_local_witnesses input h_env h_assumptions
-    -- The completeness property states that if assumptions hold and we have correct
-    -- local witnesses, then the constraints are satisfied
-    -- We need to establish that the spec holds for the output
-    have h_spec : MultiAND_Spec n input (env ((main input_var).output offset)) := by
-      -- This requires proving that the output satisfies the spec when inputs are binary
-      -- This is non-trivial and requires understanding how the circuit evaluation works
-      -- this is actually soundness
-      sorry -- TODO: Prove that binary inputs lead to spec-satisfying outputs
-    exact main_completeness n offset env input_var input h_env h_assumptions h_spec
+    exact circuit_completeness n offset env input_var h_local_witnesses input h_env h_assumptions
 
 end MultiAND
 
