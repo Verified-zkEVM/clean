@@ -3,14 +3,13 @@ import Clean.Circuit.Explicit
 import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Examples.AddOperations
 
-open Gadgets.Addition8FullCarry (add8_full_carry)
-open Gadgets.Addition32Full (add32_full Inputs)
+open Gadgets.Addition32Full (Inputs)
 
 -- `infer_explicit_circuit(s)` seem to work for all circuits
-instance explicit : ExplicitCircuits (add32_full (p:=pBabybear)) := by
+instance explicit : ExplicitCircuits (Gadgets.Addition32Full.main (p:=pBabybear)) := by
   infer_explicit_circuits
 
-@[reducible] def circuit32 input := add32_full (p:=pBabybear) input
+@[reducible] def circuit32 input := Gadgets.Addition32Full.main (p:=pBabybear) input
 
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
   -- rfl -- also works
@@ -39,12 +38,12 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F pBabybear)) env (i0 : â
   -- these are equivalent ways of rewriting the constraints
   -- the second one relies on prior inference of a `ExplicitCircuit` instance
   -- note that the second one only uses a handful of theorems (much fewer than `circuit_norm` + `subcircuit_norm`)
-  -- for 90% of the unfolding; and doesn't even need to unfold names like `add32_full` and `add8_full_carry`
+  -- for 90% of the unfolding; and doesn't even need to unfold names like `Addition32Full.main` and `Addition8FullCarry.main`
 
   -- TODO on the whole, which is better?
 
   -- first version: using `circuit_norm`
-  -- dsimp only [circuit_norm, circuit32, add32_full, add8_full_carry, Boolean.circuit, Gadgets.ByteLookup]
+  -- dsimp only [circuit_norm, circuit32, Addition32Full.main, Addition8FullCarry.main, Boolean.circuit, Gadgets.ByteLookup]
   -- simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd, and_assoc]
   -- simp only [Gadgets.ByteTable]
 
