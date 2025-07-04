@@ -502,6 +502,73 @@ theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (off
         · -- Final AND circuit
           apply AND.circuit.subcircuitsConsistent
 
+-- Extract Assumptions and Spec outside the circuit
+def MultiAND_Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
+  ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
+
+def MultiAND_Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
+  output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
+
+-- Helper theorem for soundness  
+theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) : 
+    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p)) 
+      (input : fields n (F p)),
+    eval env input_var = input →
+    MultiAND_Assumptions n input →
+    Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) →
+    MultiAND_Spec n input (env ((main input_var).output offset)) := by
+  -- Use strong induction on n
+  induction n using Nat.strong_induction_on with
+  | _ n IH =>
+    intro offset env input_var input h_env h_assumptions h_hold
+    -- Match on the structure of n as in main's definition
+    match n with
+    | 0 =>
+      -- For n = 0, main returns (1 : F p)
+      simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
+      simp only [MultiAND_Spec]
+      constructor
+      · -- Prove output.val = empty fold = 1
+        simp only [Expression.eval]
+        -- For n=0, input is a Vector of length 0, so input.toList = []
+        have : input.toList = [] := by
+          cases input using Vector.casesOn
+          rename_i l h
+          simp at h
+          subst h
+          rfl
+        rw [this]
+        simp only [List.map_nil, List.foldl_nil]
+        -- Need to prove ZMod.val 1 = 1
+        simp only [ZMod.val_one]
+      · -- Prove output = 0 ∨ output = 1
+        right
+        -- env ((1 : F p)) = 1
+        rfl
+    | 1 =>
+      -- For n = 1, main returns input.get 0
+      simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
+      simp only [MultiAND_Spec]
+      -- We know from h_env that eval env input_var = input
+      -- And from h_assumptions that input.get 0 = 0 ∨ input.get 0 = 1
+      have h_input0 := h_assumptions (0 : Fin 1)
+      -- Need to relate eval env (input_var.get 0) to input.get 0
+      have h_eval_eq : env (input_var.get 0) = input.get 0 := by
+        sorry -- TODO: prove this using eval properties
+      constructor
+      · -- Prove output.val = single element fold
+        sorry -- TODO: complete this case
+      · -- Prove output = 0 ∨ output = 1
+        sorry -- TODO: complete this case
+    | 2 =>
+      -- For n = 2, main calls AND.circuit.main
+      simp only [main] at h_hold ⊢
+      simp only [MultiAND_Spec]
+      sorry -- TODO: complete n=2 case using AND.circuit.soundness
+    | m + 3 =>
+      -- For n ≥ 3, main makes recursive calls
+      sorry -- TODO: complete recursive case using IH
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
   localLength _ := n - 1
@@ -512,16 +579,12 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     intro input offset
     exact main_subcircuitsConsistent n input offset
 
-  Assumptions input := ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
-  Spec input output :=
-    output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1
-    ∧ (output = 0 ∨ output = 1)
+  Assumptions := MultiAND_Assumptions n
+  Spec := MultiAND_Spec n
 
   soundness := by
-    intro offset env input_var valid output h_env h_assumptions h_output
-    -- We need to prove the specification holds
-    -- This requires induction on n
-    sorry
+    intro offset env input_var input h_env h_assumptions h_hold
+    exact main_soundness n offset env input_var input h_env h_assumptions h_hold
   completeness := by sorry
 
 end MultiAND
