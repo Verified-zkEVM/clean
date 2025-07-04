@@ -134,6 +134,10 @@ theorem fieldFromBits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (E
     symm
     rw [ZMod.cast_id]
 
+theorem fieldToBits_bits {n : ℕ} {x : F p} :
+    ∀ i (_ : i < n), (fieldToBits n x)[i] = 0 ∨ (fieldToBits n x)[i] = 1 := by
+  simp [fieldToBits, toBits, Vector.getElem_mapRange]
+
 /--
 Define the behaviour of `fieldFromBits` and `fieldToBits` by
 lifting `toBits_fromBits_aux`
@@ -169,9 +173,14 @@ lemma fieldToBits_fieldFromBits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p)
     rfl
 
 /-- The result of `fieldFromBits` is less than 2^n -/
-theorem fieldFromBits_lt {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
+theorem fieldFromBits_lt {n: ℕ} (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
-    (fieldFromBits bits).val < 2^n := (fieldToBits_fieldFromBits_aux hn bits h_bits).left
+    (fieldFromBits bits).val < 2^n := by
+  by_cases hn : 2^n < p
+  · exact (fieldToBits_fieldFromBits_aux hn bits h_bits).left
+  have : p ≤ 2^n := Nat.le_of_not_lt hn
+  have : (fieldFromBits bits).val < p := ZMod.val_lt _
+  linarith
 
 /-- `fieldToBits` is a left-inverse of `fieldFromBits` -/
 theorem fieldToBits_fieldFromBits {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
@@ -179,7 +188,7 @@ theorem fieldToBits_fieldFromBits {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n
     fieldToBits n (fieldFromBits bits) = bits := (fieldToBits_fieldFromBits_aux hn bits h_bits).right
 
 /-- On field elements less than `2^n`, `fieldToBits n` is injective -/
-theorem fieldToBits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2^n →
+theorem fieldToBits_injective (n : ℕ) {x y : F p} : x.val < 2^n → y.val < 2^n →
     fieldToBits n x = fieldToBits n y → x = y := by
   intro hx hy h_eq
   simp only [fieldToBits] at h_eq
@@ -204,13 +213,19 @@ theorem fieldToBits_injective (n: ℕ) {x y : F p} : x.val < 2^n → y.val < 2^n
   rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
 /-- On field elements less than `2^n`, `fieldToBits` is a right-inverse of `fieldFromBits` -/
-theorem fieldFromBits_fieldToBits {n: ℕ} (hn : 2^n < p) {x : F p} (hx : x.val < 2^n) :
+theorem fieldFromBits_fieldToBits {n: ℕ} {x : F p} (hx : x.val < 2^n) :
     fieldFromBits (fieldToBits n x) = x := by
-  have h_bits : ∀ i (hi : i < n), (fieldToBits n x)[i] = 0 ∨ (fieldToBits n x)[i] = 1 := by
+  simp only [fieldToBits, fieldFromBits]
+  have (x) : Vector.map (ZMod.val ∘ Nat.cast (R:=F p)) (toBits n x) =
+    toBits n x := by
+    rw [Vector.ext_iff]
     intro i hi
-    simp [fieldToBits, toBits, Vector.getElem_mapRange]
-
-  apply fieldToBits_injective n (fieldFromBits_lt hn _ h_bits) hx
-  rw [fieldToBits_fieldFromBits hn _ h_bits]
+    simp only [Vector.getElem_map, Function.comp_apply, id_eq]
+    rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
+    simp only [toBits, Vector.getElem_mapRange]
+    split
+    · exact prime.elim.one_lt
+    · exact prime.elim.pos
+  rw [Vector.map_map, this, fromBits_toBits hx, ZMod.natCast_zmod_val]
 
 end Utils.Bits
