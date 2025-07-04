@@ -421,15 +421,15 @@ theorem main_localLength (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ)
 
 
 -- Helper lemma: forAll for bind operations
-theorem Circuit.forAll_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) 
+theorem Circuit.forAll_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β)
     (condition : Condition (F p)) (offset : ℕ) :
     Operations.forAll offset condition ((f >>= g).operations offset) ↔
-    Operations.forAll offset condition (f.operations offset) ∧ 
-    Operations.forAll (offset + f.localLength offset) condition 
+    Operations.forAll offset condition (f.operations offset) ∧
+    Operations.forAll (offset + f.localLength offset) condition
       ((g (f.output offset)).operations (offset + f.localLength offset)) := by
   simp only [Circuit.operations, Circuit.bind_def, Circuit.localLength, Circuit.output]
   conv => rhs; arg 2; arg 1; rw [add_comm]
-  exact @Operations.forAll_append (F p) _ condition offset (f offset).2 
+  exact @Operations.forAll_append (F p) _ condition offset (f offset).2
     (g (f offset).1 (offset + Operations.localLength (f offset).2)).2
 
 -- Helper lemma: SubcircuitsConsistent preserved by bind
@@ -484,19 +484,19 @@ theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (off
       -- We need to show SubcircuitsConsistent for the combined operations
       -- After rw [main], we have a circuit structure with recursive calls
       simp only [Circuit.operations]
-      
+
       -- The structure is: main input1 >>= (λ out1 => main input2 >>= (λ out2 => AND.circuit.main (out1, out2)))
       -- Apply Circuit.subcircuitsConsistent_bind for the first bind
       apply Circuit.subcircuitsConsistent_bind
       · -- First recursive call: main input1
-        let input1 : Var (fields n1) (F p) := 
+        let input1 : Var (fields n1) (F p) :=
           ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩
         apply IH n1 h_n1_lt input1
       · -- Rest: main input2 >>= AND.circuit.main
         -- Apply bind lemma again
         apply Circuit.subcircuitsConsistent_bind
         · -- Second recursive call: main input2
-          let input2 : Var (fields n2) (F p) := 
+          let input2 : Var (fields n2) (F p) :=
             ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
           apply IH n2 h_n2_lt input2
         · -- Final AND circuit
@@ -509,9 +509,14 @@ def MultiAND_Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
 def MultiAND_Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
 
--- Helper theorem for soundness  
-theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) : 
-    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p)) 
+-- Helper lemma: A vector of length 1 has toList = [v.get 0]
+theorem Vector.toList_length_one {α : Type} (v : Vector α 1) : 
+    v.toList = [v.get 0] := by
+  sorry -- TODO: prove this lemma about vector toList
+
+-- Helper theorem for soundness
+theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
+    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     eval env input_var = input →
     MultiAND_Assumptions n input →
@@ -554,20 +559,111 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       have h_input0 := h_assumptions (0 : Fin 1)
       -- Need to relate eval env (input_var.get 0) to input.get 0
       have h_eval_eq : env (input_var.get 0) = input.get 0 := by
-        sorry -- TODO: prove this using eval properties
+        -- We have h_env : eval env input_var = input
+        -- Use eval_fields to expand eval
+        rw [ProvableType.eval_fields] at h_env
+        -- Now h_env : input_var.map (Expression.eval env) = input
+        -- Apply this equality to index 0 using getElem notation
+        have : (input_var.map (Expression.eval env))[0] = input[0] := by
+          rw [h_env]
+        -- Use Vector.getElem_map: (v.map f)[i] = f v[i]
+        rw [Vector.getElem_map] at this
+        -- Convert from getElem notation to get notation
+        change env (input_var.get 0) = input.get 0
+        convert this
       constructor
       · -- Prove output.val = single element fold
-        sorry -- TODO: complete this case
+        simp only [h_eval_eq]
+        -- For n=1, we need to show: (input.get 0).val = (input.toList.map (·.val)).foldl (· &&& ·) 1
+        -- Without the lemma, we'll use sorry for now
+        sorry -- TODO: complete this after proving Vector.toList_length_one
       · -- Prove output = 0 ∨ output = 1
-        sorry -- TODO: complete this case
+        simp only [h_eval_eq]
+        exact h_input0
     | 2 =>
       -- For n = 2, main calls AND.circuit.main
       simp only [main] at h_hold ⊢
       simp only [MultiAND_Spec]
-      sorry -- TODO: complete n=2 case using AND.circuit.soundness
+      -- We have h_env : eval env input_var = input
+      -- And h_assumptions : ∀ i : Fin 2, (input.get i = 0 ∨ input.get i = 1)
+      -- We need to show output.val = fold and (output = 0 ∨ output = 1)
+      
+      -- Get the two input values
+      have h_input0 := h_assumptions (0 : Fin 2)
+      have h_input1 := h_assumptions (1 : Fin 2)
+      
+      -- The main function calls AND.circuit.main with (input_var.get 0, input_var.get 1)
+      -- We need to show the inputs evaluate correctly
+      have h_eval0 : env (input_var.get 0) = input.get 0 := by
+        rw [ProvableType.eval_fields] at h_env
+        have : (input_var.map (Expression.eval env))[0] = input[0] := by rw [h_env]
+        rw [Vector.getElem_map] at this
+        exact this
+      
+      have h_eval1 : env (input_var.get 1) = input.get 1 := by
+        rw [ProvableType.eval_fields] at h_env
+        have : (input_var.map (Expression.eval env))[1] = input[1] := by rw [h_env]
+        rw [Vector.getElem_map] at this
+        exact this
+      
+      -- Now use AND.circuit.soundness
+      have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1) 
+        (input.get 0, input.get 1) 
+        (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1]) 
+        ⟨h_input0, h_input1⟩ h_hold
+      
+      -- h_and_spec gives us the AND specification
+      rcases h_and_spec with ⟨h_val, h_binary⟩
+      
+      -- For now, use sorry to complete the n=2 case
+      sorry -- TODO: complete n=2 case - need to relate AND output to main output and prove fold
     | m + 3 =>
       -- For n ≥ 3, main makes recursive calls
-      sorry -- TODO: complete recursive case using IH
+      simp only [main] at h_hold ⊢
+      simp only [MultiAND_Spec]
+      
+      -- Define n1 and n2 as in the main function
+      let n1 := (m + 3) / 2
+      let n2 := (m + 3) - n1
+      
+      -- We have n1 + n2 = m + 3
+      have h_sum : n1 + n2 = m + 3 := by unfold n1 n2; omega
+      
+      -- Both n1 and n2 are less than m + 3
+      have h_n1_lt : n1 < m + 3 := by unfold n1; omega
+      have h_n2_lt : n2 < m + 3 := by unfold n2; omega
+      
+      -- Extract the two input vectors
+      let input1 : fields n1 (F p) := 
+        ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
+      let input2 : fields n2 (F p) := 
+        ⟨input.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
+      
+      -- The corresponding variable vectors
+      let input_var1 : Var (fields n1) (F p) := 
+        ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
+      let input_var2 : Var (fields n2) (F p) := 
+        ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
+      
+      -- Show eval preserves the split
+      have h_eval1 : eval env input_var1 = input1 := by
+        sorry -- TODO: prove eval preserves extract
+      
+      have h_eval2 : eval env input_var2 = input2 := by
+        sorry -- TODO: prove eval preserves extract
+      
+      -- Show assumptions hold for subvectors
+      have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
+        intro i
+        sorry -- TODO: prove assumptions preserved by extract
+      
+      have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
+        intro i
+        sorry -- TODO: prove assumptions preserved by extract
+      
+      -- Apply IH to both recursive calls
+      -- The constraints hold for the subcircuits, so we can apply IH
+      sorry -- TODO: complete the recursive case using IH and AND.circuit.soundness
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
