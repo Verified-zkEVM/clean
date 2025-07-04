@@ -51,7 +51,8 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
-  Spec input output := output = fieldToBits 254 input
+  Spec input bits :=
+    bits = fieldToBits 254 input
 
   soundness := by
     intro i0 env input_var input h_input assumptions h_holds
@@ -75,20 +76,25 @@ def circuit : FormalCircuit (F p) field (fields 254) where
 
   completeness := by
     intro i0 env input_var h_env input h_input assumptions
-    simp only [circuit_norm, main, Num2Bits.main] at h_env ⊢
+    simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, subcircuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
-    stop
-    simp only [h_input] at *
+    rw [Vector.map_mapRange]
+    simp only [Expression.eval]
+    have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
+      simp [h_env i hi, fieldToBits_bits]
+    set bits := Vector.mapRange 254 fun i => env.get (i0 + i)
+    have h_eq : bits = fieldToBits 254 input := by
+      ext i hi; simp [bits, circuit_norm, h_env i hi]
     have input_lt : input.val < 2^254 := by
       linarith [‹Fact (p < 2^254)›.elim, ZMod.val_lt input]
-    specialize h_env input_lt
-    obtain ⟨ _, h_bits, h_eq ⟩ := h_env
-    use input_lt, h_bits
-    rw [FieldUtils.ext_iff] at h_eq
-    sorry
+    use h_bits
+    simp_rw [h_eq, fieldFromBits_fieldToBits input_lt,
+      fieldToBits, Vector.map_map, val_natCast_toBits,
+      fromBits_toBits input_lt, ZMod.val_lt]
+    use trivial, h_bits
 end Num2Bits_strict
 
 namespace Bits2Num_strict

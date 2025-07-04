@@ -212,20 +212,21 @@ theorem fieldToBits_injective (n : ℕ) {x y : F p} : x.val < 2^n → y.val < 2^
   replace hy : y.val < 2^i := by linarith
   rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
+lemma val_natCast_toBits {n} {x : ℕ} :
+    Vector.map (ZMod.val ∘ Nat.cast (R:=F p)) (toBits n x) = toBits n x := by
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_map, Function.comp_apply, id_eq]
+  rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
+  simp only [toBits, Vector.getElem_mapRange]
+  split
+  · exact prime.elim.one_lt
+  · exact prime.elim.pos
+
 /-- On field elements less than `2^n`, `fieldToBits` is a right-inverse of `fieldFromBits` -/
 theorem fieldFromBits_fieldToBits {n: ℕ} {x : F p} (hx : x.val < 2^n) :
     fieldFromBits (fieldToBits n x) = x := by
   simp only [fieldToBits, fieldFromBits]
-  have (x) : Vector.map (ZMod.val ∘ Nat.cast (R:=F p)) (toBits n x) =
-    toBits n x := by
-    rw [Vector.ext_iff]
-    intro i hi
-    simp only [Vector.getElem_map, Function.comp_apply, id_eq]
-    rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
-    simp only [toBits, Vector.getElem_mapRange]
-    split
-    · exact prime.elim.one_lt
-    · exact prime.elim.pos
-  rw [Vector.map_map, this, fromBits_toBits hx, ZMod.natCast_zmod_val]
+  rw [Vector.map_map, val_natCast_toBits, fromBits_toBits hx, ZMod.natCast_zmod_val]
 
 end Utils.Bits
