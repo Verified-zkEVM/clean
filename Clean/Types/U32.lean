@@ -212,60 +212,8 @@ def U32.witness (compute : Environment (F p) → U32 (F p)) := do
   assertion U32.AssertNormalized.circuit x
   return x
 
-namespace U32.Copy
 
-def main (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p))  := do
-  let y <== x
-  return y
-
-def Assumptions (_input : U32 (F p)) := True
-
-def Spec (x y : U32 (F p)) := x = y
-
-def circuit : FormalCircuit (F p) U32 U32 where
-  main := main
-  Assumptions
-  Spec
-  localLength _ := 4
-  output inputs i0 := varFromOffset U32 i0
-  soundness := by
-    rintro i0 env x_var
-    rintro ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp [circuit_norm, main, Spec, h_eval, explicit_provable_type]
-    injections h_eval
-    intros h0 h1 h2 h3
-    aesop
-  completeness := by
-    rintro i0 env x_var
-    rintro h ⟨ x0, x1, x2, x3 ⟩ h_eval _as
-    simp [circuit_norm, main, Spec, h_eval]
-    simp [circuit_norm, main, Gadgets.Equality.elaborated] at h
-    simp_all [circuit_norm, explicit_provable_type]
-    have h0 := h 0
-    have h1 := h 1
-    have h2 := h 2
-    have h3 := h 3
-    simp only [Fin.isValue, Fin.val_zero, add_zero, List.getElem_cons_zero] at h0
-    simp only [Fin.isValue, Fin.val_one, List.getElem_cons_succ, List.getElem_cons_zero] at h1
-    simp only [Fin.isValue, Fin.val_two, List.getElem_cons_succ, List.getElem_cons_zero] at h2
-    simp only [Fin.isValue, show @Fin.val 4 3 = 3 by rfl, List.getElem_cons_succ,
-      List.getElem_cons_zero] at h3
-    simp_all
-
-def deterministicCircuit : DeterministicFormalCircuit (F p) U32 U32 where
-  circuit
-  uniqueness := by
-    intro _ _ _ _ h₁ h₂
-    simp only [circuit, Spec] at h₁ h₂
-    rw[←h₁, ←h₂]
-
-end Copy
-
-@[reducible]
-def copy (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) :=
-  subcircuit Copy.circuit x
-
-namespace ByteVector
+namespace U32.ByteVector
 -- results about U32 when viewed as a vector of bytes, via `toLimbs` and `fromLimbs`
 
 theorem fromLimbs_toLimbs {F} (x : U32 F) :
