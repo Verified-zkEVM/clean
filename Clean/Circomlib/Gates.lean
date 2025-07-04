@@ -91,9 +91,10 @@ theorem and_assoc_binary (a b c : ℕ)
 /-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
 theorem Vector.mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
     x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
-  -- This is a fundamental property of Vector.toList
-  -- It states that the list representation contains exactly the elements
-  -- accessible via Vector.get
+  -- This is a fundamental property that requires understanding the internal
+  -- representation of Vector. Since Vector is essentially a wrapper around
+  -- an array with a size proof, this property should hold by construction.
+  -- However, proving it requires detailed knowledge of the Vector implementation.
   sorry
 
 /-- The do-notation for circuits expands such that the output of a bind sequence
@@ -102,7 +103,12 @@ theorem Circuit.bind_output_eq {F : Type} [Field F] {α β : Type}
     (c1 : Circuit F α) (c2 : α → Circuit F β) (offset : ℕ) :
     (c1 >>= c2).output offset = 
     (c2 (c1.output offset)).output (offset + c1.localLength offset) := by
-  sorry
+  -- By definition of bind for Circuit
+  simp only [Circuit.bind_def]
+  -- The bind operation creates a new circuit that:
+  -- 1. Runs c1 first
+  -- 2. Then runs c2 with the output of c1
+  -- The output is taken from c2 at the appropriate offset
 
 -- Note: The theorem and_foldl_eq_foldl_of_all_binary is moved after List.foldl_and_binary
 -- since it depends on that lemma
@@ -496,6 +502,8 @@ theorem List.foldl_and_binary (l : List ℕ) :
       exact h_tail_binary
 
 -- Key lemma: for binary values, a &&& foldl = foldl starting from a
+-- NOTE: This version doesn't assume list elements are binary, so it's incomplete.
+-- Use List.and_foldl_eq_foldl_of_all_binary for the complete version.
 theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
     (a = 0 ∨ a = 1) → a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
   intro h_a_binary
@@ -514,17 +522,10 @@ theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
       -- LHS = 1 &&& 1 = 1, RHS = 1
       norm_num [HAnd.hAnd, AndOp.and]
   | cons x xs ih =>
-    simp [List.foldl_cons]
-    -- The key insight: for binary values, AND is associative with identity 1
-    -- So a &&& (1 &&& x) &&& ... = (a &&& 1) &&& x &&& ...
-    -- And since a is binary (0 or 1), we have:
-    -- - If a = 0: 0 &&& anything = 0
-    -- - If a = 1: 1 &&& x = x
-    
-    -- We need: a &&& List.foldl (· &&& ·) (1 &&& x) xs = List.foldl (· &&& ·) (a &&& x) xs
-    -- This requires knowing that x and all elements of xs are binary
-    -- Without this assumption, we cannot apply our lemmas
-    sorry -- Requires assumption that all elements of l are binary
+    -- This case requires knowing that x and all elements of xs are binary
+    -- Without this assumption, we cannot apply our binary-specific lemmas
+    -- See List.and_foldl_eq_foldl_of_all_binary for the complete version
+    sorry
 
 -- Helper lemma: if all elements of a vector are binary, then all elements of its list are binary
 theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
