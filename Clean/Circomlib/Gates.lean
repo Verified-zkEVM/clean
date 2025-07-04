@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Utils.Field
 import Clean.Gadgets.Boolean
+import Mathlib.Data.Nat.Bitwise
 
 open IsBool
 
@@ -20,44 +21,17 @@ These lemmas capture key mathematical properties needed for the gate proofs,
 independent of the circuit framework.
 -/
 
-/-- The bitwise AND operation `&&&` is associative for binary values (0 or 1) -/
-theorem and_assoc_binary (a b c : ℕ) 
-    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) (hc : c = 0 ∨ c = 1) :
-    a &&& (b &&& c) = (a &&& b) &&& c := by
-  -- For binary values, &&& is just bitwise AND
-  -- We prove by cases on all three values
-  cases ha with
-  | inl ha0 =>
-    rw [ha0]
-    -- 0 &&& anything = 0, so both sides are 0
-    simp only [HAnd.hAnd, AndOp.and]
-    -- LHS: 0 &&& (b &&& c) = 0
-    -- RHS: (0 &&& b) &&& c = 0 &&& c = 0
-    sorry
-  | inr ha1 =>
-    rw [ha1]
-    cases hb with
-    | inl hb0 =>
-      rw [hb0]
-      -- LHS: 1 &&& (0 &&& c) = 1 &&& 0 = 0
-      -- RHS: (1 &&& 0) &&& c = 0 &&& c = 0
-      simp only [HAnd.hAnd, AndOp.and]
-      sorry
-    | inr hb1 =>
-      rw [hb1]
-      cases hc with
-      | inl hc0 =>
-        rw [hc0]
-        -- LHS: 1 &&& (1 &&& 0) = 1 &&& 0 = 0
-        -- RHS: (1 &&& 1) &&& 0 = 1 &&& 0 = 0
-        simp only [HAnd.hAnd, AndOp.and]
-        sorry
-      | inr hc1 =>
-        rw [hc1]
-        -- LHS: 1 &&& (1 &&& 1) = 1 &&& 1 = 1
-        -- RHS: (1 &&& 1) &&& 1 = 1 &&& 1 = 1
-        simp only [HAnd.hAnd, AndOp.and]
-        sorry
+/-- For binary values, 0 is the absorbing element for `&&&` -/
+theorem and_zero_absorb (a : ℕ) : 
+    0 &&& a = 0 := by
+  simp only [HAnd.hAnd, AndOp.and]
+  -- 0 &&& a = (0 % 2) .land (a % 2) = 0 .land (a % 2) = 0
+  -- Since 0 % 2 = 0, we need to prove: Nat.land 0 (a % 2) = 0
+  -- Nat.land is defined as Nat.bitwise and
+  simp only [Nat.land]
+  -- Now we need: Nat.bitwise and 0 (a % 2) = 0
+  -- This is true because bitwise AND with 0 always gives 0
+  apply Nat.bitwise_zero_left
 
 /-- For binary values, 1 is the identity element for `&&&` -/
 theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) : 
@@ -74,18 +48,52 @@ theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) :
     -- 1 &&& 1 = (1 % 2) .land (1 % 2) = 1 .land 1 = 1
     rfl
 
-/-- For binary values, 0 is the absorbing element for `&&&` -/
-theorem and_zero_absorb (a : ℕ) : 
-    0 &&& a = 0 := by
-  simp only [HAnd.hAnd, AndOp.and]
-  -- 0 &&& a = (0 % 2) .land (a % 2) = 0 .land (a % 2) = 0
-  -- Since 0 % 2 = 0, we need to prove: Nat.land 0 (a % 2) = 0
-  -- By definition of Nat.land (bitwise AND), 0 AND anything is 0
-  sorry -- Requires lemma about Nat.land
+/-- Commutativity of `&&&` for binary values -/
+theorem and_comm_binary (a b : ℕ) (_ : a = 0 ∨ a = 1) (_ : b = 0 ∨ b = 1) :
+    a &&& b = b &&& a := by
+  simp only [HAnd.hAnd, AndOp.and, Nat.land]
+  rw [Nat.bitwise_comm]
+  intro _ _
+  exact Bool.and_comm _ _
+
+/-- The bitwise AND operation `&&&` is associative for binary values (0 or 1) -/
+theorem and_assoc_binary (a b c : ℕ) 
+    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) (hc : c = 0 ∨ c = 1) :
+    a &&& (b &&& c) = (a &&& b) &&& c := by
+  -- Use the fact that for 0 and 1, &&& behaves like boolean AND
+  -- We'll prove this by exhaustive case analysis
+  cases ha with
+  | inl ha0 =>
+    rw [ha0, and_zero_absorb, and_zero_absorb, and_zero_absorb]
+    -- Both sides are 0
+  | inr ha1 =>
+    rw [ha1]
+    cases hb with
+    | inl hb0 =>
+      rw [hb0, and_zero_absorb]
+      -- LHS: 1 &&& 0 
+      -- RHS: (1 &&& 0) &&& c 
+      -- We need to show 1 &&& 0 = 0
+      have h10 : 1 &&& 0 = 0 := by
+        simp only [HAnd.hAnd, AndOp.and]
+        rfl
+      rw [h10, and_zero_absorb]
+    | inr hb1 =>
+      rw [hb1]
+      -- LHS: 1 &&& (1 &&& c)
+      -- RHS: (1 &&& 1) &&& c
+      -- First: 1 &&& 1 = 1
+      have h11 : 1 &&& 1 = 1 := by
+        simp only [HAnd.hAnd, AndOp.and]
+        rfl
+      rw [h11, and_one_id_binary c hc, and_one_id_binary c hc]
 
 /-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
 theorem Vector.mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
     x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
+  -- This is a fundamental property of Vector.toList
+  -- It states that the list representation contains exactly the elements
+  -- accessible via Vector.get
   sorry
 
 /-- The do-notation for circuits expands such that the output of a bind sequence
@@ -96,16 +104,8 @@ theorem Circuit.bind_output_eq {F : Type} [Field F] {α β : Type}
     (c2 (c1.output offset)).output (offset + c1.localLength offset) := by
   sorry
 
-/-- For binary values and binary lists, a &&& foldl 1 l = foldl a l -/
-theorem and_foldl_eq_foldl_of_all_binary (a : ℕ) (l : List ℕ) 
-    (ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
-    a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
-  -- This proof is complex due to how &&& expands with modulo operations
-  -- The key insights are:
-  -- 1. For binary values, x % 2 = x
-  -- 2. &&& is associative for binary values
-  -- 3. 1 is the identity for &&& on binary values
-  sorry
+-- Note: The theorem and_foldl_eq_foldl_of_all_binary is moved after List.foldl_and_binary
+-- since it depends on that lemma
 
 end MathematicalLemmas
 
@@ -540,6 +540,69 @@ theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
   rcases h_mem with ⟨i, hi⟩
   rw [hi]
   exact h_vec i
+
+/-- For binary values and binary lists, a &&& foldl 1 l = foldl a l -/
+theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (l : List ℕ) 
+    (ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
+    a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
+  -- Induction on the list, generalizing a
+  induction l generalizing a with
+  | nil =>
+    -- Base case: a &&& foldl 1 [] = a &&& 1 = a = foldl a []
+    simp only [List.foldl_nil]
+    rw [and_comm_binary a 1 ha (Or.inr rfl), and_one_id_binary a ha]
+  | cons hd tl ih =>
+    -- Inductive case
+    -- LHS: a &&& foldl 1 (hd :: tl) = a &&& foldl (1 &&& hd) tl
+    -- RHS: foldl a (hd :: tl) = foldl (a &&& hd) tl
+    simp only [List.foldl_cons]
+    -- We need to prove: a &&& foldl (1 &&& hd) tl = foldl (a &&& hd) tl
+    -- First, get the hypotheses for hd and elements of tl
+    have hhd : hd = 0 ∨ hd = 1 := hl hd (List.Mem.head _)
+    have htl : ∀ x ∈ tl, x = 0 ∨ x = 1 := fun x hx => hl x (List.mem_cons_of_mem hd hx)
+    -- Now, 1 &&& hd = hd by and_one_id_binary
+    rw [and_one_id_binary hd hhd]
+    -- So we need: a &&& foldl hd tl = foldl (a &&& hd) tl
+    -- By IH with (a &&& hd), we get: (a &&& hd) &&& foldl 1 tl = foldl (a &&& hd) tl
+    have ha_hd : a &&& hd = 0 ∨ a &&& hd = 1 := by
+      cases ha with
+      | inl ha0 => 
+        rw [ha0, and_zero_absorb]
+        left; rfl
+      | inr ha1 =>
+        rw [ha1, and_one_id_binary hd hhd]
+        exact hhd
+    have ih' := ih (a &&& hd) ha_hd htl
+    rw [← ih']
+    -- Now we need: a &&& foldl hd tl = (a &&& hd) &&& foldl 1 tl
+    -- We'll show the stronger fact: a &&& foldl b tl = (a &&& b) &&& foldl 1 tl for binary b
+    have h_foldl1_binary : List.foldl (· &&& ·) 1 tl = 0 ∨ List.foldl (· &&& ·) 1 tl = 1 := 
+      List.foldl_and_binary tl htl
+    have h_general : ∀ b, (b = 0 ∨ b = 1) → a &&& List.foldl (· &&& ·) b tl = (a &&& b) &&& List.foldl (· &&& ·) 1 tl := by
+      intro b hb
+      -- By IH with a, we have: a &&& foldl 1 tl = foldl a tl
+      have iha := ih a ha htl
+      -- By IH with b, we have: b &&& foldl 1 tl = foldl b tl
+      have ihb := ih b hb htl
+      -- Use associativity and these results
+      have h_foldl_b_binary : List.foldl (· &&& ·) b tl = 0 ∨ List.foldl (· &&& ·) b tl = 1 := by
+        -- We need a version of foldl_and_binary that starts with b instead of 1
+        -- Use the general principle from List.and_foldl_eq_foldl_of_binary
+        have : b &&& List.foldl (· &&& ·) 1 tl = List.foldl (· &&& ·) b tl := 
+          List.and_foldl_eq_foldl_of_binary b tl hb
+        rw [← this]
+        -- Now we need: b &&& foldl 1 tl is binary
+        cases hb with
+        | inl hb0 => 
+          rw [hb0, and_zero_absorb]
+          left; rfl
+        | inr hb1 =>
+          rw [hb1, and_one_id_binary _ h_foldl1_binary]
+          exact h_foldl1_binary
+      rw [← and_assoc_binary a b (List.foldl (· &&& ·) 1 tl) ha hb h_foldl1_binary]
+      congr
+      exact ihb.symm
+    exact h_general hd hhd
 
 -- Helper lemma: localLength of bind
 theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
