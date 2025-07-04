@@ -335,6 +335,22 @@ theorem Operations.localLength_append (ops1 ops2 : Operations (F p)) :
     | lookup _ => simp [Operations.localLength, ih]
     | subcircuit s => simp [Operations.localLength, ih, Nat.add_assoc]
 
+-- Key lemma: foldl with AND over binary values gives binary result
+theorem List.foldl_and_binary (l : List ℕ) :
+    (∀ x ∈ l, x = 0 ∨ x = 1) → (List.foldl (· &&& ·) 1 l = 0 ∨ List.foldl (· &&& ·) 1 l = 1) := by
+  sorry
+
+-- Key lemma: for binary values, a &&& foldl = foldl starting from a
+theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
+    (a = 0 ∨ a = 1) → a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
+  sorry
+
+-- Helper lemma: if all elements of a vector are binary, then all elements of its list are binary
+theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
+    (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) → 
+    (∀ x ∈ v.toList, x = 0 ∨ x = 1) := by
+  sorry
+
 -- Helper lemma: localLength of bind
 theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
     (f >>= g).localLength offset = f.localLength offset + (g (f.output offset)).localLength (offset + f.localLength offset) := by
@@ -899,12 +915,25 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- 1. The AND circuit output equals (foldl input1) &&& (foldl input2)
         -- 2. This equals foldl (foldl input1) input2
         
-        -- For binary values, we have the property:
-        -- a &&& foldl 1 list = foldl a list when a is 0 or 1
+        -- First, establish that foldl over input1 gives a binary result
+        have h_input1_vals_binary : ∀ x ∈ input1.toList.map (·.val), x = 0 ∨ x = 1 := by
+          intro x hx
+          simp only [List.mem_map] at hx
+          rcases hx with ⟨y, hy, rfl⟩
+          -- Use Vector.toList_binary to convert vector property to list property
+          have h_vec_binary := Vector.toList_binary input1 h_assumptions1
+          have h_y_binary := h_vec_binary y hy
+          cases h_y_binary with
+          | inl h => left; simp [h, ZMod.val_zero]
+          | inr h => right; simp [h, ZMod.val_one]
+          
+        have h_foldl1_binary := List.foldl_and_binary _ h_input1_vals_binary
         
-        -- Since all inputs are binary, the foldl over input1 gives a binary result
-        -- Therefore: (foldl 1 input1) &&& (foldl 1 input2) = foldl (foldl 1 input1) input2
+        -- Apply the key lemma: a &&& foldl 1 list = foldl a list when a is binary
+        conv_rhs => rw [← List.and_foldl_eq_foldl_of_binary _ _ h_foldl1_binary]
         
+        -- Now we need to show LHS = (foldl input1) &&& (foldl input2)
+        -- This follows from understanding what the AND circuit computes
         sorry
         
       · -- Prove output is binary
