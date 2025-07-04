@@ -259,4 +259,84 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp_all only [circuit_norm, main]
 end NOR
 
+namespace MultiAND
+/-
+template MultiAND(n) {
+    signal input in[n];
+    signal output out;
+    component and1;
+    component and2;
+    component ands[2];
+    if (n==1) {
+        out <== in[0];
+    } else if (n==2) {
+        and1 = AND();
+        and1.a <== in[0];
+        and1.b <== in[1];
+        out <== and1.out;
+    } else {
+        and2 = AND();
+        var n1 = n\2;
+        var n2 = n-n\2;
+        ands[0] = MultiAND(n1);
+        ands[1] = MultiAND(n2);
+        var i;
+        for (i=0; i<n1; i++) ands[0].in[i] <== in[i];
+        for (i=0; i<n2; i++) ands[1].in[i] <== in[n1+i];
+        and2.a <== ands[0].out;
+        and2.b <== ands[1].out;
+        out <== and2.out;
+    }
+}
+-/
+
+def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expression (F p))
+  | 0, _ => 
+    -- Edge case: return 1 for empty AND
+    return (1 : F p)
+  | 1, input => 
+    -- Single input: return the input itself
+    return input.get 0
+  | 2, input => 
+    -- Two inputs: use standard AND
+    AND.circuit.main (input.get 0, input.get 1)
+  | n + 3, input => do
+    -- More than two inputs: recursive case
+    let n1 := (n + 3) / 2
+    let n2 := (n + 3) - n1
+    
+    -- Create proof that n1 + n2 = n + 3
+    have h_sum : n1 + n2 = n + 3 := by
+      unfold n1 n2
+      omega
+    
+    -- Split input vector into two halves
+    let input1 : Vector (Expression (F p)) n1 := 
+      ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; sorry⟩
+    let input2 : Vector (Expression (F p)) n2 := 
+      ⟨input.toArray.extract n1 (n + 3), by simp [Array.size_extract]; sorry⟩
+    
+    -- Recursive calls
+    let out1 ← main input1
+    let out2 ← main input2
+    
+    -- Combine results with AND
+    AND.circuit.main (out1, out2)
+
+def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
+  main := main
+  localLength _ := sorry -- Will need to compute based on recursive structure
+  localLength_eq := by sorry
+  subcircuitsConsistent := by sorry
+
+  Assumptions input := ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
+  Spec input output := 
+    (output.val = if n = 0 then 1 else (input.toList.map (·.val)).foldl (· &&& ·) 1)
+    ∧ (output = 0 ∨ output = 1)
+
+  soundness := by sorry
+  completeness := by sorry
+
+end MultiAND
+
 end Circomlib
