@@ -64,7 +64,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
+def circuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
@@ -72,10 +72,12 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   Assumptions input := input.val < 2^n
   Spec input output :=
-    input.val < 2^n ∧ output = fieldToBits n input
+    2^n < p → input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
     intro i0 env input_var input h_input h_holds
+    simp only
+    intro hn
     apply (Gadgets.toBits n hn).soundness i0 env input_var input h_input
     simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main]
     constructor
@@ -97,11 +99,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     constructor
     · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
     show fieldFromBits bits = input
-    suffices bits = fieldToBits n input by
-      rw [this, fieldFromBits_fieldToBits hn h_holds]
-    rw [Vector.ext_iff]
-    intro i hi
-    simp only [← h_env i hi, bits, Vector.getElem_mapRange]
+    have : bits = fieldToBits n input := by
+      rw [Vector.ext_iff]
+      intro i hi
+      simp only [← h_env i hi, bits, Vector.getElem_mapRange]
+    rw [this, fieldFromBits_fieldToBits h_holds]
 end Num2Bits
 
 namespace Bits2Num
@@ -129,7 +131,7 @@ def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
   let out <== lc1
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) (fields n) field where
+def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
