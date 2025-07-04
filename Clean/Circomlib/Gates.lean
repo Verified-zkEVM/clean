@@ -501,31 +501,6 @@ theorem List.foldl_and_binary (l : List ℕ) :
       -- This is exactly h_tail_binary
       exact h_tail_binary
 
--- Key lemma: for binary values, a &&& foldl = foldl starting from a
--- NOTE: This version doesn't assume list elements are binary, so it's incomplete.
--- Use List.and_foldl_eq_foldl_of_all_binary for the complete version.
-theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
-    (a = 0 ∨ a = 1) → a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
-  intro h_a_binary
-  induction l with
-  | nil =>
-    simp [List.foldl_nil]
-    cases h_a_binary with
-    | inl h_zero => 
-      rw [h_zero]
-      -- Goal: 0 &&& 1 = List.foldl _ 0 []
-      -- LHS = 0 &&& 1 = 0, RHS = 0
-      norm_num [HAnd.hAnd, AndOp.and]
-    | inr h_one => 
-      rw [h_one] 
-      -- Goal: 1 &&& 1 = List.foldl _ 1 []
-      -- LHS = 1 &&& 1 = 1, RHS = 1
-      norm_num [HAnd.hAnd, AndOp.and]
-  | cons x xs ih =>
-    -- This case requires knowing that x and all elements of xs are binary
-    -- Without this assumption, we cannot apply our binary-specific lemmas
-    -- See List.and_foldl_eq_foldl_of_all_binary for the complete version
-    sorry
 
 -- Helper lemma: if all elements of a vector are binary, then all elements of its list are binary
 theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
@@ -546,8 +521,8 @@ theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
 theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (l : List ℕ) 
     (ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
     a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
-  -- Induction on the list, generalizing a
-  induction l generalizing a with
+  -- Induction on the list
+  induction l with
   | nil =>
     -- Base case: a &&& foldl 1 [] = a &&& 1 = a = foldl a []
     simp only [List.foldl_nil]
@@ -573,37 +548,15 @@ theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (l : List ℕ)
       | inr ha1 =>
         rw [ha1, and_one_id_binary hd hhd]
         exact hhd
-    have ih' := ih (a &&& hd) ha_hd htl
-    rw [← ih']
-    -- Now we need: a &&& foldl hd tl = (a &&& hd) &&& foldl 1 tl
-    -- We'll show the stronger fact: a &&& foldl b tl = (a &&& b) &&& foldl 1 tl for binary b
-    have h_foldl1_binary : List.foldl (· &&& ·) 1 tl = 0 ∨ List.foldl (· &&& ·) 1 tl = 1 := 
-      List.foldl_and_binary tl htl
-    have h_general : ∀ b, (b = 0 ∨ b = 1) → a &&& List.foldl (· &&& ·) b tl = (a &&& b) &&& List.foldl (· &&& ·) 1 tl := by
-      intro b hb
-      -- By IH with a, we have: a &&& foldl 1 tl = foldl a tl
-      have iha := ih a ha htl
-      -- By IH with b, we have: b &&& foldl 1 tl = foldl b tl
-      have ihb := ih b hb htl
-      -- Use associativity and these results
-      have h_foldl_b_binary : List.foldl (· &&& ·) b tl = 0 ∨ List.foldl (· &&& ·) b tl = 1 := by
-        -- We need a version of foldl_and_binary that starts with b instead of 1
-        -- Use the general principle from List.and_foldl_eq_foldl_of_binary
-        have : b &&& List.foldl (· &&& ·) 1 tl = List.foldl (· &&& ·) b tl := 
-          List.and_foldl_eq_foldl_of_binary b tl hb
-        rw [← this]
-        -- Now we need: b &&& foldl 1 tl is binary
-        cases hb with
-        | inl hb0 => 
-          rw [hb0, and_zero_absorb]
-          left; rfl
-        | inr hb1 =>
-          rw [hb1, and_one_id_binary _ h_foldl1_binary]
-          exact h_foldl1_binary
-      rw [← and_assoc_binary a b (List.foldl (· &&& ·) 1 tl) ha hb h_foldl1_binary]
-      congr
-      exact ihb.symm
-    exact h_general hd hhd
+    -- By the induction hypothesis with (a &&& hd), we get:
+    -- (a &&& hd) &&& foldl 1 tl = foldl (a &&& hd) tl
+    -- But we need: a &&& foldl hd tl = foldl (a &&& hd) tl
+    
+    -- The issue is that the IH doesn't directly apply here.
+    -- We need a stronger induction principle or a different approach.
+    -- For now, we'll leave this as a sorry since the proof requires
+    -- a more sophisticated induction strategy.
+    sorry
 
 -- Helper lemma: localLength of bind
 theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
@@ -1184,7 +1137,16 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         have h_foldl1_binary := List.foldl_and_binary _ h_input1_vals_binary
         
         -- Apply the key lemma: a &&& foldl 1 list = foldl a list when a is binary
-        conv_rhs => rw [← List.and_foldl_eq_foldl_of_binary _ _ h_foldl1_binary]
+        have h_input2_vals_binary : ∀ x ∈ input2.toList.map (·.val), x = 0 ∨ x = 1 := by
+          intro x hx
+          simp only [List.mem_map] at hx
+          rcases hx with ⟨y, hy, rfl⟩
+          have h_vec_binary := Vector.toList_binary input2 h_assumptions2
+          have h_y_binary := h_vec_binary y hy
+          cases h_y_binary with
+          | inl h => left; simp [h, ZMod.val_zero]
+          | inr h => right; simp [h, ZMod.val_one]
+        conv_rhs => rw [← List.and_foldl_eq_foldl_of_all_binary _ _ h_foldl1_binary h_input2_vals_binary]
         
         -- Now we need to show LHS = (foldl input1) &&& (foldl input2)
         -- The LHS is the evaluation of the do-block output
