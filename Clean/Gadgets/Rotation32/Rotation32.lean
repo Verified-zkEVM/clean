@@ -46,7 +46,7 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
-  simp [circuit_norm, main, elaborated, U32.copy, subcircuit_norm,
+  simp [circuit_norm, main, elaborated, subcircuit_norm,
     Rotation32Bits.circuit, Rotation32Bits.elaborated] at h_holds
 
   -- abstract away intermediate U32
