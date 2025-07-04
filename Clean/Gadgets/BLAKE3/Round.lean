@@ -80,16 +80,19 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   obtain ⟨h_state, h_message⟩ := h_normalized
   obtain ⟨h_eval_state, h_eval_message⟩ := h_input
 
-  dsimp? [ElaboratedCircuit.main, main, Fin.isValue, G.circuit, G.elaborated, Fin.val_zero,
+  dsimp only [ElaboratedCircuit.main, main, Fin.isValue, G.circuit, G.elaborated,
     Fin.coe_ofNat_eq_mod, Nat.reduceMod, Rotation32.output, Fin.reduceMod, Nat.cast_ofNat,
-    Fin.val_one, Fin.val_two, pure, Circuit.bind_def, subcircuit.eq_1, ElaboratedCircuit.output,
-    FormalCircuit.toSubcircuit.eq_1, Circuit.operations, ElaboratedCircuit.localLength,
-    List.cons_append, List.nil_append, Operations.localLength.eq_5, Operations.localLength.eq_1,
-    Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
-    Circuit.ConstraintsHold.Soundness.eq_1, circuit_norm, subcircuit_norm] at h_holds
-  simp? [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
+    HasAssignEq.assign_eq, HasAssertEq.assert_eq, assertEquals, Circuit.pure_def, Circuit.bind_def,
+    assertion.eq_1, FormalAssertion.toSubcircuit.eq_1, ↓Equality.elaborated_eq, Circuit.operations,
+    ElaboratedCircuit.localLength, Environment.ExtendsVector.eq_1, List.cons_append,
+    List.nil_append, ProvableType.witness.eq_1, size, Nat.reduceMul, Operations.localLength.eq_2,
+    Operations.localLength.eq_1, Nat.add_zero, subcircuit.eq_1, ElaboratedCircuit.output,
+    FormalCircuit.toSubcircuit.eq_1, Operations.localLength.eq_5,
+    Circuit.ConstraintsHold.Soundness.eq_5, Circuit.ConstraintsHold.Soundness.eq_2,
+    Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
+  simp only [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, h_eval_state, getElem_eval_vector, h_eval_message, G.Spec, Fin.isValue,
-    Nat.cast_zero, and_imp, and_true, circuit_norm, subcircuit_norm, Equality.circuit] at h_holds
+    Nat.cast_zero, and_imp, Equality.circuit, forall_const, and_true] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9⟩ := h_holds
   simp_all only [forall_const]
 
