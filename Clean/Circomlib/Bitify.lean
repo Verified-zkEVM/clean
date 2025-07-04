@@ -84,7 +84,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
   soundness := by
     intro i0 env input_var input h_input h_holds
     simp only
-    simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main]
+    simp_all only [circuit_norm, main]
     simp only [lc_eq] at h_holds
     rw [← h_holds.right]
     and_intros

@@ -22,6 +22,9 @@ theorem ext {x y : F p} (h : x.val = y.val) : x = y := by
   cases p; cases p_ne_zero rfl
   exact Fin.ext h
 
+theorem ext_iff {x y : F p} : x = y ↔ x.val = y.val := by
+  constructor; simp_all; apply ext
+
 theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
   intro x_lt_p
   have p_ne_zero : p ≠ 0 := Nat.ne_zero_of_lt x_lt_p

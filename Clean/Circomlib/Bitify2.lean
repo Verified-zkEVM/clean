@@ -34,26 +34,60 @@ template Num2Bits_strict() {
 -/
 def main (input : Expression (F p)) := do
   -- Convert input to 254 bits
-  -- TODO the requirement 2^254 < p is too strong here, need more precise version of Num2Bits
-  let bits ← Num2Bits.circuit 254 sorry input
+  let bits ← Num2Bits.main 254 input
 
   -- Check that the bits represent a value less than p
   AliasCheck.circuit bits
 
   return bits
 
+set_option linter.constructorNameAsVariable false
+
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
+  localLength_eq := by simp +arith [circuit_norm, main,
+    Num2Bits.main, AliasCheck.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main,
+    Num2Bits.main, AliasCheck.circuit]
 
   Spec input output := output = fieldToBits 254 input
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    intro i0 env input_var input h_input assumptions h_holds
+    simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
+    simp_all only [circuit_norm, subcircuit_norm, AliasCheck.circuit,
+      Vector.map_mapRange, Vector.map_map, Function.comp_apply]
+    simp only [Num2Bits.lc_eq, Fin.forall_iff,
+      id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
+    obtain ⟨ h_bits, h_eq, h_alias ⟩ := h_holds
+    specialize h_alias h_bits
+    rw [← h_eq, fieldToBits, fieldFromBits,
+      ZMod.val_natCast, Vector.map_mapRange]
+    rw [Nat.mod_eq_of_lt h_alias, toBits_fromBits, Vector.ext_iff]
+    simp only [circuit_norm]
+    intro i hi
+    rw [ZMod.natCast_zmod_val]
+    intro i hi; specialize h_bits i hi
+    simp only [circuit_norm]
+    rcases h_bits with h_bits | h_bits
+      <;> simp [h_bits, ZMod.val_one]
 
   completeness := by
-    simp only [circuit_norm, main]
+    intro i0 env input_var h_env input h_input assumptions
+    simp only [circuit_norm, main, Num2Bits.main] at h_env ⊢
+    dsimp only [circuit_norm, subcircuit_norm, AliasCheck.circuit] at h_env ⊢
+    simp only [h_input, circuit_norm] at h_env ⊢
+    simp only [Num2Bits.lc_eq, Fin.forall_iff,
+      id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+    stop
+    simp only [h_input] at *
+    have input_lt : input.val < 2^254 := by
+      linarith [‹Fact (p < 2^254)›.elim, ZMod.val_lt input]
+    specialize h_env input_lt
+    obtain ⟨ _, h_bits, h_eq ⟩ := h_env
+    use input_lt, h_bits
+    rw [FieldUtils.ext_iff] at h_eq
     sorry
 end Num2Bits_strict
 
@@ -79,7 +113,8 @@ def main (input : Vector (Expression (F p)) 254) := do
   AliasCheck.circuit input
 
   -- Convert bits to number
-  let out ← Bits2Num.circuit 254 sorry input
+  -- TODO: need version without condition on bit length, like for Num2Bits
+  let out ← Bits2Num.circuit 254 input
 
   return out
 
