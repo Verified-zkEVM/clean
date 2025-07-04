@@ -84,7 +84,7 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row: Array F) : Array
   table constraint's witness generators.
 -/
 def witnesses
-  (tc : TableConstraint W S F Unit) (init_row: Row F S) (n: ℕ) : Array (Array F) := Id.run do
+    (tc : TableConstraint W S F Unit) (init_row: Row F S) (n: ℕ) : Array (Array F) := Id.run do
 
   -- append auxiliary columns to the current row
   let aux_cols := Array.replicate tc.finalAssignment.numAux 0
