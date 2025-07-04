@@ -30,8 +30,7 @@ def main (input : Expression (F p)) := do
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
 
-  let out ← witnessField fun env => (-input * inv + 1).eval env
-  out === -input * inv + 1
+  let out <== -input * inv + 1
   input * out === 0
   return out
 
@@ -44,11 +43,11 @@ def circuit : FormalCircuit (F p) field field where
     output = (if input = 0 then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm, main]
+    simp_all only [circuit_norm, main]
     sorry
 
   completeness := by
-    simp only [circuit_norm, main]
+    simp_all only [circuit_norm, main]
     sorry
 end IsZero
 
@@ -150,8 +149,7 @@ template LessThan(n) {
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
   let bits ← Num2Bits.circuit (n+1) hn diff
-  let out ← witnessField fun env => 1 - (bits[n]).eval env
-  out === 1 - bits[n]
+  let out <== 1 - bits[n]
   return out
 
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where

@@ -50,7 +50,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
     change x = eval (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt hn _ h_bits
+    use fieldFromBits_lt _ h_bits
 
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
@@ -71,7 +71,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
       exact h_env ⟨ i, hi ⟩
 
     show x = eval (fieldFromBitsExpr bit_vars)
-    rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits hn h_assumptions]
+    rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits h_assumptions]
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 

@@ -64,30 +64,39 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
+def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
+  output _ i := varFromOffset (fields n) i
+
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := input.val < 2^n
-  Spec input output :=
-    input.val < 2^n ∧ output = fieldToBits n input
+
+  /- without further assumptions on n, this circuit just tells us that the output bits represent
+    _some_ number congruent to the input modulo p -/
+  Spec input bits :=
+    input.val < 2^n
+    ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
+    ∧ fieldFromBits bits = input
 
   soundness := by
     intro i0 env input_var input h_input h_holds
-    apply (Gadgets.toBits n hn).soundness i0 env input_var input h_input
-    simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main]
-    constructor
-    · intro i
+    simp only
+    simp_all only [circuit_norm, main]
+    simp only [lc_eq] at h_holds
+    rw [← h_holds.right]
+    and_intros
+    · apply fieldFromBits_lt
+      intro i hi
       simp only [circuit_norm, subcircuit_norm]
-      simpa [add_neg_eq_zero] using h_holds.left i
-    rw [←h_holds.right, lc_eq]; clear h_holds
-    show _ = env (fieldFromBitsExpr _)
-    rw [fieldFromBits_eval]
-    congr
-    rw [Vector.ext_iff]
-    simp [circuit_norm]
+      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
+    · intro i hi
+      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
+    · congr 1
+      rw [Vector.ext_iff]
+      simp [circuit_norm]
 
   completeness := by
     intro i0 env input_var h_env input h_input h_holds
@@ -97,11 +106,32 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     constructor
     · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
     show fieldFromBits bits = input
-    suffices bits = fieldToBits n input by
-      rw [this, fieldFromBits_fieldToBits hn h_holds]
-    rw [Vector.ext_iff]
-    intro i hi
-    simp only [← h_env i hi, bits, Vector.getElem_mapRange]
+    have : bits = fieldToBits n input := by
+      rw [Vector.ext_iff]
+      intro i hi
+      simp only [← h_env i hi, bits, Vector.getElem_mapRange]
+    rw [this, fieldFromBits_fieldToBits h_holds]
+
+-- the main circuit implementation makes a stronger statement assuming 2^n < p
+def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
+  main input := arbitraryBitLengthCircuit n input
+  localLength _ := n
+
+  Assumptions input := input.val < 2^n
+
+  Spec input output :=
+    input.val < 2^n ∧ output = fieldToBits n input
+
+  soundness := by
+    simp_all only [circuit_norm, subcircuit_norm,
+      arbitraryBitLengthCircuit, Vector.map_mapRange]
+    intro i0 env input_var input h_input ⟨ _, h_bits, h_holds ⟩
+    rw [← h_holds, fieldToBits_fieldFromBits hn]
+    simpa [circuit_norm] using h_bits
+
+  completeness := by
+    simp_all only [circuit_norm, subcircuit_norm, arbitraryBitLengthCircuit]
+
 end Num2Bits
 
 namespace Bits2Num
@@ -129,7 +159,7 @@ def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
   let out <== lc1
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) (fields n) field where
+def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]

@@ -282,7 +282,7 @@ preconditions, and the spec acts as the postcondition.
 -/
 structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop
+  Assumptions (_ : Input F) : Prop := True
   Spec : Input F → Output F → Prop
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
@@ -295,7 +295,7 @@ preventing ambiguity in deterministic circuits.
 -/
 structure DeterministicFormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
     extends circuit : FormalCircuit F Input Output where
-  uniqueness : ∀ (input : Input F) (out1 out2 : Output F), 
+  uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
     circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
 
 @[circuit_norm]
