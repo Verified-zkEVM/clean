@@ -22,7 +22,7 @@ independent of the circuit framework.
 -/
 
 /-- For binary values, 0 is the absorbing element for `&&&` -/
-theorem and_zero_absorb (a : ℕ) : 
+theorem and_zero_absorb (a : ℕ) :
     0 &&& a = 0 := by
   simp only [HAnd.hAnd, AndOp.and]
   -- 0 &&& a = (0 % 2) .land (a % 2) = 0 .land (a % 2) = 0
@@ -34,10 +34,10 @@ theorem and_zero_absorb (a : ℕ) :
   apply Nat.bitwise_zero_left
 
 /-- For binary values, 1 is the identity element for `&&&` -/
-theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) : 
+theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) :
     1 &&& a = a := by
   cases ha with
-  | inl h0 => 
+  | inl h0 =>
     rw [h0]
     simp only [HAnd.hAnd, AndOp.and]
     -- 1 &&& 0 = (1 % 2) .land (0 % 2) = 1 .land 0 = 0
@@ -57,7 +57,7 @@ theorem and_comm_binary (a b : ℕ) (_ : a = 0 ∨ a = 1) (_ : b = 0 ∨ b = 1) 
   exact Bool.and_comm _ _
 
 /-- The bitwise AND operation `&&&` is associative for binary values (0 or 1) -/
-theorem and_assoc_binary (a b c : ℕ) 
+theorem and_assoc_binary (a b c : ℕ)
     (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) (hc : c = 0 ∨ c = 1) :
     a &&& (b &&& c) = (a &&& b) &&& c := by
   -- Use the fact that for 0 and 1, &&& behaves like boolean AND
@@ -71,8 +71,8 @@ theorem and_assoc_binary (a b c : ℕ)
     cases hb with
     | inl hb0 =>
       rw [hb0, and_zero_absorb]
-      -- LHS: 1 &&& 0 
-      -- RHS: (1 &&& 0) &&& c 
+      -- LHS: 1 &&& 0
+      -- RHS: (1 &&& 0) &&& c
       -- We need to show 1 &&& 0 = 0
       have h10 : 1 &&& 0 = 0 := by
         simp only [HAnd.hAnd, AndOp.and]
@@ -99,9 +99,9 @@ theorem Vector.mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : 
 
 /-- The do-notation for circuits expands such that the output of a bind sequence
     is the output of the last circuit at the appropriate offset -/
-theorem Circuit.bind_output_eq {F : Type} [Field F] {α β : Type} 
+theorem Circuit.bind_output_eq {F : Type} [Field F] {α β : Type}
     (c1 : Circuit F α) (c2 : α → Circuit F β) (offset : ℕ) :
-    (c1 >>= c2).output offset = 
+    (c1 >>= c2).output offset =
     (c2 (c1.output offset)).output (offset + c1.localLength offset) := by
   -- By definition of bind for Circuit
   simp only [Circuit.bind_def]
@@ -443,13 +443,13 @@ theorem List.foldl_and_binary (l : List ℕ) :
     (∀ x ∈ l, x = 0 ∨ x = 1) → (List.foldl (· &&& ·) 1 l = 0 ∨ List.foldl (· &&& ·) 1 l = 1) := by
   intro h_all_binary
   induction l with
-  | nil => 
+  | nil =>
     simp only [List.foldl_nil]
     right; trivial
   | cons x xs ih =>
     simp only [List.foldl_cons]
     have h_x_binary : x = 0 ∨ x = 1 := h_all_binary x (List.Mem.head xs)
-    have h_xs_binary : ∀ y ∈ xs, y = 0 ∨ y = 1 := fun y hy => 
+    have h_xs_binary : ∀ y ∈ xs, y = 0 ∨ y = 1 := fun y hy =>
       h_all_binary y (List.Mem.tail x hy)
     have h_tail_binary := ih h_xs_binary
     -- Need to show: (1 &&& x) &&& (foldl 1 xs) is binary
@@ -479,7 +479,7 @@ theorem List.foldl_and_binary (l : List ℕ) :
       clear xs hxs
       induction xs' with
       | nil => simp [List.foldl_nil]
-      | cons y ys ih => 
+      | cons y ys ih =>
         simp only [List.foldl_cons, HAnd.hAnd, AndOp.and]
         -- We need: List.foldl (fun x1 x2 => x1.land x2) (0.land y) ys = 0
         -- Since 0.land y = 0, this reduces to: List.foldl _ 0 ys = 0
@@ -504,59 +504,55 @@ theorem List.foldl_and_binary (l : List ℕ) :
 
 -- Helper lemma: if all elements of a vector are binary, then all elements of its list are binary
 theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
-    (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) → 
+    (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) →
     (∀ x ∈ v.toList, x = 0 ∨ x = 1) := by
   intro h_vec x h_mem
   -- We'll prove this by induction on the vector structure
   -- First, let's use the fact that membership in v.toList means x is one of the vector elements
   -- Since all vector elements are binary by h_vec, x must be binary
-  
+
   -- Use the membership characterization lemma
   rw [Vector.mem_toList_iff_get] at h_mem
   rcases h_mem with ⟨i, hi⟩
   rw [hi]
   exact h_vec i
 
-/-- For binary values and binary lists, a &&& foldl 1 l = foldl a l -/
-theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (l : List ℕ) 
+/-- For binary values and binary lists, a &&& foldl orig l = foldl (a &&& orig) l -/
+theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List ℕ)
     (ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
-    a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
-  -- Induction on the list
-  induction l with
+    a &&& List.foldl (· &&& ·) orig l = List.foldl (· &&& ·) (a &&& orig) l := by
+  -- Induction on the list, generalizing orig
+  induction l generalizing orig with
   | nil =>
-    -- Base case: a &&& foldl 1 [] = a &&& 1 = a = foldl a []
+    -- Base case: a &&& foldl orig [] = a &&& orig = foldl (a &&& orig) []
     simp only [List.foldl_nil]
-    rw [and_comm_binary a 1 ha (Or.inr rfl), and_one_id_binary a ha]
   | cons hd tl ih =>
     -- Inductive case
-    -- LHS: a &&& foldl 1 (hd :: tl) = a &&& foldl (1 &&& hd) tl
-    -- RHS: foldl a (hd :: tl) = foldl (a &&& hd) tl
+    -- LHS: a &&& foldl orig (hd :: tl) = a &&& foldl (orig &&& hd) tl
+    -- RHS: foldl (a &&& orig) (hd :: tl) = foldl ((a &&& orig) &&& hd) tl
     simp only [List.foldl_cons]
-    -- We need to prove: a &&& foldl (1 &&& hd) tl = foldl (a &&& hd) tl
+    -- Goal: a &&& foldl (orig &&& hd) tl = foldl ((a &&& orig) &&& hd) tl
+    
     -- First, get the hypotheses for hd and elements of tl
     have hhd : hd = 0 ∨ hd = 1 := hl hd (List.Mem.head _)
     have htl : ∀ x ∈ tl, x = 0 ∨ x = 1 := fun x hx => hl x (List.mem_cons_of_mem hd hx)
-    -- Now, 1 &&& hd = hd by and_one_id_binary
-    rw [and_one_id_binary hd hhd]
-    -- So we need: a &&& foldl hd tl = foldl (a &&& hd) tl
-    -- By IH with (a &&& hd), we get: (a &&& hd) &&& foldl 1 tl = foldl (a &&& hd) tl
-    have ha_hd : a &&& hd = 0 ∨ a &&& hd = 1 := by
-      cases ha with
-      | inl ha0 => 
-        rw [ha0, and_zero_absorb]
-        left; rfl
-      | inr ha1 =>
-        rw [ha1, and_one_id_binary hd hhd]
-        exact hhd
-    -- By the induction hypothesis with (a &&& hd), we get:
-    -- (a &&& hd) &&& foldl 1 tl = foldl (a &&& hd) tl
-    -- But we need: a &&& foldl hd tl = foldl (a &&& hd) tl
     
-    -- The issue is that the IH doesn't directly apply here.
-    -- We need a stronger induction principle or a different approach.
-    -- For now, we'll leave this as a sorry since the proof requires
-    -- a more sophisticated induction strategy.
-    sorry
+    -- Apply the induction hypothesis with orig := (orig &&& hd)
+    -- The IH now gives us: ∀ orig', a &&& foldl orig' tl = foldl (a &&& orig') tl
+    rw [ih (orig &&& hd) htl]
+    
+    -- Now we need: foldl (a &&& (orig &&& hd)) tl = foldl ((a &&& orig) &&& hd) tl
+    -- This follows from: a &&& (orig &&& hd) = (a &&& orig) &&& hd (associativity)
+    congr 1
+    -- We need to prove: a &&& (orig &&& hd) = (a &&& orig) &&& hd
+    -- Use associativity of &&& (which is Nat.land)
+    simp only [HAnd.hAnd, AndOp.and]
+    -- Goal is now: a.land (orig.land hd) = (a.land orig).land hd
+    -- Convert back to &&& notation to use Nat.land_assoc
+    show a &&& (orig &&& hd) = (a &&& orig) &&& hd
+    -- Nat.land_assoc gives us: a &&& orig &&& hd = a &&& (orig &&& hd)
+    -- We need the symmetric version
+    exact (Nat.land_assoc a orig hd).symm
 
 -- Helper lemma: localLength of bind
 theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
@@ -934,10 +930,10 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
 
       -- Show eval preserves the split
-      have h_eval1 : eval env input_var1 = input1 := by 
+      have h_eval1 : eval env input_var1 = input1 := by
         sorry -- Technical proof: eval preserves vector extraction
-        
-      have h_eval2 : eval env input_var2 = input2 := by 
+
+      have h_eval2 : eval env input_var2 = input2 := by
         sorry -- Technical proof: eval preserves vector extraction
 
       -- Show assumptions hold for subvectors
@@ -950,13 +946,13 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           -- So input1.get i = (input.toArray.extract 0 n1)[i]
           simp only [input1, Vector.get]
           -- extract preserves elements: arr.extract start len[i] = arr[start + i]
-          have h_extract : (input.toArray.extract 0 n1)[i.val]'(by 
+          have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
             simp only [Array.size_extract]
             have h1 : i.val < n1 := i.isLt
             have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
             rw [h2, min_eq_left (Nat.le_of_lt h_n1_lt)]
-            exact h1) = 
-                          input.toArray[i.val]'(by 
+            exact h1) =
+                          input.toArray[i.val]'(by
                             have h1 : i.val < n1 := i.isLt
                             have h2 : n1 ≤ m + 3 := Nat.le_of_lt h_n1_lt
                             have h3 : input.size = m + 3 := by simp only [Vector.size_toArray]
@@ -973,8 +969,8 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- input2 is extracted from input starting at n1, so input2.get i = input.get (n1 + i)
         have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
           simp only [input2, Vector.get]
-          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) = 
-                          input.toArray[n1 + i.val]'(by 
+          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) =
+                          input.toArray[n1 + i.val]'(by
                             have : n1 + i.val < input.size := by
                               have h1 : i.val < n2 := i.isLt
                               have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
@@ -988,19 +984,19 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
       -- The main function for m+3 is defined as:
       -- do
-      --   let out1 ← main input_var1  
+      --   let out1 ← main input_var1
       --   let out2 ← main input_var2
       --   ElaboratedCircuit.main (out1, out2)
-      
-      -- This is two binds: first bind main input_var1 with (fun out1 => ...), 
+
+      -- This is two binds: first bind main input_var1 with (fun out1 => ...),
       -- then bind main input_var2 with (fun out2 => ElaboratedCircuit.main (out1, out2))
-      
+
       -- For now, we'll use sorry to complete the proof structure
       -- The key insight is that we need to:
-      -- 1. Use bind lemmas to decompose h_hold 
+      -- 1. Use bind lemmas to decompose h_hold
       -- 2. Apply IH to get specs for recursive calls
       -- 3. Use AND.circuit.soundness for the final combination
-      
+
       -- Apply IH to first recursive call
       have h_spec1 : MultiAND_Spec n1 input1 (env ((main input_var1).output offset)) := by
         apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
@@ -1009,8 +1005,8 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- Use bind_soundness to decompose it
         rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
         exact h_hold.1
-      
-      -- Apply IH to second recursive call  
+
+      -- Apply IH to second recursive call
       have h_spec2 : MultiAND_Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) := by
         apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2 input2 h_eval2 h_assumptions2
         -- Need to show: ConstraintsHold.Soundness env ((main input_var2).operations (offset + (main input_var1).localLength offset))
@@ -1019,47 +1015,47 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- h_hold.2 is about the second bind
         rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
         exact h_hold.2.1
-        
+
       -- Now we need to show the final output satisfies the spec
       -- The output is the AND of the two recursive outputs
-      
+
       -- First, let's understand what the output is
       -- The do-block output is ElaboratedCircuit.main (out1, out2) where
       -- out1 = (main input_var1).output offset
       -- out2 = (main input_var2).output (offset + (main input_var1).localLength offset)
-      
+
       -- We need the constraint holds for the AND circuit
       -- Extract it from h_hold
       have h_hold' := h_hold
       rw [Circuit.ConstraintsHold.bind_soundness] at h_hold'
       rw [Circuit.ConstraintsHold.bind_soundness] at h_hold'
       -- h_hold'.2.2 should be the constraint holds for the AND circuit
-      
+
       -- Extract the outputs from the recursive calls
       let out1 := (main input_var1).output offset
       let out2 := (main input_var2).output (offset + (main input_var1).localLength offset)
-      
+
       -- The final output is the AND of these two outputs
       -- We need to apply AND.circuit.soundness
-      have h_and_spec := AND.circuit.soundness 
+      have h_and_spec := AND.circuit.soundness
         (offset + (main input_var1).localLength offset + (main input_var2).localLength (offset + (main input_var1).localLength offset))
-        env 
-        (out1, out2) 
+        env
+        (out1, out2)
         (env out1, env out2)
         (by simp only [ProvableType.eval_fieldPair])
         ⟨by rcases h_spec1 with ⟨_, h_binary1⟩; exact h_binary1,
          by rcases h_spec2 with ⟨_, h_binary2⟩; exact h_binary2⟩
         h_hold'.2.2
-      
+
       -- Extract the parts from the specs
       rcases h_spec1 with ⟨h_val1, h_binary1⟩
       rcases h_spec2 with ⟨h_val2, h_binary2⟩
       rcases h_and_spec with ⟨h_and_val, h_and_binary⟩
-      
+
       -- Now we need to show the goal
       -- First, we need to understand what the do-block output is
       -- It should be the output of AND.circuit applied to (out1, out2)
-      
+
       constructor
       · -- Prove output.val = fold of entire input
         -- First show how input splits into input1 and input2
@@ -1067,61 +1063,61 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           -- input1 = extract 0 n1, input2 = extract n1 (m+3)
           -- Together they should reconstruct input
           sorry -- TODO: prove vector extraction and concatenation
-        
+
         -- Now use properties of foldl over concatenated lists
         rw [h_input_split, List.map_append, List.foldl_append]
         -- Goal: output.val = (input2.toList.map (·.val)).foldl (· &&& ·) ((input1.toList.map (·.val)).foldl (· &&& ·) 1)
-        
+
         -- Looking at the goal, we need to prove that the AND circuit output
         -- equals the foldl expression we want
-        
+
         -- The goal has ElaboratedCircuit.main being applied to outputs from recursive calls
         -- This is AND.circuit.main by the way the circuit is structured
-        
+
         -- From h_and_val, we know what the AND circuit computes
         -- It takes the AND of its two inputs
-        
+
         -- The challenge is connecting the complex expressions in the goal to our simpler analysis
-        
+
         -- Let's use the fact that for the AND circuit:
         -- eval env (AND.circuit.output (a,b) offset) = eval env a &&& eval env b
         -- when the inputs are binary (which they are from h_binary1 and h_binary2)
-        
+
         -- First, let's understand what we're evaluating
         -- The ElaboratedCircuit.main in the goal is AND.circuit.main
         -- The ElaboratedCircuit.output gives us the output of AND.circuit
-        
+
         -- From the AND circuit specification and h_and_val:
         -- The output value is the bitwise AND of the input values
-        
+
         -- We know:
         -- - out1 evaluates to foldl (&&&) 1 input1 (from h_val1)
         -- - out2 evaluates to foldl (&&&) 1 input2 (from h_val2)
         -- - The AND circuit output is out1 &&& out2 (from h_and_val)
-        
+
         -- Therefore: AND output = (foldl (&&&) 1 input1) &&& (foldl (&&&) 1 input2)
-        
+
         -- But we need: foldl (&&&) (foldl (&&&) 1 input1) input2
-        
+
         -- These are equal because:
         -- (a &&& b) &&& c = a &&& (b &&& c) = foldl (&&&) a [b, c]
         -- So (foldl (&&&) 1 list1) &&& (foldl (&&&) 1 list2) = foldl (&&&) 1 (list1 ++ list2)
         -- But that's not quite what we have...
-        
+
         -- Actually, looking more carefully at the RHS:
         -- foldl (&&&) (foldl (&&&) 1 input1) input2
         -- This starts with (foldl (&&&) 1 input1) and folds input2 into it
         -- Which is exactly (foldl (&&&) 1 input1) &&& each element of input2
-        
+
         -- We need to prove that the AND circuit output equals the expected foldl
         -- The goal shows we need to prove equality between:
         -- 1. The evaluation of the AND circuit output
         -- 2. The foldl expression over input2 starting from the foldl over input1
-        
+
         -- The key insight is that we need to prove:
         -- 1. The AND circuit output equals (foldl input1) &&& (foldl input2)
         -- 2. This equals foldl (foldl input1) input2
-        
+
         -- First, establish that foldl over input1 gives a binary result
         have h_input1_vals_binary : ∀ x ∈ input1.toList.map (·.val), x = 0 ∨ x = 1 := by
           intro x hx
@@ -1133,9 +1129,9 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           cases h_y_binary with
           | inl h => left; simp [h, ZMod.val_zero]
           | inr h => right; simp [h, ZMod.val_one]
-          
+
         have h_foldl1_binary := List.foldl_and_binary _ h_input1_vals_binary
-        
+
         -- Apply the key lemma: a &&& foldl 1 list = foldl a list when a is binary
         have h_input2_vals_binary : ∀ x ∈ input2.toList.map (·.val), x = 0 ∨ x = 1 := by
           intro x hx
@@ -1146,45 +1142,46 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           cases h_y_binary with
           | inl h => left; simp [h, ZMod.val_zero]
           | inr h => right; simp [h, ZMod.val_one]
-        conv_rhs => rw [← List.and_foldl_eq_foldl_of_all_binary _ _ h_foldl1_binary h_input2_vals_binary]
+        -- The RHS is already: foldl (foldl 1 input1) input2
+        -- The LHS is the do-block output which should equal (foldl 1 input1) &&& (foldl 1 input2)
+        -- And by our lemma: (foldl 1 input1) &&& (foldl 1 input2) = foldl (foldl 1 input1) input2
         
-        -- Now we need to show LHS = (foldl input1) &&& (foldl input2)
-        -- The LHS is the evaluation of the do-block output
-        -- The do-block computes: main input_var1, main input_var2, then AND.circuit.main
-        
+        -- This connection between do-block output and the AND of the foldls
+        -- requires understanding circuit evaluation, which we leave as a sorry for now
+
         -- From h_val1 and h_val2, we know:
         -- - out1 evaluates to foldl input1
         -- - out2 evaluates to foldl input2
-        
+
         -- From h_and_val, we know the AND circuit output equals out1.val &&& out2.val
         -- But we need to connect the complex do-block expression to this
-        
+
         -- The key is that the do-block output IS the AND circuit output
         -- We just need to show they evaluate to the same thing
-        
+
         -- The key insight: the do-block output is the AND circuit output
         -- Let's work with what we know about the AND circuit
-        
+
         -- From h_and_val, we know:
         -- AND circuit output.val = out1.val &&& out2.val
         -- where out1.val = foldl input1 and out2.val = foldl input2
-        
+
         -- The goal is about the do-block output, which is the AND circuit output
         -- We need to show this equals (foldl input1) &&& (foldl input2)
-        
+
         -- We need to show the do-block output equals (foldl input1) &&& (foldl input2)
         -- This requires connecting the do-block expansion to the AND circuit evaluation
         -- For now, we accept this as a fundamental property of circuit composition
         sorry
-        
+
       · -- Prove output is binary
         -- The output is from AND circuit, so it's binary
         -- We can use h_and_binary which tells us the AND circuit output is 0 or 1
-        
+
         -- The goal asks about the do-block output
         -- We know from h_and_binary that the AND circuit output is binary
         -- Since the do-block output IS the AND circuit output, we're done
-        
+
         -- Similar to the value case, this requires connecting do-block to AND circuit
         sorry
 
@@ -1208,10 +1205,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     intro offset env input_var h_local_witnesses input h_env h_assumptions
     -- Completeness: if inputs are binary, then constraints hold
     -- We need to show that the constraints generated by the circuit are satisfied
-    
+
     -- Use strong induction on n
     match n with
-    | 0 => 
+    | 0 =>
       -- No constraints for n = 0
       simp [main, Circuit.ConstraintsHold.Completeness]
     | 1 =>
@@ -1229,12 +1226,12 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
       simp [main]
       -- The circuit is: do { out1 ← main v1; out2 ← main v2; AND (out1, out2) }
       -- We need to show constraints hold for all three parts
-      
+
       -- This requires:
       -- 1. Completeness for the first recursive call (main v1)
-      -- 2. Completeness for the second recursive call (main v2)  
+      -- 2. Completeness for the second recursive call (main v2)
       -- 3. Completeness for the AND gate with outputs from 1 and 2
-      
+
       -- The challenge is properly handling the offsets and connecting the pieces
       sorry -- TODO: Apply IH and AND completeness with proper offset management
 
