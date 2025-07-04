@@ -331,7 +331,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
 
   Assumptions input := ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
   Spec input output := 
-    (output.val = if n = 0 then 1 else (input.toList.map (·.val)).foldl (· &&& ·) 1)
+    output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1
     ∧ (output = 0 ∨ output = 1)
 
   soundness := by sorry
