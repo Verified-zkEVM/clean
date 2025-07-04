@@ -895,13 +895,16 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- 1. The evaluation of the AND circuit output
         -- 2. The foldl expression over input2 starting from the foldl over input1
         
-        -- The challenge is that we can't directly access what the AND circuit computes
-        -- because of the complex type structure with ElaboratedCircuit
+        -- The key insight is that we need to prove:
+        -- 1. The AND circuit output equals (foldl input1) &&& (foldl input2)
+        -- 2. This equals foldl (foldl input1) input2
         
-        -- Let's use a different approach - we'll use the fact that we're computing
-        -- the bitwise AND of all inputs, and this can be done in any order
+        -- For binary values, we have the property:
+        -- a &&& foldl 1 list = foldl a list when a is 0 or 1
         
-        -- For now, let's use sorry to make progress
+        -- Since all inputs are binary, the foldl over input1 gives a binary result
+        -- Therefore: (foldl 1 input1) &&& (foldl 1 input2) = foldl (foldl 1 input1) input2
+        
         sorry
         
       · -- Prove output is binary
