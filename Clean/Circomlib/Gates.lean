@@ -519,7 +519,7 @@ theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
 
 /-- For binary values and binary lists, a &&& foldl orig l = foldl (a &&& orig) l -/
 theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List ℕ)
-    (ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
+    (_ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
     a &&& List.foldl (· &&& ·) orig l = List.foldl (· &&& ·) (a &&& orig) l := by
   -- Induction on the list, generalizing orig
   induction l generalizing orig with
