@@ -502,6 +502,7 @@ theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (off
         · -- Final AND circuit
           apply AND.circuit.subcircuitsConsistent
 
+
 -- Extract Assumptions and Spec outside the circuit
 def MultiAND_Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
   ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
@@ -711,20 +712,10 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
       -- Show eval preserves the split
       have h_eval1 : eval env input_var1 = input1 := by 
-        ext i
-        -- Goal: (eval env input_var1).get i = input1.get i
-        rw [ProvableType.eval_fields]
-        simp only [Vector.getElem_map]
-        -- Now need to show: env (input_var1.get i) = input1.get i
-        -- input_var1.get i = (input_var.toArray.extract 0 n1)[i]
-        -- input1.get i = (input.toArray.extract 0 n1)[i]
-        sorry -- technical details about array extraction and eval
-
+        sorry -- Technical proof: eval preserves vector extraction
+        
       have h_eval2 : eval env input_var2 = input2 := by 
-        ext i  
-        rw [ProvableType.eval_fields]
-        simp only [Vector.getElem_map]
-        sorry -- similar to h_eval1 but with offset n1
+        sorry -- Technical proof: eval preserves vector extraction
 
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
@@ -790,16 +781,45 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- Apply IH to first recursive call
       have h_spec1 : MultiAND_Spec n1 input1 (env ((main input_var1).output offset)) := by
         apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
-        sorry -- extract constraint holds for first recursive call from h_hold
+        -- Need to show: ConstraintsHold.Soundness env ((main input_var1).operations offset)
+        -- h_hold gives us constraints hold for the whole do-block
+        -- Use bind_soundness to decompose it
+        rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
+        exact h_hold.1
       
       -- Apply IH to second recursive call  
       have h_spec2 : MultiAND_Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) := by
         apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2 input2 h_eval2 h_assumptions2
-        sorry -- extract constraint holds for second recursive call from h_hold
+        -- Need to show: ConstraintsHold.Soundness env ((main input_var2).operations (offset + (main input_var1).localLength offset))
+        -- From h_hold.2, we have constraints hold for the rest after the first call
+        rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
+        -- h_hold.2 is about the second bind
+        rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
+        exact h_hold.2.1
         
       -- Now we need to show the final output satisfies the spec
       -- The output is the AND of the two recursive outputs
-      sorry -- TODO: Use AND.circuit.soundness and properties of List.foldl to complete
+      
+      -- First, let's understand what the output is
+      -- The do-block output is ElaboratedCircuit.main (out1, out2) where
+      -- out1 = (main input_var1).output offset
+      -- out2 = (main input_var2).output (offset + (main input_var1).localLength offset)
+      
+      -- We need the constraint holds for the AND circuit
+      -- Extract it from h_hold
+      have h_hold' := h_hold
+      rw [Circuit.ConstraintsHold.bind_soundness] at h_hold'
+      rw [Circuit.ConstraintsHold.bind_soundness] at h_hold'
+      -- h_hold'.2.2 should be the constraint holds for the AND circuit
+      
+      -- The recursive case is complex due to:
+      -- 1. Managing offsets correctly for the do-block
+      -- 2. Extracting constraint holds for each subcircuit
+      -- 3. Applying AND.circuit.soundness at the right offset
+      -- 4. Proving that the vector splits and recombines correctly
+      
+      -- For now, we'll use sorry to complete the recursive case
+      sorry
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
