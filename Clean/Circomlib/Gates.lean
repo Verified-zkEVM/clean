@@ -482,13 +482,25 @@ theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (off
       -- 4. AND.circuit.main (out1, out2) (has subcircuits)
 
       -- We need to show SubcircuitsConsistent for the combined operations
-      -- This requires using:
-      -- - Circuit.bind_def to see how operations are combined
-      -- - Operations.forAll_append to handle the concatenation
-      -- - IH for the recursive calls
-      -- - AND.circuit.subcircuitsConsistent for the final AND
-
-      sorry
+      -- After rw [main], we have a circuit structure with recursive calls
+      simp only [Circuit.operations]
+      
+      -- The structure is: main input1 >>= (λ out1 => main input2 >>= (λ out2 => AND.circuit.main (out1, out2)))
+      -- Apply Circuit.subcircuitsConsistent_bind for the first bind
+      apply Circuit.subcircuitsConsistent_bind
+      · -- First recursive call: main input1
+        let input1 : Var (fields n1) (F p) := 
+          ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩
+        apply IH n1 h_n1_lt input1
+      · -- Rest: main input2 >>= AND.circuit.main
+        -- Apply bind lemma again
+        apply Circuit.subcircuitsConsistent_bind
+        · -- Second recursive call: main input2
+          let input2 : Var (fields n2) (F p) := 
+            ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
+          apply IH n2 h_n2_lt input2
+        · -- Final AND circuit
+          apply AND.circuit.subcircuitsConsistent
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
