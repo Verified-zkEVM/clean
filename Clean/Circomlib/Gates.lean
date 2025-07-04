@@ -91,11 +91,50 @@ theorem and_assoc_binary (a b c : ℕ)
 /-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
 theorem Vector.mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
     x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
-  -- This is a fundamental property that requires understanding the internal
-  -- representation of Vector. Since Vector is essentially a wrapper around
-  -- an array with a size proof, this property should hold by construction.
-  -- However, proving it requires detailed knowledge of the Vector implementation.
-  sorry
+  constructor
+  · intro h_mem
+    -- x ∈ v.toList means there exists an index where v.toList[index] = x
+    rw [List.mem_iff_getElem] at h_mem
+    obtain ⟨i, hi, h_eq⟩ := h_mem
+    -- We need i < n to construct Fin n
+    -- v : Vector α n means v.size = n
+    have h_len : v.size = n := by
+      -- Vector α n has size n by construction
+      cases v
+      rename_i arr h_size
+      -- v.size = arr.size = n
+      exact h_size
+    have h_list_len : v.toList.length = v.size := by
+      rfl  -- toList doesn't change the length
+    rw [h_list_len, h_len] at hi
+    -- Now we can use i < n
+    use ⟨i, hi⟩
+    -- Show x = v.get ⟨i, hi⟩
+    rw [← h_eq]
+    -- v.toList[i] = v.get ⟨i, hi⟩
+    -- Both access the same element from the underlying array
+    simp only [Vector.get]
+    -- Now we need to show v.toList[i] = v.toArray[⟨i, hi⟩]
+    rfl
+  · intro ⟨i, h_eq⟩
+    rw [h_eq]
+    -- Show v.get i ∈ v.toList
+    rw [List.mem_iff_getElem]
+    use i.val
+    have h_bound : i.val < v.toList.length := by
+      -- v.toList.length = v.size = n
+      have h_len : v.size = n := by
+        cases v
+        rename_i arr h_size
+        exact h_size
+      have h_list_len : v.toList.length = v.size := by
+        rfl
+      rw [h_list_len, h_len]
+      exact i.isLt
+    use h_bound
+    -- Now show v.toList[i.val] = v.get i
+    simp only [Vector.get]
+    rfl
 
 /-- The do-notation for circuits expands such that the output of a bind sequence
     is the output of the last circuit at the appropriate offset -/
