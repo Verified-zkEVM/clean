@@ -119,14 +119,15 @@ def main (input : Vector (Expression (F p)) 254) := do
   AliasCheck.circuit input
 
   -- Convert bits to number
-  -- TODO: need version without condition on bit length, like for Num2Bits
-  let out ← Bits2Num.circuit 254 input
-
-  return out
+  Bits2Num.main 254 input
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
+  localLength_eq := by simp +arith [circuit_norm, main,
+    Bits2Num.main, AliasCheck.circuit]
+  subcircuitsConsistent := by simp +arith [circuit_norm, main,
+    Bits2Num.main, AliasCheck.circuit]
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
@@ -134,11 +135,11 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    simp only [circuit_norm, main]
+    simp only [circuit_norm, main, Bits2Num.main]
     sorry
 
   completeness := by
-    simp only [circuit_norm, main]
+    simp only [circuit_norm, main, Bits2Num.main]
     sorry
 end Bits2Num_strict
 
@@ -173,7 +174,7 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
   let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do
-    out[i] * (out[i] - 1) === 0
+    assertBool out[i]
     return lc1 + out[i] * (2^i.val : F p)
 
   -- Check if input is zero
@@ -186,11 +187,10 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
-  localLength _ := 2 + n + n  -- IsZero + witness + foldlRange constraints
-  localLength_eq := by simp [circuit_norm, main, IsZero.circuit]; sorry
-  subcircuitsConsistent := sorry
-
-  Assumptions input := True
+  localLength _ := n + 2 -- witness + IsZero
+  localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
+  subcircuitsConsistent := by
+    simp +arith only [circuit_norm, main, subcircuit_norm, IsZero.circuit]
 
   Spec input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
