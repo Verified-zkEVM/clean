@@ -510,9 +510,25 @@ def MultiAND_Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
 
 -- Helper lemma: A vector of length 1 has toList = [v.get 0]
-theorem Vector.toList_length_one {α : Type} (v : Vector α 1) : 
+theorem Vector.toList_length_one {α : Type} (v : Vector α 1) :
     v.toList = [v.get 0] := by
-  sorry -- TODO: prove this lemma about vector toList
+  -- Try using cases on the vector
+  cases v using Vector.casesOn with
+  | mk arr h =>
+      cases arr using Array.casesOn with
+      | mk lst =>
+        -- h says arr.size = 1, and arr = Array.mk lst
+        -- So lst.length = 1
+        simp only [List.size_toArray] at h
+        -- Now we know lst has length 1, so it must be [x] for some x
+        match lst with
+        | [] => simp at h
+        | [x] =>
+          -- Goal: v.toList = [v.get 0]
+          -- v.toList = arr.toList = lst = [x]
+          -- v.get 0 = arr[0] = lst[0] = x
+          rfl
+        | _ :: _ :: _ => simp [List.length] at h
 
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
@@ -587,11 +603,11 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- We have h_env : eval env input_var = input
       -- And h_assumptions : ∀ i : Fin 2, (input.get i = 0 ∨ input.get i = 1)
       -- We need to show output.val = fold and (output = 0 ∨ output = 1)
-      
+
       -- Get the two input values
       have h_input0 := h_assumptions (0 : Fin 2)
       have h_input1 := h_assumptions (1 : Fin 2)
-      
+
       -- The main function calls AND.circuit.main with (input_var.get 0, input_var.get 1)
       -- We need to show the inputs evaluate correctly
       have h_eval0 : env (input_var.get 0) = input.get 0 := by
@@ -599,68 +615,68 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         have : (input_var.map (Expression.eval env))[0] = input[0] := by rw [h_env]
         rw [Vector.getElem_map] at this
         exact this
-      
+
       have h_eval1 : env (input_var.get 1) = input.get 1 := by
         rw [ProvableType.eval_fields] at h_env
         have : (input_var.map (Expression.eval env))[1] = input[1] := by rw [h_env]
         rw [Vector.getElem_map] at this
         exact this
-      
+
       -- Now use AND.circuit.soundness
-      have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1) 
-        (input.get 0, input.get 1) 
-        (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1]) 
+      have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1)
+        (input.get 0, input.get 1)
+        (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
         ⟨h_input0, h_input1⟩ h_hold
-      
+
       -- h_and_spec gives us the AND specification
       rcases h_and_spec with ⟨h_val, h_binary⟩
-      
+
       -- For now, use sorry to complete the n=2 case
       sorry -- TODO: complete n=2 case - need to relate AND output to main output and prove fold
     | m + 3 =>
       -- For n ≥ 3, main makes recursive calls
       simp only [main] at h_hold ⊢
       simp only [MultiAND_Spec]
-      
+
       -- Define n1 and n2 as in the main function
       let n1 := (m + 3) / 2
       let n2 := (m + 3) - n1
-      
+
       -- We have n1 + n2 = m + 3
       have h_sum : n1 + n2 = m + 3 := by unfold n1 n2; omega
-      
+
       -- Both n1 and n2 are less than m + 3
       have h_n1_lt : n1 < m + 3 := by unfold n1; omega
       have h_n2_lt : n2 < m + 3 := by unfold n2; omega
-      
+
       -- Extract the two input vectors
-      let input1 : fields n1 (F p) := 
+      let input1 : fields n1 (F p) :=
         ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
-      let input2 : fields n2 (F p) := 
+      let input2 : fields n2 (F p) :=
         ⟨input.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
-      
+
       -- The corresponding variable vectors
-      let input_var1 : Var (fields n1) (F p) := 
+      let input_var1 : Var (fields n1) (F p) :=
         ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
-      let input_var2 : Var (fields n2) (F p) := 
+      let input_var2 : Var (fields n2) (F p) :=
         ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
-      
+
       -- Show eval preserves the split
       have h_eval1 : eval env input_var1 = input1 := by
         sorry -- TODO: prove eval preserves extract
-      
+
       have h_eval2 : eval env input_var2 = input2 := by
         sorry -- TODO: prove eval preserves extract
-      
+
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
         intro i
         sorry -- TODO: prove assumptions preserved by extract
-      
+
       have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
         intro i
         sorry -- TODO: prove assumptions preserved by extract
-      
+
       -- Apply IH to both recursive calls
       -- The constraints hold for the subcircuits, so we can apply IH
       sorry -- TODO: complete the recursive case using IH and AND.circuit.soundness
