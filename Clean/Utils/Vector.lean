@@ -193,6 +193,12 @@ theorem getElem_mapRange {n} {create: ℕ → α} :
       subst i_eq
       rw [getElem_push_eq]
 
+theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
+  Vector.map f (Vector.mapRange n create) =
+    Vector.mapRange n (fun i => f (create i)) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapRange, getElem_map]
+
 theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
   induction m with
