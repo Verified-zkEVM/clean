@@ -173,16 +173,19 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   specialize c6 c5.right (h_normalized.right 10) (h_normalized.right 11)
   specialize c7 c6.right (h_normalized.right 12) (h_normalized.right 13)
   specialize c8 c7.right (h_normalized.right 14) (h_normalized.right 15)
+
+  simp only [Fin.isValue, c1.right, true_and, c2.right, c3.right, c4.right, c5.right, c6.right,
+    c7.right, c8.left, c9]
+
+  clear c1 c2 c3 c4 c5 c6 c7 c8
+
+  rw [h_input.left]
+  simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
+    Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_normalized
+
+  simp [h_normalized, getElem_eval_vector, h_input.right, and_self, true_and]
+
   sorry
-  -- simp only [Fin.isValue, c1.right, true_and, c2.right, c3.right, c4.right, c5.right, c6.right,
-  --   c7.right]
-  -- clear c1 c2 c3 c4 c5 c6 c7 c8
-
-  -- rw [h_input.left]
-  -- simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
-  --   Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_normalized
-
-  -- simp only [h_normalized, getElem_eval_vector, h_input.right, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
