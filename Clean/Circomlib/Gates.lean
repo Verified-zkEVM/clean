@@ -396,28 +396,99 @@ theorem main_localLength (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ)
       -- Total: (n1 - 1) + (n2 - 1) + 1 = n1 + n2 - 1 = m + 3 - 1
       rw [main]
       repeat rw [Circuit.localLength_bind]
-      
+
       -- Apply IH to the recursive calls
       -- Need to be careful about the input vectors
       simp only [IH _ h_n1_lt, IH _ h_n2_lt]
-      
+
       -- For the final AND.circuit.main call, use its localLength_eq property
       -- The AND circuit has localLength = 1
       simp only [Circuit.output]
-      
+
       -- Use the fact that AND.circuit has localLength = 1
-      have h_and : ∀ (inp : Expression (F p) × Expression (F p)) (off : ℕ), 
+      have h_and : ∀ (inp : Expression (F p) × Expression (F p)) (off : ℕ),
         (AND.circuit.main inp).localLength off = 1 := by
         intro inp off
         have := AND.circuit.localLength_eq inp off
         rw [show AND.circuit.localLength _ = 1 from rfl] at this
         exact this
-      
+
       rw [h_and]
-      
+
       -- Now simplify the arithmetic: (n1 - 1) + (n2 - 1) + 1 = m + 3 - 1
       conv => rhs; rw [← h_sum]
       omega
+
+
+-- Helper lemma: forAll for bind operations
+theorem Circuit.forAll_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) 
+    (condition : Condition (F p)) (offset : ℕ) :
+    Operations.forAll offset condition ((f >>= g).operations offset) ↔
+    Operations.forAll offset condition (f.operations offset) ∧ 
+    Operations.forAll (offset + f.localLength offset) condition 
+      ((g (f.output offset)).operations (offset + f.localLength offset)) := by
+  simp only [Circuit.operations, Circuit.bind_def, Circuit.localLength, Circuit.output]
+  conv => rhs; arg 2; arg 1; rw [add_comm]
+  exact @Operations.forAll_append (F p) _ condition offset (f offset).2 
+    (g (f offset).1 (offset + Operations.localLength (f offset).2)).2
+
+-- Helper lemma: SubcircuitsConsistent preserved by bind
+theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ)
+    (hf : Operations.SubcircuitsConsistent offset (f.operations offset))
+    (hg : Operations.SubcircuitsConsistent (offset + f.localLength offset)
+          ((g (f.output offset)).operations (offset + f.localLength offset))) :
+    Operations.SubcircuitsConsistent offset ((f >>= g).operations offset) := by
+  simp only [Operations.SubcircuitsConsistent] at hf hg ⊢
+  rw [Circuit.forAll_bind]
+  exact ⟨hf, hg⟩
+
+-- Helper theorem for subcircuitsConsistent
+theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+    Operations.SubcircuitsConsistent offset ((main input).operations offset) := by
+  -- Use strong induction on n
+  induction n using Nat.strong_induction_on generalizing offset with
+  | _ n IH =>
+    -- Match on the structure of n as in main's definition
+    match n with
+    | 0 =>
+      -- For n = 0, main returns (1 : F p)
+      simp only [main, Circuit.operations, Circuit.pure_def]
+      simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    | 1 =>
+      -- For n = 1, main returns input.get 0
+      simp only [main, Circuit.operations, Circuit.pure_def]
+      simp only [Operations.SubcircuitsConsistent, Operations.forAll]
+    | 2 =>
+      -- For n = 2, main calls AND.circuit.main
+      simp only [main, Circuit.operations]
+      -- Use the fact that AND.circuit is subcircuits consistent
+      exact AND.circuit.subcircuitsConsistent (input.get 0, input.get 1) offset
+    | m + 3 =>
+      -- For n ≥ 3, main makes recursive calls
+      rw [main]
+
+      -- Define n1 and n2 as in the main function
+      let n1 := (m + 3) / 2
+      let n2 := (m + 3) - n1
+
+      -- We have n1 < m + 3 and n2 < m + 3
+      have h_n1_lt : n1 < m + 3 := by unfold n1; omega
+      have h_n2_lt : n2 < m + 3 := by unfold n2; omega
+
+      -- The circuit structure is:
+      -- 1. Pure operations creating input1 and input2 (no subcircuits)
+      -- 2. main input1 >>= λ out1 => (has subcircuits by IH)
+      -- 3. main input2 >>= λ out2 => (has subcircuits by IH)
+      -- 4. AND.circuit.main (out1, out2) (has subcircuits)
+
+      -- We need to show SubcircuitsConsistent for the combined operations
+      -- This requires using:
+      -- - Circuit.bind_def to see how operations are combined
+      -- - Operations.forAll_append to handle the concatenation
+      -- - IH for the recursive calls
+      -- - AND.circuit.subcircuitsConsistent for the final AND
+
+      sorry
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
@@ -425,7 +496,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   localLength_eq := by
     intro input offset
     exact main_localLength n input offset
-  subcircuitsConsistent := by sorry
+  subcircuitsConsistent := by
+    intro input offset
+    exact main_subcircuitsConsistent n input offset
 
   Assumptions input := ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
   Spec input output :=
