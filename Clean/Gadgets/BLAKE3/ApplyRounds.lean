@@ -38,40 +38,45 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   ]
 
   -- Apply 7 rounds with message permutation between rounds (except the last)
-  let state ← Round.circuit ⟨state, block_words⟩
-  let block_words ← Permute.circuit block_words
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
 
-  let state ← Round.circuit ⟨state, block_words⟩
-  let block_words ← Permute.circuit block_words
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
 
-  let state ← Round.circuit ⟨state, block_words⟩
-  let block_words ← Permute.circuit block_words
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
 
-  let state ← Round.circuit ⟨state, block_words⟩
-  let block_words ← Permute.circuit block_words
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
 
-  let state ← Round.circuit ⟨state, block_words⟩
-  let block_words ← Permute.circuit block_words
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
 
-  let state ← Round.circuit ⟨state, block_words⟩
-  let block_words ← Permute.circuit block_words
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
 
-  let state ← Round.circuit ⟨state, block_words⟩
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
+
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let block_words ← subcircuit Permute.circuit block_words
+
+  let state ← subcircuit Round.circuit ⟨state, block_words⟩
 
   return state
 
--- #eval! main (p:=pBabybear) default |>.localLength
+#eval! main (p:=pBabybear) default |>.localLength
 -- #eval! main (p:=pBabybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
-  localLength _ := 5376
+  localLength _ := 6912
   localLength_eq input i0 := by
-    simp only [Circuit.localLength, main, Round.circuit, Permute.circuit, Circuit.pure_def,
-      Circuit.bind_def, subcircuit, ElaboratedCircuit.output, Circuit.output, List.append_nil,
-      ↓Fin.getElem_fin, Operations.localLength.eq_5, Circuit.subcircuit_localLength_eq,
-      ElaboratedCircuit.localLength, Operations.localLength, add_zero, subcircuit.eq_1,
-      Operations.localLength.eq_1, Nat.add_zero, List.cons_append, List.nil_append,
-      Vector.getElem_ofFn, zero_add, Nat.reduceAdd]
+    dsimp only [main, Round.circuit, Permute.circuit, Circuit.pure_def, Circuit.bind_def,
+      subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
+      ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
+      List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
+      Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
@@ -90,6 +95,23 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+  intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+  intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
+
+  -- dsimp [main, elaborated, circuit_norm, subcircuit_norm] at h_holds
+  simp [circuit_norm] at h_input
+  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
+    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
+
+  obtain ⟨c1, h_holds⟩ := h_holds
+
+
+  simp [circuit_norm, subcircuit_norm, Round.circuit, Round.Assumptions, Round.Spec,
+    Fin.forall_fin_succ] at c1
+
+  rw [eval_vector, BLAKE3State.Normalized] at c1
+  simp [circuit_norm, BLAKE3State.value, Fin.forall_fin_succ] at c1
+
   sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
