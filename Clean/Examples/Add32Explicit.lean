@@ -13,12 +13,12 @@ instance explicit : ExplicitCircuits (Gadgets.Addition32Full.main (p:=pBabybear)
 
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
   -- rfl -- also works
-  dsimp only [explicit_circuit_norm, explicit]
+  dsimp only [explicit_circuit_norm, explicit, assertBool]
 
 example : ExplicitCircuit.output (circuit32 default) 0
     = { z := ⟨ var ⟨0⟩, var ⟨2⟩, var ⟨4⟩, var ⟨6⟩ ⟩, carryOut := var ⟨7⟩ } := by
   -- rfl -- also works
-  dsimp only [explicit_circuit_norm, explicit, ProvableType.varFromOffset_field]
+  dsimp only [explicit_circuit_norm, explicit, ProvableType.varFromOffset_field, assertBool]
 
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
@@ -50,7 +50,7 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Var field (F pBabybear)) env (i0 : �
   -- second version: using `ExplicitCircuit`
   -- resolve explicit circuit operations
   rw [ExplicitCircuit.operations_eq]
-  dsimp only [explicit_circuit_norm, explicit]
+  dsimp only [explicit_circuit_norm, explicit, assertBool]
   -- simp `ConstraintsHold` expression
   simp only [Circuit.ConstraintsHold.append_soundness, Circuit.ConstraintsHold.Soundness, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions

@@ -44,7 +44,7 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
   let state_b ← Rotation32.circuit 7 <|
     ← Xor32.circuit ⟨state_b, state_c⟩
 
-  state
+  return state
     |>.set a state_a
     |>.set b state_b
     |>.set c state_c
