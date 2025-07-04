@@ -12,6 +12,103 @@ https://github.com/iden3/circomlib/blob/master/circuits/gates.circom
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime]
 
+section MathematicalLemmas
+
+/-! # Mathematical Lemmas for Gates
+
+These lemmas capture key mathematical properties needed for the gate proofs,
+independent of the circuit framework.
+-/
+
+/-- The bitwise AND operation `&&&` is associative for binary values (0 or 1) -/
+theorem and_assoc_binary (a b c : ℕ) 
+    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) (hc : c = 0 ∨ c = 1) :
+    a &&& (b &&& c) = (a &&& b) &&& c := by
+  -- For binary values, &&& is just bitwise AND
+  -- We prove by cases on all three values
+  cases ha with
+  | inl ha0 =>
+    rw [ha0]
+    -- 0 &&& anything = 0, so both sides are 0
+    simp only [HAnd.hAnd, AndOp.and]
+    -- LHS: 0 &&& (b &&& c) = 0
+    -- RHS: (0 &&& b) &&& c = 0 &&& c = 0
+    sorry
+  | inr ha1 =>
+    rw [ha1]
+    cases hb with
+    | inl hb0 =>
+      rw [hb0]
+      -- LHS: 1 &&& (0 &&& c) = 1 &&& 0 = 0
+      -- RHS: (1 &&& 0) &&& c = 0 &&& c = 0
+      simp only [HAnd.hAnd, AndOp.and]
+      sorry
+    | inr hb1 =>
+      rw [hb1]
+      cases hc with
+      | inl hc0 =>
+        rw [hc0]
+        -- LHS: 1 &&& (1 &&& 0) = 1 &&& 0 = 0
+        -- RHS: (1 &&& 1) &&& 0 = 1 &&& 0 = 0
+        simp only [HAnd.hAnd, AndOp.and]
+        sorry
+      | inr hc1 =>
+        rw [hc1]
+        -- LHS: 1 &&& (1 &&& 1) = 1 &&& 1 = 1
+        -- RHS: (1 &&& 1) &&& 1 = 1 &&& 1 = 1
+        simp only [HAnd.hAnd, AndOp.and]
+        sorry
+
+/-- For binary values, 1 is the identity element for `&&&` -/
+theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) : 
+    1 &&& a = a := by
+  cases ha with
+  | inl h0 => 
+    rw [h0]
+    simp only [HAnd.hAnd, AndOp.and]
+    -- 1 &&& 0 = (1 % 2) .land (0 % 2) = 1 .land 0 = 0
+    rfl
+  | inr h1 =>
+    rw [h1]
+    simp only [HAnd.hAnd, AndOp.and]
+    -- 1 &&& 1 = (1 % 2) .land (1 % 2) = 1 .land 1 = 1
+    rfl
+
+/-- For binary values, 0 is the absorbing element for `&&&` -/
+theorem and_zero_absorb (a : ℕ) : 
+    0 &&& a = 0 := by
+  simp only [HAnd.hAnd, AndOp.and]
+  -- 0 &&& a = (0 % 2) .land (a % 2) = 0 .land (a % 2) = 0
+  -- Since 0 % 2 = 0, we need to prove: Nat.land 0 (a % 2) = 0
+  -- By definition of Nat.land (bitwise AND), 0 AND anything is 0
+  sorry -- Requires lemma about Nat.land
+
+/-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
+theorem Vector.mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
+    x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
+  sorry
+
+/-- The do-notation for circuits expands such that the output of a bind sequence
+    is the output of the last circuit at the appropriate offset -/
+theorem Circuit.bind_output_eq {F : Type} [Field F] {α β : Type} 
+    (c1 : Circuit F α) (c2 : α → Circuit F β) (offset : ℕ) :
+    (c1 >>= c2).output offset = 
+    (c2 (c1.output offset)).output (offset + c1.localLength offset) := by
+  sorry
+
+/-- For binary values and binary lists, a &&& foldl 1 l = foldl a l -/
+theorem and_foldl_eq_foldl_of_all_binary (a : ℕ) (l : List ℕ) 
+    (ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
+    a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
+  -- This proof is complex due to how &&& expands with modulo operations
+  -- The key insights are:
+  -- 1. For binary values, x % 2 = x
+  -- 2. &&& is associative for binary values
+  -- 3. 1 is the identity for &&& on binary values
+  sorry
+
+end MathematicalLemmas
+
 namespace XOR
 /-
 template XOR() {
@@ -401,20 +498,47 @@ theorem List.foldl_and_binary (l : List ℕ) :
 -- Key lemma: for binary values, a &&& foldl = foldl starting from a
 theorem List.and_foldl_eq_foldl_of_binary (a : ℕ) (l : List ℕ) :
     (a = 0 ∨ a = 1) → a &&& List.foldl (· &&& ·) 1 l = List.foldl (· &&& ·) a l := by
-  sorry
+  intro h_a_binary
+  induction l with
+  | nil =>
+    simp [List.foldl_nil]
+    cases h_a_binary with
+    | inl h_zero => 
+      rw [h_zero]
+      -- Goal: 0 &&& 1 = List.foldl _ 0 []
+      -- LHS = 0 &&& 1 = 0, RHS = 0
+      norm_num [HAnd.hAnd, AndOp.and]
+    | inr h_one => 
+      rw [h_one] 
+      -- Goal: 1 &&& 1 = List.foldl _ 1 []
+      -- LHS = 1 &&& 1 = 1, RHS = 1
+      norm_num [HAnd.hAnd, AndOp.and]
+  | cons x xs ih =>
+    simp [List.foldl_cons]
+    -- The key insight: for binary values, AND is associative with identity 1
+    -- So a &&& (1 &&& x) &&& ... = (a &&& 1) &&& x &&& ...
+    -- And since a is binary (0 or 1), we have:
+    -- - If a = 0: 0 &&& anything = 0
+    -- - If a = 1: 1 &&& x = x
+    
+    -- We need: a &&& List.foldl (· &&& ·) (1 &&& x) xs = List.foldl (· &&& ·) (a &&& x) xs
+    -- This requires knowing that x and all elements of xs are binary
+    -- Without this assumption, we cannot apply our lemmas
+    sorry -- Requires assumption that all elements of l are binary
 
 -- Helper lemma: if all elements of a vector are binary, then all elements of its list are binary
 theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
     (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) → 
     (∀ x ∈ v.toList, x = 0 ∨ x = 1) := by
   intro h_vec x h_mem
-  -- v.toList contains exactly the elements v.get i for i : Fin n
-  -- Since x ∈ v.toList, there exists some index i such that v.get i = x
-  have h_exists : ∃ i : Fin n, v.get i = x := by
-    -- This follows from the definition of Vector.toList
-    sorry
-  rcases h_exists with ⟨i, hi⟩
-  rw [← hi]
+  -- We'll prove this by induction on the vector structure
+  -- First, let's use the fact that membership in v.toList means x is one of the vector elements
+  -- Since all vector elements are binary by h_vec, x must be binary
+  
+  -- Use the membership characterization lemma
+  rw [Vector.mem_toList_iff_get] at h_mem
+  rcases h_mem with ⟨i, hi⟩
+  rw [hi]
   exact h_vec i
 
 -- Helper lemma: localLength of bind
@@ -1012,7 +1136,20 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- The key is that the do-block output IS the AND circuit output
         -- We just need to show they evaluate to the same thing
         
-        sorry -- TODO: Connect do-block evaluation to AND circuit evaluation
+        -- The key insight: the do-block output is the AND circuit output
+        -- Let's work with what we know about the AND circuit
+        
+        -- From h_and_val, we know:
+        -- AND circuit output.val = out1.val &&& out2.val
+        -- where out1.val = foldl input1 and out2.val = foldl input2
+        
+        -- The goal is about the do-block output, which is the AND circuit output
+        -- We need to show this equals (foldl input1) &&& (foldl input2)
+        
+        -- We need to show the do-block output equals (foldl input1) &&& (foldl input2)
+        -- This requires connecting the do-block expansion to the AND circuit evaluation
+        -- For now, we accept this as a fundamental property of circuit composition
+        sorry
         
       · -- Prove output is binary
         -- The output is from AND circuit, so it's binary
@@ -1022,7 +1159,8 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- We know from h_and_binary that the AND circuit output is binary
         -- Since the do-block output IS the AND circuit output, we're done
         
-        sorry -- TODO: Connect do-block output to AND circuit output
+        -- Similar to the value case, this requires connecting do-block to AND circuit
+        sorry
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
@@ -1045,11 +1183,34 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     -- Completeness: if inputs are binary, then constraints hold
     -- We need to show that the constraints generated by the circuit are satisfied
     
-    -- The proof structure will be similar to soundness:
-    -- 1. Base cases (n=1, n=2) are straightforward
-    -- 2. Recursive case uses the IH on the two halves
-    
-    sorry -- TODO: Implement completeness proof
+    -- Use strong induction on n
+    match n with
+    | 0 => 
+      -- No constraints for n = 0
+      simp [main, Circuit.ConstraintsHold.Completeness]
+    | 1 =>
+      -- For n = 1, main returns the single input, no constraints
+      simp [main, Circuit.ConstraintsHold.Completeness]
+    | 2 =>
+      -- For n = 2, we use the AND gate
+      simp [main]
+      -- The goal asks for the AND circuit's completeness with the given input
+      -- We need to apply AND.circuit.completeness but the types don't match exactly
+      -- This is because ElaboratedCircuit.main expects a pair, not a vector
+      sorry -- Type mismatch: need to convert between vector and pair representations
+    | m + 3 =>
+      -- Recursive case: split into two halves and apply IH
+      simp [main]
+      -- The circuit is: do { out1 ← main v1; out2 ← main v2; AND (out1, out2) }
+      -- We need to show constraints hold for all three parts
+      
+      -- This requires:
+      -- 1. Completeness for the first recursive call (main v1)
+      -- 2. Completeness for the second recursive call (main v2)  
+      -- 3. Completeness for the AND gate with outputs from 1 and 2
+      
+      -- The challenge is properly handling the offsets and connecting the pieces
+      sorry -- TODO: Apply IH and AND completeness with proper offset management
 
 end MultiAND
 
