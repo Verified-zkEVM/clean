@@ -530,6 +530,21 @@ theorem Vector.toList_length_one {α : Type} (v : Vector α 1) :
           rfl
         | _ :: _ :: _ => simp [List.length] at h
 
+-- Helper lemma: A vector of length 2 has toList = [v.get 0, v.get 1]
+theorem Vector.toList_length_two {α : Type} (v : Vector α 2) :
+    v.toList = [v.get 0, v.get 1] := by
+  -- Use the same approach as for length 1
+  cases v using Vector.casesOn with
+  | mk arr h =>
+      cases arr using Array.casesOn with
+      | mk lst =>
+        simp only [List.size_toArray] at h
+        match lst with
+        | [] => simp at h
+        | [_] => simp [List.length] at h
+        | [x, y] => rfl
+        | _ :: _ :: _ :: _ => simp [List.length] at h
+
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
@@ -591,8 +606,21 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       · -- Prove output.val = single element fold
         simp only [h_eval_eq]
         -- For n=1, we need to show: (input.get 0).val = (input.toList.map (·.val)).foldl (· &&& ·) 1
-        -- Without the lemma, we'll use sorry for now
-        sorry -- TODO: complete this after proving Vector.toList_length_one
+        -- Use our Vector.toList_length_one lemma
+        rw [Vector.toList_length_one]
+        -- Now we have: (input.get 0).val = ([input.get 0].map (·.val)).foldl (· &&& ·) 1
+        simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
+        -- This simplifies to: (input.get 0).val = 1 &&& (input.get 0).val
+        -- For binary values, 1 &&& x = x
+        cases h_input0 with
+        | inl h0 =>
+          rw [h0]
+          simp only [ZMod.val_zero]
+          rfl
+        | inr h1 =>
+          rw [h1]
+          simp only [ZMod.val_one]
+          rfl
       · -- Prove output = 0 ∨ output = 1
         simp only [h_eval_eq]
         exact h_input0
@@ -631,8 +659,27 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- h_and_spec gives us the AND specification
       rcases h_and_spec with ⟨h_val, h_binary⟩
 
-      -- For now, use sorry to complete the n=2 case
-      sorry -- TODO: complete n=2 case - need to relate AND output to main output and prove fold
+      -- TODO: complete n=2 case - need to connect AND circuit output to main output
+      constructor
+      · -- Prove output.val = fold
+        simp only [Vector.toList_length_two]
+        -- Now goal is: output.val = [input.get 0, input.get 1].map(·.val).foldl(· &&& ·) 1
+        simp only [List.map_cons, List.map_nil]
+        -- Goal: output.val = [(input.get 0).val, (input.get 1).val].foldl (· &&& ·) 1
+        -- Apply foldl_cons twice to expand [a, b].foldl f init
+        rw [List.foldl_cons, List.foldl_cons, List.foldl_nil]
+        -- Goal: output.val = (1 &&& (input.get 0).val) &&& (input.get 1).val
+        -- Simplify 1 &&& x = x for binary values
+        have h1 : 1 &&& (input.get 0).val = (input.get 0).val := by
+          cases h_input0 with
+          | inl h => rw [h]; simp only [ZMod.val_zero]; rfl
+          | inr h => rw [h]; simp only [ZMod.val_one]; rfl
+        rw [h1]
+        -- Now goal is: output.val = (input.get 0).val &&& (input.get 1).val
+        -- This is exactly h_val from AND.circuit.soundness
+        exact h_val
+      · -- Prove output = 0 ∨ output = 1
+        exact h_binary
     | m + 3 =>
       -- For n ≥ 3, main makes recursive calls
       simp only [main] at h_hold ⊢
