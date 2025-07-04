@@ -123,26 +123,25 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize c8 c7.right (h_message 14) (h_message 15)
   clear c7
 
-  sorry
-  -- dsimp [circuit_norm] at c9
+  -- TODO for some reason `circuit_norm` dos not apply automatically this thm
+  rw [eval_pair (α := BLAKE3State) (β := BLAKE3State) env] at c9
+  simp [circuit_norm] at c9
 
-  -- rw [c8.left] at c9
-
-
-  -- -- now c8 is basically the goal
-  -- simp only [Spec, ElaboratedCircuit.output, Circuit.output, main, G.circuit, G.elaborated,
-  --   Fin.isValue, Fin.val_zero, Fin.coe_ofNat_eq_mod, Nat.reduceMod, Fin.val_one, Fin.val_two,
-  --   Nat.mod_succ, pure, Circuit.bind_def, subcircuit, FormalCircuit.toSubcircuit,
-  --   Circuit.operations, ElaboratedCircuit.main, ElaboratedCircuit.localLength, List.append_nil,
-  --   Operations.localLength.eq_5, Operations.localLength, add_zero, id_eq, subcircuit.eq_1,
-  --   FormalCircuit.toSubcircuit.eq_1, Operations.localLength.eq_1, Nat.add_zero, List.cons_append,
-  --   List.nil_append, Circuit.localLength, Operations.SubcircuitsConsistent.eq_1, Specs.BLAKE3.round,
-  --   Vector.foldl, roundConstants, ↓Fin.getElem_fin, ↓Vector.getElem_map, List.size_toArray,
-  --   List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, List.foldl_toArray',
-  --   List.foldl_cons, List.foldl_nil]
-  -- constructor
-  -- · rw [←c8.left]; rfl
-  -- · exact c8.right
+  -- now c8 is basically the goal
+  simp only [Spec, ElaboratedCircuit.output, Circuit.output, main, G.circuit, G.elaborated,
+    Fin.isValue, Fin.val_zero, Fin.coe_ofNat_eq_mod, Nat.reduceMod, Fin.val_one, Fin.val_two,
+    Nat.mod_succ, pure, Circuit.bind_def, subcircuit, FormalCircuit.toSubcircuit,
+    Circuit.operations, ElaboratedCircuit.main, ElaboratedCircuit.localLength, List.append_nil,
+    Operations.localLength.eq_5, Operations.localLength, add_zero, id_eq, subcircuit.eq_1,
+    FormalCircuit.toSubcircuit.eq_1, Operations.localLength.eq_1, Nat.add_zero, List.cons_append,
+    List.nil_append, Circuit.localLength, Operations.SubcircuitsConsistent.eq_1, Specs.BLAKE3.round,
+    Vector.foldl, roundConstants, ↓Fin.getElem_fin, ↓Vector.getElem_map, List.size_toArray,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, List.foldl_toArray',
+    List.foldl_cons, List.foldl_nil]
+  constructor
+  · rw [c9, c8.left]
+  · rw [c9]
+    exact c8.right
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨state_var, message_var⟩ henv ⟨state, message⟩ h_input h_normalized
