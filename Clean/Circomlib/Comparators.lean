@@ -45,11 +45,12 @@ def circuit : FormalCircuit (F p) field field where
 
   soundness := by
     simp only [circuit_norm, main]
-    sorry
+    aesop
 
   completeness := by
     simp only [circuit_norm, main]
-    sorry
+    aesop
+
 end IsZero
 
 namespace IsEqual
