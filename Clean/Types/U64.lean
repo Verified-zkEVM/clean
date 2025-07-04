@@ -221,48 +221,10 @@ end U64.AssertNormalized
 -/
 def U64.witness (compute : Environment (F p) → U64 (F p)) := do
   let x ← ProvableType.witness compute
-  assertion U64.AssertNormalized.circuit x
+  U64.AssertNormalized.circuit x
   return x
 
-namespace U64.Copy
-
-def main (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p))  := do
-  let y ← ProvableType.witness fun env =>
-    U64.mk (env x.x0) (env x.x1) (env x.x2) (env x.x3) (env x.x4) (env x.x5) (env x.x6) (env x.x7)
-  x === y
-  return y
-
-def Assumptions (_input : U64 (F p)) := True
-
-def Spec (x y : U64 (F p)) := x = y
-
-def circuit : FormalCircuit (F p) U64 U64 where
-  main := main
-  Assumptions
-  Spec
-  localLength _ := 8
-  output inputs i0 := varFromOffset U64 i0
-  soundness := by
-    rintro i0 env x_var
-    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp [circuit_norm, main, Spec, h_eval, explicit_provable_type]
-    injections h_eval
-    intros h0 h1 h2 h3 h4 h5 h6 h7
-    aesop
-
-  completeness := by
-    rintro i0 env x_var
-    rintro h ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    simp only [circuit_norm, main] at h
-    have h0 : env.get i0 = _ := h 0
-    simp_all [circuit_norm, main, explicit_provable_type, Fin.forall_iff]
-
-end Copy
-
-@[reducible]
-def copy (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  subcircuit U64.Copy.circuit x
-
+namespace U64
 def fromByte (x: Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 

@@ -287,6 +287,17 @@ structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableTyp
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
 
+/--
+`DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
+This ensures that for any input satisfying the assumptions, the specification uniquely determines the output.
+Use this class when you want to formally guarantee that constraints uniquely determine the output,
+preventing ambiguity in deterministic circuits.
+-/
+structure DeterministicFormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
+    extends circuit : FormalCircuit F Input Output where
+  uniqueness : ∀ (input : Input F) (out1 out2 : Output F), 
+    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+
 @[circuit_norm]
 def FormalAssertion.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=

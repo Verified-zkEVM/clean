@@ -1,4 +1,6 @@
 import Clean.Circuit
+import Clean.Circomlib.Gates
+import Clean.Circomlib.Comparators
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson

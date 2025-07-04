@@ -18,14 +18,14 @@ instance : ProvableStruct Input where
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
-  let state_rate ← Circuit.mapFinRange RATE fun i => subcircuit Xor64.circuit ⟨state[i.val], block[i.val]⟩
+  let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit ⟨state[i.val], block[i.val]⟩
 
   -- the remaining elements of the state are unchanged
   let state_capacity := Vector.mapFinRange (25 - RATE) fun i => state[RATE + i.val]
   let state' : Vector _ 25 := state_rate ++ state_capacity
 
   -- apply the permutation
-  subcircuit Permutation.circuit state'
+  Permutation.circuit state'
 
 instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   main

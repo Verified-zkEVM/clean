@@ -45,7 +45,7 @@ def recursiveRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
   let next ← TableConstraint.getNextRow
 
-  let z ← subcircuit Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
+  let z ← Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
 
   assignU32 nextRowOff.y z
   curr.y === next.x

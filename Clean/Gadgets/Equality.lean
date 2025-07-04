@@ -117,13 +117,13 @@ end Gadgets
 
 @[circuit_norm]
 def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
-  (x y : α (Expression F)) : Circuit F Unit :=
-  assertion (Gadgets.Equality.circuit α) (x, y)
+    (x y : α (Expression F)) : Circuit F Unit :=
+  Gadgets.Equality.circuit α (x, y)
 
 @[circuit_norm, reducible]
 def Expression.assertEquals {F : Type} [Field F]
-  (x y : Expression F) : Circuit F Unit :=
-  assertion (Gadgets.Equality.circuit id) (x, y)
+    (x y : Expression F) : Circuit F Unit :=
+  Gadgets.Equality.circuit id (x, y)
 
 class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
   assert_eq : β → β → Circuit F Unit

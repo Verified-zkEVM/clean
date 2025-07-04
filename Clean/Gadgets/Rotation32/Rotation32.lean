@@ -24,8 +24,8 @@ def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) :
   let bit_offset : ℕ := (offset % 8).val
 
   -- rotation is performed by combining a bit and a byte rotation
-  let byte_rotated ← subcircuit (Rotation32Bytes.circuit byte_offset) x
-  subcircuit (Rotation32Bits.circuit bit_offset) byte_rotated
+  let byte_rotated ← Rotation32Bytes.circuit byte_offset x
+  Rotation32Bits.circuit bit_offset byte_rotated
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 
@@ -46,7 +46,7 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
-  simp [circuit_norm, main, elaborated, U32.copy, subcircuit_norm,
+  simp [circuit_norm, main, elaborated, subcircuit_norm,
     Rotation32Bits.circuit, Rotation32Bits.elaborated] at h_holds
 
   -- abstract away intermediate U32

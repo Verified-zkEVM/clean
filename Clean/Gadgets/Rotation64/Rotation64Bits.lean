@@ -20,7 +20,7 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
   Rotate the 64-bit integer by `offset` bits
 -/
 def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let parts ← Circuit.map x.toLimbs (subcircuit (ByteDecomposition.circuit offset))
+  let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
   let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
 

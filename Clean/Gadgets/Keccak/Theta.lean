@@ -9,9 +9,9 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let c ← subcircuit ThetaC.circuit state
-  let d ← subcircuit ThetaD.circuit c
-  subcircuit ThetaXor.circuit ⟨state, d⟩
+  let c ← ThetaC.circuit state
+  let d ← ThetaD.circuit c
+  ThetaXor.circuit ⟨state, d⟩
 
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main

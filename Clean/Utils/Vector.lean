@@ -46,9 +46,9 @@ theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
 universe u
 
 def induct {motive : {n: ℕ} → Vector α n → Sort u}
-  (nil: motive #v[])
-  (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
-  {n: ℕ} (v: Vector α n) : motive v :=
+    (nil: motive #v[])
+    (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
+    {n: ℕ} (v: Vector α n) : motive v :=
   match v with
   | ⟨ .mk [], h ⟩ => by
     have : n = 0 := by rw [←h, List.length_eq_zero_iff]
