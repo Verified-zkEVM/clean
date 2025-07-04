@@ -10,6 +10,8 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
+-- instance : Fact (p > 2^135) := .mk (by linarith [‹Fact (p > 2^253)›.elim])
+
 
 namespace CompConstant
 /-
@@ -90,7 +92,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 
   -- Convert sum to bits
   have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
-  let bits ← subcircuitWithAssertion (Num2Bits.circuit 135 hp) sout
+  let bits ← Num2Bits.circuit 135 hp sout
 
   let out <== bits[127]
   return out

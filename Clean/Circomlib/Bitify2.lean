@@ -35,17 +35,16 @@ template Num2Bits_strict() {
 def main (input : Expression (F p)) := do
   -- Convert input to 254 bits
   -- TODO the requirement 2^254 < p is too strong here, need more precise version of Num2Bits
-  let bits ← subcircuitWithAssertion (Num2Bits.circuit 254 sorry) input
+  let bits ← Num2Bits.circuit 254 sorry input
 
   -- Check that the bits represent a value less than p
-  have h135 : 2^135 < p := by linarith [‹Fact (p > 2^253)›.elim]
-  assertion (AliasCheck.circuit h135) bits
+  AliasCheck.circuit bits
 
   return bits
 
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
-  localLength _ := 254 + (127 + 1 + 135 + 1)  -- Num2Bits + AliasCheck
+  localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
 
   Spec input output := output = fieldToBits 254 input
 
@@ -77,11 +76,10 @@ template Bits2Num_strict() {
 -/
 def main (input : Vector (Expression (F p)) 254) := do
   -- Check that the bits represent a value less than p
-  have h135 : 2^135 < p := by linarith [‹Fact (p > 2^253)›.elim]
-  assertion (AliasCheck.circuit h135) input
+  AliasCheck.circuit input
 
   -- Convert bits to number
-  let out ← subcircuit (Bits2Num.circuit 254 sorry) input
+  let out ← Bits2Num.circuit 254 sorry input
 
   return out
 
@@ -138,7 +136,7 @@ def main (n : ℕ) (input : Expression (F p)) := do
     return lc1 + out[i] * (2^i.val : F p)
 
   -- Check if input is zero
-  let isZero_out ← subcircuit IsZero.circuit input
+  let isZero_out ← IsZero.circuit input
 
   -- Main constraint: lc1 + isZero.out * 2^n === 2^n - in
   lc1 + isZero_out * (2^n : F p) === (2^n : F p) - input

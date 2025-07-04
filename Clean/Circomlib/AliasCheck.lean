@@ -10,6 +10,7 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
+instance hp135 : Fact (p > 2^135) := .mk (by linarith [‹Fact (p > 2^253)›.elim])
 
 namespace AliasCheck
 /-
@@ -26,10 +27,10 @@ template AliasCheck() {
 -/
 def main (input : Vector (Expression (F p)) 254) := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
-  let comp_out ← subcircuit (CompConstant.circuit (p - 1)) input
+  let comp_out ← CompConstant.circuit (p - 1) input
   comp_out === 0
 
-def circuit (h135 : 2^135 < p) : FormalAssertion (F p) (fields 254) where
+def circuit : FormalAssertion (F p) (fields 254) where
   main
   localLength _ := 127 + 1 + 135 + 1
 
@@ -41,6 +42,7 @@ def circuit (h135 : 2^135 < p) : FormalAssertion (F p) (fields 254) where
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
     simp only [subcircuit_norm, circuit_norm]
     simp_all
+    have : p > 2^135 := hp135.elim
     omega
 
   completeness := by
