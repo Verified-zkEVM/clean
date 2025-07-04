@@ -324,7 +324,7 @@ def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expressi
     AND.circuit.main (out1, out2)
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
-  main := main
+  main
   localLength _ := sorry -- Will need to compute based on recursive structure
   localLength_eq := by sorry
   subcircuitsConsistent := by sorry
