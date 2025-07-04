@@ -145,8 +145,8 @@ template NOT() {
 }
 -/
 def main (input : Expression (F p)) := do
-  let in := input
-  let out <== 1 + in - 2*in
+  let inp := input
+  let out <== 1 + inp - 2*inp
   return out
 
 def circuit : FormalCircuit (F p) field field where
@@ -157,7 +157,7 @@ def circuit : FormalCircuit (F p) field field where
 
   Assumptions input := (input = 0 ∨ input = 1)
   Spec input output :=
-    output.val = ~~~input.val
+    output.val = 1 - input.val
     ∧ (output = 0 ∨ output = 1)
 
   soundness := by
@@ -166,7 +166,7 @@ def circuit : FormalCircuit (F p) field field where
       simp only [circuit_norm, main] at h_env h_hold ⊢
       simp_all only [h_in, h_hold]
       constructor
-      · ring_nf; simp
+      · ring_nf; simp [ZMod.val_zero, tsub_zero, ZMod.val_one]
       · ring_nf; simp
     }
 
@@ -198,7 +198,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
   Spec input output :=
-    output.val = ~~~(input.1.val &&& input.2.val)
+    output.val = 1 - (input.1.val &&& input.2.val)
     ∧ (output = 0 ∨ output = 1)
 
   soundness := by
@@ -208,7 +208,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rcases h_env with ⟨ _, _ ⟩
       simp_all only [h_a, h_b, h_hold]
       constructor
-      · ring_nf; simp
+      · ring_nf; simp [ZMod.val_zero, tsub_zero, ZMod.val_one]
       · ring_nf; simp
     }
 
@@ -240,7 +240,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
   Spec input output :=
-    output.val = ~~~(input.1.val ||| input.2.val)
+    output.val = 1 - (input.1.val ||| input.2.val)
     ∧ (output = 0 ∨ output = 1)
 
   soundness := by
@@ -250,7 +250,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rcases h_env with ⟨ _, _ ⟩
       simp_all only [h_a, h_b, h_hold]
       constructor
-      · ring_nf; simp
+      · ring_nf; simp [ZMod.val_zero, tsub_zero, ZMod.val_one]
       · ring_nf; simp
     }
 
