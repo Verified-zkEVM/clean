@@ -291,50 +291,152 @@ template MultiAND(n) {
 -/
 
 def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expression (F p))
-  | 0, _ => 
+  | 0, _ =>
     -- Edge case: return 1 for empty AND
     return (1 : F p)
-  | 1, input => 
+  | 1, input =>
     -- Single input: return the input itself
     return input.get 0
-  | 2, input => 
+  | 2, input =>
     -- Two inputs: use standard AND
     AND.circuit.main (input.get 0, input.get 1)
   | n + 3, input => do
     -- More than two inputs: recursive case
     let n1 := (n + 3) / 2
     let n2 := (n + 3) - n1
-    
+
     -- Create proof that n1 + n2 = n + 3
     have h_sum : n1 + n2 = n + 3 := by
       unfold n1 n2
       omega
-    
+
     -- Split input vector into two halves
-    let input1 : Vector (Expression (F p)) n1 := 
-      ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; sorry⟩
-    let input2 : Vector (Expression (F p)) n2 := 
-      ⟨input.toArray.extract n1 (n + 3), by simp [Array.size_extract]; sorry⟩
-    
+    let input1 : Vector (Expression (F p)) n1 :=
+      ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
+    let input2 : Vector (Expression (F p)) n2 :=
+      ⟨input.toArray.extract n1 (n + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
+
     -- Recursive calls
     let out1 ← main input1
     let out2 ← main input2
-    
+
     -- Combine results with AND
     AND.circuit.main (out1, out2)
 
+-- Helper lemma: localLength distributes over append
+theorem Operations.localLength_append (ops1 ops2 : Operations (F p)) :
+    Operations.localLength (ops1 ++ ops2) = Operations.localLength ops1 + Operations.localLength ops2 := by
+  induction ops1 with
+  | nil => simp [Operations.localLength]
+  | cons op ops1 ih =>
+    cases op with
+    | witness m _ => simp [Operations.localLength, ih, Nat.add_assoc]
+    | assert _ => simp [Operations.localLength, ih]
+    | lookup _ => simp [Operations.localLength, ih]
+    | subcircuit s => simp [Operations.localLength, ih, Nat.add_assoc]
+
+-- Helper lemma: localLength of bind
+theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
+    (f >>= g).localLength offset = f.localLength offset + (g (f.output offset)).localLength (offset + f.localLength offset) := by
+  simp [Circuit.localLength, Circuit.bind_def, Operations.localLength_append]
+
+-- Helper lemma for localLength
+theorem main_localLength (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+    (main input).localLength offset = n - 1 := by
+  -- Use strong induction on n
+  induction n using Nat.strong_induction_on generalizing offset with
+  | _ n IH =>
+    -- Match on the structure of n as in main's definition
+    match n with
+    | 0 =>
+      -- For n = 0, main returns (1 : F p)
+      simp only [main]
+      rfl
+    | 1 =>
+      -- For n = 1, main returns input.get 0
+      simp only [main]
+      rfl
+    | 2 =>
+      -- For n = 2, main calls AND.circuit.main
+      simp only [main]
+      simp only [Fin.isValue, Nat.add_one_sub_one]
+      -- We need to use the fact that AND.circuit has localLength = 1
+      -- The ElaboratedCircuit.main preserves this property
+      have h := AND.circuit.localLength_eq (input.get 0, input.get 1) offset
+      rw [show AND.circuit.localLength _ = 1 from rfl] at h
+      exact h
+    | m + 3 =>
+      -- For n ≥ 3, main makes recursive calls
+      -- The circuit is built using do notation with recursive calls
+      -- We need to analyze the structure carefully
+
+      -- Define n1 and n2 as in the main function
+      let n1 := (m + 3) / 2
+      let n2 := (m + 3) - n1
+
+      -- We have n1 + n2 = m + 3
+      have h_sum : n1 + n2 = m + 3 := by
+        unfold n1 n2
+        omega
+
+      -- Both n1 and n2 are less than m + 3
+      have h_n1_lt : n1 < m + 3 := by
+        unfold n1
+        omega
+      have h_n2_lt : n2 < m + 3 := by
+        unfold n2
+        omega
+
+      -- Now we need to prove that the localLength of the entire circuit equals m + 3 - 1
+      -- The circuit structure is roughly:
+      -- 1. Create input1 and input2 (no local signals)
+      -- 2. Recursively call main on input1 (localLength = n1 - 1 by IH)
+      -- 3. Recursively call main on input2 (localLength = n2 - 1 by IH)
+      -- 4. Call AND.circuit.main (localLength = 1)
+      -- Total: (n1 - 1) + (n2 - 1) + 1 = n1 + n2 - 1 = m + 3 - 1
+      rw [main]
+      repeat rw [Circuit.localLength_bind]
+      
+      -- Apply IH to the recursive calls
+      -- Need to be careful about the input vectors
+      simp only [IH _ h_n1_lt, IH _ h_n2_lt]
+      
+      -- For the final AND.circuit.main call, use its localLength_eq property
+      -- The AND circuit has localLength = 1
+      simp only [Circuit.output]
+      
+      -- Use the fact that AND.circuit has localLength = 1
+      have h_and : ∀ (inp : Expression (F p) × Expression (F p)) (off : ℕ), 
+        (AND.circuit.main inp).localLength off = 1 := by
+        intro inp off
+        have := AND.circuit.localLength_eq inp off
+        rw [show AND.circuit.localLength _ = 1 from rfl] at this
+        exact this
+      
+      rw [h_and]
+      
+      -- Now simplify the arithmetic: (n1 - 1) + (n2 - 1) + 1 = m + 3 - 1
+      conv => rhs; rw [← h_sum]
+      omega
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
-  localLength _ := sorry -- Will need to compute based on recursive structure
-  localLength_eq := by sorry
+  localLength _ := n - 1
+  localLength_eq := by
+    intro input offset
+    exact main_localLength n input offset
   subcircuitsConsistent := by sorry
 
   Assumptions input := ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
-  Spec input output := 
+  Spec input output :=
     output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1
     ∧ (output = 0 ∨ output = 1)
 
-  soundness := by sorry
+  soundness := by
+    intro offset env input_var valid output h_env h_assumptions h_output
+    -- We need to prove the specification holds
+    -- This requires induction on n
+    sorry
   completeness := by sorry
 
 end MultiAND
