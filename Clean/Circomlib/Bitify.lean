@@ -80,7 +80,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     simp_all only [circuit_norm, main, Gadgets.toBits, Gadgets.ToBits.main]
     constructor
     · intro i
-      simp only [circuit_norm, subcircuit_norm, Boolean.circuit]
+      simp only [circuit_norm, subcircuit_norm]
       simpa [add_neg_eq_zero] using h_holds.left i
     rw [←h_holds.right, lc_eq]; clear h_holds
     show _ = env (fieldFromBitsExpr _)

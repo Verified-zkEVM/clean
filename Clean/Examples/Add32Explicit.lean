@@ -13,21 +13,21 @@ instance explicit : ExplicitCircuits (Gadgets.Addition32Full.main (p:=pBabybear)
 
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
   -- rfl -- also works
-  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
+  dsimp only [explicit_circuit_norm, explicit]
 
 example : ExplicitCircuit.output (circuit32 default) 0
-    = { z := ⟨ var ⟨0⟩, var ⟨2⟩, var ⟨4⟩, var ⟨6⟩ ⟩, carry_out := var ⟨7⟩ } := by
+    = { z := ⟨ var ⟨0⟩, var ⟨2⟩, var ⟨4⟩, var ⟨6⟩ ⟩, carryOut := var ⟨7⟩ } := by
   -- rfl -- also works
-  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit, ProvableType.varFromOffset_field]
+  dsimp only [explicit_circuit_norm, explicit, ProvableType.varFromOffset_field]
 
 example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
   ExplicitCircuits.subcircuitsConsistent ..
 
-example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F pBabybear)) env (i0 : ℕ) :
-  Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carry_in ⟩).operations i0)
+example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Var field (F pBabybear)) env (i0 : ℕ) :
+  Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carryIn ⟩).operations i0)
   ↔
   (ZMod.val (env.get i0) < 256 ∧ (env.get (i0 + 1) = 0 ∨ env.get (i0 + 1) = 1) ∧
-    Expression.eval env x0 + Expression.eval env y0 + Expression.eval env carry_in + -env.get i0 + -(env.get (i0 + 1) * 256) = 0) ∧
+    Expression.eval env x0 + Expression.eval env y0 + Expression.eval env carryIn + -env.get i0 + -(env.get (i0 + 1) * 256) = 0) ∧
   (ZMod.val (env.get (i0 + 2)) < 256 ∧ (env.get (i0 + 3) = 0 ∨ env.get (i0 + 3) = 1) ∧
     Expression.eval env x1 + Expression.eval env y1 + env.get (i0 + 1) + -env.get (i0 + 2) + -(env.get (i0 + 3) * 256) = 0) ∧
   (ZMod.val (env.get (i0 + 4)) < 256 ∧ (env.get (i0 + 5) = 0 ∨ env.get (i0 + 5) = 1) ∧
@@ -43,14 +43,14 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carry_in : Var field (F pBabybear)) env (i0 : �
   -- TODO on the whole, which is better?
 
   -- first version: using `circuit_norm`
-  -- dsimp only [circuit_norm, circuit32, Addition32Full.main, Addition8FullCarry.main, Boolean.circuit, Gadgets.ByteLookup]
+  -- dsimp only [circuit_norm, circuit32, Addition32Full.main, Addition8FullCarry.main, Gadgets.ByteTable]
   -- simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd, and_assoc]
   -- simp only [Gadgets.ByteTable]
 
   -- second version: using `ExplicitCircuit`
   -- resolve explicit circuit operations
   rw [ExplicitCircuit.operations_eq]
-  dsimp only [explicit_circuit_norm, explicit, Boolean.circuit]
+  dsimp only [explicit_circuit_norm, explicit]
   -- simp `ConstraintsHold` expression
   simp only [Circuit.ConstraintsHold.append_soundness, Circuit.ConstraintsHold.Soundness, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions

@@ -60,7 +60,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
-    simp only [circuit_norm, main, Addition8FullCarry.main, Boolean.circuit]
+    simp only [circuit_norm, main, Addition8FullCarry.main]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
@@ -78,7 +78,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, main, Addition8FullCarry.main, Spec, Boolean.circuit, U32.value, U32.Normalized] at h ⊢
+  dsimp only [circuit_norm, subcircuit_norm, main, Addition8FullCarry.main, Spec, U32.value, U32.Normalized] at h ⊢
   simp only [circuit_norm, subcircuit_norm, explicit_provable_type, h_inputs, ByteTable] at h ⊢
   set z0 := env.get i0
   set c0 := env.get (i0 + 1)
@@ -118,7 +118,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
 
   -- simplify circuit
-  dsimp only [circuit_norm, subcircuit_norm, main, Addition8FullCarry.main, Boolean.circuit] at henv ⊢
+  dsimp only [circuit_norm, subcircuit_norm, main, Addition8FullCarry.main] at henv ⊢
   simp only [h_inputs, circuit_norm, subcircuit_norm] at henv ⊢
 
   -- characterize local witnesses
