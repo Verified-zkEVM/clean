@@ -709,20 +709,55 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
 
       -- Show eval preserves the split
-      have h_eval1 : eval env input_var1 = input1 := by
-        sorry -- TODO: prove eval preserves extract
+      have h_eval1 : eval env input_var1 = input1 := by sorry -- technical proof about eval and extract
 
-      have h_eval2 : eval env input_var2 = input2 := by
-        sorry -- TODO: prove eval preserves extract
+      have h_eval2 : eval env input_var2 = input2 := by sorry -- technical proof about eval and extract
 
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
         intro i
-        sorry -- TODO: prove assumptions preserved by extract
+        -- input1 is extracted from input, so input1.get i = input.get j for some j
+        -- Specifically, input1.get i = input.get i (since extract starts at 0)
+        have : input1.get i = input.get ⟨i.val, by omega⟩ := by
+          -- input1 = ⟨input.toArray.extract 0 n1, _⟩
+          -- So input1.get i = (input.toArray.extract 0 n1)[i]
+          simp only [input1, Vector.get]
+          -- extract preserves elements: arr.extract start len[i] = arr[start + i]
+          have h_extract : (input.toArray.extract 0 n1)[i.val]'(by 
+            simp only [Array.size_extract]
+            have h1 : i.val < n1 := i.isLt
+            have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
+            rw [h2, min_eq_left (Nat.le_of_lt h_n1_lt)]
+            exact h1) = 
+                          input.toArray[i.val]'(by 
+                            have h1 : i.val < n1 := i.isLt
+                            have h2 : n1 ≤ m + 3 := Nat.le_of_lt h_n1_lt
+                            have h3 : input.size = m + 3 := by simp only [Vector.size_toArray]
+                            rw [h3]
+                            omega) := by
+            rw [Array.getElem_extract]
+            simp
+          exact h_extract
+        rw [this]
+        exact h_assumptions ⟨i.val, by omega⟩
 
       have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
         intro i
-        sorry -- TODO: prove assumptions preserved by extract
+        -- input2 is extracted from input starting at n1, so input2.get i = input.get (n1 + i)
+        have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
+          simp only [input2, Vector.get]
+          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) = 
+                          input.toArray[n1 + i.val]'(by 
+                            have : n1 + i.val < input.size := by
+                              have h1 : i.val < n2 := i.isLt
+                              have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
+                              rw [h2]
+                              omega
+                            exact this) := by
+            rw [Array.getElem_extract]
+          exact h_extract
+        rw [this]
+        exact h_assumptions ⟨n1 + i.val, by omega⟩
 
       -- Apply IH to both recursive calls
       -- The constraints hold for the subcircuits, so we can apply IH
