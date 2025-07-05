@@ -538,38 +538,28 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
     offset1 = offset2 ->
     (env.UsesLocalWitnesses offset1 ((main input).operations offset2) ↔
      env.UsesLocalWitnessesCompleteness offset1 ((main input).operations offset2)) := by
-  -- Use strong induction on n to handle the recursive structure
   induction n using Nat.strong_induction_on generalizing offset1 offset2 with
   | _ n IH =>
-    -- Match on the structure of n as in main's definition
     match n with
     | 0 =>
       intros
-      -- Base case: n = 0, main returns pure 1
       simp [main, Circuit.operations, Circuit.pure_def]
       constructor <;> intro <;> trivial
     | 1 =>
       intros
-      -- Base case: n = 1, main returns the single input
       simp [main, Circuit.operations, Circuit.pure_def]
       constructor <;> intro <;> trivial
     | 2 =>
       intros
       subst offset2
-      -- n = 2: main uses AND.circuit
       simp only [main]
-      -- The operations involve a subcircuit call to AND.circuit
       constructor
-      · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
+      ·
         intro h_witnesses
         apply Environment.can_replace_usesLocalWitnessesCompleteness
-        · -- Need subcircuit consistency for AND.circuit
-          apply AND.circuit.subcircuitsConsistent
+        · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
-      · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
-        intro h_completeness
-        -- For AND.circuit (ElaboratedCircuit), the reverse direction is more complex
-        -- This requires understanding the specific structure of AND operations
+      · intro h_completeness
         simp only [AND.circuit, subcircuit_norm, AND.main, HasAssignEq.assign_eq, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
         simp only [Fin.isValue, Nat.add_zero, id_eq]
         unfold Environment.UsesLocalWitnesses Operations.forAllFlat
@@ -577,50 +567,28 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
 
 
         constructor
-        · -- First part: witness operation
-          -- The goal is env.ExtendsVector (witness_value) offset
-          -- h_completeness gives us exactly this: env.get offset = correct_value
-          simp only [Environment.ExtendsVector, Vector.getElem_mk]
+        · simp only [Environment.ExtendsVector, Vector.getElem_mk]
           intro i
-          -- For the single witness (Fin 1), i = 0
           fin_cases i
           simp only [Fin.val_zero, add_zero, List.getElem_toArray]
           exact h_completeness
-        · -- Second part: subcircuit operation (equality circuit)
-          -- The UsesLocalWitnesses for this subcircuit is defined as fun x => True
-          simp only [Operations.forAll]
+        · simp only [Operations.forAll]
           trivial
     | m + 3 =>
       intros
       subst offset2
-      -- Recursive case: n ≥ 3
       simp only [main]
-      -- The operations involve recursive calls to main with smaller n
       constructor
-      · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
-        intro h_witnesses
-        -- The bind structure: main input1 >>= λ out1 => main input2 >>= λ out2 => AND.circuit (out1, out2)
-        -- We can use IH for both recursive calls since they have smaller inputs
+      · intro h_witnesses
         let n1 := (m + 3) / 2
         let n2 := (m + 3) - n1
         have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
         have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
-
-        -- The bind structure is quite complex with nested operations
-        -- For now, we can use the general approach that both concepts should be equivalent
-        -- when the operations have the right subcircuit consistency properties
         apply Environment.can_replace_usesLocalWitnessesCompleteness
-        · -- Need subcircuit consistency for the composed operations
-          -- The goal matches main input.operations since main expands to the do-notation
-          rw [← main]
+        · rw [← main]
           apply subcircuitsConsistent
         · exact h_witnesses
-      · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
-        intro h_completeness
-        -- For the reverse direction, we need to show that completeness implies witness usage
-        -- This is the more complex direction since there's no direct theorem for the reverse
-        -- However, for circuits with proper subcircuit consistency, this should hold by the
-        -- structure of the operations
+      · intro h_completeness
         simp only [circuit_norm, subcircuit_norm] at h_completeness ⊢
         rcases h_completeness with ⟨ h_c1, h_c2, h_c3 ⟩
 
@@ -640,21 +608,11 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           · aesop
           · omega
           · omega
-        · -- For AND.circuit, we need to show UsesLocalWitnesses from UsesLocalWitnessesCompleteness
-          -- The goal has been simplified to show:
-          -- 1. env.get at the witness position equals the product (which h_c3 gives us)
-          -- 2. FlatOperation.forAll for the equality subcircuit
-          simp only [AND.circuit] at h_c3 ⊢
+        · simp only [AND.circuit] at h_c3 ⊢
           simp only [AND.main, circuit_norm] at h_c3 ⊢
           constructor
-          · -- First part: the witness value equals the product
-            exact h_c3
-          · -- Second part: the equality subcircuit's flat operations satisfy the witness condition
-            -- The equality circuit (Gadgets.Equality.circuit) has no witness operations
-            -- It only uses allZero which produces assert operations
-            -- For operations with no witnesses, FlatOperation.forAll is trivially satisfied
-            -- The full proof requires expanding through multiple layers of definitions
-            simp only [Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, subcircuit_norm]
+          · exact h_c3
+          · simp only [Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, subcircuit_norm]
             rw [Circuit.forEach]
             simp_all [toVars, assertZero, var, circuit_norm, Operations.toFlat, FlatOperation.forAll]
 
@@ -692,26 +650,20 @@ lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F
   have lhs : Expression.eval env (⟨v.toArray.extract start stop, size_proof⟩ : Vector _ _)[i] =
              Expression.eval env v[start + i] := by
     congr 1
-    -- We need to show that accessing element i of the extracted vector
-    -- is the same as accessing element (start + i) of the original
     show (v.toArray.extract start stop)[i]'(size_proof ▸ hi) = v.toArray[start + i]'(by simp [v.size_toArray]; exact h_idx)
     rw [Array.getElem_extract]
   rw [lhs]
-  -- Show RHS
   have size_proof2 : (w.toArray.extract start stop).size = stop - start := by
     simp [Array.size_extract]
     omega
   have rhs : (⟨w.toArray.extract start stop, size_proof2⟩ : Vector _ _)[i] =
              w[start + i] := by
-    -- Similar to LHS
     show (w.toArray.extract start stop)[i]'(size_proof2 ▸ hi) = w.toArray[start + i]'(by simp [w.size_toArray]; exact h_idx)
     rw [Array.getElem_extract]
   rw [rhs]
-  -- Use the fact that eval env v = w
   have h_eval' := h_eval
   simp only [ProvableType.eval_fields] at h_eval'
   have : Vector.map (Expression.eval env) v = w := h_eval'
-  -- Get element-wise equality
   have : (Vector.map (Expression.eval env) v)[start + i] = w[start + i] := by
     rw [this]
   simp only [Vector.getElem_map] at this
@@ -735,9 +687,7 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
     | inl h => left; simp [h, ZMod.val_zero]
     | inr h => right; simp [h, ZMod.val_one]
 
-  -- Now we can use the helper lemma
   rw [List.and_foldl_eq_foldl_of_all_binary init 1 _ h_init h_mapped_binary]
-  -- We need to show init &&& 1 = init for binary init
   cases h_init with
   | inl h0 => rw [h0, and_zero_absorb]
   | inr h1 => rw [h1, and_one_id_binary 1 (Or.inr rfl)]
@@ -849,9 +799,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
   constructor
-  · -- Prove output.val = empty fold = 1
-    simp only [Expression.eval]
-    -- For n=0, input is a Vector of length 0, so input.toList = []
+  · simp only [Expression.eval]
     have : input.toList = [] := by
       cases input using Vector.casesOn
       rename_i l h
@@ -860,8 +808,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
       rfl
     rw [this]
     simp only [List.map_nil, List.foldl_nil, ZMod.val_one]
-  · -- Prove output = 0 ∨ output = 1
-    right
+  · right
     rfl
 
 /-- Soundness for n = 1 case -/
@@ -894,13 +841,10 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
     Spec 2 input (env ((main input_var).output offset)) := by
   simp only [main] at h_hold ⊢
   simp only [Spec]
-  -- Get the two input values
   have h_input0 := h_assumptions (0 : Fin 2)
   have h_input1 := h_assumptions (1 : Fin 2)
   have h_eval0 : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
   have h_eval1 : env (input_var.get 1) = input.get 1 := eval_get_eq h_env 1
-  
-  -- Use AND.circuit.soundness
   have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1)
     (input.get 0, input.get 1)
     (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
