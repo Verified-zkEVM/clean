@@ -27,13 +27,8 @@ section HelperLemmas
 lemma eval_get_eq {n : ℕ} {env : Environment (F p)} {input_var : Var (fields n) (F p)}
     {input : fields n (F p)} (h_env : eval env input_var = input) (i : Fin n) :
     env (input_var.get i) = input.get i := by
-  -- First, let's understand what Vector.get means
-  -- Vector.get is just getElem, so we can rewrite the goal
   change env input_var[i] = input[i]
-  -- Use eval_fields to understand what eval means
   rw [ProvableType.eval_fields] at h_env
-  -- Now h_env : input_var.map (Expression.eval env) = input
-  -- Apply congrArg to both sides with getElem at index i
   have h_eq : (input_var.map (Expression.eval env))[i] = input[i] :=
     congrArg (·[i]) h_env
   rw[← h_eq]
@@ -322,35 +317,27 @@ template MultiAND(n) {
 
 def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expression (F p))
   | 0, _ =>
-    -- Edge case: return 1 for empty AND
     return (1 : F p)
   | 1, input =>
-    -- Single input: return the input itself
     return input.get 0
   | 2, input =>
-    -- Two inputs: use standard AND
     AND.circuit.main (input.get 0, input.get 1)
   | n + 3, input => do
-    -- More than two inputs: recursive case
     let n1 := (n + 3) / 2
     let n2 := (n + 3) - n1
 
-    -- Create proof that n1 + n2 = n + 3
     have h_sum : n1 + n2 = n + 3 := by
       unfold n1 n2
       omega
 
-    -- Split input vector into two halves
     let input1 : Vector (Expression (F p)) n1 :=
       ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
     let input2 : Vector (Expression (F p)) n2 :=
       ⟨input.toArray.extract n1 (n + 3), by simp [Array.size_extract]; unfold n2; rfl⟩
 
-    -- Recursive calls
     let out1 ← main input1
     let out2 ← main input2
 
-    -- Combine results with AND
     AND.circuit.main (out1, out2)
 
 -- Helper lemma: localLength distributes over append
@@ -383,24 +370,16 @@ theorem List.foldl_and_binary (l : List ℕ) :
     -- Case split on x
     cases h_x_binary with
     | inl h_x_zero =>
-      -- x = 0, so 1 &&& 0 = 0
       rw [h_x_zero]
       simp only [HAnd.hAnd, AndOp.and]
-      -- 0 &&& anything = 0
       left
-      -- Need to prove: 0 &&& (foldl 1 xs) = 0
-      -- Since x = 0 and 0 &&& anything = 0, the result is 0
-      -- We'll use the fact that (1 &&& 0) = 0 and folding with 0 gives 0
       suffices h : List.foldl (· &&& ·) (1 &&& 0) xs = 0 by
         simp only [List.foldl_cons, HAnd.hAnd, AndOp.and] at h ⊢
         exact h
-      -- First: 1 &&& 0 = 0
       have h_one_zero : (1 : ℕ) &&& 0 = 0 := by
         simp only [HAnd.hAnd, AndOp.and]
         rfl
       rw [h_one_zero]
-      -- Now we need: foldl 0 xs = 0
-      -- Since 0 &&& anything = 0, folding with 0 always gives 0
       clear h_one_zero h_x_zero h_all_binary h_xs_binary h_tail_binary ih
       generalize hxs : xs = xs'
       clear xs hxs
@@ -408,24 +387,17 @@ theorem List.foldl_and_binary (l : List ℕ) :
       | nil => simp [List.foldl_nil]
       | cons y ys ih =>
         simp only [List.foldl_cons, HAnd.hAnd, AndOp.and]
-        -- We need: List.foldl (fun x1 x2 => x1.land x2) (0.land y) ys = 0
-        -- Since 0.land y = 0, this reduces to: List.foldl _ 0 ys = 0
         have h_zero_y : (0 : ℕ).land y = 0 := by
-          -- 0 AND anything is 0
           unfold Nat.land
           simp [Nat.bitwise]
         rw [h_zero_y]
         exact ih
     | inr h_x_one =>
-      -- x = 1, so 1 &&& 1 = 1
       rw [h_x_one]
-      -- Goal: List.foldl (· &&& ·) (1 &&& 1) xs is binary
-      -- Since 1 &&& 1 = 1, this simplifies to: List.foldl (· &&& ·) 1 xs is binary
       have h_one_one : (1 : ℕ) &&& 1 = 1 := by
         simp only [HAnd.hAnd, AndOp.and]
         rfl
       rw [h_one_one]
-      -- This is exactly h_tail_binary
       exact h_tail_binary
 
 
@@ -434,11 +406,6 @@ theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
     (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) →
     (∀ x ∈ v.toList, x = 0 ∨ x = 1) := by
   intro h_vec x h_mem
-  -- We'll prove this by induction on the vector structure
-  -- First, let's use the fact that membership in v.toList means x is one of the vector elements
-  -- Since all vector elements are binary by h_vec, x must be binary
-
-  -- Use the membership characterization lemma
   rw [Vector.mem_toList_iff_get] at h_mem
   rcases h_mem with ⟨i, hi⟩
   rw [hi]
@@ -448,37 +415,17 @@ theorem Vector.toList_binary {n : ℕ} (v : Vector (F p) n) :
 theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List ℕ)
     (_ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
     a &&& List.foldl (· &&& ·) orig l = List.foldl (· &&& ·) (a &&& orig) l := by
-  -- Induction on the list, generalizing orig
   induction l generalizing orig with
   | nil =>
-    -- Base case: a &&& foldl orig [] = a &&& orig = foldl (a &&& orig) []
     simp only [List.foldl_nil]
   | cons hd tl ih =>
-    -- Inductive case
-    -- LHS: a &&& foldl orig (hd :: tl) = a &&& foldl (orig &&& hd) tl
-    -- RHS: foldl (a &&& orig) (hd :: tl) = foldl ((a &&& orig) &&& hd) tl
     simp only [List.foldl_cons]
-    -- Goal: a &&& foldl (orig &&& hd) tl = foldl ((a &&& orig) &&& hd) tl
-
-    -- First, get the hypotheses for hd and elements of tl
     have hhd : hd = 0 ∨ hd = 1 := hl hd (List.Mem.head _)
     have htl : ∀ x ∈ tl, x = 0 ∨ x = 1 := fun x hx => hl x (List.mem_cons_of_mem hd hx)
-
-    -- Apply the induction hypothesis with orig := (orig &&& hd)
-    -- The IH now gives us: ∀ orig', a &&& foldl orig' tl = foldl (a &&& orig') tl
     rw [ih (orig &&& hd) htl]
-
-    -- Now we need: foldl (a &&& (orig &&& hd)) tl = foldl ((a &&& orig) &&& hd) tl
-    -- This follows from: a &&& (orig &&& hd) = (a &&& orig) &&& hd (associativity)
     congr 1
-    -- We need to prove: a &&& (orig &&& hd) = (a &&& orig) &&& hd
-    -- Use associativity of &&& (which is Nat.land)
     simp only [HAnd.hAnd, AndOp.and]
-    -- Goal is now: a.land (orig.land hd) = (a.land orig).land hd
-    -- Convert back to &&& notation to use Nat.land_assoc
     show a &&& (orig &&& hd) = (a &&& orig) &&& hd
-    -- Nat.land_assoc gives us: a &&& orig &&& hd = a &&& (orig &&& hd)
-    -- We need the symmetric version
     exact (Nat.land_assoc a orig hd).symm
 
 -- Helper lemma: localLength of bind
@@ -489,25 +436,18 @@ theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α �
 -- Helper lemma for localLength
 theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     (main input).localLength offset = n - 1 := by
-  -- Use strong induction on n
   induction n using Nat.strong_induction_on generalizing offset with
   | _ n IH =>
-    -- Match on the structure of n as in main's definition
     match n with
     | 0 =>
-      -- For n = 0, main returns (1 : F p)
       simp only [main]
       rfl
     | 1 =>
-      -- For n = 1, main returns input.get 0
       simp only [main]
       rfl
     | 2 =>
-      -- For n = 2, main calls AND.circuit.main
       simp only [main]
       simp only [Fin.isValue, Nat.add_one_sub_one]
-      -- We need to use the fact that AND.circuit has localLength = 1
-      -- The ElaboratedCircuit.main preserves this property
       have h := AND.circuit.localLength_eq (input.get 0, input.get 1) offset
       rw [show AND.circuit.localLength _ = 1 from rfl] at h
       exact h
