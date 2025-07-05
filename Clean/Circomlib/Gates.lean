@@ -1623,7 +1623,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
       
       -- Extract the two input parts (these are already defined in the goal)
       let input_var1 : Var (fields n1) (F p) := ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
-      let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by sorry⟩
+      let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract, n2]⟩
       
       -- The output is the AND of two recursive outputs
       -- We need to apply IH to both recursive calls
@@ -1635,7 +1635,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
                            input = (input1 ++ input2).cast (by simp [n1, n2]; omega) := by
         -- The inputs are extracted from the original input
         use ⟨input.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
-        use ⟨input.toArray.extract n1 (m + 3), by sorry⟩
+        use ⟨input.toArray.extract n1 (m + 3), by simp [Array.size_extract, n2]⟩
         constructor
         · -- eval env input_var1 = input1
           -- We need to show: eval env input_var1 = ⟨input.toArray.extract 0 n1, _⟩
@@ -1654,8 +1654,17 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
         · -- input = (input1 ++ input2).cast _
           -- We need to show input = (extract1 ++ extract2).cast _
           -- This follows from the fact that extracting and appending gives back the original
-          -- For now, use sorry to avoid circular reference
-          sorry
+          ext i
+          simp only [Vector.getElem_cast, Vector.getElem_append]
+          by_cases h : i < n1
+          · -- i < n1: use first part
+            simp [h]
+          · -- i >= n1: use second part
+            simp [h]
+            -- The goal simplifies to input[i] = input[n1 + (i - n1)]
+            -- Since i ≥ n1, we have n1 + (i - n1) = i
+            congr
+            omega
       
       obtain ⟨input1, input2, h_eval1, h_eval2, h_input_eq⟩ := h_input_split
       
