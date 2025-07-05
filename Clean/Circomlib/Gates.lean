@@ -868,14 +868,9 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           · aesop
           · omega
           · omega
-        apply h_c3
-
-        -- The reverse direction requires careful handling of the bind structure
-        -- We can use the distribution property but the conversion between
-        -- the expanded form and the IH pattern is quite complex
-        sorry -- TODO: Use Operations.forAll_append to decompose, then apply IH for each part
-        --       The technical challenge is matching the exact input/offset patterns
-        --       that IH expects with the expanded bind form in h_completeness
+        · -- For AND.circuit, UsesLocalWitnesses and UsesLocalWitnessesCompleteness coincide
+          -- because AND.circuit contains no subcircuits (only witness and assert operations)
+          sorry -- TODO: Prove equivalence for AND.circuit specifically
 
 
 -- Extract Assumptions and Spec outside the circuit
@@ -1548,7 +1543,8 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
   · apply main_subcircuitsConsistent
   · -- Convert UsesLocalWitnessesCompleteness to UsesLocalWitnesses
     rw [main_usesLocalWitnesses_iff_completeness]
-    exact h_local_witnesses
+    · exact h_local_witnesses
+    · rfl
   · exact h_completeness
 
 -- Helper theorem for circuit completeness
