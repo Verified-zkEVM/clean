@@ -853,12 +853,12 @@ lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F
   simp only [Vector.getElem_map] at this
   exact this
 
-/-- Folding AND over a list with a binary initial accumulator 
+/-- Folding AND over a list with a binary initial accumulator
     is equivalent to ANDing the initial value with the fold starting from 1 -/
 lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
     (l : List (F p)) (init : ℕ) (h_init : init = 0 ∨ init = 1)
     (h_binary : ∀ x ∈ l, x = 0 ∨ x = 1) :
-    List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) = 
+    List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) =
     init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
   -- Let's use the existing lemma List.and_foldl_eq_foldl_of_all_binary
   -- First, we need to establish that the mapped list elements are binary
@@ -870,7 +870,7 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
     cases h_y_binary with
     | inl h => left; simp [h, ZMod.val_zero]
     | inr h => right; simp [h, ZMod.val_one]
-  
+
   -- Now we can use the helper lemma
   rw [List.and_foldl_eq_foldl_of_all_binary init 1 _ h_init h_mapped_binary]
   -- We need to show init &&& 1 = init for binary init
@@ -1349,46 +1349,46 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           -- Use Vector.toList_binary to convert vector property to list property
           apply Vector.toList_binary
           exact h_assumptions2
-        
+
         rw [List.foldl_and_eq_and_foldl _ _ h_foldl1_binary h_input2_binary]
 
         -- We need to show the do-block output equals (foldl 1 input1) &&& (foldl 1 input2)
         -- The key insight: ElaboratedCircuit.main in the goal IS AND.circuit.main
         -- and the offsets match exactly with what h_and_val tells us about
-        
+
         -- First, notice that ElaboratedCircuit.output in h_and_val is at the same offset
         -- as the ElaboratedCircuit.main.output in the goal
-        
+
         -- The goal has the output of ElaboratedCircuit.main applied to (out1_expr, out2_expr)
         -- where out1_expr and out2_expr are the outputs of the recursive main calls
-        
+
         -- h_and_val tells us about ElaboratedCircuit.output (out1, out2) at the same offset
         -- and out1, out2 are defined as the outputs of those same recursive calls
-        
+
         -- So we can directly use h_and_val
         convert h_and_val using 1
-        
+
         -- Now we need to show the arguments match
         congr 1
         · -- First component
           rw [h_val1]
-        · -- Second component  
+        · -- Second component
           rw [h_val2]
 
       · -- Prove output is binary
         -- The output is from AND circuit, so it's binary
         -- We can use h_and_binary which tells us the AND circuit output is 0 or 1
-        
+
         -- Similar to the previous case, the do-block output IS the AND circuit output
         -- at the appropriate offset, which h_and_binary tells us is binary
-        
+
         -- Use the same reasoning as before: ElaboratedCircuit.main is AND.circuit.main
         -- and the output at the given offset is what h_and_binary describes
         exact h_and_binary
 
 -- Helper lemma: MultiAND with binary inputs produces binary output
 -- This captures the essential property we need for both soundness and completeness
-lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p)) 
+lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : eval env input_var = input)
     (h_assumptions : MultiAND_Assumptions n input)
@@ -1398,24 +1398,24 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
   -- The key insight: we can use soundness to get this property!
   -- If the constraints hold, then by soundness, the spec holds
   -- The spec includes that the output is binary
-  
+
   -- Apply main_soundness
   have h_spec := main_soundness n offset env input_var input h_eval h_assumptions
-  
+
   -- But wait, main_soundness requires ConstraintsHold.Soundness, not just ConstraintsHold
   -- We need to convert using can_replace_soundness
   have h_soundness : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) := by
     apply Circuit.can_replace_soundness
     exact h_constraints
-    
+
   -- Now apply soundness
   have h_spec := main_soundness n offset env input_var input h_eval h_assumptions h_soundness
-  
+
   -- Extract the binary part from the spec
   exact h_spec.2
 
 -- Helper lemma for completeness: extract binary from completeness + local witnesses
-lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p)) 
+lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : eval env input_var = input)
     (h_assumptions : MultiAND_Assumptions n input)
@@ -1441,11 +1441,11 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
       -- We know from ProvableType.eval_fields that:
       -- eval env input_var = input_var.map (Expression.eval env)
       -- And h_eval tells us this equals input
-      
+
       -- So: input_var.map (Expression.eval env) = input
       -- Taking component 0: (input_var.map (Expression.eval env)).get 0 = input.get 0
       -- By Vector.get_map: (Expression.eval env) (input_var.get 0) = input.get 0
-      
+
       have h_eval_component : env (input_var.get 0) = input.get 0 := by
         -- We use that eval for fields is just mapping Expression.eval
         rw [ProvableType.eval_fields] at h_eval
@@ -1461,11 +1461,11 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
         -- First simplify the lambda application
         simp only [Function.comp_apply]
         rw [← map_eq, this]
-      
+
       -- Now use h_binary which tells us input.get 0 is binary
       -- h_eval_component : (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = Vector.get input 0
       -- This is the same as: Expression.eval env (Vector.get input_var 0) = Vector.get input 0
-      change (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = 0 ∨ 
+      change (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = 0 ∨
              (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = 1
       rw [h_eval_component]
       exact h_binary
@@ -1473,27 +1473,27 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
       -- Output is from AND circuit, which preserves binary
       -- For n=2, main returns: subcircuit AND.circuit ⟨input_var.get 0, input_var.get 1⟩
       simp [main, Circuit.output] at h_local_witnesses ⊢
-      
+
       -- The output is the evaluation of the AND circuit's output
       -- We need to show this is binary when both inputs are binary
-      
+
       -- From h_eval and h_assumptions, we know both inputs are binary
       have h_binary0 := h_assumptions ⟨0, by simp⟩
       have h_binary1 := h_assumptions ⟨1, by simp⟩
-      
+
       -- Connect input_var evaluation to input values
       -- We know both inputs are binary by h_binary0 and h_binary1
       -- The AND circuit preserves this property when both inputs are binary
-      
+
       -- For the sorry, we would need to:
       -- 1. Connect the evaluation of input_var components to input components
       -- 2. Use the AND circuit's specification to show the output is binary
-      
+
       -- The AND circuit output is binary when inputs are binary
       -- This is part of the AND circuit specification
       -- The output is env (AND.circuit.output ⟨input_var.get 0, input_var.get 1⟩ offset)
       -- We know from AND.circuit that when both inputs are binary, the output is binary
-      
+
       -- We need to establish that the inputs to the AND circuit are binary
       have h_input0_eval : env (input_var.get 0) = input.get 0 := by
         rw [ProvableType.eval_fields] at h_eval
@@ -1503,7 +1503,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
           rw [h_eval]
         simp only [Function.comp_apply]
         rw [← map_eq, this]
-      
+
       have h_input1_eval : env (input_var.get 1) = input.get 1 := by
         rw [ProvableType.eval_fields] at h_eval
         have map_eq : (input_var.map (Expression.eval env)).get 1 = (Expression.eval env) (input_var.get 1) := by
@@ -1512,98 +1512,117 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
           rw [h_eval]
         simp only [Function.comp_apply]
         rw [← map_eq, this]
-      
+
       -- The inputs to AND circuit are binary
-      have h_and_inputs_binary : (env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1) ∧ 
+      have h_and_inputs_binary : (env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1) ∧
                                  (env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1) := by
         rw [h_input0_eval, h_input1_eval]
         exact ⟨h_binary0, h_binary1⟩
-      
+
       -- We'll use a lemma that AND circuit output is binary when inputs are binary
       -- This is a mathematical fact: binary AND binary = binary
-      have h_and_output_binary : ∀ a b : F p, (a = 0 ∨ a = 1) → (b = 0 ∨ b = 1) → 
+      have h_and_output_binary : ∀ a b : F p, (a = 0 ∨ a = 1) → (b = 0 ∨ b = 1) →
                                               (a * b = 0 ∨ a * b = 1) := by
         intro a b ha hb
         cases ha with
         | inl h0 => left; rw [h0]; ring
-        | inr h1 => 
+        | inr h1 =>
           rw [h1, one_mul]
           exact hb
-      
+
       -- Now we need to connect the AND circuit output to the multiplication
       -- The AND circuit's main function returns a*b where a and b are the inputs
-      -- So (AND.circuit.main (input_var.get 0, input_var.get 1) offset).1 
+      -- So (AND.circuit.main (input_var.get 0, input_var.get 1) offset).1
       -- should evaluate to (env (input_var.get 0)) * (env (input_var.get 1))
-      
+
       -- This is where we need to understand how the AND circuit works
       -- From the definition, AND.main returns `a*b` after witnessing it
       -- The output is the witnessed value, which equals a*b
-      
+
       -- We need to show that the evaluation of the AND circuit output
       -- equals the product of the evaluated inputs
-      have h_and_output_eq : Expression.eval env (AND.circuit.main (Vector.get input_var 0, Vector.get input_var 1) offset).1 = 
+      have h_and_output_eq : Expression.eval env (AND.circuit.main (Vector.get input_var 0, Vector.get input_var 1) offset).1 =
                             (env (input_var.get 0)) * (env (input_var.get 1)) := by
         -- This follows from the AND circuit definition and how witness works
         -- The AND circuit's main function witnesses a*b and returns it
         -- We need to show that AND.circuit.main evaluates to multiplication
-        
+
         -- Unfold the AND circuit definition
-        simp [AND.circuit, AND.main]
+        simp only [AND.circuit, AND.main, circuit_norm]
         -- The AND.main function does:
         -- let out <== a*b
         -- return out
         -- Where <== is HasAssignEq.assign_eq (a*b)
+
+        -- The goal is now: env.get offset = (input_var.get 0).eval env * (input_var.get 1).eval env
+        -- From h_local_witnesses, we know that the witness at offset has the correct value
+        -- The AND circuit witnesses a single value: (input_var.get 0 * input_var.get 1).eval env
         
-        -- assign_eq creates a witness whose value is (a*b).eval env
-        -- The key insight: from h_local_witnesses (UsesLocalWitnessesCompleteness),
-        -- we know that the witness created by assign_eq evaluates to the
-        -- value it was supposed to witness
+        -- h_local_witnesses tells us env.ExtendsVector (witness_value) offset
+        -- For a single witness (m=1), this means env.get offset = witness_value[0]
+        -- The witness value is computed as (input_var.get 0 * input_var.get 1).eval env
         
-        -- Unfortunately, connecting this requires understanding the relationship
-        -- between assign_eq, witness operations, and UsesLocalWitnessesCompleteness
-        -- This is a deep property of the circuit framework
+        -- Expand what the witness computes
+        have h_witness : env.get offset = Expression.eval env (Vector.get input_var 0 * Vector.get input_var 1) := by
+          -- The tricky part: h_local_witnesses is about the main circuit for n=2,
+          -- which creates a subcircuit. The subcircuit condition in UsesLocalWitnessesCompleteness
+          -- says s.UsesLocalWitnesses env, where s is the AND subcircuit.
+          
+          -- For n=2, main creates: subcircuit AND.circuit ⟨input_var.get 0, input_var.get 1⟩
+          -- The subcircuit's UsesLocalWitnesses property should tell us about
+          -- the witness inside the AND circuit
+          
+          -- From the structure of UsesLocalWitnessesCompleteness for subcircuits:
+          -- It requires s.UsesLocalWitnesses env
+          -- The AND.circuit as a subcircuit should have UsesLocalWitnesses that
+          -- ensures its witness (at offset) equals the computed value
+          
+          -- This is a deep property about how subcircuits preserve witness values
+          -- For now, we assume this property holds
+          sorry
         
-        -- For now, we leave this as a sorry
-        sorry
-      
+        -- Now use that multiplication evaluation is evaluation of multiplications
+        rw [h_witness]
+        simp only [Expression.eval]
+
       -- Now we can apply our binary multiplication lemma
       rw [h_and_output_eq]
-      exact h_and_output_binary (env (input_var.get 0)) (env (input_var.get 1)) 
+      exact h_and_output_binary (env (input_var.get 0)) (env (input_var.get 1))
                                h_and_inputs_binary.1 h_and_inputs_binary.2
     | m + 3 =>
       -- Recursive case: output is AND of two recursive outputs
       -- For n ≥ 3, main splits the input and recursively calls itself
-      
+
       -- The circuit structure is:
       -- do
       --   let out1 ← main input_var1
       --   let out2 ← main input_var2
       --   subcircuit AND.circuit ⟨out1, out2⟩
-      
+
       -- So the output is the AND of two recursive outputs
       -- If both recursive outputs are binary, then their AND is also binary
-      
+
       -- We can use the induction hypothesis on the two recursive calls
       -- since they have smaller input sizes
-      
+
       -- Extract the two parts of the input
       simp [main, Circuit.output] at h_local_witnesses ⊢
-      
+
       -- For m + 3, the circuit splits input into two parts and recursively processes them
       -- Then combines the results with AND
-      
+
       -- We need to apply the induction hypothesis to both recursive calls
       -- The key insight is that we can use ih for both n1 and n2 where n1 + n2 = m + 3
-      
+
       -- From the circuit structure, we know:
       -- 1. The first recursive call processes n1 elements
-      -- 2. The second recursive call processes n2 elements  
+      -- 2. The second recursive call processes n2 elements
       -- 3. n1 < m + 3 and n2 < m + 3
       -- 4. Both outputs are combined with AND
-      
+
       -- Since both recursive outputs are binary (by IH) and AND preserves binary,
       -- the final output is binary
-      
+
       sorry -- Complete using induction hypothesis on both recursive calls
 
 -- Helper theorem for circuit completeness
@@ -1696,25 +1715,25 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- Define the same n1, n2 as in the main function
       let n1 := (m + 3) / 2
       let n2 := (m + 3) - n1
-      
+
       -- Extract the input variables and values
       let input_var1 : Var (fields n1) (F p) := ⟨input_var.toArray.extract 0 n1, by simp; unfold n1; omega⟩
       let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
-      
+
       -- Get the actual input values
       have h_eval1 : eval env input_var1 = ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩ := by
         apply eval_toArray_extract_eq 0 n1 h_env
         · omega
         · omega
-      
+
       have h_eval2 : eval env input_var2 = ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩ := by
         apply eval_toArray_extract_eq n1 (m + 3) h_env
-        · omega  
         · omega
-      
+        · omega
+
       let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩
       let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
-      
+
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
         intro i
@@ -1737,12 +1756,12 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           exact h_extract
         rw [this]
         exact h_assumptions ⟨i.val, by omega⟩
-        
+
       have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
         intro i
         have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
           simp only [input2, Vector.get]
-          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) = 
+          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) =
                           input.toArray[n1 + i.val]'(by
                             have : input.size = m + 3 := by simp
                             rw [this]
@@ -1751,49 +1770,49 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           exact h_extract
         rw [this]
         exact h_assumptions ⟨n1 + i.val, by omega⟩
-      
+
       -- The key insight: h_local_witnesses provides witnesses for the entire circuit
       -- This includes witnesses for both recursive calls and the AND circuit
-      
+
       -- For a do-block circuit, ConstraintsHold.Completeness IS UsesLocalWitnessesCompleteness
       -- So we already have what we need from h_local_witnesses
-      
+
       -- The goal is about the do-block expansion of main input_var
       -- But h_local_witnesses is about (main input_var).operations offset
       -- These are the same by the definition of main for m+3
-      
+
       -- The goal is ConstraintsHold.Completeness for the do-block
       -- We have UsesLocalWitnessesCompleteness from h_local_witnesses
-      
+
       -- First, prove some facts about n1 and n2
       have h_n1_lt : n1 < m + 3 := by
         unfold n1
         omega
-      
+
       have h_n2_lt : n2 < m + 3 := by
         unfold n2
         omega
-      
+
       -- Next, we need to show that for m+3, main input_var expands to the do-block
       -- This is true by the definition of main
-      have h_main_eq : (main input_var).operations offset = 
-        ((main input_var1 >>= fun out1 => 
-          main input_var2 >>= fun out2 => 
+      have h_main_eq : (main input_var).operations offset =
+        ((main input_var1 >>= fun out1 =>
+          main input_var2 >>= fun out2 =>
           AND.circuit.main (out1, out2)).operations offset) := by
         -- This follows from the definition of main for case m+3
         simp only [main, AND.circuit]
         -- The do-block notation expands to nested binds
         rfl
-      
+
       -- Now rewrite h_local_witnesses using this equality
       rw [h_main_eq] at h_local_witnesses
-      
+
       -- The do-block is: main input_var1 >>= (λ out1 => main input_var2 >>= (λ out2 => AND.circuit.main (out1, out2)))
       -- Use the bind_completeness lemma to decompose it
-      
+
       -- First, rewrite h_local_witnesses to extract the parts
       rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_local_witnesses
-      
+
       rw [Circuit.ConstraintsHold.bind_completeness]
       constructor
       · -- First recursive call: main input_var1
@@ -1825,7 +1844,7 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             exact h_extract
           rw [this]
           exact h_assumptions ⟨i.val, by omega⟩
-        
+
       · -- Rest: main input_var2 >>= AND.circuit.main
         rw [Circuit.ConstraintsHold.bind_completeness]
         constructor
@@ -1855,13 +1874,13 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               exact h_extract
             rw [this]
             exact h_assumptions ⟨n1 + i.val, by omega⟩
-          
+
         · -- Final AND circuit
           -- We need to apply AND.circuit.completeness
           -- First, we need to know the outputs of the recursive calls
           let out1 := (main input_var1).output offset
           let out2 := (main input_var2).output (offset + (main input_var1).localLength offset)
-          
+
           -- Apply AND.circuit.completeness
           apply AND.circuit.completeness
           · -- Extract UsesLocalWitnessesCompleteness for AND circuit
@@ -1874,10 +1893,10 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           · -- Need to show AND assumptions: both outputs are binary
             -- The AND circuit requires both inputs to be binary (0 or 1)
             -- We get this from the MultiAND_Spec of the recursive calls
-            
+
             -- We already proved h_assumptions1 and h_assumptions2 in the IH applications above
             -- Now we need to get the outputs are binary from the soundness
-            
+
             -- First, we need h_assumptions1 and h_assumptions2 again
             have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
               intro i
@@ -1920,7 +1939,7 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
                 exact h_extract
               rw [this]
               exact h_assumptions ⟨n1 + i.val, by omega⟩
-            
+
             -- Get completeness from the IH for both recursive calls
             have h_comp1 : Circuit.ConstraintsHold.Completeness env ((main input_var1).operations offset) := by
               apply IH n1 h_n1_lt offset env input_var1
@@ -1928,7 +1947,7 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
                 exact h_local_witnesses.1
               · exact h_eval1
               · exact h_assumptions1
-              
+
             have h_comp2 : Circuit.ConstraintsHold.Completeness env ((main input_var2).operations (offset + (main input_var1).localLength offset)) := by
               apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2
               · -- Extract UsesLocalWitnessesCompleteness for second recursive call
@@ -1937,16 +1956,16 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
                 exact h_rest.1
               · exact h_eval2
               · exact h_assumptions2
-            
+
             -- The outputs are binary because of the MultiAND_Spec from recursive calls
             -- We can use the subcircuits' UsesLocalWitnesses property
-            
+
             -- The goal asks for AND.circuit.Assumptions (eval env (out1, out2))
             -- which expands to: (env out1 = 0 ∨ env out1 = 1) ∧ (env out2 = 0 ∨ env out2 = 1)
-            
+
             -- For the recursive calls, we have Completeness which implies the constraints hold
             -- Since we also have UsesLocalWitnesses, we can apply can_replace_completeness
-            
+
             constructor
             · -- Show env out1 is binary
               apply main_output_binary_from_completeness n1 offset env input_var1 input1
@@ -1954,8 +1973,8 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_assumptions1
               · exact h_local_witnesses.1
               · exact h_comp1
-              
-            · -- Show env out2 is binary  
+
+            · -- Show env out2 is binary
               have h_rest := h_local_witnesses.2
               rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
               apply main_output_binary_from_completeness n2 (offset + (main input_var1).localLength offset) env input_var2 input2
