@@ -943,11 +943,11 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
 /-- Soundness for n = 0 case -/
 lemma main_soundness_zero {p : ℕ} [Fact p.Prime] 
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
-    (input : fields 0 (F p)) (h_env : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions 0 input)
-    (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    (input : fields 0 (F p)) (_h_env : eval env input_var = input)
+    (_h_assumptions : MultiAND_Assumptions 0 input)
+    (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
     MultiAND_Spec 0 input (env ((main input_var).output offset)) := by
-  simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
+  simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [MultiAND_Spec]
   constructor
   · -- Prove output.val = empty fold = 1
@@ -970,9 +970,9 @@ lemma main_soundness_one {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p)) (h_env : eval env input_var = input)
     (h_assumptions : MultiAND_Assumptions 1 input)
-    (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
     MultiAND_Spec 1 input (env ((main input_var).output offset)) := by
-  simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
+  simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [MultiAND_Spec]
   have h_input0 := h_assumptions (0 : Fin 1)
   have h_eval_eq : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
@@ -1030,9 +1030,9 @@ lemma main_soundness_two {p : ℕ} [Fact p.Prime]
 lemma circuit_completeness_zero {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
-    (h_env : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions 0 input) :
+    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (_h_env : eval env input_var = input)
+    (_h_assumptions : MultiAND_Assumptions 0 input) :
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
@@ -1040,9 +1040,9 @@ lemma circuit_completeness_zero {p : ℕ} [Fact p.Prime]
 lemma circuit_completeness_one {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
-    (h_env : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions 1 input) :
+    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (_h_env : eval env input_var = input)
+    (_h_assumptions : MultiAND_Assumptions 1 input) :
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
