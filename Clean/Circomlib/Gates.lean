@@ -749,45 +749,6 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
   | inl h => left; simp [h, ZMod.val_zero]
   | inr h => right; simp [h, ZMod.val_one]
 
-/-- Helper to show assumptions hold for the first part of a split -/
-lemma assumptions_split_left {p m : ℕ} [Fact p.Prime] 
-    (input : fields (m + 3) (F p)) (h_assumptions : Assumptions (m + 3) input) :
-    Assumptions ((m + 3) / 2) 
-      (⟨input.toArray.extract 0 ((m + 3) / 2), by simp [Array.size_extract]; omega⟩ : fields ((m + 3) / 2) (F p)) := by
-  intro i
-  rw [extract_preserves_element input i (by omega : (m + 3) / 2 ≤ m + 3)]
-  exact h_assumptions ⟨i.val, by omega⟩
-
-/-- Helper to show assumptions hold for the second part of a split -/
-lemma assumptions_split_right {p m : ℕ} [Fact p.Prime] 
-    (input : fields (m + 3) (F p)) (h_assumptions : Assumptions (m + 3) input) :
-    Assumptions ((m + 3) - (m + 3) / 2) 
-      (⟨input.toArray.extract ((m + 3) / 2) (m + 3), by simp [Array.size_extract]⟩ : fields ((m + 3) - (m + 3) / 2) (F p)) := by
-  intro i
-  have h_sum : (m + 3) / 2 + ((m + 3) - (m + 3) / 2) = m + 3 := by omega
-  rw [extract_from_offset_preserves_element input i h_sum]
-  exact h_assumptions ⟨(m + 3) / 2 + i.val, by omega⟩
-
-/-- Helper to show evaluation preserves for the first part of a split -/
-lemma eval_split_left {p m : ℕ} [Fact p.Prime] {env : Environment (F p)}
-    {input : fields (m + 3) (F p)} {input_var : Var (fields (m + 3)) (F p)}
-    (h_env : eval env input_var = input) :
-    let n1 := (m + 3) / 2
-    let input_var1 : Var (fields n1) (F p) := ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
-    let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
-    eval env input_var1 = input1 := by
-  apply eval_toArray_extract_eq 0 _ h_env <;> omega
-
-/-- Helper to show evaluation preserves for the second part of a split -/
-lemma eval_split_right {p m : ℕ} [Fact p.Prime] {env : Environment (F p)}
-    {input : fields (m + 3) (F p)} {input_var : Var (fields (m + 3)) (F p)}
-    (h_env : eval env input_var = input) :
-    let n1 := (m + 3) / 2
-    let n2 := (m + 3) - n1
-    let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; omega⟩
-    let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 (m + 3), by simp [Array.size_extract]; omega⟩
-    eval env input_var2 = input2 := by
-  apply eval_toArray_extract_eq _ (m + 3) h_env <;> omega
 
 /-- Soundness for n = 0 case -/
 lemma soundness_zero {p : ℕ} [Fact p.Prime] 
