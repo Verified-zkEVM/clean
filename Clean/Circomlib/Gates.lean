@@ -486,7 +486,7 @@ theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α �
   simp [Circuit.localLength, Circuit.bind_def, Operations.localLength_append]
 
 -- Helper lemma for localLength
-theorem main_localLength (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     (main input).localLength offset = n - 1 := by
   -- Use strong induction on n
   induction n using Nat.strong_induction_on generalizing offset with
@@ -588,7 +588,7 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
   exact ⟨hf, hg⟩
 
 -- Helper theorem for subcircuitsConsistent
-theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
+theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     Operations.SubcircuitsConsistent offset ((main input).operations offset) := by
   -- Use strong induction on n
   induction n using Nat.strong_induction_on generalizing offset with
@@ -728,7 +728,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         · -- Need subcircuit consistency for the composed operations
           -- The goal matches main input.operations since main expands to the do-notation
           rw [← main]
-          apply main_subcircuitsConsistent
+          apply subcircuitsConsistent
         · exact h_witnesses
       · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
         intro h_completeness
@@ -1448,7 +1448,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
   · assumption
 
   apply Circuit.can_replace_completeness (n := offset)
-  · apply main_subcircuitsConsistent
+  · apply subcircuitsConsistent
   · -- Convert UsesLocalWitnessesCompleteness to UsesLocalWitnesses
     rw [main_usesLocalWitnesses_iff_completeness]
     · exact h_local_witnesses
@@ -1668,19 +1668,13 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
   localLength _ := n - 1
-  localLength_eq := by
-    intro input offset
-    exact main_localLength n input offset
-  subcircuitsConsistent := by
-    intro input offset
-    exact main_subcircuitsConsistent n input offset
+  localLength_eq := localLength_eq n
+  subcircuitsConsistent := subcircuitsConsistent n
 
   Assumptions := Assumptions n
   Spec := Spec n
 
-  soundness := by
-    intro offset env input_var input h_env h_assumptions h_hold
-    exact soundness n offset env input_var input h_env h_assumptions h_hold
+  soundness := soundness n
   completeness := by
     intro offset env input_var h_local_witnesses input h_env h_assumptions
     exact completeness n offset env input_var input h_local_witnesses h_env h_assumptions
