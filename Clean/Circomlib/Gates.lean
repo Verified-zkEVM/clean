@@ -941,6 +941,7 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
   | inl h => left; simp [h, ZMod.val_zero]
   | inr h => right; simp [h, ZMod.val_one]
 
+
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
@@ -1436,12 +1437,8 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- Now we need to show eval env input_var[0] is binary
         -- From h_env which was substituted, we know eval env input_var = input
         -- So eval env input_var[0] = input[0]
-        have h_eval0 : env (input_var.get 0) = input.get 0 := by
-          -- Use h_env which tells us eval env input_var = input
-          rw [ProvableType.eval_fields] at h_env
-          have : (input_var.map (Expression.eval env))[0] = input[0] := by rw [h_env]
-          rw [Vector.getElem_map] at this
-          exact this
+        have h_eval0 : env (input_var.get 0) = input.get 0 := 
+          eval_get_eq h_env 0
         -- h_eval0 tells us env (input_var.get 0) = input.get 0
         -- but the goal is about Expression.eval env ...
         -- They are the same since env is notation for Expression.eval env
@@ -1454,12 +1451,8 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [ProvableType.eval_fieldPair]
         -- Now we need to show eval env input_var[1] is binary
         -- Similar to the first component
-        have h_eval1 : env (input_var.get 1) = input.get 1 := by
-          -- Use h_env directly
-          rw [ProvableType.eval_fields] at h_env
-          have : (input_var.map (Expression.eval env))[1] = input[1] := by rw [h_env]
-          rw [Vector.getElem_map] at this
-          exact this
+        have h_eval1 : env (input_var.get 1) = input.get 1 := 
+          eval_get_eq h_env 1
         change env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1
         rw [h_eval1]
         exact h_binary1
@@ -1509,38 +1502,13 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
         intro i
-        have : input1.get i = input.get ⟨i.val, by omega⟩ := by
-          simp only [input1, Vector.get]
-          have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
-            simp only [Array.size_extract]
-            have : i.val < n1 := i.isLt
-            have : input.size = m + 3 := by simp
-            rw [this, min_eq_left]
-            · exact i.isLt
-            · unfold n1; omega) = input.toArray[i.val]'(by
-            have : i.val < n1 := i.isLt
-            have : n1 ≤ m + 3 := by unfold n1; omega
-            have : input.size = m + 3 := by simp
-            rw [this]
-            omega) := by
-            rw [Array.getElem_extract]
-            simp
-          exact h_extract
-        rw [this]
+        rw [extract_preserves_element input i (by unfold n1; omega)]
         exact h_assumptions ⟨i.val, by omega⟩
 
       have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
         intro i
-        have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
-          simp only [input2, Vector.get]
-          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) =
-                          input.toArray[n1 + i.val]'(by
-                            have : input.size = m + 3 := by simp
-                            rw [this]
-                            omega) := by
-            rw [Array.getElem_extract]
-          exact h_extract
-        rw [this]
+        have h_sum : n1 + n2 = m + 3 := by unfold n1 n2; omega
+        rw [extract_from_offset_preserves_element input i h_sum]
         exact h_assumptions ⟨n1 + i.val, by omega⟩
 
       -- The key insight: h_local_witnesses provides witnesses for the entire circuit
@@ -1594,28 +1562,7 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           exact h_local_witnesses.1
         · exact h_eval1
         · -- Need h_assumptions1
-          intro i
-          -- input1 is extracted from input starting at 0, so input1.get i = input.get i
-          have : input1.get i = input.get ⟨i.val, by omega⟩ := by
-            simp only [input1, Vector.get]
-            -- extract preserves elements: arr.extract start len[i] = arr[start + i]
-            have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
-              simp only [Array.size_extract]
-              have h1 : i.val < n1 := i.isLt
-              have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
-              rw [h2, min_eq_left (Nat.le_of_lt h_n1_lt)]
-              exact h1) =
-                            input.toArray[i.val]'(by
-                              have h1 : i.val < n1 := i.isLt
-                              have h2 : n1 ≤ m + 3 := Nat.le_of_lt h_n1_lt
-                              have h3 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                              rw [h3]
-                              omega) := by
-              rw [Array.getElem_extract]
-              simp
-            exact h_extract
-          rw [this]
-          exact h_assumptions ⟨i.val, by omega⟩
+          exact h_assumptions1
 
       · -- Rest: main input_var2 >>= AND.circuit.main
         rw [Circuit.ConstraintsHold.bind_completeness]
@@ -1630,22 +1577,7 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             exact h_rest.1
           · exact h_eval2
           · -- Need h_assumptions2
-            intro i
-            -- input2 is extracted from input starting at n1, so input2.get i = input.get (n1 + i)
-            have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
-              simp only [input2, Vector.get]
-              have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) =
-                              input.toArray[n1 + i.val]'(by
-                                have : n1 + i.val < input.size := by
-                                  have h1 : i.val < n2 := i.isLt
-                                  have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                                  rw [h2]
-                                  omega
-                                exact this) := by
-                rw [Array.getElem_extract]
-              exact h_extract
-            rw [this]
-            exact h_assumptions ⟨n1 + i.val, by omega⟩
+            exact h_assumptions2
 
         · -- Final AND circuit
           -- We need to apply AND.circuit.completeness
