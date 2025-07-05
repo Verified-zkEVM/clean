@@ -8,6 +8,7 @@ import Clean.Circuit.Basic
 
 variable {F: Type} [Field F] {α β : Type}
 
+
 -- basic simp lemmas
 
 namespace Operations

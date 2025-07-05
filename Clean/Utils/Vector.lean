@@ -11,6 +11,90 @@ def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 namespace Vector
 def len (_: Vector α n) : ℕ := n
 
+/-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
+theorem mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
+    x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
+  constructor
+  · intro h_mem
+    -- x ∈ v.toList means there exists an index where v.toList[index] = x
+    rw [List.mem_iff_getElem] at h_mem
+    obtain ⟨i, hi, h_eq⟩ := h_mem
+    -- We need i < n to construct Fin n
+    -- v : Vector α n means v.size = n
+    have h_len : v.size = n := by
+      -- Vector α n has size n by construction
+      cases v
+      rename_i arr h_size
+      -- v.size = arr.size = n
+      exact h_size
+    have h_list_len : v.toList.length = v.size := by
+      rfl  -- toList doesn't change the length
+    rw [h_list_len, h_len] at hi
+    -- Now we can use i < n
+    use ⟨i, hi⟩
+    -- Show x = v.get ⟨i, hi⟩
+    rw [← h_eq]
+    -- v.toList[i] = v.get ⟨i, hi⟩
+    -- Both access the same element from the underlying array
+    simp only [Vector.get]
+    -- Now we need to show v.toList[i] = v.toArray[⟨i, hi⟩]
+    rfl
+  · intro ⟨i, h_eq⟩
+    rw [h_eq]
+    -- Show v.get i ∈ v.toList
+    rw [List.mem_iff_getElem]
+    use i.val
+    have h_bound : i.val < v.toList.length := by
+      -- v.toList.length = v.size = n
+      have h_len : v.size = n := by
+        cases v
+        rename_i arr h_size
+        exact h_size
+      have h_list_len : v.toList.length = v.size := by
+        rfl
+      rw [h_list_len, h_len]
+      exact i.isLt
+    use h_bound
+    -- Now show v.toList[i.val] = v.get i
+    simp only [Vector.get]
+    rfl
+
+-- Helper lemma: A vector of length 1 has toList = [v.get 0]
+theorem toList_length_one {α : Type} (v : Vector α 1) :
+    v.toList = [v.get 0] := by
+  -- Try using cases on the vector
+  cases v using Vector.casesOn with
+  | mk arr h =>
+      cases arr using Array.casesOn with
+      | mk lst =>
+        -- h says arr.size = 1, and arr = Array.mk lst
+        -- So lst.length = 1
+        simp only [List.size_toArray] at h
+        -- Now we know lst has length 1, so it must be [x] for some x
+        match lst with
+        | [] => simp at h
+        | [x] =>
+          -- Goal: v.toList = [v.get 0]
+          -- v.toList = arr.toList = lst = [x]
+          -- v.get 0 = arr[0] = lst[0] = x
+          rfl
+        | _ :: _ :: _ => simp [List.length] at h
+
+-- Helper lemma: A vector of length 2 has toList = [v.get 0, v.get 1]
+theorem toList_length_two {α : Type} (v : Vector α 2) :
+    v.toList = [v.get 0, v.get 1] := by
+  -- Use the same approach as for length 1
+  cases v using Vector.casesOn with
+  | mk arr h =>
+      cases arr using Array.casesOn with
+      | mk lst =>
+        simp only [List.size_toArray] at h
+        match lst with
+        | [] => simp at h
+        | [_] => simp [List.length] at h
+        | [x, y] => rfl
+        | _ :: _ :: _ :: _ => simp [List.length] at h
+
 def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
@@ -244,6 +328,35 @@ theorem append_take_drop {v : Vector α (n + m)} :
   simp only [hi', reduceDIte, getElem_cast, getElem_extract]
   congr
   omega
+
+/-- Splitting a vector via extract and then converting to lists gives concatenation -/
+theorem toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k : ℕ) (hk : k ≤ n) :
+    v.toList = (⟨v.toArray.extract 0 k, by simp [Array.size_extract, v.size_toArray]; exact hk⟩ : Vector α k).toList ++
+               (⟨v.toArray.extract k n, by simp [Array.size_extract, v.size_toArray]⟩ : Vector α (n - k)).toList := by
+  rw [List.ext_get_iff]
+  constructor
+  · simp only [Array.length_toList, Vector.size_toArray, Array.toList_extract,
+    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.length_append, List.length_take,
+    List.length_drop, min_self]
+    omega
+  · intro idx h_idx h_idx'
+    -- The goal is to show v.toList[idx] equals the appropriate element from the concatenation
+    -- First, let's understand what we're comparing:
+    -- LHS: v.toList[idx] = v.toArray.toList[idx]
+    -- RHS: concatenation of two extracted parts
+
+    -- Simplify the RHS using our lemmas
+    simp only [Array.toList_extract, List.extract_eq_drop_take, tsub_zero, List.drop_zero]
+    by_cases idx < k
+    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
+      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
+      List.drop_zero]
+      aesop
+    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
+      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
+      List.drop_zero]
+      aesop
+
 end Vector
 
 -- helpers for `Vector.toChunks`
