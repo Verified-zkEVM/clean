@@ -700,70 +700,6 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
   rw [Circuit.forAll_bind]
   exact ⟨hf, hg⟩
 
--- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
-lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) (env : Environment (F p)) :
-    env.UsesLocalWitnesses offset ((main input).operations offset) ↔
-    env.UsesLocalWitnessesCompleteness offset ((main input).operations offset) := by
-  -- Use strong induction on n to handle the recursive structure
-  induction n using Nat.strong_induction_on generalizing offset with
-  | _ n IH =>
-    -- Match on the structure of n as in main's definition
-    match n with
-    | 0 =>
-      -- Base case: n = 0, main returns pure 1
-      simp [main, Circuit.operations, Circuit.pure_def]
-      constructor <;> intro <;> trivial
-    | 1 =>
-      -- Base case: n = 1, main returns the single input
-      simp [main, Circuit.operations, Circuit.pure_def]
-      constructor <;> intro <;> trivial
-    | 2 =>
-      -- n = 2: main uses AND.circuit
-      simp only [main]
-      -- The operations involve a subcircuit call to AND.circuit
-      constructor
-      · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
-        intro h_witnesses
-        apply Environment.can_replace_usesLocalWitnessesCompleteness
-        · -- Need subcircuit consistency for AND.circuit
-          apply AND.circuit.subcircuitsConsistent
-        · exact h_witnesses
-      · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses  
-        intro h_completeness
-        -- For AND.circuit (ElaboratedCircuit), the reverse direction is more complex
-        -- This requires understanding the specific structure of AND operations
-        sorry -- TODO: Prove equivalence for AND.circuit specifically
-    | m + 3 =>
-      -- Recursive case: n ≥ 3
-      simp only [main]
-      -- The operations involve recursive calls to main with smaller n
-      constructor
-      · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
-        intro h_witnesses
-        -- The operations are: (main input1 >>= λ out1 => main input2 >>= λ out2 => AND.circuit (out1, out2))
-        -- We can use IH for both recursive calls since they have smaller inputs
-        let n1 := (m + 3) / 2
-        let n2 := (m + 3) - n1
-        have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
-        have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
-        
-        -- This is complex due to the bind structure
-        -- For now, leave as sorry - the approach is correct but needs detailed bind lemmas
-        sorry -- TODO: Use bind decomposition lemmas and apply IH to recursive parts
-      · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
-        intro h_completeness  
-        -- Similar to forward direction, use the reverse of can_replace_usesLocalWitnessesCompleteness
-        -- For recursive case, the structure is symmetric
-        let n1 := (m + 3) / 2
-        let n2 := (m + 3) - n1
-        have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
-        have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
-        
-        -- The reverse direction is more complex since we need to extract witness properties
-        -- from the composed operations and apply IH in reverse
-        simp only [circuit_norm]
-        sorry -- TODO: Extract UsesLocalWitnesses from the bind composition
-
 -- Helper theorem for subcircuitsConsistent
 theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     Operations.SubcircuitsConsistent offset ((main input).operations offset) := by
@@ -823,6 +759,90 @@ theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (off
           apply IH n2 h_n2_lt input2
         · -- Final AND circuit
           apply AND.circuit.subcircuitsConsistent
+
+
+-- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
+lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) (env : Environment (F p)) :
+    env.UsesLocalWitnesses offset ((main input).operations offset) ↔
+    env.UsesLocalWitnessesCompleteness offset ((main input).operations offset) := by
+  -- Use strong induction on n to handle the recursive structure
+  induction n using Nat.strong_induction_on generalizing offset with
+  | _ n IH =>
+    -- Match on the structure of n as in main's definition
+    match n with
+    | 0 =>
+      -- Base case: n = 0, main returns pure 1
+      simp [main, Circuit.operations, Circuit.pure_def]
+      constructor <;> intro <;> trivial
+    | 1 =>
+      -- Base case: n = 1, main returns the single input
+      simp [main, Circuit.operations, Circuit.pure_def]
+      constructor <;> intro <;> trivial
+    | 2 =>
+      -- n = 2: main uses AND.circuit
+      simp only [main]
+      -- The operations involve a subcircuit call to AND.circuit
+      constructor
+      · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
+        intro h_witnesses
+        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        · -- Need subcircuit consistency for AND.circuit
+          apply AND.circuit.subcircuitsConsistent
+        · exact h_witnesses
+      · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
+        intro h_completeness
+        -- For AND.circuit (ElaboratedCircuit), the reverse direction is more complex
+        -- This requires understanding the specific structure of AND operations
+        simp only [AND.circuit, subcircuit_norm, AND.main, HasAssignEq.assign_eq, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
+        simp only [Fin.isValue, Nat.add_zero, id_eq]
+        unfold Environment.UsesLocalWitnesses Operations.forAllFlat
+        unfold Operations.forAll
+
+
+        constructor
+        · -- First part: witness operation
+          -- The goal is env.ExtendsVector (witness_value) offset
+          -- h_completeness gives us exactly this: env.get offset = correct_value
+          simp only [Environment.ExtendsVector, Vector.getElem_mk]
+          intro i
+          -- For the single witness (Fin 1), i = 0
+          fin_cases i
+          simp only [Fin.val_zero, add_zero, List.getElem_toArray]
+          exact h_completeness
+        · -- Second part: subcircuit operation (equality circuit)
+          -- The UsesLocalWitnesses for this subcircuit is defined as fun x => True
+          simp only [Operations.forAll]
+          trivial
+    | m + 3 =>
+      -- Recursive case: n ≥ 3
+      simp only [main]
+      -- The operations involve recursive calls to main with smaller n
+      constructor
+      · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
+        intro h_witnesses
+        -- The bind structure: main input1 >>= λ out1 => main input2 >>= λ out2 => AND.circuit (out1, out2)
+        -- We can use IH for both recursive calls since they have smaller inputs
+        let n1 := (m + 3) / 2
+        let n2 := (m + 3) - n1
+        have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
+        have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
+
+        -- The bind structure is quite complex with nested operations
+        -- For now, we can use the general approach that both concepts should be equivalent
+        -- when the operations have the right subcircuit consistency properties
+        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        · -- Need subcircuit consistency for the composed operations
+          sorry -- TODO: Apply subcircuit consistency for recursive case
+        · exact h_witnesses
+      · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
+        intro h_completeness
+        -- For the reverse direction, we need to show that completeness implies witness usage
+        -- This is the more complex direction since there's no direct theorem for the reverse
+        -- However, for circuits with proper subcircuit consistency, this should hold by the
+        -- structure of the operations
+        sorry -- TODO: This requires a deeper analysis of how completeness implies witness usage
+        --       for composed circuits. The forward direction works via can_replace_usesLocalWitnessesCompleteness
+        --       but the reverse needs more careful handling of the bind structure.
 
 
 -- Extract Assumptions and Spec outside the circuit
