@@ -853,13 +853,30 @@ lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F
   simp only [Vector.getElem_map] at this
   exact this
 
-/-- Folding AND over a list with an initial accumulator that is itself a fold 
-    is equivalent to ANDing the initial fold result with the fold over the list -/
+/-- Folding AND over a list with a binary initial accumulator 
+    is equivalent to ANDing the initial value with the fold starting from 1 -/
 lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
-    (l : List (F p)) (init : ℕ) :
+    (l : List (F p)) (init : ℕ) (h_init : init = 0 ∨ init = 1)
+    (h_binary : ∀ x ∈ l, x = 0 ∨ x = 1) :
     List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) = 
     init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
-  sorry
+  -- Let's use the existing lemma List.and_foldl_eq_foldl_of_all_binary
+  -- First, we need to establish that the mapped list elements are binary
+  have h_mapped_binary : ∀ x ∈ (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l), x = 0 ∨ x = 1 := by
+    intro x hx
+    simp only [List.mem_map] at hx
+    rcases hx with ⟨y, hy, rfl⟩
+    have h_y_binary := h_binary y hy
+    cases h_y_binary with
+    | inl h => left; simp [h, ZMod.val_zero]
+    | inr h => right; simp [h, ZMod.val_one]
+  
+  -- Now we can use the helper lemma
+  rw [List.and_foldl_eq_foldl_of_all_binary init 1 _ h_init h_mapped_binary]
+  -- We need to show init &&& 1 = init for binary init
+  cases h_init with
+  | inl h0 => rw [h0, and_zero_absorb]
+  | inr h1 => rw [h1, and_one_id_binary 1 (Or.inr rfl)]
 
 /-- Splitting a vector via extract and then converting to lists gives concatenation -/
 lemma Vector.toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k : ℕ) (hk : k ≤ n) :
@@ -1333,7 +1350,13 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- This is a fundamental property of how do-blocks work in the circuit framework
 
         -- Apply the lemma about foldl with AND
-        rw [List.foldl_and_eq_and_foldl]
+        -- We need to provide the binary assumptions for input2
+        have h_input2_binary : ∀ x ∈ input2.toList, x = 0 ∨ x = 1 := by
+          -- Use Vector.toList_binary to convert vector property to list property
+          apply Vector.toList_binary
+          exact h_assumptions2
+        
+        rw [List.foldl_and_eq_and_foldl _ _ h_foldl1_binary h_input2_binary]
 
         sorry -- TODO: Connect do-block output to ElaboratedCircuit.output
 
