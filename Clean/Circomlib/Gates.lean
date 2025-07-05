@@ -941,6 +941,148 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
   | inl h => left; simp [h, ZMod.val_zero]
   | inr h => right; simp [h, ZMod.val_one]
 
+/-- Soundness for n = 0 case -/
+lemma main_soundness_zero {p : ℕ} [Fact p.Prime] 
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
+    (input : fields 0 (F p)) (h_env : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions 0 input)
+    (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    MultiAND_Spec 0 input (env ((main input_var).output offset)) := by
+  simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
+  simp only [MultiAND_Spec]
+  constructor
+  · -- Prove output.val = empty fold = 1
+    simp only [Expression.eval]
+    -- For n=0, input is a Vector of length 0, so input.toList = []
+    have : input.toList = [] := by
+      cases input using Vector.casesOn
+      rename_i l h
+      simp at h
+      subst h
+      rfl
+    rw [this]
+    simp only [List.map_nil, List.foldl_nil, ZMod.val_one]
+  · -- Prove output = 0 ∨ output = 1
+    right
+    rfl
+
+/-- Soundness for n = 1 case -/
+lemma main_soundness_one {p : ℕ} [Fact p.Prime] 
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
+    (input : fields 1 (F p)) (h_env : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions 1 input)
+    (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    MultiAND_Spec 1 input (env ((main input_var).output offset)) := by
+  simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
+  simp only [MultiAND_Spec]
+  have h_input0 := h_assumptions (0 : Fin 1)
+  have h_eval_eq : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
+  constructor
+  · -- Prove output.val = single element fold
+    simp only [h_eval_eq]
+    rw [Vector.toList_length_one]
+    simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
+    -- For binary values, 1 &&& x = x
+    cases h_input0 with
+    | inl h0 => rw [h0]; simp only [ZMod.val_zero]; rfl
+    | inr h1 => rw [h1]; simp only [ZMod.val_one]; rfl
+  · -- Prove output = 0 ∨ output = 1
+    simp only [h_eval_eq]
+    exact h_input0
+
+/-- Soundness for n = 2 case -/
+lemma main_soundness_two {p : ℕ} [Fact p.Prime] 
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
+    (input : fields 2 (F p)) (h_env : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions 2 input)
+    (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    MultiAND_Spec 2 input (env ((main input_var).output offset)) := by
+  simp only [main] at h_hold ⊢
+  simp only [MultiAND_Spec]
+  -- Get the two input values
+  have h_input0 := h_assumptions (0 : Fin 2)
+  have h_input1 := h_assumptions (1 : Fin 2)
+  have h_eval0 : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
+  have h_eval1 : env (input_var.get 1) = input.get 1 := eval_get_eq h_env 1
+  
+  -- Use AND.circuit.soundness
+  have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1)
+    (input.get 0, input.get 1)
+    (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
+    ⟨h_input0, h_input1⟩ h_hold
+  
+  rcases h_and_spec with ⟨h_val, h_binary⟩
+  constructor
+  · -- Prove output.val = fold
+    simp only [Vector.toList_length_two]
+    simp only [List.map_cons, List.map_nil]
+    rw [List.foldl_cons, List.foldl_cons, List.foldl_nil]
+    -- Simplify 1 &&& x = x for binary values
+    have h1 : 1 &&& (input.get 0).val = (input.get 0).val := by
+      cases h_input0 with
+      | inl h => rw [h]; simp only [ZMod.val_zero]; rfl
+      | inr h => rw [h]; simp only [ZMod.val_one]; rfl
+    rw [h1]
+    exact h_val
+  · -- Prove output = 0 ∨ output = 1
+    exact h_binary
+
+/-- Completeness for n = 0 case -/
+lemma circuit_completeness_zero {p : ℕ} [Fact p.Prime]
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
+    (input : fields 0 (F p))
+    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (h_env : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions 0 input) :
+    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+  simp [main, Circuit.ConstraintsHold.Completeness]
+
+/-- Completeness for n = 1 case -/
+lemma circuit_completeness_one {p : ℕ} [Fact p.Prime]
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
+    (input : fields 1 (F p))
+    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (h_env : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions 1 input) :
+    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+  simp [main, Circuit.ConstraintsHold.Completeness]
+
+/-- Completeness for n = 2 case -/
+lemma circuit_completeness_two {p : ℕ} [Fact p.Prime]
+    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
+    (input : fields 2 (F p))
+    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (h_env : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions 2 input) :
+    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+  simp only [main, circuit_norm] at h_local_witnesses ⊢
+  
+  -- From h_assumptions, we know both inputs are binary
+  have h_binary0 : input[0] = 0 ∨ input[0] = 1 := h_assumptions 0
+  have h_binary1 : input[1] = 0 ∨ input[1] = 1 := h_assumptions 1
+  
+  apply AND.circuit.completeness
+  · exact h_local_witnesses
+  · subst h_env
+    simp_all only [forall_eq', id_eq, Fin.isValue]
+    rfl
+  · simp only [MultiAND_Assumptions] at h_assumptions
+    constructor
+    · -- First component is binary
+      simp only [ProvableType.eval_fieldPair]
+      have h_eval0 : env (input_var.get 0) = input.get 0 := 
+        eval_get_eq h_env 0
+      change env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1
+      rw [h_eval0]
+      exact h_binary0
+    · -- Second component is binary
+      simp only [ProvableType.eval_fieldPair]
+      have h_eval1 : env (input_var.get 1) = input.get 1 := 
+        eval_get_eq h_env 1
+      change env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1
+      rw [h_eval1]
+      exact h_binary1
+
 
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
@@ -956,107 +1098,9 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     intro offset env input_var input h_env h_assumptions h_hold
     -- Match on the structure of n as in main's definition
     match n with
-    | 0 =>
-      -- For n = 0, main returns (1 : F p)
-      simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
-      simp only [MultiAND_Spec]
-      constructor
-      · -- Prove output.val = empty fold = 1
-        simp only [Expression.eval]
-        -- For n=0, input is a Vector of length 0, so input.toList = []
-        have : input.toList = [] := by
-          cases input using Vector.casesOn
-          rename_i l h
-          simp at h
-          subst h
-          rfl
-        rw [this]
-        simp only [List.map_nil, List.foldl_nil]
-        -- Need to prove ZMod.val 1 = 1
-        simp only [ZMod.val_one]
-      · -- Prove output = 0 ∨ output = 1
-        right
-        -- env ((1 : F p)) = 1
-        rfl
-    | 1 =>
-      -- For n = 1, main returns input.get 0
-      simp only [main, Circuit.output, Circuit.pure_def] at h_hold ⊢
-      simp only [MultiAND_Spec]
-      -- We know from h_env that eval env input_var = input
-      -- And from h_assumptions that input.get 0 = 0 ∨ input.get 0 = 1
-      have h_input0 := h_assumptions (0 : Fin 1)
-      -- Need to relate eval env (input_var.get 0) to input.get 0
-      have h_eval_eq : env (input_var.get 0) = input.get 0 :=
-        eval_get_eq h_env 0
-      constructor
-      · -- Prove output.val = single element fold
-        simp only [h_eval_eq]
-        -- For n=1, we need to show: (input.get 0).val = (input.toList.map (·.val)).foldl (· &&& ·) 1
-        -- Use our Vector.toList_length_one lemma
-        rw [Vector.toList_length_one]
-        -- Now we have: (input.get 0).val = ([input.get 0].map (·.val)).foldl (· &&& ·) 1
-        simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-        -- This simplifies to: (input.get 0).val = 1 &&& (input.get 0).val
-        -- For binary values, 1 &&& x = x
-        cases h_input0 with
-        | inl h0 =>
-          rw [h0]
-          simp only [ZMod.val_zero]
-          rfl
-        | inr h1 =>
-          rw [h1]
-          simp only [ZMod.val_one]
-          rfl
-      · -- Prove output = 0 ∨ output = 1
-        simp only [h_eval_eq]
-        exact h_input0
-    | 2 =>
-      -- For n = 2, main calls AND.circuit.main
-      simp only [main] at h_hold ⊢
-      simp only [MultiAND_Spec]
-      -- We have h_env : eval env input_var = input
-      -- And h_assumptions : ∀ i : Fin 2, (input.get i = 0 ∨ input.get i = 1)
-      -- We need to show output.val = fold and (output = 0 ∨ output = 1)
-
-      -- Get the two input values
-      have h_input0 := h_assumptions (0 : Fin 2)
-      have h_input1 := h_assumptions (1 : Fin 2)
-
-      -- The main function calls AND.circuit.main with (input_var.get 0, input_var.get 1)
-      -- We need to show the inputs evaluate correctly
-      have h_eval0 : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
-      have h_eval1 : env (input_var.get 1) = input.get 1 := eval_get_eq h_env 1
-
-      -- Now use AND.circuit.soundness
-      have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1)
-        (input.get 0, input.get 1)
-        (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
-        ⟨h_input0, h_input1⟩ h_hold
-
-      -- h_and_spec gives us the AND specification
-      rcases h_and_spec with ⟨h_val, h_binary⟩
-
-      -- TODO: complete n=2 case - need to connect AND circuit output to main output
-      constructor
-      · -- Prove output.val = fold
-        simp only [Vector.toList_length_two]
-        -- Now goal is: output.val = [input.get 0, input.get 1].map(·.val).foldl(· &&& ·) 1
-        simp only [List.map_cons, List.map_nil]
-        -- Goal: output.val = [(input.get 0).val, (input.get 1).val].foldl (· &&& ·) 1
-        -- Apply foldl_cons twice to expand [a, b].foldl f init
-        rw [List.foldl_cons, List.foldl_cons, List.foldl_nil]
-        -- Goal: output.val = (1 &&& (input.get 0).val) &&& (input.get 1).val
-        -- Simplify 1 &&& x = x for binary values
-        have h1 : 1 &&& (input.get 0).val = (input.get 0).val := by
-          cases h_input0 with
-          | inl h => rw [h]; simp only [ZMod.val_zero]; rfl
-          | inr h => rw [h]; simp only [ZMod.val_one]; rfl
-        rw [h1]
-        -- Now goal is: output.val = (input.get 0).val &&& (input.get 1).val
-        -- This is exactly h_val from AND.circuit.soundness
-        exact h_val
-      · -- Prove output = 0 ∨ output = 1
-        exact h_binary
+    | 0 => exact main_soundness_zero offset env input_var input h_env h_assumptions h_hold
+    | 1 => exact main_soundness_one offset env input_var input h_env h_assumptions h_hold
+    | 2 => exact main_soundness_two offset env input_var input h_env h_assumptions h_hold
     | m + 3 =>
       -- For n ≥ 3, main makes recursive calls
       simp only [main] at h_hold ⊢
@@ -1411,51 +1455,9 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
   | _ n IH =>
     intro offset env input_var input h_local_witnesses h_env h_assumptions
     match n with
-    | 0 =>
-      -- No constraints for n = 0
-      simp [main, Circuit.ConstraintsHold.Completeness]
-    | 1 =>
-      -- For n = 1, main returns the single input, no constraints
-      simp [main, Circuit.ConstraintsHold.Completeness]
-    | 2 =>
-      -- For n = 2, we use the AND gate
-      simp only [main, circuit_norm] at h_local_witnesses ⊢
-
-      -- From h_assumptions, we know both inputs are binary
-      have h_binary0 : input[0] = 0 ∨ input[0] = 1 := h_assumptions 0
-      have h_binary1 : input[1] = 0 ∨ input[1] = 1 := h_assumptions 1
-
-      apply AND.circuit.completeness
-      subst h_env
-      simp_all only [forall_eq', id_eq, Fin.isValue]
-      rfl
-      simp only [MultiAND_Assumptions] at h_assumptions
-      constructor
-      · -- First component is binary
-        -- We need to show (eval env (input_var[0], input_var[1])).1 is binary
-        simp only [ProvableType.eval_fieldPair]
-        -- Now we need to show eval env input_var[0] is binary
-        -- From h_env which was substituted, we know eval env input_var = input
-        -- So eval env input_var[0] = input[0]
-        have h_eval0 : env (input_var.get 0) = input.get 0 := 
-          eval_get_eq h_env 0
-        -- h_eval0 tells us env (input_var.get 0) = input.get 0
-        -- but the goal is about Expression.eval env ...
-        -- They are the same since env is notation for Expression.eval env
-        change env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1
-        rw [h_eval0]
-        exact h_binary0
-      · -- Second component is binary
-        -- We need to show (eval env (input_var[0], input_var[1])).2 is binary
-        -- This is the second component of the evaluated pair
-        simp only [ProvableType.eval_fieldPair]
-        -- Now we need to show eval env input_var[1] is binary
-        -- Similar to the first component
-        have h_eval1 : env (input_var.get 1) = input.get 1 := 
-          eval_get_eq h_env 1
-        change env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1
-        rw [h_eval1]
-        exact h_binary1
+    | 0 => exact circuit_completeness_zero offset env input_var input h_local_witnesses h_env h_assumptions
+    | 1 => exact circuit_completeness_one offset env input_var input h_local_witnesses h_env h_assumptions
+    | 2 => exact circuit_completeness_two offset env input_var input h_local_witnesses h_env h_assumptions
     | m + 3 =>
       -- Recursive case: split into two halves and apply IH
       simp [main]
@@ -1602,47 +1604,10 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             -- Now we need to get the outputs are binary from the soundness
 
             -- First, we need h_assumptions1 and h_assumptions2 again
-            have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
-              intro i
-              -- input1 is extracted from input starting at 0, so input1.get i = input.get i
-              have : input1.get i = input.get ⟨i.val, by omega⟩ := by
-                simp only [input1, Vector.get]
-                -- extract preserves elements: arr.extract start len[i] = arr[start + i]
-                have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
-                  simp only [Array.size_extract]
-                  have h1 : i.val < n1 := i.isLt
-                  have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                  rw [h2, min_eq_left (Nat.le_of_lt h_n1_lt)]
-                  exact h1) =
-                                input.toArray[i.val]'(by
-                                  have h1 : i.val < n1 := i.isLt
-                                  have h2 : n1 ≤ m + 3 := Nat.le_of_lt h_n1_lt
-                                  have h3 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                                  rw [h3]
-                                  omega) := by
-                  rw [Array.getElem_extract]
-                  simp
-                exact h_extract
-              rw [this]
-              exact h_assumptions ⟨i.val, by omega⟩
+            -- (These were already computed above, but we need them again for the AND circuit)
+            have h_assumptions1' : MultiAND_Assumptions n1 input1 := h_assumptions1
 
-            have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
-              intro i
-              -- input2 is extracted from input starting at n1, so input2.get i = input.get (n1 + i)
-              have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
-                simp only [input2, Vector.get]
-                have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) =
-                                input.toArray[n1 + i.val]'(by
-                                  have : n1 + i.val < input.size := by
-                                    have h1 : i.val < n2 := i.isLt
-                                    have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                                    rw [h2]
-                                    omega
-                                  exact this) := by
-                  rw [Array.getElem_extract]
-                exact h_extract
-              rw [this]
-              exact h_assumptions ⟨n1 + i.val, by omega⟩
+            have h_assumptions2' : MultiAND_Assumptions n2 input2 := h_assumptions2
 
             -- Get completeness from the IH for both recursive calls
             have h_comp1 : Circuit.ConstraintsHold.Completeness env ((main input_var1).operations offset) := by
