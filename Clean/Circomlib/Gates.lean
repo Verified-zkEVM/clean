@@ -762,23 +762,28 @@ theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (off
 
 
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
-lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) (env : Environment (F p)) :
-    env.UsesLocalWitnesses offset ((main input).operations offset) ↔
-    env.UsesLocalWitnessesCompleteness offset ((main input).operations offset) := by
+lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : Environment (F p)) :
+    offset1 = offset2 ->
+    (env.UsesLocalWitnesses offset1 ((main input).operations offset2) ↔
+     env.UsesLocalWitnessesCompleteness offset1 ((main input).operations offset2)) := by
   -- Use strong induction on n to handle the recursive structure
-  induction n using Nat.strong_induction_on generalizing offset with
+  induction n using Nat.strong_induction_on generalizing offset1 offset2 with
   | _ n IH =>
     -- Match on the structure of n as in main's definition
     match n with
     | 0 =>
+      intros
       -- Base case: n = 0, main returns pure 1
       simp [main, Circuit.operations, Circuit.pure_def]
       constructor <;> intro <;> trivial
     | 1 =>
+      intros
       -- Base case: n = 1, main returns the single input
       simp [main, Circuit.operations, Circuit.pure_def]
       constructor <;> intro <;> trivial
     | 2 =>
+      intros
+      subst offset2
       -- n = 2: main uses AND.circuit
       simp only [main]
       -- The operations involve a subcircuit call to AND.circuit
@@ -814,6 +819,8 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           simp only [Operations.forAll]
           trivial
     | m + 3 =>
+      intros
+      subst offset2
       -- Recursive case: n ≥ 3
       simp only [main]
       -- The operations involve recursive calls to main with smaller n
@@ -842,9 +849,33 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         -- This is the more complex direction since there's no direct theorem for the reverse
         -- However, for circuits with proper subcircuit consistency, this should hold by the
         -- structure of the operations
-        sorry -- TODO: This requires a deeper analysis of how completeness implies witness usage
-        --       for composed circuits. The forward direction works via can_replace_usesLocalWitnessesCompleteness
-        --       but the reverse needs more careful handling of the bind structure.
+        simp only [circuit_norm, subcircuit_norm] at h_completeness ⊢
+        rcases h_completeness with ⟨ h_c1, h_c2, h_c3 ⟩
+
+        rw[Environment.UsesLocalWitnesses, Operations.forAllFlat]
+
+        rw [Operations.forAll_append]
+        constructor
+        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+          rw[IH]
+          · aesop
+          · omega
+          · trivial
+        rw [Operations.forAll_append]
+        constructor
+        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+          rw[IH]
+          · aesop
+          · omega
+          · omega
+        apply h_c3
+
+        -- The reverse direction requires careful handling of the bind structure
+        -- We can use the distribution property but the conversion between
+        -- the expanded form and the IH pattern is quite complex
+        sorry -- TODO: Use Operations.forAll_append to decompose, then apply IH for each part
+        --       The technical challenge is matching the exact input/offset patterns
+        --       that IH expects with the expanded bind form in h_completeness
 
 
 -- Extract Assumptions and Spec outside the circuit
