@@ -775,10 +775,10 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
             simp_all [toVars, assertZero, var, circuit_norm, Operations.toFlat, FlatOperation.forAll]
 
 -- Extract Assumptions and Spec outside the circuit
-def MultiAND_Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
+def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
   ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
 
-def MultiAND_Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
+def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
 
 
@@ -903,7 +903,7 @@ lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n 
 
 /-- Helper to show that mapping .val over a binary vector produces binary values -/
 lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p)) 
-    (h_assumptions : MultiAND_Assumptions n input) :
+    (h_assumptions : Assumptions n input) :
     ∀ x ∈ input.toList.map (·.val), x = 0 ∨ x = 1 := by
   intro x hx
   simp only [List.mem_map] at hx
@@ -917,8 +917,8 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
 
 /-- Helper to show assumptions hold for the first part of a split -/
 lemma assumptions_split_left {p m : ℕ} [Fact p.Prime] 
-    (input : fields (m + 3) (F p)) (h_assumptions : MultiAND_Assumptions (m + 3) input) :
-    MultiAND_Assumptions ((m + 3) / 2) 
+    (input : fields (m + 3) (F p)) (h_assumptions : Assumptions (m + 3) input) :
+    Assumptions ((m + 3) / 2) 
       (⟨input.toArray.extract 0 ((m + 3) / 2), by simp [Array.size_extract]; omega⟩ : fields ((m + 3) / 2) (F p)) := by
   intro i
   rw [extract_preserves_element input i (by omega : (m + 3) / 2 ≤ m + 3)]
@@ -926,8 +926,8 @@ lemma assumptions_split_left {p m : ℕ} [Fact p.Prime]
 
 /-- Helper to show assumptions hold for the second part of a split -/
 lemma assumptions_split_right {p m : ℕ} [Fact p.Prime] 
-    (input : fields (m + 3) (F p)) (h_assumptions : MultiAND_Assumptions (m + 3) input) :
-    MultiAND_Assumptions ((m + 3) - (m + 3) / 2) 
+    (input : fields (m + 3) (F p)) (h_assumptions : Assumptions (m + 3) input) :
+    Assumptions ((m + 3) - (m + 3) / 2) 
       (⟨input.toArray.extract ((m + 3) / 2) (m + 3), by simp [Array.size_extract]⟩ : fields ((m + 3) - (m + 3) / 2) (F p)) := by
   intro i
   have h_sum : (m + 3) / 2 + ((m + 3) - (m + 3) / 2) = m + 3 := by omega
@@ -956,14 +956,14 @@ lemma eval_split_right {p m : ℕ} [Fact p.Prime] {env : Environment (F p)}
   apply eval_toArray_extract_eq _ (m + 3) h_env <;> omega
 
 /-- Soundness for n = 0 case -/
-lemma main_soundness_zero {p : ℕ} [Fact p.Prime] 
+lemma soundness_zero {p : ℕ} [Fact p.Prime] 
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p)) (_h_env : eval env input_var = input)
-    (_h_assumptions : MultiAND_Assumptions 0 input)
+    (_h_assumptions : Assumptions 0 input)
     (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
-    MultiAND_Spec 0 input (env ((main input_var).output offset)) := by
+    Spec 0 input (env ((main input_var).output offset)) := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
-  simp only [MultiAND_Spec]
+  simp only [Spec]
   constructor
   · -- Prove output.val = empty fold = 1
     simp only [Expression.eval]
@@ -981,14 +981,14 @@ lemma main_soundness_zero {p : ℕ} [Fact p.Prime]
     rfl
 
 /-- Soundness for n = 1 case -/
-lemma main_soundness_one {p : ℕ} [Fact p.Prime] 
+lemma soundness_one {p : ℕ} [Fact p.Prime] 
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p)) (h_env : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions 1 input)
+    (h_assumptions : Assumptions 1 input)
     (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
-    MultiAND_Spec 1 input (env ((main input_var).output offset)) := by
+    Spec 1 input (env ((main input_var).output offset)) := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
-  simp only [MultiAND_Spec]
+  simp only [Spec]
   have h_input0 := h_assumptions (0 : Fin 1)
   have h_eval_eq : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
   constructor
@@ -1005,14 +1005,14 @@ lemma main_soundness_one {p : ℕ} [Fact p.Prime]
     exact h_input0
 
 /-- Soundness for n = 2 case -/
-lemma main_soundness_two {p : ℕ} [Fact p.Prime] 
+lemma soundness_two {p : ℕ} [Fact p.Prime] 
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p)) (h_env : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions 2 input)
+    (h_assumptions : Assumptions 2 input)
     (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
-    MultiAND_Spec 2 input (env ((main input_var).output offset)) := by
+    Spec 2 input (env ((main input_var).output offset)) := by
   simp only [main] at h_hold ⊢
-  simp only [MultiAND_Spec]
+  simp only [Spec]
   -- Get the two input values
   have h_input0 := h_assumptions (0 : Fin 2)
   have h_input1 := h_assumptions (1 : Fin 2)
@@ -1042,32 +1042,32 @@ lemma main_soundness_two {p : ℕ} [Fact p.Prime]
     exact h_binary
 
 /-- Completeness for n = 0 case -/
-lemma circuit_completeness_zero {p : ℕ} [Fact p.Prime]
+lemma completeness_zero {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : eval env input_var = input)
-    (_h_assumptions : MultiAND_Assumptions 0 input) :
+    (_h_assumptions : Assumptions 0 input) :
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
 /-- Completeness for n = 1 case -/
-lemma circuit_completeness_one {p : ℕ} [Fact p.Prime]
+lemma completeness_one {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
     (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (_h_env : eval env input_var = input)
-    (_h_assumptions : MultiAND_Assumptions 1 input) :
+    (_h_assumptions : Assumptions 1 input) :
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
 /-- Completeness for n = 2 case -/
-lemma circuit_completeness_two {p : ℕ} [Fact p.Prime]
+lemma completeness_two {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p))
     (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (h_env : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions 2 input) :
+    (h_assumptions : Assumptions 2 input) :
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp only [main, circuit_norm] at h_local_witnesses ⊢
   
@@ -1080,7 +1080,7 @@ lemma circuit_completeness_two {p : ℕ} [Fact p.Prime]
   · subst h_env
     simp_all only [forall_eq', id_eq, Fin.isValue]
     rfl
-  · simp only [MultiAND_Assumptions] at h_assumptions
+  · simp only [Assumptions] at h_assumptions
     constructor
     · -- First component is binary
       simp only [ProvableType.eval_fieldPair]
@@ -1099,26 +1099,26 @@ lemma circuit_completeness_two {p : ℕ} [Fact p.Prime]
 
 
 -- Helper theorem for soundness
-theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
+theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     eval env input_var = input →
-    MultiAND_Assumptions n input →
+    Assumptions n input →
     Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) →
-    MultiAND_Spec n input (env ((main input_var).output offset)) := by
+    Spec n input (env ((main input_var).output offset)) := by
   -- Use strong induction on n
   induction n using Nat.strong_induction_on with
   | _ n IH =>
     intro offset env input_var input h_env h_assumptions h_hold
     -- Match on the structure of n as in main's definition
     match n with
-    | 0 => exact main_soundness_zero offset env input_var input h_env h_assumptions h_hold
-    | 1 => exact main_soundness_one offset env input_var input h_env h_assumptions h_hold
-    | 2 => exact main_soundness_two offset env input_var input h_env h_assumptions h_hold
+    | 0 => exact soundness_zero offset env input_var input h_env h_assumptions h_hold
+    | 1 => exact soundness_one offset env input_var input h_env h_assumptions h_hold
+    | 2 => exact soundness_two offset env input_var input h_env h_assumptions h_hold
     | m + 3 =>
       -- For n ≥ 3, main makes recursive calls
       simp only [main] at h_hold ⊢
-      simp only [MultiAND_Spec]
+      simp only [Spec]
 
       -- Define n1 and n2 as in the main function
       let n1 := (m + 3) / 2
@@ -1155,12 +1155,12 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         eval_toArray_extract_eq n1 (m + 3) h_env (by omega) (by omega)
 
       -- Show assumptions hold for subvectors
-      have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
+      have h_assumptions1 : Assumptions n1 input1 := by
         intro i
         rw [extract_preserves_element input i (Nat.le_of_lt h_n1_lt)]
         exact h_assumptions ⟨i.val, by omega⟩
 
-      have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
+      have h_assumptions2 : Assumptions n2 input2 := by
         intro i
         rw [extract_from_offset_preserves_element input i h_sum]
         exact h_assumptions ⟨n1 + i.val, by omega⟩
@@ -1175,7 +1175,7 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- then bind main input_var2 with (fun out2 => ElaboratedCircuit.main (out1, out2))
 
       -- Apply IH to first recursive call
-      have h_spec1 : MultiAND_Spec n1 input1 (env ((main input_var1).output offset)) := by
+      have h_spec1 : Spec n1 input1 (env ((main input_var1).output offset)) := by
         apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
         -- Need to show: ConstraintsHold.Soundness env ((main input_var1).operations offset)
         -- h_hold gives us constraints hold for the whole do-block
@@ -1184,7 +1184,7 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         exact h_hold.1
 
       -- Apply IH to second recursive call
-      have h_spec2 : MultiAND_Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) := by
+      have h_spec2 : Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) := by
         apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2 input2 h_eval2 h_assumptions2
         -- Need to show: ConstraintsHold.Soundness env ((main input_var2).operations (offset + (main input_var1).localLength offset))
         -- From h_hold.2, we have constraints hold for the rest after the first call
@@ -1412,7 +1412,7 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions n input)
+    (h_assumptions : Assumptions n input)
     (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     output = 0 ∨ output = 1 := by
@@ -1421,7 +1421,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
   -- The spec includes that the output is binary
 
   -- Apply main_soundness
-  have h_spec := main_soundness n offset env input_var input h_eval h_assumptions
+  have h_spec := soundness n offset env input_var input h_eval h_assumptions
 
   -- But wait, main_soundness requires ConstraintsHold.Soundness, not just ConstraintsHold
   -- We need to convert using can_replace_soundness
@@ -1430,7 +1430,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     exact h_constraints
 
   -- Now apply soundness
-  have h_spec := main_soundness n offset env input_var input h_eval h_assumptions h_soundness
+  have h_spec := soundness n offset env input_var input h_eval h_assumptions h_soundness
 
   -- Extract the binary part from the spec
   exact h_spec.2
@@ -1439,7 +1439,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
 lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : eval env input_var = input)
-    (h_assumptions : MultiAND_Assumptions n input)
+    (h_assumptions : Assumptions n input)
     (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (h_completeness : Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
@@ -1457,21 +1457,21 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
   · exact h_completeness
 
 -- Helper theorem for circuit completeness
-theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
+theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset) →
     eval env input_var = input →
-    MultiAND_Assumptions n input →
+    Assumptions n input →
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   -- Use strong induction on n to handle the recursive structure
   induction n using Nat.strong_induction_on with
   | _ n IH =>
     intro offset env input_var input h_local_witnesses h_env h_assumptions
     match n with
-    | 0 => exact circuit_completeness_zero offset env input_var input h_local_witnesses h_env h_assumptions
-    | 1 => exact circuit_completeness_one offset env input_var input h_local_witnesses h_env h_assumptions
-    | 2 => exact circuit_completeness_two offset env input_var input h_local_witnesses h_env h_assumptions
+    | 0 => exact completeness_zero offset env input_var input h_local_witnesses h_env h_assumptions
+    | 1 => exact completeness_one offset env input_var input h_local_witnesses h_env h_assumptions
+    | 2 => exact completeness_two offset env input_var input h_local_witnesses h_env h_assumptions
     | m + 3 =>
       -- Recursive case: split into two halves and apply IH
       simp [main]
@@ -1516,12 +1516,12 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
 
       -- Show assumptions hold for subvectors
-      have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
+      have h_assumptions1 : Assumptions n1 input1 := by
         intro i
         rw [extract_preserves_element input i (by unfold n1; omega)]
         exact h_assumptions ⟨i.val, by omega⟩
 
-      have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
+      have h_assumptions2 : Assumptions n2 input2 := by
         intro i
         have h_sum : n1 + n2 = m + 3 := by unfold n1 n2; omega
         rw [extract_from_offset_preserves_element input i h_sum]
@@ -1612,16 +1612,16 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             rfl
           · -- Need to show AND assumptions: both outputs are binary
             -- The AND circuit requires both inputs to be binary (0 or 1)
-            -- We get this from the MultiAND_Spec of the recursive calls
+            -- We get this from the Spec of the recursive calls
 
             -- We already proved h_assumptions1 and h_assumptions2 in the IH applications above
             -- Now we need to get the outputs are binary from the soundness
 
             -- First, we need h_assumptions1 and h_assumptions2 again
             -- (These were already computed above, but we need them again for the AND circuit)
-            have h_assumptions1' : MultiAND_Assumptions n1 input1 := h_assumptions1
+            have h_assumptions1' : Assumptions n1 input1 := h_assumptions1
 
-            have h_assumptions2' : MultiAND_Assumptions n2 input2 := h_assumptions2
+            have h_assumptions2' : Assumptions n2 input2 := h_assumptions2
 
             -- Get completeness from the IH for both recursive calls
             have h_comp1 : Circuit.ConstraintsHold.Completeness env ((main input_var1).operations offset) := by
@@ -1640,7 +1640,7 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_eval2
               · exact h_assumptions2
 
-            -- The outputs are binary because of the MultiAND_Spec from recursive calls
+            -- The outputs are binary because of the Spec from recursive calls
             -- We can use the subcircuits' UsesLocalWitnesses property
 
             -- The goal asks for AND.circuit.Assumptions (eval env (out1, out2))
@@ -1676,15 +1676,15 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     intro input offset
     exact main_subcircuitsConsistent n input offset
 
-  Assumptions := MultiAND_Assumptions n
-  Spec := MultiAND_Spec n
+  Assumptions := Assumptions n
+  Spec := Spec n
 
   soundness := by
     intro offset env input_var input h_env h_assumptions h_hold
-    exact main_soundness n offset env input_var input h_env h_assumptions h_hold
+    exact soundness n offset env input_var input h_env h_assumptions h_hold
   completeness := by
     intro offset env input_var h_local_witnesses input h_env h_assumptions
-    exact circuit_completeness n offset env input_var input h_local_witnesses h_env h_assumptions
+    exact completeness n offset env input_var input h_local_witnesses h_env h_assumptions
 
 end MultiAND
 
