@@ -832,7 +832,9 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         -- when the operations have the right subcircuit consistency properties
         apply Environment.can_replace_usesLocalWitnessesCompleteness
         · -- Need subcircuit consistency for the composed operations
-          sorry -- TODO: Apply subcircuit consistency for recursive case
+          -- The goal matches main input.operations since main expands to the do-notation
+          rw [← main]
+          apply main_subcircuitsConsistent
         · exact h_witnesses
       · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
         intro h_completeness
