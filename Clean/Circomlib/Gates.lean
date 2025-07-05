@@ -21,6 +21,27 @@ open Bitwise (and_zero_absorb and_one_id_binary and_comm_binary and_assoc_binary
 open Vector (mem_toList_iff_get)
 open Circuit (bind_output_eq)
 
+section HelperLemmas
+
+/-- Extract individual field element from vector evaluation -/
+lemma eval_get_eq {n : ℕ} {env : Environment (F p)} {input_var : Var (fields n) (F p)}
+    {input : fields n (F p)} (h_env : eval env input_var = input) (i : Fin n) :
+    env (input_var.get i) = input.get i := by
+  -- First, let's understand what Vector.get means
+  -- Vector.get is just getElem, so we can rewrite the goal
+  change env input_var[i] = input[i]
+  -- Use eval_fields to understand what eval means
+  rw [ProvableType.eval_fields] at h_env
+  -- Now h_env : input_var.map (Expression.eval env) = input
+  -- Apply congrArg to both sides with getElem at index i
+  have h_eq : (input_var.map (Expression.eval env))[i] = input[i] :=
+    congrArg (·[i]) h_env
+  rw[← h_eq]
+  simp_all only [Vector.getElem_map]
+  aesop
+
+end HelperLemmas
+
 namespace XOR
 /-
 template XOR() {
@@ -942,19 +963,8 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- And from h_assumptions that input.get 0 = 0 ∨ input.get 0 = 1
       have h_input0 := h_assumptions (0 : Fin 1)
       -- Need to relate eval env (input_var.get 0) to input.get 0
-      have h_eval_eq : env (input_var.get 0) = input.get 0 := by
-        -- We have h_env : eval env input_var = input
-        -- Use eval_fields to expand eval
-        rw [ProvableType.eval_fields] at h_env
-        -- Now h_env : input_var.map (Expression.eval env) = input
-        -- Apply this equality to index 0 using getElem notation
-        have : (input_var.map (Expression.eval env))[0] = input[0] := by
-          rw [h_env]
-        -- Use Vector.getElem_map: (v.map f)[i] = f v[i]
-        rw [Vector.getElem_map] at this
-        -- Convert from getElem notation to get notation
-        change env (input_var.get 0) = input.get 0
-        convert this
+      have h_eval_eq : env (input_var.get 0) = input.get 0 :=
+        eval_get_eq h_env 0
       constructor
       · -- Prove output.val = single element fold
         simp only [h_eval_eq]
@@ -991,17 +1001,8 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
       -- The main function calls AND.circuit.main with (input_var.get 0, input_var.get 1)
       -- We need to show the inputs evaluate correctly
-      have h_eval0 : env (input_var.get 0) = input.get 0 := by
-        rw [ProvableType.eval_fields] at h_env
-        have : (input_var.map (Expression.eval env))[0] = input[0] := by rw [h_env]
-        rw [Vector.getElem_map] at this
-        exact this
-
-      have h_eval1 : env (input_var.get 1) = input.get 1 := by
-        rw [ProvableType.eval_fields] at h_env
-        have : (input_var.map (Expression.eval env))[1] = input[1] := by rw [h_env]
-        rw [Vector.getElem_map] at this
-        exact this
+      have h_eval0 : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
+      have h_eval1 : env (input_var.get 1) = input.get 1 := eval_get_eq h_env 1
 
       -- Now use AND.circuit.soundness
       have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1)
