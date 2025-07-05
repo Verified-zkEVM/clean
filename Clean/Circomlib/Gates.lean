@@ -1557,30 +1557,16 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
         -- The goal is now: env.get offset = (input_var.get 0).eval env * (input_var.get 1).eval env
         -- From h_local_witnesses, we know that the witness at offset has the correct value
         -- The AND circuit witnesses a single value: (input_var.get 0 * input_var.get 1).eval env
-        
+
         -- h_local_witnesses tells us env.ExtendsVector (witness_value) offset
         -- For a single witness (m=1), this means env.get offset = witness_value[0]
         -- The witness value is computed as (input_var.get 0 * input_var.get 1).eval env
-        
+
         -- Expand what the witness computes
         have h_witness : env.get offset = Expression.eval env (Vector.get input_var 0 * Vector.get input_var 1) := by
-          -- The tricky part: h_local_witnesses is about the main circuit for n=2,
-          -- which creates a subcircuit. The subcircuit condition in UsesLocalWitnessesCompleteness
-          -- says s.UsesLocalWitnesses env, where s is the AND subcircuit.
-          
-          -- For n=2, main creates: subcircuit AND.circuit ⟨input_var.get 0, input_var.get 1⟩
-          -- The subcircuit's UsesLocalWitnesses property should tell us about
-          -- the witness inside the AND circuit
-          
-          -- From the structure of UsesLocalWitnessesCompleteness for subcircuits:
-          -- It requires s.UsesLocalWitnesses env
-          -- The AND.circuit as a subcircuit should have UsesLocalWitnesses that
-          -- ensures its witness (at offset) equals the computed value
-          
-          -- This is a deep property about how subcircuits preserve witness values
-          -- For now, we assume this property holds
-          sorry
-        
+          simp only [circuit_norm, AND.circuit, AND.main] at h_local_witnesses
+          assumption
+
         -- Now use that multiplication evaluation is evaluation of multiplications
         rw [h_witness]
         simp only [Expression.eval]
