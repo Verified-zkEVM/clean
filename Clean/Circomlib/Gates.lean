@@ -1473,7 +1473,85 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- 2. The outputs from recursive calls satisfy the AND circuit's assumptions
       -- 3. The witness assignment includes proper values for the AND circuit
 
-      sorry -- TODO: Prove recursive case completeness - requires understanding witness propagation in do-blocks
+      -- Define the same n1, n2 as in the main function
+      let n1 := (m + 3) / 2
+      let n2 := (m + 3) - n1
+      
+      -- Extract the input variables and values
+      let input_var1 : Var (fields n1) (F p) := ⟨input_var.toArray.extract 0 n1, by simp; unfold n1; omega⟩
+      let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
+      
+      -- Get the actual input values
+      have h_eval1 : eval env input_var1 = ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩ := by
+        apply eval_toArray_extract_eq 0 n1 h_env
+        · omega
+        · omega
+      
+      have h_eval2 : eval env input_var2 = ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩ := by
+        apply eval_toArray_extract_eq n1 (m + 3) h_env
+        · omega  
+        · omega
+      
+      let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩
+      let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
+      
+      -- Show assumptions hold for subvectors
+      have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
+        intro i
+        have : input1.get i = input.get ⟨i.val, by omega⟩ := by
+          simp only [input1, Vector.get]
+          have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
+            simp only [Array.size_extract]
+            have : i.val < n1 := i.isLt
+            have : input.size = m + 3 := by simp
+            rw [this, min_eq_left]
+            · exact i.isLt
+            · unfold n1; omega) = input.toArray[i.val]'(by
+            have : i.val < n1 := i.isLt
+            have : n1 ≤ m + 3 := by unfold n1; omega
+            have : input.size = m + 3 := by simp
+            rw [this]
+            omega) := by
+            rw [Array.getElem_extract]
+            simp
+          exact h_extract
+        rw [this]
+        exact h_assumptions ⟨i.val, by omega⟩
+        
+      have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
+        intro i
+        have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
+          simp only [input2, Vector.get]
+          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) = 
+                          input.toArray[n1 + i.val]'(by
+                            have : input.size = m + 3 := by simp
+                            rw [this]
+                            omega) := by
+            rw [Array.getElem_extract]
+          exact h_extract
+        rw [this]
+        exact h_assumptions ⟨n1 + i.val, by omega⟩
+      
+      -- The key insight: h_local_witnesses provides witnesses for the entire circuit
+      -- This includes witnesses for both recursive calls and the AND circuit
+      
+      -- For a do-block circuit, ConstraintsHold.Completeness IS UsesLocalWitnessesCompleteness
+      -- So we already have what we need from h_local_witnesses
+      
+      -- The goal is about the do-block expansion of main input_var
+      -- But h_local_witnesses is about (main input_var).operations offset
+      -- These are the same by the definition of main for m+3
+      
+      -- The goal is ConstraintsHold.Completeness for the do-block
+      -- We have UsesLocalWitnessesCompleteness from h_local_witnesses
+      
+      -- The key insight: when all witnesses are properly assigned (UsesLocalWitnessesCompleteness),
+      -- all constraints hold (ConstraintsHold.Completeness)
+      
+      -- This conversion from UsesLocalWitnessesCompleteness to ConstraintsHold.Completeness
+      -- is a fundamental property of the circuit framework that we'll rely on
+      
+      sorry  -- TODO: Connect UsesLocalWitnessesCompleteness to ConstraintsHold.Completeness
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
