@@ -1386,11 +1386,91 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- and the output at the given offset is what h_and_binary describes
         exact h_and_binary
 
--- For simplicity, let's directly prove what we need without the helper lemmas
--- The key insight is that for the MultiAND circuit:
--- 1. It only uses witness and assert operations (no subcircuits)
--- 2. For such operations, Completeness and Soundness are identical
--- 3. We can convert between them trivially
+-- Helper lemma: For operations without subcircuits, Completeness implies ConstraintsHold
+lemma completeness_implies_constraintsHold (env : Environment (F p)) (ops : List (Operation (F p)))
+    (h_no_subcircuits : ∀ op ∈ ops, ∀ (n : ℕ) (s : Subcircuit (F p) n), op ≠ Operation.subcircuit s) :
+    Circuit.ConstraintsHold.Completeness env ops → Circuit.ConstraintsHold env ops := by
+  induction ops with
+  | nil => intro _; exact trivial
+  | cons op ops ih =>
+    intro h_comp
+    cases op with
+    | witness m c =>
+      simp [Circuit.ConstraintsHold.Completeness, Circuit.ConstraintsHold] at h_comp ⊢
+      apply ih
+      · intro op' h_mem n' s'
+        exact h_no_subcircuits op' (List.mem_cons_of_mem _ h_mem) n' s'
+      · exact h_comp
+    | assert e =>
+      simp [Circuit.ConstraintsHold.Completeness, Circuit.ConstraintsHold] at h_comp ⊢
+      constructor
+      · exact h_comp.1
+      · apply ih
+        · intro op' h_mem n' s'
+          exact h_no_subcircuits op' (List.mem_cons_of_mem _ h_mem) n' s'
+        · exact h_comp.2
+    | lookup lookup =>
+      simp [Circuit.ConstraintsHold.Completeness, Circuit.ConstraintsHold] at h_comp ⊢
+      constructor
+      · -- Need to show table.Contains from table.Completeness
+        sorry -- TODO: This depends on the specific table
+      · apply ih
+        · intro op' h_mem n' s'
+          exact h_no_subcircuits op' (List.mem_cons_of_mem _ h_mem) n' s'
+        · exact h_comp.2
+    | subcircuit s =>
+      -- This case is impossible by h_no_subcircuits
+      exfalso
+      have h_mem : Operation.subcircuit s ∈ Operation.subcircuit s :: ops := by simp
+      exact h_no_subcircuits (Operation.subcircuit s) h_mem _ s rfl
+
+-- Helper lemma: main produces no subcircuit operations
+lemma main_no_subcircuits (n : ℕ) (input_var : Var (fields n) (F p)) (offset : ℕ) :
+    ∀ op ∈ (main input_var).operations offset, ∀ (n' : ℕ) (s : Subcircuit (F p) n'), op ≠ Operation.subcircuit s := by
+  sorry -- TODO: Prove by induction on n
+
+-- Helper lemma: MultiAND with binary inputs produces binary output
+-- This captures the essential property we need for both soundness and completeness
+lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p)) 
+    (input_var : Var (fields n) (F p)) (input : fields n (F p))
+    (h_eval : eval env input_var = input)
+    (h_assumptions : MultiAND_Assumptions n input)
+    (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
+    let output := env ((main input_var).output offset)
+    output = 0 ∨ output = 1 := by
+  -- Prove by induction on n
+  induction n using Nat.strong_induction_on with
+  | _ n IH =>
+    match n with
+    | 0 =>
+      -- For n = 0, output is 1
+      simp [main, Circuit.output, Circuit.pure_def]
+      right
+      rfl
+    | 1 =>
+      -- For n = 1, output is input_var.get 0 which is binary by assumption
+      simp [main, Circuit.output, Circuit.pure_def]
+      have h_input_binary := h_assumptions ⟨0, by simp⟩
+      -- We need to show: env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1
+      -- From h_eval : eval env input_var = input
+      -- and the definition of eval for fields n, we know that evaluating input_var gives input
+      -- For a single field, this means env (input_var.get 0) = input.get 0
+      
+      -- Let's use a more direct approach
+      -- The output is env (input_var.get 0)
+      -- We know from h_assumptions that input.get 0 is binary
+      -- We need to connect these via h_eval
+      
+      sorry -- TODO: Need to understand the exact definition of eval for fields
+    | 2 =>
+      -- For n = 2, output is from AND circuit
+      simp [main] at h_constraints ⊢
+      -- The AND circuit ensures binary output when inputs are binary
+      sorry -- TODO: Use AND circuit properties
+    | m + 3 =>
+      -- For n ≥ 3, recursive case
+      -- The output comes from AND of two recursive calls
+      sorry -- TODO: Use IH and AND properties
 
 -- Helper theorem for circuit completeness
 theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
@@ -1737,15 +1817,30 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             -- The key insight: main only generates witness and assert operations, no subcircuit operations
             -- So ConstraintsHold.Completeness = ConstraintsHold.Soundness for main's operations
             
-            -- For the MultiAND circuit, we can use the fact that it produces binary outputs
-            -- when given binary inputs. This is a fundamental property we can assume.
+            -- Use the main_output_binary lemma to show outputs are binary
+            -- The goal asks for AND.circuit.Assumptions (eval env (out1, out2))
+            -- which expands to: (env out1 = 0 ∨ env out1 = 1) ∧ (env out2 = 0 ∨ env out2 = 1)
             
-            -- The key insight: Since we have Completeness, the constraints hold.
-            -- Since the inputs are binary (from MultiAND_Assumptions), 
-            -- the outputs must be binary (from the MultiAND_Spec).
+            -- First, note that out1 = (main input_var1).output offset
+            -- and out2 = (main input_var2).output (offset + (main input_var1).localLength offset)
+            -- So env out1 = env ((main input_var1).output offset), etc.
             
-            -- For now, let's assert this as a sorry and move on
-            sorry -- TODO: Prove that MultiAND outputs are binary when inputs are binary
+            constructor
+            · -- Show env out1 is binary
+              -- We need to convert Completeness to regular ConstraintsHold first
+              have h_hold1 : Circuit.ConstraintsHold env ((main input_var1).operations offset) := by
+                apply completeness_implies_constraintsHold
+                · exact main_no_subcircuits n1 input_var1 offset
+                · exact h_comp1
+              exact main_output_binary n1 offset env input_var1 input1 h_eval1 h_assumptions1 h_hold1
+              
+            · -- Show env out2 is binary
+              let offset2 := offset + (main input_var1).localLength offset
+              have h_hold2 : Circuit.ConstraintsHold env ((main input_var2).operations offset2) := by
+                apply completeness_implies_constraintsHold
+                · exact main_no_subcircuits n2 input_var2 offset2
+                · exact h_comp2
+              exact main_output_binary n2 offset2 env input_var2 input2 h_eval2 h_assumptions2 h_hold2
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
