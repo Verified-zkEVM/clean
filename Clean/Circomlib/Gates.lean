@@ -1423,13 +1423,14 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     (h_completeness : Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     output = 0 ∨ output = 1 := by
-  -- Convert Completeness to regular ConstraintsHold using can_replace_completeness
-  have h_sc := main_subcircuitsConsistent n input_var offset
+  -- The simplest approach: since we know the MultiAND circuit implements
+  -- the bitwise AND operation, and bitwise AND preserves binary values,
+  -- the output must be binary when all inputs are binary.
   
-  -- We need UsesLocalWitnesses, but we have UsesLocalWitnessesCompleteness
-  -- The key is that for the specific operations of main, they are related
+  -- This is a mathematical property independent of the circuit framework:
+  -- If you AND together binary values, you get a binary value.
   
-  -- For now, let's take a shortcut: we'll prove this directly by examining n
+  -- We'll prove this by cases on n
   match n with
   | 0 =>
     -- Output is 1
@@ -1442,34 +1443,105 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     -- From h_eval and h_assumptions, this is binary
     have h_binary := h_assumptions ⟨0, by simp⟩
     -- Connect via h_eval
-    -- We need to show that env (input_var.get 0) is binary
-    -- From h_eval, we know eval env input_var = input
-    -- So env (input_var.get 0) should equal input.get 0
+    -- We know from ProvableType.eval_fields that:
+    -- eval env input_var = input_var.map (Expression.eval env)
+    -- And h_eval tells us this equals input
     
-    -- For a fields 1 type, eval is defined as mapping Expression.eval over the vector
-    -- So (eval env input_var).get 0 = env (input_var.get 0)
+    -- So: input_var.map (Expression.eval env) = input
+    -- Taking component 0: (input_var.map (Expression.eval env)).get 0 = input.get 0
+    -- By Vector.get_map: (Expression.eval env) (input_var.get 0) = input.get 0
     
-    -- Since h_eval tells us eval env input_var = input, we have:
-    -- env (input_var.get 0) = input.get 0
+    have h_eval_component : env (input_var.get 0) = input.get 0 := by
+      -- We use that eval for fields is just mapping Expression.eval
+      rw [ProvableType.eval_fields] at h_eval
+      -- h_eval : input_var.map (Expression.eval env) = input
+      -- For the sorry, we need to establish the connection between
+      -- (v.map f).get i and f (v.get i)
+      sorry
     
-    -- And h_binary tells us input.get 0 is binary
-    -- Let's prove this step by step
-    
-    -- The goal is about Expression.eval env (input_var.get 0)
-    -- which is the same as env (input_var.get 0) by notation
-    
-    -- For n=1, main returns pure (input_var.get 0), so output is env (input_var.get 0)
-    -- We know from h_eval that the evaluation of input_var gives us input
-    -- For a Vector type, this means component-wise evaluation
-    
-    sorry -- TODO: Work out the exact connection between eval and component evaluation
+    -- Now use h_binary which tells us input.get 0 is binary
+    -- h_eval_component : (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = Vector.get input 0
+    -- This is the same as: Expression.eval env (Vector.get input_var 0) = Vector.get input 0
+    change (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = 0 ∨ 
+           (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = 1
+    rw [h_eval_component]
+    exact h_binary
   | 2 =>
     -- Output is from AND circuit, which preserves binary
-    -- Use AND circuit properties
-    sorry
+    -- For n=2, main returns: subcircuit AND.circuit ⟨input_var.get 0, input_var.get 1⟩
+    simp [main, Circuit.output] at h_local_witnesses ⊢
+    
+    -- The output is the evaluation of the AND circuit's output
+    -- We need to show this is binary when both inputs are binary
+    
+    -- From h_eval and h_assumptions, we know both inputs are binary
+    have h_binary0 := h_assumptions ⟨0, by simp⟩
+    have h_binary1 := h_assumptions ⟨1, by simp⟩
+    
+    -- Connect input_var evaluation to input values
+    -- We know both inputs are binary by h_binary0 and h_binary1
+    -- The AND circuit preserves this property when both inputs are binary
+    
+    -- For the sorry, we would need to:
+    -- 1. Connect the evaluation of input_var components to input components
+    -- 2. Use the AND circuit's specification to show the output is binary
+    
+    -- The AND circuit output is binary when inputs are binary
+    -- This is part of the AND circuit specification
+    -- The output is env (AND.circuit.output ⟨input_var.get 0, input_var.get 1⟩ offset)
+    -- We know from AND.circuit that when both inputs are binary, the output is binary
+    
+    -- Use the fact that AND preserves binary property
+    -- From AND.circuit.Spec, the output equals input0 &&& input1, which is binary
+    -- when both inputs are binary
+    
+    -- The challenge here is that we need to establish that the AND circuit's
+    -- output is binary, but we're in the completeness context, not soundness.
+    -- We would need to:
+    -- 1. Show that the AND circuit's constraints hold (from completeness)
+    -- 2. Use AND circuit's soundness to get the spec
+    -- 3. Extract that the output is binary from the spec
+    
+    -- This requires connecting completeness to soundness through the constraints
+    sorry -- Requires deeper integration with AND circuit properties
   | m + 3 =>
     -- Recursive case: output is AND of two recursive outputs
-    sorry
+    -- For n ≥ 3, main splits the input and recursively calls itself
+    
+    -- The circuit structure is:
+    -- do
+    --   let out1 ← main input_var1
+    --   let out2 ← main input_var2
+    --   subcircuit AND.circuit ⟨out1, out2⟩
+    
+    -- So the output is the AND of two recursive outputs
+    -- If both recursive outputs are binary, then their AND is also binary
+    
+    -- But we can't directly use recursion here because we're proving a property
+    -- about the output given completeness conditions
+    
+    -- Instead, we'll use the fact that the output satisfies the spec
+    -- We can convert completeness to regular constraints hold, then use soundness
+    
+    -- First, we need to establish subcircuits consistency
+    have h_sc := main_subcircuitsConsistent (m + 3) input_var offset
+    
+    -- We need to convert from Completeness to regular ConstraintsHold
+    -- This requires UsesLocalWitnesses, but we only have UsesLocalWitnessesCompleteness
+    
+    -- Actually, let's use a different approach: since we have both completeness
+    -- and local witnesses, we can get that the constraints hold, then use soundness
+    
+    -- The recursive structure makes this challenging because:
+    -- 1. We need to establish binary outputs for the two recursive calls
+    -- 2. Then show their AND is also binary
+    -- 3. But we can't directly recurse in this lemma structure
+    
+    -- A complete proof would require either:
+    -- - Converting completeness to regular constraints (needs can_replace_completeness)
+    -- - Or proving a stronger induction principle that handles the completeness case
+    
+    sorry -- Requires a more sophisticated proof structure
 
 -- Helper theorem for circuit completeness
 theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
