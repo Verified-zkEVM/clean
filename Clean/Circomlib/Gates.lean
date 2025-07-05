@@ -1289,7 +1289,7 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- And by our lemma: (foldl 1 input1) &&& (foldl 1 input2) = foldl (foldl 1 input1) input2
 
         -- This connection between do-block output and the AND of the foldls
-        -- requires understanding circuit evaluation, which we leave as a sorry for now
+        -- is established using the convert tactic below
 
         -- From h_val1 and h_val2, we know:
         -- - out1 evaluates to foldl input1
