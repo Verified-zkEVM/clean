@@ -853,6 +853,14 @@ lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F
   simp only [Vector.getElem_map] at this
   exact this
 
+/-- Folding AND over a list with an initial accumulator that is itself a fold 
+    is equivalent to ANDing the initial fold result with the fold over the list -/
+lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
+    (l : List (F p)) (init : ℕ) :
+    List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) = 
+    init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
+  sorry
+
 /-- Splitting a vector via extract and then converting to lists gives concatenation -/
 lemma Vector.toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k : ℕ) (hk : k ≤ n) :
     v.toList = (⟨v.toArray.extract 0 k, by simp [Array.size_extract, v.size_toArray]; exact hk⟩ : Vector α k).toList ++
@@ -1324,18 +1332,8 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- The do-block output should be the same as ElaboratedCircuit.output
         -- This is a fundamental property of how do-blocks work in the circuit framework
 
-        -- Let's see what's really in the goal with all details
-        set_option pp.explicit true in
-        set_option pp.coercions true in
-        trace "{h_foldl_and}"
-
-        have h_foldl_and : List.foldl (fun x1 x2 ↦ x1 &&& x2)
-                 (List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) input1.toList))
-                 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) input2.toList) =
-               (List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) input1.toList)) &&&
-                 (List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) input2.toList)) := by
-          sorry
-        rw [h_foldl_and]
+        -- Apply the lemma about foldl with AND
+        rw [List.foldl_and_eq_and_foldl]
 
         sorry -- TODO: Connect do-block output to ElaboratedCircuit.output
 
