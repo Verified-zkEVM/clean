@@ -783,6 +783,7 @@ def MultiAND_Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
 
 
 
+
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
 lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F p)}
     {v : Var (fields n) (F p)} {w : fields n (F p)}
@@ -857,33 +858,6 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
   | inl h0 => rw [h0, and_zero_absorb]
   | inr h1 => rw [h1, and_one_id_binary 1 (Or.inr rfl)]
 
-/-- Splitting a vector via extract and then converting to lists gives concatenation -/
-lemma Vector.toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k : ℕ) (hk : k ≤ n) :
-    v.toList = (⟨v.toArray.extract 0 k, by simp [Array.size_extract, v.size_toArray]; exact hk⟩ : Vector α k).toList ++
-               (⟨v.toArray.extract k n, by simp [Array.size_extract, v.size_toArray]⟩ : Vector α (n - k)).toList := by
-  rw [List.ext_get_iff]
-  constructor
-  · simp only [Array.length_toList, Vector.size_toArray, Array.toList_extract,
-    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.length_append, List.length_take,
-    List.length_drop, min_self]
-    omega
-  · intro idx h_idx h_idx'
-    -- The goal is to show v.toList[idx] equals the appropriate element from the concatenation
-    -- First, let's understand what we're comparing:
-    -- LHS: v.toList[idx] = v.toArray.toList[idx]
-    -- RHS: concatenation of two extracted parts
-
-    -- Simplify the RHS using our lemmas
-    simp only [Array.toList_extract, List.extract_eq_drop_take, tsub_zero, List.drop_zero]
-    by_cases idx < k
-    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
-      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
-      List.drop_zero]
-      aesop
-    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
-      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
-      List.drop_zero]
-      aesop
 
 /-- Helper to show that extracting a subvector preserves element access -/
 lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : Fin n1) (h_n1_lt : n1 ≤ n) :
@@ -940,6 +914,46 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
   cases h_y_binary with
   | inl h => left; simp [h, ZMod.val_zero]
   | inr h => right; simp [h, ZMod.val_one]
+
+/-- Helper to show assumptions hold for the first part of a split -/
+lemma assumptions_split_left {p m : ℕ} [Fact p.Prime] 
+    (input : fields (m + 3) (F p)) (h_assumptions : MultiAND_Assumptions (m + 3) input) :
+    MultiAND_Assumptions ((m + 3) / 2) 
+      (⟨input.toArray.extract 0 ((m + 3) / 2), by simp [Array.size_extract]; omega⟩ : fields ((m + 3) / 2) (F p)) := by
+  intro i
+  rw [extract_preserves_element input i (by omega : (m + 3) / 2 ≤ m + 3)]
+  exact h_assumptions ⟨i.val, by omega⟩
+
+/-- Helper to show assumptions hold for the second part of a split -/
+lemma assumptions_split_right {p m : ℕ} [Fact p.Prime] 
+    (input : fields (m + 3) (F p)) (h_assumptions : MultiAND_Assumptions (m + 3) input) :
+    MultiAND_Assumptions ((m + 3) - (m + 3) / 2) 
+      (⟨input.toArray.extract ((m + 3) / 2) (m + 3), by simp [Array.size_extract]⟩ : fields ((m + 3) - (m + 3) / 2) (F p)) := by
+  intro i
+  have h_sum : (m + 3) / 2 + ((m + 3) - (m + 3) / 2) = m + 3 := by omega
+  rw [extract_from_offset_preserves_element input i h_sum]
+  exact h_assumptions ⟨(m + 3) / 2 + i.val, by omega⟩
+
+/-- Helper to show evaluation preserves for the first part of a split -/
+lemma eval_split_left {p m : ℕ} [Fact p.Prime] {env : Environment (F p)}
+    {input : fields (m + 3) (F p)} {input_var : Var (fields (m + 3)) (F p)}
+    (h_env : eval env input_var = input) :
+    let n1 := (m + 3) / 2
+    let input_var1 : Var (fields n1) (F p) := ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
+    let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
+    eval env input_var1 = input1 := by
+  apply eval_toArray_extract_eq 0 _ h_env <;> omega
+
+/-- Helper to show evaluation preserves for the second part of a split -/
+lemma eval_split_right {p m : ℕ} [Fact p.Prime] {env : Environment (F p)}
+    {input : fields (m + 3) (F p)} {input_var : Var (fields (m + 3)) (F p)}
+    (h_env : eval env input_var = input) :
+    let n1 := (m + 3) / 2
+    let n2 := (m + 3) - n1
+    let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by simp [Array.size_extract]; omega⟩
+    let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 (m + 3), by simp [Array.size_extract]; omega⟩
+    eval env input_var2 = input2 := by
+  apply eval_toArray_extract_eq _ (m + 3) h_env <;> omega
 
 /-- Soundness for n = 0 case -/
 lemma main_soundness_zero {p : ℕ} [Fact p.Prime] 
