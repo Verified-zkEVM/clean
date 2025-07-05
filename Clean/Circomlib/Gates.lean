@@ -1135,12 +1135,6 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- This is two binds: first bind main input_var1 with (fun out1 => ...),
       -- then bind main input_var2 with (fun out2 => ElaboratedCircuit.main (out1, out2))
 
-      -- For now, we'll use sorry to complete the proof structure
-      -- The key insight is that we need to:
-      -- 1. Use bind lemmas to decompose h_hold
-      -- 2. Apply IH to get specs for recursive calls
-      -- 3. Use AND.circuit.soundness for the final combination
-
       -- Apply IH to first recursive call
       have h_spec1 : MultiAND_Spec n1 input1 (env ((main input_var1).output offset)) := by
         apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
