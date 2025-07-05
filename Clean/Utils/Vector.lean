@@ -316,6 +316,35 @@ theorem append_take_drop {v : Vector α (n + m)} :
   simp only [hi', reduceDIte, getElem_cast, getElem_extract]
   congr
   omega
+
+/-- Splitting a vector via extract and then converting to lists gives concatenation -/
+theorem toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k : ℕ) (hk : k ≤ n) :
+    v.toList = (⟨v.toArray.extract 0 k, by simp [Array.size_extract, v.size_toArray]; exact hk⟩ : Vector α k).toList ++
+               (⟨v.toArray.extract k n, by simp [Array.size_extract, v.size_toArray]⟩ : Vector α (n - k)).toList := by
+  rw [List.ext_get_iff]
+  constructor
+  · simp only [Array.length_toList, Vector.size_toArray, Array.toList_extract,
+    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.length_append, List.length_take,
+    List.length_drop, min_self]
+    omega
+  · intro idx h_idx h_idx'
+    -- The goal is to show v.toList[idx] equals the appropriate element from the concatenation
+    -- First, let's understand what we're comparing:
+    -- LHS: v.toList[idx] = v.toArray.toList[idx]
+    -- RHS: concatenation of two extracted parts
+
+    -- Simplify the RHS using our lemmas
+    simp only [Array.toList_extract, List.extract_eq_drop_take, tsub_zero, List.drop_zero]
+    by_cases idx < k
+    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
+      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
+      List.drop_zero]
+      aesop
+    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
+      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
+      List.drop_zero]
+      aesop
+
 end Vector
 
 -- helpers for `Vector.toChunks`
