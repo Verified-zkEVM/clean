@@ -1,6 +1,9 @@
 import Clean.Circuit
 import Clean.Utils.Field
 import Clean.Gadgets.Boolean
+import Clean.Utils.Bitwise
+import Clean.Utils.Vector
+import Clean.Circuit.Theorems
 import Mathlib.Data.Nat.Bitwise
 
 open IsBool
@@ -13,146 +16,10 @@ https://github.com/iden3/circomlib/blob/master/circuits/gates.circom
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime]
 
-section MathematicalLemmas
-
-/-! # Mathematical Lemmas for Gates
-
-These lemmas capture key mathematical properties needed for the gate proofs,
-independent of the circuit framework.
--/
-
-/-- For binary values, 0 is the absorbing element for `&&&` -/
-theorem and_zero_absorb (a : ℕ) :
-    0 &&& a = 0 := by
-  simp only [HAnd.hAnd, AndOp.and]
-  -- 0 &&& a = (0 % 2) .land (a % 2) = 0 .land (a % 2) = 0
-  -- Since 0 % 2 = 0, we need to prove: Nat.land 0 (a % 2) = 0
-  -- Nat.land is defined as Nat.bitwise and
-  simp only [Nat.land]
-  -- Now we need: Nat.bitwise and 0 (a % 2) = 0
-  -- This is true because bitwise AND with 0 always gives 0
-  apply Nat.bitwise_zero_left
-
-/-- For binary values, 1 is the identity element for `&&&` -/
-theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) :
-    1 &&& a = a := by
-  cases ha with
-  | inl h0 =>
-    rw [h0]
-    simp only [HAnd.hAnd, AndOp.and]
-    -- 1 &&& 0 = (1 % 2) .land (0 % 2) = 1 .land 0 = 0
-    rfl
-  | inr h1 =>
-    rw [h1]
-    simp only [HAnd.hAnd, AndOp.and]
-    -- 1 &&& 1 = (1 % 2) .land (1 % 2) = 1 .land 1 = 1
-    rfl
-
-/-- Commutativity of `&&&` for binary values -/
-theorem and_comm_binary (a b : ℕ) (_ : a = 0 ∨ a = 1) (_ : b = 0 ∨ b = 1) :
-    a &&& b = b &&& a := by
-  simp only [HAnd.hAnd, AndOp.and, Nat.land]
-  rw [Nat.bitwise_comm]
-  intro _ _
-  exact Bool.and_comm _ _
-
-/-- The bitwise AND operation `&&&` is associative for binary values (0 or 1) -/
-theorem and_assoc_binary (a b c : ℕ)
-    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) (hc : c = 0 ∨ c = 1) :
-    a &&& (b &&& c) = (a &&& b) &&& c := by
-  -- Use the fact that for 0 and 1, &&& behaves like boolean AND
-  -- We'll prove this by exhaustive case analysis
-  cases ha with
-  | inl ha0 =>
-    rw [ha0, and_zero_absorb, and_zero_absorb, and_zero_absorb]
-    -- Both sides are 0
-  | inr ha1 =>
-    rw [ha1]
-    cases hb with
-    | inl hb0 =>
-      rw [hb0, and_zero_absorb]
-      -- LHS: 1 &&& 0
-      -- RHS: (1 &&& 0) &&& c
-      -- We need to show 1 &&& 0 = 0
-      have h10 : 1 &&& 0 = 0 := by
-        simp only [HAnd.hAnd, AndOp.and]
-        rfl
-      rw [h10, and_zero_absorb]
-    | inr hb1 =>
-      rw [hb1]
-      -- LHS: 1 &&& (1 &&& c)
-      -- RHS: (1 &&& 1) &&& c
-      -- First: 1 &&& 1 = 1
-      have h11 : 1 &&& 1 = 1 := by
-        simp only [HAnd.hAnd, AndOp.and]
-        rfl
-      rw [h11, and_one_id_binary c hc, and_one_id_binary c hc]
-
-/-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
-theorem Vector.mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
-    x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
-  constructor
-  · intro h_mem
-    -- x ∈ v.toList means there exists an index where v.toList[index] = x
-    rw [List.mem_iff_getElem] at h_mem
-    obtain ⟨i, hi, h_eq⟩ := h_mem
-    -- We need i < n to construct Fin n
-    -- v : Vector α n means v.size = n
-    have h_len : v.size = n := by
-      -- Vector α n has size n by construction
-      cases v
-      rename_i arr h_size
-      -- v.size = arr.size = n
-      exact h_size
-    have h_list_len : v.toList.length = v.size := by
-      rfl  -- toList doesn't change the length
-    rw [h_list_len, h_len] at hi
-    -- Now we can use i < n
-    use ⟨i, hi⟩
-    -- Show x = v.get ⟨i, hi⟩
-    rw [← h_eq]
-    -- v.toList[i] = v.get ⟨i, hi⟩
-    -- Both access the same element from the underlying array
-    simp only [Vector.get]
-    -- Now we need to show v.toList[i] = v.toArray[⟨i, hi⟩]
-    rfl
-  · intro ⟨i, h_eq⟩
-    rw [h_eq]
-    -- Show v.get i ∈ v.toList
-    rw [List.mem_iff_getElem]
-    use i.val
-    have h_bound : i.val < v.toList.length := by
-      -- v.toList.length = v.size = n
-      have h_len : v.size = n := by
-        cases v
-        rename_i arr h_size
-        exact h_size
-      have h_list_len : v.toList.length = v.size := by
-        rfl
-      rw [h_list_len, h_len]
-      exact i.isLt
-    use h_bound
-    -- Now show v.toList[i.val] = v.get i
-    simp only [Vector.get]
-    rfl
-
-/-- The do-notation for circuits expands such that the output of a bind sequence
-    is the output of the last circuit at the appropriate offset -/
-theorem Circuit.bind_output_eq {F : Type} [Field F] {α β : Type}
-    (c1 : Circuit F α) (c2 : α → Circuit F β) (offset : ℕ) :
-    (c1 >>= c2).output offset =
-    (c2 (c1.output offset)).output (offset + c1.localLength offset) := by
-  -- By definition of bind for Circuit
-  simp only [Circuit.bind_def]
-  -- The bind operation creates a new circuit that:
-  -- 1. Runs c1 first
-  -- 2. Then runs c2 with the output of c1
-  -- The output is taken from c2 at the appropriate offset
-
--- Note: The theorem and_foldl_eq_foldl_of_all_binary is moved after List.foldl_and_binary
--- since it depends on that lemma
-
-end MathematicalLemmas
+-- Import the moved lemmas
+open Bitwise (and_zero_absorb and_one_id_binary and_comm_binary and_assoc_binary)
+open Vector (mem_toList_iff_get)
+open Circuit (bind_output_eq)
 
 namespace XOR
 /-
