@@ -1544,8 +1544,27 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
       have h_and_output_eq : Expression.eval env (AND.circuit.main (Vector.get input_var 0, Vector.get input_var 1) offset).1 = 
                             (env (input_var.get 0)) * (env (input_var.get 1)) := by
         -- This follows from the AND circuit definition and how witness works
-        -- The AND circuit witnesses a*b and returns it
-        sorry -- This requires unfolding the AND circuit definition
+        -- The AND circuit's main function witnesses a*b and returns it
+        -- We need to show that AND.circuit.main evaluates to multiplication
+        
+        -- Unfold the AND circuit definition
+        simp [AND.circuit, AND.main]
+        -- The AND.main function does:
+        -- let out <== a*b
+        -- return out
+        -- Where <== is HasAssignEq.assign_eq (a*b)
+        
+        -- assign_eq creates a witness whose value is (a*b).eval env
+        -- The key insight: from h_local_witnesses (UsesLocalWitnessesCompleteness),
+        -- we know that the witness created by assign_eq evaluates to the
+        -- value it was supposed to witness
+        
+        -- Unfortunately, connecting this requires understanding the relationship
+        -- between assign_eq, witness operations, and UsesLocalWitnessesCompleteness
+        -- This is a deep property of the circuit framework
+        
+        -- For now, we leave this as a sorry
+        sorry
       
       -- Now we can apply our binary multiplication lemma
       rw [h_and_output_eq]
