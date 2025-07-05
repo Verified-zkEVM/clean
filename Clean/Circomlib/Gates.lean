@@ -853,6 +853,34 @@ lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F
   simp only [Vector.getElem_map] at this
   exact this
 
+/-- Splitting a vector via extract and then converting to lists gives concatenation -/
+lemma Vector.toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k : ℕ) (hk : k ≤ n) :
+    v.toList = (⟨v.toArray.extract 0 k, by simp [Array.size_extract, v.size_toArray]; exact hk⟩ : Vector α k).toList ++
+               (⟨v.toArray.extract k n, by simp [Array.size_extract, v.size_toArray]⟩ : Vector α (n - k)).toList := by
+  rw [List.ext_get_iff]
+  constructor
+  · simp only [Array.length_toList, Vector.size_toArray, Array.toList_extract,
+    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.length_append, List.length_take,
+    List.length_drop, min_self]
+    omega
+  · intro idx h_idx h_idx'
+    -- The goal is to show v.toList[idx] equals the appropriate element from the concatenation
+    -- First, let's understand what we're comparing:
+    -- LHS: v.toList[idx] = v.toArray.toList[idx]
+    -- RHS: concatenation of two extracted parts
+
+    -- Simplify the RHS using our lemmas
+    simp only [Array.toList_extract, List.extract_eq_drop_take, tsub_zero, List.drop_zero]
+    by_cases idx < k
+    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
+      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
+      List.drop_zero]
+      aesop
+    · simp only [Array.length_toList, List.get_eq_getElem, Array.getElem_toList,
+      Vector.getElem_toArray, Array.toList_extract, List.extract_eq_drop_take, tsub_zero,
+      List.drop_zero]
+      aesop
+
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
@@ -1153,7 +1181,11 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         have h_input_split : input.toList = input1.toList ++ input2.toList := by
           -- input1 = extract 0 n1, input2 = extract n1 (m+3)
           -- Together they should reconstruct input
-          sorry -- TODO: prove vector extraction and concatenation
+          -- Use our Vector.toList_extract_append lemma
+          have := Vector.toList_extract_append input n1 (by omega : n1 ≤ m + 3)
+          -- Rewrite input1 and input2 by their definitions
+          simp only [input1, input2] at this ⊢
+          exact this
 
         -- Now use properties of foldl over concatenated lists
         rw [h_input_split, List.map_append, List.foldl_append]
@@ -1282,8 +1314,17 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- Since h_and_val is about the ElaboratedCircuit.main output at a specific offset
         -- and the goal is about the do-block output at offset 0
 
-        -- For now, we accept this connection as a property of circuit composition
-        sorry
+        -- The key insight: the do-block output is the AND circuit output
+        -- We need to connect the do-block notation to ElaboratedCircuit.output
+
+        -- From h_and_val, we know:
+        -- ElaboratedCircuit.output (out1, out2) at the final offset
+        -- evaluates to out1.val &&& out2.val
+
+        -- The do-block output should be the same as ElaboratedCircuit.output
+        -- This is a fundamental property of how do-blocks work in the circuit framework
+
+        sorry -- TODO: Connect do-block output to ElaboratedCircuit.output
 
       · -- Prove output is binary
         -- The output is from AND circuit, so it's binary
@@ -1402,10 +1443,14 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- which provides witnesses for the entire circuit including all sub-circuits
 
       -- The conversion from UsesLocalWitnessesCompleteness to ConstraintsHold.Completeness
-      -- for the recursive structure requires framework-specific knowledge about
-      -- how witnesses propagate through circuit composition
-      simp only[circuit_norm, main]
-      sorry
+      -- for the recursive structure is circuit-specific
+
+      -- The recursive case requires showing that:
+      -- 1. The witness assignment from h_local_witnesses can be restricted to each recursive call
+      -- 2. The outputs from recursive calls satisfy the AND circuit's assumptions
+      -- 3. The witness assignment includes proper values for the AND circuit
+
+      sorry -- TODO: Prove recursive case completeness - requires understanding witness propagation in do-blocks
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
