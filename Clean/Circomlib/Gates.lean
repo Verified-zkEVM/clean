@@ -724,10 +724,15 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       constructor
       · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
         intro h_witnesses
-        sorry -- Apply subcircuit consistency properties for AND.circuit
+        apply Environment.can_replace_usesLocalWitnessesCompleteness
+        · -- Need subcircuit consistency for AND.circuit
+          apply AND.circuit.subcircuitsConsistent
+        · exact h_witnesses
       · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses  
         intro h_completeness
-        sorry -- Apply subcircuit consistency properties for AND.circuit
+        -- For AND.circuit (ElaboratedCircuit), the reverse direction is more complex
+        -- This requires understanding the specific structure of AND operations
+        sorry -- TODO: Prove equivalence for AND.circuit specifically
     | m + 3 =>
       -- Recursive case: n ≥ 3
       simp only [main]
@@ -735,10 +740,29 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       constructor
       · -- Forward: UsesLocalWitnesses → UsesLocalWitnessesCompleteness
         intro h_witnesses
-        sorry -- Use IH for recursive calls: IH (n/2) and IH (n - n/2)
+        -- The operations are: (main input1 >>= λ out1 => main input2 >>= λ out2 => AND.circuit (out1, out2))
+        -- We can use IH for both recursive calls since they have smaller inputs
+        let n1 := (m + 3) / 2
+        let n2 := (m + 3) - n1
+        have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
+        have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
+        
+        -- This is complex due to the bind structure
+        -- For now, leave as sorry - the approach is correct but needs detailed bind lemmas
+        sorry -- TODO: Use bind decomposition lemmas and apply IH to recursive parts
       · -- Reverse: UsesLocalWitnessesCompleteness → UsesLocalWitnesses
         intro h_completeness  
-        sorry -- Use IH for recursive calls: IH (n/2) and IH (n - n/2)
+        -- Similar to forward direction, use the reverse of can_replace_usesLocalWitnessesCompleteness
+        -- For recursive case, the structure is symmetric
+        let n1 := (m + 3) / 2
+        let n2 := (m + 3) - n1
+        have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
+        have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
+        
+        -- The reverse direction is more complex since we need to extract witness properties
+        -- from the composed operations and apply IH in reverse
+        simp only [circuit_norm]
+        sorry -- TODO: Extract UsesLocalWitnesses from the bind composition
 
 -- Helper theorem for subcircuitsConsistent
 theorem main_subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
