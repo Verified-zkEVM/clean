@@ -1358,44 +1358,39 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         
         rw [List.foldl_and_eq_and_foldl _ _ h_foldl1_binary h_input2_binary]
 
-        sorry -- TODO: Connect do-block output to ElaboratedCircuit.output
+        -- We need to show the do-block output equals (foldl 1 input1) &&& (foldl 1 input2)
+        -- The key insight: ElaboratedCircuit.main in the goal IS AND.circuit.main
+        -- and the offsets match exactly with what h_and_val tells us about
+        
+        -- First, notice that ElaboratedCircuit.output in h_and_val is at the same offset
+        -- as the ElaboratedCircuit.main.output in the goal
+        
+        -- The goal has the output of ElaboratedCircuit.main applied to (out1_expr, out2_expr)
+        -- where out1_expr and out2_expr are the outputs of the recursive main calls
+        
+        -- h_and_val tells us about ElaboratedCircuit.output (out1, out2) at the same offset
+        -- and out1, out2 are defined as the outputs of those same recursive calls
+        
+        -- So we can directly use h_and_val
+        convert h_and_val using 1
+        
+        -- Now we need to show the arguments match
+        congr 1
+        · -- First component
+          rw [h_val1]
+        · -- Second component  
+          rw [h_val2]
 
       · -- Prove output is binary
         -- The output is from AND circuit, so it's binary
         -- We can use h_and_binary which tells us the AND circuit output is 0 or 1
-
-        -- The goal asks about the do-block output
-        -- We know from h_and_binary that the AND circuit output is binary
-        -- Since the do-block output IS the AND circuit output, we're done
-
-        -- The key insight: the do-block structure with bind operations
-        -- ultimately produces the same output as the AND circuit
-
-        -- First, let's understand what the do-block does:
-        -- 1. It runs main on input_var1 to get out1
-        -- 2. It runs main on input_var2 to get out2
-        -- 3. It runs ElaboratedCircuit.main on (out1, out2)
-
-        -- The output of the do-block at offset is the same as
-        -- the output of the final ElaboratedCircuit.main at the appropriate offset
-
-        -- We know from h_and_binary that this final output is 0 or 1
-        -- So we just need to show the do-block output equals this
-
-        -- Using the fact that bind propagates outputs correctly
-        simp only [Circuit.bind_output_eq]
-
-        -- Now we need to connect the extracted inputs to input_var1 and input_var2
-        -- We have:
-        -- input_var1 = ⟨input_var.extract 0 n1, _⟩
-        -- input_var2 = ⟨input_var.extract n1 (m+3), _⟩
-        -- And n1 = (m+3)/2
-
-        -- The goal has the same structure as h_and_binary but with different notation
-        -- Let's convert to match h_and_binary
-        convert h_and_binary
-        -- The convert tactic should handle all the unification automatically
-        -- since input_var1 and input_var2 are definitionally equal to the extractions
+        
+        -- Similar to the previous case, the do-block output IS the AND circuit output
+        -- at the appropriate offset, which h_and_binary tells us is binary
+        
+        -- Use the same reasoning as before: ElaboratedCircuit.main is AND.circuit.main
+        -- and the output at the given offset is what h_and_binary describes
+        exact h_and_binary
 
 -- Helper theorem for circuit completeness
 theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
