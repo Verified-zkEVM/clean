@@ -1455,9 +1455,17 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
       -- We use that eval for fields is just mapping Expression.eval
       rw [ProvableType.eval_fields] at h_eval
       -- h_eval : input_var.map (Expression.eval env) = input
-      -- For the sorry, we need to establish the connection between
-      -- (v.map f).get i and f (v.get i)
-      sorry
+      -- Use Vector.getElem_map to connect the evaluation
+      have map_eq : (input_var.map (Expression.eval env)).get 0 = (Expression.eval env) (input_var.get 0) := by
+        exact Vector.getElem_map (Expression.eval env) (by simp)
+      -- From h_eval, we know input_var.map (Expression.eval env) = input
+      -- So (input_var.map (Expression.eval env)).get 0 = input.get 0
+      have : (input_var.map (Expression.eval env)).get 0 = input.get 0 := by
+        rw [h_eval]
+      -- Combining these two facts
+      -- First simplify the lambda application
+      simp only [Function.comp_apply]
+      rw [← map_eq, this]
     
     -- Now use h_binary which tells us input.get 0 is binary
     -- h_eval_component : (fun x ↦ Expression.eval env x) (Vector.get input_var 0) = Vector.get input 0
@@ -1491,19 +1499,63 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     -- The output is env (AND.circuit.output ⟨input_var.get 0, input_var.get 1⟩ offset)
     -- We know from AND.circuit that when both inputs are binary, the output is binary
     
-    -- Use the fact that AND preserves binary property
-    -- From AND.circuit.Spec, the output equals input0 &&& input1, which is binary
-    -- when both inputs are binary
+    -- We need to establish that the inputs to the AND circuit are binary
+    have h_input0_eval : env (input_var.get 0) = input.get 0 := by
+      rw [ProvableType.eval_fields] at h_eval
+      have map_eq : (input_var.map (Expression.eval env)).get 0 = (Expression.eval env) (input_var.get 0) := by
+        exact Vector.getElem_map (Expression.eval env) (by simp)
+      have : (input_var.map (Expression.eval env)).get 0 = input.get 0 := by
+        rw [h_eval]
+      simp only [Function.comp_apply]
+      rw [← map_eq, this]
     
-    -- The challenge here is that we need to establish that the AND circuit's
-    -- output is binary, but we're in the completeness context, not soundness.
-    -- We would need to:
-    -- 1. Show that the AND circuit's constraints hold (from completeness)
-    -- 2. Use AND circuit's soundness to get the spec
-    -- 3. Extract that the output is binary from the spec
+    have h_input1_eval : env (input_var.get 1) = input.get 1 := by
+      rw [ProvableType.eval_fields] at h_eval
+      have map_eq : (input_var.map (Expression.eval env)).get 1 = (Expression.eval env) (input_var.get 1) := by
+        exact Vector.getElem_map (Expression.eval env) (by simp)
+      have : (input_var.map (Expression.eval env)).get 1 = input.get 1 := by
+        rw [h_eval]
+      simp only [Function.comp_apply]
+      rw [← map_eq, this]
     
-    -- This requires connecting completeness to soundness through the constraints
-    sorry -- Requires deeper integration with AND circuit properties
+    -- The inputs to AND circuit are binary
+    have h_and_inputs_binary : (env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1) ∧ 
+                               (env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1) := by
+      rw [h_input0_eval, h_input1_eval]
+      exact ⟨h_binary0, h_binary1⟩
+    
+    -- We'll use a lemma that AND circuit output is binary when inputs are binary
+    -- This is a mathematical fact: binary AND binary = binary
+    have h_and_output_binary : ∀ a b : F p, (a = 0 ∨ a = 1) → (b = 0 ∨ b = 1) → 
+                                            (a * b = 0 ∨ a * b = 1) := by
+      intro a b ha hb
+      cases ha with
+      | inl h0 => left; rw [h0]; ring
+      | inr h1 => 
+        rw [h1, one_mul]
+        exact hb
+    
+    -- Now we need to connect the AND circuit output to the multiplication
+    -- The AND circuit's main function returns a*b where a and b are the inputs
+    -- So (AND.circuit.main (input_var.get 0, input_var.get 1) offset).1 
+    -- should evaluate to (env (input_var.get 0)) * (env (input_var.get 1))
+    
+    -- This is where we need to understand how the AND circuit works
+    -- From the definition, AND.main returns `a*b` after witnessing it
+    -- The output is the witnessed value, which equals a*b
+    
+    -- We need to show that the evaluation of the AND circuit output
+    -- equals the product of the evaluated inputs
+    have h_and_output_eq : Expression.eval env (AND.circuit.main (Vector.get input_var 0, Vector.get input_var 1) offset).1 = 
+                          (env (input_var.get 0)) * (env (input_var.get 1)) := by
+      -- This follows from the AND circuit definition and how witness works
+      -- The AND circuit witnesses a*b and returns it
+      sorry -- This requires unfolding the AND circuit definition
+    
+    -- Now we can apply our binary multiplication lemma
+    rw [h_and_output_eq]
+    exact h_and_output_binary (env (input_var.get 0)) (env (input_var.get 1)) 
+                             h_and_inputs_binary.1 h_and_inputs_binary.2
   | m + 3 =>
     -- Recursive case: output is AND of two recursive outputs
     -- For n ≥ 3, main splits the input and recursively calls itself
