@@ -1609,20 +1609,131 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
       -- Since both recursive outputs are binary (by IH) and AND preserves binary,
       -- the final output is binary
 
-      sorry -- Complete using induction hypothesis on both recursive calls
+      -- Let's name the split sizes for clarity
+      let n1 := (m + 3) / 2
+      let n2 := (m + 3) - n1
+      
+      -- We have n1 < m + 3 and n2 < m + 3
+      have h_n1_lt : n1 < m + 3 := by
+        simp only [n1]
+        exact Nat.div_lt_self (by omega) (by norm_num)
+      have h_n2_lt : n2 < m + 3 := by
+        simp only [n2, n1]
+        omega
+      
+      -- Extract the two input parts (these are already defined in the goal)
+      let input_var1 : Var (fields n1) (F p) := ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
+      let input_var2 : Var (fields n2) (F p) := ⟨input_var.toArray.extract n1 (m + 3), by sorry⟩
+      
+      -- The output is the AND of two recursive outputs
+      -- We need to apply IH to both recursive calls
+      
+      -- First, we need to extract the evaluated inputs for each part
+      have h_input_split : ∃ input1 : fields n1 (F p), ∃ input2 : fields n2 (F p),
+                           eval env input_var1 = input1 ∧ 
+                           eval env input_var2 = input2 ∧
+                           input = (input1 ++ input2).cast (by simp [n1, n2]; omega) := by
+        -- The inputs are extracted from the original input
+        use ⟨input.toArray.extract 0 n1, by simp [Array.size_extract]; omega⟩
+        use ⟨input.toArray.extract n1 (m + 3), by sorry⟩
+        constructor
+        · -- eval env input_var1 = input1
+          -- We need to show: eval env input_var1 = ⟨input.toArray.extract 0 n1, _⟩
+          -- Using eval_toArray_extract_eq lemma
+          apply eval_toArray_extract_eq
+          · exact h_eval
+          · simp only [n1]; omega
+          · omega
+        constructor
+        · -- eval env input_var2 = input2  
+          -- Similar to above
+          apply eval_toArray_extract_eq
+          · exact h_eval
+          · omega
+          · simp only [n1]; omega
+        · -- input = (input1 ++ input2).cast _
+          -- We need to show input = (extract1 ++ extract2).cast _
+          -- This follows from the fact that extracting and appending gives back the original
+          -- For now, use sorry to avoid circular reference
+          sorry
+      
+      obtain ⟨input1, input2, h_eval1, h_eval2, h_input_eq⟩ := h_input_split
+      
+      -- Now establish that both inputs satisfy MultiAND_Assumptions
+      have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
+        intro i
+        -- input1[i] is binary because it comes from input
+        -- This follows from the fact that input1 is extracted from input
+        -- which satisfies the binary assumptions
+        -- The detailed proof involves vector manipulation which is complex
+        sorry
+        
+      have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
+        intro i
+        -- input2[i] is binary because it comes from input
+        -- This follows from the fact that input2 is extracted from input
+        -- which satisfies the binary assumptions
+        -- The detailed proof involves vector manipulation which is complex
+        sorry
+      
+      -- Apply IH to the first recursive call
+      let out1 := env ((main input_var1).output offset)
+      have h_out1_binary : out1 = 0 ∨ out1 = 1 := by
+        apply ih n1 h_n1_lt offset input_var1 input1 h_eval1 h_assumptions1
+        · -- UsesLocalWitnessesCompleteness for first recursive call
+          -- h_local_witnesses tells us about the monadic composition
+          -- We need to extract the part about the first recursive call
+          -- This is complex due to the monadic structure, use sorry for now
+          sorry
+        · -- Completeness for first recursive call
+          -- Similarly, extract from h_completeness
+          -- This is complex due to the monadic structure, use sorry for now
+          sorry
+      
+      -- Apply IH to the second recursive call  
+      let out2 := env ((main input_var2).output (offset + (main input_var1).localLength offset))
+      have h_out2_binary : out2 = 0 ∨ out2 = 1 := by
+        apply ih n2 h_n2_lt (offset + (main input_var1).localLength offset) input_var2 input2 h_eval2 h_assumptions2
+        · -- UsesLocalWitnessesCompleteness for second recursive call
+          -- This is complex due to the monadic structure, use sorry for now
+          sorry
+        · -- Completeness for second recursive call
+          -- This is complex due to the monadic structure, use sorry for now
+          sorry
+      
+      -- The final output is AND of out1 and out2, which is binary
+      -- Let's understand what the output actually is
+      simp only [main, circuit_norm]
+      
+      -- The output is the result of the AND circuit
+      -- From the do-notation structure, we know:
+      -- 1. First we compute out1 = main input_var1
+      -- 2. Then we compute out2 = main input_var2
+      -- 3. Finally we apply AND.circuit to (out1, out2)
+      
+      -- The goal is asking about the output of the AND circuit applied to the outputs of the recursive calls
+      -- Need to connect the actual expression evaluation to our out1 and out2
+      have h_out1_eq : out1 = Expression.eval env ((main input_var1).output offset) := rfl
+      have h_out2_eq : out2 = Expression.eval env ((main input_var2).output (offset + (main input_var1).localLength offset)) := rfl
+      
+      -- The output is the result of AND.circuit applied to the expression outputs
+      -- We need to use the AND circuit's soundness to connect its output to multiplication
+      -- This requires detailed understanding of how the AND circuit works and how
+      -- the do-notation expands. For now, we'll leave this as sorry.
+      sorry
 
 -- Helper theorem for circuit completeness
 theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
-      (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
       (input : fields n (F p)),
+    env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset) →
     eval env input_var = input →
     MultiAND_Assumptions n input →
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   -- Use strong induction on n to handle the recursive structure
   induction n using Nat.strong_induction_on with
   | _ n IH =>
-    intro offset env input_var h_local_witnesses input h_env h_assumptions
+    intro offset env input_var input h_local_witnesses h_env h_assumptions
     match n with
     | 0 =>
       -- No constraints for n = 0
@@ -1987,7 +2098,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     exact main_soundness n offset env input_var input h_env h_assumptions h_hold
   completeness := by
     intro offset env input_var h_local_witnesses input h_env h_assumptions
-    exact circuit_completeness n offset env input_var h_local_witnesses input h_env h_assumptions
+    exact circuit_completeness n offset env input_var input h_local_witnesses h_env h_assumptions
 
 end MultiAND
 
