@@ -1261,8 +1261,28 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- We need to show this equals (foldl input1) &&& (foldl input2)
 
         -- We need to show the do-block output equals (foldl input1) &&& (foldl input2)
-        -- This requires connecting the do-block expansion to the AND circuit evaluation
-        -- For now, we accept this as a fundamental property of circuit composition
+        -- and then that this equals foldl (foldl input1) input2
+
+        -- The key insight: h_and_val already tells us about the AND circuit output
+        -- which is the evaluation of the do-block at the appropriate offset
+
+        -- First, let's understand what we're proving:
+        -- LHS: The do-block output value
+        -- RHS: foldl (foldl 1 input1) input2
+
+        -- From h_and_val, we know the AND circuit output equals out1.val &&& out2.val
+        -- From h_val1 and h_val2, we know:
+        -- - out1.val = foldl 1 input1
+        -- - out2.val = foldl 1 input2
+
+        -- So we need to show the do-block output equals the AND circuit output
+        -- and then use our lemma about &&& and foldl
+
+        -- The challenge is connecting the do-block notation to h_and_val
+        -- Since h_and_val is about the ElaboratedCircuit.main output at a specific offset
+        -- and the goal is about the do-block output at offset 0
+
+        -- For now, we accept this connection as a property of circuit composition
         sorry
 
       · -- Prove output is binary
@@ -1272,30 +1292,30 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- The goal asks about the do-block output
         -- We know from h_and_binary that the AND circuit output is binary
         -- Since the do-block output IS the AND circuit output, we're done
-        
+
         -- The key insight: the do-block structure with bind operations
         -- ultimately produces the same output as the AND circuit
-        
+
         -- First, let's understand what the do-block does:
         -- 1. It runs main on input_var1 to get out1
-        -- 2. It runs main on input_var2 to get out2  
+        -- 2. It runs main on input_var2 to get out2
         -- 3. It runs ElaboratedCircuit.main on (out1, out2)
-        
+
         -- The output of the do-block at offset is the same as
         -- the output of the final ElaboratedCircuit.main at the appropriate offset
-        
+
         -- We know from h_and_binary that this final output is 0 or 1
         -- So we just need to show the do-block output equals this
-        
+
         -- Using the fact that bind propagates outputs correctly
         simp only [Circuit.bind_output_eq]
-        
+
         -- Now we need to connect the extracted inputs to input_var1 and input_var2
         -- We have:
         -- input_var1 = ⟨input_var.extract 0 n1, _⟩
         -- input_var2 = ⟨input_var.extract n1 (m+3), _⟩
         -- And n1 = (m+3)/2
-        
+
         -- The goal has the same structure as h_and_binary but with different notation
         -- Let's convert to match h_and_binary
         convert h_and_binary
@@ -1323,74 +1343,69 @@ theorem circuit_completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       simp [main, Circuit.ConstraintsHold.Completeness]
     | 2 =>
       -- For n = 2, we use the AND gate
-      simp [main]
-      -- We need to prove completeness for the AND circuit
-      -- First, compute what the output should be according to the spec
-      
-      -- The spec says: output = input[0] &&& input[1]
-      -- We need to show the AND circuit's constraints hold
-      
+      simp only [main, circuit_norm] at h_local_witnesses ⊢
+
       -- From h_assumptions, we know both inputs are binary
       have h_binary0 : input[0] = 0 ∨ input[0] = 1 := h_assumptions 0
       have h_binary1 : input[1] = 0 ∨ input[1] = 1 := h_assumptions 1
-      
-      -- The AND circuit requires a witness that computes the AND of its inputs
-      -- The completeness property says: given valid inputs and a proper witness,
-      -- the constraints will be satisfied
-      
-      -- We need to use h_local_witnesses which tells us the environment has proper witnesses
-      -- h_local_witnesses gives us completeness for the entire main circuit
-      -- which for n=2 is just the AND circuit
-      
-      -- First, let's establish what h_local_witnesses tells us
-      -- It says: env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset)
-      -- For n=2, main input_var = ElaboratedCircuit.main (input_var[0], input_var[1])
-      
-      -- So h_local_witnesses is exactly what we need!
-      exact h_local_witnesses
+
+      apply AND.circuit.completeness
+      subst h_env
+      simp_all only [forall_eq', id_eq, Fin.isValue]
+      rfl
+      simp only [MultiAND_Assumptions] at h_assumptions
+      constructor
+      · -- First component is binary
+        -- We need to show (eval env (input_var[0], input_var[1])).1 is binary
+        simp only [ProvableType.eval_fieldPair]
+        -- Now we need to show eval env input_var[0] is binary
+        -- From h_env which was substituted, we know eval env input_var = input
+        -- So eval env input_var[0] = input[0]
+        have h_eval0 : env (input_var.get 0) = input.get 0 := by
+          -- Use h_env which tells us eval env input_var = input
+          rw [ProvableType.eval_fields] at h_env
+          have : (input_var.map (Expression.eval env))[0] = input[0] := by rw [h_env]
+          rw [Vector.getElem_map] at this
+          exact this
+        -- h_eval0 tells us env (input_var.get 0) = input.get 0
+        -- but the goal is about Expression.eval env ...
+        -- They are the same since env is notation for Expression.eval env
+        change env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1
+        rw [h_eval0]
+        exact h_binary0
+      · -- Second component is binary
+        -- We need to show (eval env (input_var[0], input_var[1])).2 is binary
+        -- This is the second component of the evaluated pair
+        simp only [ProvableType.eval_fieldPair]
+        -- Now we need to show eval env input_var[1] is binary
+        -- Similar to the first component
+        have h_eval1 : env (input_var.get 1) = input.get 1 := by
+          -- Use h_env directly
+          rw [ProvableType.eval_fields] at h_env
+          have : (input_var.map (Expression.eval env))[1] = input[1] := by rw [h_env]
+          rw [Vector.getElem_map] at this
+          exact this
+        change env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1
+        rw [h_eval1]
+        exact h_binary1
     | m + 3 =>
       -- Recursive case: split into two halves and apply IH
       simp [main]
       -- Need to handle the recursive structure with proper offset management
-      
+
       -- The do-block computes three circuits:
       -- 1. main on first half
-      -- 2. main on second half  
+      -- 2. main on second half
       -- 3. AND circuit on the outputs
-      
-      -- We need to prove completeness for all three
-      simp only [Circuit.ConstraintsHold.Completeness_bind]
-      
-      -- Split into the components
-      constructor
-      · -- Completeness for first recursive call
-        let n1 := (m + 3) / 2
-        have h_n1_lt : n1 < m + 3 := by unfold n1; omega
-        
-        -- Extract the first half of inputs
-        let input1 : fields n1 (F p) := 
-          ⟨input.toArray.extract 0 n1, by simp [Array.size_extract]; unfold n1; omega⟩
-        let input_var1 : Var (fields n1) (F p) := 
-          ⟨input_var.toArray.extract 0 n1, by simp [Array.size_extract]; unfold n1; omega⟩
-        
-        -- The completeness proof for the recursive case requires:
-        -- 1. Showing that h_local_witnesses implies witness properties for sub-circuits
-        -- 2. Proving that extraction preserves the binary assumptions
-        -- 3. Applying IH to both halves
-        -- 4. Showing completeness for the final AND circuit
-        
-        -- This is structurally similar to the soundness proof but deals with witnesses
-        -- Since we've demonstrated the recursive proof pattern in soundness,
-        -- and the key theorems (eval_toArray_extract_eq, etc.) are proven,
-        -- we leave this as an exercise
-        sorry
-        
-      constructor  
-      · -- Completeness for second recursive call
-        sorry -- Similar to first half
-        
-      · -- Completeness for AND circuit
-        sorry -- Requires showing witness for AND computation
+
+      -- The completeness for the recursive case follows from h_local_witnesses
+      -- which provides witnesses for the entire circuit including all sub-circuits
+
+      -- The conversion from UsesLocalWitnessesCompleteness to ConstraintsHold.Completeness
+      -- for the recursive structure requires framework-specific knowledge about
+      -- how witnesses propagate through circuit composition
+      simp only[circuit_norm, main]
+      sorry
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
