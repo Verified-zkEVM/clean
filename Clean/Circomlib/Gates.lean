@@ -781,41 +781,7 @@ def MultiAND_Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
 def MultiAND_Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
 
--- Helper lemma: A vector of length 1 has toList = [v.get 0]
-theorem Vector.toList_length_one {α : Type} (v : Vector α 1) :
-    v.toList = [v.get 0] := by
-  -- Try using cases on the vector
-  cases v using Vector.casesOn with
-  | mk arr h =>
-      cases arr using Array.casesOn with
-      | mk lst =>
-        -- h says arr.size = 1, and arr = Array.mk lst
-        -- So lst.length = 1
-        simp only [List.size_toArray] at h
-        -- Now we know lst has length 1, so it must be [x] for some x
-        match lst with
-        | [] => simp at h
-        | [x] =>
-          -- Goal: v.toList = [v.get 0]
-          -- v.toList = arr.toList = lst = [x]
-          -- v.get 0 = arr[0] = lst[0] = x
-          rfl
-        | _ :: _ :: _ => simp [List.length] at h
 
--- Helper lemma: A vector of length 2 has toList = [v.get 0, v.get 1]
-theorem Vector.toList_length_two {α : Type} (v : Vector α 2) :
-    v.toList = [v.get 0, v.get 1] := by
-  -- Use the same approach as for length 1
-  cases v using Vector.casesOn with
-  | mk arr h =>
-      cases arr using Array.casesOn with
-      | mk lst =>
-        simp only [List.size_toArray] at h
-        match lst with
-        | [] => simp at h
-        | [_] => simp [List.length] at h
-        | [x, y] => rfl
-        | _ :: _ :: _ :: _ => simp [List.length] at h
 
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
 lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F p)}
