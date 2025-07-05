@@ -366,8 +366,6 @@ theorem List.foldl_and_binary (l : List ℕ) :
     have h_xs_binary : ∀ y ∈ xs, y = 0 ∨ y = 1 := fun y hy =>
       h_all_binary y (List.Mem.tail x hy)
     have h_tail_binary := ih h_xs_binary
-    -- Need to show: (1 &&& x) &&& (foldl 1 xs) is binary
-    -- Case split on x
     cases h_x_binary with
     | inl h_x_zero =>
       rw [h_x_zero]
@@ -452,46 +450,21 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
       rw [show AND.circuit.localLength _ = 1 from rfl] at h
       exact h
     | m + 3 =>
-      -- For n ≥ 3, main makes recursive calls
-      -- The circuit is built using do notation with recursive calls
-      -- We need to analyze the structure carefully
-
-      -- Define n1 and n2 as in the main function
       let n1 := (m + 3) / 2
       let n2 := (m + 3) - n1
-
-      -- We have n1 + n2 = m + 3
       have h_sum : n1 + n2 = m + 3 := by
         unfold n1 n2
         omega
-
-      -- Both n1 and n2 are less than m + 3
       have h_n1_lt : n1 < m + 3 := by
         unfold n1
         omega
       have h_n2_lt : n2 < m + 3 := by
         unfold n2
         omega
-
-      -- Now we need to prove that the localLength of the entire circuit equals m + 3 - 1
-      -- The circuit structure is roughly:
-      -- 1. Create input1 and input2 (no local signals)
-      -- 2. Recursively call main on input1 (localLength = n1 - 1 by IH)
-      -- 3. Recursively call main on input2 (localLength = n2 - 1 by IH)
-      -- 4. Call AND.circuit.main (localLength = 1)
-      -- Total: (n1 - 1) + (n2 - 1) + 1 = n1 + n2 - 1 = m + 3 - 1
       rw [main]
       repeat rw [Circuit.localLength_bind]
-
-      -- Apply IH to the recursive calls
-      -- Need to be careful about the input vectors
       simp only [IH _ h_n1_lt, IH _ h_n2_lt]
-
-      -- For the final AND.circuit.main call, use its localLength_eq property
-      -- The AND circuit has localLength = 1
       simp only [Circuit.output]
-
-      -- Use the fact that AND.circuit has localLength = 1
       have h_and : ∀ (inp : Expression (F p) × Expression (F p)) (off : ℕ),
         (AND.circuit.main inp).localLength off = 1 := by
         intro inp off
@@ -500,8 +473,6 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
         exact this
 
       rw [h_and]
-
-      -- Now simplify the arithmetic: (n1 - 1) + (n2 - 1) + 1 = m + 3 - 1
       conv => rhs; rw [← h_sum]
       omega
 
@@ -531,62 +502,35 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
 -- Helper theorem for subcircuitsConsistent
 theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     Operations.SubcircuitsConsistent offset ((main input).operations offset) := by
-  -- Use strong induction on n
   induction n using Nat.strong_induction_on generalizing offset with
   | _ n IH =>
-    -- Match on the structure of n as in main's definition
     match n with
     | 0 =>
-      -- For n = 0, main returns (1 : F p)
       simp only [main, Circuit.operations, Circuit.pure_def]
       simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     | 1 =>
-      -- For n = 1, main returns input.get 0
       simp only [main, Circuit.operations, Circuit.pure_def]
       simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     | 2 =>
-      -- For n = 2, main calls AND.circuit.main
       simp only [main, Circuit.operations]
-      -- Use the fact that AND.circuit is subcircuits consistent
       exact AND.circuit.subcircuitsConsistent (input.get 0, input.get 1) offset
     | m + 3 =>
-      -- For n ≥ 3, main makes recursive calls
       rw [main]
-
-      -- Define n1 and n2 as in the main function
       let n1 := (m + 3) / 2
       let n2 := (m + 3) - n1
-
-      -- We have n1 < m + 3 and n2 < m + 3
       have h_n1_lt : n1 < m + 3 := by unfold n1; omega
       have h_n2_lt : n2 < m + 3 := by unfold n2; omega
-
-      -- The circuit structure is:
-      -- 1. Pure operations creating input1 and input2 (no subcircuits)
-      -- 2. main input1 >>= λ out1 => (has subcircuits by IH)
-      -- 3. main input2 >>= λ out2 => (has subcircuits by IH)
-      -- 4. AND.circuit.main (out1, out2) (has subcircuits)
-
-      -- We need to show SubcircuitsConsistent for the combined operations
-      -- After rw [main], we have a circuit structure with recursive calls
       simp only [Circuit.operations]
-
-      -- The structure is: main input1 >>= (λ out1 => main input2 >>= (λ out2 => AND.circuit.main (out1, out2)))
-      -- Apply Circuit.subcircuitsConsistent_bind for the first bind
       apply Circuit.subcircuitsConsistent_bind
-      · -- First recursive call: main input1
+      ·
         let input1 : Var (fields n1) (F p) :=
           ⟨input.toArray.extract 0 n1, by simp; unfold n1; omega⟩
         apply IH n1 h_n1_lt input1
-      · -- Rest: main input2 >>= AND.circuit.main
-        -- Apply bind lemma again
-        apply Circuit.subcircuitsConsistent_bind
-        · -- Second recursive call: main input2
-          let input2 : Var (fields n2) (F p) :=
+      · apply Circuit.subcircuitsConsistent_bind
+        · let input2 : Var (fields n2) (F p) :=
             ⟨input.toArray.extract n1 (m + 3), by simp; unfold n2; rfl⟩
           apply IH n2 h_n2_lt input2
-        · -- Final AND circuit
-          apply AND.circuit.subcircuitsConsistent
+        · apply AND.circuit.subcircuitsConsistent
 
 
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
@@ -932,16 +876,13 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
   have h_input0 := h_assumptions (0 : Fin 1)
   have h_eval_eq : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
   constructor
-  · -- Prove output.val = single element fold
-    simp only [h_eval_eq]
+  · simp only [h_eval_eq]
     rw [Vector.toList_length_one]
     simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-    -- For binary values, 1 &&& x = x
     cases h_input0 with
     | inl h0 => rw [h0]; simp only [ZMod.val_zero]; rfl
     | inr h1 => rw [h1]; simp only [ZMod.val_one]; rfl
-  · -- Prove output = 0 ∨ output = 1
-    simp only [h_eval_eq]
+  · simp only [h_eval_eq]
     exact h_input0
 
 /-- Soundness for n = 2 case -/
