@@ -885,6 +885,62 @@ lemma Vector.toList_extract_append {α : Type*} {n : ℕ} (v : Vector α n) (k :
       List.drop_zero]
       aesop
 
+/-- Helper to show that extracting a subvector preserves element access -/
+lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : Fin n1) (h_n1_lt : n1 ≤ n) :
+    let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, Vector.size_toArray]; exact h_n1_lt⟩
+    input1.get i = input.get ⟨i.val, by omega⟩ := by
+  simp only [Vector.get]
+  have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
+    simp only [Array.size_extract]
+    have h1 : i.val < n1 := i.isLt
+    have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
+    rw [h2, min_eq_left h_n1_lt]
+    exact h1) =
+                  input.toArray[i.val]'(by 
+                    have h1 : i.val < n1 := i.isLt
+                    have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
+                    rw [h2]
+                    omega) := by
+    rw [Array.getElem_extract]
+    simp
+  exact h_extract
+
+/-- Helper to show that extracting a subvector from an offset preserves element access -/
+lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n (F p)) 
+    (i : Fin n2) (h_sum : n1 + n2 = n) :
+    let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 n, by simp [Array.size_extract, Vector.size_toArray]; omega⟩
+    input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
+  simp only [Vector.get]
+  have h_extract : (input.toArray.extract n1 n)[i.val]'(by 
+    simp only [Array.size_extract]
+    have h1 : i.val < n2 := i.isLt
+    have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
+    rw [h2]
+    omega) =
+                  input.toArray[n1 + i.val]'(by
+                    have : n1 + i.val < input.size := by
+                      have h1 : i.val < n2 := i.isLt
+                      have h2 : input.size = n := by simp only [Vector.size_toArray]
+                      rw [h2]
+                      omega
+                    exact this) := by
+    rw [Array.getElem_extract]
+  exact h_extract
+
+/-- Helper to show that mapping .val over a binary vector produces binary values -/
+lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p)) 
+    (h_assumptions : MultiAND_Assumptions n input) :
+    ∀ x ∈ input.toList.map (·.val), x = 0 ∨ x = 1 := by
+  intro x hx
+  simp only [List.mem_map] at hx
+  rcases hx with ⟨y, hy, rfl⟩
+  -- Use Vector.toList_binary to convert vector property to list property
+  have h_vec_binary := Vector.toList_binary input h_assumptions
+  have h_y_binary := h_vec_binary y hy
+  cases h_y_binary with
+  | inl h => left; simp [h, ZMod.val_zero]
+  | inr h => right; simp [h, ZMod.val_one]
+
 -- Helper theorem for soundness
 theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
@@ -1042,47 +1098,12 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       -- Show assumptions hold for subvectors
       have h_assumptions1 : MultiAND_Assumptions n1 input1 := by
         intro i
-        -- input1 is extracted from input, so input1.get i = input.get j for some j
-        -- Specifically, input1.get i = input.get i (since extract starts at 0)
-        have : input1.get i = input.get ⟨i.val, by omega⟩ := by
-          -- input1 = ⟨input.toArray.extract 0 n1, _⟩
-          -- So input1.get i = (input.toArray.extract 0 n1)[i]
-          simp only [input1, Vector.get]
-          -- extract preserves elements: arr.extract start len[i] = arr[start + i]
-          have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
-            simp only [Array.size_extract]
-            have h1 : i.val < n1 := i.isLt
-            have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
-            rw [h2, min_eq_left (Nat.le_of_lt h_n1_lt)]
-            exact h1) =
-                          input.toArray[i.val]'(by
-                            have h1 : i.val < n1 := i.isLt
-                            have h2 : n1 ≤ m + 3 := Nat.le_of_lt h_n1_lt
-                            have h3 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                            rw [h3]
-                            omega) := by
-            rw [Array.getElem_extract]
-            simp
-          exact h_extract
-        rw [this]
+        rw [extract_preserves_element input i (Nat.le_of_lt h_n1_lt)]
         exact h_assumptions ⟨i.val, by omega⟩
 
       have h_assumptions2 : MultiAND_Assumptions n2 input2 := by
         intro i
-        -- input2 is extracted from input starting at n1, so input2.get i = input.get (n1 + i)
-        have : input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
-          simp only [input2, Vector.get]
-          have h_extract : (input.toArray.extract n1 (m + 3))[i.val]'(by simp; exact i.isLt) =
-                          input.toArray[n1 + i.val]'(by
-                            have : n1 + i.val < input.size := by
-                              have h1 : i.val < n2 := i.isLt
-                              have h2 : input.size = m + 3 := by simp only [Vector.size_toArray]
-                              rw [h2]
-                              omega
-                            exact this) := by
-            rw [Array.getElem_extract]
-          exact h_extract
-        rw [this]
+        rw [extract_from_offset_preserves_element input i h_sum]
         exact h_assumptions ⟨n1 + i.val, by omega⟩
 
       -- The main function for m+3 is defined as:
@@ -1220,29 +1241,11 @@ theorem main_soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         -- 2. This equals foldl (foldl input1) input2
 
         -- First, establish that foldl over input1 gives a binary result
-        have h_input1_vals_binary : ∀ x ∈ input1.toList.map (·.val), x = 0 ∨ x = 1 := by
-          intro x hx
-          simp only [List.mem_map] at hx
-          rcases hx with ⟨y, hy, rfl⟩
-          -- Use Vector.toList_binary to convert vector property to list property
-          have h_vec_binary := Vector.toList_binary input1 h_assumptions1
-          have h_y_binary := h_vec_binary y hy
-          cases h_y_binary with
-          | inl h => left; simp [h, ZMod.val_zero]
-          | inr h => right; simp [h, ZMod.val_one]
-
+        have h_input1_vals_binary := map_val_binary input1 h_assumptions1
         have h_foldl1_binary := List.foldl_and_binary _ h_input1_vals_binary
 
         -- Apply the key lemma: a &&& foldl 1 list = foldl a list when a is binary
-        have h_input2_vals_binary : ∀ x ∈ input2.toList.map (·.val), x = 0 ∨ x = 1 := by
-          intro x hx
-          simp only [List.mem_map] at hx
-          rcases hx with ⟨y, hy, rfl⟩
-          have h_vec_binary := Vector.toList_binary input2 h_assumptions2
-          have h_y_binary := h_vec_binary y hy
-          cases h_y_binary with
-          | inl h => left; simp [h, ZMod.val_zero]
-          | inr h => right; simp [h, ZMod.val_one]
+        have h_input2_vals_binary := map_val_binary input2 h_assumptions2
         -- The RHS is already: foldl (foldl 1 input1) input2
         -- The LHS is the do-block output which should equal (foldl 1 input1) &&& (foldl 1 input2)
         -- And by our lemma: (foldl 1 input1) &&& (foldl 1 input2) = foldl (foldl 1 input1) input2
