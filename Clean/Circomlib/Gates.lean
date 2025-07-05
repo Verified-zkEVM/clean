@@ -868,10 +868,23 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           · aesop
           · omega
           · omega
-        · -- For AND.circuit, UsesLocalWitnesses and UsesLocalWitnessesCompleteness coincide
-          -- because AND.circuit contains no subcircuits (only witness and assert operations)
-          sorry -- TODO: Prove equivalence for AND.circuit specifically
-
+        · -- For AND.circuit, we need to show UsesLocalWitnesses from UsesLocalWitnessesCompleteness
+          -- The goal has been simplified to show:
+          -- 1. env.get at the witness position equals the product (which h_c3 gives us)
+          -- 2. FlatOperation.forAll for the equality subcircuit
+          simp only [AND.circuit] at h_c3 ⊢
+          simp only [AND.main, circuit_norm] at h_c3 ⊢
+          constructor
+          · -- First part: the witness value equals the product
+            exact h_c3
+          · -- Second part: the equality subcircuit's flat operations satisfy the witness condition
+            -- The equality circuit (Gadgets.Equality.circuit) has no witness operations
+            -- It only uses allZero which produces assert operations
+            -- For operations with no witnesses, FlatOperation.forAll is trivially satisfied
+            -- The full proof requires expanding through multiple layers of definitions
+            simp only [Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, subcircuit_norm]
+            rw [Circuit.forEach]
+            simp_all [toVars, assertZero, var, circuit_norm, Operations.toFlat, FlatOperation.forAll]
 
 -- Extract Assumptions and Spec outside the circuit
 def MultiAND_Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
