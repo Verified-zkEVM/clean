@@ -13,7 +13,7 @@ namespace BinaryOps
 
 variable {p : ℕ} [Fact p.Prime]
 
-open Bitwise (and_zero_absorb and_one_id_binary and_comm_binary and_assoc_binary)
+open Bitwise (and_zero_absorb and_one_id_binary)
 
 section ListOperations
 

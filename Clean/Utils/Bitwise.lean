@@ -22,47 +22,6 @@ theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) :
   | inl h0 => rw [h0]; rfl
   | inr h1 => rw [h1]; rfl
 
-/-- Commutativity of `&&&` for binary values -/
-theorem and_comm_binary (a b : ℕ) (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) :
-    a &&& b = b &&& a := by
-  -- Prove by exhaustive cases
-  cases ha with
-  | inl ha0 =>
-    cases hb with
-    | inl hb0 => rw [ha0, hb0]
-    | inr hb1 => rw [ha0, hb1]; rfl
-  | inr ha1 =>
-    cases hb with
-    | inl hb0 => rw [ha1, hb0]; rfl
-    | inr hb1 => rw [ha1, hb1]
-
-/-- The bitwise AND operation `&&&` is associative for binary values (0 or 1) -/
-theorem and_assoc_binary (a b c : ℕ)
-    (ha : a = 0 ∨ a = 1) (hb : b = 0 ∨ b = 1) (hc : c = 0 ∨ c = 1) :
-    a &&& (b &&& c) = (a &&& b) &&& c := by
-  -- Prove by exhaustive case analysis
-  cases ha with
-  | inl ha0 =>
-    rw [ha0, and_zero_absorb, and_zero_absorb, and_zero_absorb]
-  | inr ha1 =>
-    rw [ha1]
-    cases hb with
-    | inl hb0 =>
-      rw [hb0, and_zero_absorb]
-      -- LHS: 1 &&& 0
-      -- RHS: (1 &&& 0) &&& c
-      -- We need to show 1 &&& 0 = 0
-      have h10 : 1 &&& 0 = 0 := by
-        simp only [HAnd.hAnd, AndOp.and]
-        rfl
-      rw [h10, and_zero_absorb]
-    | inr hb1 =>
-      rw [hb1]
-      -- 1 &&& 1 = 1
-      cases hc with
-      | inl hc0 => rw [hc0]; rfl
-      | inr hc1 => rw [hc1]; rfl
-
 end BitwiseAND
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
