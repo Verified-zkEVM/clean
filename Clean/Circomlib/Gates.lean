@@ -18,7 +18,7 @@ namespace Circomlib
 variable {p : ℕ} [Fact p.Prime]
 
 -- Import the moved lemmas
-open Bitwise (and_zero_absorb and_one_id_binary and_comm_binary and_assoc_binary)
+open Bitwise (and_zero_absorb and_one_id_binary)
 open Vector (mem_toList_iff_get)
 open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
 open Operations (append_localLength)
