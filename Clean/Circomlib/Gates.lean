@@ -19,7 +19,8 @@ variable {p : ℕ} [Fact p.Prime]
 -- Import the moved lemmas
 open Bitwise (and_zero_absorb and_one_id_binary and_comm_binary and_assoc_binary)
 open Vector (mem_toList_iff_get)
-open Circuit (bind_output_eq)
+open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
+open Operations (append_localLength)
 
 section HelperLemmas
 
@@ -340,17 +341,6 @@ def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expressi
 
     AND.circuit.main (out1, out2)
 
--- Helper lemma: localLength distributes over append
-theorem Operations.localLength_append (ops1 ops2 : Operations (F p)) :
-    Operations.localLength (ops1 ++ ops2) = Operations.localLength ops1 + Operations.localLength ops2 := by
-  induction ops1 with
-  | nil => simp [Operations.localLength]
-  | cons op ops1 ih =>
-    cases op with
-    | witness m _ => simp [Operations.localLength, ih, Nat.add_assoc]
-    | assert _ => simp [Operations.localLength, ih]
-    | lookup _ => simp [Operations.localLength, ih]
-    | subcircuit s => simp [Operations.localLength, ih, Nat.add_assoc]
 
 -- Key lemma: foldl with AND over binary values gives binary result
 theorem List.foldl_and_binary (l : List ℕ) :
@@ -426,10 +416,6 @@ theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List �
     show a &&& (orig &&& hd) = (a &&& orig) &&& hd
     exact (Nat.land_assoc a orig hd).symm
 
--- Helper lemma: localLength of bind
-theorem Circuit.localLength_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ) :
-    (f >>= g).localLength offset = f.localLength offset + (g (f.output offset)).localLength (offset + f.localLength offset) := by
-  simp [Circuit.localLength, Circuit.bind_def, Operations.localLength_append]
 
 -- Helper lemma for localLength
 theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
@@ -462,7 +448,7 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
         unfold n2
         omega
       rw [main]
-      repeat rw [Circuit.localLength_bind]
+      repeat rw [bind_localLength_eq]
       simp only [IH _ h_n1_lt, IH _ h_n2_lt]
       simp only [Circuit.output]
       have h_and : ∀ (inp : Expression (F p) × Expression (F p)) (off : ℕ),
@@ -477,17 +463,6 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
       omega
 
 
--- Helper lemma: forAll for bind operations
-theorem Circuit.forAll_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β)
-    (condition : Condition (F p)) (offset : ℕ) :
-    Operations.forAll offset condition ((f >>= g).operations offset) ↔
-    Operations.forAll offset condition (f.operations offset) ∧
-    Operations.forAll (offset + f.localLength offset) condition
-      ((g (f.output offset)).operations (offset + f.localLength offset)) := by
-  simp only [Circuit.operations, Circuit.bind_def, Circuit.localLength, Circuit.output]
-  conv => rhs; arg 2; arg 1; rw [add_comm]
-  exact @Operations.forAll_append (F p) _ condition offset (f offset).2
-    (g (f offset).1 (offset + Operations.localLength (f offset).2)).2
 
 -- Helper lemma: SubcircuitsConsistent preserved by bind
 theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ)
@@ -496,7 +471,7 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
           ((g (f.output offset)).operations (offset + f.localLength offset))) :
     Operations.SubcircuitsConsistent offset ((f >>= g).operations offset) := by
   simp only [Operations.SubcircuitsConsistent] at hf hg ⊢
-  rw [Circuit.forAll_bind]
+  rw [bind_forAll]
   exact ⟨hf, hg⟩
 
 -- Helper theorem for subcircuitsConsistent
