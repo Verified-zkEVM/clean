@@ -627,13 +627,13 @@ def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
 
 
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
-lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F p)}
+lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment (F p)}
     {v : Var (fields n) (F p)} {w : fields n (F p)}
     (h_eval : eval env v = w)
-    (h_bounds : stop ≤ n) (h_start : start ≤ stop) :
-    ProvableType.eval (α := fields (stop - start)) env
-      ⟨v.toArray.extract start stop, by simp [Array.size_extract]; omega⟩ =
-    ⟨w.toArray.extract start stop, by simp [Array.size_extract]; omega⟩ := by
+    (h_bounds : finish ≤ n) (h_start : start ≤ finish) :
+    ProvableType.eval (α := fields (finish - start)) env
+      ⟨v.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ =
+    ⟨w.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ := by
   -- Work with the definition of eval for fields
   simp only [ProvableType.eval_fields]
   -- Need to show the mapped vectors are equal
@@ -644,21 +644,21 @@ lemma eval_toArray_extract_eq {n : ℕ} (start stop : ℕ) {env : Environment (F
   -- Key insight: the i-th element of extracted array corresponds to (start + i)-th of original
   have h_idx : start + i < n := by omega
   -- Show LHS
-  have size_proof : (v.toArray.extract start stop).size = stop - start := by
+  have size_proof : (v.toArray.extract start finish).size = finish - start := by
     simp [Array.size_extract]
     omega
-  have lhs : Expression.eval env (⟨v.toArray.extract start stop, size_proof⟩ : Vector _ _)[i] =
+  have lhs : Expression.eval env (⟨v.toArray.extract start finish, size_proof⟩ : Vector _ _)[i] =
              Expression.eval env v[start + i] := by
     congr 1
-    show (v.toArray.extract start stop)[i]'(size_proof ▸ hi) = v.toArray[start + i]'(by simp [v.size_toArray]; exact h_idx)
+    show (v.toArray.extract start finish)[i]'(size_proof ▸ hi) = v.toArray[start + i]'(by simp [v.size_toArray]; exact h_idx)
     rw [Array.getElem_extract]
   rw [lhs]
-  have size_proof2 : (w.toArray.extract start stop).size = stop - start := by
+  have size_proof2 : (w.toArray.extract start finish).size = finish - start := by
     simp [Array.size_extract]
     omega
-  have rhs : (⟨w.toArray.extract start stop, size_proof2⟩ : Vector _ _)[i] =
+  have rhs : (⟨w.toArray.extract start finish, size_proof2⟩ : Vector _ _)[i] =
              w[start + i] := by
-    show (w.toArray.extract start stop)[i]'(size_proof2 ▸ hi) = w.toArray[start + i]'(by simp [w.size_toArray]; exact h_idx)
+    show (w.toArray.extract start finish)[i]'(size_proof2 ▸ hi) = w.toArray[start + i]'(by simp [w.size_toArray]; exact h_idx)
     rw [Array.getElem_extract]
   rw [rhs]
   have h_eval' := h_eval
