@@ -10,7 +10,6 @@ https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
--- instance : Fact (p > 2^135) := .mk (by linarith [‹Fact (p > 2^253)›.elim])
 
 
 namespace CompConstant
@@ -73,9 +72,8 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
     let slsb := input[i.val * 2]
     let smsb := input[i.val * 2 + 1]
 
-    -- Compute b, a, e values for this iteration
-    let e_val : ℤ := 2^i.val
-    let b_val : ℤ := (1 <<< 128) - 1 - (2^(i.val + 1) - 1)
+    -- Compute b, a values for this iteration
+    let b_val : ℤ := 2^128 - 2^i.val
     let a_val : ℤ := 2^i.val
 
     if cmsb == 0 && clsb == 0 then
@@ -100,7 +98,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
+  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
   subcircuitsConsistent input n := by
     simp only [circuit_norm, main, Num2Bits.circuit]
     and_intros <;> ac_rfl
