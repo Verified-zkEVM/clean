@@ -6,9 +6,10 @@ variable {α β : Type} {n m : ℕ}
 
 open Vector (finRange)
 
-def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 namespace Vector
+def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
+
 def len (_: Vector α n) : ℕ := n
 
 def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
@@ -191,6 +192,12 @@ theorem getElem_mapRange {n} {create: ℕ → α} :
     · have i_eq : n = i := by linarith
       subst i_eq
       rw [getElem_push_eq]
+
+theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
+  Vector.map f (Vector.mapRange n create) =
+    Vector.mapRange n (fun i => f (create i)) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapRange, getElem_map]
 
 theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by

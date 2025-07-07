@@ -160,6 +160,8 @@ attribute [circuit_norm] HasAssignEq.assign_eq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem
+syntax "let " ident " : " term " <== " term : doElem
 
 macro_rules
   | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assign_eq $e)
+  | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assign_eq $e)
