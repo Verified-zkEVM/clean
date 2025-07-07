@@ -59,6 +59,8 @@ template BinSum(n, ops) {
     lin === lout;
 }
 -/
+-- n: number of bits per operand
+-- ops: number of operands to sum
 def main (n ops : ℕ) (inp : Vector (Vector (Expression (F p)) n) ops) := do
   let nout := nbits ((2^n - 1) * ops)
   
@@ -84,6 +86,8 @@ def main (n ops : ℕ) (inp : Vector (Vector (Expression (F p)) n) ops) := do
   
   return out
 
+-- n: number of bits per operand
+-- ops: number of operands to sum
 def circuit (n ops : ℕ) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) : 
   GeneralFormalCircuit (F p) (fields (n * ops)) (fields (nbits ((2^n - 1) * ops))) where
   main input := do
