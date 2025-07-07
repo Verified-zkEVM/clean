@@ -3,15 +3,6 @@ import Clean.Utils.Field
 
 namespace Circomlib
 open Circuit
-
--- Add missing NonEmptyProvableType instance for ProvablePair
-instance {α β: TypeMap} [NonEmptyProvableType α] [NonEmptyProvableType β] : 
-  NonEmptyProvableType (ProvablePair α β) where
-  nonempty := by 
-    simp only [ProvablePair.instance, size]
-    have h1 := NonEmptyProvableType.nonempty (M := α)
-    have h2 := NonEmptyProvableType.nonempty (M := β)
-    omega
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 /-

@@ -520,6 +520,14 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
   toElements_fromElements v := by
     simp [ProvableType.toElements_fromElements, Vector.cast]
 
+instance {α β: TypeMap} [NonEmptyProvableType α] [NonEmptyProvableType β] : 
+  NonEmptyProvableType (ProvablePair α β) where
+  nonempty := by 
+    simp only [ProvablePair.instance, size]
+    have h1 := NonEmptyProvableType.nonempty (M := α)
+    have h2 := NonEmptyProvableType.nonempty (M := β)
+    omega
+
 def ProvablePair.fromElements {α β: TypeMap} [ProvableType α] [ProvableType β] (xs : Vector F (size α + size β)) : α F × β F :=
   (ProvableType.fromElements xs : ProvablePair α β F)
 
