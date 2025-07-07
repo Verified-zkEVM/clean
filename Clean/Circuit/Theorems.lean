@@ -631,3 +631,120 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
+
+-- Structural rules for FormalCircuit
+
+namespace FormalCircuit
+
+/--
+Strengthen the assumptions of a FormalCircuit.
+Given a circuit with assumptions `Assumptions` and a stronger assumption `StrongerAssumptions`,
+this creates a new FormalCircuit with the stronger assumptions.
+-/
+def strengthenAssumptions {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuit F Input Output)
+    (StrongerAssumptions : Input F → Prop)
+    (h_stronger : ∀ input, StrongerAssumptions input → circuit.Assumptions input) :
+    FormalCircuit F Input Output where
+  elaborated := circuit.elaborated
+  Assumptions := StrongerAssumptions
+  Spec := circuit.Spec
+  soundness := fun offset env input_var input h_eval h_stronger_assumptions h_constraints =>
+    circuit.soundness offset env input_var input h_eval (h_stronger input h_stronger_assumptions) h_constraints
+  completeness := fun offset env input_var h_uses_local input h_eval h_stronger_assumptions =>
+    circuit.completeness offset env input_var h_uses_local input h_eval (h_stronger input h_stronger_assumptions)
+
+/--
+Derive a new specification from a FormalCircuit.
+Given a circuit and a proof that the original spec implies a new spec under the assumptions,
+this creates a new FormalCircuit with the derived specification.
+-/
+def deriveSpec {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuit F Input Output)
+    (NewSpec : Input F → Output F → Prop)
+    (h_derive : ∀ input output, circuit.Assumptions input → circuit.Spec input output → NewSpec input output) :
+    FormalCircuit F Input Output where
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := NewSpec
+  soundness := fun offset env input_var input h_eval h_assumptions h_constraints =>
+    let output := eval env (circuit.output input_var offset)
+    h_derive input output h_assumptions (circuit.soundness offset env input_var input h_eval h_assumptions h_constraints)
+  completeness := circuit.completeness
+
+end FormalCircuit
+
+namespace GeneralFormalCircuit
+
+/--
+Strengthen the assumptions of a GeneralFormalCircuit.
+-/
+def strengthenAssumptions {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output)
+    (StrongerAssumptions : Input F → Prop)
+    (h_stronger : ∀ input, StrongerAssumptions input → circuit.Assumptions input) :
+    GeneralFormalCircuit F Input Output where
+  elaborated := circuit.elaborated
+  Assumptions := StrongerAssumptions
+  Spec := circuit.Spec
+  soundness := circuit.soundness
+  completeness := fun offset env input_var h_uses_local input h_eval h_stronger_assumptions =>
+    circuit.completeness offset env input_var h_uses_local input h_eval (h_stronger input h_stronger_assumptions)
+
+/--
+Derive a new specification from a GeneralFormalCircuit.
+Note: For GeneralFormalCircuit, the derivation doesn't require assumptions since soundness doesn't use them.
+-/
+def deriveSpec {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output)
+    (NewSpec : Input F → Output F → Prop)
+    (h_derive : ∀ input output, circuit.Spec input output → NewSpec input output) :
+    GeneralFormalCircuit F Input Output where
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := NewSpec
+  soundness := fun offset env input_var input h_eval h_constraints =>
+    let output := eval env (circuit.output input_var offset)
+    h_derive input output (circuit.soundness offset env input_var input h_eval h_constraints)
+  completeness := circuit.completeness
+
+end GeneralFormalCircuit
+
+namespace FormalAssertion
+
+/--
+Strengthen the assumptions of a FormalAssertion.
+-/
+def strengthenAssumptions {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertion F Input)
+    (StrongerAssumptions : Input F → Prop)
+    (h_stronger : ∀ input, StrongerAssumptions input → circuit.Assumptions input) :
+    FormalAssertion F Input where
+  elaborated := circuit.elaborated
+  Assumptions := StrongerAssumptions
+  Spec := circuit.Spec
+  soundness := fun offset env input_var input h_eval h_stronger_assumptions h_constraints =>
+    circuit.soundness offset env input_var input h_eval (h_stronger input h_stronger_assumptions) h_constraints
+  completeness := fun offset env input_var h_uses_local input h_eval h_stronger_assumptions h_spec =>
+    circuit.completeness offset env input_var h_uses_local input h_eval (h_stronger input h_stronger_assumptions) h_spec
+
+/--
+Derive a new specification from a FormalAssertion.
+Since FormalAssertion requires both assumptions and spec for completeness,
+the derivation needs to handle both directions.
+-/
+def deriveSpec {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertion F Input)
+    (NewSpec : Input F → Prop)
+    (h_derive_sound : ∀ input, circuit.Assumptions input → circuit.Spec input → NewSpec input)
+    (h_derive_complete : ∀ input, circuit.Assumptions input → NewSpec input → circuit.Spec input) :
+    FormalAssertion F Input where
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := NewSpec
+  soundness := fun offset env input_var input h_eval h_assumptions h_constraints =>
+    h_derive_sound input h_assumptions (circuit.soundness offset env input_var input h_eval h_assumptions h_constraints)
+  completeness := fun offset env input_var h_uses_local input h_eval h_assumptions h_new_spec =>
+    circuit.completeness offset env input_var h_uses_local input h_eval h_assumptions (h_derive_complete input h_assumptions h_new_spec)
+
+end FormalAssertion
