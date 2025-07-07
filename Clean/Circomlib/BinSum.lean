@@ -24,7 +24,8 @@ Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/binsum.circom
 
 The BinSum template takes multiple binary numbers as input and outputs their sum in binary form.
-It ensures that:
+Note that the input bits must be guaranteed to be binary (0 or 1) by the caller.
+The circuit ensures that:
 1. All output bits are binary (0 or 1)
 2. The sum of inputs equals the sum represented by output bits
 -/
