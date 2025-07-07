@@ -130,9 +130,8 @@ def circuit (n ops : ℕ) [hn : Fact (0 < n)] (hops : 0 < ops) (hnout : 2^(nbits
     ∧ (∀ i (hi : i < nout), output[i] = 0 ∨ output[i] = 1)
     -- Sum of inputs equals the value represented by output bits
     ∧ fieldFromBits output = 
-        Fin.foldl n (fun sum (k : Fin n) => 
-          sum + Fin.foldl ops (fun sum' (j : Fin ops) => 
-            sum' + input[j][k] * (2^k.val : F p)) (0 : F p)) (0 : F p)
+        Fin.foldl ops (fun sum (j : Fin ops) => 
+          sum + fieldFromBits input[j]) (0 : F p)
   
   soundness := by
     sorry
