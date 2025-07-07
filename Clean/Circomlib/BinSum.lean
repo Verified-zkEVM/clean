@@ -6,6 +6,19 @@ namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
+-- Define a 2D vector type for BinSum inputs
+-- Represents ops operands, each with n bits
+-- This is a vector of ops elements, where each element is a vector of n field elements
+@[reducible]
+def BinSumInput (n ops : ℕ) := ProvableVector (fields n) ops
+
+-- Instance for NonEmptyProvableType for fields when n > 0
+instance {n : ℕ} [hn : Fact (0 < n)] : NonEmptyProvableType (fields n) where
+  size := n
+  toElements := id
+  fromElements := id
+  nonempty := hn.out
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/binsum.circom
@@ -61,7 +74,7 @@ template BinSum(n, ops) {
 -/
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def main (n ops : ℕ) (inp : Vector (Vector (Expression (F p)) n) ops) := do
+def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) := do
   let nout := nbits ((2^n - 1) * ops)
   
   -- Calculate input linear sum
@@ -88,18 +101,9 @@ def main (n ops : ℕ) (inp : Vector (Vector (Expression (F p)) n) ops) := do
 
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def circuit (n ops : ℕ) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) : 
-  GeneralFormalCircuit (F p) (fields (n * ops)) (fields (nbits ((2^n - 1) * ops))) where
-  main input := do
-    -- Reshape the flat input vector into a 2D structure  
-    -- input : Var (fields (n * ops)) (F p) = Vector (Expression (F p)) (n * ops)
-    let inp : Vector (Vector (Expression (F p)) n) ops := 
-      Vector.mapRange ops fun j => 
-        Vector.mapRange n fun k => 
-          -- The element at position (j,k) is at index j*n + k in the flat array
-          -- We use the ! notation for simplicity, assuming the index is valid
-          input[j * n + k]!
-    main n ops inp
+def circuit (n ops : ℕ) [hn : Fact (0 < n)] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) : 
+  GeneralFormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
+  main input := main n ops input
   
   localLength _ := nbits ((2^n - 1) * ops)
   localLength_eq := by simp [circuit_norm, main]
@@ -114,22 +118,20 @@ def circuit (n ops : ℕ) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
   
   Assumptions input := 
-    -- We need n > 0 to ensure indices are valid
-    n > 0 ∧ 
     -- All inputs are binary
-    ∀ i (hi : i < n * ops), input[i] = 0 ∨ input[i] = 1
+    ∀ j k (hj : j < ops) (hk : k < n), input[j][k] = 0 ∨ input[j][k] = 1
   
   Spec input output := 
     let nout := nbits ((2^n - 1) * ops)
-    n > 0 →
     -- All inputs are binary
-    (∀ i (hi : i < n * ops), input[i] = 0 ∨ input[i] = 1)
+    (∀ j k (hj : j < ops) (hk : k < n), input[j][k] = 0 ∨ input[j][k] = 1)
     -- All outputs are binary
     ∧ (∀ i (hi : i < nout), output[i] = 0 ∨ output[i] = 1)
     -- Sum of inputs equals the value represented by output bits
     ∧ fieldFromBits output = 
-        Fin.foldl (n * ops) (fun sum (i : Fin (n * ops)) => 
-          sum + input[i] * (2^(i.val % n) : F p)) (0 : F p)
+        Fin.foldl n (fun sum (k : Fin n) => 
+          sum + Fin.foldl ops (fun sum' (j : Fin ops) => 
+            sum' + input[j][k] * (2^k.val : F p)) (0 : F p)) (0 : F p)
   
   soundness := by
     sorry
