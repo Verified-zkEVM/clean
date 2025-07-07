@@ -3,6 +3,15 @@ import Clean.Utils.Field
 
 namespace Circomlib
 open Circuit
+
+-- Add missing NonEmptyProvableType instance for ProvablePair
+instance {α β: TypeMap} [NonEmptyProvableType α] [NonEmptyProvableType β] : 
+  NonEmptyProvableType (ProvablePair α β) where
+  nonempty := by 
+    simp only [ProvablePair.instance, size]
+    have h1 := NonEmptyProvableType.nonempty (M := α)
+    have h2 := NonEmptyProvableType.nonempty (M := β)
+    omega
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 /-
@@ -22,24 +31,23 @@ template MultiMux1(n) {
     }
 }
 -/
-def main (n: ℕ) [NeZero n] (input : Var (ProvablePair (fields (n * 2)) field) (F p)) := do
-  -- Extract flat array and selector from input
-  let c_flat := input.1 
+def main (n: ℕ) [NeZero n] (input : Var (ProvablePair (ProvableVector (ProvablePair field field) n) field) (F p)) := do
+  -- Extract vector of pairs and selector
+  let c := input.1
   let s := input.2
-  -- Reshape flat array into n x 2 matrix
-  let c := Vector.ofFn fun i : Fin n => 
-    Vector.ofFn fun j : Fin 2 => 
-      c_flat[i.val * 2 + j.val]
   
   -- Create output vector where each element is witnessed and constrained
   -- Note: We assume n > 0 (enforced by NeZero instance)
   let out ← Circuit.mapFinRange n fun i => do
-    let out_i <== (c[i][1] - c[i][0]) * s + c[i][0]
+    let c_i := c[i]
+    let c0 : Expression (F p) := c_i.1
+    let c1 : Expression (F p) := c_i.2
+    let out_i <== (c1 - c0) * s + c0
     return out_i
   return out
 
 -- Note: This circuit requires n > 0. In practice, a 0-output multiplexer doesn't make sense.
-def circuit (n : ℕ) [NeZero n] : FormalCircuit (F p) (ProvablePair (fields (n * 2)) field) (fields n) where
+def circuit (n : ℕ) [NeZero n] : FormalCircuit (F p) (ProvablePair (ProvableVector (ProvablePair field field) n) field) (fields n) where
   main := main n
   
   localLength _ := n
@@ -54,7 +62,7 @@ def circuit (n : ℕ) [NeZero n] : FormalCircuit (F p) (ProvablePair (fields (n 
     let ⟨c, s⟩ := input
     (s = 0 ∨ s = 1) ∧
     ∀ i (_ : i < n), 
-      output[i] = if s = 0 then c[i * 2] else c[i * 2 + 1]
+      output[i] = if s = 0 then (c[i]).1 else (c[i]).2
   
   soundness := by
     simp only [circuit_norm, main, MultiMux1.main]
@@ -90,8 +98,13 @@ def main (input : Var (ProvablePair (fields 2) field) (F p)) := do
   let c := input.1
   let s := input.2
   
-  -- Create input for MultiMux1 by reshaping
-  let mux_input : Var (ProvablePair (fields 2) field) (F p) := (c, s)
+  -- Create input for MultiMux1 by converting to vector of pairs
+  let c_pairs : Var (ProvableVector (ProvablePair field field) 1) (F p) := 
+    Vector.ofFn fun _ : Fin 1 => (c[0], c[1])
+  
+  -- Create combined input for MultiMux1
+  let mux_input : Var (ProvablePair (ProvableVector (ProvablePair field field) 1) field) (F p) := 
+    (c_pairs, s)
   
   -- Call MultiMux1 with n=1
   let mux_out ← MultiMux1.main 1 mux_input
