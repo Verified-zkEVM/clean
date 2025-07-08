@@ -40,7 +40,6 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
     (c1 - c0) * s + c0
   return out
 
--- Note: This circuit requires n > 0. In practice, a 0-output multiplexer doesn't make sense.
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
