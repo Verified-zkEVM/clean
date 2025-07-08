@@ -50,7 +50,7 @@ theorem xor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
   · simp only [hx0, zero_mul, mul_zero, sub_zero, zero_add, add_zero, IsBool]
     exact hy
   · rcases hy with hy0 | hy1
-    · simp only [hx1, hy0, one_mul, mul_zero, sub_zero, add_zero, IsBool]; right; ring_nf
+    · simp only [hx1, hy0, one_mul, mul_zero, sub_zero, add_zero, IsBool]; tauto
     · left
       simp only [hx1, hy1, one_mul, mul_one, one_add_one_eq_two]
       ring
@@ -87,11 +87,11 @@ theorem not_is_bool {x : F p} (hx : IsBool x) :
 theorem nand_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
     IsBool (1 - x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, sub_zero, IsBool]; right; ring
+  · simp only [hx0, zero_mul, sub_zero, IsBool]; tauto
   · simp only [hx1, one_mul]
     rcases hy with hy0 | hy1
-    · simp only [hy0, mul_zero, sub_zero, IsBool]; right; ring
-    · simp only [hy1, mul_one, sub_self]; left; rfl
+    · simp only [hy0, mul_zero, sub_zero, IsBool]; tauto
+    · simp only [hy1, mul_one, sub_self]; tauto
 
 /-- If x and y are boolean, then NOR(x,y) is boolean -/
 theorem nor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
