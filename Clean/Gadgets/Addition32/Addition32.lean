@@ -44,11 +44,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rw [←elaborated.output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
   simp_all [circuit_norm, Spec, main, Addition32Full.circuit, subcircuit_norm,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
+  obtain ⟨h1, h2, h3, h4⟩ := h (by left; rfl)
+  exact ⟨h1, h3⟩
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated, subcircuit_norm,
-  Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
+  Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, Clean.IsBool]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
   Assumptions

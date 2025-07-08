@@ -56,11 +56,9 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by 
-    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit]
-    simp [Clean.IsBool]
+    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit, Clean.IsBool]
   completeness := by 
-    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit]
-    simp [Clean.IsBool]
+    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit, Clean.IsBool]
 
 end Addition8
 end Gadgets

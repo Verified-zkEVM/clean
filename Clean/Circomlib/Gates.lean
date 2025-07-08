@@ -43,8 +43,13 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp [h_a, h_b]; ring
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b
+      · simp only [h_a, h_b, ZMod.val_zero]; norm_num
+      · simp only [h_a, h_b, ZMod.val_zero, ZMod.val_one, zero_mul, mul_zero, 
+                   zero_add, add_zero, neg_zero]; norm_num
+      · simp only [h_a, h_b, ZMod.val_zero, ZMod.val_one, zero_mul, mul_zero, mul_one,
+                   zero_add, add_zero, neg_zero]; norm_num
+      · simp only [h_a, h_b]; ring_nf; simp only [ZMod.val_zero]; norm_num
     · convert Clean.IsBool.xor_is_bool h_a h_b using 1
       ring
 
@@ -166,7 +171,8 @@ def circuit : FormalCircuit (F p) field field where
     simp_all only [h_hold]
     constructor
     · rcases h_in with h_in | h_in <;>
-        simp [h_in, ZMod.val_one]; ring
+        simp only [h_in, ZMod.val_zero, ZMod.val_one, zero_mul, mul_zero, mul_one, 
+                   add_zero, sub_zero, neg_zero, one_add_one_eq_two]; norm_num
     · convert Clean.IsBool.not_is_bool h_in using 1
       ring
 
@@ -249,8 +255,11 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp [h_a, h_b, ZMod.val_one]
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b
+      · simp only [h_a, h_b]; ring_nf; simp only [ZMod.val_one]; norm_num
+      · simp only [h_a, h_b]; ring_nf; simp only [ZMod.val_zero, ZMod.val_one]; norm_num
+      · simp only [h_a, h_b]; ring_nf; simp only [ZMod.val_zero, ZMod.val_one]; norm_num
+      · simp only [h_a, h_b]; ring_nf; simp only [ZMod.val_zero, ZMod.val_one]; norm_num
     · convert Clean.IsBool.nor_is_bool h_a h_b using 1
       ring
 
