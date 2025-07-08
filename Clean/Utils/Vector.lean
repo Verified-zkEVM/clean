@@ -75,7 +75,6 @@ def inductPush {motive : {n: ℕ} → Vector α n → Sort u}
     cast (by subst h; rfl) nil
   | ⟨ .mk (a::as), h ⟩ =>
     have hlen : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
-    let v : Vector α (as.length + 1) := ⟨.mk (a :: as), rfl⟩
     let ⟨ as', a', is_push ⟩ := toPush ⟨.mk (a :: as), rfl⟩
     cast (by subst hlen; rw [is_push]) (push as' a' (inductPush nil push as'))
 
