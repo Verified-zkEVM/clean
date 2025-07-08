@@ -1,4 +1,5 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
+import Clean.Gadgets.Boolean
 
 namespace Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -16,7 +17,7 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
   output _ i0 := var ⟨i0⟩
 
   Assumptions := fun { x, y, carryIn } =>
-    x.val < 256 ∧ y.val < 256 ∧ (carryIn = 0 ∨ carryIn = 1)
+    x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
   Spec := fun { x, y, carryIn } z =>
     z.val = (x.val + y.val + carryIn.val) % 256
@@ -54,8 +55,10 @@ def circuit : FormalCircuit (F p) Inputs field where
   Spec | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
-  soundness := by simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit]
-  completeness := by simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit]
+  soundness := by 
+    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit, IsBool]
+  completeness := by 
+    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit, IsBool]
 
 end Addition8
 end Gadgets
