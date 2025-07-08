@@ -12,9 +12,9 @@ def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 def len (_: Vector α n) : ℕ := n
 
-/-- Membership in Vector.toList: if x ∈ v.toList, then x = v.get i for some i -/
+/-- Membership in Vector.toList: if x ∈ v.toList, then x = v[i] for some i -/
 theorem mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
-    x ∈ v.toList ↔ ∃ i : Fin n, x = v.get i := by
+    x ∈ v.toList ↔ ∃ i : Fin n, x = v[i] := by
   constructor
   · intro h_mem
     -- x ∈ v.toList means there exists an index where v.toList[index] = x
@@ -33,16 +33,16 @@ theorem mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
     rw [h_list_len, h_len] at hi
     -- Now we can use i < n
     use ⟨i, hi⟩
-    -- Show x = v.get ⟨i, hi⟩
+    -- Show x = v[⟨i, hi⟩]
     rw [← h_eq]
-    -- v.toList[i] = v.get ⟨i, hi⟩
+    -- v.toList[i] = v[⟨i, hi⟩]
     -- Both access the same element from the underlying array
-    simp only [Vector.get]
+    simp only [getElem]
     -- Now we need to show v.toList[i] = v.toArray[⟨i, hi⟩]
     rfl
   · intro ⟨i, h_eq⟩
     rw [h_eq]
-    -- Show v.get i ∈ v.toList
+    -- Show v[i] ∈ v.toList
     rw [List.mem_iff_getElem]
     use i.val
     have h_bound : i.val < v.toList.length := by
@@ -56,13 +56,13 @@ theorem mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
       rw [h_list_len, h_len]
       exact i.isLt
     use h_bound
-    -- Now show v.toList[i.val] = v.get i
-    simp only [Vector.get]
+    -- Now show v.toList[i.val] = v[i]
+    simp only [getElem]
     rfl
 
--- Helper lemma: A vector of length 1 has toList = [v.get 0]
+-- Helper lemma: A vector of length 1 has toList = [v[0]]
 theorem toList_length_one {α : Type} (v : Vector α 1) :
-    v.toList = [v.get 0] := by
+    v.toList = [v[0]] := by
   -- Try using cases on the vector
   cases v using Vector.casesOn with
   | mk arr h =>
@@ -81,9 +81,9 @@ theorem toList_length_one {α : Type} (v : Vector α 1) :
           rfl
         | _ :: _ :: _ => simp [List.length] at h
 
--- Helper lemma: A vector of length 2 has toList = [v.get 0, v.get 1]
+-- Helper lemma: A vector of length 2 has toList = [v[0], v[1]]
 theorem toList_length_two {α : Type} (v : Vector α 2) :
-    v.toList = [v.get 0, v.get 1] := by
+    v.toList = [v[0], v[1]] := by
   -- Use the same approach as for length 1
   cases v using Vector.casesOn with
   | mk arr h =>
