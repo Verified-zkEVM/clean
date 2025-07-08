@@ -23,11 +23,13 @@ instance : HAdd (field (Expression (F p))) (field (Expression (F p))) (field (Ex
     let b : Expression (F p) := b
     a + b
 
-instance : HasAssignEq (Vector (field (Expression (F p))) n) F where
-  assignEq out vals := do
-    let out : Vector (Expression (F p)) n := out
+instance {n : ℕ} : HasAssignEq (Vector (field (Expression (F p))) n) (F p) where
+  assignEq vals := do
     let vals : Vector (Expression (F p)) n := vals
-    out <== vals
+    vals.mapM fun v => do
+      let witness ← witnessField fun env => v.eval env
+      witness === v
+      return witness
 
 /-
 Original source code:
@@ -71,7 +73,6 @@ def circuit (n : ℕ) [NeZero n] : FormalCircuit (F p) (ProvablePair (ProvableVe
 
   Spec input output :=
     let ⟨c, s⟩ := input
-    (s = 0 ∨ s = 1) ∧
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
@@ -109,16 +110,8 @@ def main (input : Var (ProvablePair (fields 2) field) (F p)) := do
   let c := input.1
   let s := input.2
 
-  -- Create input for MultiMux1 by converting to vector of pairs
-  let c_pairs : Var (ProvableVector (ProvablePair field field) 1) (F p) :=
-    Vector.ofFn fun _ : Fin 1 => (c[0], c[1])
-
-  -- Create combined input for MultiMux1
-  let mux_input : Var (ProvablePair (ProvableVector (ProvablePair field field) 1) field) (F p) :=
-    (c_pairs, s)
-
   -- Call MultiMux1 with n=1
-  let mux_out ← MultiMux1.main 1 mux_input
+  let mux_out ← subcircuit (MultiMux1.circuit 1) (#v[(c[0], c[1])], s)
 
   -- Extract single output
   return mux_out[0]
@@ -136,7 +129,6 @@ def circuit : FormalCircuit (F p) (ProvablePair (fields 2) field) field where
 
   Spec input output :=
     let ⟨c, s⟩ := input
-    (s = 0 ∨ s = 1) ∧
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
