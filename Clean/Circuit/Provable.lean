@@ -134,28 +134,6 @@ instance : ProvableType unit where
 
 @[reducible] def fieldVar (F : Type) := field (Expression F)
 
--- Instances for arithmetic operations on field expressions
--- Since field is defined as id, field (Expression F) = Expression F
-variable {F : Type} [Field F]
-
-instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hSub a b :=
-    let a : Expression F := a
-    let b : Expression F := b
-    a - b
-
-instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hMul a b :=
-    let a : Expression F := a
-    let b : Expression F := b
-    a * b
-
-instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) where
-  hAdd a b :=
-    let a : Expression F := a
-    let b : Expression F := b
-    a + b
-
 @[circuit_norm]
 instance : ProvableType field where
   size := 1
@@ -542,9 +520,9 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
   toElements_fromElements v := by
     simp [ProvableType.toElements_fromElements, Vector.cast]
 
-instance {α β: TypeMap} [NonEmptyProvableType α] [NonEmptyProvableType β] : 
+instance {α β: TypeMap} [NonEmptyProvableType α] [NonEmptyProvableType β] :
   NonEmptyProvableType (ProvablePair α β) where
-  nonempty := by 
+  nonempty := by
     simp only [ProvablePair.instance, size]
     have h1 := NonEmptyProvableType.nonempty (M := α)
     have h2 := NonEmptyProvableType.nonempty (M := β)
@@ -578,11 +556,15 @@ instance : HAdd (field (Expression F)) (Expression F) (Expression F) where
   hAdd (x : Expression F) y := x + y
 instance : HAdd (Expression F) (field (Expression F)) (Expression F) where
   hAdd x (y : Expression F) := x + y
+instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hAdd (a : Expression F) (b : Expression F) := a + b
 
 instance : HSub (field (Expression F)) (Expression F) (Expression F) where
   hSub (x : Expression F) y := x - y
 instance : HSub (Expression F) (field (Expression F)) (Expression F) where
   hSub x (y : Expression F) := x - y
+instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hSub (a : Expression F) (b : Expression F) := a - b
 
 instance : HMul (field (Expression F)) (Expression F) (Expression F) where
   hMul (x : Expression F) y := x * y
@@ -592,6 +574,11 @@ instance : HMul F (field (Expression F)) (field (Expression F)) where
   hMul x y : Expression F := x * y
 instance : HMul (field (Expression F)) F (field (Expression F)) where
   hMul x y : Expression F := x * y
+instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hMul (a : Expression F) (b : Expression F) := a * b
+
+instance : Inv (field F) where
+  inv (x : F) : F := x⁻¹
 
 instance {n: ℕ} [OfNat F n] : OfNat (field F) n where
   ofNat : F := OfNat.ofNat n

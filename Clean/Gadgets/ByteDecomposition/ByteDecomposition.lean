@@ -10,8 +10,8 @@ namespace Gadgets.ByteDecomposition
 open FieldUtils (mod floorDiv two_lt two_pow_lt two_val two_pow_val)
 
 structure Outputs (F : Type) where
-  low : field F
-  high : field F
+  low : F
+  high : F
 
 instance : ProvableStruct Outputs where
   components := [field, field]
@@ -30,7 +30,7 @@ def main (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) (Var Outputs (
   lookup ByteTable ((2^(8 - offset.val) : F p) * low)
   lookup ByteTable high
 
-  x.assertEquals (low + high * (2^offset.val : F p))
+  x === low + high * (2^offset.val : F p)
 
   return { low, high }
 

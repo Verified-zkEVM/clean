@@ -126,8 +126,6 @@ def ProvableType.witness {α: TypeMap} [ProvableType α] (compute : Environment 
     let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> toElements)])
 
-export ProvableType (witness)
-
 @[circuit_norm]
 def ProvableVector.witness {α: TypeMap} [NonEmptyProvableType α] (m: ℕ)
     (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
@@ -397,6 +395,29 @@ end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
 
+-- general `witness` method
+
+class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
+  witness : ((Environment F) → value F) → Circuit F (var F)
+  var_eq : var F = value (Expression F) := by rfl
+  witness_eq (compute : Environment F → value F) :
+    witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
+
+export Witnessable (witness)
+
+instance : Witnessable F field Expression where
+  witness := witnessField
+
+instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
+  witness := witnessVector m
+
+instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
+  witness := ProvableType.witness
+
+instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
+    Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
+  witness := ProvableVector.witness m
+
 -- witness generation
 
 def Environment.fromList (witnesses: List F) : Environment F :=
@@ -488,8 +509,8 @@ macro_rules
 
 example :
   let add (x : Expression F) := do
-    let y : fieldVar F ← witness fun _ => 1
-    let z : fieldVar F ← witness fun eval => eval (x + y)
+    let y : Expression F ← witness fun _ => 1
+    let z ← witness fun eval => eval (x + y)
     assertZero (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length

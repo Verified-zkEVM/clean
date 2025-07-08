@@ -12,6 +12,30 @@ theorem funext_heq {α α' β : Type} (h : α = α') {f : α → β} {g : α' �
   funext x
   exact hfg x
 
+theorem cast_apply {α β β' : Type} (h : β = β') (f : α → β) (x : α) :
+    (cast (h ▸ rfl) f : α → β') x = cast (h ▸ rfl) (f x) := by
+  subst h; rfl
+
+theorem cast_apply' {α α' β : Type} (h : α = α') (f : α → β) (x : α') :
+    (cast (h ▸ rfl) f : α' → β) x = f (cast (h ▸ rfl) x : α) := by
+  subst h; rfl
+
+theorem cast_fst {α α' β : Type} (h : α = α') (p : α × β) :
+    (cast h p.1 : α') = (cast (h ▸ rfl) p : α' × β).1 := by
+  subst h; rfl
+
+theorem cast_snd {α β β' : Type} (h : β = β') (p : α × β) :
+    (cast h p.2 : β') = (cast (h ▸ rfl) p : α × β').2 := by
+  subst h; rfl
+
+theorem fst_cast {α β β' : Type} (h : β = β') (p : α × β) :
+    (cast (h ▸ rfl) p : α × β').1 = p.1 := by
+  subst h; rfl
+
+theorem snd_cast {α α' β : Type} (h : α = α') (p : α × β) :
+    (cast (h ▸ rfl) p : α' × β).2 = p.2 := by
+  subst h; rfl
+
 theorem Fin.foldl_const_succ (n : ℕ) (f : Fin (n + 1) → α) (init : α) :
     Fin.foldl (n + 1) (fun _ i => f i) init = f n := by
   induction n generalizing init with
