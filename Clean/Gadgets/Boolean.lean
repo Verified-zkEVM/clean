@@ -29,25 +29,10 @@ theorem mul_self {α : Type*} [MulZeroOneClass α] {x : α} (h : IsBool x) : x *
   · rw [h0]; simp only [mul_zero]
   · rw [h1]; simp only [mul_one]
 
-/-- If x is boolean, then x * (x - 1) = 0 -/
-theorem mul_sub_one {α : Type*} [Ring α] {x : α} (h : IsBool x) : x * (x - 1) = 0 := by
-  rcases h with h0 | h1
-  · rw [h0]; simp only [zero_mul]
-  · rw [h1]; simp only [sub_self, mul_zero]
-
 /-- x is boolean iff x * (x - 1) = 0 -/
 theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} :
     IsBool x ↔ x * (x - 1) = 0 := by
-  constructor
-  · exact mul_sub_one
-  · intro h
-    have : x = 0 ∨ x - 1 = 0 := by
-      rw [mul_eq_zero] at h
-      exact h
-    rcases this with h0 | h1
-    · left; exact h0
-    · right
-      exact sub_eq_zero.mp h1
+  rw [mul_eq_zero, sub_eq_zero, IsBool]
 
 /-- For natural numbers, if x is boolean then x < 2 -/
 theorem nat_lt_two {x : ℕ} (h : IsBool x) : x < 2 := by
