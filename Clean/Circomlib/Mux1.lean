@@ -111,7 +111,7 @@ def main (input : Var (ProvablePair (fields 2) field) (F p)) := do
   let s := input.2
 
   -- Call MultiMux1 with n=1
-  let mux_out ← subcircuit (MultiMux1.circuit 1) (#v[(c[0], c[1])], s)
+  let mux_out ← MultiMux1.circuit 1 (#v[(c[0], c[1])], s)
 
   -- Extract single output
   return mux_out[0]
