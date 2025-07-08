@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
+import Clean.Utils.Bool
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -19,17 +20,17 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
   coe x := x.var
 
 theorem equiv : ∀ {x: F p},
-    x * (x + -1) = 0 ↔ x = 0 ∨ x = 1 := by
-  intro x; rw [mul_eq_zero, add_neg_eq_zero]
+    x * (x + -1) = 0 ↔ Clean.IsBool x := by
+  intro x; rw [mul_eq_zero, add_neg_eq_zero, Clean.IsBool]
 
 /--
-Asserts that x = 0 ∨ x = 1 by adding the constraint x * (x - 1) = 0
+Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
 @[circuit_norm]
 def assertBool : FormalAssertion (F p) field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
   Assumptions _ := True
-  Spec (x : F p) := x = 0 ∨ x = 1
+  Spec (x : F p) := Clean.IsBool x
 
   soundness := by simp_all only [circuit_norm, equiv]
   completeness := by simp_all only [circuit_norm, equiv]
