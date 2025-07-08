@@ -5,6 +5,30 @@ namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
+instance : HSub (field (Expression (F p))) (field (Expression (F p))) (field (Expression (F p))) where
+  hSub a b :=
+    let a : Expression (F p) := a
+    let b : Expression (F p) := b
+    a - b
+
+instance : HMul (field (Expression (F p))) (field (Expression (F p))) (field (Expression (F p))) where
+  hMul a b :=
+    let a : Expression (F p) := a
+    let b : Expression (F p) := b
+    a * b
+
+instance : HAdd (field (Expression (F p))) (field (Expression (F p))) (field (Expression (F p))) where
+  hAdd a b :=
+    let a : Expression (F p) := a
+    let b : Expression (F p) := b
+    a + b
+
+instance : HasAssignEq (Vector (field (Expression (F p))) n) F where
+  assignEq out vals := do
+    let out : Vector (Expression (F p)) n := out
+    let vals : Vector (Expression (F p)) n := vals
+    out <== vals
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/mux1.circom
@@ -26,39 +50,35 @@ def main (n: ℕ) [NeZero n] (input : Var (ProvablePair (ProvableVector (Provabl
   -- Extract vector of pairs and selector
   let c := input.1
   let s := input.2
-  
+
   -- Create output vector where each element is witnessed and constrained
   -- Note: We assume n > 0 (enforced by NeZero instance)
-  let out ← Circuit.mapFinRange n fun i => do
-    let c_i := c[i]
-    let c0 : Expression (F p) := c_i.1
-    let c1 : Expression (F p) := c_i.2
-    let out_i <== (c1 - c0) * s + c0
-    return out_i
+  let out <== c.map fun (c0, c1) =>
+    (c1 - c0) * s + c0
   return out
 
 -- Note: This circuit requires n > 0. In practice, a 0-output multiplexer doesn't make sense.
 def circuit (n : ℕ) [NeZero n] : FormalCircuit (F p) (ProvablePair (ProvableVector (ProvablePair field field) n) field) (fields n) where
   main := main n
-  
+
   localLength _ := n
   localLength_eq := by sorry -- TODO: prove
   subcircuitsConsistent := by sorry -- TODO: prove
-  
-  Assumptions input := 
+
+  Assumptions input :=
     let ⟨c, s⟩ := input
     s = 0 ∨ s = 1
-  
+
   Spec input output :=
     let ⟨c, s⟩ := input
     (s = 0 ∨ s = 1) ∧
-    ∀ i (_ : i < n), 
+    ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
-  
+
   soundness := by
     simp only [circuit_norm, main, MultiMux1.main]
     sorry -- TODO: prove soundness
-  
+
   completeness := by
     simp only [circuit_norm, main, MultiMux1.main]
     sorry -- TODO: prove completeness
@@ -88,41 +108,41 @@ def main (input : Var (ProvablePair (fields 2) field) (F p)) := do
   -- Extract inputs
   let c := input.1
   let s := input.2
-  
+
   -- Create input for MultiMux1 by converting to vector of pairs
-  let c_pairs : Var (ProvableVector (ProvablePair field field) 1) (F p) := 
+  let c_pairs : Var (ProvableVector (ProvablePair field field) 1) (F p) :=
     Vector.ofFn fun _ : Fin 1 => (c[0], c[1])
-  
+
   -- Create combined input for MultiMux1
-  let mux_input : Var (ProvablePair (ProvableVector (ProvablePair field field) 1) field) (F p) := 
+  let mux_input : Var (ProvablePair (ProvableVector (ProvablePair field field) 1) field) (F p) :=
     (c_pairs, s)
-  
+
   -- Call MultiMux1 with n=1
   let mux_out ← MultiMux1.main 1 mux_input
-  
+
   -- Extract single output
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) (ProvablePair (fields 2) field) field where
   main := main
-  
+
   localLength _ := 1
-  localLength_eq := by sorry -- TODO: prove  
+  localLength_eq := by sorry -- TODO: prove
   subcircuitsConsistent := by sorry -- TODO: prove
-  
-  Assumptions input := 
+
+  Assumptions input :=
     let ⟨_, s⟩ := input
     s = 0 ∨ s = 1
-  
+
   Spec input output :=
     let ⟨c, s⟩ := input
     (s = 0 ∨ s = 1) ∧
     output = if s = 0 then c[0] else c[1]
-  
+
   soundness := by
     simp only [circuit_norm, main, MultiMux1.main]
     sorry
-  
+
   completeness := by
     simp only [circuit_norm, main, MultiMux1.main]
     sorry
