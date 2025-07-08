@@ -23,7 +23,7 @@ echo "Generating trace with $steps steps -> $output_path"
 cd "$CLEAN_ROOT" || exit 1
 
 # Run Lean with the trace generator using lake
-lake lean "$TESTS_DIR/TraceGen.lean" -- --run "$steps" "$TESTS_DIR/$output_path"
+lake lean "$TESTS_DIR/TraceGen.lean" -- --run "$TESTS_DIR/TraceGen.lean" "$steps" "$TESTS_DIR/$output_path"
 
 exit_code=$?
 cd "$TESTS_DIR" || exit 1

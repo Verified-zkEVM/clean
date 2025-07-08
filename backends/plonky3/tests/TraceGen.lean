@@ -9,8 +9,8 @@ open Tables.Fibonacci8Table
 
 -- Generate trace with specified steps and output path
 def generateTrace (steps : Nat) (output_path : String) : IO Unit := do
-  let fib_relation_babybear := fib_relation (p := p_babybear)
-  let init_row : RowType (F p_babybear) := { x := 0, y := 1 }
+  let fib_relation_babybear := fibRelation (p := pBabybear)
+  let init_row : RowType (F pBabybear) := { x := 0, y := 1 }
 
   let trace_data := witnesses fib_relation_babybear init_row steps
   let json_data := Lean.toJson trace_data
