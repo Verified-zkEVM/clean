@@ -521,10 +521,10 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
 
 -- Extract Assumptions and Spec outside the circuit
 def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
-  ∀ (i : ℕ) (h : i < n), (input[i] = 0 ∨ input[i] = 1)
+  ∀ (i : ℕ) (h : i < n), IsBool input[i]
 
 def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
-  output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
+  output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ IsBool output
 
 
 
@@ -576,7 +576,7 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment 
     is equivalent to ANDing the initial value with the fold starting from 1 -/
 lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
     (l : List (F p)) (init : ℕ) (h_init : init = 0 ∨ init = 1)
-    (h_binary : ∀ x ∈ l, x = 0 ∨ x = 1) :
+    (h_binary : ∀ x ∈ l, IsBool x) :
     List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) =
     init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
   -- Let's use the existing lemma List.and_foldl_eq_foldl_of_all_binary
@@ -647,7 +647,7 @@ lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
   rcases hx with ⟨y, hy, rfl⟩
   -- Use Vector.toList_binary_field to convert vector property to list property
   -- Convert Assumptions to the form needed by toList_binary_field
-  have h_vec_binary : ∀ i : Fin n, input[i] = 0 ∨ input[i] = 1 := by
+  have h_vec_binary : ∀ i : Fin n, IsBool input[i] := by
     intro i
     exact h_assumptions i.val i.isLt
   have h_toList_binary := Vector.toList_binary_field input h_vec_binary
@@ -765,8 +765,8 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp only [main, circuit_norm] at h_local_witnesses ⊢
 
-  have h_binary0 : input[0] = 0 ∨ input[0] = 1 := h_assumptions 0 (by norm_num)
-  have h_binary1 : input[1] = 0 ∨ input[1] = 1 := h_assumptions 1 (by norm_num)
+  have h_binary0 : IsBool input[0] := h_assumptions 0 (by norm_num)
+  have h_binary1 : IsBool input[1] := h_assumptions 1 (by norm_num)
 
   apply AND.circuit.completeness
   · exact h_local_witnesses
@@ -778,13 +778,13 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     · simp only [ProvableType.eval_fieldPair]
       have h_eval0 : env input_var[0] = input[0] :=
         eval_get_eq h_env 0
-      change env input_var[0] = 0 ∨ env input_var[0] = 1
+      change IsBool (env input_var[0])
       rw [h_eval0]
       exact h_binary0
     · simp only [ProvableType.eval_fieldPair]
       have h_eval1 : env input_var[1] = input[1] :=
         eval_get_eq h_env 1
-      change env input_var[1] = 0 ∨ env input_var[1] = 1
+      change IsBool (env input_var[1])
       rw [h_eval1]
       exact h_binary1
 
@@ -883,7 +883,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         have h_input2_vals_binary := map_val_binary input2 h_assumptions2
 
 
-        have h_input2_binary : ∀ x ∈ input2.toList, x = 0 ∨ x = 1 := by
+        have h_input2_binary : ∀ x ∈ input2.toList, IsBool x := by
           apply Vector.toList_binary_field
           intro i
           exact h_assumptions2 i.val i.isLt
@@ -901,7 +901,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (h_assumptions : Assumptions n input)
     (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
-    output = 0 ∨ output = 1 := by
+    IsBool output := by
   have h_soundness : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) := by
     apply Circuit.can_replace_soundness
     exact h_constraints
@@ -915,7 +915,7 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
     (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
     (h_completeness : Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
-    output = 0 ∨ output = 1 := by
+    IsBool output := by
   apply main_output_binary
   · assumption
   · assumption

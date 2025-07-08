@@ -1,6 +1,7 @@
 import Clean.Utils.Vector
 import Clean.Utils.Bitwise
 import Clean.Utils.Field
+import Clean.Gadgets.Boolean
 
 /-!
 # Binary Operations Utilities
@@ -95,11 +96,11 @@ theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n)
   rw [hi]
   exact h_vec i
 
-/-- Specialized version for F p where binary means = 0 or = 1 -/
+/-- Specialized version for F p where binary means IsBool -/
 theorem Vector.toList_binary_field {n : ℕ} (v : Vector (F p) n) :
-    (∀ i : Fin n, v[i] = 0 ∨ v[i] = 1) →
-    (∀ x ∈ v.toList, x = 0 ∨ x = 1) := 
-  Vector.toList_binary v (fun x => x = 0 ∨ x = 1)
+    (∀ i : Fin n, IsBool v[i]) →
+    (∀ x ∈ v.toList, IsBool x) := 
+  Vector.toList_binary v IsBool
 
 end VectorOperations
 
