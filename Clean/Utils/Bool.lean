@@ -106,6 +106,12 @@ theorem nor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
     · simp [hy0, IsBool]
     · simp [hy1, IsBool]
 
+/-- Compatibility: IsBool is equivalent to the disjunction -/
+theorem to_or {x : F p} : IsBool x → x = 0 ∨ x = 1 := id
+
+/-- Compatibility: the disjunction implies IsBool -/
+theorem of_or {x : F p} : x = 0 ∨ x = 1 → IsBool x := id
+
 end IsBool
 
 end Clean

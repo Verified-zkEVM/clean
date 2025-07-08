@@ -67,6 +67,7 @@ macro_rules
 example [Fact (p > 512)] (x y : F p) (hx: x.val < 256) (hy: y.val < 2) :
     (x + y * 256).val = x.val + y.val * 256 := by field_to_nat
 
+-- Note: This is now a compatibility theorem. Use Clean.IsBool.val_lt_two instead.
 theorem boolean_lt_2 {b : F p} (hb : b = 0 ∨ b = 1) : b.val < 2 := by
   rcases hb with h0 | h1
   · rw [h0]; simp

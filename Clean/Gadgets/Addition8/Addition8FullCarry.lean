@@ -2,6 +2,7 @@ import Clean.Circuit.LookupCircuit
 import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
+import Clean.Utils.Bool
 
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -81,13 +82,13 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    guard_hyp h_bool_carry: carry_out = 0 ∨ carry_out = 1
+    have h_bool_carry' : carry_out = 0 ∨ carry_out = 1 := Clean.IsBool.to_or h_bool_carry
 
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry h_add
+    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry' h_add
 
   completeness := by
    -- introductions
