@@ -19,10 +19,6 @@ def var (b: Boolean (F p)) := Expression.var b.1
 instance : Coe (Boolean (F p)) (Expression (F p)) where
   coe x := x.var
 
-theorem equiv : ∀ {x: F p},
-    x * (x + -1) = 0 ↔ Clean.IsBool x := by
-  intro x; rw [mul_eq_zero, add_neg_eq_zero, Clean.IsBool]
-
 /--
 Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
@@ -32,8 +28,18 @@ def assertBool : FormalAssertion (F p) field where
   Assumptions _ := True
   Spec (x : F p) := Clean.IsBool x
 
-  soundness := by simp_all only [circuit_norm, equiv]
-  completeness := by simp_all only [circuit_norm, equiv]
+  soundness := by 
+    simp_all only [circuit_norm]
+    intro env input_var input h_eval h_constraint
+    -- h_constraint : input * (input + -1) = 0
+    rw [mul_eq_zero, add_neg_eq_zero] at h_constraint
+    exact h_constraint
+  completeness := by 
+    simp_all only [circuit_norm]
+    intro env input_var input h_eval h_spec
+    -- h_spec : input = 0 ∨ input = 1
+    rw [mul_eq_zero, add_neg_eq_zero]
+    exact h_spec
 end Boolean
 
 export Boolean (assertBool)
