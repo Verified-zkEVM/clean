@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Field
+import Clean.Utils.Bool
 
 /-
 Original source code:
@@ -31,21 +32,21 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
+  Assumptions input := Clean.IsBool input.1 ∧ Clean.IsBool input.2
   Spec input output :=
     output.val = input.1.val ^^^ input.2.val
-    ∧ (output = 0 ∨ output = 1)
+    ∧ Clean.IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩ h_hold
-    all_goals {
-      simp only [circuit_norm, main] at h_env h_hold ⊢
-      rcases h_env with ⟨ _, _ ⟩
-      simp_all only [h_a, h_b, h_hold]
-      constructor
-      · ring_nf; simp
-      · ring_nf; simp
-    }
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env with ⟨ _, _ ⟩
+    simp_all only [h_hold]
+    constructor
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
+        simp [h_a, h_b]; ring
+    · convert Clean.IsBool.xor_is_bool h_a h_b using 1
+      ring
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -73,21 +74,20 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
+  Assumptions input := Clean.IsBool input.1 ∧ Clean.IsBool input.2
   Spec input output :=
     output.val = input.1.val &&& input.2.val
-    ∧ (output = 0 ∨ output = 1)
+    ∧ Clean.IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩ h_hold
-    all_goals {
-      simp only [circuit_norm, main] at h_env h_hold ⊢
-      rcases h_env with ⟨ _, _ ⟩
-      simp_all only [h_a, h_b, h_hold]
-      constructor
-      · ring_nf; simp
-      · ring_nf; simp
-    }
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env with ⟨ _, _ ⟩
+    simp_all only [h_hold]
+    constructor
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
+        simp [h_a, h_b]
+    · convert Clean.IsBool.and_is_bool h_a h_b using 1
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -115,21 +115,21 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
+  Assumptions input := Clean.IsBool input.1 ∧ Clean.IsBool input.2
   Spec input output :=
     output.val = input.1.val ||| input.2.val
-    ∧ (output = 0 ∨ output = 1)
+    ∧ Clean.IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩ h_hold
-    all_goals {
-      simp only [circuit_norm, main] at h_env h_hold ⊢
-      rcases h_env with ⟨ _, _ ⟩
-      simp_all only [h_a, h_b, h_hold]
-      constructor
-      · ring_nf; simp
-      · ring_nf; simp
-    }
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env with ⟨ _, _ ⟩
+    simp_all only [h_hold]
+    constructor
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
+        simp [h_a, h_b]
+    · convert Clean.IsBool.or_is_bool h_a h_b using 1
+      ring
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -155,20 +155,20 @@ def circuit : FormalCircuit (F p) field field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := (input = 0 ∨ input = 1)
+  Assumptions input := Clean.IsBool input
   Spec input output :=
     output.val = 1 - input.val
-    ∧ (output = 0 ∨ output = 1)
+    ∧ Clean.IsBool output
 
   soundness := by
-    rintro _ _ _ _ h_env (h_in | h_in) h_hold
-    all_goals {
-      simp only [circuit_norm, main] at h_env h_hold ⊢
-      simp_all only [h_in, h_hold]
-      constructor
-      · ring_nf; simp [ZMod.val_one]
-      · ring_nf; simp
-    }
+    rintro _ _ _ _ h_env h_in h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    simp_all only [h_hold]
+    constructor
+    · rcases h_in with h_in | h_in <;>
+        simp [h_in, ZMod.val_one]; ring
+    · convert Clean.IsBool.not_is_bool h_in using 1
+      ring
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -196,21 +196,21 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
+  Assumptions input := Clean.IsBool input.1 ∧ Clean.IsBool input.2
   Spec input output :=
     output.val = 1 - (input.1.val &&& input.2.val)
-    ∧ (output = 0 ∨ output = 1)
+    ∧ Clean.IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩ h_hold
-    all_goals {
-      simp only [circuit_norm, main] at h_env h_hold ⊢
-      rcases h_env with ⟨ _, _ ⟩
-      simp_all only [h_a, h_b, h_hold]
-      constructor
-      · ring_nf; simp [ZMod.val_one]
-      · ring_nf; simp
-    }
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env with ⟨ _, _ ⟩
+    simp_all only [h_hold]
+    constructor
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
+        simp [h_a, h_b, ZMod.val_one]
+    · convert Clean.IsBool.nand_is_bool h_a h_b using 1
+      ring
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -238,21 +238,21 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := (input.1 = 0 ∨ input.1 = 1) ∧ (input.2 = 0 ∨ input.2 = 1)
+  Assumptions input := Clean.IsBool input.1 ∧ Clean.IsBool input.2
   Spec input output :=
     output.val = 1 - (input.1.val ||| input.2.val)
-    ∧ (output = 0 ∨ output = 1)
+    ∧ Clean.IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ (h_a | h_a), (h_b | h_b) ⟩ h_hold
-    all_goals {
-      simp only [circuit_norm, main] at h_env h_hold ⊢
-      rcases h_env with ⟨ _, _ ⟩
-      simp_all only [h_a, h_b, h_hold]
-      constructor
-      · ring_nf; simp [ZMod.val_one]
-      · ring_nf; simp
-    }
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env with ⟨ _, _ ⟩
+    simp_all only [h_hold]
+    constructor
+    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
+        simp [h_a, h_b, ZMod.val_one]
+    · convert Clean.IsBool.nor_is_bool h_a h_b using 1
+      ring
 
   completeness := by
     simp_all only [circuit_norm, main]
