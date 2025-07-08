@@ -141,27 +141,27 @@ infix:50 " === " => HasAssertEq.assert_eq
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
 
 class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
-  assign_eq : β → Circuit F β
+  assignEq : β → Circuit F β
 
 instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
-  assign_eq := fun rhs => do
+  assignEq := fun rhs => do
     let witness ← witnessField fun env => rhs.eval env
     witness === rhs
     return witness
 
 instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
   HasAssignEq (α (Expression F)) F where
-  assign_eq := fun rhs => do
+  assignEq := fun rhs => do
     let witness ← ProvableType.witness fun env => eval env rhs
     witness === rhs
     return witness
 
-attribute [circuit_norm] HasAssignEq.assign_eq
+attribute [circuit_norm] HasAssignEq.assignEq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem
 syntax "let " ident " : " term " <== " term : doElem
 
 macro_rules
-  | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assign_eq $e)
-  | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assign_eq $e)
+  | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assignEq $e)
+  | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assignEq $e)
