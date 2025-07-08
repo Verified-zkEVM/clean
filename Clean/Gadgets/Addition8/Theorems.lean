@@ -1,4 +1,5 @@
 import Clean.Utils.Field
+import Clean.Utils.Bool
 
 namespace Gadgets.Addition8.Theorems
 variable {p : ℕ} [Fact p.Prime]
@@ -197,7 +198,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
     y.val < 256 ->
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floorDiv (x + y + carry_in) 256
-    carry_out = 0 ∨ carry_out = 1 := by
+    Clean.IsBool carry_out := by
   intro as_x as_y carry_in_bound
   dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
 

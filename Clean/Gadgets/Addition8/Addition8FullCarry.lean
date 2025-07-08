@@ -45,7 +45,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
-  x.val < 256 ∧ y.val < 256 ∧ (carryIn = 0 ∨ carryIn = 1)
+  x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carryIn
 
 def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
@@ -79,7 +79,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carry_in
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
     have h_bool_carry' : carry_out = 0 ∨ carry_out = 1 := Clean.IsBool.to_or h_bool_carry
@@ -88,7 +88,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry' h_add
+    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte (Clean.IsBool.to_or as_carry_in) h_bool_carry' h_add
 
   completeness := by
    -- introductions
@@ -106,10 +106,10 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     set carry_out := env.get (i0 + 1)
 
     -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carry_in
 
     let goal_byte := z.val < 256
-    let goal_bool := carry_out = 0 ∨ carry_out = 1
+    let goal_bool := Clean.IsBool carry_out
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show goal_byte ∧ goal_bool ∧ goal_add
 
@@ -120,7 +120,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
 
-    have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
+    have completeness2 : Clean.IsBool carry_out := by
       rw [hcarry_out]
       apply Addition8.Theorems.completeness_bool
       repeat assumption
