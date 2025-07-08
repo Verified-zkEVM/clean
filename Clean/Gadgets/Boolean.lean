@@ -30,18 +30,8 @@ def assertBool : FormalAssertion (F p) field where
   Assumptions _ := True
   Spec (x : F p) := IsBinary x
 
-  soundness := by 
-    simp_all only [circuit_norm]
-    intro env input_var input h_eval h_constraint
-    -- h_constraint : input * (input + -1) = 0
-    rw [mul_eq_zero, add_neg_eq_zero] at h_constraint
-    exact h_constraint
-  completeness := by 
-    simp_all only [circuit_norm]
-    intro env input_var input h_eval h_spec
-    -- h_spec : input = 0 ∨ input = 1
-    rw [mul_eq_zero, add_neg_eq_zero]
-    exact h_spec
+  soundness := by simp_all only [circuit_norm, IsBinary.iff_mul_sub_one, sub_eq_add_neg]
+  completeness := by simp_all only [circuit_norm, IsBinary.iff_mul_sub_one, sub_eq_add_neg]
 end Boolean
 
 export Boolean (assertBool)
