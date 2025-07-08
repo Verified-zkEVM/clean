@@ -33,3 +33,12 @@ theorem Fin.foldl_const (n : ℕ) (f : Fin n → α) (init : α) :
     | 0 => init
     | n + 1 => f n := by
   split <;> simp [foldl_const_succ]
+
+lemma Fin.foldl_eq_foldl_finRange (n : ℕ) (f : α → Fin n → α) (init : α) :
+    Fin.foldl n f init = (List.finRange n).foldl f init := by
+  induction n generalizing init with
+  | zero => rfl
+  | succ n ih =>
+    simp only [Fin.foldl_succ, List.finRange_succ, List.foldl_cons]
+    specialize ih (fun x i => f x i.succ) (f init 0)
+    rw [ih, List.foldl_map]

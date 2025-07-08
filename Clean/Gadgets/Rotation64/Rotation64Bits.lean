@@ -19,8 +19,8 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def rot64_bits (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let parts ← Circuit.map x.toLimbs (subcircuit (ByteDecomposition.circuit offset))
+def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+  let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
   let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
 
@@ -40,24 +40,24 @@ def output (offset : Fin 8) (i0 : Nat) : U64 (Expression (F p)) :=
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
 
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
-  main := rot64_bits off
+  main := main off
   localLength _ := 16
   output _ i0 := output off i0
   localLength_eq _ i0 := by
-    simp only [circuit_norm, rot64_bits, ByteDecomposition.circuit, ByteDecomposition.elaborated]
+    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
-    simp only [circuit_norm, rot64_bits, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
+    simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
   subcircuitsConsistent _ _ := by
-    simp +arith only [circuit_norm, rot64_bits,
+    simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
   -- simplify statements
-  dsimp only [circuit_norm, elaborated, rot64_bits,
+  dsimp only [circuit_norm, elaborated, main,
     ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
   simp only [Spec, circuit_norm, elaborated, subcircuit_norm,
     ByteDecomposition.Assumptions, ByteDecomposition.Spec] at h_holds ⊢
@@ -111,7 +111,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
-  simp only [rot64_bits, elaborated, circuit_norm, subcircuit_norm,
+  simp only [main, elaborated, circuit_norm, subcircuit_norm,
     ByteDecomposition.circuit, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions

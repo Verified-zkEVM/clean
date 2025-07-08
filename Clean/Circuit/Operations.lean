@@ -211,9 +211,9 @@ current operation as well as the current offset.
 -/
 structure Condition (F: Type) [Field F] where
   witness (offset: ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
-  assert (offset: ℕ) : Expression F → Prop := fun _ => True
-  lookup (offset: ℕ) : Lookup F → Prop := fun _ => True
-  subcircuit (offset: ℕ) : {m : ℕ} → Subcircuit F m → Prop := fun _ => True
+  assert (offset: ℕ) (_ : Expression F) : Prop := True
+  lookup (offset: ℕ) (_ : Lookup F) : Prop := True
+  subcircuit (offset: ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 @[circuit_norm]
 def Condition.apply (condition: Condition F) (offset: ℕ) : Operation F → Prop
@@ -286,7 +286,7 @@ where motive' : (ops: Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsis
 end Operations
 
 def Condition.ignoreSubcircuit (condition : Condition F) : Condition F :=
-  { condition with subcircuit := fun _ _ _ => True }
+  { condition with subcircuit _ _ _ := True }
 
 def Condition.applyFlat (condition: Condition F) (offset: ℕ) : FlatOperation F → Prop
   | .witness m c => condition.witness offset m c

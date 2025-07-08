@@ -18,14 +18,14 @@ instance : ProvableStruct Inputs where
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
-  let z0 ← subcircuit And8.circuit ⟨ x.x0, y.x0 ⟩
-  let z1 ← subcircuit And8.circuit ⟨ x.x1, y.x1 ⟩
-  let z2 ← subcircuit And8.circuit ⟨ x.x2, y.x2 ⟩
-  let z3 ← subcircuit And8.circuit ⟨ x.x3, y.x3 ⟩
-  let z4 ← subcircuit And8.circuit ⟨ x.x4, y.x4 ⟩
-  let z5 ← subcircuit And8.circuit ⟨ x.x5, y.x5 ⟩
-  let z6 ← subcircuit And8.circuit ⟨ x.x6, y.x6 ⟩
-  let z7 ← subcircuit And8.circuit ⟨ x.x7, y.x7 ⟩
+  let z0 ← And8.circuit ⟨ x.x0, y.x0 ⟩
+  let z1 ← And8.circuit ⟨ x.x1, y.x1 ⟩
+  let z2 ← And8.circuit ⟨ x.x2, y.x2 ⟩
+  let z3 ← And8.circuit ⟨ x.x3, y.x3 ⟩
+  let z4 ← And8.circuit ⟨ x.x4, y.x4 ⟩
+  let z5 ← And8.circuit ⟨ x.x5, y.x5 ⟩
+  let z6 ← And8.circuit ⟨ x.x6, y.x6 ⟩
+  let z7 ← And8.circuit ⟨ x.x7, y.x7 ⟩
   return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
 def Assumptions (input: Inputs (F p)) :=

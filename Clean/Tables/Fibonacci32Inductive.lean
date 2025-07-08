@@ -22,7 +22,7 @@ instance : ProvableStruct Row where
 
 def table : InductiveTable (F p) Row unit where
   step row _ := do
-    let z ← subcircuit Gadgets.Addition32.circuit { x := row.x, y := row.y }
+    let z ← Addition32.circuit { x := row.x, y := row.y }
     return { x := row.y, y := z }
 
   Spec i row _ _ : Prop :=

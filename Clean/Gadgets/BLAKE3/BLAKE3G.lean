@@ -24,37 +24,31 @@ instance : ProvableStruct Inputs where
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, x, y } := input
 
-  let state_a ← subcircuit (Addition32.circuit) ⟨
-    state[a],
-    ← subcircuit (Addition32.circuit) ⟨state[b], x⟩
-  ⟩
+  let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
 
-  let state_d ← subcircuit (Rotation32.circuit 16) <|
-    ← subcircuit (Xor32.circuit) ⟨state[d], state_a⟩
+  let state_d ← Rotation32.circuit 16 <|
+    ← Xor32.circuit ⟨state[d], state_a⟩
 
-  let state_c ← subcircuit (Addition32.circuit) ⟨state[c], state_d⟩
+  let state_c ← Addition32.circuit ⟨state[c], state_d⟩
 
-  let state_b ← subcircuit (Rotation32.circuit 12) <|
-    ← subcircuit (Xor32.circuit) ⟨state[b], state_c⟩
+  let state_b ← Rotation32.circuit 12 <|
+    ← Xor32.circuit ⟨state[b], state_c⟩
 
-  let state_a ← subcircuit (Addition32.circuit) ⟨
-    state_a,
-    ← subcircuit (Addition32.circuit) ⟨state_b, y⟩
-  ⟩
+  let state_a ← Addition32.circuit ⟨state_a, ← Addition32.circuit ⟨state_b, y⟩⟩
 
-  let state_d ← subcircuit (Rotation32.circuit 8) <|
-    ← subcircuit (Xor32.circuit) ⟨state_d, state_a⟩
+  let state_d ← Rotation32.circuit 8 <|
+    ← Xor32.circuit ⟨state_d, state_a⟩
 
-  let state_c ← subcircuit (Addition32.circuit) ⟨state_c, state_d⟩
+  let state_c ← Addition32.circuit ⟨state_c, state_d⟩
 
-  let state_b ← subcircuit (Rotation32.circuit 7) <|
-    ← subcircuit (Xor32.circuit) ⟨state_b, state_c⟩
+  let state_b ← Rotation32.circuit 7 <|
+    ← Xor32.circuit ⟨state_b, state_c⟩
 
-  let state := state.set a state_a
-                    |>.set b state_b
-                    |>.set c state_c
-                    |>.set d state_d
   return state
+    |>.set a state_a
+    |>.set b state_b
+    |>.set c state_c
+    |>.set d state_d
 
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d

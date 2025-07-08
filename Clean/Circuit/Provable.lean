@@ -134,6 +134,28 @@ instance : ProvableType unit where
 
 @[reducible] def fieldVar (F : Type) := field (Expression F)
 
+-- Instances for arithmetic operations on field expressions
+-- Since field is defined as id, field (Expression F) = Expression F
+variable {F : Type} [Field F]
+
+instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hSub a b :=
+    let a : Expression F := a
+    let b : Expression F := b
+    a - b
+
+instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hMul a b :=
+    let a : Expression F := a
+    let b : Expression F := b
+    a * b
+
+instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hAdd a b :=
+    let a : Expression F := a
+    let b : Expression F := b
+    a + b
+
 @[circuit_norm]
 instance : ProvableType field where
   size := 1
@@ -520,6 +542,14 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
   toElements_fromElements v := by
     simp [ProvableType.toElements_fromElements, Vector.cast]
 
+instance {α β: TypeMap} [NonEmptyProvableType α] [NonEmptyProvableType β] : 
+  NonEmptyProvableType (ProvablePair α β) where
+  nonempty := by 
+    simp only [ProvablePair.instance, size]
+    have h1 := NonEmptyProvableType.nonempty (M := α)
+    have h2 := NonEmptyProvableType.nonempty (M := β)
+    omega
+
 def ProvablePair.fromElements {α β: TypeMap} [ProvableType α] [ProvableType β] (xs : Vector F (size α + size β)) : α F × β F :=
   (ProvableType.fromElements xs : ProvablePair α β F)
 
@@ -574,3 +604,6 @@ instance [CoeTail ℕ F] : CoeTail ℕ (field F) where
   coe n : F := n
 instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
   coe n : F := n
+
+instance [DecidableEq F] : DecidableEq (field F) :=
+  inferInstanceAs (DecidableEq F)

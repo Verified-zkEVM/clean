@@ -9,6 +9,8 @@ instance (p : ℕ) [Fact p.Prime] : Fintype (F p) := ZMod.fintype p
 instance (p : ℕ) [Fact p.Prime] : Inhabited (F p) := ⟨0⟩
 instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
+instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
+
 namespace FieldUtils
 variable {p : ℕ} [p_prime: Fact p.Prime]
 
@@ -19,6 +21,9 @@ theorem p_ne_zero : p ≠ 0 := p_prime.elim.ne_zero
 theorem ext {x y : F p} (h : x.val = y.val) : x = y := by
   cases p; cases p_ne_zero rfl
   exact Fin.ext h
+
+theorem ext_iff {x y : F p} : x = y ↔ x.val = y.val := by
+  constructor; simp_all; apply ext
 
 theorem val_lt_p {p : ℕ} (x: ℕ) : (x < p) → (x : F p).val = x := by
   intro x_lt_p

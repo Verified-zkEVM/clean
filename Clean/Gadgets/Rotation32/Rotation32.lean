@@ -19,13 +19,13 @@ open Utils.Rotation (rotRight32_composition)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
-def rot32 (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
+def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let byte_offset : ℕ := offset.val / 8
   let bit_offset : ℕ := (offset % 8).val
 
   -- rotation is performed by combining a bit and a byte rotation
-  let byte_rotated ← subcircuit (Rotation32Bytes.circuit byte_offset) x
-  subcircuit (Rotation32Bits.circuit bit_offset) byte_rotated
+  let byte_rotated ← Rotation32Bytes.circuit byte_offset x
+  Rotation32Bits.circuit bit_offset byte_rotated
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 
@@ -39,14 +39,14 @@ def output (offset : Fin 32) (i0 : Nat) : U32 (Expression (F p)) :=
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
-  main := rot32 off
+  main := main off
   localLength _ := 8
   output _inputs i0 := output off i0
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
-  simp [circuit_norm, rot32, elaborated, U32.copy, subcircuit_norm,
+  simp [circuit_norm, main, elaborated, subcircuit_norm,
     Rotation32Bits.circuit, Rotation32Bits.elaborated] at h_holds
 
   -- abstract away intermediate U32
@@ -84,10 +84,10 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
 theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
-  simp [circuit_norm, rot32, elaborated, subcircuit_norm,
+  simp [circuit_norm, main, elaborated, subcircuit_norm,
     Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Assumptions,
     Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions]
-  simp [circuit_norm, elaborated, rot32, subcircuit_norm,
+  simp [circuit_norm, elaborated, main, subcircuit_norm,
     Rotation32Bytes.circuit, Rotation32Bytes.Assumptions, Rotation32Bytes.Spec] at h_env
 
   obtain ⟨h0, _⟩ := h_env

@@ -282,10 +282,21 @@ preconditions, and the spec acts as the postcondition.
 -/
 structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop
+  Assumptions (_ : Input F) : Prop := True
   Spec : Input F → Output F → Prop
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
+
+/--
+`DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
+This ensures that for any input satisfying the assumptions, the specification uniquely determines the output.
+Use this class when you want to formally guarantee that constraints uniquely determine the output,
+preventing ambiguity in deterministic circuits.
+-/
+structure DeterministicFormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableType Input] [ProvableType Output]
+    extends circuit : FormalCircuit F Input Output where
+  uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
+    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
 
 @[circuit_norm]
 def FormalAssertion.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
@@ -334,9 +345,9 @@ structure FormalAssertion (F: Type) (Input: TypeMap) [Field F] [ProvableType Inp
   completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
-  localLength := fun _ => 0
+  localLength _ := 0
   -- the output has to be unit
-  output := fun _ _ => ()
+  output _ _ := ()
 
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec: Input F → Output F → Prop) :=

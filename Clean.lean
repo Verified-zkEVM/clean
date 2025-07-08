@@ -1,4 +1,8 @@
-import Clean.Circuit.Foundations
+import Clean.Circuit
+import Clean.Circomlib.BinSum
+import Clean.Circomlib.Gates
+import Clean.Circomlib.Comparators
+import Clean.Circomlib.Mux1
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
@@ -9,3 +13,5 @@ import Clean.Tables.KeccakInductive
 import Clean.Gadgets.Bits
 import Clean.Gadgets.BLAKE3.BLAKE3G
 import Clean.Gadgets.BLAKE3.Permute
+import Clean.Gadgets.BLAKE3.FinalStateUpdate
+import Clean.Gadgets.BLAKE3.Round

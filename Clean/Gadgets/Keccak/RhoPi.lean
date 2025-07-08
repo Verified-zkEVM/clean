@@ -18,7 +18,7 @@ def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .map rhoPiConstants fun (i, s) =>
-    subcircuit (Rotation64.circuit (-s)) state[i.val]
+    Rotation64.circuit (-s) state[i.val]
 
 def Assumptions := KeccakState.Normalized (p:=p)
 

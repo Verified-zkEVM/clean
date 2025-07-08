@@ -34,7 +34,7 @@ instance : ProvableType RowType where
 def fibRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
   let next_x ← copyToVar curr.y
-  let next_y ← subcircuit Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
+  let next_y ← Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
   assignVar (.next 0) next_x
   assign (.next 1) next_y
 

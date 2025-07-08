@@ -117,13 +117,13 @@ end Gadgets
 
 @[circuit_norm]
 def assertEquals {F : Type} [Field F] {α : TypeMap} [ProvableType α]
-  (x y : α (Expression F)) : Circuit F Unit :=
-  assertion (Gadgets.Equality.circuit α) (x, y)
+    (x y : α (Expression F)) : Circuit F Unit :=
+  Gadgets.Equality.circuit α (x, y)
 
 @[circuit_norm, reducible]
 def Expression.assertEquals {F : Type} [Field F]
-  (x y : Expression F) : Circuit F Unit :=
-  assertion (Gadgets.Equality.circuit id) (x, y)
+    (x y : Expression F) : Circuit F Unit :=
+  Gadgets.Equality.circuit id (x, y)
 
 class HasAssertEq (β : Type) (F : outParam Type) [Field F] where
   assert_eq : β → β → Circuit F Unit
@@ -137,3 +137,38 @@ instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
 
 attribute [circuit_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq
+
+-- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
+
+class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
+  assignEq : β → Circuit F β
+
+instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
+  assignEq := fun rhs => do
+    let witness ← witnessField fun env => rhs.eval env
+    witness === rhs
+    return witness
+
+instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
+  HasAssignEq (α (Expression F)) F where
+  assignEq := fun rhs => do
+    let witness ← ProvableType.witness fun env => eval env rhs
+    witness === rhs
+    return witness
+
+instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) F where
+  assignEq vals := do
+    vals.mapM fun v => do
+      let witness ← witnessField fun env => v.eval env
+      witness === v
+      return witness
+
+attribute [circuit_norm] HasAssignEq.assignEq
+
+-- Custom syntax to allow `let var <== expr` without monadic arrow
+syntax "let " ident " <== " term : doElem
+syntax "let " ident " : " term " <== " term : doElem
+
+macro_rules
+  | `(doElem| let $x <== $e) => `(doElem| let $x ← HasAssignEq.assignEq $e)
+  | `(doElem| let $x : $t <== $e) => `(doElem| let $x : $t ← HasAssignEq.assignEq $e)

@@ -11,7 +11,7 @@ def main (n: ℕ) (x : Expression (F p)) := do
   let bits ← witnessVector n fun env => fieldToBits n (x.eval env)
 
   -- add boolean constraints on all bits
-  Circuit.forEach bits (assertion Boolean.circuit)
+  Circuit.forEach bits assertBool
 
   -- check that the bits correctly sum to `x`
   x === fieldFromBitsExpr bits
@@ -24,7 +24,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  localLength_eq _ _ := by simp only [main, circuit_norm, Boolean.circuit]; ac_rfl
+  localLength_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
@@ -35,7 +35,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
   soundness := by
     intro k eval x_var x h_input h_holds
-    simp only [main, circuit_norm, Boolean.circuit] at *
+    simp only [main, circuit_norm] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
     clear h_input
 
@@ -50,11 +50,11 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
     change x = eval (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt hn _ h_bits
+    use fieldFromBits_lt _ h_bits
 
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
-    simp only [main, circuit_norm, Boolean.circuit] at *
+    simp only [main, circuit_norm] at *
     simp only [h_input, circuit_norm, subcircuit_norm] at h_env ⊢
 
     constructor
@@ -71,14 +71,14 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
       exact h_env ⟨ i, hi ⟩
 
     show x = eval (fieldFromBitsExpr bit_vars)
-    rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits hn h_assumptions]
+    rw [fieldFromBits_eval bit_vars, h_bits_eq, fieldFromBits_fieldToBits h_assumptions]
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
 def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
-    let _ ← subcircuitWithAssertion (toBits n hn) x
+    let _ ← toBits n hn x
 
   localLength _ := n
 
@@ -88,4 +88,6 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   soundness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
   completeness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
 
-end Gadgets.ToBits
+end ToBits
+export ToBits (toBits)
+end Gadgets

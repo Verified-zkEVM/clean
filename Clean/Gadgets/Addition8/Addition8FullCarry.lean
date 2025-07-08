@@ -11,56 +11,56 @@ open ByteUtils (mod256 floorDiv256)
 structure Inputs (F : Type) where
   x: F
   y: F
-  carry_in: F
+  carryIn: F
 
 instance : ProvableStruct Inputs where
   components := [field, field, field]
-  toComponents := fun { x, y, carry_in } => .cons x (.cons y (.cons carry_in .nil))
-  fromComponents := fun (.cons x (.cons y (.cons carry_in .nil))) => { x, y, carry_in }
+  toComponents := fun { x, y, carryIn } => .cons x (.cons y (.cons carryIn .nil))
+  fromComponents := fun (.cons x (.cons y (.cons carryIn .nil))) => { x, y, carryIn }
 
 structure Outputs (F : Type) where
   z: F
-  carry_out: F
+  carryOut: F
 
 instance : ProvableStruct Outputs where
   components := [field, field]
-  toComponents := fun { z, carry_out } => .cons z (.cons carry_out .nil)
-  fromComponents := fun (.cons z (.cons carry_out .nil)) => { z, carry_out }
+  toComponents := fun { z, carryOut } => .cons z (.cons carryOut .nil)
+  fromComponents := fun (.cons z (.cons carryOut .nil)) => { z, carryOut }
 
-def add8_full_carry (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x, y, carry_in⟩ := input
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+  let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
-  let z ← witness fun eval => mod256 (eval (x + y + carry_in))
+  let z ← witness fun eval => mod256 (eval (x + y + carryIn))
   lookup ByteTable z
 
   -- witness the output carry
-  let carry_out ← witness fun eval => floorDiv256 (eval (x + y + carry_in))
-  assertion Boolean.circuit carry_out
+  let carryOut ← witness fun eval => floorDiv256 (eval (x + y + carryIn))
+  assertBool carryOut
 
-  assertZero (x + y + carry_in - z - carry_out * 256)
+  assertZero (x + y + carryIn - z - carryOut * 256)
 
-  return { z, carry_out }
+  return { z, carryOut }
 
 def Assumptions (input : Inputs (F p)) :=
-  let ⟨x, y, carry_in⟩ := input
-  x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+  let ⟨x, y, carryIn⟩ := input
+  x.val < 256 ∧ y.val < 256 ∧ (carryIn = 0 ∨ carryIn = 1)
 
 def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
-  let ⟨x, y, carry_in⟩ := input
-  out.z.val = (x.val + y.val + carry_in.val) % 256 ∧
-  out.carry_out.val = (x.val + y.val + carry_in.val) / 256
+  let ⟨x, y, carryIn⟩ := input
+  out.z.val = (x.val + y.val + carryIn.val) % 256 ∧
+  out.carryOut.val = (x.val + y.val + carryIn.val) / 256
 
 /--
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
-  main := add8_full_carry
+  main
   Assumptions
   Spec
   localLength _ := 2
-  output _ i0 := { z := var ⟨i0⟩, carry_out := var ⟨i0 + 1⟩ }
+  output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
   soundness := by
     -- introductions
@@ -71,8 +71,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, add8_full_carry,
-      ByteTable, Boolean.circuit]
+    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, main,
+      ByteTable]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
@@ -98,8 +98,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, add8_full_carry,
-      ByteTable, Boolean.circuit] at *
+    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, main,
+      ByteTable] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -136,7 +136,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, subcircuit_norm, circuit, add8_full_carry, Boolean.circuit,
+    simp_all only [circuit_norm, subcircuit_norm, circuit, main,
       Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 

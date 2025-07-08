@@ -6,9 +6,10 @@ variable {α β : Type} {n m : ℕ}
 
 open Vector (finRange)
 
-def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 namespace Vector
+def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
+
 def len (_: Vector α n) : ℕ := n
 
 def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
@@ -45,9 +46,9 @@ theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
 universe u
 
 def induct {motive : {n: ℕ} → Vector α n → Sort u}
-  (nil: motive #v[])
-  (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
-  {n: ℕ} (v: Vector α n) : motive v :=
+    (nil: motive #v[])
+    (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
+    {n: ℕ} (v: Vector α n) : motive v :=
   match v with
   | ⟨ .mk [], h ⟩ => by
     have : n = 0 := by rw [←h, List.length_eq_zero_iff]
@@ -191,6 +192,12 @@ theorem getElem_mapRange {n} {create: ℕ → α} :
     · have i_eq : n = i := by linarith
       subst i_eq
       rw [getElem_push_eq]
+
+theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
+  Vector.map f (Vector.mapRange n create) =
+    Vector.mapRange n (fun i => f (create i)) := by
+  rw [Vector.ext_iff]
+  simp [getElem_mapRange, getElem_map]
 
 theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
