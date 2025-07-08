@@ -49,10 +49,16 @@ theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} :
     · right
       exact sub_eq_zero.mp h1
 
+/-- For natural numbers, if x is boolean then x < 2 -/
+theorem nat_lt_two {x : ℕ} (h : IsBool x) : x < 2 := by
+  rcases h with h0 | h1
+  · rw [h0]; norm_num
+  · rw [h1]; norm_num
+
 section FieldSpecific
 variable {p : ℕ} [Fact p.Prime]
 
-/-- If x is boolean, then x.val < 2 -/
+/-- For field elements, if x is boolean then x.val < 2 -/
 theorem val_lt_two {x : F p} (h : IsBool x) : x.val < 2 := by
   rcases h with h0 | h1
   · rw [h0]; simp only [ZMod.val_zero]; norm_num
