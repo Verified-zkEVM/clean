@@ -3,7 +3,6 @@ import Clean.Utils.Bits
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Boolean
 
-open Clean
 
 namespace Circomlib
 open Utils.Bits
@@ -120,14 +119,14 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   
   Assumptions input := 
     -- All inputs are binary
-    ∀ j k (hj : j < ops) (hk : k < n), IsBinary input[j][k]
+    ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
   
   Spec input output := 
     let nout := nbits ((2^n - 1) * ops)
     -- All inputs are binary
-    (∀ j k (hj : j < ops) (hk : k < n), IsBinary input[j][k])
+    (∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k])
     -- All outputs are binary
-    ∧ (∀ i (hi : i < nout), IsBinary output[i])
+    ∧ (∀ i (hi : i < nout), IsBool output[i])
     -- Sum of inputs equals the value represented by output bits
     ∧ fieldFromBits output = 
         Fin.foldl ops (fun sum (j : Fin ops) => 

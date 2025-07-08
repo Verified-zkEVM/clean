@@ -4,7 +4,6 @@ import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Examples.AddOperations
 import Clean.Gadgets.Boolean
 
-open Clean
 
 open Gadgets.Addition32Full (Inputs)
 
@@ -29,13 +28,13 @@ example : ((circuit32 default).operations 0).SubcircuitsConsistent 0 :=
 example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Var field (F pBabybear)) env (i0 : ℕ) :
   Circuit.ConstraintsHold.Soundness env ((circuit32 ⟨ ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩, carryIn ⟩).operations i0)
   ↔
-  (ZMod.val (env.get i0) < 256 ∧ IsBinary (env.get (i0 + 1)) ∧
+  (ZMod.val (env.get i0) < 256 ∧ IsBool (env.get (i0 + 1)) ∧
     Expression.eval env x0 + Expression.eval env y0 + Expression.eval env carryIn + -env.get i0 + -(env.get (i0 + 1) * 256) = 0) ∧
-  (ZMod.val (env.get (i0 + 2)) < 256 ∧ IsBinary (env.get (i0 + 3)) ∧
+  (ZMod.val (env.get (i0 + 2)) < 256 ∧ IsBool (env.get (i0 + 3)) ∧
     Expression.eval env x1 + Expression.eval env y1 + env.get (i0 + 1) + -env.get (i0 + 2) + -(env.get (i0 + 3) * 256) = 0) ∧
-  (ZMod.val (env.get (i0 + 4)) < 256 ∧ IsBinary (env.get (i0 + 5)) ∧
+  (ZMod.val (env.get (i0 + 4)) < 256 ∧ IsBool (env.get (i0 + 5)) ∧
     Expression.eval env x2 + Expression.eval env y2 + env.get (i0 + 3) + -env.get (i0 + 4) + -(env.get (i0 + 5) * 256) = 0) ∧
-  (ZMod.val (env.get (i0 + 6)) < 256 ∧ IsBinary (env.get (i0 + 7)) ∧
+  (ZMod.val (env.get (i0 + 6)) < 256 ∧ IsBool (env.get (i0 + 7)) ∧
     Expression.eval env x3 + Expression.eval env y3 + env.get (i0 + 5) + -env.get (i0 + 6) + -(env.get (i0 + 7) * 256) = 0) := by
 
   -- these are equivalent ways of rewriting the constraints
