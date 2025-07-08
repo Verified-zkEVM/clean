@@ -3,6 +3,8 @@ import Clean.Utils.Field
 import Clean.Gadgets.Equality
 import Clean.Utils.Bool
 
+open Clean
+
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
@@ -53,7 +55,7 @@ def circuit (n : ℕ) [NeZero n] : FormalCircuit (F p) (Inputs n) (fields n) whe
 
   Assumptions input :=
     let ⟨c, s⟩ := input
-    Clean.IsBool s
+    IsBinary s
 
   Spec input output :=
     let ⟨c, s⟩ := input
@@ -117,7 +119,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   Assumptions input :=
     let ⟨_, s⟩ := input
-    Clean.IsBool s
+    IsBinary s
 
   Spec input output :=
     let ⟨c, s⟩ := input

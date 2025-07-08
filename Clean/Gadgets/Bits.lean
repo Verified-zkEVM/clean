@@ -3,6 +3,8 @@ import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
 import Clean.Utils.Bool
 
+open Clean
+
 namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
@@ -45,7 +47,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
     let bits : Vector (F p) n := bit_vars.map eval
 
-    replace h_bits (i : ℕ) (hi : i < n) : Clean.IsBool bits[i] := by
+    replace h_bits (i : ℕ) (hi : i < n) : IsBinary bits[i] := by
       simp only [circuit_norm, bits, bit_vars]
       exact h_bits ⟨ i, hi ⟩
 
@@ -62,7 +64,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     · intro i
       rw [h_env i]
       simp [fieldToBits, Utils.Bits.toBits, Vector.getElem_mapRange]
-      cases (x.val.testBit i) <;> simp [Clean.IsBool]
+      cases (x.val.testBit i) <;> simp [IsBinary]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
 

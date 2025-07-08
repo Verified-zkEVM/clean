@@ -4,6 +4,8 @@ import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
 import Clean.Utils.Bool
 
+open Clean
+
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
@@ -45,7 +47,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
-  x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carryIn
+  x.val < 256 ∧ y.val < 256 ∧ IsBinary carryIn
 
 def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
@@ -79,7 +81,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carry_in
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBinary carry_in
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
@@ -104,10 +106,10 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     set carry_out := env.get (i0 + 1)
 
     -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carry_in
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBinary carry_in
 
     let goal_byte := z.val < 256
-    let goal_bool := Clean.IsBool carry_out
+    let goal_bool := IsBinary carry_out
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show goal_byte ∧ goal_bool ∧ goal_add
 
@@ -116,9 +118,9 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       apply ByteUtils.mod256_lt
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    have carry_in_bound := Clean.IsBool.val_lt_two as_carry_in
+    have carry_in_bound := IsBinary.val_lt_two as_carry_in
 
-    have completeness2 : Clean.IsBool carry_out := by
+    have completeness2 : IsBinary carry_out := by
       rw [hcarry_out]
       apply Addition8.Theorems.completeness_bool
       repeat assumption

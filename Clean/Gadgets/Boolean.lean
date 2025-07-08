@@ -2,6 +2,8 @@ import Clean.Circuit.Basic
 import Clean.Utils.Field
 import Clean.Utils.Bool
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 
@@ -26,7 +28,7 @@ Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 def assertBool : FormalAssertion (F p) field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
   Assumptions _ := True
-  Spec (x : F p) := Clean.IsBool x
+  Spec (x : F p) := IsBinary x
 
   soundness := by 
     simp_all only [circuit_norm]

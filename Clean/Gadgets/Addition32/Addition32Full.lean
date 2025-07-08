@@ -4,6 +4,8 @@ import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 import Clean.Utils.Bool
 
+open Clean
+
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
@@ -40,14 +42,14 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
-  x.Normalized ∧ y.Normalized ∧ Clean.IsBool carryIn
+  x.Normalized ∧ y.Normalized ∧ IsBinary carryIn
 
 def Spec (input : Inputs (F p)) (out: Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
   z.value = (x.value + y.value + carryIn.val) % 2^32
   ∧ carryOut.val = (x.value + y.value + carryIn.val) / 2^32
-  ∧ z.Normalized ∧ Clean.IsBool carryOut
+  ∧ z.Normalized ∧ IsBinary carryOut
 
 /--
 Elaborated circuit data can be found as follows:
@@ -137,13 +139,13 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
     (hz: z = mod256 (x + y + c_in)) (hc_out: c_out = floorDiv256 (x + y + c_in)) :
-    x.val < 256 → y.val < 256 → Clean.IsBool c_in →
-    z.val < 256 ∧ Clean.IsBool c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
+    x.val < 256 → y.val < 256 → IsBinary c_in →
+    z.val < 256 ∧ IsBinary c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by
     intro x_byte y_byte hc
     have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
     use this
-    have carry_lt_2 : c_in.val < 2 := Clean.IsBool.val_lt_two hc
+    have carry_lt_2 : c_in.val < 2 := IsBinary.val_lt_two hc
     have : (x + y + c_in).val < 512 :=
       ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
     use (hc_out ▸ ByteUtils.floorDiv256_bool this)

@@ -1,6 +1,8 @@
 import Clean.Utils.Field
 import Clean.Utils.Bool
 
+open Clean
+
 namespace Gadgets.Addition8.Theorems
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
@@ -85,13 +87,13 @@ theorem soundness_one_carry (x y out carry_in: F p):
 theorem soundness (x y out carry_in carry_out: F p):
     x.val < 256 -> y.val < 256 ->
     out.val < 256 ->
-    Clean.IsBool carry_in ->
-    Clean.IsBool carry_out ->
+    IsBinary carry_in ->
+    IsBinary carry_out ->
     (x + y + carry_in + -out + -(carry_out * 256) = 0) ->
     (out.val = (x.val + y.val + carry_in.val) % 256
     ∧ carry_out.val = (x.val + y.val + carry_in.val) / 256):= by
   intros hx hy hout carry_in_bool carry_out_bool h
-  have carry_in_bound := Clean.IsBool.val_lt_two carry_in_bool
+  have carry_in_bound := IsBinary.val_lt_two carry_in_bool
 
   rcases carry_out_bool with zero_carry | one_carry
   -- case with zero carry
@@ -198,7 +200,7 @@ theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
     y.val < 256 ->
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floorDiv (x + y + carry_in) 256
-    Clean.IsBool carry_out := by
+    IsBinary carry_out := by
   intro as_x as_y carry_in_bound
   dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
 
