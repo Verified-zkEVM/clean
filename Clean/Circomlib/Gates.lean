@@ -168,7 +168,7 @@ def circuit : FormalCircuit (F p) field field where
     simp_all only [h_hold]
     constructor
     · rcases h_in with h_in | h_in <;> subst h_in <;> ring_nf <;> simp [ZMod.val_one]
-    · convert not_is_bool h_in using 1
+    · convert @IsBool.not_is_bool (F p) _ _ h_in using 1
       ring
 
   completeness := by
