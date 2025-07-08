@@ -1,5 +1,5 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 

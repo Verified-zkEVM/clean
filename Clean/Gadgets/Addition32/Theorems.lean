@@ -1,7 +1,7 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
 import Clean.Utils.Field
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 

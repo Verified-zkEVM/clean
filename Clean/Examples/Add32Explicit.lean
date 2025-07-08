@@ -2,7 +2,7 @@ import Clean.Utils.Primes
 import Clean.Circuit.Explicit
 import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Examples.AddOperations
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 

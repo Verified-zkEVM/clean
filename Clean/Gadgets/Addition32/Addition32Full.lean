@@ -2,7 +2,7 @@ import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Types.U32
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 

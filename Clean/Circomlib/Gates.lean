@@ -1,6 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Field
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 

@@ -1,7 +1,7 @@
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 

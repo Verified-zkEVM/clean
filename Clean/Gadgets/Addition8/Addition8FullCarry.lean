@@ -2,7 +2,7 @@ import Clean.Circuit.LookupCircuit
 import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
-import Clean.Utils.Bool
+import Clean.Gadgets.Boolean
 
 open Clean
 
