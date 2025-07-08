@@ -1,42 +1,43 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 
-variable {p : ℕ} [Fact p.Prime]
+/-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
+def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
 
-/-- A predicate stating that a field element is boolean (0 or 1) -/
-def IsBool (x : F p) : Prop := x = 0 ∨ x = 1
-
-/-- IsBool is decidable -/
-instance {x : F p} : Decidable (IsBool x) := inferInstanceAs (Decidable (x = 0 ∨ x = 1))
+/-- IsBool is decidable for types with decidable equality -/
+instance {α : Type*} [Zero α] [One α] [DecidableEq α] {x : α} : Decidable (IsBool x) := 
+  inferInstanceAs (Decidable (x = 0 ∨ x = 1))
 
 namespace IsBool
 
 @[simp]
-theorem zero : IsBool (0 : F p) := Or.inl rfl
+theorem zero {α : Type*} [Zero α] [One α] : IsBool (0 : α) := Or.inl rfl
 
 @[simp]
-theorem one : IsBool (1 : F p) := Or.inr rfl
+theorem one {α : Type*} [Zero α] [One α] : IsBool (1 : α) := Or.inr rfl
 
-/-- If x is boolean, then x.val < 2 -/
-theorem val_lt_two {x : F p} (h : IsBool x) : x.val < 2 := by
-  rcases h with h0 | h1
-  · rw [h0]; simp only [ZMod.val_zero]; norm_num
-  · rw [h1]; simp only [ZMod.val_one, Nat.one_lt_ofNat]
+/-- If x is boolean in a type with a < relation, then x < 2 (when 2 exists) -/
+theorem lt_two {α : Type*} [Zero α] [One α] [Preorder α] [OfNat α 2]
+    {x : α} (h : IsBool x) (h0 : (0 : α) < 2) (h1 : (1 : α) < 2) : x < 2 := by
+  rcases h with h0' | h1'
+  · rw [h0']; exact h0
+  · rw [h1']; exact h1
 
 /-- If x is boolean, then x * x = x -/
-theorem mul_self {x : F p} (h : IsBool x) : x * x = x := by
+theorem mul_self {α : Type*} [MulZeroOneClass α] {x : α} (h : IsBool x) : x * x = x := by
   rcases h with h0 | h1
-  · rw [h0]; simp only [zero_mul, mul_zero]
-  · rw [h1]; simp only [one_mul, mul_one]
+  · rw [h0]; simp only [mul_zero]
+  · rw [h1]; simp only [mul_one]
 
 /-- If x is boolean, then x * (x - 1) = 0 -/
-theorem mul_sub_one {x : F p} (h : IsBool x) : x * (x - 1) = 0 := by
+theorem mul_sub_one {α : Type*} [Ring α] {x : α} (h : IsBool x) : x * (x - 1) = 0 := by
   rcases h with h0 | h1
-  · rw [h0]; simp only [zero_mul, zero_sub]
-  · rw [h1]; simp only [one_mul, sub_self]
+  · rw [h0]; simp only [zero_mul]
+  · rw [h1]; simp only [sub_self, mul_zero]
 
 /-- x is boolean iff x * (x - 1) = 0 -/
-theorem iff_mul_sub_one {x : F p} : IsBool x ↔ x * (x - 1) = 0 := by
+theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} : 
+    IsBool x ↔ x * (x - 1) = 0 := by
   constructor
   · exact mul_sub_one
   · intro h
@@ -48,6 +49,27 @@ theorem iff_mul_sub_one {x : F p} : IsBool x ↔ x * (x - 1) = 0 := by
     · right
       exact sub_eq_zero.mp h1
 
+section FieldSpecific
+variable {p : ℕ} [Fact p.Prime]
+
+/-- If x is boolean, then x.val < 2 -/
+theorem val_lt_two {x : F p} (h : IsBool x) : x.val < 2 := by
+  rcases h with h0 | h1
+  · rw [h0]; simp only [ZMod.val_zero]; norm_num
+  · rw [h1]; simp only [ZMod.val_one, Nat.one_lt_ofNat]
+
+end FieldSpecific
+
+/-- If x and y are boolean, then x AND y is boolean -/
+theorem and_is_bool {α : Type*} [MulZeroOneClass α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
+    IsBool (x * y) := by
+  rcases hx with hx0 | hx1
+  · simp [hx0, mul_zero]
+  · simp [hx1, one_mul, hy]
+
+section FieldOperations
+variable {p : ℕ} [Fact p.Prime]
+
 /-- If x and y are boolean, then x XOR y is boolean -/
 theorem xor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x + y - 2 * x * y) := by
@@ -56,13 +78,6 @@ theorem xor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
   · rcases hy with hy0 | hy1
     · simp_all
     · subst hx1 hy1; norm_num
-
-/-- If x and y are boolean, then x AND y is boolean -/
-theorem and_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x * y) := by
-  rcases hx with hx0 | hx1
-  · simp_all
-  · simp_all
 
 /-- If x and y are boolean, then x OR y is boolean -/
 theorem or_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
@@ -99,6 +114,8 @@ theorem nor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
   · rcases hy with hy0 | hy1
     · simp_all
     · simp_all
+
+end FieldOperations
 
 end IsBool
 
