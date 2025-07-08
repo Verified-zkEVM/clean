@@ -1,35 +1,10 @@
 import Clean.Circuit
 import Clean.Utils.Field
+import Clean.Gadgets.Equality
 
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-
-instance : HSub (field (Expression (F p))) (field (Expression (F p))) (field (Expression (F p))) where
-  hSub a b :=
-    let a : Expression (F p) := a
-    let b : Expression (F p) := b
-    a - b
-
-instance : HMul (field (Expression (F p))) (field (Expression (F p))) (field (Expression (F p))) where
-  hMul a b :=
-    let a : Expression (F p) := a
-    let b : Expression (F p) := b
-    a * b
-
-instance : HAdd (field (Expression (F p))) (field (Expression (F p))) (field (Expression (F p))) where
-  hAdd a b :=
-    let a : Expression (F p) := a
-    let b : Expression (F p) := b
-    a + b
-
-instance {n : ℕ} : HasAssignEq (Vector (field (Expression (F p))) n) (F p) where
-  assignEq vals := do
-    let vals : Vector (Expression (F p)) n := vals
-    vals.mapM fun v => do
-      let witness ← witnessField fun env => v.eval env
-      witness === v
-      return witness
 
 /-
 Original source code:

@@ -134,6 +134,28 @@ instance : ProvableType unit where
 
 @[reducible] def fieldVar (F : Type) := field (Expression F)
 
+-- Instances for arithmetic operations on field expressions
+-- Since field is defined as id, field (Expression F) = Expression F
+variable {F : Type} [Field F]
+
+instance : HSub (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hSub a b :=
+    let a : Expression F := a
+    let b : Expression F := b
+    a - b
+
+instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hMul a b :=
+    let a : Expression F := a
+    let b : Expression F := b
+    a * b
+
+instance : HAdd (field (Expression F)) (field (Expression F)) (field (Expression F)) where
+  hAdd a b :=
+    let a : Expression F := a
+    let b : Expression F := b
+    a + b
+
 @[circuit_norm]
 instance : ProvableType field where
   size := 1

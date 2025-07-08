@@ -156,6 +156,14 @@ instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
     witness === rhs
     return witness
 
+instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (field (Expression F)) n) F where
+  assignEq vals := do
+    let vals : Vector (Expression F) n := vals
+    vals.mapM fun v => do
+      let witness ← witnessField fun env => v.eval env
+      witness === v
+      return witness
+
 attribute [circuit_norm] HasAssignEq.assignEq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
