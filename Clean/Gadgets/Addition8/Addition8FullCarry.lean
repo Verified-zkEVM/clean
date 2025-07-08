@@ -82,13 +82,11 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ Clean.IsBool carry_in
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    have h_bool_carry' : carry_out = 0 ∨ carry_out = 1 := Clean.IsBool.to_or h_bool_carry
-
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte (Clean.IsBool.to_or as_carry_in) h_bool_carry' h_add
+    apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry h_add
 
   completeness := by
    -- introductions
@@ -118,7 +116,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       apply ByteUtils.mod256_lt
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
+    have carry_in_bound := Clean.IsBool.val_lt_two as_carry_in
 
     have completeness2 : Clean.IsBool carry_out := by
       rw [hcarry_out]

@@ -20,7 +20,7 @@ lemma lift_val2 {x b : (F p)} (x_byte : x.val < 256) (b_bool : Clean.IsBool b) :
 
 omit p_large_enough in
 lemma zify_bool {b : (F p)} (b_bool : Clean.IsBool b) : (↑(b.val) : ℤ) = 0 ∨ (↑(b.val) : ℤ) = 1  := by
-  rcases Clean.IsBool.to_or b_bool with b_zero | b_one
+  rcases b_bool with b_zero | b_one
   · rw [b_zero]
     simp only [ZMod.val_zero, CharP.cast_eq_zero, zero_ne_one, or_false]
   · rw [b_one, ZMod.val_one]
