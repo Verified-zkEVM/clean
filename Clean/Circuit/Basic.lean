@@ -397,28 +397,25 @@ export Circuit (witnessVar witnessField witnessVars witnessVector assertZero loo
 
 -- general `witness` method
 
-class Witnessable (F : outParam Type) [Field F] (value : outParam Type) (var : Type) where
-  witness : ((Environment F) → value) → Circuit F var
+class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
+  witness : ((Environment F) → value F) → Circuit F (var F)
+  var_eq : var F = value (Expression F) := by rfl
+  witness_eq (compute : Environment F → value F) :
+    witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
 
 export Witnessable (witness)
 
-instance : Witnessable F F (Variable F) where
-  witness := witnessVar
-
-instance : Witnessable F F (Expression F) where
+instance : Witnessable F field Expression where
   witness := witnessField
 
-instance {m : ℕ} : Witnessable F (Vector F m) (Vector (Variable F) m) where
-  witness := witnessVars m
-
-instance {m : ℕ} : Witnessable F (Vector F m) (Vector (Expression F) m) where
+instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
   witness := witnessVector m
 
-instance (α : TypeMap) [ProvableType α] : Witnessable F (α F) (Var α F) where
+instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
   witness := ProvableType.witness
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
-    Witnessable F (Vector (α F) m) (Vector (α (Expression F)) m) where
+    Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
   witness := ProvableVector.witness m
 
 -- witness generation
