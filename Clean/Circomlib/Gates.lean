@@ -46,8 +46,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp_all only [h_hold]
     constructor
     · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        (simp only [h_a, h_b, ZMod.val_zero, ZMod.val_one, zero_mul, mul_zero, mul_one,
-                    zero_add, add_zero, neg_zero]; ring_nf; simp)
+        simp only [h_a, h_b] <;> norm_num
     · convert IsBinary.xor_is_binary h_a h_b using 1
       ring
 
@@ -168,9 +167,7 @@ def circuit : FormalCircuit (F p) field field where
     simp only [circuit_norm, main] at h_env h_hold ⊢
     simp_all only [h_hold]
     constructor
-    · rcases h_in with h_in | h_in <;>
-        simp only [h_in, ZMod.val_zero, ZMod.val_one, zero_mul, mul_zero, mul_one,
-                   add_zero, sub_zero, neg_zero, one_add_one_eq_two]; norm_num
+    · rcases h_in with h_in | h_in <;> subst h_in <;> ring_nf <;> simp [ZMod.val_one]
     · convert IsBinary.not_is_binary h_in using 1
       ring
 
@@ -254,7 +251,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp_all only [h_hold]
     constructor
     · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        (norm_num only [h_a, h_b, ZMod.val_zero, ZMod.val_one]; simp)
+        simp [h_a, h_b, ZMod.val_one]
     · convert IsBinary.nor_is_binary h_a h_b using 1
       ring
 

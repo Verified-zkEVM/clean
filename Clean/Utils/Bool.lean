@@ -12,6 +12,12 @@ instance {x : F p} : Decidable (IsBinary x) := inferInstanceAs (Decidable (x = 0
 
 namespace IsBinary
 
+@[simp]
+theorem zero : IsBinary (0 : F p) := Or.inl rfl
+
+@[simp]
+theorem one : IsBinary (1 : F p) := Or.inr rfl
+
 /-- If x is binary, then x.val < 2 -/
 theorem val_lt_two {x : F p} (h : IsBinary x) : x.val < 2 := by
   rcases h with h0 | h1
