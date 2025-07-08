@@ -48,7 +48,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
         simp only [h_a, h_b] <;> norm_num
     · convert xor_is_bool h_a h_b using 1
-      ring
+      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -131,7 +131,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
         simp [h_a, h_b]
     · convert or_is_bool h_a h_b using 1
-      ring
+      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -169,7 +169,7 @@ def circuit : FormalCircuit (F p) field field where
     constructor
     · rcases h_in with h_in | h_in <;> subst h_in <;> ring_nf <;> simp [ZMod.val_one]
     · convert @IsBool.not_is_bool (F p) _ _ h_in using 1
-      ring
+      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -211,7 +211,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
         simp [h_a, h_b, ZMod.val_one]
     · convert nand_is_bool h_a h_b using 1
-      ring
+      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -253,7 +253,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
         simp [h_a, h_b, ZMod.val_one]
     · convert nor_is_bool h_a h_b using 1
-      ring
+      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]
