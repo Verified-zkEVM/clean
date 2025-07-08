@@ -5,7 +5,7 @@ import Clean.Utils.Field
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
 
 /-- IsBool is decidable for types with decidable equality -/
-instance {α : Type*} [Zero α] [One α] [DecidableEq α] {x : α} : Decidable (IsBool x) := 
+instance {α : Type*} [Zero α] [One α] [DecidableEq α] {x : α} : Decidable (IsBool x) :=
   inferInstanceAs (Decidable (x = 0 ∨ x = 1))
 
 namespace IsBool
@@ -36,7 +36,7 @@ theorem mul_sub_one {α : Type*} [Ring α] {x : α} (h : IsBool x) : x * (x - 1)
   · rw [h1]; simp only [sub_self, mul_zero]
 
 /-- x is boolean iff x * (x - 1) = 0 -/
-theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} : 
+theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} :
     IsBool x ↔ x * (x - 1) = 0 := by
   constructor
   · exact mul_sub_one
@@ -73,53 +73,57 @@ theorem and_is_bool {α : Type*} [MulZeroOneClass α] {x y : α} (hx : IsBool x)
   · simp [hx0, mul_zero]
   · simp [hx1, one_mul, hy]
 
-section FieldOperations
-variable {p : ℕ} [Fact p.Prime]
-
-/-- If x and y are boolean, then x XOR y is boolean -/
-theorem xor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x + y - 2 * x * y) := by
-  rcases hx with hx0 | hx1
-  · simp_all
-  · rcases hy with hy0 | hy1
-    · simp_all
-    · subst hx1 hy1; norm_num
-
 /-- If x and y are boolean, then x OR y is boolean -/
-theorem or_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
+theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x + y - x * y) := by
   rcases hx with hx0 | hx1
-  · simp_all
+  · simp [hx0, zero_add, zero_mul, sub_zero, hy]
   · rcases hy with hy0 | hy1
-    · simp_all
-    · simp_all
+    · simp [hx1, hy0, one_mul, mul_zero, add_zero, sub_zero]
+    · simp [hx1, hy1, one_mul, mul_one, sub_self]
 
 /-- If x is boolean, then NOT x is boolean -/
-theorem not_is_bool {x : F p} (hx : IsBool x) :
+theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
     IsBool (1 + x - 2 * x) := by
   rcases hx with hx0 | hx1
-  · simp_all
-  · simp only [hx1]; norm_num
+  · simp [hx0, add_zero, zero_mul, sub_zero]
+  · simp only [hx1]
+    norm_num
+
+/-- If x and y are boolean, then x XOR y is boolean -/
+theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
+    IsBool (x + y - 2 * x * y) := by
+  rcases hx with hx0 | hx1
+  · simp [hx0, zero_add, zero_mul, mul_zero, sub_zero, hy]
+  · rcases hy with hy0 | hy1
+    · simp [hx1, hy0, add_zero, one_mul, mul_zero, sub_zero]
+    · simp only [hx1, hy1, one_mul, mul_one]
+      norm_num
 
 /-- If x and y are boolean, then NAND(x,y) is boolean -/
-theorem nand_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
+theorem nand_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (1 - x * y) := by
   rcases hx with hx0 | hx1
-  · simp_all
+  · simp [hx0, mul_zero, sub_zero]
   · rcases hy with hy0 | hy1
-    · simp_all
-    · simp_all
+    · simp [hx1, hy0, one_mul, sub_zero]
+    · simp [hx1, hy1, one_mul, sub_self]
 
 /-- If x and y are boolean, then NOR(x,y) is boolean -/
-theorem nor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
+theorem nor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x * y + 1 - x - y) := by
   rcases hx with hx0 | hx1
   · rcases hy with hy0 | hy1
-    · simp_all
-    · simp_all
+    · simp [hx0, hy0, zero_mul, zero_add, sub_zero]
+    · simp [hx0, hy1, zero_mul, zero_add, sub_self]
   · rcases hy with hy0 | hy1
-    · simp_all
-    · simp_all
+    · simp [hx1, hy0, one_mul, mul_zero, add_sub_cancel, sub_self]
+    · simp [hx1, hy1, one_mul]
+
+section FieldOperations
+variable {p : ℕ} [Fact p.Prime]
+
+-- Field-specific operations can go here if needed
 
 end FieldOperations
 
