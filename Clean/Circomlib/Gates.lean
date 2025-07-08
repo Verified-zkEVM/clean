@@ -464,7 +464,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
-        simp only [AND.circuit, subcircuit_norm, AND.main, HasAssignEq.assign_eq, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
+        simp only [AND.circuit, subcircuit_norm, AND.main, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
         simp only [Fin.isValue, Nat.add_zero, id_eq]
         unfold Environment.UsesLocalWitnesses Operations.forAllFlat
         unfold Operations.forAll
