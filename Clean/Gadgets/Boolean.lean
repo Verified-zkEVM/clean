@@ -54,10 +54,10 @@ theorem iff_mul_sub_one {x : F p} : IsBinary x ↔ x * (x - 1) = 0 := by
 theorem xor_is_binary {x y : F p} (hx : IsBinary x) (hy : IsBinary y) :
     IsBinary (x + y - 2 * x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, mul_zero, sub_zero, zero_add, add_zero, IsBinary]
+  · simp only [hx0, zero_mul, mul_zero, sub_zero, zero_add, add_zero]
     exact hy
   · rcases hy with hy0 | hy1
-    · simp only [hx1, hy0, one_mul, mul_zero, sub_zero, add_zero, IsBinary]; tauto
+    · simp_all
     · left
       simp only [hx1, hy1, one_mul, mul_one, one_add_one_eq_two]
       ring
@@ -66,52 +66,46 @@ theorem xor_is_binary {x y : F p} (hx : IsBinary x) (hy : IsBinary y) :
 theorem and_is_binary {x y : F p} (hx : IsBinary x) (hy : IsBinary y) :
     IsBinary (x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul]; left; rfl
-  · simp only [hx1, one_mul]
-    exact hy
+  · simp_all
+  · simp_all
 
 /-- If x and y are binary, then x OR y is binary -/
 theorem or_is_binary {x y : F p} (hx : IsBinary x) (hy : IsBinary y) :
     IsBinary (x + y - x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, zero_add, sub_zero, IsBinary]
+  · simp only [hx0, zero_mul, zero_add, sub_zero]
     exact hy
   · rcases hy with hy0 | hy1
-    · simp only [hx1, hy0, mul_zero, sub_zero, IsBinary]; right; ring
-    · right
-      simp only [hx1, hy1, one_mul]; ring
+    · simp_all
+    · simp_all
 
 /-- If x is binary, then NOT x is binary -/
 theorem not_is_binary {x : F p} (hx : IsBinary x) :
     IsBinary (1 + x - 2 * x) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, zero_add, sub_zero, IsBinary]; right; ring
-  · left
-    simp only [hx1, one_mul, one_add_one_eq_two]
-    ring
+  · simp_all
+  · simp only [hx1]; norm_num
 
 /-- If x and y are binary, then NAND(x,y) is binary -/
 theorem nand_is_binary {x y : F p} (hx : IsBinary x) (hy : IsBinary y) :
     IsBinary (1 - x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, sub_zero, IsBinary]; tauto
+  · simp [hx0, zero_mul, sub_zero]
   · simp only [hx1, one_mul]
     rcases hy with hy0 | hy1
-    · simp only [hy0, mul_zero, sub_zero, IsBinary]; tauto
-    · simp only [hy1, mul_one, sub_self]; tauto
+    · simp_all
+    · simp_all
 
 /-- If x and y are binary, then NOR(x,y) is binary -/
 theorem nor_is_binary {x y : F p} (hx : IsBinary x) (hy : IsBinary y) :
     IsBinary (x * y + 1 - x - y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, mul_zero, zero_add, add_zero, sub_zero, zero_sub]
-    rcases hy with hy0 | hy1
-    · simp only [hy0, IsBinary]; right; ring
-    · simp only [hy1, IsBinary]; left; ring
-  · simp only [hx1, one_mul, mul_one]
-    rcases hy with hy0 | hy1
-    · simp only [hy0, mul_zero, add_zero, IsBinary]; left; ring
-    · simp only [hy1, mul_one, IsBinary]; left; ring
+  · rcases hy with hy0 | hy1
+    · simp_all
+    · simp_all
+  · rcases hy with hy0 | hy1
+    · simp_all
+    · simp_all
 
 end IsBinary
 
