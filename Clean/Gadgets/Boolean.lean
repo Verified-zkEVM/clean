@@ -52,13 +52,10 @@ theorem iff_mul_sub_one {x : F p} : IsBool x ↔ x * (x - 1) = 0 := by
 theorem xor_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x + y - 2 * x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, mul_zero, sub_zero, zero_add, add_zero]
-    exact hy
+  · simp_all
   · rcases hy with hy0 | hy1
     · simp_all
-    · left
-      simp only [hx1, hy1, one_mul, mul_one, one_add_one_eq_two]
-      ring
+    · subst hx1 hy1; norm_num
 
 /-- If x and y are boolean, then x AND y is boolean -/
 theorem and_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
@@ -71,8 +68,7 @@ theorem and_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
 theorem or_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x + y - x * y) := by
   rcases hx with hx0 | hx1
-  · simp only [hx0, zero_mul, zero_add, sub_zero]
-    exact hy
+  · simp_all
   · rcases hy with hy0 | hy1
     · simp_all
     · simp_all
@@ -88,9 +84,8 @@ theorem not_is_bool {x : F p} (hx : IsBool x) :
 theorem nand_is_bool {x y : F p} (hx : IsBool x) (hy : IsBool y) :
     IsBool (1 - x * y) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, zero_mul, sub_zero]
-  · simp only [hx1, one_mul]
-    rcases hy with hy0 | hy1
+  · simp_all
+  · rcases hy with hy0 | hy1
     · simp_all
     · simp_all
 
