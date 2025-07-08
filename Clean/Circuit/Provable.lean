@@ -577,6 +577,9 @@ instance : HMul (field (Expression F)) F (field (Expression F)) where
 instance : HMul (field (Expression F)) (field (Expression F)) (field (Expression F)) where
   hMul (a : Expression F) (b : Expression F) := a * b
 
+instance : Inv (field F) where
+  inv (x : F) : F := x⁻¹
+
 instance {n: ℕ} [OfNat F n] : OfNat (field F) n where
   ofNat : F := OfNat.ofNat n
 
