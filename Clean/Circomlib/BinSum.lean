@@ -13,11 +13,8 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 def BinSumInput (n ops : ℕ) := ProvableVector (fields n) ops
 
 -- Instance for NonEmptyProvableType for fields when n > 0
-instance {n : ℕ} [hn : Fact (0 < n)] : NonEmptyProvableType (fields n) where
-  size := n
-  toElements := id
-  fromElements := id
-  nonempty := hn.out
+instance {n : ℕ} [hn : NeZero n] : NonEmptyProvableType (fields n) where
+  nonempty := Nat.pos_of_ne_zero hn.out
 
 /-
 Original source code:
@@ -102,7 +99,7 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) := do
 
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def circuit (n ops : ℕ) [hn : Fact (0 < n)] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) : 
+def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) : 
   GeneralFormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops input
   
