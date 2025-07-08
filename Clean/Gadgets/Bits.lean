@@ -60,8 +60,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     constructor
     · intro i
       rw [h_env i]
-      simp [fieldToBits, Utils.Bits.toBits, Vector.getElem_mapRange]
-      cases (x.val.testBit i) <;> simp [IsBool]
+      simp [fieldToBits, Utils.Bits.toBits, Vector.getElem_mapRange, IsBool]
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨k + ·⟩)
 
