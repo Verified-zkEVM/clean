@@ -87,7 +87,7 @@ section VectorOperations
 /-- If all elements of a vector are binary, then all elements of its list are binary -/
 theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n) 
     (isBinary : α → Prop) :
-    (∀ i : Fin n, isBinary (v.get i)) →
+    (∀ i : Fin n, isBinary v[i]) →
     (∀ x ∈ v.toList, isBinary x) := by
   intro h_vec x h_mem
   rw [Vector.mem_toList_iff_get] at h_mem
@@ -97,7 +97,7 @@ theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n)
 
 /-- Specialized version for F p where binary means = 0 or = 1 -/
 theorem Vector.toList_binary_field {n : ℕ} (v : Vector (F p) n) :
-    (∀ i : Fin n, v.get i = 0 ∨ v.get i = 1) →
+    (∀ i : Fin n, v[i] = 0 ∨ v[i] = 1) →
     (∀ x ∈ v.toList, x = 0 ∨ x = 1) := 
   Vector.toList_binary v (fun x => x = 0 ∨ x = 1)
 

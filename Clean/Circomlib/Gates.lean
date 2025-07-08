@@ -29,8 +29,7 @@ section HelperLemmas
 /-- Extract individual field element from vector evaluation -/
 lemma eval_get_eq {n : ℕ} {env : Environment (F p)} {input_var : Var (fields n) (F p)}
     {input : fields n (F p)} (h_env : eval env input_var = input) (i : Fin n) :
-    env (input_var.get i) = input.get i := by
-  change env input_var[i] = input[i]
+    env input_var[i] = input[i] := by
   rw [ProvableType.eval_fields] at h_env
   have h_eq : (input_var.map (Expression.eval env))[i] = input[i] :=
     congrArg (·[i]) h_env
@@ -322,9 +321,9 @@ def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expressi
   | 0, _ =>
     return (1 : F p)
   | 1, input =>
-    return input.get 0
+    return input[0]
   | 2, input =>
-    AND.circuit.main (input.get 0, input.get 1)
+    AND.circuit.main (input[0], input[1])
   | n + 3, input => do
     let n1 := (n + 3) / 2
     let n2 := (n + 3) - n1
@@ -361,7 +360,7 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
     | 2 =>
       simp only [main]
       simp only [Fin.isValue, Nat.add_one_sub_one]
-      have h := AND.circuit.localLength_eq (input.get 0, input.get 1) offset
+      have h := AND.circuit.localLength_eq (input[0], input[1]) offset
       rw [show AND.circuit.localLength _ = 1 from rfl] at h
       exact h
     | m + 3 =>
@@ -417,7 +416,7 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
       simp only [Operations.SubcircuitsConsistent, Operations.forAll]
     | 2 =>
       simp only [main, Circuit.operations]
-      exact AND.circuit.subcircuitsConsistent (input.get 0, input.get 1) offset
+      exact AND.circuit.subcircuitsConsistent (input[0], input[1]) offset
     | m + 3 =>
       rw [main]
       let n1 := (m + 3) / 2
@@ -522,7 +521,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
 
 -- Extract Assumptions and Spec outside the circuit
 def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
-  ∀ i : Fin n, (input.get i = 0 ∨ input.get i = 1)
+  ∀ (i : ℕ) (h : i < n), (input[i] = 0 ∨ input[i] = 1)
 
 def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
   output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ (output = 0 ∨ output = 1)
@@ -598,18 +597,18 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
 
 
 /-- Helper to show that extracting a subvector preserves element access -/
-lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : Fin n1) (h_n1_lt : n1 ≤ n) :
+lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : ℕ) (hi : i < n1) (h_n1_lt : n1 ≤ n) :
     let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, Vector.size_toArray]; exact h_n1_lt⟩
-    input1.get i = input.get ⟨i.val, by omega⟩ := by
-  simp only [Vector.get]
-  have h_extract : (input.toArray.extract 0 n1)[i.val]'(by
+    input1[i]'hi = input[i]'(by omega) := by
+  simp only [getElem]
+  have h_extract : (input.toArray.extract 0 n1)[i]'(by
     simp only [Array.size_extract]
-    have h1 : i.val < n1 := i.isLt
+    have h1 : i < n1 := hi
     have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
     rw [h2, min_eq_left h_n1_lt]
     exact h1) =
-                  input.toArray[i.val]'(by 
-                    have h1 : i.val < n1 := i.isLt
+                  input.toArray[i]'(by
+                    have h1 : i < n1 := hi
                     have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
                     rw [h2]
                     omega) := by
@@ -618,20 +617,20 @@ lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : Fin
   exact h_extract
 
 /-- Helper to show that extracting a subvector from an offset preserves element access -/
-lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n (F p)) 
-    (i : Fin n2) (h_sum : n1 + n2 = n) :
+lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n (F p))
+    (i : ℕ) (hi : i < n2) (h_sum : n1 + n2 = n) :
     let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 n, by simp [Array.size_extract, Vector.size_toArray]; omega⟩
-    input2.get i = input.get ⟨n1 + i.val, by omega⟩ := by
-  simp only [Vector.get]
-  have h_extract : (input.toArray.extract n1 n)[i.val]'(by 
+    input2[i]'hi = input[n1 + i]'(by omega) := by
+  simp only [getElem]
+  have h_extract : (input.toArray.extract n1 n)[i]'(by
     simp only [Array.size_extract]
-    have h1 : i.val < n2 := i.isLt
+    have h1 : i < n2 := hi
     have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
     rw [h2]
     omega) =
-                  input.toArray[n1 + i.val]'(by
-                    have : n1 + i.val < input.size := by
-                      have h1 : i.val < n2 := i.isLt
+                  input.toArray[n1 + i]'(by
+                    have : n1 + i < input.size := by
+                      have h1 : i < n2 := hi
                       have h2 : input.size = n := by simp only [Vector.size_toArray]
                       rw [h2]
                       omega
@@ -640,22 +639,26 @@ lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n 
   exact h_extract
 
 /-- Helper to show that mapping .val over a binary vector produces binary values -/
-lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p)) 
+lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
     (h_assumptions : Assumptions n input) :
     ∀ x ∈ input.toList.map (·.val), x = 0 ∨ x = 1 := by
   intro x hx
   simp only [List.mem_map] at hx
   rcases hx with ⟨y, hy, rfl⟩
   -- Use Vector.toList_binary_field to convert vector property to list property
-  have h_vec_binary := Vector.toList_binary_field input h_assumptions
-  have h_y_binary := h_vec_binary y hy
+  -- Convert Assumptions to the form needed by toList_binary_field
+  have h_vec_binary : ∀ i : Fin n, input[i] = 0 ∨ input[i] = 1 := by
+    intro i
+    exact h_assumptions i.val i.isLt
+  have h_toList_binary := Vector.toList_binary_field input h_vec_binary
+  have h_y_binary := h_toList_binary y hy
   cases h_y_binary with
   | inl h => left; simp [h, ZMod.val_zero]
   | inr h => right; simp [h, ZMod.val_one]
 
 
 /-- Soundness for n = 0 case -/
-lemma soundness_zero {p : ℕ} [Fact p.Prime] 
+lemma soundness_zero {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p)) (_h_env : eval env input_var = input)
     (_h_assumptions : Assumptions 0 input)
@@ -676,7 +679,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
     rfl
 
 /-- Soundness for n = 1 case -/
-lemma soundness_one {p : ℕ} [Fact p.Prime] 
+lemma soundness_one {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p)) (h_env : eval env input_var = input)
     (h_assumptions : Assumptions 1 input)
@@ -684,12 +687,15 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
     Spec 1 input (env ((main input_var).output offset)) := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
-  have h_input0 := h_assumptions (0 : Fin 1)
-  have h_eval_eq : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
+  have h_input0 := h_assumptions 0 (by norm_num : 0 < 1)
+  have h_eval_eq : env input_var[0] = input[0] := eval_get_eq h_env 0
   constructor
   · simp only [h_eval_eq]
     rw [Vector.toList_length_one]
     simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
+    -- The goal now has form: (input[0]).val = 1 &&& (input[0]).val
+    -- For binary values, 1 &&& x = x
+
     cases h_input0 with
     | inl h0 => rw [h0]; simp only [ZMod.val_zero]; rfl
     | inr h1 => rw [h1]; simp only [ZMod.val_one]; rfl
@@ -697,7 +703,7 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
     exact h_input0
 
 /-- Soundness for n = 2 case -/
-lemma soundness_two {p : ℕ} [Fact p.Prime] 
+lemma soundness_two {p : ℕ} [Fact p.Prime]
     (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p)) (h_env : eval env input_var = input)
     (h_assumptions : Assumptions 2 input)
@@ -705,22 +711,22 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
     Spec 2 input (env ((main input_var).output offset)) := by
   simp only [main] at h_hold ⊢
   simp only [Spec]
-  have h_input0 := h_assumptions (0 : Fin 2)
-  have h_input1 := h_assumptions (1 : Fin 2)
-  have h_eval0 : env (input_var.get 0) = input.get 0 := eval_get_eq h_env 0
-  have h_eval1 : env (input_var.get 1) = input.get 1 := eval_get_eq h_env 1
-  have h_and_spec := AND.circuit.soundness offset env (input_var.get 0, input_var.get 1)
-    (input.get 0, input.get 1)
+  have h_input0 := h_assumptions 0 (by norm_num : 0 < 2)
+  have h_input1 := h_assumptions 1 (by norm_num : 1 < 2)
+  have h_eval0 : env input_var[0] = input[0] := eval_get_eq h_env 0
+  have h_eval1 : env input_var[1] = input[1] := eval_get_eq h_env 1
+  have h_and_spec := AND.circuit.soundness offset env (input_var[0], input_var[1])
+    (input[0], input[1])
     (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
     ⟨h_input0, h_input1⟩ h_hold
-  
+
   rcases h_and_spec with ⟨h_val, h_binary⟩
   constructor
   · -- Prove output.val = fold
     simp only [Vector.toList_length_two]
     simp only [List.map_cons, List.map_nil]
     rw [List.foldl_cons, List.foldl_cons, List.foldl_nil]
-    have h1 : 1 &&& (input.get 0).val = (input.get 0).val := by
+    have h1 : 1 &&& (input[0]).val = (input[0]).val := by
       cases h_input0 with
       | inl h => rw [h]; simp only [ZMod.val_zero]; rfl
       | inr h => rw [h]; simp only [ZMod.val_one]; rfl
@@ -758,10 +764,10 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
     (h_assumptions : Assumptions 2 input) :
     Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
   simp only [main, circuit_norm] at h_local_witnesses ⊢
-  
-  have h_binary0 : input[0] = 0 ∨ input[0] = 1 := h_assumptions 0
-  have h_binary1 : input[1] = 0 ∨ input[1] = 1 := h_assumptions 1
-  
+
+  have h_binary0 : input[0] = 0 ∨ input[0] = 1 := h_assumptions 0 (by norm_num)
+  have h_binary1 : input[1] = 0 ∨ input[1] = 1 := h_assumptions 1 (by norm_num)
+
   apply AND.circuit.completeness
   · exact h_local_witnesses
   · subst h_env
@@ -770,15 +776,15 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
   · simp only [Assumptions] at h_assumptions
     constructor
     · simp only [ProvableType.eval_fieldPair]
-      have h_eval0 : env (input_var.get 0) = input.get 0 := 
+      have h_eval0 : env input_var[0] = input[0] :=
         eval_get_eq h_env 0
-      change env (input_var.get 0) = 0 ∨ env (input_var.get 0) = 1
+      change env input_var[0] = 0 ∨ env input_var[0] = 1
       rw [h_eval0]
       exact h_binary0
     · simp only [ProvableType.eval_fieldPair]
-      have h_eval1 : env (input_var.get 1) = input.get 1 := 
+      have h_eval1 : env input_var[1] = input[1] :=
         eval_get_eq h_env 1
-      change env (input_var.get 1) = 0 ∨ env (input_var.get 1) = 1
+      change env input_var[1] = 0 ∨ env input_var[1] = 1
       rw [h_eval1]
       exact h_binary1
 
@@ -824,13 +830,21 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         eval_toArray_extract_eq n1 (m + 3) h_env (by omega) (by omega)
 
       have h_assumptions1 : Assumptions n1 input1 := by
-        intro i
-        rw [extract_preserves_element input i (Nat.le_of_lt h_n1_lt)]
-        exact h_assumptions ⟨i.val, by omega⟩
+        intro i hi
+        -- input1[i] = input[i] by the extract lemma
+        have : input1[i]'hi = input[i]'(by omega) := by
+          apply extract_preserves_element
+          omega
+        rw [this]
+        apply h_assumptions i (by omega)
       have h_assumptions2 : Assumptions n2 input2 := by
-        intro i
-        rw [extract_from_offset_preserves_element input i h_sum]
-        exact h_assumptions ⟨n1 + i.val, by omega⟩
+        intro i hi
+        -- input2[i] = input[n1 + i] by the extract lemma
+        have : input2[i]'hi = input[n1 + i]'(by omega) := by
+          apply extract_from_offset_preserves_element
+          exact h_sum
+        rw [this]
+        apply h_assumptions (n1 + i) (by omega)
       have h_spec1 : Spec n1 input1 (env ((main input_var1).output offset)) := by
         apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
         rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
@@ -871,7 +885,8 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
         have h_input2_binary : ∀ x ∈ input2.toList, x = 0 ∨ x = 1 := by
           apply Vector.toList_binary_field
-          exact h_assumptions2
+          intro i
+          exact h_assumptions2 i.val i.isLt
         rw [List.foldl_and_eq_and_foldl _ _ h_foldl1_binary h_input2_binary]
 
         convert h_and_val using 1
@@ -943,14 +958,22 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       let input1 : fields n1 (F p) := ⟨input.toArray.extract 0 n1, by simp only [Array.size_extract, Vector.size_toArray]; unfold n1; omega⟩
       let input2 : fields n2 (F p) := ⟨input.toArray.extract n1 (m + 3), by simp only [Array.size_extract, Vector.size_toArray]; unfold n2; omega⟩
       have h_assumptions1 : Assumptions n1 input1 := by
-        intro i
-        rw [extract_preserves_element input i (by unfold n1; omega)]
-        exact h_assumptions ⟨i.val, by omega⟩
+        intro i hi
+        -- input1[i] = input[i] by the extract lemma
+        have : input1[i]'hi = input[i]'(by omega) := by
+          apply extract_preserves_element
+          unfold n1; omega
+        rw [this]
+        apply h_assumptions i (by omega)
       have h_assumptions2 : Assumptions n2 input2 := by
-        intro i
+        intro i hi
         have h_sum : n1 + n2 = m + 3 := by unfold n1 n2; omega
-        rw [extract_from_offset_preserves_element input i h_sum]
-        exact h_assumptions ⟨n1 + i.val, by omega⟩
+        -- input2[i] = input[n1 + i] by the extract lemma
+        have : input2[i]'hi = input[n1 + i]'(by omega) := by
+          apply extract_from_offset_preserves_element
+          exact h_sum
+        rw [this]
+        apply h_assumptions (n1 + i) (by omega)
 
       have h_n1_lt : n1 < m + 3 := by
         unfold n1
