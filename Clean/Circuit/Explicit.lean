@@ -4,7 +4,7 @@ using the `infer_explicit_circuit(s)` tactic.
 
 This could be useful to simplify circuit statements with less user intervention.
 -/
-
+import Clean.Utils.Misc
 import Clean.Circuit.Subcircuit
 variable {n : ℕ} {F : Type} [Field F] {α β : Type}
 
@@ -120,6 +120,34 @@ instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witnes
   localLength _ _ := size α
   operations c n := [.witness (size α) (toElements ∘ c)]
 
+instance {value var: TypeMap} [ProvableType value] [inst: Witnessable F value var] :
+    ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
+  output _ n := inst.var_eq ▸ varFromOffset value n
+  output_eq c n := by
+    rw [inst.witness_eq]
+    show _ = inst.var_eq ▸ (ProvableType.witness c).output n
+    rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
+      cast_fst, cast_apply (by rw [inst.var_eq])]
+
+  localLength _ _ := size value
+  localLength_eq c n := by
+    rw [inst.witness_eq, Circuit.localLength, eqRec_eq_cast,
+      cast_apply (by rw [inst.var_eq]), snd_cast (by rw [inst.var_eq])]
+    rfl
+
+  operations c n := [.witness (size value) (toElements ∘ c)]
+  operations_eq c n := by
+    rw [inst.witness_eq, Circuit.operations, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+      snd_cast (by rw [inst.var_eq])]
+    rfl
+
+  subcircuitsConsistent c n := by
+    simp only [circuit_norm]
+    rw [inst.witness_eq, eqRec_eq_cast, cast_apply (by rw [inst.var_eq]),
+      snd_cast (by rw [inst.var_eq])]
+    reduce
+    trivial
+
 instance : ExplicitCircuits (F:=F) assertZero where
   output _ _ := ()
   localLength _ _ := 0
@@ -166,7 +194,7 @@ macro_rules
 section
 
 -- single
-example : ExplicitCircuit (witnessField fun _ => (0 : F)) := by infer_explicit_circuit
+example : ExplicitCircuit (witness fun _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
 
 example :
   let add := do
