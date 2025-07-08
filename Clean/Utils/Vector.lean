@@ -61,28 +61,9 @@ def induct {motive : {n: ℕ} → Vector α n → Sort u}
     let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 
-structure ToPush (v : Vector α (n + 1)) where
-  as : Vector α n
-  a : α
-  eq : v = as.push a
-
-def toPush (v : Vector α (n + 1)) : ToPush v where
-  as := v.take n |>.cast Nat.min_add_right_self
-  a := v[n]
-  eq := by
-    rcases v with ⟨ xs, h ⟩
-    simp at h ⊢
-    rcases xs with a | ⟨x, xs⟩
-    ·  simp only [List.size_toArray, List.length_nil, right_eq_add, Nat.add_eq_zero, one_ne_zero,
-      and_false] at h
-    · simp_all only [List.pop_toArray, List.getElem_toArray, List.push_toArray, Array.mk.injEq]
-      rw [List.dropLast_append_getLast?]
-      rw [Option.mem_def]
-      simp only [List.getLast?, Option.some.injEq]
-      rw [List.getLast_eq_getElem]
-      congr
-      simp only [h, add_tsub_cancel_right]
-
+def toPush (v : Vector α (n + 1)) :
+    (as : Vector α n) ×' (a : α) ×' (as.push a = v) :=
+  ⟨ v.pop, v.back, v.push_pop_back ⟩
 
 /- induction principle for Vector.push -/
 def inductPush {motive : {n: ℕ} → Vector α n → Sort u}
@@ -94,6 +75,7 @@ def inductPush {motive : {n: ℕ} → Vector α n → Sort u}
     cast (by subst h; rfl) nil
   | ⟨ .mk (a::as), h ⟩ =>
     have hlen : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
+    let v : Vector α (as.length + 1) := ⟨.mk (a :: as), rfl⟩
     let ⟨ as', a', is_push ⟩ := toPush ⟨.mk (a :: as), rfl⟩
     cast (by subst hlen; rw [is_push]) (push as' a' (inductPush nil push as'))
 
@@ -114,13 +96,13 @@ lemma inductPush_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
   conv => lhs; simp only [cons, inductPush]
   rw [cast_eq_iff_heq]
   have h_push_len : (xs.push a).toList.length = n + 1 := by simp
-  have h_to_push_cons : HEq (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).as (cons x xs) := by
-    have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).as = (cons x xs).cast h_push_len.symm := by
+  have h_to_push_cons : HEq (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 (cons x xs) := by
+    have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).1 = (cons x xs).cast h_push_len.symm := by
       simp [cons, toPush, List.dropLast]
     rw [this]; apply cast_heq
   congr
-  · have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).a = a := by
-      simp [cons, toPush]
+  · have : (toPush ⟨.mk (x :: (xs.push a).toList), rfl⟩).2.1 = a := by
+      simp [toPush]
     rw [this]
 
 theorem inductPush_push {motive : {n: ℕ} → Vector α n → Sort u}
