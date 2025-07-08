@@ -10,10 +10,10 @@ instance {α : Type*} [Zero α] [One α] [DecidableEq α] {x : α} : Decidable (
 
 namespace IsBool
 
-@[simp]
+@[circuit_norm]
 theorem zero {α : Type*} [Zero α] [One α] : IsBool (0 : α) := Or.inl rfl
 
-@[simp]
+@[circuit_norm]
 theorem one {α : Type*} [Zero α] [One α] : IsBool (1 : α) := Or.inr rfl
 
 /-- If x is boolean in a type with a < relation, then x < 2 (when 2 exists) -/
@@ -40,22 +40,17 @@ theorem nat_lt_two {x : ℕ} (h : IsBool x) : x < 2 := by
   · rw [h0]; norm_num
   · rw [h1]; norm_num
 
-section FieldSpecific
-variable {p : ℕ} [Fact p.Prime]
-
 /-- For field elements, if x is boolean then x.val < 2 -/
-theorem val_lt_two {x : F p} (h : IsBool x) : x.val < 2 := by
+theorem val_lt_two {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : x.val < 2 := by
   rcases h with h0 | h1
   · rw [h0]; simp only [ZMod.val_zero]; norm_num
   · rw [h1]; simp only [ZMod.val_one, Nat.one_lt_ofNat]
-
-end FieldSpecific
 
 /-- If x and y are boolean, then x AND y is boolean -/
 theorem and_is_bool {α : Type*} [MulZeroOneClass α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x * y) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, mul_zero]
+  · simp [hx0, mul_zero, zero]
   · simp [hx1, one_mul, hy]
 
 /-- If x and y are boolean, then x OR y is boolean -/
@@ -64,16 +59,17 @@ theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBoo
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, sub_zero, hy]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, one_mul, mul_zero, add_zero, sub_zero]
-    · simp [hx1, hy1, one_mul, mul_one, sub_self]
+    · simp [hx1, hy0, one_mul, mul_zero, add_zero, sub_zero, one]
+    · simp [hx1, hy1, one_mul, mul_one, sub_self, one]
 
 /-- If x is boolean, then NOT x is boolean -/
 theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
     IsBool (1 + x - 2 * x) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, add_zero, zero_mul, sub_zero]
+  · simp [hx0, add_zero, zero_mul, sub_zero, one]
   · simp only [hx1]
     norm_num
+    exact zero
 
 /-- If x and y are boolean, then x XOR y is boolean -/
 theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
@@ -81,36 +77,32 @@ theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBo
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, mul_zero, sub_zero, hy]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, add_zero, one_mul, mul_zero, sub_zero]
+    · simp [hx1, hy0, add_zero, one_mul, mul_zero, sub_zero, one]
     · simp only [hx1, hy1, one_mul, mul_one]
       norm_num
+      exact zero
 
 /-- If x and y are boolean, then NAND(x,y) is boolean -/
 theorem nand_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (1 - x * y) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, mul_zero, sub_zero]
+  · simp [hx0, mul_zero, sub_zero, one]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, one_mul, sub_zero]
-    · simp [hx1, hy1, one_mul, sub_self]
+    · simp [hx1, hy0, one_mul, sub_zero, one]
+    · simp [hx1, hy1, one_mul, sub_self, zero]
 
 /-- If x and y are boolean, then NOR(x,y) is boolean -/
 theorem nor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x * y + 1 - x - y) := by
   rcases hx with hx0 | hx1
   · rcases hy with hy0 | hy1
-    · simp [hx0, hy0, zero_mul, zero_add, sub_zero]
-    · simp [hx0, hy1, zero_mul, zero_add, sub_self]
+    · simp [hx0, hy0, zero_mul, zero_add, sub_zero, one]
+    · simp [hx0, hy1, zero_mul, zero_add, sub_self, zero]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, one_mul, mul_zero, add_sub_cancel, sub_self]
+    · simp [hx1, hy0, one_mul, mul_zero, add_sub_cancel, sub_self, zero]
     · simp [hx1, hy1, one_mul]
+      exact zero
 
-section FieldOperations
-variable {p : ℕ} [Fact p.Prime]
-
--- Field-specific operations can go here if needed
-
-end FieldOperations
 
 end IsBool
 
