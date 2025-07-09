@@ -36,18 +36,15 @@ theorem List.foldl_and_IsBool (l : List ℕ) :
     apply IsBool.land_inherit_left
     assumption
 
-/-- For binary values and binary lists, a &&& foldl orig l = foldl (a &&& orig) l -/
-theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List ℕ)
-    (_ha : IsBool a) (hl : ∀ x ∈ l, IsBool x) :
+/-- For any values, a &&& foldl orig l = foldl (a &&& orig) l -/
+theorem List.and_foldl_eq_foldl (a : ℕ) (orig : ℕ) (l : List ℕ) :
     a &&& List.foldl (· &&& ·) orig l = List.foldl (· &&& ·) (a &&& orig) l := by
   induction l generalizing orig with
   | nil =>
     simp only [List.foldl_nil]
   | cons hd tl ih =>
     simp only [List.foldl_cons]
-    have hhd : hd = 0 ∨ hd = 1 := hl hd (List.Mem.head _)
-    have htl : ∀ x ∈ tl, x = 0 ∨ x = 1 := fun x hx => hl x (List.mem_cons_of_mem hd hx)
-    rw [ih (orig &&& hd) htl]
+    rw [ih (orig &&& hd)]
     congr 1
     simp only [HAnd.hAnd, AndOp.and]
     show a &&& (orig &&& hd) = (a &&& orig) &&& hd
