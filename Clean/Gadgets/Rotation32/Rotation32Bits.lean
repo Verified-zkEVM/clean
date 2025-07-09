@@ -13,7 +13,6 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open _root_ (rotRight32)
 open Gadgets.Rotation32.Theorems
 open ByteDecomposition (Outputs)
 open ByteDecomposition.Theorems (byteDecomposition_lt)

@@ -4,8 +4,6 @@ import Mathlib.Data.Nat.Bitwise
 import Clean.Utils.Bits
 
 namespace Utils.Rotation
--- Import functions directly without namespace
-open _root_ (rotRight64 rotRight32)
 open Bits (toBits toBits_injective)
 
 -- Theorems about 64-bit rotation

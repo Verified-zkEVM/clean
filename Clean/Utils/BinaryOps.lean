@@ -14,7 +14,6 @@ namespace BinaryOps
 
 variable {p : ℕ} [Fact p.Prime]
 
--- Import theorems from Bitwise module
 
 section ListOperations
 

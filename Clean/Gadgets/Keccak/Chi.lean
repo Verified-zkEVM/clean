@@ -8,7 +8,6 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open _root_ (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
