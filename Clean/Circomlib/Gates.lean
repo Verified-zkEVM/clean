@@ -20,7 +20,7 @@ variable {p : ℕ} [Fact p.Prime]
 -- Import the moved lemmas
 open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
 open Operations (append_localLength)
-open BinaryOps (List.foldl_and_IsBool List.and_foldl_eq_foldl_of_all_binary)
+open BinaryOps (List.foldl_and_IsBool List.and_foldl_eq_foldl)
 
 namespace XOR
 /-
@@ -563,7 +563,7 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
     (h_binary : ∀ x ∈ l, IsBool x) :
     List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) =
     init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
-  -- Let's use the existing lemma List.and_foldl_eq_foldl_of_all_binary
+  -- Let's use the existing lemma List.and_foldl_eq_foldl
   -- First, we need to establish that the mapped list elements are binary
   have h_mapped_binary : ∀ x ∈ (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l), IsBool x := by
     intro x hx
@@ -574,7 +574,7 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
     | inl h => left; simp [h, ZMod.val_zero]
     | inr h => right; simp [h, ZMod.val_one]
 
-  rw [List.and_foldl_eq_foldl_of_all_binary init 1 _ h_init h_mapped_binary]
+  rw [List.and_foldl_eq_foldl init 1]
   cases h_init with
   | inl h0 => rw [h0, and_zero_absorb]
   | inr h1 => rw [h1, and_one_id_binary 1 (IsBool.one)]
