@@ -9,29 +9,14 @@ import Mathlib.Data.Nat.Bitwise
 
 open IsBool
 
-/-- Helper for soundness proofs of binary boolean gates -/
-lemma binary_gate_soundness {p : ℕ} [Fact p.Prime]
-    {circuit_expr : F p} {spec_val : ℕ} {is_bool_proof : IsBool circuit_expr}
-    (h_val : circuit_expr.val = spec_val) :
-    circuit_expr.val = spec_val ∧ IsBool circuit_expr :=
-  ⟨h_val, is_bool_proof⟩
-
 section VectorSplitHelpers
 variable {p n n1 n2 : ℕ} [Fact p.Prime]
 
-/-- Helper to prove evaluation equality for take operations -/
-lemma eval_take_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
-    (h_eval : input = eval env input_var) (i : ℕ) (hi : i < n1) (h_n1_le : n1 ≤ n) :
-    input[i] = Expression.eval env input_var[i] := by
-  have : input[i] = (eval env input_var)[i] := by rw [h_eval]
-  simp only [ProvableType.eval_fields, Vector.getElem_map] at this
-  exact this
-
-/-- Helper to prove evaluation equality for drop operations -/
-lemma eval_drop_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
-    (h_eval : input = eval env input_var) (i : ℕ) (hi : n1 + i < n) :
-    input[n1 + i] = Expression.eval env input_var[n1 + i] := by
-  have : input[n1 + i] = (eval env input_var)[n1 + i] := by rw [h_eval]
+/-- Helper to prove evaluation equality at any index -/
+lemma eval_index_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
+    (h_eval : input = eval env input_var) (idx : ℕ) (hidx : idx < n) :
+    input[idx] = Expression.eval env input_var[idx] := by
+  have : input[idx] = (eval env input_var)[idx] := by rw [h_eval]
   simp only [ProvableType.eval_fields, Vector.getElem_map] at this
   exact this
 
@@ -806,14 +791,14 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         apply Vector.ext
         intro i hi
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
-        exact eval_take_helper h_env i (by omega) h_n1_lt
+        exact eval_index_helper h_env i (by omega)
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
         apply Vector.ext
         intro i hi
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
-        exact eval_drop_helper h_env i (by omega)
+        exact eval_index_helper h_env (n1 + i) (by omega)
 
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
@@ -970,24 +955,14 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
         have hi' : i < n1 := hi
         have hi'' : i < m + 3 := by omega
-        -- Use h_env to show equality
-        have : input[i] = (eval env input_var)[i] := by
-          rw [h_env]
-        simp only [ProvableType.eval_fields, Vector.getElem_map] at this ⊢
-        exact this
+        exact eval_index_helper h_env i (by omega)
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
         apply Vector.ext
         intro i hi
-        -- We need to show: input[n1 + i] = (eval env (Vector.cast ⋯ (Vector.drop input_var n1)))[i]
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
-        -- Now we need: input[n1 + i] = (eval env input_var)[n1 + i]
-        have hi' : n1 + i < m + 3 := by omega
-        -- Use the fact that input = eval env input_var
-        have := congrArg (fun v => v[n1 + i]'hi') h_env
-        simp only [ProvableType.eval_fields, Vector.getElem_map] at this
-        exact this
+        exact eval_index_helper h_env (n1 + i) (by omega)
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
         -- input1[i] = input[i] since input1 is take of input
