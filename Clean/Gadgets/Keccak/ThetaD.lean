@@ -71,7 +71,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_xor4 (row_norm 3) h_rot4.right
   rw [h_rot4.left] at h_xor4
 
-  simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, Bitwise.rotLeft64]
+  simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rotLeft64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions
