@@ -12,54 +12,6 @@ def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 def len (_: Vector α n) : ℕ := n
 
-/-- Membership in Vector.toList: if x ∈ v.toList, then x = v[i] for some i -/
-theorem mem_toList_iff_get {α : Type*} {n : ℕ} (v : Vector α n) (x : α) :
-    x ∈ v.toList ↔ ∃ i : Fin n, x = v[i] := by
-  constructor
-  · intro h_mem
-    -- x ∈ v.toList means there exists an index where v.toList[index] = x
-    rw [List.mem_iff_getElem] at h_mem
-    obtain ⟨i, hi, h_eq⟩ := h_mem
-    -- We need i < n to construct Fin n
-    -- v : Vector α n means v.size = n
-    have h_len : v.size = n := by
-      -- Vector α n has size n by construction
-      cases v
-      rename_i arr h_size
-      -- v.size = arr.size = n
-      exact h_size
-    have h_list_len : v.toList.length = v.size := by
-      rfl  -- toList doesn't change the length
-    rw [h_list_len, h_len] at hi
-    -- Now we can use i < n
-    use ⟨i, hi⟩
-    -- Show x = v[⟨i, hi⟩]
-    rw [← h_eq]
-    -- v.toList[i] = v[⟨i, hi⟩]
-    -- Both access the same element from the underlying array
-    simp only [getElem]
-    -- Now we need to show v.toList[i] = v.toArray[⟨i, hi⟩]
-    rfl
-  · intro ⟨i, h_eq⟩
-    rw [h_eq]
-    -- Show v[i] ∈ v.toList
-    rw [List.mem_iff_getElem]
-    use i.val
-    have h_bound : i.val < v.toList.length := by
-      -- v.toList.length = v.size = n
-      have h_len : v.size = n := by
-        cases v
-        rename_i arr h_size
-        exact h_size
-      have h_list_len : v.toList.length = v.size := by
-        rfl
-      rw [h_list_len, h_len]
-      exact i.isLt
-    use h_bound
-    -- Now show v.toList[i.val] = v[i]
-    simp only [getElem]
-    rfl
-
 -- Helper lemma: A vector of length 1 has toList = [v[0]]
 theorem toList_length_one {α : Type} (v : Vector α 1) :
     v.toList = [v[0]] := by

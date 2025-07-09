@@ -14,7 +14,7 @@ namespace BinaryOps
 
 variable {p : ℕ} [Fact p.Prime]
 
-open Bitwise (and_zero_absorb and_one_id_binary)
+-- Import theorems from Bitwise module
 
 section ListOperations
 
@@ -56,25 +56,5 @@ theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List �
 
 end ListOperations
 
-section VectorOperations
-
-/-- If all elements of a vector are binary, then all elements of its list are binary -/
-theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n)
-    (isBinary : α → Prop) :
-    (∀ i : Fin n, isBinary v[i]) →
-    (∀ x ∈ v.toList, isBinary x) := by
-  intro h_vec x h_mem
-  rw [Vector.mem_toList_iff_get] at h_mem
-  rcases h_mem with ⟨i, hi⟩
-  rw [hi]
-  exact h_vec i
-
-/-- Specialized version for F p where binary means IsBool -/
-theorem Vector.toList_binary_field {n : ℕ} (v : Vector (F p) n) :
-    (∀ i : Fin n, IsBool v[i]) →
-    (∀ x ∈ v.toList, IsBool x) :=
-  Vector.toList_binary v IsBool
-
-end VectorOperations
 
 end BinaryOps
