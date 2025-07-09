@@ -18,18 +18,19 @@ open Bitwise (and_zero_absorb and_one_id_binary)
 
 section ListOperations
 
-/-- Folding AND over a list of binary values gives a binary result -/
-theorem List.foldl_and_binary (l : List ℕ) :
-    (∀ x ∈ l, x = 0 ∨ x = 1) → (List.foldl (· &&& ·) 1 l = 0 ∨ List.foldl (· &&& ·) 1 l = 1) := by
+/-- Folding AND over a list of natural numbers with IsBool gives an IsBool result -/
+theorem List.foldl_and_IsBool (l : List ℕ) :
+    (∀ x ∈ l, IsBool x) →
+    IsBool (List.foldl (· &&& ·) 1 l : ℕ) := by
   intro h_all_binary
   induction l with
   | nil =>
     simp only [List.foldl_nil]
-    right; trivial
+    exact IsBool.one
   | cons x xs ih =>
     simp only [List.foldl_cons]
-    have h_x_binary : x = 0 ∨ x = 1 := h_all_binary x (List.Mem.head xs)
-    have h_xs_binary : ∀ y ∈ xs, y = 0 ∨ y = 1 := fun y hy =>
+    have h_x_binary : IsBool x := h_all_binary x (List.Mem.head xs)
+    have h_xs_binary : ∀ y ∈ xs, IsBool y := fun y hy =>
       h_all_binary y (List.Mem.tail x hy)
     have h_tail_binary := ih h_xs_binary
     cases h_x_binary with
@@ -66,7 +67,7 @@ theorem List.foldl_and_binary (l : List ℕ) :
 
 /-- For binary values and binary lists, a &&& foldl orig l = foldl (a &&& orig) l -/
 theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List ℕ)
-    (_ha : a = 0 ∨ a = 1) (hl : ∀ x ∈ l, x = 0 ∨ x = 1) :
+    (_ha : IsBool a) (hl : ∀ x ∈ l, IsBool x) :
     a &&& List.foldl (· &&& ·) orig l = List.foldl (· &&& ·) (a &&& orig) l := by
   induction l generalizing orig with
   | nil =>
@@ -86,7 +87,7 @@ end ListOperations
 section VectorOperations
 
 /-- If all elements of a vector are binary, then all elements of its list are binary -/
-theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n) 
+theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n)
     (isBinary : α → Prop) :
     (∀ i : Fin n, isBinary v[i]) →
     (∀ x ∈ v.toList, isBinary x) := by
@@ -99,7 +100,7 @@ theorem Vector.toList_binary {α : Type*} {n : ℕ} (v : Vector α n)
 /-- Specialized version for F p where binary means IsBool -/
 theorem Vector.toList_binary_field {n : ℕ} (v : Vector (F p) n) :
     (∀ i : Fin n, IsBool v[i]) →
-    (∀ x ∈ v.toList, IsBool x) := 
+    (∀ x ∈ v.toList, IsBool x) :=
   Vector.toList_binary v IsBool
 
 end VectorOperations

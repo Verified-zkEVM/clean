@@ -22,7 +22,7 @@ open Bitwise (and_zero_absorb and_one_id_binary)
 open Vector (mem_toList_iff_get)
 open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
 open Operations (append_localLength)
-open BinaryOps (List.foldl_and_binary List.and_foldl_eq_foldl_of_all_binary Vector.toList_binary_field)
+open BinaryOps (List.foldl_and_IsBool List.and_foldl_eq_foldl_of_all_binary Vector.toList_binary_field)
 
 namespace XOR
 /-
@@ -561,13 +561,13 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment 
 /-- Folding AND over a list with a binary initial accumulator
     is equivalent to ANDing the initial value with the fold starting from 1 -/
 lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
-    (l : List (F p)) (init : ℕ) (h_init : init = 0 ∨ init = 1)
+    (l : List (F p)) (init : ℕ) (h_init : IsBool init)
     (h_binary : ∀ x ∈ l, IsBool x) :
     List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) =
     init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
   -- Let's use the existing lemma List.and_foldl_eq_foldl_of_all_binary
   -- First, we need to establish that the mapped list elements are binary
-  have h_mapped_binary : ∀ x ∈ (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l), x = 0 ∨ x = 1 := by
+  have h_mapped_binary : ∀ x ∈ (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l), IsBool x := by
     intro x hx
     simp only [List.mem_map] at hx
     rcases hx with ⟨y, hy, rfl⟩
@@ -579,7 +579,7 @@ lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
   rw [List.and_foldl_eq_foldl_of_all_binary init 1 _ h_init h_mapped_binary]
   cases h_init with
   | inl h0 => rw [h0, and_zero_absorb]
-  | inr h1 => rw [h1, and_one_id_binary 1 (Or.inr rfl)]
+  | inr h1 => rw [h1, and_one_id_binary 1 (IsBool.one)]
 
 
 /-- Helper to show that extracting a subvector preserves element access -/
@@ -623,24 +623,6 @@ lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n 
                     exact this) := by
     rw [Array.getElem_extract]
   exact h_extract
-
-/-- Helper to show that mapping .val over a binary vector produces binary values -/
-lemma map_val_binary {p n : ℕ} [Fact p.Prime] (input : fields n (F p))
-    (h_assumptions : Assumptions n input) :
-    ∀ x ∈ input.toList.map (·.val), x = 0 ∨ x = 1 := by
-  intro x hx
-  simp only [List.mem_map] at hx
-  rcases hx with ⟨y, hy, rfl⟩
-  -- Use Vector.toList_binary_field to convert vector property to list property
-  -- Convert Assumptions to the form needed by toList_binary_field
-  have h_vec_binary : ∀ i : Fin n, IsBool input[i] := by
-    intro i
-    exact h_assumptions i.val i.isLt
-  have h_toList_binary := Vector.toList_binary_field input h_vec_binary
-  have h_y_binary := h_toList_binary y hy
-  cases h_y_binary with
-  | inl h => left; simp [h, ZMod.val_zero]
-  | inr h => right; simp [h, ZMod.val_one]
 
 
 /-- Soundness for n = 0 case -/
@@ -865,11 +847,19 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           simp only [input1, input2] at this ⊢
           exact this
         rw [h_input_split, List.map_append, List.foldl_append]
-        have h_input1_vals_binary := map_val_binary input1 h_assumptions1
-        have h_foldl1_binary := List.foldl_and_binary _ h_input1_vals_binary
-        have h_input2_vals_binary := map_val_binary input2 h_assumptions2
-
-
+        have h_input1_binary : ∀ x ∈ input1.toList, IsBool x := by
+          apply Vector.toList_binary_field
+          intro i
+          exact h_assumptions1 i.val i.isLt
+        have h_input1_vals_binary : ∀ x ∈ input1.toList.map (·.val), IsBool x := by
+          intro x hx
+          simp only [List.mem_map] at hx
+          rcases hx with ⟨y, hy, rfl⟩
+          have h_y_binary := h_input1_binary y hy
+          cases h_y_binary with
+          | inl h => left; simp [h, ZMod.val_zero]
+          | inr h => right; simp [h, ZMod.val_one]
+        have h_foldl1_binary := List.foldl_and_IsBool _ h_input1_vals_binary
         have h_input2_binary : ∀ x ∈ input2.toList, IsBool x := by
           apply Vector.toList_binary_field
           intro i
