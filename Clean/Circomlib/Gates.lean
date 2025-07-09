@@ -312,10 +312,6 @@ def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expressi
     let n1 := (n + 3) / 2
     let n2 := (n + 3) - n1
 
-    have h_sum : n1 + n2 = n + 3 := by
-      unfold n1 n2
-      omega
-
     let input1 : Vector (Expression (F p)) n1 :=
       ⟨input.toArray.extract 0 n1, by simp [Array.size_extract, min_eq_left]; unfold n1; omega⟩
     let input2 : Vector (Expression (F p)) n2 :=
@@ -469,8 +465,6 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
       · intro h_witnesses
         let n1 := (m + 3) / 2
         let n2 := (m + 3) - n1
-        have h_n1_lt : n1 < m + 3 := Nat.div_lt_self (by omega) (by norm_num)
-        have h_n2_lt : n2 < m + 3 := by simp only [n2, n1]; omega
         apply Environment.can_replace_usesLocalWitnessesCompleteness
         · rw [← main]
           apply subcircuitsConsistent
@@ -552,30 +546,6 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment 
     rw [this]
   simp only [Vector.getElem_map] at this
   exact this.symm
-
-/-- Folding AND over a list with a binary initial accumulator
-    is equivalent to ANDing the initial value with the fold starting from 1 -/
-lemma List.foldl_and_eq_and_foldl {p : ℕ} [Fact p.Prime]
-    (l : List (F p)) (init : ℕ) (h_init : IsBool init)
-    (h_binary : ∀ x ∈ l, IsBool x) :
-    List.foldl (fun x1 x2 ↦ x1 &&& x2) init (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) =
-    init &&& List.foldl (fun x1 x2 ↦ x1 &&& x2) 1 (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l) := by
-  -- Let's use the existing lemma List.and_foldl_eq_foldl
-  -- First, we need to establish that the mapped list elements are binary
-  have h_mapped_binary : ∀ x ∈ (@List.map (F p) ℕ (fun x ↦ ZMod.val x) l), IsBool x := by
-    intro x hx
-    simp only [List.mem_map] at hx
-    rcases hx with ⟨y, hy, rfl⟩
-    have h_y_binary := h_binary y hy
-    cases h_y_binary with
-    | inl h => left; simp [h, ZMod.val_zero]
-    | inr h => right; simp [h, ZMod.val_one]
-
-  rw [List.and_foldl_eq_foldl init 1]
-  cases h_init with
-  | inl h0 => rw [h0, and_zero_absorb]
-  | inr h1 => rw [h1, and_one_id_binary 1 (IsBool.one)]
-
 
 /-- Helper to show that extracting a subvector preserves element access -/
 lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : ℕ) (hi : i < n1) (h_n1_lt : n1 ≤ n) :
