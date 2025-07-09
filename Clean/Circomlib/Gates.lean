@@ -508,10 +508,7 @@ def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
   ∀ (i : ℕ) (h : i < n), IsBool input[i]
 
 def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
-  output.val = (input.toList.map (·.val)).foldl (· &&& ·) 1 ∧ IsBool output
-
-
-
+  output.val = (input.map (·.val)).foldl (· &&& ·) 1 ∧ IsBool output
 
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
 lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment (F p)}
@@ -622,6 +619,39 @@ lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n 
     rw [Array.getElem_extract]
   exact h_extract
 
+lemma Vector.foldl_empty' {α β : Type} (init : β) (f : β → α → β) (v : Vector α 0) :
+    Vector.foldl f init v = init := by
+  rcases v with ⟨ a, ah ⟩
+  rcases a with ⟨ l ⟩
+  cases l with
+  | nil => rfl
+  | cons _ _ => contradiction
+
+/-- Key lemma: folding with &&& over a split vector equals the &&& of the folds over each part -/
+lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
+    (v1 : Vector ℕ n1) (v2 : Vector ℕ n2)
+    (h_split : v.toList = v1.toList ++ v2.toList) :
+    List.foldl (· &&& ·) 1 v.toList =
+    List.foldl (· &&& ·) 1 v1.toList &&& List.foldl (· &&& ·) 1 v2.toList := by
+  rw [h_split, List.foldl_append]
+  -- After append, we have: foldl (· &&& ·) (foldl (· &&& ·) 1 v1.toList) v2.toList
+  -- We need to show this equals (foldl 1 v1) &&& (foldl 1 v2)
+  -- Using List.and_foldl_eq_foldl lemma
+  rw [List.and_foldl_eq_foldl]
+  -- Now we need: foldl (· &&& ·) ((foldl 1 v1) &&& 1) v2 = (foldl 1 v1) &&& (foldl 1 v2)
+  -- Since (x &&& 1) = x for any x, we have what we need
+  congr 1
+  -- Show that (List.foldl (· &&& ·) 1 v1.toList) &&& 1 = List.foldl (· &&& ·) 1 v1.toList
+  -- This is true because List.foldl (· &&& ·) 1 v1.toList is IsBool
+  have h_fold_is_bool : IsBool (List.foldl (· &&& ·) 1 v1.toList : ℕ) := by
+    exact List.foldl_and_IsBool v1.toList
+  -- For binary values, x &&& 1 = x
+  have h_and_one : ∀ x : ℕ, IsBool x → x &&& 1 = x := by
+    intro x hx
+    cases hx with
+    | inl h => rw [h]; norm_num
+    | inr h => rw [h]; norm_num
+  rw [h_and_one _ h_fold_is_bool]
 
 /-- Soundness for n = 0 case -/
 lemma soundness_zero {p : ℕ} [Fact p.Prime]
@@ -633,14 +663,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
   constructor
-  · simp only [Expression.eval]
-    have : input.toList = [] := by
-      cases input using Vector.casesOn
-      rename_i l h
-      simp only [Array.size_eq_length_toList, List.length_eq_zero_iff] at h
-      exact h
-    rw [this]
-    simp only [List.map_nil, List.foldl_nil, ZMod.val_one]
+  · simp [Expression.eval, Vector.foldl_empty', ZMod.val_one]
   · right
     rfl
 
@@ -658,14 +681,22 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
     simp [h_env, circuit_norm]
   constructor
   · simp only [h_eval_eq]
-    rw [Vector.toList_length_one]
-    simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-    -- The goal now has form: (input[0]).val = 1 &&& (input[0]).val
+    -- For a vector of length 1, foldl f init [x] = f init x
+    have h_fold_one : ∀ (v : Vector (F p) 1),
+      Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (v.map (·.val)) = 1 &&& v[0].val := by
+      intro v
+      -- Use Vector.foldl definition
+      rw [Vector.foldl_mk, ← Array.foldl_toList]
+      have h_toList : (v.map (·.val)).toList = [v[0].val] := by
+        rw [Vector.toList_length_one]
+        simp only [Vector.getElem_map]
+      rw [h_toList]
+      simp only [List.foldl_cons, List.foldl_nil]
+    rw [h_fold_one]
     -- For binary values, 1 &&& x = x
-
     cases h_input0 with
-    | inl h0 => rw [h0]; simp only [ZMod.val_zero]; rfl
-    | inr h1 => rw [h1]; simp only [ZMod.val_one]; rfl
+    | inl h0 => rw [h0]; simp only [ZMod.val_zero]; norm_num
+    | inr h1 => rw [h1]; simp only [ZMod.val_one]; norm_num
   · simp only [h_eval_eq]
     exact h_input0
 
@@ -690,14 +721,22 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
   rcases h_and_spec with ⟨h_val, h_binary⟩
   constructor
   · -- Prove output.val = fold
-    simp only [Vector.toList_length_two]
-    simp only [List.map_cons, List.map_nil]
-    rw [List.foldl_cons, List.foldl_cons, List.foldl_nil]
-    have h1 : 1 &&& (input[0]).val = (input[0]).val := by
-      cases h_input0 with
-      | inl h => rw [h]; simp only [ZMod.val_zero]; rfl
-      | inr h => rw [h]; simp only [ZMod.val_one]; rfl
-    rw [h1]
+    -- For a vector of length 2, we need to show the fold equals input[0] &&& input[1]
+    have h_fold_two : Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input.map (·.val)) = input[0].val &&& input[1].val := by
+      rw [Vector.foldl_mk, ← Array.foldl_toList]
+      have h_toList : (input.map (·.val)).toList = [input[0].val, input[1].val] := by
+        rw [Vector.toList_length_two]
+        simp only [Vector.getElem_map]
+      rw [h_toList]
+      simp only [List.foldl_cons, List.foldl_nil]
+      -- The fold gives us (1 &&& input[0].val) &&& input[1].val
+      -- We need to show that 1 &&& x = x for binary x
+      have h_one_and : 1 &&& input[0].val = input[0].val := by
+        cases h_input0 with
+        | inl h => rw [h]; simp only [ZMod.val_zero]; norm_num
+        | inr h => rw [h]; simp only [ZMod.val_one]; norm_num
+      rw [h_one_and]
+    rw [h_fold_two]
     exact h_val
   · -- Prove output = 0 ∨ output = 1
     exact h_binary
@@ -840,39 +879,51 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       rcases h_spec2 with ⟨h_val2, h_binary2⟩
       rcases h_and_spec with ⟨h_and_val, h_and_binary⟩
       constructor
-      · have h_input_split : input.toList = input1.toList ++ input2.toList := by
+      · -- The goal is to show the output equals the fold over the entire input
+        -- We have h_val1, h_val2 showing the outputs equal folds over input1, input2
+        -- And h_and_val showing the final output is their AND
+        -- So we need to relate the fold over the whole input to the AND of the two sub-folds
+
+        -- The goal is about the output of the entire circuit
+        -- which is the AND of the two recursive calls
+        -- h_and_val tells us this output equals out1.val &&& out2.val
+        -- h_val1, h_val2 tell us what out1.val and out2.val are
+
+        -- First simplify the goal by using our hypotheses
+        -- The LHS is the output of the entire circuit
+        -- The RHS is the fold over the entire input
+        -- We know from h_and_val that the output equals out1.val &&& out2.val
+        -- We know from h_val1, h_val2 what out1.val and out2.val are
+
+        -- Rewrite using these facts
+        trans (Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input1.map (·.val)) &&&
+               Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input2.map (·.val)))
+        · -- Show LHS equals this intermediate expression
+          convert h_and_val using 1
+          simp only [ProvableType.eval_fieldPair, out1, out2]
+          simp only [h_val1, h_val2]
+
+        -- Now we need to show that folding over input equals folding over input1 &&& folding over input2
+        -- Convert to list operations
+        rw [Vector.foldl_mk, ← Array.foldl_toList, Vector.foldl_mk, ← Array.foldl_toList,
+            Vector.foldl_mk, ← Array.foldl_toList]
+
+        -- We need the fact that the mapped vectors also split correctly
+        have h_input_split : input.toList = input1.toList ++ input2.toList := by
           have := Vector.toList_extract_append input n1 (by omega : n1 ≤ m + 3)
           simp only [input1, input2] at this ⊢
           exact this
-        rw [h_input_split, List.map_append, List.foldl_append]
-        have h_input1_binary : ∀ x ∈ input1.toList, IsBool x := by
-          intro x h_mem
-          rw [List.mem_iff_getElem] at h_mem
-          rcases h_mem with ⟨i, hi, rfl⟩
-          simp only [Vector.getElem_toList]
-          have h_i_lt_n1 : i < n1 := by
-            have h_len : input1.toList.length = n1 := Vector.length_toList input1
-            rw [← h_len]
-            exact hi
-          exact h_assumptions1 i h_i_lt_n1
-        have h_foldl1_binary : IsBool (List.foldl (· &&& ·) 1 (input1.toList.map (·.val))) := 
-          List.foldl_and_IsBool (input1.toList.map (·.val))
-        have h_input2_binary : ∀ x ∈ input2.toList, IsBool x := by
-          intro x h_mem
-          rw [List.mem_iff_getElem] at h_mem
-          rcases h_mem with ⟨i, hi, rfl⟩
-          simp only [Vector.getElem_toList]
-          have h_i_lt_n2 : i < n2 := by
-            have h_len : input2.toList.length = n2 := Vector.length_toList input2
-            rw [← h_len]
-            exact hi
-          exact h_assumptions2 i h_i_lt_n2
-        rw [List.foldl_and_eq_and_foldl _ _ h_foldl1_binary h_input2_binary]
 
-        convert h_and_val using 1
-        congr 1
-        · rw [h_val1]
-        · rw [h_val2]
+        have h_map_split : (input.map (·.val)).toList = (input1.map (·.val)).toList ++ (input2.map (·.val)).toList := by
+          simp only [Vector.toList_map]
+          rw [h_input_split, List.map_append]
+
+        -- The goal is already in the form we need for our lemma
+        -- We have: List.foldl over input1 &&& List.foldl over input2 = List.foldl over input
+        -- This is exactly what Vector.foldl_and_split proves (in reverse)
+        symm
+        apply Vector.foldl_and_split
+        assumption
       · exact h_and_binary
 
 lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
