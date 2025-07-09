@@ -9,6 +9,34 @@ import Mathlib.Data.Nat.Bitwise
 
 open IsBool
 
+/-- Helper for soundness proofs of binary boolean gates -/
+lemma binary_gate_soundness {p : ℕ} [Fact p.Prime]
+    {circuit_expr : F p} {spec_val : ℕ} {is_bool_proof : IsBool circuit_expr}
+    (h_val : circuit_expr.val = spec_val) :
+    circuit_expr.val = spec_val ∧ IsBool circuit_expr :=
+  ⟨h_val, is_bool_proof⟩
+
+section VectorSplitHelpers
+variable {p n n1 n2 : ℕ} [Fact p.Prime]
+
+/-- Helper to prove evaluation equality for take operations -/
+lemma eval_take_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
+    (h_eval : input = eval env input_var) (i : ℕ) (hi : i < n1) (h_n1_le : n1 ≤ n) :
+    input[i] = Expression.eval env input_var[i] := by
+  have : input[i] = (eval env input_var)[i] := by rw [h_eval]
+  simp only [ProvableType.eval_fields, Vector.getElem_map] at this
+  exact this
+
+/-- Helper to prove evaluation equality for drop operations -/
+lemma eval_drop_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
+    (h_eval : input = eval env input_var) (i : ℕ) (hi : n1 + i < n) (_h_n1_le : n1 ≤ n) :
+    input[n1 + i] = Expression.eval env input_var[n1 + i] := by
+  have : input[n1 + i] = (eval env input_var)[n1 + i] := by rw [h_eval]
+  simp only [ProvableType.eval_fields, Vector.getElem_map] at this
+  exact this
+
+end VectorSplitHelpers
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/gates.circom
@@ -55,8 +83,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp only [h_a, h_b] <;> norm_num
+    · convert xor_eq_val_xor h_a h_b using 1
+      ring_nf
     · convert xor_is_bool h_a h_b using 1
       ring_nf
 
@@ -97,8 +125,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp [h_a, h_b]
+    · exact and_eq_val_and h_a h_b
     · convert and_is_bool h_a h_b using 1
 
   completeness := by
@@ -138,8 +165,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp [h_a, h_b]
+    · convert or_eq_val_or h_a h_b using 1
+      ring_nf
     · convert or_is_bool h_a h_b using 1
       ring_nf
 
@@ -178,7 +205,8 @@ def circuit : FormalCircuit (F p) field field where
     rw [h_env] at h_hold
     simp_all only [h_hold]
     constructor
-    · rcases h_in with h_in | h_in <;> rw [h_in] <;> ring_nf <;> simp [ZMod.val_one]
+    · convert not_eq_val_not h_in using 1
+      ring_nf
     · convert @IsBool.not_is_bool (F p) _ _ h_in using 1
       ring_nf
 
@@ -219,8 +247,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp [h_a, h_b, ZMod.val_one]
+    · convert nand_eq_val_nand h_a h_b using 1
+      ring_nf
     · convert nand_is_bool h_a h_b using 1
       ring_nf
 
@@ -261,8 +289,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only [h_hold]
     constructor
-    · rcases h_a with h_a | h_a <;> rcases h_b with h_b | h_b <;>
-        simp [h_a, h_b, ZMod.val_one]
+    · convert nor_eq_val_nor h_a h_b using 1
+      ring_nf
     · convert nor_is_bool h_a h_b using 1
       ring_nf
 
@@ -801,37 +829,17 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       let input_var2 : Var (fields n2) (F p) := input_var.drop n1 |>.cast (by omega)
       have h_eval1 : input1 = eval env input_var1 := by
         simp only [input_var1, input1]
-        -- Both are casts of take operations
-        -- Need to show: take input n1 = eval env (take input_var n1)
         apply Vector.ext
         intro i hi
-        -- Need to show: input[i] = (eval env (Vector.cast _ (Vector.take input_var n1)))[i]
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
-        -- The i-th element of take is just the i-th element
-        have hi' : i < n1 := hi
-        have hi'' : i < m + 3 := by omega
-        -- Use h_env to show equality
-        -- Use h_env to show equality
-        have : input[i] = (eval env input_var)[i] := by
-          rw [h_env]
-        simp only [ProvableType.eval_fields, Vector.getElem_map] at this ⊢
-        exact this
+        exact eval_take_helper h_env i (by omega) h_n1_lt
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
-        -- Both are casts of drop operations
-        -- Need to show: drop input n1 = eval env (drop input_var n1)
         apply Vector.ext
         intro i hi
-        -- Need to show: input[n1 + i] = (eval env (Vector.cast _ (Vector.drop input_var n1)))[i]
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
-        -- The i-th element of drop is the (n1 + i)-th element of original
-        have hi' : n1 + i < m + 3 := by omega
-        -- Use h_env to show equality
-        have : input[n1 + i] = (eval env input_var)[n1 + i] := by
-          rw [h_env]
-        simp only [ProvableType.eval_fields, Vector.getElem_map] at this
-        exact this
+        exact eval_drop_helper h_env i (by omega) (Nat.le_of_lt h_n1_lt)
 
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi

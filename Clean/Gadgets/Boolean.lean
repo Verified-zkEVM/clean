@@ -157,6 +157,41 @@ theorem val_of_IsBool {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : IsBool
   · rw [h0]; simp only [ZMod.val_zero]; exact zero
   · rw [h1]; simp only [ZMod.val_one]; exact one
 
+section BinaryOps
+variable {p : ℕ} [Fact p.Prime]
+
+/-- For boolean field elements, XOR operation matches bitwise XOR of values -/
+theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a + b - 2 * a * b).val = a.val ^^^ b.val := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb] <;> norm_num
+
+/-- For boolean field elements, AND operation matches bitwise AND of values -/
+theorem and_eq_val_and {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a * b).val = a.val &&& b.val := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
+
+/-- For boolean field elements, OR operation matches bitwise OR of values -/
+theorem or_eq_val_or {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a + b - a * b).val = a.val ||| b.val := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
+
+/-- For boolean field elements, NAND operation matches 1 - AND of values -/
+theorem nand_eq_val_nand {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (1 - a * b).val = 1 - (a.val &&& b.val) := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb, ZMod.val_one]
+
+/-- For boolean field elements, NOR operation matches 1 - OR of values -/
+theorem nor_eq_val_nor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a * b + 1 - a - b).val = 1 - (a.val ||| b.val) := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb, ZMod.val_one]
+
+/-- For boolean field elements, NOT operation matches 1 - value -/
+theorem not_eq_val_not {a : F p} (ha : IsBool a) :
+    (1 - 2 * a + a).val = 1 - a.val := by
+  rcases ha with ha | ha <;> rw [ha] <;> ring_nf <;> simp [ZMod.val_one]
+
+end BinaryOps
+
 
 end IsBool
 
