@@ -635,10 +635,7 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
   rw [List.and_foldl_eq_foldl]
   
   -- Now we need to show that a &&& 1 = a when IsBool a
-  -- For binary values (0 or 1), x &&& 1 = x
-  cases h_a_bool with
-  | inl h0 => rw [h0]; norm_num
-  | inr h1 => rw [h1]; norm_num
+  rw [land_one_of_IsBool a h_a_bool]
 
 /-- Soundness for n = 0 case -/
 lemma soundness_zero {p : ℕ} [Fact p.Prime]
@@ -681,9 +678,7 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
       simp only [List.foldl_cons, List.foldl_nil]
     rw [h_fold_one]
     -- For binary values, 1 &&& x = x
-    cases h_input0 with
-    | inl h0 => rw [h0]; simp only [ZMod.val_zero]; norm_num
-    | inr h1 => rw [h1]; simp only [ZMod.val_one]; norm_num
+    exact (one_land_of_IsBool input[0].val (val_of_IsBool h_input0)).symm
   · simp only [h_eval_eq]
     exact h_input0
 
@@ -718,11 +713,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
       simp only [List.foldl_cons, List.foldl_nil]
       -- The fold gives us (1 &&& input[0].val) &&& input[1].val
       -- We need to show that 1 &&& x = x for binary x
-      have h_one_and : 1 &&& input[0].val = input[0].val := by
-        cases h_input0 with
-        | inl h => rw [h]; simp only [ZMod.val_zero]; norm_num
-        | inr h => rw [h]; simp only [ZMod.val_one]; norm_num
-      rw [h_one_and]
+      rw [one_land_of_IsBool input[0].val (val_of_IsBool h_input0)]
     rw [h_fold_two]
     exact h_val
   · -- Prove output = 0 ∨ output = 1

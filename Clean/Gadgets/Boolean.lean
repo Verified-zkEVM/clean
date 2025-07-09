@@ -140,6 +140,23 @@ theorem nor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBo
     · simp [hx1, hy1, one_mul]
       exact zero
 
+/-- If a is boolean (0 or 1), then a &&& 1 = a -/
+theorem land_one_of_IsBool (a : ℕ) (h : IsBool a) : a &&& 1 = a := by
+  rcases h with h0 | h1
+  · rw [h0]; norm_num
+  · rw [h1]; norm_num
+
+/-- If a is boolean (0 or 1), then 1 &&& a = a -/
+theorem one_land_of_IsBool (a : ℕ) (h : IsBool a) : 1 &&& a = a := by
+  rw [Nat.land_comm]
+  exact land_one_of_IsBool a h
+
+/-- If x is boolean in F p, then x.val is boolean as a natural number -/
+theorem val_of_IsBool {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : IsBool x.val := by
+  rcases h with h0 | h1
+  · rw [h0]; simp only [ZMod.val_zero]; exact zero
+  · rw [h1]; simp only [ZMod.val_one]; exact one
+
 
 end IsBool
 
