@@ -1,8 +1,6 @@
 import Clean.Utils.Bitwise
 
 namespace Specs.BLAKE3
--- Import functions directly without namespace
-open _root_ (add32 rotRight32)
 
 ------------
 -- CONSTANTS
