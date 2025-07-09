@@ -599,7 +599,46 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
     (h_split : v = h_sum ▸ (v1 ++ v2)) :
     Vector.foldl (· &&& ·) 1 v =
     Vector.foldl (· &&& ·) 1 v1 &&& Vector.foldl (· &&& ·) 1 v2 := by
-  sorry
+  -- Substitute v with the appended vectors
+  rw [h_split]
+  -- The key insight: after substituting h_sum, the transport becomes identity
+  subst h_sum
+  -- Now the goal simplifies since the transport is on a reflexive equality
+  -- Apply Vector.foldl_append
+  rw [Vector.foldl_append]
+  -- After append, we have: foldl (· &&& ·) (foldl (· &&& ·) 1 v1) v2
+  -- We need to show this equals (foldl 1 v1) &&& (foldl 1 v2)
+  -- Use List.and_foldl_eq_foldl from BinaryOps
+  symm
+  -- The key is that we need to use the fact that a satisfies IsBool
+  -- because it's the result of folding with &&& starting from 1
+  generalize h1 : Vector.foldl (· &&& ·) 1 v1 = a
+  generalize h2 : Vector.foldl (· &&& ·) 1 v2 = b
+  -- Now we need: Vector.foldl (· &&& ·) a v2 = a &&& b
+  rw [← h2]
+  
+  -- First, establish that a is boolean
+  have h_a_bool : IsBool a := by
+    rw [← h1]
+    -- Convert to List operations to use List.foldl_and_IsBool
+    rw [Vector.foldl_mk, ← Array.foldl_toList]
+    exact List.foldl_and_IsBool v1.toList
+  
+  -- Convert to List operations
+  have : ∀ (init : ℕ) (vec : Vector ℕ n2),
+         Vector.foldl (· &&& ·) init vec = List.foldl (· &&& ·) init vec.toList := by
+    intros init vec
+    rw [Vector.foldl_mk, ← Array.foldl_toList]
+  rw [this, this]
+  
+  -- Apply the lemma
+  rw [List.and_foldl_eq_foldl]
+  
+  -- Now we need to show that a &&& 1 = a when IsBool a
+  -- For binary values (0 or 1), x &&& 1 = x
+  cases h_a_bool with
+  | inl h0 => rw [h0]; norm_num
+  | inr h1 => rw [h1]; norm_num
 
 /-- Soundness for n = 0 case -/
 lemma soundness_zero {p : ℕ} [Fact p.Prime]
