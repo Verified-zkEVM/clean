@@ -29,7 +29,7 @@ lemma eval_take_helper {env : Environment (F p)} {input_var : Var (fields n) (F 
 
 /-- Helper to prove evaluation equality for drop operations -/
 lemma eval_drop_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
-    (h_eval : input = eval env input_var) (i : ℕ) (hi : n1 + i < n) (_h_n1_le : n1 ≤ n) :
+    (h_eval : input = eval env input_var) (i : ℕ) (hi : n1 + i < n) :
     input[n1 + i] = Expression.eval env input_var[n1 + i] := by
   have : input[n1 + i] = (eval env input_var)[n1 + i] := by rw [h_eval]
   simp only [ProvableType.eval_fields, Vector.getElem_map] at this
@@ -644,24 +644,24 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
   generalize h2 : Vector.foldl (· &&& ·) 1 v2 = b
   -- Now we need: Vector.foldl (· &&& ·) a v2 = a &&& b
   rw [← h2]
-  
+
   -- First, establish that a is boolean
   have h_a_bool : IsBool a := by
     rw [← h1]
     -- Convert to List operations to use List.foldl_and_IsBool
     rw [Vector.foldl_mk, ← Array.foldl_toList]
     exact List.foldl_and_IsBool v1.toList
-  
+
   -- Convert to List operations
   have : ∀ (init : ℕ) (vec : Vector ℕ n2),
          Vector.foldl (· &&& ·) init vec = List.foldl (· &&& ·) init vec.toList := by
     intros init vec
     rw [Vector.foldl_mk, ← Array.foldl_toList]
   rw [this, this]
-  
+
   -- Apply the lemma
   rw [List.and_foldl_eq_foldl]
-  
+
   -- Now we need to show that a &&& 1 = a when IsBool a
   rw [land_one_of_IsBool a h_a_bool]
 
@@ -839,7 +839,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         apply Vector.ext
         intro i hi
         simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
-        exact eval_drop_helper h_env i (by omega) (Nat.le_of_lt h_n1_lt)
+        exact eval_drop_helper h_env i (by omega)
 
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
