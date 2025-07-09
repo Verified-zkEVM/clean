@@ -12,29 +12,6 @@ particularly for AND operations on binary values (0 or 1).
 
 namespace BinaryOps
 
-lemma IsBool_inherit_land_l (l r : ℕ):
-    IsBool l -> IsBool (l &&& r) := by
-  rintro (h_l0 | h_l1)
-  · -- Case: l = 0
-    left
-    rw [h_l0]
-    simp only [HAnd.hAnd, AndOp.and]
-    have : (0 : ℕ).land r = 0 := by
-      unfold Nat.land
-      simp [Nat.bitwise]
-    exact this
-  · -- Case: l = 1
-    subst h_l1
-    simp only [Nat.one_and_eq_mod_two]
-    apply IsBool.nat_of_lt_two
-    omega
-
-lemma IsBool_inherit_land_r (l r : ℕ):
-    IsBool r -> IsBool (l &&& r) := by
-  intro h
-  rw [Nat.land_comm]
-  exact IsBool_inherit_land_l r l h
-
 variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (and_zero_absorb and_one_id_binary)
@@ -57,7 +34,7 @@ theorem List.foldl_and_IsBool (l : List ℕ) :
   | cons x xs ih =>
     simp only [List.foldl_cons]
     apply ih
-    apply IsBool_inherit_land_l
+    apply IsBool.land_inherit_left
     assumption
 
 /-- For binary values and binary lists, a &&& foldl orig l = foldl (a &&& orig) l -/

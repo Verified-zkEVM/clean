@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
+import Mathlib.Data.Nat.Bitwise
 
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
@@ -53,6 +54,28 @@ theorem nat_of_lt_two {x : ℕ} (h : x < 2) : IsBool x := by
       have : m + 2 ≥ 2 := by omega
       have : m + 2 < 2 := h
       omega
+
+/-- If l is boolean, then l AND r is boolean -/
+theorem land_inherit_left (l r : ℕ) (h : IsBool l) : IsBool (l &&& r) := by
+  rcases h with h_l0 | h_l1
+  · -- Case: l = 0
+    left
+    rw [h_l0]
+    simp only [HAnd.hAnd, AndOp.and]
+    have : (0 : ℕ).land r = 0 := by
+      unfold Nat.land
+      simp [Nat.bitwise]
+    exact this
+  · -- Case: l = 1
+    subst h_l1
+    simp only [Nat.one_and_eq_mod_two]
+    apply nat_of_lt_two
+    omega
+
+/-- If r is boolean, then l AND r is boolean -/
+theorem land_inherit_right (l r : ℕ) (h : IsBool r) : IsBool (l &&& r) := by
+  rw[Nat.land_comm]
+  simp_all [land_inherit_left]
 
 /-- For field elements, if x is boolean then x.val < 2 -/
 theorem val_lt_two {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : x.val < 2 := by
