@@ -536,16 +536,11 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment 
     ProvableType.eval (α := fields (finish - start)) env
       ⟨v.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ =
     ⟨w.toArray.extract start finish, by simp [Array.size_extract]; omega⟩ := by
-  -- Work with the definition of eval for fields
   simp only [ProvableType.eval_fields]
-  -- Need to show the mapped vectors are equal
   apply Vector.ext
   intro i hi
-  -- Simplify the map operations
   simp only [Vector.getElem_map]
-  -- Key insight: the i-th element of extracted array corresponds to (start + i)-th of original
   have h_idx : start + i < n := by omega
-  -- Show LHS
   have size_proof : (v.toArray.extract start finish).size = finish - start := by
     simp [Array.size_extract]
     omega
@@ -627,42 +622,26 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
     (h_split : v = h_sum ▸ (v1 ++ v2)) :
     Vector.foldl (· &&& ·) 1 v =
     Vector.foldl (· &&& ·) 1 v1 &&& Vector.foldl (· &&& ·) 1 v2 := by
-  -- Substitute v with the appended vectors
   rw [h_split]
-  -- The key insight: after substituting h_sum, the transport becomes identity
   subst h_sum
-  -- Now the goal simplifies since the transport is on a reflexive equality
-  -- Apply Vector.foldl_append
   rw [Vector.foldl_append]
-  -- After append, we have: foldl (· &&& ·) (foldl (· &&& ·) 1 v1) v2
-  -- We need to show this equals (foldl 1 v1) &&& (foldl 1 v2)
-  -- Use List.and_foldl_eq_foldl from BinaryOps
   symm
-  -- The key is that we need to use the fact that a satisfies IsBool
-  -- because it's the result of folding with &&& starting from 1
   generalize h1 : Vector.foldl (· &&& ·) 1 v1 = a
   generalize h2 : Vector.foldl (· &&& ·) 1 v2 = b
-  -- Now we need: Vector.foldl (· &&& ·) a v2 = a &&& b
   rw [← h2]
 
-  -- First, establish that a is boolean
   have h_a_bool : IsBool a := by
     rw [← h1]
-    -- Convert to List operations to use List.foldl_and_IsBool
     rw [Vector.foldl_mk, ← Array.foldl_toList]
     exact List.foldl_and_IsBool v1.toList
 
-  -- Convert to List operations
   have : ∀ (init : ℕ) (vec : Vector ℕ n2),
          Vector.foldl (· &&& ·) init vec = List.foldl (· &&& ·) init vec.toList := by
     intros init vec
     rw [Vector.foldl_mk, ← Array.foldl_toList]
   rw [this, this]
 
-  -- Apply the lemma
   rw [List.and_foldl_eq_foldl]
-
-  -- Now we need to show that a &&& 1 = a when IsBool a
   rw [land_one_of_IsBool a h_a_bool]
 
 /-- Soundness for n = 0 case -/
@@ -705,7 +684,6 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
       rw [h_toList]
       simp only [List.foldl_cons, List.foldl_nil]
     rw [h_fold_one]
-    -- For binary values, 1 &&& x = x
     exact (one_land_of_IsBool input[0].val (val_of_IsBool h_input0)).symm
   · simp only [h_eval_eq]
     exact h_input0
@@ -731,7 +709,6 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
   rcases h_and_spec with ⟨h_val, h_binary⟩
   constructor
   · -- Prove output.val = fold
-    -- For a vector of length 2, we need to show the fold equals input[0] &&& input[1]
     have h_fold_two : Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input.map (·.val)) = input[0].val &&& input[1].val := by
       rw [Vector.foldl_mk, ← Array.foldl_toList]
       have h_toList : (input.map (·.val)).toList = [input[0].val, input[1].val] := by
@@ -739,13 +716,10 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
         simp only [Vector.getElem_map]
       rw [h_toList]
       simp only [List.foldl_cons, List.foldl_nil]
-      -- The fold gives us (1 &&& input[0].val) &&& input[1].val
-      -- We need to show that 1 &&& x = x for binary x
       rw [one_land_of_IsBool input[0].val (val_of_IsBool h_input0)]
     rw [h_fold_two]
     exact h_val
-  · -- Prove output = 0 ∨ output = 1
-    exact h_binary
+  · exact h_binary
 
 /-- Completeness for n = 0 case -/
 lemma completeness_zero {p : ℕ} [Fact p.Prime]
@@ -885,73 +859,34 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       rcases h_spec2 with ⟨h_val2, h_binary2⟩
       rcases h_and_spec with ⟨h_and_val, h_and_binary⟩
       constructor
-      · -- The goal is to show the output equals the fold over the entire input
-        -- We have h_val1, h_val2 showing the outputs equal folds over input1, input2
-        -- And h_and_val showing the final output is their AND
-        -- So we need to relate the fold over the whole input to the AND of the two sub-folds
-
-        -- The goal is about the output of the entire circuit
-        -- which is the AND of the two recursive calls
-        -- h_and_val tells us this output equals out1.val &&& out2.val
-        -- h_val1, h_val2 tell us what out1.val and out2.val are
-
-        -- First simplify the goal by using our hypotheses
-        -- The LHS is the output of the entire circuit
-        -- The RHS is the fold over the entire input
-        -- We know from h_and_val that the output equals out1.val &&& out2.val
-        -- We know from h_val1, h_val2 what out1.val and out2.val are
-
-        -- Rewrite using these facts
-        trans (Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input1.map (·.val)) &&&
+      · trans (Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input1.map (·.val)) &&&
                Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input2.map (·.val)))
-        · -- Show LHS equals this intermediate expression
-          convert h_and_val using 1
+        · convert h_and_val using 1
           simp only [ProvableType.eval_fieldPair, out1, out2]
           simp only [h_val1, h_val2]
 
-        -- Now we need to show that folding over input equals folding over input1 &&& folding over input2
-        -- We're working with Vector.foldl throughout (more idiomatic)
-
-        -- We need the fact that the mapped vectors also split correctly
         have h_append : input1.cast (by omega : n1 = n1) ++ input2.cast (by omega : n2 = n2) =
                           input.cast (by omega : m + 3 = n1 + n2) := by
-            -- input1 = input.take n1 |>.cast _ and input2 = input.drop n1 |>.cast _
             simp only [input1, input2]
-            -- Apply Vector.append_take_drop
-            -- We need to show the cast operations give the right result
-            -- We need to show the casted vectors equal the original
             have h_eq : n1 + n2 = m + 3 := by omega
             simp only [Vector.cast_cast]
             rw [← Vector.append_take_drop (n := n1) (m := n2) (v := input.cast h_eq.symm)]
-            -- Now use append_take_drop
             congr 1
 
-        -- Now apply Vector.foldl_and_split to the mapped vectors
         symm
         refine Vector.foldl_and_split (Vector.map (·.val) input) (Vector.map (·.val) input1) (Vector.map (·.val) input2) ?_ ?_
-        · -- First goal: n1 + n2 = m + 3
-          exact h_sum
-        · -- Second goal: Vector.map (·.val) input = h_sum ▸ (Vector.map (·.val) input1 ++ Vector.map (·.val) input2)
-          -- Use the fact that h_append gives us the relationship between input and input1 ++ input2
-          -- First, apply map to both sides of h_append
-          have h_map_append : Vector.map (·.val) (input.cast (by omega : m + 3 = n1 + n2)) =
+        · exact h_sum
+        · have h_map_append : Vector.map (·.val) (input.cast (by omega : m + 3 = n1 + n2)) =
                              Vector.map (·.val) (input1.cast (by omega : n1 = n1) ++ input2.cast (by omega : n2 = n2)) := by
             congr 1
             exact h_append.symm
 
-          -- Simplify the RHS
           simp only [Vector.map_append] at h_map_append
 
-          -- Now we need to show that the transport (▸) equals the cast and map
-          -- The key is that for vectors of the same underlying data, cast and transport are equal
-          -- Let's prove this step by step
-
-          -- First, show that map preserves casts
           have h1 : Vector.map (·.val) input = (Vector.map (·.val) (input.cast (by omega : m + 3 = n1 + n2))).cast h_sum := by
             ext i
             simp only [Vector.getElem_map, Vector.getElem_cast]
 
-          -- Now show that cast of append equals append after removing redundant casts
           have h2 : Vector.map (·.val) (input1.cast (by omega : n1 = n1)) = Vector.map (·.val) input1 := by
             ext i
             simp only [Vector.getElem_map, Vector.getElem_cast]
@@ -960,10 +895,8 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             ext i
             simp only [Vector.getElem_map, Vector.getElem_cast]
 
-          -- Combine everything
           rw [h1, h_map_append, h2, h3]
 
-          -- Finally, show that cast and transport are equal
           have h_cast_transport : ∀ {n m : ℕ} (h : n = m) (v : Vector ℕ n),
                                   Vector.cast h v = h ▸ v := by
             intros n m h v
@@ -1083,16 +1016,8 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           main input_var2 >>= fun out2 =>
           AND.circuit.main (out1, out2)).operations offset) := by
         simp only [main, AND.circuit, input_var1, input_var2]
-        -- The main function now uses take/drop, and input_var1, input_var2 are defined using take/drop
-        -- Need to show the expressions are equal
-        -- The expressions are equal by definition of input_var1 and input_var2
         rfl
 
-      -- Note that n1 = (m + 3) / 2 by definition
-      -- The goal uses extract, but we can show this equals our take/drop version
-      -- because Vector.take n1 = Vector.extract 0 n1 and Vector.drop n1 = Vector.extract n1
-
-      -- First, let's establish that the extract-based expressions equal our variables
       have h_extract_eq_var1 : Vector.cast (by simp only [Nat.min_def, n1]; split <;> omega)
                                           (Vector.extract input_var 0 ((m + 3) / 2)) = input_var1 := by
         simp only [input_var1, Vector.take_eq_extract, n1]
@@ -1102,13 +1027,10 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [input_var2, Vector.drop_eq_cast_extract, n1]
         rfl
 
-      -- We need to show that the goal equals what we can prove
-      -- Since n1 = (m + 3) / 2, the extract expressions are the same
       suffices Circuit.ConstraintsHold.Completeness env
         ((main input_var1 >>= fun out1 =>
           main input_var2 >>= fun out2 =>
           AND.circuit.main (out1, out2)).operations offset) by
-        -- Show that the goal equals this
         convert this
 
       rw [h_main_eq] at h_local_witnesses
