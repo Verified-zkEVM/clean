@@ -40,6 +40,20 @@ theorem nat_lt_two {x : ℕ} (h : IsBool x) : x < 2 := by
   · rw [h0]; norm_num
   · rw [h1]; norm_num
 
+/-- If a natural number is less than 2, then it is boolean (0 or 1) -/
+theorem nat_of_lt_two {x : ℕ} (h : x < 2) : IsBool x := by
+  cases x with
+  | zero => exact IsBool.zero
+  | succ n =>
+    cases n with
+    | zero => exact IsBool.one
+    | succ m =>
+      -- This case is impossible since x = m + 2 ≥ 2
+      exfalso
+      have : m + 2 ≥ 2 := by omega
+      have : m + 2 < 2 := h
+      omega
+
 /-- For field elements, if x is boolean then x.val < 2 -/
 theorem val_lt_two {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : x.val < 2 := by
   rcases h with h0 | h1

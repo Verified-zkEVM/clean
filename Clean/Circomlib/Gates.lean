@@ -851,15 +851,8 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           apply Vector.toList_binary_field
           intro i
           exact h_assumptions1 i.val i.isLt
-        have h_input1_vals_binary : ∀ x ∈ input1.toList.map (·.val), IsBool x := by
-          intro x hx
-          simp only [List.mem_map] at hx
-          rcases hx with ⟨y, hy, rfl⟩
-          have h_y_binary := h_input1_binary y hy
-          cases h_y_binary with
-          | inl h => left; simp [h, ZMod.val_zero]
-          | inr h => right; simp [h, ZMod.val_one]
-        have h_foldl1_binary := List.foldl_and_IsBool _ h_input1_vals_binary
+        have h_foldl1_binary : IsBool (List.foldl (· &&& ·) 1 (input1.toList.map (·.val))) := 
+          List.foldl_and_IsBool (input1.toList.map (·.val))
         have h_input2_binary : ∀ x ∈ input2.toList, IsBool x := by
           apply Vector.toList_binary_field
           intro i
