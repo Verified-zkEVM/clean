@@ -12,58 +12,53 @@ particularly for AND operations on binary values (0 or 1).
 
 namespace BinaryOps
 
+lemma IsBool_inherit_land_l (l r : ℕ):
+    IsBool l -> IsBool (l &&& r) := by
+  rintro (h_l0 | h_l1)
+  · -- Case: l = 0
+    left
+    rw [h_l0]
+    simp only [HAnd.hAnd, AndOp.and]
+    have : (0 : ℕ).land r = 0 := by
+      unfold Nat.land
+      simp [Nat.bitwise]
+    exact this
+  · -- Case: l = 1
+    subst h_l1
+    simp only [Nat.one_and_eq_mod_two]
+    apply IsBool.nat_of_lt_two
+    omega
+
+lemma IsBool_inherit_land_r (l r : ℕ):
+    IsBool r -> IsBool (l &&& r) := by
+  intro h
+  rw [Nat.land_comm]
+  exact IsBool_inherit_land_l r l h
+
 variable {p : ℕ} [Fact p.Prime]
 
 open Bitwise (and_zero_absorb and_one_id_binary)
 
 section ListOperations
 
-/-- Folding AND over a list of natural numbers with IsBool gives an IsBool result -/
+/-- Folding AND over any list of natural numbers starting from 1 gives an IsBool result -/
 theorem List.foldl_and_IsBool (l : List ℕ) :
-    (∀ x ∈ l, IsBool x) →
     IsBool (List.foldl (· &&& ·) 1 l : ℕ) := by
-  intro h_all_binary
-  induction l with
+  -- We'll prove a more general statement: folding with any IsBool initial value
+  -- preserves the IsBool property
+  suffices h_general : ∀ (init : ℕ), IsBool init → IsBool (List.foldl (· &&& ·) init l) by
+    exact h_general 1 IsBool.one
+
+  intro init h_init
+  induction l generalizing init with
   | nil =>
     simp only [List.foldl_nil]
-    exact IsBool.one
+    exact h_init
   | cons x xs ih =>
     simp only [List.foldl_cons]
-    have h_x_binary : IsBool x := h_all_binary x (List.Mem.head xs)
-    have h_xs_binary : ∀ y ∈ xs, IsBool y := fun y hy =>
-      h_all_binary y (List.Mem.tail x hy)
-    have h_tail_binary := ih h_xs_binary
-    cases h_x_binary with
-    | inl h_x_zero =>
-      rw [h_x_zero]
-      simp only [HAnd.hAnd, AndOp.and]
-      left
-      suffices h : List.foldl (· &&& ·) (1 &&& 0) xs = 0 by
-        simp only [List.foldl_cons, HAnd.hAnd, AndOp.and] at h ⊢
-        exact h
-      have h_one_zero : (1 : ℕ) &&& 0 = 0 := by
-        simp only [HAnd.hAnd, AndOp.and]
-        rfl
-      rw [h_one_zero]
-      clear h_one_zero h_x_zero h_all_binary h_xs_binary h_tail_binary ih
-      generalize hxs : xs = xs'
-      clear xs hxs
-      induction xs' with
-      | nil => simp [List.foldl_nil]
-      | cons y ys ih =>
-        simp only [List.foldl_cons, HAnd.hAnd, AndOp.and]
-        have h_zero_y : (0 : ℕ).land y = 0 := by
-          unfold Nat.land
-          simp [Nat.bitwise]
-        rw [h_zero_y]
-        exact ih
-    | inr h_x_one =>
-      rw [h_x_one]
-      have h_one_one : (1 : ℕ) &&& 1 = 1 := by
-        simp only [HAnd.hAnd, AndOp.and]
-        rfl
-      rw [h_one_one]
-      exact h_tail_binary
+    apply ih
+    apply IsBool_inherit_land_l
+    assumption
 
 /-- For binary values and binary lists, a &&& foldl orig l = foldl (a &&& orig) l -/
 theorem List.and_foldl_eq_foldl_of_all_binary (a : ℕ) (orig : ℕ) (l : List ℕ)
