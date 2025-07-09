@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 namespace Gadgets.Rotation32Bytes
 variable {p : ℕ} [Fact p.Prime]
 
-open Bitwise (rotRight32)
+open _root_ (rotRight32)
 /--
   Rotate the 32-bit integer by increments of 8 positions
   This gadget does not introduce constraints

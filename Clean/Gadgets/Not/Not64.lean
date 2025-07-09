@@ -7,7 +7,7 @@ section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Not
-open Bitwise (not64 not64_eq_sub)
+open _root_ (not64 not64_eq_sub)
 
 def not64_bytewise (x : Var U64 (F p)) : Var U64 (F p) := U64.map x (fun x => 255 - x)
 

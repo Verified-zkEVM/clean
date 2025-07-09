@@ -14,7 +14,7 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Bitwise (rotRight64)
+open _root_ (rotRight64)
 open Utils.Rotation (rotRight64_composition)
 
 /--

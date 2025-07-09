@@ -18,11 +18,9 @@ namespace Circomlib
 variable {p : ℕ} [Fact p.Prime]
 
 -- Import the moved lemmas
-open Bitwise (and_zero_absorb and_one_id_binary)
-open Vector (mem_toList_iff_get)
 open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
 open Operations (append_localLength)
-open BinaryOps (List.foldl_and_IsBool List.and_foldl_eq_foldl_of_all_binary Vector.toList_binary_field)
+open BinaryOps (List.foldl_and_IsBool List.and_foldl_eq_foldl_of_all_binary)
 
 namespace XOR
 /-
@@ -848,15 +846,27 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           exact this
         rw [h_input_split, List.map_append, List.foldl_append]
         have h_input1_binary : ∀ x ∈ input1.toList, IsBool x := by
-          apply Vector.toList_binary_field
-          intro i
-          exact h_assumptions1 i.val i.isLt
+          intro x h_mem
+          rw [List.mem_iff_getElem] at h_mem
+          rcases h_mem with ⟨i, hi, rfl⟩
+          simp only [Vector.getElem_toList]
+          have h_i_lt_n1 : i < n1 := by
+            have h_len : input1.toList.length = n1 := Vector.length_toList input1
+            rw [← h_len]
+            exact hi
+          exact h_assumptions1 i h_i_lt_n1
         have h_foldl1_binary : IsBool (List.foldl (· &&& ·) 1 (input1.toList.map (·.val))) := 
           List.foldl_and_IsBool (input1.toList.map (·.val))
         have h_input2_binary : ∀ x ∈ input2.toList, IsBool x := by
-          apply Vector.toList_binary_field
-          intro i
-          exact h_assumptions2 i.val i.isLt
+          intro x h_mem
+          rw [List.mem_iff_getElem] at h_mem
+          rcases h_mem with ⟨i, hi, rfl⟩
+          simp only [Vector.getElem_toList]
+          have h_i_lt_n2 : i < n2 := by
+            have h_len : input2.toList.length = n2 := Vector.length_toList input2
+            rw [← h_len]
+            exact hi
+          exact h_assumptions2 i h_i_lt_n2
         rw [List.foldl_and_eq_and_foldl _ _ h_foldl1_binary h_input2_binary]
 
         convert h_and_val using 1
