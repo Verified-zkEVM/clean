@@ -8,6 +8,15 @@ namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
+-- Instance for assignEq on a single expression
+instance : ConstantLength (fun v : Expression (F p) => HasAssignEq.assignEq v) where
+  localLength := 1
+  localLength_eq := by
+    intros v n
+    simp only [HasAssignEq.assignEq, bind_localLength_eq, witnessField, witnessVar, 
+               localLength, operations, bind_def, map_def, pure_localLength_eq]
+    simp only [Expression.assertEquals, Gadgets.Equality.circuit, circuit_norm]
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/mux1.circom
@@ -46,7 +55,14 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
-  localLength_eq := by sorry -- TODO: prove
+  localLength_eq := by
+    intros input offset
+    simp only [main, HasAssignEq.assignEq, bind_localLength_eq, pure_localLength_eq, add_zero]
+    -- The mapM body is exactly HasAssignEq.assignEq
+    conv => lhs; arg 1; arg 1; intro v; change HasAssignEq.assignEq v
+    rw [Circuit.MapM.localLength_eq]
+    simp only [ConstantLength.localLength]
+    ring
   subcircuitsConsistent := by sorry -- TODO: prove
 
   Assumptions input :=
