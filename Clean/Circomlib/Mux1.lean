@@ -160,8 +160,11 @@ def circuit : FormalCircuit (F p) Inputs field where
     sorry
 
   completeness := by
-    simp only [circuit_norm, main, MultiMux1.circuit]
-    sorry
+    simp only [circuit_norm, main]
+    intros offset env input_var h_env input h_input h_s
+    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
+    rw [← h_input] at h_s
+    simp_all
 
 end Mux1
 
