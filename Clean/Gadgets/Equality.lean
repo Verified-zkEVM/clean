@@ -161,6 +161,15 @@ instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) 
 
 attribute [circuit_norm] HasAssignEq.assignEq
 
+-- ConstantLength instance for assignEq on a single expression
+instance {F : Type} [Field F] : Circuit.ConstantLength (HasAssignEq.assignEq : Expression F → Circuit F (Expression F)) where
+  localLength := 1
+  localLength_eq := by
+    intros v n
+    simp only [HasAssignEq.assignEq, Circuit.bind_localLength_eq, Circuit.witnessField, Circuit.witnessVar, 
+               Circuit.localLength, Circuit.operations, Circuit.bind_def, Circuit.map_def, Circuit.pure_localLength_eq]
+    simp only [Expression.assertEquals, circuit_norm]
+
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem
 syntax "let " ident " : " term " <== " term : doElem
