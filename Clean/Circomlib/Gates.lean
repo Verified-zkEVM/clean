@@ -532,11 +532,7 @@ lemma eval_toArray_extract_eq {n : ℕ} (start finish : ℕ) {env : Environment 
   rw [rhs]
   have h_eval' := h_eval
   simp only [ProvableType.eval_fields] at h_eval'
-  have : w = Vector.map (Expression.eval env) v := h_eval'
-  have : w[start + i] = (Vector.map (Expression.eval env) v)[start + i] := by
-    rw [this]
-  simp only [Vector.getElem_map] at this
-  exact this.symm
+  rw [h_eval', Vector.getElem_map]
 
 /-- Helper to show that extracting a subvector preserves element access -/
 lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : ℕ) (hi : i < n1) (h_n1_lt : n1 ≤ n) :
@@ -886,11 +882,8 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     IsBool output := by
-  have h_soundness : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) := by
-    apply Circuit.can_replace_soundness
-    exact h_constraints
-  have h_spec := soundness n offset env input_var input h_eval h_assumptions h_soundness
-  exact h_spec.2
+  exact (soundness n offset env input_var input h_eval h_assumptions 
+    (Circuit.can_replace_soundness h_constraints)).2
 
 lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
