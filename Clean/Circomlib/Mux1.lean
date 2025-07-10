@@ -48,9 +48,12 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   localLength _ := n
   localLength_eq := by
     intros input offset
-    simp only [main, bind_localLength_eq, pure_localLength_eq, add_zero]
-    sorry -- TODO: prove using ProvableType instance
-  subcircuitsConsistent := by sorry -- TODO: prove
+    simp only [main, circuit_norm]
+    ring
+  subcircuitsConsistent := by
+    intro input offset
+    simp only [main, circuit_norm]
+    ring
 
   Assumptions input :=
     let ⟨c, s⟩ := input
