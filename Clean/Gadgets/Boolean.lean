@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
+import Mathlib.Data.Nat.Bitwise
 
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
@@ -23,22 +24,41 @@ theorem lt_two {α : Type*} [Zero α] [One α] [Preorder α] [OfNat α 2]
   · rw [h0']; exact h0
   · rw [h1']; exact h1
 
-/-- If x is boolean, then x * x = x -/
-theorem mul_self {α : Type*} [MulZeroOneClass α] {x : α} (h : IsBool x) : x * x = x := by
-  rcases h with h0 | h1
-  · rw [h0]; simp only [mul_zero]
-  · rw [h1]; simp only [mul_one]
-
 /-- x is boolean iff x * (x - 1) = 0 -/
 theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} :
     IsBool x ↔ x * (x - 1) = 0 := by
   rw [mul_eq_zero, sub_eq_zero, IsBool]
 
-/-- For natural numbers, if x is boolean then x < 2 -/
-theorem nat_lt_two {x : ℕ} (h : IsBool x) : x < 2 := by
-  rcases h with h0 | h1
-  · rw [h0]; norm_num
-  · rw [h1]; norm_num
+/-- If a natural number is less than 2, then it is boolean (0 or 1) -/
+theorem nat_of_lt_two {x : ℕ} (h : x < 2) : IsBool x := by
+  cases x with
+  | zero => exact IsBool.zero
+  | succ n =>
+    cases n with
+    | zero => exact IsBool.one
+    | succ m =>
+      -- This case is impossible since x = m + 2 ≥ 2
+      exfalso
+      have : m + 2 ≥ 2 := by omega
+      have : m + 2 < 2 := h
+      omega
+
+/-- If l is boolean, then l AND r is boolean -/
+theorem land_inherit_left (l r : ℕ) (h : IsBool l) : IsBool (l &&& r) := by
+  rcases h with h_l0 | h_l1
+  · -- Case: l = 0
+    left
+    rw [h_l0]
+    simp only [HAnd.hAnd, AndOp.and]
+    have : (0 : ℕ).land r = 0 := by
+      unfold Nat.land
+      simp [Nat.bitwise]
+    exact this
+  · -- Case: l = 1
+    subst h_l1
+    simp only [Nat.one_and_eq_mod_two]
+    apply nat_of_lt_two
+    omega
 
 /-- For field elements, if x is boolean then x.val < 2 -/
 theorem val_lt_two {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : x.val < 2 := by
@@ -102,6 +122,58 @@ theorem nor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBo
     · simp [hx1, hy0, one_mul, mul_zero, add_sub_cancel, sub_self, zero]
     · simp [hx1, hy1, one_mul]
       exact zero
+
+/-- If a is boolean (0 or 1), then a &&& 1 = a -/
+theorem land_one_of_IsBool (a : ℕ) (h : IsBool a) : a &&& 1 = a := by
+  rcases h with h0 | h1
+  · rw [h0]; norm_num
+  · rw [h1]; norm_num
+
+/-- If a is boolean (0 or 1), then 1 &&& a = a -/
+theorem one_land_of_IsBool (a : ℕ) (h : IsBool a) : 1 &&& a = a := by
+  rw [Nat.land_comm]
+  exact land_one_of_IsBool a h
+
+/-- If x is boolean in F p, then x.val is boolean as a natural number -/
+theorem val_of_IsBool {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : IsBool x.val := by
+  rcases h with h0 | h1
+  · rw [h0]; simp only [ZMod.val_zero]; exact zero
+  · rw [h1]; simp only [ZMod.val_one]; exact one
+
+section BinaryOps
+variable {p : ℕ} [Fact p.Prime]
+
+/-- For boolean field elements, XOR operation matches bitwise XOR of values -/
+theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a + b - 2 * a * b).val = a.val ^^^ b.val := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]; norm_num
+
+/-- For boolean field elements, AND operation matches bitwise AND of values -/
+theorem and_eq_val_and {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a * b).val = a.val &&& b.val := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
+
+/-- For boolean field elements, OR operation matches bitwise OR of values -/
+theorem or_eq_val_or {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a + b - a * b).val = a.val ||| b.val := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
+
+/-- For boolean field elements, NAND operation matches 1 - AND of values -/
+theorem nand_eq_val_nand {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (1 - a * b).val = 1 - (a.val &&& b.val) := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb, ZMod.val_one]
+
+/-- For boolean field elements, NOR operation matches 1 - OR of values -/
+theorem nor_eq_val_nor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
+    (a * b + 1 - a - b).val = 1 - (a.val ||| b.val) := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb, ZMod.val_one]
+
+/-- For boolean field elements, NOT operation matches 1 - value -/
+theorem not_eq_val_not {a : F p} (ha : IsBool a) :
+    (1 - 2 * a + a).val = 1 - a.val := by
+  rcases ha with ha | ha <;> rw [ha] <;> ring_nf <;> simp [ZMod.val_one]
+
+end BinaryOps
 
 
 end IsBool

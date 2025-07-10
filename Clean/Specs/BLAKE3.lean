@@ -1,7 +1,6 @@
 import Clean.Utils.Bitwise
 
 namespace Specs.BLAKE3
-open Bitwise (add32 rotRight32)
 
 ------------
 -- CONSTANTS

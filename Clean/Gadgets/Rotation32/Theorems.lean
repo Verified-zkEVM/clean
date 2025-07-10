@@ -8,7 +8,6 @@ variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation32.Theorems
-open Bitwise (rotRight32)
 open Gadgets.ByteDecomposition.Theorems (byteDecomposition_lift)
 open Utils.Rotation
 

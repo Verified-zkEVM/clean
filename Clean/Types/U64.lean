@@ -97,7 +97,7 @@ theorem value_xor_horner {x : U64 (F p)} (hx: x.Normalized) : x.value =
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
   simp_all only [Normalized, value_horner]
   let ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := hx
-  repeat rw [Bitwise.xor_eq_add 8]
+  repeat rw [xor_eq_add 8]
   repeat assumption
 
 def valueNat (x: U64 ℕ) :=

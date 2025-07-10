@@ -12,6 +12,42 @@ def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
 def len (_: Vector α n) : ℕ := n
 
+-- Helper lemma: A vector of length 1 has toList = [v[0]]
+theorem toList_length_one {α : Type} (v : Vector α 1) :
+    v.toList = [v[0]] := by
+  -- Try using cases on the vector
+  cases v using Vector.casesOn with
+  | mk arr h =>
+      cases arr using Array.casesOn with
+      | mk lst =>
+        -- h says arr.size = 1, and arr = Array.mk lst
+        -- So lst.length = 1
+        simp only [List.size_toArray] at h
+        -- Now we know lst has length 1, so it must be [x] for some x
+        match lst with
+        | [] => simp at h
+        | [x] =>
+          -- Goal: v.toList = [v.get 0]
+          -- v.toList = arr.toList = lst = [x]
+          -- v.get 0 = arr[0] = lst[0] = x
+          rfl
+        | _ :: _ :: _ => simp [List.length] at h
+
+-- Helper lemma: A vector of length 2 has toList = [v[0], v[1]]
+theorem toList_length_two {α : Type} (v : Vector α 2) :
+    v.toList = [v[0], v[1]] := by
+  -- Use the same approach as for length 1
+  cases v using Vector.casesOn with
+  | mk arr h =>
+      cases arr using Array.casesOn with
+      | mk lst =>
+        simp only [List.size_toArray] at h
+        match lst with
+        | [] => simp at h
+        | [_] => simp [List.length] at h
+        | [x, y] => rfl
+        | _ :: _ :: _ :: _ => simp [List.length] at h
+
 def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
@@ -232,6 +268,7 @@ theorem append_take_drop {v : Vector α (n + m)} :
   simp only [hi', reduceDIte, getElem_cast, getElem_extract]
   congr
   omega
+
 end Vector
 
 -- helpers for `Vector.toChunks`

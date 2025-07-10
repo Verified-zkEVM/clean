@@ -1,7 +1,6 @@
 import Clean.Types.U64
 namespace Specs.Keccak256
 
-open Bitwise (not64 rotLeft64)
 
 def roundConstants : Vector UInt64 24 := #v[
   0x0000000000000001, 0x0000000000008082,

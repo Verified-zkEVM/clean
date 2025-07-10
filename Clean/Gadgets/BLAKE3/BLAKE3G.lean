@@ -102,7 +102,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
   constructor
   · ext i hi
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
-      Vector.getElem_map, g, Fin.getElem_fin, Bitwise.add32]
+      Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
     · rw [c11.left]
     · rw [c12.left]
