@@ -42,19 +42,23 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
     (c1 - c0) * s + c0
   return out
 
+lemma assignEq_Vector_localLength {F : Type} [Field F] {n : ℕ} (v : Vector (Expression F) n) (offset : ℕ) :
+    (HasAssignEq.assignEq v).localLength offset = n := by
+  simp only [HasAssignEq.assignEq, bind_localLength_eq, pure_localLength_eq, add_zero]
+  -- assignEq for vectors uses mapM
+  conv => lhs; arg 1; arg 1; intro v; rw [assignEq_expanded_eq]
+  rw [Circuit.MapM.localLength_eq]
+  simp only [assignEq_localLength]
+  ring
+
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
   localLength_eq := by
     intros input offset
-    simp only [main, HasAssignEq.assignEq, bind_localLength_eq, pure_localLength_eq, add_zero]
-    -- The mapM uses assignEq which has constant length 1
-    -- First, recognize that the expanded form is assignEq
-    conv => lhs; arg 1; arg 1; intro v; rw [assignEq_expanded_eq]
-    rw [Circuit.MapM.localLength_eq]
-    simp only [assignEq_localLength]
-    ring
+    simp only [main, bind_localLength_eq, pure_localLength_eq, add_zero]
+    simp only [assignEq_Vector_localLength]
   subcircuitsConsistent := by sorry -- TODO: prove
 
   Assumptions input :=
