@@ -163,7 +163,7 @@ variable {p : ℕ} [Fact p.Prime]
 /-- For boolean field elements, XOR operation matches bitwise XOR of values -/
 theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
     (a + b - 2 * a * b).val = a.val ^^^ b.val := by
-  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb] <;> norm_num
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]; norm_num
 
 /-- For boolean field elements, AND operation matches bitwise AND of values -/
 theorem and_eq_val_and {a b : F p} (ha : IsBool a) (hb : IsBool b) :
