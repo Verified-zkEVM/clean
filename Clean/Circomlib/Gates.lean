@@ -9,19 +9,6 @@ import Mathlib.Data.Nat.Bitwise
 
 open IsBool
 
-section VectorSplitHelpers
-variable {p n n1 n2 : ℕ} [Fact p.Prime]
-
-/-- Helper to prove evaluation equality at any index -/
-lemma eval_index_helper {env : Environment (F p)} {input_var : Var (fields n) (F p)} {input : fields n (F p)}
-    (h_eval : input = eval env input_var) (idx : ℕ) (hidx : idx < n) :
-    input[idx] = Expression.eval env input_var[idx] := by
-  have : input[idx] = (eval env input_var)[idx] := by rw [h_eval]
-  simp only [ProvableType.eval_fields, Vector.getElem_map] at this
-  exact this
-
-end VectorSplitHelpers
-
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/gates.circom

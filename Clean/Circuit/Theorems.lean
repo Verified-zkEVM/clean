@@ -8,7 +8,6 @@ import Clean.Circuit.Basic
 
 variable {F: Type} [Field F] {α β : Type}
 
-
 -- basic simp lemmas
 
 namespace Operations
@@ -632,3 +631,11 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
+
+/-- Helper to prove evaluation equality at any index -/
+lemma eval_index_helper {F : Type} [Field F] {n : ℕ} {env : Environment F} {input_var : Var (fields n) F} {input : fields n F}
+    (h_eval : input = eval env input_var) (idx : ℕ) (hidx : idx < n) :
+    input[idx] = Expression.eval env input_var[idx] := by
+  have : input[idx] = (eval env input_var)[idx] := by rw [h_eval]
+  simp only [ProvableType.eval_fields, Vector.getElem_map] at this
+  exact this
