@@ -50,11 +50,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intros input offset
     simp only [main, HasAssignEq.assignEq, bind_localLength_eq, pure_localLength_eq, add_zero]
     -- The mapM uses assignEq which has constant length 1
-    conv => lhs; arg 1; arg 1; intro v; change HasAssignEq.assignEq v
-    rw [@Circuit.MapM.localLength_eq offset n (F p) _ (Expression (F p)) (Expression (F p)) _ _ 
-        (inferInstanceAs (Circuit.ConstantLength (HasAssignEq.assignEq : Expression (F p) → Circuit (F p) (Expression (F p)))))]
-    -- The instance has localLength = 1
-    rw [show Circuit.ConstantLength.localLength (HasAssignEq.assignEq : Expression (F p) → Circuit (F p) (Expression (F p))) = 1 from rfl]
+    -- First, recognize that the expanded form is assignEq
+    conv => lhs; arg 1; arg 1; intro v; rw [assignEq_expanded_eq]
+    rw [Circuit.MapM.localLength_eq]
+    simp only [assignEq_localLength]
     ring
   subcircuitsConsistent := by sorry -- TODO: prove
 
