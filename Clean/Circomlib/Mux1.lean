@@ -109,8 +109,15 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   localLength _ := 1
-  localLength_eq := by sorry -- TODO: prove
-  subcircuitsConsistent := by sorry -- TODO: prove
+  localLength_eq := by
+    intro input offset
+    simp only [main, circuit_norm]
+    -- The goal is about MultiMux1.circuit's localLength with n=1
+    -- which is defined as n = 1
+    rfl
+  subcircuitsConsistent := by
+    intro input offset
+    simp only [main, circuit_norm]
 
   Assumptions input :=
     let ⟨_, s⟩ := input
