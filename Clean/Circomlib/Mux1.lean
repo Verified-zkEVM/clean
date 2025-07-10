@@ -38,7 +38,7 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
-  let out : Var (ProvableVector field n) (F p) <== c.map fun (c0, c1) =>
+  let out <== c.provable_map field fun (c0, c1) =>
     (c1 - c0) * s + c0
   return out
 
