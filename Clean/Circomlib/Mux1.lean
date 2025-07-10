@@ -42,6 +42,14 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
     (c1 - c0) * s + c0
   return out
 
+lemma Vector.mapRange_one {α : Type} (f : ℕ → α) : 
+  Vector.mapRange 1 f = #v[f 0] := by
+  rfl
+
+lemma Vector.getElem_flatten_singleton {α : Type} {n : ℕ} (v : Vector (Vector α 1) n) (i : ℕ) (hi : i < n) :
+  v.flatten[i] = (v[i])[0] := by
+  sorry -- TODO: prove this lemma about Vector.flatten
+
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
@@ -70,7 +78,34 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   completeness := by
     simp only [circuit_norm, main]
-    sorry -- TODO: prove completeness
+    intro offset env input_var h_env input h_input h_assumptions
+    -- We need to show that the witnessed values equal the computed expressions
+    ext i hi
+    -- Left side: eval of varFromOffset
+    simp only [varFromOffset_vector, eval_vector, Vector.getElem_map, Vector.getElem_mapRange]
+    simp only [varFromOffset, size, mul_one]
+    -- Use eval_fromVars lemma
+    rw [ProvableType.eval_fromVars]
+    -- Now simplify fromElements for field (which has size 1)
+    -- The mapRange has size 1, so we get a single element vector
+    simp only [Vector.mapRange_one, Vector.map_singleton, add_zero]
+    -- The match on a singleton vector returns the single element
+    simp only [fromElements]
+    -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
+    simp only [Expression.eval, mul_one]
+    -- Right side: eval of the computed expression  
+    simp only [eval_vector, Vector.getElem_map, ProvableVector.provable_map]
+    -- Now we have env.get (offset + 1 * i) on the left
+    -- Simplify 1 * i to i
+    simp only [one_mul]
+    -- Use h_env which tells us this equals the right side
+    have h_env_i := h_env ⟨i, by simp only [mul_one]; exact hi⟩
+    simp only [Fin.val_mk, mul_one] at h_env_i
+    rw [h_env_i]
+    -- Now we need to show the right side of h_env_i equals what we want
+    simp only [toElements]
+    -- The completeness proof is complex due to how toElements works for ProvableVector
+    sorry -- TODO: complete this part of the proof
 
 end MultiMux1
 
