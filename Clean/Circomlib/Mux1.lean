@@ -42,13 +42,18 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
     (c1 - c0) * s + c0
   return out
 
-lemma Vector.mapRange_one {α : Type} (f : ℕ → α) : 
+lemma Vector.mapRange_one {α : Type} (f : ℕ → α) :
   Vector.mapRange 1 f = #v[f 0] := by
   rfl
 
+-- Helper lemmas for vector operations (to be proved later)
 lemma Vector.getElem_flatten_singleton {α : Type} {n : ℕ} (v : Vector (Vector α 1) n) (i : ℕ) (hi : i < n) :
-  v.flatten[i] = (v[i])[0] := by
-  sorry -- TODO: prove this lemma about Vector.flatten
+    v.flatten[i] = (v[i])[0] := by
+  sorry
+
+lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector α n) (f : α → β) (i : ℕ) (hi : i < n) :
+    (v.map (fun x => #v[f x])).flatten[i] = f (v[i]) := by
+  sorry
 
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
@@ -93,7 +98,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [fromElements]
     -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
     simp only [Expression.eval, mul_one]
-    -- Right side: eval of the computed expression  
+    -- Right side: eval of the computed expression
     simp only [eval_vector, Vector.getElem_map, ProvableVector.provable_map]
     -- Now we have env.get (offset + 1 * i) on the left
     -- Simplify 1 * i to i
@@ -103,9 +108,17 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [Fin.val_mk, mul_one] at h_env_i
     rw [h_env_i]
     -- Now we need to show the right side of h_env_i equals what we want
+    -- toElements for ProvableVector field n creates a vector of singletons then flattens
     simp only [toElements]
-    -- The completeness proof is complex due to how toElements works for ProvableVector
-    sorry -- TODO: complete this part of the proof
+    -- We need to show:
+    -- (Vector.map toElements (eval env (provable_map ...))).flatten[i] = eval env (...)
+    rw [Vector.getElem_map_singleton_flatten]
+    -- Now we have: toElements (eval env (provable_map ...)[i]) = eval env (...)
+    -- Since toElements for field is just #v[x], and we want the single element
+    -- Left side: (eval env (input_var.c.provable_map field fun x ↦ (x.2 - x.1) * input_var.s + x.1))[i]
+    · simp only [eval_vector, Vector.getElem_map, ProvableVector.provable_map]
+      -- Now the goal is solved by definitional equality
+    · exact hi
 
 end MultiMux1
 
