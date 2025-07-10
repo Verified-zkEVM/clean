@@ -166,7 +166,7 @@ instance {F : Type} [Field F] : Circuit.ConstantLength (HasAssignEq.assignEq : E
   localLength := 1
   localLength_eq := by
     intros v n
-    simp only [HasAssignEq.assignEq, Circuit.bind_localLength_eq, Circuit.witnessField, Circuit.witnessVar, 
+    simp only [HasAssignEq.assignEq, Circuit.bind_localLength_eq, Circuit.witnessField, Circuit.witnessVar,
                Circuit.localLength, Circuit.operations, Circuit.bind_def, Circuit.map_def, Circuit.pure_localLength_eq]
     simp only [Expression.assertEquals, circuit_norm]
 

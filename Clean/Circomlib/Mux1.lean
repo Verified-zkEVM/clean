@@ -42,6 +42,10 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
     (c1 - c0) * s + c0
   return out
 
+lemma assignEq_Vector_localLength {F : Type} [Field F] {n : ℕ} (v : Vector (Expression F) n) (offset : ℕ) :
+    (HasAssignEq.assignEq v).localLength offset = n := by
+  simp only [HasAssignEq.assignEq, bind_localLength_eq, pure_localLength_eq, add_zero, circuit_norm]
+
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
