@@ -49,11 +49,15 @@ lemma Vector.mapRange_one {α : Type} (f : ℕ → α) :
 -- Helper lemmas for vector operations (to be proved later)
 lemma Vector.getElem_flatten_singleton {α : Type} {n : ℕ} (v : Vector (Vector α 1) n) (i : ℕ) (hi : i < n) :
     v.flatten[i] = (v[i])[0] := by
-  sorry
+  simp only [Vector.getElem_flatten, Nat.div_one]
+  congr
+  omega
 
 lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector α n) (f : α → β) (i : ℕ) (hi : i < n) :
     (v.map (fun x => #v[f x])).flatten[i] = f (v[i]) := by
-  sorry
+  rw [Vector.getElem_flatten_singleton (v.map (fun x => #v[f x])) i hi]
+  simp only [Vector.getElem_map (fun x => #v[f x]) hi]
+  rfl
 
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
