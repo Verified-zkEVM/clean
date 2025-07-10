@@ -24,22 +24,10 @@ theorem lt_two {α : Type*} [Zero α] [One α] [Preorder α] [OfNat α 2]
   · rw [h0']; exact h0
   · rw [h1']; exact h1
 
-/-- If x is boolean, then x * x = x -/
-theorem mul_self {α : Type*} [MulZeroOneClass α] {x : α} (h : IsBool x) : x * x = x := by
-  rcases h with h0 | h1
-  · rw [h0]; simp only [mul_zero]
-  · rw [h1]; simp only [mul_one]
-
 /-- x is boolean iff x * (x - 1) = 0 -/
 theorem iff_mul_sub_one {α : Type*} [Ring α] [NoZeroDivisors α] {x : α} :
     IsBool x ↔ x * (x - 1) = 0 := by
   rw [mul_eq_zero, sub_eq_zero, IsBool]
-
-/-- For natural numbers, if x is boolean then x < 2 -/
-theorem nat_lt_two {x : ℕ} (h : IsBool x) : x < 2 := by
-  rcases h with h0 | h1
-  · rw [h0]; norm_num
-  · rw [h1]; norm_num
 
 /-- If a natural number is less than 2, then it is boolean (0 or 1) -/
 theorem nat_of_lt_two {x : ℕ} (h : x < 2) : IsBool x := by
@@ -71,11 +59,6 @@ theorem land_inherit_left (l r : ℕ) (h : IsBool l) : IsBool (l &&& r) := by
     simp only [Nat.one_and_eq_mod_two]
     apply nat_of_lt_two
     omega
-
-/-- If r is boolean, then l AND r is boolean -/
-theorem land_inherit_right (l r : ℕ) (h : IsBool r) : IsBool (l &&& r) := by
-  rw[Nat.land_comm]
-  simp_all [land_inherit_left]
 
 /-- For field elements, if x is boolean then x.val < 2 -/
 theorem val_lt_two {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : x.val < 2 := by
