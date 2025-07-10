@@ -16,8 +16,8 @@ https://github.com/iden3/circomlib/blob/master/circuits/mux1.circom
 namespace MultiMux1
 
 structure Inputs (n : ℕ) (F : Type) where
-  c : Vector (F × F) n  -- n pairs of constants
-  s : F                 -- selector
+  c : ProvableVector (ProvablePair field field) n F  -- n pairs of constants
+  s : F                                               -- selector
 
 instance {n : ℕ} : ProvableStruct (Inputs n) where
   components := [ProvableVector (ProvablePair field field) n, field]
@@ -38,7 +38,7 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
-  let out <== c.map fun (c0, c1) =>
+  let out <== c.provable_map field fun (c0, c1) =>
     (c1 - c0) * s + c0
   return out
 
@@ -71,7 +71,7 @@ end MultiMux1
 namespace Mux1
 
 structure Inputs (F : Type) where
-  c : Vector F 2  -- 2 constants
+  c : fields 2 F  -- 2 constants
   s : F           -- selector
 
 instance : ProvableStruct Inputs where

@@ -169,6 +169,12 @@ def ProvableVector (α: TypeMap) (n: ℕ) := fun F => Vector (α F) n
 @[reducible]
 def fields (n: ℕ) := fun F => Vector F n
 
+-- beta is the ProvableType of the target, and it's explicit because omitting this has caused type inference failures
+namespace ProvableVector
+def provable_map {α : TypeMap} {n : ℕ} {F : Type} (x : ProvableVector α n F) (β : TypeMap) (f : α F → β F) : ProvableVector β n F :=
+  Vector.map f x
+end ProvableVector
+
 @[circuit_norm]
 instance : ProvableType (fields n) where
   size := n
