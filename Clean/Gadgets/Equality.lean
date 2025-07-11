@@ -172,27 +172,6 @@ instance {F : Type} [Field F] : Circuit.ConstantLength (HasAssignEq.assignEq : E
 lemma assignEq_localLength {F : Type} [Field F] : 
   Circuit.ConstantLength.localLength (HasAssignEq.assignEq : Expression F → Circuit F (Expression F)) = 1 := rfl
 
--- Instance for the expanded form of assignEq
-instance assignEq_expanded {F : Type} [Field F] : 
-  Circuit.ConstantLength (fun v : Expression F => do
-    let witness ← Circuit.witnessField fun env => v.eval env
-    witness === v
-    return witness) where
-  localLength := 1
-  localLength_eq := by
-    intros v n
-    simp only [Circuit.bind_localLength_eq, Circuit.witnessField, Circuit.witnessVar, 
-               Circuit.localLength, Circuit.operations, Circuit.bind_def, Circuit.map_def, Circuit.pure_localLength_eq]
-    simp only [Expression.assertEquals, circuit_norm]
-
--- Circuit normalization lemma to recognize the expanded form
-@[circuit_norm]
-lemma assignEq_expanded_eq {F : Type} [Field F] (v : Expression F) : 
-  (do
-    let witness ← Circuit.witnessField fun env => v.eval env
-    witness === v
-    return witness) = HasAssignEq.assignEq v := by
-  simp only [HasAssignEq.assignEq]
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem
