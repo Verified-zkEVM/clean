@@ -300,7 +300,80 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     -- This proof requires showing that:
     -- 1. fieldToBits produces binary values (for BinaryWeightedSum constraints)
     -- 2. fieldFromBits(fieldToBits(input)) = input (for the assertEq)
-    sorry
+    
+    constructor
+    · -- First: show the witnessed bits are binary
+      intro i hi
+      -- The circuit witnesses out[i] = fieldToBits(input)[i]
+      -- We need to show this is binary
+      -- The key property is that fieldToBits produces values in {0, 1}
+      
+      -- h_input_eval tells us that the environment extends the witness vector at offset input_var
+      -- The witness vector is fieldToBits nout (lin.eval env) from the main function
+      have h_witness : h_uses_local_witnesses.get (input_var + i) = 
+                       (fieldToBits nout (Expression.eval h_uses_local_witnesses input_val))[i] := by
+        -- h_input_eval contains ExtendsVector for the witness operation
+        simp only [Environment.UsesLocalWitnessesCompleteness] at h_input_eval
+        have ⟨h_extends, _⟩ := h_input_eval
+        simp only [Environment.ExtendsVector] at h_extends
+        exact h_extends ⟨i, hi⟩
+      
+      rw [h_witness]
+      -- Now apply the theorem about fieldToBits producing binary values
+      have h_binary := fieldToBits_bits (i := i) hi (x := Expression.eval h_uses_local_witnesses input_val)
+      cases h_binary with
+      | inl h => left; exact h
+      | inr h => right; exact h
+      
+    · -- Second: show input = BinaryWeightedSum output
+      -- BinaryWeightedSum computes fieldFromBits of the witnessed bits
+      -- The witnessed bits are fieldToBits(input)
+      -- So we need: input = fieldFromBits(fieldToBits(input))
+      
+      -- The BinaryWeightedSum main function evaluates to fieldFromBits of its input vector
+      -- Its input vector is Vector.mapRange nout (fun i => var ⟨input_var + i⟩)
+      -- When evaluated, this gives us the witness values
+      
+      -- First, let's understand what BinaryWeightedSum.main computes
+      -- It computes Σ_i bits[i] * 2^i = fieldFromBits bits
+      
+      -- The expression we need to prove equal to input_val is:
+      -- BinaryWeightedSum.main nout (Vector.mapRange nout fun i ↦ var { index := input_var + i })
+      
+      -- When evaluated, the var expressions give us the witness values
+      have h_witness_vec : Vector.map (Expression.eval h_uses_local_witnesses) 
+                           (Vector.mapRange nout fun i ↦ var { index := input_var + i }) = 
+                           fieldToBits nout (Expression.eval h_uses_local_witnesses input_val) := by
+        rw [Vector.ext_iff]
+        intro i hi
+        simp only [Vector.getElem_map, Vector.getElem_mapRange]
+        -- Use h_input_eval to get the witness value
+        simp only [Environment.UsesLocalWitnessesCompleteness] at h_input_eval
+        have ⟨h_extends, _⟩ := h_input_eval
+        simp only [Environment.ExtendsVector] at h_extends
+        simp only [Expression.eval]
+        exact h_extends ⟨i, hi⟩
+      
+      -- Now we need to prove that the evaluation of input_val equals the evaluation of BinaryWeightedSum output
+      -- The LHS is Expression.eval h_uses_local_witnesses input_val = h_input
+      -- The RHS is the output of BinaryWeightedSum.main applied to the witness vector
+      
+      -- Let's think about what BinaryWeightedSum.main computes:
+      -- It takes a vector of bits and computes Σ_i bits[i] * 2^i
+      -- When applied to fieldToBits(h_input), it should return h_input
+      
+      -- First, let's use h_assumptions to replace the LHS
+      have h_lhs : Expression.eval h_uses_local_witnesses input_val = h_input := h_assumptions
+      rw [h_lhs]
+      
+      -- Now we need to show that the RHS also equals h_input
+      -- The RHS is the evaluation of BinaryWeightedSum.main on the witness vector
+      -- The witness vector evaluates to fieldToBits nout h_input (by h_witness_vec)
+      
+      -- To proceed, we need a lemma about what BinaryWeightedSum.main computes
+      -- It should compute fieldFromBits of its input vector
+      -- For now, let's leave this as a sorry
+      sorry
 
 end OutputBitsDecomposition
 
