@@ -49,38 +49,44 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F
       return lin + inp[j][k] * e2
   return lin
 
-def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) : 
+def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
     FormalCircuit (F p) (BinSumInput n ops) field where
   main input := main n ops input
-  
+
   localLength _ := 0
-  localLength_eq := by 
+  localLength_eq := by
     simp only [circuit_norm, main]
     -- Need to show that the conditional expression equals 0
     simp only [mul_zero]
     -- Both branches of the if-then-else evaluate to 0
     split_ifs <;> simp
-  
+
   output input offset := Circuit.output (main n ops input) offset
-  output_eq := by 
+  output_eq := by
     intros
     rfl
-  
+
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  
-  Assumptions input := 
+
+  Assumptions input :=
     -- All inputs are binary
     ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
-  
-  Spec input output := 
+
+  Spec input output :=
     -- Output equals the sum of all input bits interpreted as numbers
-    output = Fin.foldl ops (fun sum (j : Fin ops) => 
+    output = Fin.foldl ops (fun sum (j : Fin ops) =>
       sum + fieldFromBits input[j]) (0 : F p)
-  
+
   soundness := by
+    intros input h_assumptions offset env h_input_eval h_constraints
+    intro h_constraints_hold
+    -- InputLinearSum has no internal constraints, just computes the sum
+    -- The soundness proof shows that the output equals the weighted sum of inputs
     sorry
-  
+
   completeness := by
+    intros input h_assumptions
+    -- InputLinearSum has no constraints, so it's always satisfiable
     sorry
 
 end InputLinearSum
@@ -93,48 +99,55 @@ namespace OutputBitsDecomposition
 -- Witness output bits and verify they are binary
 def main (nout : ℕ) (lin : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) nout) := do
   -- Witness output bits
-  let out ← witnessVector nout fun env => 
+  let out ← witnessVector nout fun env =>
     fieldToBits nout (lin.eval env)
-  
+
   -- Calculate output linear sum and constrain bits
   let (lout, _) ← Circuit.foldlRange nout ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) k => do
     -- Ensure out[k] is binary
     out[k] * (out[k] - (1 : Expression (F p))) === (0 : Expression (F p))
     let lout := lout + out[k] * e2
     return (lout, e2 + e2)
-  
+
   -- Ensure the sum is correct
   lin === lout
-  
+
   return out
 
-def circuit (nout : ℕ) (hnout : 2^nout < p) : 
+def circuit (nout : ℕ) (hnout : 2^nout < p) :
     FormalCircuit (F p) field (fields nout) where
   main input := main nout input
-  
+
   localLength _ := nout
-  localLength_eq := by 
+  localLength_eq := by
     simp only [circuit_norm, main]
     simp only [mul_zero, add_zero]
     split_ifs <;> simp
-  
+
   output _ i := varFromOffset (fields nout) i
   output_eq := by simp +arith [circuit_norm, main]
-  
+
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
-  
+
   Assumptions input := True
-  
-  Spec input output := 
+
+  Spec input output :=
     -- All outputs are binary
     (∀ i (hi : i < nout), IsBool output[i])
     -- Output bits represent the input value
     ∧ fieldFromBits output = input
-  
+
   soundness := by
+    intros input h_assumptions offset env h_input_eval h_constraints
+    intro h_constraints_hold
+    -- OutputBitsDecomposition enforces:
+    -- 1. Each output bit is binary (0 or 1)
+    -- 2. The sum of output bits equals the input
     sorry
-  
+
   completeness := by
+    intros input h_assumptions
+    -- We can always witness the binary decomposition of the input
     sorry
 
 end OutputBitsDecomposition
@@ -180,13 +193,13 @@ template BinSum(n, ops) {
 -/
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) 
+def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p)
     (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Vector (Expression (F p)) (nbits ((2^n - 1) * ops))) := do
   let nout := nbits ((2^n - 1) * ops)
 
   -- Use InputLinearSum subcircuit to calculate the sum
   let lin ← subcircuit (InputLinearSum.circuit n ops hops) inp
-  
+
   -- Use OutputBitsDecomposition subcircuit to decompose into bits
   let out ← subcircuit (OutputBitsDecomposition.circuit nout hnout) lin
 
@@ -195,11 +208,11 @@ def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n 
 -- n: number of bits per operand
 -- ops: number of operands to sum
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
-    GeneralFormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
+    FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops hops hnout input
 
   localLength _ := nbits ((2^n - 1) * ops)
-  localLength_eq := by 
+  localLength_eq := by
     intros
     simp only [circuit_norm, main, subcircuit]
     -- The localLength of InputLinearSum is 0
@@ -232,15 +245,72 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
           sum + fieldFromBits input[j]) (0 : F p)
 
   soundness := by
-    simp only [GeneralFormalCircuit.Soundness]
-    intros offset env input_var input h_input_eval h_constraints
-    simp only [circuit_norm, main] at h_constraints
-    -- The modular structure means we can use the subcircuits' soundness
-    -- But for now, let's use the original proof approach
-    sorry
+    intros input h_assumptions offset env h_input_eval h_circuit_constraints
+    -- Extract what h_circuit_constraints says
+    intro h_constraints_hold
+    -- h_circuit_constraints contains our assumptions about the input (they are binary)
+    -- h_constraints_hold contains the fact that circuit constraints hold
+    
+    -- We need to analyze what constraints are generated by our main circuit
+    simp only [circuit_norm, main, subcircuit, subcircuit_norm] at h_constraints_hold
+    -- Unfold the subcircuit definitions to access their specs
+    simp only [InputLinearSum.circuit, OutputBitsDecomposition.circuit] at h_constraints_hold
+    
+    -- Now we can see the constraints from both subcircuits
+    -- The constraints are:
+    -- 1. From InputLinearSum: none (it just computes)
+    -- 2. From OutputBitsDecomposition: binary constraints and sum constraint
+    
+    -- If the subcircuits were sound, we would have:
+    -- - InputLinearSum.Spec: its output equals the sum of inputs
+    -- - OutputBitsDecomposition.Spec: outputs are binary and represent the input
+    
+    -- Extract the two parts of the constraint
+    obtain ⟨h_input_sum, h_output_decomp⟩ := h_constraints_hold
+    
+    -- We need to prove the output specification
+    constructor
+    · -- First: all outputs are binary
+      intro i hi
+      -- The output is varFromOffset at position offset + input
+      simp only [varFromOffset, eval, fromVars, fromElements, toVars, fields, size]
+      -- Apply the binary constraint from OutputBitsDecomposition
+      have h_binary := (h_output_decomp trivial).1 i hi
+      simp only [varFromOffset] at h_binary
+      exact h_binary
+      
+    · -- Second: the sum property
+      -- We know inputs are binary from h_circuit_constraints
+      have h_inputs_binary : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval h_assumptions offset)[j][k] := by
+        intro j k hj hk
+        rw [h_input_eval]
+        exact h_circuit_constraints j k hj hk
+      
+      -- Apply InputLinearSum spec with binary inputs
+      have h_lin_sum := h_input_sum h_inputs_binary
+      
+      -- Apply OutputBitsDecomposition spec
+      have h_output_sum := (h_output_decomp trivial).2
+      
+      -- Chain the equalities
+      -- The goal is about ElaboratedCircuit.output which is varFromOffset
+      simp only [ElaboratedCircuit.output]
+      -- Now we need to connect this with our hypotheses
+      -- h_output_sum tells us about fieldFromBits of the output
+      have h_output_eq : fieldFromBits (eval h_assumptions (varFromOffset (fields (nbits ((2^n - 1) * ops))) input)) =
+                         fieldFromBits (Vector.map (Expression.eval h_assumptions) 
+                           (varFromOffset (fields (nbits ((2^n - 1) * ops))) (input + 0))) := by
+        congr 1
+      rw [h_output_eq, h_output_sum, h_lin_sum, h_input_eval]
 
   completeness := by
-    -- The modular structure means we can leverage the subcircuits' completeness
+    intros input h_assumptions
+    -- We need to show that when inputs are binary, the circuit constraints can be satisfied
+    -- The completeness follows from:
+    -- 1. InputLinearSum has no constraints, so it's trivially complete
+    -- 2. OutputBitsDecomposition witnesses the correct binary decomposition
+    
+    -- This would follow from the completeness of the subcircuits
     sorry
 
 end BinSum
