@@ -60,6 +60,13 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0 := by
   -- The main function uses offset[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
+  
+  -- The proof strategy:
+  -- 1. Show that the circuit computes Σ_k 2^k * (Σ_j offset[j][k])
+  -- 2. Use interchange of summation to get Σ_j (Σ_k 2^k * offset[j][k])
+  -- 3. Show that Σ_k 2^k * offset[j][k] = fieldFromBits(input_val[j])
+  
+  -- For now, we leave this as a key lemma to prove
   sorry
 
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
@@ -175,12 +182,42 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     -- OutputBitsDecomposition enforces:
     -- 1. Each output bit is binary (0 or 1)
     -- 2. The sum of output bits equals the input
-    sorry
+    
+    -- The circuit main function:
+    -- 1. Witnesses output bits using fieldToBits
+    -- 2. Constrains each bit to be binary: out[k] * (out[k] - 1) = 0
+    -- 3. Constrains the sum: lin = Σ_k out[k] * 2^k
+    
+    constructor
+    · -- First: prove all outputs are binary
+      intro i hi
+      -- The constraint out[i] * (out[i] - 1) = 0 enforces IsBool
+      sorry
+      
+    · -- Second: prove fieldFromBits output = input
+      -- This follows from the constraint lin = lout
+      sorry
 
   completeness := by
-    intros input h_assumptions
+    intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
     -- We can always witness the binary decomposition of the input
-    sorry
+    -- The circuit witnesses out = fieldToBits(input)
+    -- This satisfies all constraints:
+    -- 1. Binary constraints: fieldToBits produces binary values
+    -- 2. Sum constraint: fieldFromBits(fieldToBits(x)) = x (when x < 2^nout)
+    simp only [circuit_norm, main]
+    -- We need to handle the implication
+    intro h_eq
+    -- The goal has two parts: binary constraints and sum constraint
+    constructor
+    · -- Binary constraints: out[i] * (out[i] - 1) = 0
+      intro i
+      -- The witnessing uses fieldToBits which produces binary values
+      -- This ensures the constraint is satisfied
+      sorry
+    · -- Sum constraint: input = Σ_i out[i] * 2^i
+      -- This follows from fieldFromBits(fieldToBits(x)) = x
+      sorry
 
 end OutputBitsDecomposition
 
