@@ -239,10 +239,39 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro offset env input_var input h_input h_assumptions h_subcircuit_sound
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
     have h_asm' : IsBool (Expression.eval env input_var.s) := by
-      sorry
+      rw [← h_input] at h_assumptions
+      exact h_assumptions
     specialize h_subcircuit_sound h_asm' 0 (by omega)
     rw [h_subcircuit_sound]
-    sorry
+    -- Now we need to show the RHS equals our spec
+    -- First, simplify the evaluation of the vector
+    simp only [eval_vector, Vector.getElem_singleton]
+    -- The goal is now about pairs (Expression.eval env input_var.c[0], Expression.eval env input_var.c[1])
+    
+    -- Connect the condition using h_input
+    have h_s : Expression.eval env input_var.s = input.s := by
+      rw [← h_input]
+    rw [h_s]
+    
+    -- Now we need to show the branches match
+    -- First simplify the vector map on the singleton vector
+    simp only [Vector.getElem_map, Vector.getElem_singleton]
+    -- Now we have (eval env (input_var.c[0], input_var.c[1])).1 or .2
+    simp only [eval, Prod.fst, Prod.snd]
+    
+    split_ifs with h
+    · -- Case: s = 0
+      have h_c0 : Expression.eval env input_var.c[0] = input.c[0] := by
+        have h := congrArg (fun x => x.c[0]) h_input
+        simp only [Vector.getElem_map] at h
+        exact h
+      exact h_c0
+    · -- Case: s ≠ 0  
+      have h_c1 : Expression.eval env input_var.c[1] = input.c[1] := by
+        have h := congrArg (fun x => x.c[1]) h_input
+        simp only [Vector.getElem_map] at h
+        exact h
+      exact h_c1
 
   completeness := by
     simp only [circuit_norm, main]
