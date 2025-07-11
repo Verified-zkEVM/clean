@@ -54,7 +54,12 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
   main input := main n ops input
   
   localLength _ := 0
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by 
+    simp only [circuit_norm, main]
+    -- Need to show that the conditional expression equals 0
+    simp only [mul_zero]
+    -- Both branches of the if-then-else evaluate to 0
+    split_ifs <;> simp
   
   output input offset := Circuit.output (main n ops input) offset
   output_eq := by 
@@ -108,7 +113,10 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
   main input := main nout input
   
   localLength _ := nout
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by 
+    simp only [circuit_norm, main]
+    simp only [mul_zero, add_zero]
+    split_ifs <;> simp
   
   output _ i := varFromOffset (fields nout) i
   output_eq := by simp +arith [circuit_norm, main]
@@ -191,13 +199,22 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   main input := main n ops hops hnout input
 
   localLength _ := nbits ((2^n - 1) * ops)
-  localLength_eq := by simp [circuit_norm, main]
+  localLength_eq := by 
+    intros
+    simp only [circuit_norm, main, subcircuit]
+    -- The localLength of InputLinearSum is 0
+    -- The localLength of OutputBitsDecomposition is nout
+    simp only [InputLinearSum.circuit, OutputBitsDecomposition.circuit]
+    simp only [zero_add]
 
   output _ i := varFromOffset (fields (nbits ((2^n - 1) * ops))) i
 
   output_eq := by
-    intros
-    simp +arith [circuit_norm, main]
+    intros input offset
+    simp only [circuit_norm, main, subcircuit]
+    -- The output of the main circuit is the output of OutputBitsDecomposition
+    simp only [OutputBitsDecomposition.circuit]
+    rfl
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
