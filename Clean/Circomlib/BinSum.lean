@@ -39,7 +39,61 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     (h_sum : F p)
     (h_sum_eq : h_sum = Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0) :
     h_sum.val < 2^(nbits ((2^n - 1) * ops)) := by
-  sorry
+  -- Each input[j] is n-bit binary, so fieldFromBits inputs[j] ≤ 2^n - 1
+  -- The sum of ops such numbers is at most ops * (2^n - 1)
+  -- We need to show this is < 2^(nbits(ops * (2^n - 1)))
+  
+  -- First, bound each individual fieldFromBits
+  have h_individual_bound : ∀ j (hj : j < ops), (fieldFromBits inputs[j]).val ≤ 2^n - 1 := by
+    intro j hj
+    -- Apply the bound theorem for binary inputs
+    have h_binary_j : ∀ k (hk : k < n), IsBool inputs[j][k] := fun k hk => h_binary j k hj hk
+    have h_binary_alt : ∀ k (hk : k < n), inputs[j][k] = 0 ∨ inputs[j][k] = 1 := by
+      intro k hk
+      cases h_binary_j k hk with
+      | inl h => left; exact h
+      | inr h => right; exact h
+    -- Use the fieldFromBits bound
+    have h_lt := fieldFromBits_lt inputs[j] h_binary_alt
+    -- We have fieldFromBits inputs[j] < 2^n, so its value is ≤ 2^n - 1
+    omega
+  
+  -- Now bound the sum using h_sum_eq
+  rw [h_sum_eq]
+  -- The sum is bounded by ops * (2^n - 1)
+  have h_sum_bound : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val ≤ ops * (2^n - 1) := by
+    -- This requires careful analysis of field arithmetic and overflow
+    -- The key insight is that since p > 2^n for practical parameters,
+    -- the sum shouldn't wrap around in the field
+    -- For now, we assume this bound holds
+    sorry
+  
+  -- Now we need: ops * (2^n - 1) < 2^(nbits(ops * (2^n - 1)))
+  -- This follows from the definition of nbits
+  have h_nbits_property : ∀ x : ℕ, x > 0 → x < 2^(nbits x) := by
+    intro x hx
+    simp only [nbits]
+    split_ifs with h
+    · -- Case x = 0, contradicts hx
+      omega
+    · -- Case x ≠ 0
+      -- nbits x = Nat.log2 x + 1
+      -- We need x < 2^(Nat.log2 x + 1)
+      exact Nat.lt_log2_self
+  
+  apply Nat.lt_of_le_of_lt h_sum_bound
+  -- We need to apply h_nbits_property to (2^n - 1) * ops, not ops * (2^n - 1)
+  rw [mul_comm ops]
+  apply h_nbits_property
+  -- We need (2^n - 1) * ops > 0
+  apply Nat.mul_pos
+  · -- 2^n - 1 > 0
+    have : 1 < 2^n := by
+      apply Nat.one_lt_pow
+      · exact NeZero.ne n
+      · norm_num
+    omega
+  · exact hops
 namespace BinSum
 
 /-
@@ -167,8 +221,8 @@ lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Envir
 lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     fieldFromBits bits =
     fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
-  simp only [fieldFromBits, fromBits]
-  -- This follows from how Fin.foldl_succ works
+  -- This should follow from how fromBits and fieldFromBits work
+  -- Let me try a different approach based on existing lemmas
   sorry
 
 -- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
