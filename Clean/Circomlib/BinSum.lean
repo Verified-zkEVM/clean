@@ -181,11 +181,11 @@ lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
       Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 := by
   sorry
 
--- Lemma 3: The sum Σ_k input_val[j][k] * 2^k equals fieldFromBits(input_val[j])
+-- Lemma 3: The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits)
 omit [Fact (p > 2)] in
 lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
     fieldFromBits bits =
-    Fin.foldl n (fun acc k => acc + bits[k].val * (2^k.val : F p)) 0 := by
+    Fin.foldl n (fun acc k => acc + bits[k] * (2^k.val : F p)) 0 := by
   sorry
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
@@ -204,12 +204,35 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- Step 1: Apply circuit_eval_nested_sum to show how the circuit evaluates
   rw [circuit_eval_nested_sum hops env offset input_offset]
 
-  -- Step 2: We need to show the sums are equal after evaluation
-  -- The left side has Expression.eval env offset[j][k]
-  -- We know from h_eval that eval env offset = input_val
+  -- Step 2: We need to replace Expression.eval env offset[j][k] with input_val[j][k]
+  -- First, let's establish this equality
+  have offset_eval_elem : ∀ (j : Fin ops) (k : Fin n), Expression.eval env offset[j][k] = input_val[j][k] := by
+    intro j k
+    -- We use the fact that eval env offset = input_val
+    -- Since offset is a BinSumInput (vector of vectors), we need to show element-wise equality
+    have h1 : eval env offset = input_val := h_eval
+    -- For vectors, eval distributes over indexing
+    have h2 := getElem_eval_vector env offset j j.isLt
+    rw [h1] at h2
+    -- Now for the inner vector
+    have h3 := getElem_eval_vector (α := field) env offset[j] k k.isLt
+    sorry
 
-  -- For now, we complete the proof using the three lemmas
-  sorry
+  -- Now substitute this equality in our sum
+  simp only [offset_eval_elem]
+
+  -- Step 3: Apply sum_interchange_binsum to swap the order of summation
+  rw [sum_interchange_binsum (fun j k => input_val[j][k])]
+
+  -- Step 4: Now we need to show that each inner sum equals fieldFromBits
+  -- The goal should be:
+  -- Fin.foldl ops (fun acc j => acc + Fin.foldl n (fun acc' k => acc' + input_val[j][k] * 2^k) 0) 0
+  -- = Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0
+
+  -- Apply fieldFromBits_as_sum to each inner sum
+  congr 1
+  ext j
+  rw [← fieldFromBits_as_sum]
 
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
     FormalCircuit (F p) (BinSumInput n ops) field where
