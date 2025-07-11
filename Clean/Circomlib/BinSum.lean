@@ -207,7 +207,53 @@ def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
     sorry
 
   completeness := by
-    sorry
+    simp only [GeneralFormalCircuit.Completeness]
+    intros offset env input_var h_witness_extends input h_input_eval h_assumptions
+    -- We need to show that when inputs are binary, the constraints can be satisfied
+    -- The constraints are: for each i, bits[i] * (bits[i] - 1) = 0
+    -- This is satisfied when bits[i] is binary (0 or 1)
+
+    -- We need to prove that the constraints from main hold
+    -- The main function uses foldlRange to add constraints bits[i] * (bits[i] - 1) = 0
+    simp only [Circuit.ConstraintsHold.Completeness, main]
+
+    -- The constraints come from the foldlRange in main
+    -- Each iteration adds a constraint bits[i] * (bits[i] - 1) = 0
+    -- We know from h_assumptions that each input[i] is binary (0 or 1)
+
+    -- For binary values, x * (x - 1) = 0 always holds:
+    -- If x = 0: 0 * (0 - 1) = 0 * (-1) = 0
+    -- If x = 1: 1 * (1 - 1) = 1 * 0 = 0
+
+    -- Apply the constraint satisfaction
+    simp only [circuit_norm]
+
+    -- Now we need to prove that for each i: input_var[i] * (input_var[i] - 1) = 0
+    rintro ⟨ i, h_i ⟩
+    simp only [circuit_norm]
+    specialize h_assumptions i h_i
+    rw [← h_input_eval] at h_assumptions
+
+    -- We need to show: Expression.eval env input_var[i] * (Expression.eval env input_var[i] - 1) = 0
+    -- We know from h_assumptions that (eval env input_var)[i] is binary
+    
+    -- Use the fact that evaluating a vector gives us a vector of evaluations
+    -- For fields n, eval env input_var is a Vector (F p) n
+    have h_eval_eq : (eval env input_var)[i] = Expression.eval env input_var[i] := by
+      -- This should follow from how eval works on vectors
+      sorry
+    
+    -- Now we can use h_assumptions with our equality
+    rw [← h_eval_eq]
+    
+    -- For binary values, x * (x - 1) = 0
+    cases h_assumptions with
+    | inl h => -- value = 0
+      rw [h]
+      ring_nf
+    | inr h => -- value = 1
+      rw [h]
+      ring_nf
 
 end BinaryWeightedSum
 
