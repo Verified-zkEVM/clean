@@ -460,7 +460,7 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
 
     constructor
     · -- First component
-      simp only [Expression.eval, ih1, ih2, fieldFromBits_succ]
+      simp only [Expression.eval, ih1, ih2, InputLinearSum.fieldFromBits_succ]
       congr
       · -- Goal: LHS = fieldFromBits ((Vector.map (Expression.eval env) bits).take n)
         -- We have ih1: LHS = fieldFromBits (Vector.map (Expression.eval env) bits.pop)
