@@ -59,6 +59,8 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
   simp only [Vector.getElem_map (fun x => #v[f x]) hi]
   rfl
 
+-- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
+
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
