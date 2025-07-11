@@ -233,9 +233,18 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
     have min_pre_h : (min pre_n (pre_n + 1)) = pre_n := by omega
     calc
       _ = fieldFromBits (min_pre_h ▸ (bits.take pre_n)) + bits[pre_n] * 2 ^ pre_n := by
-        sorry
+        congr
+        simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+          Nat.add_one_sub_one, Nat.sub_zero, heq_eqRec_iff_heq, heq_eq_eq]
       _ = _ := by
         rw [ih]
+        simp only [Fin.foldl_succ_last]
+        congr
+        ext acc k
+        simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+          Nat.add_one_sub_one, Nat.sub_zero, Fin.getElem_fin, Fin.coe_castSucc, add_right_inj,
+          mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq]
+        left
         sorry
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
