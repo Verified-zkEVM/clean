@@ -304,14 +304,27 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       rw [h_output_eq, h_output_sum, h_lin_sum, h_input_eval]
 
   completeness := by
-    intros input h_assumptions
+    intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
     -- We need to show that when inputs are binary, the circuit constraints can be satisfied
     -- The completeness follows from:
     -- 1. InputLinearSum has no constraints, so it's trivially complete
     -- 2. OutputBitsDecomposition witnesses the correct binary decomposition
     
-    -- This would follow from the completeness of the subcircuits
-    sorry
+    -- The circuit constraints come from the subcircuits
+    simp only [circuit_norm, main, subcircuit, subcircuit_norm]
+    simp only [InputLinearSum.circuit, OutputBitsDecomposition.circuit]
+    
+    -- We have implications to handle
+    intro h_eq h_binary
+    -- Now we need to prove the conjunction
+    constructor
+    · -- First part: inputs remain binary after evaluation
+      intro j k hj hk
+      rw [h_eq]
+      exact h_binary j k hj hk
+      
+    · -- Second part: OutputBitsDecomposition completeness (True)
+      trivial
 
 end BinSum
 
