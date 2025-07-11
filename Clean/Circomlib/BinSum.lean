@@ -32,6 +32,43 @@ The circuit ensures that:
 def nbits (a : ℕ) : ℕ :=
   if a = 0 then 1 else Nat.log2 a + 1
 
+-- Lemma: The ZMod.val of a Fin.foldl sum is bounded by the sum of individual ZMod.vals
+omit [Fact (Nat.Prime p)] [Fact (p > 2)] in
+lemma foldl_sum_val_bound {ops : ℕ} (f : Fin ops → F p) (M : ℕ)
+    (h_bound : ∀ j : Fin ops, (f j).val ≤ M) (h_no_overflow : ops * M < p) :
+    (Fin.foldl ops (fun sum j => sum + f j) 0).val ≤ ops * M := by
+  -- Use induction on ops
+  induction ops with
+  | zero => 
+    simp only [Fin.foldl_zero, ZMod.val_zero, zero_mul, le_refl]
+  | succ k ih =>
+    -- For the inductive step, use Fin.foldl_succ_last
+    rw [Fin.foldl_succ_last]
+    -- The key insight: use ZMod.val_add_of_lt when the sum doesn't overflow
+    have h_partial_bound := ih (fun j => f j.castSucc) 
+                               (fun j => h_bound j.castSucc)
+                               (by 
+                                 -- k * M < (k+1) * M < p
+                                 apply Nat.lt_of_le_of_lt _ h_no_overflow
+                                 apply Nat.mul_le_mul_right
+                                 exact Nat.le_succ k)
+    
+    -- Show that the partial sum + new element doesn't overflow
+    have h_add_lt : (Fin.foldl k (fun sum j => sum + f j.castSucc) 0).val + (f (Fin.last k)).val < p := by
+      apply Nat.lt_of_le_of_lt
+      · apply Nat.add_le_add h_partial_bound (h_bound (Fin.last k))
+      · rw [← Nat.succ_mul]
+        exact h_no_overflow
+    
+    -- Use the fact that ZMod.val preserves addition when no overflow
+    rw [ZMod.val_add_of_lt h_add_lt]
+    -- We want to show: partial_sum + element ≤ (k+1) * M
+    -- We know: partial_sum ≤ k * M and element ≤ M
+    -- So: partial_sum + element ≤ k * M + M = (k+1) * M
+    have h_succ : (k + 1) * M = k * M + M := by rw [Nat.succ_mul]
+    rw [h_succ]
+    apply Nat.add_le_add h_partial_bound (h_bound (Fin.last k))
+
 -- Lemma: The sum of ops n-bit numbers fits in nbits((2^n - 1) * ops) bits
 lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     (hnout : 2^(nbits ((2^n - 1) * ops)) < p)
@@ -43,7 +80,7 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- Each input[j] is n-bit binary, so fieldFromBits inputs[j] ≤ 2^n - 1
   -- The sum of ops such numbers is at most ops * (2^n - 1)
   -- We need to show this is < 2^(nbits(ops * (2^n - 1)))
-  
+
   -- First, bound each individual fieldFromBits
   have h_individual_bound : ∀ j (hj : j < ops), (fieldFromBits inputs[j]).val ≤ 2^n - 1 := by
     intro j hj
@@ -58,18 +95,20 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     have h_lt := fieldFromBits_lt inputs[j] h_binary_alt
     -- We have fieldFromBits inputs[j] < 2^n, so its value is ≤ 2^n - 1
     omega
-  
+
   -- Now bound the sum using h_sum_eq
   rw [h_sum_eq]
   -- The sum is bounded by ops * (2^n - 1)
   have h_sum_bound : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val ≤ ops * (2^n - 1) := by
-    -- With hnout assumption, we know the sum won't overflow in the field
-    -- Since ops * (2^n - 1) ≤ (2^n - 1) * ops < 2^(nbits(...)) < p,
-    -- the field arithmetic is equivalent to natural number arithmetic
-    have h_no_overflow : ops * (2^n - 1) < p := by
+    -- Apply our general lemma about foldl sum bounds
+    apply foldl_sum_val_bound (fun j => fieldFromBits inputs[j]) (2^n - 1) 
+    · -- Prove each element is bounded
+      intro j
+      exact h_individual_bound j j.isLt
+    · -- Prove no overflow: ops * (2^n - 1) < p
+      -- This follows from hnout and the definition of nbits
       rw [mul_comm]
       apply Nat.lt_trans _ hnout
-      -- Apply that (2^n - 1) * ops < 2^(nbits ((2^n - 1) * ops))
       simp only [nbits]
       split_ifs with h
       · -- Case (2^n - 1) * ops = 0, but this contradicts our assumptions
@@ -84,51 +123,27 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
         omega
       · -- Case (2^n - 1) * ops ≠ 0
         exact Nat.lt_log2_self
-    
-    -- Since no overflow occurs, we can use natural number arithmetic
-    have h_fold_eq : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val = 
-                     ∑ j : Fin ops, (fieldFromBits inputs[j]).val := by
-      -- This follows from the fact that field addition equals natural addition when no overflow
-      sorry
-    
-    rw [h_fold_eq]
-    -- Now bound the natural sum
-    have h_bound_all : ∀ j : Fin ops, (fieldFromBits inputs[j]).val ≤ 2^n - 1 := by
-      intro j
-      exact h_individual_bound j j.isLt
-    
-    -- Apply the sum bound directly
-    have h_card : Finset.card (Finset.univ : Finset (Fin ops)) = ops := Finset.card_fin ops
-    have h_bound_total := Finset.sum_le_card_nsmul (Finset.univ : Finset (Fin ops)) (fun j => (fieldFromBits inputs[j]).val) (2^n - 1) (fun j _ => h_bound_all j)
-    rw [h_card, nsmul_eq_mul] at h_bound_total
-    exact h_bound_total
-  
-  -- Now we need: ops * (2^n - 1) < 2^(nbits(ops * (2^n - 1)))
-  -- This follows from the definition of nbits
-  have h_nbits_property : ∀ x : ℕ, x > 0 → x < 2^(nbits x) := by
-    intro x hx
-    simp only [nbits]
-    split_ifs with h
-    · -- Case x = 0, contradicts hx
-      omega
-    · -- Case x ≠ 0
-      -- nbits x = Nat.log2 x + 1
-      -- We need x < 2^(Nat.log2 x + 1)
-      exact Nat.lt_log2_self
-  
+
+  -- Apply the bound we just proved
   apply Nat.lt_of_le_of_lt h_sum_bound
-  -- We need to apply h_nbits_property to (2^n - 1) * ops, not ops * (2^n - 1)
-  rw [mul_comm ops]
-  apply h_nbits_property
-  -- We need (2^n - 1) * ops > 0
-  apply Nat.mul_pos
-  · -- 2^n - 1 > 0
-    have : 1 < 2^n := by
-      apply Nat.one_lt_pow
-      · exact NeZero.ne n
-      · norm_num
+  -- We need to apply the nbits property to (2^n - 1) * ops
+  rw [mul_comm]
+  -- The goal is (2^n - 1) * ops < 2^(nbits ((2^n - 1) * ops))
+  -- This follows from the definition of nbits
+  simp only [nbits]
+  split_ifs with h
+  · -- Case (2^n - 1) * ops = 0, contradicts our assumptions
+    have pos_prod : 0 < (2^n - 1) * ops := by
+      apply Nat.mul_pos
+      · have : 1 < 2^n := by
+          apply Nat.one_lt_pow
+          · exact NeZero.ne n
+          · norm_num
+        omega
+      · exact hops
     omega
-  · exact hops
+  · -- Case (2^n - 1) * ops ≠ 0
+    exact Nat.lt_log2_self
 namespace BinSum
 
 /-
