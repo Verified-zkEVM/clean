@@ -285,7 +285,7 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
       exact h_input_eval
 
   completeness := by
-    intros input_var h_uses_local_witnesses input_val h_input_eval h_input h_assumptions
+    intros witness_offset env lin_var h_witness_extends lin_value h_lin_eval
     -- We can always witness the binary decomposition of the input
     -- The circuit witnesses out = fieldToBits(input)
     -- This satisfies all constraints:
@@ -304,23 +304,23 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     constructor
     · -- First: show the witnessed bits are binary
       intro i hi
-      -- The circuit witnesses out[i] = fieldToBits(input)[i]
+      -- The circuit witnesses out[i] = fieldToBits(lin_value)[i]
       -- We need to show this is binary
       -- The key property is that fieldToBits produces values in {0, 1}
       
-      -- h_input_eval tells us that the environment extends the witness vector at offset input_var
+      -- h_witness_extends tells us that the environment extends the witness vector at offset witness_offset
       -- The witness vector is fieldToBits nout (lin.eval env) from the main function
-      have h_witness : h_uses_local_witnesses.get (input_var + i) = 
-                       (fieldToBits nout (Expression.eval h_uses_local_witnesses input_val))[i] := by
-        -- h_input_eval contains ExtendsVector for the witness operation
-        simp only [Environment.UsesLocalWitnessesCompleteness] at h_input_eval
-        have ⟨h_extends, _⟩ := h_input_eval
+      have h_witness : env.get (witness_offset + i) = 
+                       (fieldToBits nout (Expression.eval env lin_var))[i] := by
+        -- h_witness_extends contains ExtendsVector for the witness operation
+        simp only [Environment.UsesLocalWitnessesCompleteness] at h_witness_extends
+        have ⟨h_extends, _⟩ := h_witness_extends
         simp only [Environment.ExtendsVector] at h_extends
         exact h_extends ⟨i, hi⟩
       
       rw [h_witness]
       -- Now apply the theorem about fieldToBits producing binary values
-      have h_binary := fieldToBits_bits (i := i) hi (x := Expression.eval h_uses_local_witnesses input_val)
+      have h_binary := fieldToBits_bits (i := i) hi (x := Expression.eval env lin_var)
       cases h_binary with
       | inl h => left; exact h
       | inr h => right; exact h
@@ -331,44 +331,44 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
       -- So we need: input = fieldFromBits(fieldToBits(input))
       
       -- The BinaryWeightedSum main function evaluates to fieldFromBits of its input vector
-      -- Its input vector is Vector.mapRange nout (fun i => var ⟨input_var + i⟩)
+      -- Its input vector is Vector.mapRange nout (fun i => var ⟨witness_offset + i⟩)
       -- When evaluated, this gives us the witness values
       
       -- First, let's understand what BinaryWeightedSum.main computes
       -- It computes Σ_i bits[i] * 2^i = fieldFromBits bits
       
-      -- The expression we need to prove equal to input_val is:
-      -- BinaryWeightedSum.main nout (Vector.mapRange nout fun i ↦ var { index := input_var + i })
+      -- The expression we need to prove equal to lin_var is:
+      -- BinaryWeightedSum.main nout (Vector.mapRange nout fun i ↦ var { index := witness_offset + i })
       
       -- When evaluated, the var expressions give us the witness values
-      have h_witness_vec : Vector.map (Expression.eval h_uses_local_witnesses) 
-                           (Vector.mapRange nout fun i ↦ var { index := input_var + i }) = 
-                           fieldToBits nout (Expression.eval h_uses_local_witnesses input_val) := by
+      have h_witness_vec : Vector.map (Expression.eval env) 
+                           (Vector.mapRange nout fun i ↦ var { index := witness_offset + i }) = 
+                           fieldToBits nout (Expression.eval env lin_var) := by
         rw [Vector.ext_iff]
         intro i hi
         simp only [Vector.getElem_map, Vector.getElem_mapRange]
-        -- Use h_input_eval to get the witness value
-        simp only [Environment.UsesLocalWitnessesCompleteness] at h_input_eval
-        have ⟨h_extends, _⟩ := h_input_eval
+        -- Use h_witness_extends to get the witness value
+        simp only [Environment.UsesLocalWitnessesCompleteness] at h_witness_extends
+        have ⟨h_extends, _⟩ := h_witness_extends
         simp only [Environment.ExtendsVector] at h_extends
         simp only [Expression.eval]
         exact h_extends ⟨i, hi⟩
       
-      -- Now we need to prove that the evaluation of input_val equals the evaluation of BinaryWeightedSum output
-      -- The LHS is Expression.eval h_uses_local_witnesses input_val = h_input
+      -- Now we need to prove that the evaluation of lin_var equals the evaluation of BinaryWeightedSum output
+      -- The LHS is Expression.eval env lin_var = lin_value
       -- The RHS is the output of BinaryWeightedSum.main applied to the witness vector
       
       -- Let's think about what BinaryWeightedSum.main computes:
       -- It takes a vector of bits and computes Σ_i bits[i] * 2^i
-      -- When applied to fieldToBits(h_input), it should return h_input
+      -- When applied to fieldToBits(lin_value), it should return lin_value
       
-      -- First, let's use h_assumptions to replace the LHS
-      have h_lhs : Expression.eval h_uses_local_witnesses input_val = h_input := h_assumptions
+      -- First, let's use h_lin_eval to replace the LHS
+      have h_lhs : Expression.eval env lin_var = lin_value := h_lin_eval
       rw [h_lhs]
       
-      -- Now we need to show that the RHS also equals h_input
+      -- Now we need to show that the RHS also equals lin_value
       -- The RHS is the evaluation of BinaryWeightedSum.main on the witness vector
-      -- The witness vector evaluates to fieldToBits nout h_input (by h_witness_vec)
+      -- The witness vector evaluates to fieldToBits nout lin_value (by h_witness_vec)
       
       -- To proceed, we need a lemma about what BinaryWeightedSum.main computes
       -- It should compute fieldFromBits of its input vector
