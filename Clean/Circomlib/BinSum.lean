@@ -49,6 +49,19 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F
       return lin + inp[j][k] * e2
   return lin
 
+-- Lemma showing that evaluating the main circuit computes the correct sum
+lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops) 
+    (env : Environment (F p))
+    (offset : Var (BinSumInput n ops) (F p)) 
+    (input_val : BinSumInput n ops (F p))
+    (h_eval : eval env offset = input_val)
+    (input_offset : ℕ) :
+    Expression.eval env ((main n ops offset input_offset).1) =
+    Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0 := by
+  -- The main function uses offset[j][k] which evaluates to input_val[j][k]
+  -- We need to show the nested sum equals the sum of fieldFromBits
+  sorry
+
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
     FormalCircuit (F p) (BinSumInput n ops) field where
   main input := main n ops input
@@ -95,15 +108,11 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
     -- We just need to show the computation is correct
     simp only [main]
     
-    -- The key is to use fieldFromBitsExpr which is defined using Fin.foldl
-    -- and matches our circuit structure
+    -- The output is the evaluation of the circuit's output expression
+    -- We need to show it equals the sum of fieldFromBits of the inputs
     
-    -- First, we need to relate the nested foldl to a single sum
-    -- The circuit computes: Σ_k 2^k * (Σ_j inp[j][k])
-    -- We want: Σ_j (Σ_k 2^k * inp[j][k]) = Σ_j fieldFromBits(inp[j])
-    
-    -- This is a standard interchange of summation
-    sorry -- TODO: Prove the interchange of summation property
+    -- Apply our lemma to show the circuit computes the correct sum
+    exact main_eval_eq_sum hops h_assumptions offset env h_input_eval input
 
   completeness := by
     intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
