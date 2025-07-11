@@ -214,8 +214,46 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- First, let's establish this equality
   have offset_eval_elem : ∀ (j : Fin ops) (k : Fin n), Expression.eval env input[j][k] = input_val[j][k] := by
     intro j k
+    -- Goal: Expression.eval env input[j][k] = input_val[j][k]
+    -- We have: eval env input = input_val
+    -- We need to show: Expression.eval env input[j][k] = input_val[j][k]
+    -- Let's work step by step
 
-    sorry
+    -- For vectors of expressions (fields n), the evaluation is element-wise
+    -- So (eval env input[j])[k] = Expression.eval env (input[j][k])
+
+    -- We can use the fact that for fields n:
+    -- eval env v = Vector.map (Expression.eval env) v
+
+    simp only [Fin.getElem_fin]
+
+    -- For fields n, eval is defined as mapping Expression.eval over the vector
+    -- So (eval env v)[i] = (v.map (Expression.eval env))[i] = Expression.eval env v[i]
+    have h_fields_eval : ∀ (v : Var (fields n) (F p)) (i : Fin n),
+      (eval env v)[i] = Expression.eval env v[i] := by
+      intro v i
+      simp only [ProvableType.eval_fields]
+      -- Now we have (Vector.map (Expression.eval env) v)[i] = Expression.eval env v[i]
+      -- This follows from the property of Vector.map
+      have i_lt : ↑i < n := by omega
+      unfold BinSumInput at *
+      have vget := Vector.getElem_map (xs := v) (Expression.eval env) i_lt
+      simp only [Fin.getElem_fin, Vector.getElem_map]
+
+    -- The goal has Expression.eval env input[↑j][↑k] = input_val[↑j][↑k]
+    -- We need to be careful about the coercions
+
+    -- First, let's understand what input[↑j] is
+    -- input : Var (BinSumInput n ops) (F p)
+    -- input[↑j] : Var (fields n) (F p) = fields n (Expression (F p))
+    -- input[↑j][↑k] : Expression (F p)
+
+    have h_step1 := h_fields_eval input[↑j] k
+    simp only [Fin.getElem_fin] at h_step1
+    rw[← h_step1]
+    congr
+    rw[getElem_eval_vector]
+    rw[h_eval]
 
   -- Now substitute this equality in our sum
   simp only [offset_eval_elem]
