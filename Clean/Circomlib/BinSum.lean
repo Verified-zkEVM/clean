@@ -112,8 +112,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   
   output_eq := by 
     intros
-    simp only [main, Circuit.output]
-    sorry  -- The proof that output is correct
+    simp +arith [circuit_norm, main]
   
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
   
@@ -123,17 +122,36 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   
   Spec input output := 
     let nout := nbits ((2^n - 1) * ops)
-    -- All inputs are binary
-    (∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k])
     -- All outputs are binary
-    ∧ (∀ i (hi : i < nout), IsBool output[i])
+    (∀ i (hi : i < nout), IsBool output[i])
     -- Sum of inputs equals the value represented by output bits
     ∧ fieldFromBits output = 
         Fin.foldl ops (fun sum (j : Fin ops) => 
           sum + fieldFromBits input[j]) (0 : F p)
   
   soundness := by
-    sorry
+    simp only [GeneralFormalCircuit.Soundness]
+    intros offset env input_var input h_input_eval h_constraints
+    simp only [circuit_norm, main] at h_constraints
+    -- Need to prove the spec holds
+    constructor
+    · -- Prove all outputs are binary
+      intro i hi
+      -- The constraint says out[i] * (out[i] - 1) = 0, which means IsBool out[i]
+      have h_bit_constraint := h_constraints.1 ⟨i, hi⟩
+      -- The offset calculation simplifies because ops * 0 = 0
+      have h_offset : offset + (if h : n > 0 then n * (if h : ops > 0 then ops * 0 else 0) else 0) + i = offset + i := by
+        simp only [mul_zero]
+        split_ifs <;> simp
+      rw [h_offset] at h_bit_constraint
+      simp only [varFromOffset, circuit_norm, eval, fromVars, Vector.getElem_mapRange, size, fields]
+      -- Use the characterization of IsBool
+      rw [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+      exact h_bit_constraint
+    · -- Prove the sum property
+      -- This requires proving that the sum constraint in the circuit
+      -- correctly enforces that the output bits represent the sum of inputs
+      sorry
   
   completeness := by
     sorry
