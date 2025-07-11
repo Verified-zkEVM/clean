@@ -153,26 +153,62 @@ def main (n : ℕ) (bits : Vector (Expression (F p)) n) : Circuit (F p) (Express
     return (sum, e2 + e2)
   return sum
 
+-- Lemma: fieldFromBits on any zero-length vector is zero
+lemma fieldFromBits_zero {α : Type*} (v : Vector α 0) [inst : (a : α) → Decidable (a = a)] :
+    @fieldFromBits p _ 0 (v.map fun _ => (0 : F p)) = 0 := by
+  -- Fin.foldl.loop on 0 returns the initial value
+  sorry
+
+-- Specific version for our use case
+lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Environment (F p)) :
+    fieldFromBits (Vector.map (Expression.eval env) bits) = 0 := by
+  -- This should follow from fieldFromBits_zero or a direct argument
+  sorry
+
+-- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
+lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
+    fieldFromBits bits =
+    fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
+  simp only [fieldFromBits, fromBits]
+  -- This follows from how Fin.foldl_succ works
+  sorry
+
+-- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
+-- and the second component is the current power of 2
+lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env : Environment (F p)),
+    let result := Fin.foldl n (fun acc i ↦ (acc.1 + bits[i] * acc.2, acc.2 + acc.2)) (0, 1)
+    Expression.eval env result.1 = fieldFromBits (Vector.map (Expression.eval env) bits) ∧
+    Expression.eval env result.2 = (2^n : F p) := by
+  intro n
+  induction n with
+  | zero =>
+    intro bits env
+    simp only [Fin.getElem_fin, Fin.foldl_zero, pow_zero]
+    constructor
+    · -- First component: Expression.eval env 0 = fieldFromBits empty_vector
+      simp only [Expression.eval, fieldFromBits_empty_expr]
+    · -- Second component: Expression.eval env 1 = 2^0 = 1
+      simp only [Expression.eval]
+  | succ n ih =>
+    intro bits env
+    -- Inductive step
+    -- The key insight: Fin.foldl (n+1) applies the function one more time after Fin.foldl n
+
+    -- For the inductive hypothesis, we need the first n elements of bits
+    -- But we can't easily extract them, so let's work directly with the fold
+
+    -- The inductive step requires understanding how Fin.foldl_succ works
+    -- and how to relate bits of length n+1 to its prefix of length n
+    sorry
+
 -- Lemma: BinaryWeightedSum.main computes fieldFromBits of its input
 lemma main_computes_fieldFromBits (n : ℕ) (bits : Vector (Expression (F p)) n) (offset : ℕ) (env : Environment (F p)) :
     Expression.eval env (Circuit.output (main n bits) offset) = fieldFromBits (bits.map (Expression.eval env)) := by
-  simp only [main, Circuit.output]
-  -- The main function uses foldlRange to compute Σ_i bits[i] * 2^i
-  -- We need to show this equals fieldFromBits
-
-  -- First, let's understand the foldlRange structure
-  -- It starts with (sum=0, e2=1) and for each i:
-  -- - Adds bits[i] * e2 to sum
-  -- - Doubles e2 for the next iteration
-  -- This computes: Σ_{i=0}^{n-1} bits[i] * 2^i
-
-  -- fieldFromBits is defined as: Fin.foldl n (fun acc i => acc + bits[i] * 2^i) 0
-  -- So we need to show these are equivalent
-
-  -- The key is to prove by induction that after k iterations:
-  -- - sum = Σ_{i=0}^{k-1} bits[i] * 2^i
-  -- - e2 = 2^k
-  sorry
+  simp only [main, circuit_norm]
+  -- Use the helper lemma
+  have h := foldl_pair_inv n bits env
+  -- Extract the first component
+  exact h.1
 
 def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
   main input := main n input
