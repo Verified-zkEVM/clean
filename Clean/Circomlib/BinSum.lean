@@ -34,6 +34,7 @@ def nbits (a : ℕ) : ℕ :=
 
 -- Lemma: The sum of ops n-bit numbers fits in nbits((2^n - 1) * ops) bits
 lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
+    (hnout : 2^(nbits ((2^n - 1) * ops)) < p)
     (inputs : BinSumInput n ops (F p))
     (h_binary : ∀ j k (hj : j < ops) (hk : k < n), IsBool inputs[j][k])
     (h_sum : F p)
@@ -62,11 +63,45 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   rw [h_sum_eq]
   -- The sum is bounded by ops * (2^n - 1)
   have h_sum_bound : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val ≤ ops * (2^n - 1) := by
-    -- This requires careful analysis of field arithmetic and overflow
-    -- The key insight is that since p > 2^n for practical parameters,
-    -- the sum shouldn't wrap around in the field
-    -- For now, we assume this bound holds
-    sorry
+    -- With hnout assumption, we know the sum won't overflow in the field
+    -- Since ops * (2^n - 1) ≤ (2^n - 1) * ops < 2^(nbits(...)) < p,
+    -- the field arithmetic is equivalent to natural number arithmetic
+    have h_no_overflow : ops * (2^n - 1) < p := by
+      rw [mul_comm]
+      apply Nat.lt_trans _ hnout
+      -- Apply that (2^n - 1) * ops < 2^(nbits ((2^n - 1) * ops))
+      simp only [nbits]
+      split_ifs with h
+      · -- Case (2^n - 1) * ops = 0, but this contradicts our assumptions
+        have pos_prod : 0 < (2^n - 1) * ops := by
+          apply Nat.mul_pos
+          · have : 1 < 2^n := by
+              apply Nat.one_lt_pow
+              · exact NeZero.ne n
+              · norm_num
+            omega
+          · exact hops
+        omega
+      · -- Case (2^n - 1) * ops ≠ 0
+        exact Nat.lt_log2_self
+    
+    -- Since no overflow occurs, we can use natural number arithmetic
+    have h_fold_eq : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val = 
+                     ∑ j : Fin ops, (fieldFromBits inputs[j]).val := by
+      -- This follows from the fact that field addition equals natural addition when no overflow
+      sorry
+    
+    rw [h_fold_eq]
+    -- Now bound the natural sum
+    have h_bound_all : ∀ j : Fin ops, (fieldFromBits inputs[j]).val ≤ 2^n - 1 := by
+      intro j
+      exact h_individual_bound j j.isLt
+    
+    -- Apply the sum bound directly
+    have h_card : Finset.card (Finset.univ : Finset (Fin ops)) = ops := Finset.card_fin ops
+    have h_bound_total := Finset.sum_le_card_nsmul (Finset.univ : Finset (Fin ops)) (fun j => (fieldFromBits inputs[j]).val) (2^n - 1) (fun j _ => h_bound_all j)
+    rw [h_card, nsmul_eq_mul] at h_bound_total
+    exact h_bound_total
   
   -- Now we need: ops * (2^n - 1) < 2^(nbits(ops * (2^n - 1)))
   -- This follows from the definition of nbits
@@ -734,7 +769,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
         -- Apply InputLinearSum spec to know what the output equals
         have h_sum_val := h_input_sum h_inputs_binary_local
         -- Use our lemma about sum bounds
-        apply sum_bound_of_binary_inputs hops (eval h_assumptions offset) h_inputs_binary_local
+        apply sum_bound_of_binary_inputs hops hnout (eval h_assumptions offset) h_inputs_binary_local
         exact h_sum_val
       have h_binary := (h_output_decomp h_sum_bound).1 i hi
       simp only [varFromOffset] at h_binary
@@ -755,7 +790,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       have h_sum_bound : (Expression.eval h_assumptions ((InputLinearSum.main n ops offset).output input)).val <
                          2^(nbits ((2^n - 1) * ops)) := by
         -- Use our lemma about sum bounds
-        apply sum_bound_of_binary_inputs hops (eval h_assumptions offset) h_inputs_binary
+        apply sum_bound_of_binary_inputs hops hnout (eval h_assumptions offset) h_inputs_binary
         exact h_lin_sum
       have h_output_sum := (h_output_decomp h_sum_bound).2
 
@@ -813,7 +848,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
         intro j k hj hk
         rw [h_inputs_eval]
         exact h_inputs_binary j k hj hk
-      apply sum_bound_of_binary_inputs hops (eval env inputs_var) h_binary_eval
+      apply sum_bound_of_binary_inputs hops hnout (eval env inputs_var) h_binary_eval
       exact h_sum_eq
 
 end BinSum
