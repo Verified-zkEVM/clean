@@ -158,6 +158,21 @@ instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
 
 attribute [circuit_norm] HasAssignEq.assignEq
 
+-- ConstantLength instance for assignEq on a single expression
+instance {F : Type} [Field F] : Circuit.ConstantLength (HasAssignEq.assignEq : Expression F → Circuit F (Expression F)) where
+  localLength := 1
+  localLength_eq := by
+    intros v n
+    simp only [HasAssignEq.assignEq, Circuit.bind_localLength_eq, Circuit.witnessField, Circuit.witnessVar, 
+               Circuit.localLength, Circuit.operations, Circuit.bind_def, Circuit.map_def, Circuit.pure_localLength_eq]
+    simp only [Expression.assertEquals, circuit_norm]
+
+-- Circuit normalization lemma to reduce the localLength of assignEq
+@[circuit_norm]
+lemma assignEq_localLength {F : Type} [Field F] : 
+  Circuit.ConstantLength.localLength (HasAssignEq.assignEq : Expression F → Circuit F (Expression F)) = 1 := rfl
+
+
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem
 syntax "let " ident " : " term " <== " term : doElem
