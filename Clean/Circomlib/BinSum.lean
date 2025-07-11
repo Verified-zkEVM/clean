@@ -220,7 +220,7 @@ def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
         simp only [ProvableType.eval_fields]
         simp only [Vector.getElem_map]
       rw [h_eq]
-      sorry
+      exact IsBool.iff_mul_sub_one.mpr h_binary
     · rw[← h_input_eval]
       -- We need to prove that the output of the circuit equals fieldFromBits of the input
       -- The circuit computes Σ_i input_var[i] * 2^i using foldlRange
