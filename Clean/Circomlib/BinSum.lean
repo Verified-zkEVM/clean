@@ -153,12 +153,6 @@ def main (n : ℕ) (bits : Vector (Expression (F p)) n) : Circuit (F p) (Express
     return (sum, e2 + e2)
   return sum
 
--- Lemma: fieldFromBits on any zero-length vector is zero
-lemma fieldFromBits_zero {α : Type*} (v : Vector α 0) [inst : (a : α) → Decidable (a = a)] :
-    @fieldFromBits p _ 0 (v.map fun _ => (0 : F p)) = 0 := by
-  -- Fin.foldl.loop on 0 returns the initial value
-  sorry
-
 -- Specific version for our use case
 lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Environment (F p)) :
     fieldFromBits (Vector.map (Expression.eval env) bits) = 0 := by
