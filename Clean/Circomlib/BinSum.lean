@@ -186,36 +186,35 @@ omit [Fact (p > 2)] in
 lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
     fieldFromBits bits =
     Fin.foldl n (fun acc k => acc + bits[k] * (2^k.val : F p)) 0 := by
+  -- fieldFromBits uses fromBits which sums bits[k].val * 2^k
+  -- We need to show this equals the sum of bits[k] * 2^k (without .val)
+  -- This requires that for binary field elements, x = x.val when cast
+  simp only [fieldFromBits, fromBits]
+  -- Now we have: ↑(Fin.foldl n (fun acc k => acc + bits[k].val * 2^k) 0)
+  -- We want: Fin.foldl n (fun acc k => acc + bits[k] * 2^k) 0
   sorry
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
 lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     (env : Environment (F p))
-    (offset : Var (BinSumInput n ops) (F p))
+    (input : Var (BinSumInput n ops) (F p))
     (input_val : BinSumInput n ops (F p))
-    (h_eval : eval env offset = input_val)
+    (h_eval : eval env input = input_val)
     (input_offset : ℕ) :
-    Expression.eval env ((main n ops offset input_offset).1) =
+    Expression.eval env ((main n ops input input_offset).1) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0 := by
   -- The main function uses offset[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
 
   -- Step 1: Apply circuit_eval_nested_sum to show how the circuit evaluates
-  rw [circuit_eval_nested_sum hops env offset input_offset]
+  rw [circuit_eval_nested_sum hops env input input_offset]
 
   -- Step 2: We need to replace Expression.eval env offset[j][k] with input_val[j][k]
   -- First, let's establish this equality
-  have offset_eval_elem : ∀ (j : Fin ops) (k : Fin n), Expression.eval env offset[j][k] = input_val[j][k] := by
+  have offset_eval_elem : ∀ (j : Fin ops) (k : Fin n), Expression.eval env input[j][k] = input_val[j][k] := by
     intro j k
-    -- We use the fact that eval env offset = input_val
-    -- Since offset is a BinSumInput (vector of vectors), we need to show element-wise equality
-    have h1 : eval env offset = input_val := h_eval
-    -- For vectors, eval distributes over indexing
-    have h2 := getElem_eval_vector env offset j j.isLt
-    rw [h1] at h2
-    -- Now for the inner vector
-    have h3 := getElem_eval_vector (α := field) env offset[j] k k.isLt
+
     sorry
 
   -- Now substitute this equality in our sum
