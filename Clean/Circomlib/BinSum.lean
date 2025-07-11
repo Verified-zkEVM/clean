@@ -270,7 +270,7 @@ lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Envir
   simp
 
 -- Lemma: map and take commute for vectors
-lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n) (i : ℕ) : 
+lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n) (i : ℕ) :
     (xs.map f).take i = (xs.take i).map f := by
   ext j hj
   simp only [Vector.getElem_map, Vector.getElem_take]
@@ -279,9 +279,14 @@ lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n
 lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     fieldFromBits bits =
     fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
-  -- This should follow from how fromBits and fieldFromBits work
-  -- Let me try a different approach based on existing lemmas
-  sorry
+  simp only [fieldFromBits, fromBits, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
+  simp only [Vector.getElem_map, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
+    Nat.cast_ofNat, Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+    Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
+  congr
+  · norm_num
+  · sorry
+  · sorry
 
 -- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
 -- and the second component is the current power of 2
