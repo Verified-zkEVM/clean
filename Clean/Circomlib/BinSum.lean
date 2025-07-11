@@ -181,6 +181,42 @@ lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
       Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 := by
   sorry
 
+-- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
+omit [Fact (p > 2)] in
+lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
+    fieldFromBits bits =
+    fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
+  simp only [fieldFromBits, fromBits, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
+  have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
+  simp only [Vector.getElem_map, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
+    Nat.cast_ofNat, Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+    Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
+  congr
+  · norm_num
+  · -- Show the function equality via HEq
+    -- The two functions are equal - they just have different variable names
+    -- But we need to handle the type equality: Fin n vs Fin (min n (n + 1))
+    have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
+    apply Function.hfunext
+    · rfl
+    · intro a0 a1 h_a
+      have : a0 = a1 := by
+        apply eq_of_heq
+        assumption
+      rw[this]
+      apply Function.hfunext
+      · rw [h_min]
+      · intros b0 b1 h_b
+        simp only [heq_eq_eq]
+        congr
+        rw [h_min]
+        rw [h_min]
+  · -- Show bits[n].cast = bits[n]
+    -- The cast here is ZMod.cast from F p to F p, which should be identity
+    rw [ZMod.cast_id']
+    rfl
+
+
 -- Lemma 3: The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits)
 omit [Fact (p > 2)] in
 lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
@@ -188,11 +224,11 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
     Fin.foldl n (fun acc k => acc + bits[k] * (2^k.val : F p)) 0 := by
   -- fieldFromBits uses fromBits which sums bits[k].val * 2^k
   -- We need to show this equals the sum of bits[k] * 2^k (without .val)
-  -- This requires that for binary field elements, x = x.val when cast
-  simp only [fieldFromBits, fromBits]
-  -- Now we have: ↑(Fin.foldl n (fun acc k => acc + bits[k].val * 2^k) 0)
-  -- We want: Fin.foldl n (fun acc k => acc + bits[k] * 2^k) 0
-  sorry
+  induction n
+  · -- Base case: n = 0
+    simp only [fieldFromBits, fromBits, Fin.foldl_zero]
+    norm_cast
+  · sorry
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
@@ -364,40 +400,6 @@ lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n
   ext j hj
   simp only [Vector.getElem_map, Vector.getElem_take]
 
--- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
-omit [Fact (p > 2)] in
-lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
-    fieldFromBits bits =
-    fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
-  simp only [fieldFromBits, fromBits, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
-  have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
-  simp only [Vector.getElem_map, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
-    Nat.cast_ofNat, Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
-    Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
-  congr
-  · norm_num
-  · -- Show the function equality via HEq
-    -- The two functions are equal - they just have different variable names
-    -- But we need to handle the type equality: Fin n vs Fin (min n (n + 1))
-    have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
-    apply Function.hfunext
-    · rfl
-    · intro a0 a1 h_a
-      have : a0 = a1 := by
-        apply eq_of_heq
-        assumption
-      rw[this]
-      apply Function.hfunext
-      · rw [h_min]
-      · intros b0 b1 h_b
-        simp only [heq_eq_eq]
-        congr
-        rw [h_min]
-        rw [h_min]
-  · -- Show bits[n].cast = bits[n]
-    -- The cast here is ZMod.cast from F p to F p, which should be identity
-    rw [ZMod.cast_id']
-    rfl
 
 
 -- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
