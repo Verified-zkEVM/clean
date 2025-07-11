@@ -156,11 +156,10 @@ namespace InputLinearSum
 -- Compute the linear sum of input bits weighted by powers of 2
 def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Expression (F p)) := do
   -- Calculate input linear sum
-  let lin ← Circuit.foldlRange n (0 : Expression (F p)) fun lin k => do
+  Circuit.foldlRange n (0 : Expression (F p)) fun lin k => do
     let e2 : Expression (F p) := (2^k.val : F p)
     Circuit.foldlRange ops lin fun lin j => do
       return lin + inp[j][k] * e2
-  return lin
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
