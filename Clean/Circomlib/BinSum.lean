@@ -70,6 +70,7 @@ lemma foldl_sum_val_bound {ops : ℕ} (f : Fin ops → F p) (M : ℕ)
     apply Nat.add_le_add h_partial_bound (h_bound (Fin.last k))
 
 -- Lemma: The sum of ops n-bit numbers fits in nbits((2^n - 1) * ops) bits
+omit [Fact (p > 2)] in
 lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     (hnout : 2^(nbits ((2^n - 1) * ops)) < p)
     (inputs : BinSumInput n ops (F p))
