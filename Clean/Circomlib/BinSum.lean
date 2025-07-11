@@ -259,6 +259,7 @@ def main (n : ℕ) (bits : Vector (Expression (F p)) n) : Circuit (F p) (Express
   return sum
 
 -- Specific version for our use case
+omit [Fact (p > 2)] in
 lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Environment (F p)) :
     fieldFromBits (Vector.map (Expression.eval env) bits) = 0 := by
   -- For a vector of length 0, fieldFromBits should return 0
