@@ -162,30 +162,34 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F
       return lin + inp[j][k] * e2
 
 -- Lemma 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
+omit [Fact (p > 2)] in
 lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     (env : Environment (F p))
     (offset : Var (BinSumInput n ops) (F p))
     (input_offset : ℕ) :
     Expression.eval env ((main n ops offset input_offset).1) =
-    Fin.foldl n (fun acc k => acc + (2^k.val : F p) * 
+    Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   sorry
 
 -- Lemma 2: Summation interchange for the double sum
+omit [Fact (p > 2)] in
 lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
-    Fin.foldl n (fun acc k => acc + (2^k.val : F p) * 
+    Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
       Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
-    Fin.foldl ops (fun acc j => acc + 
+    Fin.foldl ops (fun acc j => acc +
       Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 := by
   sorry
 
 -- Lemma 3: The sum Σ_k input_val[j][k] * 2^k equals fieldFromBits(input_val[j])
+omit [Fact (p > 2)] in
 lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
-    fieldFromBits bits = 
+    fieldFromBits bits =
     Fin.foldl n (fun acc k => acc + bits[k].val * (2^k.val : F p)) 0 := by
   sorry
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
+omit [Fact (p > 2)] in
 lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     (env : Environment (F p))
     (offset : Var (BinSumInput n ops) (F p))
@@ -199,11 +203,11 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
 
   -- Step 1: Apply circuit_eval_nested_sum to show how the circuit evaluates
   rw [circuit_eval_nested_sum hops env offset input_offset]
-  
+
   -- Step 2: We need to show the sums are equal after evaluation
   -- The left side has Expression.eval env offset[j][k]
   -- We know from h_eval that eval env offset = input_val
-  
+
   -- For now, we complete the proof using the three lemmas
   sorry
 
