@@ -276,6 +276,7 @@ lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n
   simp only [Vector.getElem_map, Vector.getElem_take]
 
 -- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
+omit [Fact (p > 2)] in
 lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     fieldFromBits bits =
     fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
