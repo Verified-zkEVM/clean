@@ -329,13 +329,40 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
       simp only [Expression.eval]
   | succ n ih =>
     intro bits env
-    simp only [Fin.foldl_succ_last, fieldFromBits_succ]
-    let ih_bits := ((Vector.map (Expression.eval env) bits).take n)
-    specialize ih (cast (by norm_num) (bits.take n)) env
-    rcases ih with ⟨ ih1, ih2 ⟩
+    -- Unfold the foldl for n+1
+    simp only [Fin.foldl_succ_last]
 
+    -- Get the inductive hypothesis for bits.pop
+    have ih_spec := ih (bits.pop) env
 
-    sorry
+    -- Key insight: the fold with castSucc is the same as fold on bits.pop
+    have h_fold_eq : ∀ (init : Expression (F p) × Expression (F p)),
+      Fin.foldl n (fun acc i ↦ (acc.1 + bits[i.castSucc] * acc.2, acc.2 + acc.2)) init =
+      Fin.foldl n (fun acc i ↦ (acc.1 + bits.pop[i] * acc.2, acc.2 + acc.2)) init := by
+      intro init
+      congr 2
+      funext acc i
+      simp only [Fin.getElem_fin, Fin.coe_castSucc, Nat.add_one_sub_one, Vector.getElem_pop']
+    -- Apply the fold equality
+    rw [h_fold_eq]
+
+    -- Now we can use the inductive hypothesis
+    rcases ih_spec with ⟨ih1, ih2⟩
+
+    constructor
+    · -- First component
+      simp only [Expression.eval]
+      -- Goal: fieldFromBits (bits.pop.map eval) + bits[Fin.last n].eval * 2^n = fieldFromBits (bits.map eval)
+      -- This is exactly fieldFromBits_succ
+      rw [fieldFromBits_succ]
+      sorry
+    · -- Second component: 2^n + 2^n = 2^(n+1)
+      simp only [Expression.eval, ih2]
+      set_option pp.explicit true in
+      ring_nf
+      -- We have the_fold.2 * 2 = 2^n * 2
+      -- Since ih2 says the_fold.2 = 2^n, we can substitute
+      congr 1
 
 -- Lemma: BinaryWeightedSum.main computes fieldFromBits of its input
 lemma main_computes_fieldFromBits (n : ℕ) (bits : Vector (Expression (F p)) n) (offset : ℕ) (env : Environment (F p)) :
