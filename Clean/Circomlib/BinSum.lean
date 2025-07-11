@@ -39,27 +39,27 @@ lemma foldl_sum_val_bound {ops : ℕ} (f : Fin ops → F p) (M : ℕ)
     (Fin.foldl ops (fun sum j => sum + f j) 0).val ≤ ops * M := by
   -- Use induction on ops
   induction ops with
-  | zero => 
+  | zero =>
     simp only [Fin.foldl_zero, ZMod.val_zero, zero_mul, le_refl]
   | succ k ih =>
     -- For the inductive step, use Fin.foldl_succ_last
     rw [Fin.foldl_succ_last]
     -- The key insight: use ZMod.val_add_of_lt when the sum doesn't overflow
-    have h_partial_bound := ih (fun j => f j.castSucc) 
+    have h_partial_bound := ih (fun j => f j.castSucc)
                                (fun j => h_bound j.castSucc)
-                               (by 
+                               (by
                                  -- k * M < (k+1) * M < p
                                  apply Nat.lt_of_le_of_lt _ h_no_overflow
                                  apply Nat.mul_le_mul_right
                                  exact Nat.le_succ k)
-    
+
     -- Show that the partial sum + new element doesn't overflow
     have h_add_lt : (Fin.foldl k (fun sum j => sum + f j.castSucc) 0).val + (f (Fin.last k)).val < p := by
       apply Nat.lt_of_le_of_lt
       · apply Nat.add_le_add h_partial_bound (h_bound (Fin.last k))
       · rw [← Nat.succ_mul]
         exact h_no_overflow
-    
+
     -- Use the fact that ZMod.val preserves addition when no overflow
     rw [ZMod.val_add_of_lt h_add_lt]
     -- We want to show: partial_sum + element ≤ (k+1) * M
@@ -102,7 +102,7 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- The sum is bounded by ops * (2^n - 1)
   have h_sum_bound : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val ≤ ops * (2^n - 1) := by
     -- Apply our general lemma about foldl sum bounds
-    apply foldl_sum_val_bound (fun j => fieldFromBits inputs[j]) (2^n - 1) 
+    apply foldl_sum_val_bound (fun j => fieldFromBits inputs[j]) (2^n - 1)
     · -- Prove each element is bounded
       intro j
       exact h_individual_bound j j.isLt
@@ -269,6 +269,12 @@ lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Envir
   -- ↑0 = 0
   simp
 
+-- Lemma: map and take commute for vectors
+lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n) (i : ℕ) : 
+    (xs.map f).take i = (xs.take i).map f := by
+  ext j hj
+  simp only [Vector.getElem_map, Vector.getElem_take]
+
 -- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
 lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     fieldFromBits bits =
@@ -295,14 +301,12 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
       simp only [Expression.eval]
   | succ n ih =>
     intro bits env
-    -- Inductive step
-    -- The key insight: Fin.foldl (n+1) applies the function one more time after Fin.foldl n
+    simp only [Fin.foldl_succ_last, fieldFromBits_succ]
+    let ih_bits := ((Vector.map (Expression.eval env) bits).take n)
+    specialize ih (cast (by norm_num) (bits.take n)) env
+    rcases ih with ⟨ ih1, ih2 ⟩
 
-    -- For the inductive hypothesis, we need the first n elements of bits
-    -- But we can't easily extract them, so let's work directly with the fold
 
-    -- The inductive step requires understanding how Fin.foldl_succ works
-    -- and how to relate bits of length n+1 to its prefix of length n
     sorry
 
 -- Lemma: BinaryWeightedSum.main computes fieldFromBits of its input
