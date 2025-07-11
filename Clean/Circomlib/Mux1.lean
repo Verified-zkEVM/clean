@@ -44,7 +44,7 @@ def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
 
 lemma Vector.mapRange_one {α : Type} (f : ℕ → α) :
   Vector.mapRange 1 f = #v[f 0] := by
-  rfl
+    rfl
 
 -- Helper lemmas for vector operations (to be proved later)
 lemma Vector.getElem_flatten_singleton {α : Type} {n : ℕ} (v : Vector (Vector α 1) n) (i : ℕ) (hi : i < n) :
@@ -87,9 +87,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
     -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
 
-    -- First, understand what h_output says
-    -- eval env (varFromOffset (ProvableVector field n) offset) =
-    -- eval env (input_var.c.provable_map field fun x => (x.2 - x.1) * input_var.s + x.1)
+    -- h_output gives us the equality of evaluated vectors
 
     -- Get the i-th element equality from h_output
     have h_output_i : Expression.eval env (var { index := offset + i }) =
