@@ -131,6 +131,58 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
 end InputLinearSum
 
 /-
+Circuit that computes the weighted sum of binary values: Σ_i bits[i] * 2^i
+Assumes the inputs are binary (0 or 1).
+-/
+namespace BinaryWeightedSum
+
+-- Compute Σ_i bits[i] * 2^i and verify each bit is binary
+def main (n : ℕ) (bits : Vector (Expression (F p)) n) : Circuit (F p) (Expression (F p)) := do
+  let (sum, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (sum, e2) i => do
+    -- Ensure bits[i] is binary
+    bits[i] * (bits[i] - (1 : Expression (F p))) === (0 : Expression (F p))
+    let sum := sum + bits[i] * e2
+    return (sum, e2 + e2)
+  return sum
+
+def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
+  main input := main n input
+  
+  localLength _ := 0
+  localLength_eq := by
+    simp only [circuit_norm, main]
+    split_ifs <;> simp
+    
+  output input offset := Circuit.output (main n input) offset
+  output_eq := by
+    intros
+    rfl
+    
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  
+  Assumptions input :=
+    -- All inputs are binary
+    ∀ i (hi : i < n), IsBool input[i]
+    
+  Spec input output :=
+    -- All inputs are binary (enforced by constraints)
+    (∀ i (hi : i < n), IsBool input[i])
+    -- Output equals the weighted sum of bits
+    ∧ output = fieldFromBits input
+    
+  soundness := by
+    simp only [GeneralFormalCircuit.Soundness]
+    intros offset env input_var input h_input_eval h_constraints
+    -- No constraints, just computation
+    -- We need to show the foldl computes fieldFromBits
+    sorry
+    
+  completeness := by
+    sorry
+
+end BinaryWeightedSum
+
+/-
 Circuit that decomposes a number into binary representation and verifies each bit.
 -/
 namespace OutputBitsDecomposition
@@ -183,19 +235,24 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     -- 1. Each output bit is binary (0 or 1)
     -- 2. The sum of output bits equals the input
     
-    -- The circuit main function:
-    -- 1. Witnesses output bits using fieldToBits
-    -- 2. Constrains each bit to be binary: out[k] * (out[k] - 1) = 0
-    -- 3. Constrains the sum: lin = Σ_k out[k] * 2^k
+    -- Extract the constraints from h_constraints_hold
+    simp only [circuit_norm, main] at h_constraints_hold
+    
+    -- The constraints are:
+    -- 1. For each i: out[i] * (out[i] - 1) = 0 (binary constraint)
+    -- 2. lin = lout (sum constraint)
     
     constructor
     · -- First: prove all outputs are binary
       intro i hi
       -- The constraint out[i] * (out[i] - 1) = 0 enforces IsBool
+      -- This constraint is included in the foldl
       sorry
       
     · -- Second: prove fieldFromBits output = input
-      -- This follows from the constraint lin = lout
+      -- The foldl computes exactly what BinaryWeightedSum.Spec says:
+      -- lout = Σ_i out[i] * 2^i = fieldFromBits out
+      -- And we have the constraint lin = lout
       sorry
 
   completeness := by
@@ -206,18 +263,12 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     -- 1. Binary constraints: fieldToBits produces binary values
     -- 2. Sum constraint: fieldFromBits(fieldToBits(x)) = x (when x < 2^nout)
     simp only [circuit_norm, main]
-    -- We need to handle the implication
-    intro h_eq
-    -- The goal has two parts: binary constraints and sum constraint
-    constructor
-    · -- Binary constraints: out[i] * (out[i] - 1) = 0
-      intro i
-      -- The witnessing uses fieldToBits which produces binary values
-      -- This ensures the constraint is satisfied
-      sorry
-    · -- Sum constraint: input = Σ_i out[i] * 2^i
-      -- This follows from fieldFromBits(fieldToBits(x)) = x
-      sorry
+    
+    -- The witnessing uses fieldToBits which:
+    -- 1. Produces binary values (satisfies out[i] * (out[i] - 1) = 0)
+    -- 2. Has the property fieldFromBits(fieldToBits(x)) = x
+    -- This is exactly what BinaryWeightedSum.Spec guarantees
+    sorry
 
 end OutputBitsDecomposition
 
