@@ -235,7 +235,13 @@ def circuit : FormalCircuit (F p) Inputs field where
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
-    simp only [circuit_norm, main, MultiMux1.circuit]
+    simp only [circuit_norm, main]
+    intro offset env input_var input h_input h_assumptions h_subcircuit_sound
+    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
+    have h_asm' : IsBool (Expression.eval env input_var.s) := by
+      sorry
+    specialize h_subcircuit_sound h_asm' 0 (by omega)
+    rw [h_subcircuit_sound]
     sorry
 
   completeness := by
