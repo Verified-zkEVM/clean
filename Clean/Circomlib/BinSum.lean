@@ -33,6 +33,104 @@ def nbits (a : ℕ) : ℕ :=
   if a = 0 then 1 else Nat.log2 a + 1
 
 namespace BinSum
+
+/-
+Circuit that computes the linear sum of multiple binary numbers.
+Takes n-bit binary numbers and computes their weighted sum.
+-/
+namespace InputLinearSum
+
+-- Compute the linear sum of input bits weighted by powers of 2
+def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Expression (F p)) := do
+  -- Calculate input linear sum
+  let lin ← Circuit.foldlRange n (0 : Expression (F p)) fun lin k => do
+    let e2 : Expression (F p) := (2^k.val : F p)
+    Circuit.foldlRange ops lin fun lin j => do
+      return lin + inp[j][k] * e2
+  return lin
+
+def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) : 
+    FormalCircuit (F p) (BinSumInput n ops) field where
+  main input := main n ops input
+  
+  localLength _ := 0
+  localLength_eq := by simp [circuit_norm, main]
+  
+  output input offset := Circuit.output (main n ops input) offset
+  output_eq := by 
+    intros
+    rfl
+  
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  
+  Assumptions input := 
+    -- All inputs are binary
+    ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
+  
+  Spec input output := 
+    -- Output equals the sum of all input bits interpreted as numbers
+    output = Fin.foldl ops (fun sum (j : Fin ops) => 
+      sum + fieldFromBits input[j]) (0 : F p)
+  
+  soundness := by
+    sorry
+  
+  completeness := by
+    sorry
+
+end InputLinearSum
+
+/-
+Circuit that decomposes a number into binary representation and verifies each bit.
+-/
+namespace OutputBitsDecomposition
+
+-- Witness output bits and verify they are binary
+def main (nout : ℕ) (lin : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) nout) := do
+  -- Witness output bits
+  let out ← witnessVector nout fun env => 
+    fieldToBits nout (lin.eval env)
+  
+  -- Calculate output linear sum and constrain bits
+  let (lout, _) ← Circuit.foldlRange nout ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) k => do
+    -- Ensure out[k] is binary
+    out[k] * (out[k] - (1 : Expression (F p))) === (0 : Expression (F p))
+    let lout := lout + out[k] * e2
+    return (lout, e2 + e2)
+  
+  -- Ensure the sum is correct
+  lin === lout
+  
+  return out
+
+def circuit (nout : ℕ) (hnout : 2^nout < p) : 
+    FormalCircuit (F p) field (fields nout) where
+  main input := main nout input
+  
+  localLength _ := nout
+  localLength_eq := by simp [circuit_norm, main]
+  
+  output _ i := varFromOffset (fields nout) i
+  output_eq := by simp +arith [circuit_norm, main]
+  
+  subcircuitsConsistent := by simp +arith [circuit_norm, main]
+  
+  Assumptions input := True
+  
+  Spec input output := 
+    -- All outputs are binary
+    (∀ i (hi : i < nout), IsBool output[i])
+    -- Output bits represent the input value
+    ∧ fieldFromBits output = input
+  
+  soundness := by
+    sorry
+  
+  completeness := by
+    sorry
+
+end OutputBitsDecomposition
+
 /-
 template BinSum(n, ops) {
     var nout = nbits((2**n - 1)*ops);
@@ -74,28 +172,15 @@ template BinSum(n, ops) {
 -/
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) := do
+def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) 
+    (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Vector (Expression (F p)) (nbits ((2^n - 1) * ops))) := do
   let nout := nbits ((2^n - 1) * ops)
 
-  -- Calculate input linear sum
-  let lin ← Circuit.foldlRange n (0 : Expression (F p)) fun lin k => do
-    let e2 : Expression (F p) := (2^k.val : F p)
-    Circuit.foldlRange ops lin fun lin j => do
-      return lin + inp[j][k] * e2
-
-  -- Witness output bits
-  let out ← witnessVector nout fun env =>
-    fieldToBits nout (lin.eval env)
-
-  -- Calculate output linear sum and constrain bits
-  let (lout, _) ← Circuit.foldlRange nout ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) k => do
-    -- Ensure out[k] is binary
-    out[k] * (out[k] - (1 : Expression (F p))) === (0 : Expression (F p))
-    let lout := lout + out[k] * e2
-    return (lout, e2 + e2)
-
-  -- Ensure the sum is correct
-  lin === lout
+  -- Use InputLinearSum subcircuit to calculate the sum
+  let lin ← subcircuit (InputLinearSum.circuit n ops hops) inp
+  
+  -- Use OutputBitsDecomposition subcircuit to decompose into bits
+  let out ← subcircuit (OutputBitsDecomposition.circuit nout hnout) lin
 
   return out
 
@@ -103,7 +188,7 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) := do
 -- ops: number of operands to sum
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
     GeneralFormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
-  main input := main n ops input
+  main input := main n ops hops hnout input
 
   localLength _ := nbits ((2^n - 1) * ops)
   localLength_eq := by simp [circuit_norm, main]
@@ -133,51 +218,13 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
     simp only [GeneralFormalCircuit.Soundness]
     intros offset env input_var input h_input_eval h_constraints
     simp only [circuit_norm, main] at h_constraints
-    -- Need to prove the spec holds
-    constructor
-    · -- Prove all outputs are binary
-      intro i hi
-      -- The constraint says out[i] * (out[i] - 1) = 0, which means IsBool out[i]
-      have h_bit_constraint := h_constraints.1 ⟨i, hi⟩
-      -- The offset calculation simplifies because ops * 0 = 0
-      have h_offset : offset + (if h : n > 0 then n * (if h : ops > 0 then ops * 0 else 0) else 0) + i = offset + i := by
-        simp only [mul_zero]
-        split_ifs <;> simp
-      rw [h_offset] at h_bit_constraint
-      simp only [varFromOffset, circuit_norm, eval, fromVars, Vector.getElem_mapRange, size, fields]
-      -- Use the characterization of IsBool
-      rw [IsBool.iff_mul_sub_one, sub_eq_add_neg]
-      exact h_bit_constraint
-    · -- Prove the sum property
-      -- This requires proving that the sum constraint in the circuit
-      -- correctly enforces that the output bits represent the sum of inputs
-      sorry
+    -- The modular structure means we can use the subcircuits' soundness
+    -- But for now, let's use the original proof approach
+    sorry
 
   completeness := by
-    simp only [GeneralFormalCircuit.Completeness]
-    intro offset env input_var h_witnesses input h_input h_assumptions
-    -- We need to prove ConstraintsHold.Completeness
-    simp only [circuit_norm, main, Circuit.ConstraintsHold.Completeness]
-    -- The constraints are: binary constraints on outputs and sum constraint
-    apply And.intro
-    · -- Binary constraints: out[i] * (out[i] - 1) = 0 for each output bit
-      intro i
-      -- The witnesses should satisfy this because they come from fieldToBits
-      -- First, simplify the offset
-      have h_offset : offset + (if h : n > 0 then n * (if h : ops > 0 then ops * 0 else 0) else 0) + ↑i = offset + ↑i := by
-        simp only [mul_zero]
-        split_ifs <;> simp
-      rw [h_offset]
-      simp only [circuit_norm, main, subcircuit] at h_witnesses
-      -- Now we need to show that the witnessed value at offset + i is binary
-      -- This follows from the fact that witnessVector uses fieldToBits
-      -- The key insight is that fieldToBits produces binary values
-      -- because toBits produces 0 or 1, which are then cast to field elements
-      -- We need to use h_witnesses which tells us about the witness generation
-      sorry -- This requires reasoning about witnessVector and fieldToBits
-    · -- Sum constraint: lin = lout
-      -- The witness generation ensures this by construction
-      sorry
+    -- The modular structure means we can leverage the subcircuits' completeness
+    sorry
 
 end BinSum
 
