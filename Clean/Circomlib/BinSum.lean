@@ -236,16 +236,18 @@ def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
 
     -- We need to show: Expression.eval env input_var[i] * (Expression.eval env input_var[i] - 1) = 0
     -- We know from h_assumptions that (eval env input_var)[i] is binary
-    
+
     -- Use the fact that evaluating a vector gives us a vector of evaluations
     -- For fields n, eval env input_var is a Vector (F p) n
     have h_eval_eq : (eval env input_var)[i] = Expression.eval env input_var[i] := by
-      -- This should follow from how eval works on vectors
-      sorry
-    
-    -- Now we can use h_assumptions with our equality
-    rw [← h_eval_eq]
-    
+      -- For fields n, eval is defined as mapping Expression.eval over the vector
+      -- So (eval env input_var)[i] = (input_var.map (Expression.eval env))[i]
+      -- which equals Expression.eval env input_var[i]
+      simp only [ProvableType.eval_fields]
+      simp only [Vector.getElem_map]
+
+    rw[h_eval_eq] at h_assumptions
+
     -- For binary values, x * (x - 1) = 0
     cases h_assumptions with
     | inl h => -- value = 0
