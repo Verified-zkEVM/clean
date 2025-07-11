@@ -82,12 +82,35 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
     intro h_constraints_hold
     -- InputLinearSum has no internal constraints, just computes the sum
     -- The soundness proof shows that the output equals the weighted sum of inputs
-    sorry
+    
+    -- The circuit output is the result of the nested foldl computation
+    simp only [ElaboratedCircuit.output, circuit_norm]
+    
+    -- We need to show that the output equals the sum of fieldFromBits
+    -- The main function computes: sum over k of (2^k * sum over j of inp[j][k])
+    -- This is equivalent to: sum over j of (sum over k of (2^k * inp[j][k]))
+    -- Which equals: sum over j of fieldFromBits(inp[j])
+    
+    -- The circuit has no constraints, so h_constraints_hold is trivial
+    -- We just need to show the computation is correct
+    simp only [main]
+    
+    -- The key is to use fieldFromBitsExpr which is defined using Fin.foldl
+    -- and matches our circuit structure
+    
+    -- First, we need to relate the nested foldl to a single sum
+    -- The circuit computes: Σ_k 2^k * (Σ_j inp[j][k])
+    -- We want: Σ_j (Σ_k 2^k * inp[j][k]) = Σ_j fieldFromBits(inp[j])
+    
+    -- This is a standard interchange of summation
+    sorry -- TODO: Prove the interchange of summation property
 
   completeness := by
-    intros input h_assumptions
+    intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
     -- InputLinearSum has no constraints, so it's always satisfiable
-    sorry
+    -- The circuit just computes a value, no constraints to satisfy
+    simp only [circuit_norm, main]
+    -- The constraints are empty (True), so they're trivially satisfied
 
 end InputLinearSum
 
