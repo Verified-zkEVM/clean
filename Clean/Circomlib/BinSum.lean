@@ -632,8 +632,19 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       -- We have the sum from InputLinearSum
       have h_sum_eq : Expression.eval env ((InputLinearSum.main n ops inputs_var).output witness_offset) =
                        Fin.foldl ops (fun sum j => sum + fieldFromBits (eval env inputs_var)[j]) 0 := by
-        -- This should follow from InputLinearSum.completeness
-        sorry
+        -- This follows from InputLinearSum.Spec
+        -- We need to extract the relevant part from h_witness_extends
+        simp only [subcircuit_norm, main, circuit_norm, InputLinearSum.circuit] at h_witness_extends
+        -- h_witness_extends tells us that InputLinearSum.circuit is satisfied
+        -- Extract the first part of the conjunction which gives us the InputLinearSum.Spec
+        have h_input_spec := h_witness_extends.1
+        -- We need to prove the inputs are binary to apply h_input_spec
+        have h_inputs_binary_eval : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval env inputs_var)[j][k] := by
+          intro j k hj hk
+          rw [h_inputs_eval]
+          exact h_inputs_binary j k hj hk
+        -- Apply the spec
+        exact h_input_spec h_inputs_binary_eval
       -- Now apply our lemma
       have h_binary_eval : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval env inputs_var)[j][k] := by
         intro j k hj hk
