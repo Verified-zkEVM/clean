@@ -243,14 +243,46 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     · -- First: prove all outputs are binary
       intro i hi
       -- BinaryWeightedSum enforces out[i] * (out[i] - 1) = 0 which means IsBool
-      -- If BinaryWeightedSum is sound, its spec tells us all outputs are binary
-      sorry
+      -- The output is varFromOffset which maps to the witnessed variables
+      simp only [ElaboratedCircuit.output]
+      simp only [varFromOffset, eval, fromVars, fromElements, toVars]
+      simp only [toElements, size, fields]
+      simp only [Vector.getElem_map, Vector.getElem_mapRange]
+      -- The constraint tells us the witnessed variables are binary
+      have h_binary_all := h_constraints_hold.1.1
+      exact h_binary_all i hi
 
     · -- Second: prove fieldFromBits output = input
       -- BinaryWeightedSum.Spec says: lout = fieldFromBits out
       -- We have the constraint: lin = lout
       -- Therefore: fieldFromBits output = lout = lin = input
-      sorry
+
+      -- First, simplify the output
+      simp only [ElaboratedCircuit.output]
+      simp only [varFromOffset, eval, fromVars, fromElements, toVars]
+
+      -- From h_constraints_hold, we have:
+      -- 1. All bits are binary (h_constraints_hold.1)
+      -- 2. BinaryWeightedSum output = fieldFromBits of the bits (h_constraints_hold.2.1)
+      -- 3. input = BinaryWeightedSum output (h_constraints_hold.2.2)
+
+      -- Extract the parts of the constraint
+      have ⟨h_binary_and_sum, h_eq⟩ := h_constraints_hold
+      have ⟨h_binary, h_sum⟩ := h_binary_and_sum
+
+      -- First simplify the goal
+      simp only [toElements, size, fields]
+      -- Now we need to show: fieldFromBits(...) = env
+      -- We have the chain: fieldFromBits(...) = BinaryWeightedSum output = offset = env
+      -- Work backwards from the goal
+      rw [← h_sum]
+      -- Now we need: BinaryWeightedSum output = env
+      rw [← h_eq]
+      -- Now we need: Expression.eval h_assumptions offset = env
+      -- h_input_eval gives us this (after expanding eval)
+      simp only [eval, fromVars, fromElements, toVars] at h_input_eval
+      -- For field type, this should be the identity
+      exact h_input_eval
 
   completeness := by
     intros input_var h_uses_local_witnesses input_val h_input_eval h_input h_assumptions
@@ -261,13 +293,13 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     -- 2. Sum constraint: fieldFromBits(fieldToBits(x)) = x (when x < 2^nout)
     simp only [circuit_norm, main, BinaryWeightedSum.circuit, subcircuit_norm, Gadgets.Equality.circuit]
 
-    -- The witnessing uses fieldToBits which produces binary values
-    -- BinaryWeightedSum.completeness shows that when inputs are binary,
-    -- its constraints (out[i] * (out[i] - 1) = 0) are satisfiable
-    -- The assertEq lin = lout is satisfied because:
-    -- - BinaryWeightedSum ensures lout = fieldFromBits(out)
-    -- - out = fieldToBits(lin) by our witnessing
-    -- - fieldFromBits(fieldToBits(x)) = x (when x < 2^nout)
+    -- The witnessing uses fieldToBits which:
+    -- 1. Produces binary values
+    -- 2. Has the property fieldFromBits(fieldToBits(x)) = x
+
+    -- This proof requires showing that:
+    -- 1. fieldToBits produces binary values (for BinaryWeightedSum constraints)
+    -- 2. fieldFromBits(fieldToBits(input)) = input (for the assertEq)
     sorry
 
 end OutputBitsDecomposition
