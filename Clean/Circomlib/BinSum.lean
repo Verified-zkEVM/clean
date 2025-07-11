@@ -228,7 +228,15 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
   · -- Base case: n = 0
     simp only [fieldFromBits, fromBits, Fin.foldl_zero]
     norm_cast
-  · sorry
+  · rename_i pre_n ih
+    rw [fieldFromBits_succ]
+    have min_pre_h : (min pre_n (pre_n + 1)) = pre_n := by omega
+    calc
+      _ = fieldFromBits (min_pre_h ▸ (bits.take pre_n)) + bits[pre_n] * 2 ^ pre_n := by
+        sorry
+      _ = _ := by
+        rw [ih]
+        sorry
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
