@@ -285,8 +285,14 @@ lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
   congr
   · norm_num
-  · sorry
-  · sorry
+  · -- Show the function equality via HEq
+    -- The two functions are equal - they just have different variable names
+    sorry
+  · -- Show bits[n].cast = bits[n]
+    -- The cast here is ZMod.cast from F p to F p, which should be identity
+    rw [ZMod.cast_id']
+    rfl
+
 
 -- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
 -- and the second component is the current power of 2
