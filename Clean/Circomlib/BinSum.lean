@@ -202,9 +202,36 @@ def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
   soundness := by
     simp only [GeneralFormalCircuit.Soundness]
     intros offset env input_var input h_input_eval h_constraints
-    -- No constraints, just computation
-    -- We need to show the foldl computes fieldFromBits
-    sorry
+    simp only[main, circuit_norm] at h_constraints ⊢
+    constructor
+    · -- Prove all inputs are binary
+      intro i hi
+      -- The constraints enforce input_var[i] * (input_var[i] - 1) = 0
+      have h_constraint := h_constraints ⟨i, hi⟩
+      simp only [circuit_norm] at h_constraint
+      -- h_constraint : Expression.eval env input_var[i] * (Expression.eval env input_var[i] + -1) = 0
+      -- We need to convert this to the standard form x * (x - 1) = 0
+      have h_binary : Expression.eval env input_var[i] * (Expression.eval env input_var[i] - 1) = 0 := by
+        simp only [sub_eq_add_neg]
+        assumption
+      -- Now apply IsBool.of_sq_sub_sq
+      have h_eq : input[i] = Expression.eval env input_var[i] := by
+        rw [← h_input_eval]
+        simp only [ProvableType.eval_fields]
+        simp only [Vector.getElem_map]
+      rw [h_eq]
+      sorry
+    · rw[← h_input_eval]
+      -- We need to prove that the output of the circuit equals fieldFromBits of the input
+      -- The circuit computes Σ_i input_var[i] * 2^i using foldlRange
+      -- We can use the lemma main_computes_fieldFromBits
+      have h_lemma := main_computes_fieldFromBits n input_var offset env
+      simp only [ProvableType.eval_fields]
+      rw [← h_lemma]
+      -- Now we need to show that Fin.foldl equals Circuit.output (main n input_var) offset
+      -- This requires understanding how Circuit.foldlRange relates to Fin.foldl
+      simp only [Circuit.output, main, circuit_norm]
+      -- The simp unfolded the definitions and proved the equality
 
   completeness := by
     simp only [GeneralFormalCircuit.Completeness]
