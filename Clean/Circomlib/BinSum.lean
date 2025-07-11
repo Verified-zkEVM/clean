@@ -280,6 +280,7 @@ lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
     fieldFromBits bits =
     fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
   simp only [fieldFromBits, fromBits, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
+  have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
   simp only [Vector.getElem_map, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
     Nat.cast_ofNat, Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
     Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
@@ -287,7 +288,22 @@ lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
   · norm_num
   · -- Show the function equality via HEq
     -- The two functions are equal - they just have different variable names
-    sorry
+    -- But we need to handle the type equality: Fin n vs Fin (min n (n + 1))
+    have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
+    apply Function.hfunext
+    · rfl
+    · intro a0 a1 h_a
+      have : a0 = a1 := by
+        apply eq_of_heq
+        assumption
+      rw[this]
+      apply Function.hfunext
+      · rw [h_min]
+      · intros b0 b1 h_b
+        simp only [heq_eq_eq]
+        congr
+        rw [h_min]
+        rw [h_min]
   · -- Show bits[n].cast = bits[n]
     -- The cast here is ZMod.cast from F p to F p, which should be identity
     rw [ZMod.cast_id']
