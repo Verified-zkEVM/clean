@@ -155,7 +155,13 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         rw [h0]
         simp only [mul_zero, add_zero, if_pos rfl]
         simp only [id_eq, zero_add, ↓reduceIte]
-        sorry
+        symm
+        calc
+          _ = (eval (α := ProvablePair _ _) env input_var.c[i]).1 := by
+            congr
+            sorry
+          _ = _ := by
+            sorry
       | inr h1 =>
         -- When s = 1
         rw [← h_s] at h1
