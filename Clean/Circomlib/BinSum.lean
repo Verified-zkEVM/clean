@@ -145,6 +145,27 @@ def main (n : ℕ) (bits : Vector (Expression (F p)) n) : Circuit (F p) (Express
     return (sum, e2 + e2)
   return sum
 
+-- Lemma: BinaryWeightedSum.main computes fieldFromBits of its input
+lemma main_computes_fieldFromBits (n : ℕ) (bits : Vector (Expression (F p)) n) (offset : ℕ) (env : Environment (F p)) :
+    Expression.eval env (Circuit.output (main n bits) offset) = fieldFromBits (bits.map (Expression.eval env)) := by
+  simp only [main, Circuit.output]
+  -- The main function uses foldlRange to compute Σ_i bits[i] * 2^i
+  -- We need to show this equals fieldFromBits
+  
+  -- First, let's understand the foldlRange structure
+  -- It starts with (sum=0, e2=1) and for each i:
+  -- - Adds bits[i] * e2 to sum
+  -- - Doubles e2 for the next iteration
+  -- This computes: Σ_{i=0}^{n-1} bits[i] * 2^i
+  
+  -- fieldFromBits is defined as: Fin.foldl n (fun acc i => acc + bits[i] * 2^i) 0
+  -- So we need to show these are equivalent
+  
+  -- The key is to prove by induction that after k iterations:
+  -- - sum = Σ_{i=0}^{k-1} bits[i] * 2^i
+  -- - e2 = 2^k
+  sorry
+
 def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
   main input := main n input
 
@@ -370,10 +391,44 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
       -- The RHS is the evaluation of BinaryWeightedSum.main on the witness vector
       -- The witness vector evaluates to fieldToBits nout lin_value (by h_witness_vec)
       
-      -- To proceed, we need a lemma about what BinaryWeightedSum.main computes
-      -- It should compute fieldFromBits of its input vector
-      -- For now, let's leave this as a sorry
-      sorry
+      -- To proceed, we need to use the lemma about what BinaryWeightedSum.main computes
+      -- It computes fieldFromBits of its input vector
+      
+      -- The goal is: lin_value = Expression.eval env (BinaryWeightedSum.main ...)
+      -- We know lin_value = Expression.eval env lin_var
+      -- And the witness vector evaluates to fieldToBits nout lin_value
+      
+      -- Apply the lemma about BinaryWeightedSum.main
+      have h_bws_output := BinaryWeightedSum.main_computes_fieldFromBits nout 
+                           (Vector.mapRange nout fun i ↦ var { index := witness_offset + i })
+                           (witness_offset + nout) env
+      
+      -- Simplify the RHS using our lemma
+      rw [h_bws_output]
+      
+      -- Now we need: lin_value = fieldFromBits (fieldToBits nout lin_value)
+      -- This follows from fieldFromBits_fieldToBits with appropriate bounds
+      
+      -- We need lin_value < 2^nout for the theorem to apply
+      -- Since hnout : 2^nout < p, we need to show that the actual value is less than 2^nout
+      -- For OutputBitsDecomposition to work correctly, we need an additional assumption
+      -- that the input value is less than 2^nout (otherwise the bit decomposition won't work)
+      -- For now, we'll leave this as a sorry
+      have h_lt : lin_value.val < 2^nout := by
+        sorry
+      
+      -- Now we use h_witness_vec and h_lhs to rewrite
+      -- h_witness_vec tells us the witness vector equals fieldToBits nout (Expression.eval env lin_var)
+      -- h_lhs tells us Expression.eval env lin_var = lin_value
+      rw [h_lhs] at h_witness_vec
+      
+      -- Now we can rewrite the goal using h_witness_vec
+      -- The goal has fieldFromBits (Vector.map ...) and h_witness_vec tells us this equals fieldToBits nout lin_value
+      rw [h_witness_vec]
+      
+      -- Now the goal is: lin_value = fieldFromBits (fieldToBits nout lin_value)
+      -- This follows from fieldFromBits_fieldToBits (with symmetry)
+      exact (fieldFromBits_fieldToBits h_lt).symm
 
 end OutputBitsDecomposition
 
