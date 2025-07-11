@@ -351,14 +351,35 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
 
     constructor
     · -- First component
-      simp only [Expression.eval]
-      -- Goal: fieldFromBits (bits.pop.map eval) + bits[Fin.last n].eval * 2^n = fieldFromBits (bits.map eval)
-      -- This is exactly fieldFromBits_succ
-      rw [fieldFromBits_succ]
-      sorry
+      simp only [Expression.eval, ih1, ih2, fieldFromBits_succ]
+      congr
+      · -- Goal: LHS = fieldFromBits ((Vector.map (Expression.eval env) bits).take n)
+        -- We have ih1: LHS = fieldFromBits (Vector.map (Expression.eval env) bits.pop)
+        -- We need to show these are equal
+        trans (fieldFromBits (Vector.map (Expression.eval env) bits.pop))
+        · exact ih1
+        · -- Now show: fieldFromBits (Vector.map (Expression.eval env) bits.pop) = fieldFromBits ((Vector.map (Expression.eval env) bits).take n)
+          congr 1
+          simp only [add_tsub_cancel_right, le_add_iff_nonneg_right, zero_le, inf_of_le_left]
+          rw [Vector.map_take]
+          congr 1
+          have n_eq : n + 1 - 1 = min n (n + 1) := by omega
+          rw [n_eq]
+          simp only [Vector.pop, Vector.take]
+          congr 1
+          · omega
+          · ext
+            · sorry
+            · sorry
+          · sorry
+      · simp only [circuit_norm]
+        -- Goal: Expression.eval env bits[↑(Fin.last n)] = Expression.eval env bits[n]
+        -- Both sides evaluate the same element of bits
+        -- Fin.last n has value n, and the coercion ↑ preserves this
+        -- So bits[↑(Fin.last n)] = bits[n]
+        congr
     · -- Second component: 2^n + 2^n = 2^(n+1)
       simp only [Expression.eval, ih2]
-      set_option pp.explicit true in
       ring_nf
       -- We have the_fold.2 * 2 = 2^n * 2
       -- Since ih2 says the_fold.2 = 2^n, we can substitute
