@@ -313,6 +313,7 @@ lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
 
 -- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
 -- and the second component is the current power of 2
+omit [Fact (p > 2)] in
 lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env : Environment (F p)),
     let result := Fin.foldl n (fun acc i ↦ (acc.1 + bits[i] * acc.2, acc.2 + acc.2)) (0, 1)
     Expression.eval env result.1 = fieldFromBits (Vector.map (Expression.eval env) bits) ∧
@@ -369,9 +370,13 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
           congr 1
           · omega
           · ext
-            · sorry
-            · sorry
-          · sorry
+            · simp only [Array.size_pop, Vector.size_toArray, add_tsub_cancel_right,
+              Array.take_eq_extract, Array.extract_eq_pop]
+            · simp only [Array.getElem_pop, Vector.getElem_toArray, Array.take_eq_extract,
+              Vector.size_toArray, add_tsub_cancel_right, Array.extract_eq_pop]
+          · simp only [Array.size_pop, Vector.size_toArray, add_tsub_cancel_right,
+            Array.take_eq_extract, Array.extract_eq_pop, le_add_iff_nonneg_right, zero_le,
+            inf_of_le_left, heq_eq_eq]
       · simp only [circuit_norm]
         -- Goal: Expression.eval env bits[↑(Fin.last n)] = Expression.eval env bits[n]
         -- Both sides evaluate the same element of bits
