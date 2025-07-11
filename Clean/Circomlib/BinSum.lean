@@ -391,6 +391,7 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
       congr 1
 
 -- Lemma: BinaryWeightedSum.main computes fieldFromBits of its input
+omit [Fact (p > 2)] in
 lemma main_computes_fieldFromBits (n : ℕ) (bits : Vector (Expression (F p)) n) (offset : ℕ) (env : Environment (F p)) :
     Expression.eval env (Circuit.output (main n bits) offset) = fieldFromBits (bits.map (Expression.eval env)) := by
   simp only [main, circuit_norm]
