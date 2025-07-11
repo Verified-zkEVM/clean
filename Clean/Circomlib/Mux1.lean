@@ -59,6 +59,8 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
   simp only [Vector.getElem_map (fun x => #v[f x]) hi]
   rfl
 
+-- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
+
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
@@ -159,16 +161,24 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         calc
           _ = (eval (α := ProvablePair _ _) env input_var.c[i]).1 := by
             congr
-            sorry
+            exact (getElem_eval_vector env input_var.c i hi).symm
           _ = _ := by
-            sorry
+            -- eval on a pair evaluates each component
+            rfl
       | inr h1 =>
         -- When s = 1
         rw [← h_s] at h1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0)]
         simp only [id_eq, neg_mul, one_mul, neg_add_cancel_right]
-        sorry
+        -- Need to show: Expression.eval env input_var.c[i].2 = (eval env input_var.c)[i].2
+        symm
+        calc
+          _ = (eval (α := ProvablePair _ _) env input_var.c[i]).2 := by
+            congr
+            exact (getElem_eval_vector env input_var.c i hi).symm
+          _ = _ := by
+            rfl
 
   completeness := by
     simp only [circuit_norm, main]
