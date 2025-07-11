@@ -162,8 +162,12 @@ lemma fieldFromBits_zero {α : Type*} (v : Vector α 0) [inst : (a : α) → Dec
 -- Specific version for our use case
 lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Environment (F p)) :
     fieldFromBits (Vector.map (Expression.eval env) bits) = 0 := by
-  -- This should follow from fieldFromBits_zero or a direct argument
-  sorry
+  -- For a vector of length 0, fieldFromBits should return 0
+  simp only [fieldFromBits, fromBits]
+  -- Fin.foldl 0 returns the initial value 0
+  simp only [Fin.foldl_zero]
+  -- ↑0 = 0
+  simp
 
 -- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
 lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
