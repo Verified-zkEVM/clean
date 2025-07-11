@@ -608,7 +608,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       rw [h_output_eq, h_output_sum, h_lin_sum, h_input_eval]
 
   completeness := by
-    intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
+    intros witness_offset env inputs_var h_witness_extends inputs_value
     -- We need to show that when inputs are binary, the circuit constraints can be satisfied
     -- The completeness follows from:
     -- 1. InputLinearSum has no constraints, so it's trivially complete
@@ -619,27 +619,27 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
     simp only [InputLinearSum.circuit, OutputBitsDecomposition.circuit]
 
     -- We have implications to handle
-    intro h_eq h_binary
+    intro h_inputs_eval h_inputs_binary
     -- Now we need to prove the conjunction
     constructor
     · -- First part: inputs remain binary after evaluation
       intro j k hj hk
-      rw [h_eq]
-      exact h_binary j k hj hk
+      rw [h_inputs_eval]
+      exact h_inputs_binary j k hj hk
 
     · -- Second part: OutputBitsDecomposition completeness
       -- We need to prove that the sum is less than 2^nbits((2^n - 1) * ops)
       -- We have the sum from InputLinearSum
-      have h_sum_eq : Expression.eval h_uses_local_witnesses ((InputLinearSum.main n ops input_val).output input_var) =
-                       Fin.foldl ops (fun sum j => sum + fieldFromBits (eval h_uses_local_witnesses input_val)[j]) 0 := by
+      have h_sum_eq : Expression.eval env ((InputLinearSum.main n ops inputs_var).output witness_offset) =
+                       Fin.foldl ops (fun sum j => sum + fieldFromBits (eval env inputs_var)[j]) 0 := by
         -- This should follow from InputLinearSum.completeness
         sorry
       -- Now apply our lemma
-      have h_binary_eval : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval h_uses_local_witnesses input_val)[j][k] := by
+      have h_binary_eval : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval env inputs_var)[j][k] := by
         intro j k hj hk
-        rw [h_eq]
-        exact h_binary j k hj hk
-      apply sum_bound_of_binary_inputs hops (eval h_uses_local_witnesses input_val) h_binary_eval
+        rw [h_inputs_eval]
+        exact h_inputs_binary j k hj hk
+      apply sum_bound_of_binary_inputs hops (eval env inputs_var) h_binary_eval
       exact h_sum_eq
 
 end BinSum
