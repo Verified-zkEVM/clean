@@ -222,7 +222,7 @@ def main (nout : ℕ) (lin : Expression (F p)) : Circuit (F p) (Vector (Expressi
 
   return out
 
-def circuit (nout : ℕ) (hnout : 2^nout < p) :
+def circuit (nout : ℕ) (_ : 2^nout < p) :
     FormalCircuit (F p) field (fields nout) where
   main input := main nout input
 
@@ -238,7 +238,7 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := True
+  Assumptions input := input.val < 2^nout
 
   Spec input output :=
     -- All outputs are binary
@@ -306,7 +306,7 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
       exact h_input_eval
 
   completeness := by
-    intros witness_offset env lin_var h_witness_extends lin_value h_lin_eval
+    intros witness_offset env lin_var h_witness_extends lin_value h_lin_eval h_assumptions
     -- We can always witness the binary decomposition of the input
     -- The circuit witnesses out = fieldToBits(input)
     -- This satisfies all constraints:
@@ -322,6 +322,7 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
     -- 1. fieldToBits produces binary values (for BinaryWeightedSum constraints)
     -- 2. fieldFromBits(fieldToBits(input)) = input (for the assertEq)
     
+    -- h_assumptions gives us that lin_value.val < 2^nout
     constructor
     · -- First: show the witnessed bits are binary
       intro i hi
@@ -410,12 +411,8 @@ def circuit (nout : ℕ) (hnout : 2^nout < p) :
       -- This follows from fieldFromBits_fieldToBits with appropriate bounds
       
       -- We need lin_value < 2^nout for the theorem to apply
-      -- Since hnout : 2^nout < p, we need to show that the actual value is less than 2^nout
-      -- For OutputBitsDecomposition to work correctly, we need an additional assumption
-      -- that the input value is less than 2^nout (otherwise the bit decomposition won't work)
-      -- For now, we'll leave this as a sorry
-      have h_lt : lin_value.val < 2^nout := by
-        sorry
+      -- This is given by h_assumptions
+      have h_lt : lin_value.val < 2^nout := h_assumptions
       
       -- Now we use h_witness_vec and h_lhs to rewrite
       -- h_witness_vec tells us the witness vector equals fieldToBits nout (Expression.eval env lin_var)
@@ -555,7 +552,13 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       -- The output is varFromOffset at position offset + input
       simp only [varFromOffset, eval, fromVars, fromElements, toVars, fields, size]
       -- Apply the binary constraint from OutputBitsDecomposition
-      have h_binary := (h_output_decomp trivial).1 i hi
+      -- First we need to prove that the sum is less than 2^nbits((2^n - 1) * ops)
+      have h_sum_bound : (Expression.eval h_assumptions ((InputLinearSum.main n ops offset).output input)).val < 
+                         2^(nbits ((2^n - 1) * ops)) := by
+        -- The sum is at most ops * (2^n - 1) since each input is an n-bit number
+        -- And nbits is defined to give enough bits to represent this maximum value
+        sorry
+      have h_binary := (h_output_decomp h_sum_bound).1 i hi
       simp only [varFromOffset] at h_binary
       exact h_binary
 
@@ -570,7 +573,13 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       have h_lin_sum := h_input_sum h_inputs_binary
 
       -- Apply OutputBitsDecomposition spec
-      have h_output_sum := (h_output_decomp trivial).2
+      -- We need the same sum bound as before
+      have h_sum_bound : (Expression.eval h_assumptions ((InputLinearSum.main n ops offset).output input)).val < 
+                         2^(nbits ((2^n - 1) * ops)) := by
+        -- The sum is at most ops * (2^n - 1) since each input is an n-bit number
+        -- And nbits is defined to give enough bits to represent this maximum value
+        sorry
+      have h_output_sum := (h_output_decomp h_sum_bound).2
 
       -- Chain the equalities
       -- The goal is about ElaboratedCircuit.output which is varFromOffset
@@ -603,8 +612,10 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       rw [h_eq]
       exact h_binary j k hj hk
 
-    · -- Second part: OutputBitsDecomposition completeness (True)
-      trivial
+    · -- Second part: OutputBitsDecomposition completeness
+      -- We need to prove that the sum is less than 2^nbits((2^n - 1) * ops)
+      -- The sum is at most ops * (2^n - 1) since each input is an n-bit number
+      sorry
 
 end BinSum
 
