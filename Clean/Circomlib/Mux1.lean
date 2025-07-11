@@ -109,14 +109,14 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- The issue is that varFromOffset returns a Var (ProvableVector field n)
     -- which is Vector (field (Expression (F p))) n
     -- But in the goal we need Vector (Expression (F p)) n
-    
+
     -- Let's unfold what varFromOffset actually gives us
     simp only [varFromOffset_vector, eval_vector] at h_output_i ⊢
-    
+
     -- Simplify the left side first
     simp only [Vector.getElem_mapRange] at h_output_i ⊢
     simp only [size, mul_one] at h_output_i ⊢
-    
+
     -- Now we can rewrite
     rw [h_output_i]
     -- Now simplify the right side step by step
@@ -133,36 +133,36 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- Now we need to evaluate the expression
     -- The goal is: Expression.eval env ((input_var.c[i].2 - input_var.c[i].1) * input_var.s + input_var.c[i].1)
     simp only [Expression.eval]
-    
+
     -- We have input_var.c : Var (ProvableVector (ProvablePair field field) n)
     -- So eval env input_var.c : Vector (field (F p) × field (F p)) n
     -- And (eval env input_var.c)[i] : field (F p) × field (F p)
-    
+
     -- Get the pair at index i
-    have h_ci : (eval env input_var.c)[i] = input.c[i] := by
+    have h_ci : (eval env input_var.c : ProvableVector _ _ _)[i] = input.c[i] := by
       rw [h_c]
-    
+
     -- Now we can work with the components
     rw [← h_s]
-    conv_lhs => 
-      arg 1; arg 1; arg 2; rw [← h_ci]
-      arg 1; arg 2; rw [← h_ci]
-      arg 2; rw [← h_ci]
+    rw [← h_c]
 
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
     cases h_assumptions with
-      -- When s = 0 or s = 1
-      cases hs with
       | inl h0 =>
         -- When s = 0
+        rw [← h_s] at h0
         rw [h0]
         simp only [mul_zero, add_zero, if_pos rfl]
+        simp only [id_eq, zero_add, ↓reduceIte]
+        sorry
       | inr h1 =>
         -- When s = 1
+        rw [← h_s] at h1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0)]
-        ring
+        simp only [id_eq, neg_mul, one_mul, neg_add_cancel_right]
+        sorry
 
   completeness := by
     simp only [circuit_norm, main]
