@@ -191,7 +191,7 @@ lemma Expression.eval_foldl (env : Environment (F p)) (n : ℕ)
 -- Helper lemma: Factoring out a constant from a foldl sum
 omit [Fact (p > 2)] in
 lemma foldl_factor_const {n : ℕ} (f : Fin n → F p) (c : F p) (init : F p) :
-    Fin.foldl n (fun acc i => acc + f i * c) init = 
+    Fin.foldl n (fun acc i => acc + f i * c) init =
     init + c * Fin.foldl n (fun acc i => acc + f i) 0 := by
   induction n generalizing init with
   | zero => simp [Fin.foldl_zero]
@@ -199,12 +199,15 @@ lemma foldl_factor_const {n : ℕ} (f : Fin n → F p) (c : F p) (init : F p) :
     -- Unfold the foldl on both sides
     simp only [Fin.foldl_succ_last]
     -- Apply IH to the castSucc part
-    have h_eq : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc * c) init = 
+    have h_eq : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc * c) init =
                 Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2 * c) init := by
       congr
-      ext x1 x2
-      rfl
     rw [h_eq, ih (f ∘ Fin.castSucc)]
+    -- Now simplify the RHS
+    have h_rhs : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc) 0 =
+                 Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2) 0 := by
+      congr
+    rw [← h_rhs]
     -- Now we have: init + c * (foldl of castSucc) + f(last) * c
     -- We want: init + c * (foldl of castSucc + f(last))
     ring
