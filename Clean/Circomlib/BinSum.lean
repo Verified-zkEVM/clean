@@ -172,6 +172,12 @@ lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   sorry
 
+
+omit [Fact (p > 2)] in
+lemma foldl_to_sum : ∀ (n' : ℕ) (f' : Fin n' → F p),
+    Fin.foldl n' (fun acc i => acc + f' i) 0 = ∑ i : Fin n', f' i := by
+  sorry
+
 -- Lemma 2: Summation interchange for the double sum
 omit [Fact (p > 2)] in
 lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
@@ -179,7 +185,33 @@ lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
       Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
     Fin.foldl ops (fun acc j => acc +
       Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 := by
-  sorry
+  -- Now convert the LHS
+  have lhs_eq : Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
+      Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
+      ∑ k : Fin n, (2^k.val : F p) * (∑ j : Fin ops, f j k) := by
+    rw [foldl_to_sum]
+    congr 1
+    ext k
+    rw [foldl_to_sum]
+
+  -- Convert the RHS
+  have rhs_eq : Fin.foldl ops (fun acc j => acc +
+      Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 =
+      ∑ j : Fin ops, (∑ k : Fin n, f j k * (2^k.val : F p)) := by
+    rw [foldl_to_sum]
+    congr 1
+    ext j
+    rw [foldl_to_sum]
+
+  rw [lhs_eq, rhs_eq]
+  -- Now we have: ∑ k, 2^k * (∑ j, f j k) = ∑ j, (∑ k, f j k * 2^k)
+  -- Distribute multiplication
+  simp only [Finset.mul_sum]
+  -- Now: ∑ k, (∑ j, 2^k * f j k) = ∑ j, (∑ k, f j k * 2^k)
+  -- Use sum_comm to swap order
+  rw [Finset.sum_comm]
+  -- Just need to show 2^k * f j k = f j k * 2^k
+  simp only [mul_comm]
 
 -- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
 omit [Fact (p > 2)] in
