@@ -247,21 +247,7 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   -- First, let's establish this equality
   have offset_eval_elem : ∀ (j : Fin ops) (k : Fin n), Expression.eval env input[j][k] = input_val[j][k] := by
     intro j k
-    -- Goal: Expression.eval env input[j][k] = input_val[j][k]
-    -- We have: eval env input = input_val
-    -- We need to show: Expression.eval env input[j][k] = input_val[j][k]
-    -- Let's work step by step
-
-    -- For vectors of expressions (fields n), the evaluation is element-wise
-    -- So (eval env input[j])[k] = Expression.eval env (input[j][k])
-
-    -- We can use the fact that for fields n:
-    -- eval env v = Vector.map (Expression.eval env) v
-
     simp only [Fin.getElem_fin]
-
-    -- For fields n, eval is defined as mapping Expression.eval over the vector
-    -- So (eval env v)[i] = (v.map (Expression.eval env))[i] = Expression.eval env v[i]
     have h_fields_eval : ∀ (v : Var (fields n) (F p)) (i : Fin n),
       (eval env v)[i] = Expression.eval env v[i] := by
       intro v i
@@ -291,15 +277,7 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   -- Now substitute this equality in our sum
   simp only [offset_eval_elem]
 
-  -- Step 3: Apply sum_interchange to swap the order of summation
   rw [Fin.sum_interchange (fun j k => input_val[j][k]) (fun k => (2^k : F p))]
-
-  -- Step 4: Now we need to show that each inner sum equals fieldFromBits
-  -- The goal should be:
-  -- Fin.foldl ops (fun acc j => acc + Fin.foldl n (fun acc' k => acc' + input_val[j][k] * 2^k) 0) 0
-  -- = Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0
-
-  -- Apply fieldFromBits_as_sum to each inner sum
   congr 1
   ext j
   rw [← fieldFromBits_as_sum]
@@ -722,28 +700,12 @@ def circuit (nout : ℕ) (_ : 2^nout < p) :
         exact h_extends ⟨i, hi⟩
 
       rw [h_witness]
-      -- Now apply the theorem about fieldToBits producing binary values
       have h_binary := fieldToBits_bits (i := i) hi (x := Expression.eval env lin_var)
       cases h_binary with
       | inl h => left; exact h
       | inr h => right; exact h
 
-    · -- Second: show input = BinaryWeightedSum output
-      -- BinaryWeightedSum computes fieldFromBits of the witnessed bits
-      -- The witnessed bits are fieldToBits(input)
-      -- So we need: input = fieldFromBits(fieldToBits(input))
-
-      -- The BinaryWeightedSum main function evaluates to fieldFromBits of its input vector
-      -- Its input vector is Vector.mapRange nout (fun i => var ⟨witness_offset + i⟩)
-      -- When evaluated, this gives us the witness values
-
-      -- First, let's understand what BinaryWeightedSum.main computes
-      -- It computes Σ_i bits[i] * 2^i = fieldFromBits bits
-
-      -- The expression we need to prove equal to lin_var is:
-      -- BinaryWeightedSum.main nout (Vector.mapRange nout fun i ↦ var { index := witness_offset + i })
-
-      -- When evaluated, the var expressions give us the witness values
+    ·
       have h_witness_vec : Vector.map (Expression.eval env)
                            (Vector.mapRange nout fun i ↦ var { index := witness_offset + i }) =
                            fieldToBits nout (Expression.eval env lin_var) := by
