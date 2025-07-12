@@ -214,7 +214,7 @@ lemma foldl_factor_const {n : ℕ} (f : Fin n → F p) (c : F p) (init : F p) :
 
 -- Lemma 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
 omit [Fact (p > 2)] in
-lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
+lemma circuit_eval_nested_sum {n ops : ℕ}
     (env : Environment (F p))
     (offset : Var (BinSumInput n ops) (F p))
     (input_offset : ℕ) :
@@ -383,7 +383,7 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
 
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
-lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
+lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
     (env : Environment (F p))
     (input : Var (BinSumInput n ops) (F p))
     (input_val : BinSumInput n ops (F p))
@@ -395,7 +395,7 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- We need to show the nested sum equals the sum of fieldFromBits
 
   -- Step 1: Apply circuit_eval_nested_sum to show how the circuit evaluates
-  rw [circuit_eval_nested_sum hops env input input_offset]
+  rw [circuit_eval_nested_sum env input input_offset]
 
   -- Step 2: We need to replace Expression.eval env offset[j][k] with input_val[j][k]
   -- First, let's establish this equality
@@ -508,7 +508,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
     -- We need to show it equals the sum of fieldFromBits of the inputs
 
     -- Apply our lemma to show the circuit computes the correct sum
-    exact main_eval_eq_sum hops h_assumptions offset env h_input_eval input
+    exact main_eval_eq_sum h_assumptions offset env h_input_eval input
 
   completeness := by
     intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
