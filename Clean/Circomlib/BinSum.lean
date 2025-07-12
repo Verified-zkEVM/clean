@@ -172,11 +172,38 @@ lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   sorry
 
+-- Lemma to convert Fin.foldl to Finset.sum via range
 omit [Fact (p > 2)] in
+lemma foldl_eq_sum_range {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : Fin n' → α),
+    Fin.foldl n' (fun acc i => acc + f' i) 0 = ∑ i ∈ Finset.range n', if h : i < n' then f' ⟨i, h⟩ else 0 := by
+  intro n' f'
+  induction n' with
+  | zero =>
+    simp [Fin.foldl_zero, Finset.range_zero, Finset.sum_empty]
+  | succ n'' ih =>
+    rw [Fin.foldl_succ_last]
+    rw [Finset.sum_range_succ]
+    simp only [ih]
+    -- We need to show that the sum equals itself plus the last term
+    congr 1
+    -- For the sum part, we need to show the functions are equal
+    · apply Finset.sum_congr rfl
+      intro i hi
+      simp only [Finset.mem_range] at hi
+      simp only [Fin.castSucc_mk]
+      simp only [hi]
+      simp only [↓reduceDIte]
+      have hi' : i < n'' + 1 := by omega
+      simp only [hi', ↓reduceDIte]
+    · -- For the last term
+      simp only [Fin.last, Nat.lt_succ_self, dif_pos]
+
+omit [Fact p.Prime] [Fact (p > 2)] in
 lemma foldl_to_sum : ∀ (n' : ℕ) (f' : Fin n' → F p),
     Fin.foldl n' (fun acc i => acc + f' i) 0 = ∑ i : Fin n', f' i := by
+  intro n' f'
   simp only [Finset.sum_fin_eq_sum_range]
-  sorry
+  exact foldl_eq_sum_range n' f'
 
 -- Lemma 2: Summation interchange for the double sum
 omit [Fact (p > 2)] in
