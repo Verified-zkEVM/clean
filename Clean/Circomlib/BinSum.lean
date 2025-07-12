@@ -172,10 +172,10 @@ lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   sorry
 
-
 omit [Fact (p > 2)] in
 lemma foldl_to_sum : ∀ (n' : ℕ) (f' : Fin n' → F p),
     Fin.foldl n' (fun acc i => acc + f' i) 0 = ∑ i : Fin n', f' i := by
+  simp only [Finset.sum_fin_eq_sum_range]
   sorry
 
 -- Lemma 2: Summation interchange for the double sum
