@@ -229,4 +229,81 @@ theorem fieldFromBits_fieldToBits {n: ℕ} {x : F p} (hx : x.val < 2^n) :
   simp only [fieldToBits, fieldFromBits]
   rw [Vector.map_map, val_natCast_toBits, fromBits_toBits hx, ZMod.natCast_zmod_val]
 
+/-! ## Additional lemmas about fieldFromBits -/
+
+/-- fieldFromBits decomposes as sum of first n bits + bit_n * 2^n -/
+lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
+    fieldFromBits bits =
+    fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
+  simp only [fieldFromBits, fromBits, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
+  have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
+  simp only [Vector.getElem_map, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
+    Nat.cast_ofNat, Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+    Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
+  congr
+  · norm_num
+  · -- Show the function equality via HEq
+    -- The two functions are equal - they just have different variable names
+    -- But we need to handle the type equality: Fin n vs Fin (min n (n + 1))
+    have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
+    apply Function.hfunext
+    · rfl
+    · intro a0 a1 h_a
+      have : a0 = a1 := by
+        apply eq_of_heq
+        assumption
+      rw[this]
+      apply Function.hfunext
+      · rw [h_min]
+      · intros b0 b1 h_b
+        simp only [heq_eq_eq]
+        congr
+        rw [h_min]
+        rw [h_min]
+  · -- Show bits[n].cast = bits[n]
+    -- The cast here is ZMod.cast from F p to F p, which should be identity
+    rw [ZMod.cast_id']
+    rfl
+
+/-- The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits) -/
+lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
+    fieldFromBits bits =
+    Fin.foldl n (fun acc k => acc + bits[k] * (2^k.val : F p)) 0 := by
+  -- fieldFromBits uses fromBits which sums bits[k].val * 2^k
+  -- We need to show this equals the sum of bits[k] * 2^k (without .val)
+  induction n
+  · -- Base case: n = 0
+    simp only [fieldFromBits, fromBits, Fin.foldl_zero]
+    norm_cast
+  · rename_i pre_n ih
+    rw [fieldFromBits_succ]
+    have min_pre_h : (min pre_n (pre_n + 1)) = pre_n := by omega
+    calc
+      _ = fieldFromBits (Vector.cast min_pre_h (bits.take pre_n)) + bits[pre_n] * 2 ^ pre_n := by
+        congr
+        simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+          Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl]
+        apply Vector.cast_heq
+      _ = _ := by
+        rw [ih]
+        simp only [Fin.foldl_succ_last]
+        congr
+        ext acc k
+        simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+          Nat.add_one_sub_one, Nat.sub_zero, Fin.getElem_fin, Fin.coe_castSucc, add_right_inj,
+          mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq]
+        left
+        repeat rw[Vector.getElem_cast]
+        simp only [Vector.getElem_pop']
+
+/-- fieldFromBits of empty vector (Expression version) -/
+lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Environment (F p)) :
+    fieldFromBits (Vector.map (Expression.eval env) bits) = 0 := by
+  -- For a vector of length 0, fieldFromBits should return 0
+  simp only [fieldFromBits, fromBits]
+  -- Fin.foldl 0 returns the initial value 0
+  simp only [Fin.foldl_zero]
+  -- ↑0 = 0
+  norm_cast
+
 end Utils.Bits
