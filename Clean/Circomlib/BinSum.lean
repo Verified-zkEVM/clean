@@ -188,6 +188,27 @@ lemma Expression.eval_foldl (env : Environment (F p)) (n : ℕ)
     -- Rewrite using h1
     rw [h1]
 
+-- Helper lemma: Factoring out a constant from a foldl sum
+omit [Fact (p > 2)] in
+lemma foldl_factor_const {n : ℕ} (f : Fin n → F p) (c : F p) (init : F p) :
+    Fin.foldl n (fun acc i => acc + f i * c) init = 
+    init + c * Fin.foldl n (fun acc i => acc + f i) 0 := by
+  induction n generalizing init with
+  | zero => simp [Fin.foldl_zero]
+  | succ m ih =>
+    -- Unfold the foldl on both sides
+    simp only [Fin.foldl_succ_last]
+    -- Apply IH to the castSucc part
+    have h_eq : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc * c) init = 
+                Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2 * c) init := by
+      congr
+      ext x1 x2
+      rfl
+    rw [h_eq, ih (f ∘ Fin.castSucc)]
+    -- Now we have: init + c * (foldl of castSucc) + f(last) * c
+    -- We want: init + c * (foldl of castSucc + f(last))
+    ring
+
 -- Lemma 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
 omit [Fact (p > 2)] in
 lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
@@ -205,7 +226,10 @@ lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     ext acc k
     rw [Expression.eval_foldl]
     · simp only [circuit_norm]
-      sorry
+      -- Apply the factorization lemma with proper coercions
+      have h := foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
+      -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
+      convert h
     · intros e i
       simp only [circuit_norm]
   · intros e i
