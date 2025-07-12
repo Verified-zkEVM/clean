@@ -165,7 +165,7 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F
 omit [Fact (p > 2)] in
 lemma Expression.eval_foldl (env : Environment (F p)) (n : ℕ)
     (f : Expression (F p) → Fin n → Expression (F p)) (init : Expression (F p))
-    (hf : ∀ (e : Expression (F p)) (i : Fin n), 
+    (hf : ∀ (e : Expression (F p)) (i : Fin n),
       Expression.eval env (f e i) = Expression.eval env (f (Expression.const (Expression.eval env e)) i)) :
     Expression.eval env (Fin.foldl n f init) =
     Fin.foldl n (fun (acc : F p) (i : Fin n) => Expression.eval env (f (Expression.const acc) i)) (Expression.eval env init) := by
@@ -174,15 +174,15 @@ lemma Expression.eval_foldl (env : Environment (F p)) (n : ℕ)
   | succ n' ih =>
     rw [Fin.foldl_succ_last, Fin.foldl_succ_last]
     -- Apply the inductive hypothesis with the appropriate function and assumption
-    have hf' : ∀ (e : Expression (F p)) (i : Fin n'), 
+    have hf' : ∀ (e : Expression (F p)) (i : Fin n'),
       Expression.eval env (f e i.castSucc) = Expression.eval env (f (Expression.const (Expression.eval env e)) i.castSucc) := by
       intros e i
       exact hf e i.castSucc
-    
-    have h1 : Expression.eval env (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) = 
-              Fin.foldl n' (fun acc i => Expression.eval env (f (Expression.const acc) i.castSucc)) (Expression.eval env init) := 
+
+    have h1 : Expression.eval env (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) =
+              Fin.foldl n' (fun acc i => Expression.eval env (f (Expression.const acc) i.castSucc)) (Expression.eval env init) :=
       ih (fun x i => f x i.castSucc) hf'
-    
+
     -- Now apply the assumption to relate the two sides
     rw [hf (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) (Fin.last n')]
     -- Rewrite using h1
@@ -199,6 +199,11 @@ lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   -- The main function uses nested Circuit.foldlRange
   simp only [main, circuit_norm]
+  rw [Expression.eval_foldl _ _ _ _ (by sorry)]
+  congr
+  ext acc i
+  rw [Expression.eval_foldl _ _ _ _ (by sorry)]
+  rw [add_comm]
   sorry
 
 -- Lemma to convert Fin.foldl to Finset.sum via range
