@@ -432,7 +432,7 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
         -- Both sides evaluate the same element of bits
         -- Fin.last n has value n, and the coercion ↑ preserves this
         -- So bits[↑(Fin.last n)] = bits[n]
-        congr
+        rfl
     · -- Second component: 2^n + 2^n = 2^(n+1)
       simp only [Expression.eval, ih2]
       ring_nf
