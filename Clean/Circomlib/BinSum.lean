@@ -199,12 +199,24 @@ lemma circuit_eval_nested_sum {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   -- The main function uses nested Circuit.foldlRange
   simp only [main, circuit_norm]
-  rw [Expression.eval_foldl _ _ _ _ (by sorry)]
-  congr
-  ext acc i
-  rw [Expression.eval_foldl _ _ _ _ (by sorry)]
-  rw [add_comm]
-  sorry
+  rw [Expression.eval_foldl]
+  · simp only [circuit_norm]
+    congr 1
+    ext acc k
+    rw [Expression.eval_foldl]
+    · simp only [circuit_norm]
+      sorry
+    · intros e i
+      simp only [circuit_norm]
+  · intros e i
+    rw [Expression.eval_foldl]
+    · simp only [circuit_norm]
+      rw [Expression.eval_foldl]
+      · simp only [circuit_norm]
+      · intros e' i'
+        simp only [circuit_norm]
+    · intros e' i'
+      simp only [circuit_norm]
 
 -- Lemma to convert Fin.foldl to Finset.sum via range
 omit [Fact (p > 2)] in
