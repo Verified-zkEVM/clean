@@ -93,3 +93,36 @@ instance [Field F] : Inhabited F where
 
 instance [Field F] : Inhabited (Expression F) where
   default := .const 0
+
+/-! ## Lemmas about Expression evaluation -/
+
+section EvalLemmas
+variable [Field F]
+
+/-- Expression.eval distributes over Fin.foldl with addition -/
+lemma eval_foldl (env : Environment F) (n : ℕ)
+    (f : Expression F → Fin n → Expression F) (init : Expression F)
+    (hf : ∀ (e : Expression F) (i : Fin n),
+      Expression.eval env (f e i) = Expression.eval env (f (Expression.const (Expression.eval env e)) i)) :
+    Expression.eval env (Fin.foldl n f init) =
+    Fin.foldl n (fun (acc : F) (i : Fin n) => Expression.eval env (f (Expression.const acc) i)) (Expression.eval env init) := by
+  induction n with
+  | zero => simp [Fin.foldl_zero]
+  | succ n' ih =>
+    rw [Fin.foldl_succ_last, Fin.foldl_succ_last]
+    -- Apply the inductive hypothesis with the appropriate function and assumption
+    have hf' : ∀ (e : Expression F) (i : Fin n'),
+      Expression.eval env (f e i.castSucc) = Expression.eval env (f (Expression.const (Expression.eval env e)) i.castSucc) := by
+      intros e i
+      exact hf e i.castSucc
+
+    have h1 : Expression.eval env (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) =
+              Fin.foldl n' (fun acc i => Expression.eval env (f (Expression.const acc) i.castSucc)) (Expression.eval env init) :=
+      ih (fun x i => f x i.castSucc) hf'
+
+    -- Now apply the assumption to relate the two sides
+    rw [hf (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) (Fin.last n')]
+    -- Rewrite using h1
+    rw [h1]
+
+end EvalLemmas

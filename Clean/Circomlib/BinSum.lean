@@ -1,11 +1,14 @@
 import Clean.Circuit
+import Clean.Circuit.Expression
 import Clean.Utils.Bits
+import Clean.Utils.Fin
+import Clean.Utils.Vector
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Boolean
 
 
 namespace Circomlib
-open Utils.Bits
+open Utils.Bits Expression
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 -- Define a 2D vector type for BinSum inputs
@@ -31,43 +34,6 @@ The circuit ensures that:
 
 def nbits (a : ℕ) : ℕ :=
   if a = 0 then 1 else Nat.log2 a + 1
-
--- Lemma: The ZMod.val of a Fin.foldl sum is bounded by the sum of individual ZMod.vals
-omit [Fact (Nat.Prime p)] [Fact (p > 2)] in
-lemma foldl_sum_val_bound {ops : ℕ} (f : Fin ops → F p) (M : ℕ)
-    (h_bound : ∀ j : Fin ops, (f j).val ≤ M) (h_no_overflow : ops * M < p) :
-    (Fin.foldl ops (fun sum j => sum + f j) 0).val ≤ ops * M := by
-  -- Use induction on ops
-  induction ops with
-  | zero =>
-    simp only [Fin.foldl_zero, ZMod.val_zero, zero_mul, le_refl]
-  | succ k ih =>
-    -- For the inductive step, use Fin.foldl_succ_last
-    rw [Fin.foldl_succ_last]
-    -- The key insight: use ZMod.val_add_of_lt when the sum doesn't overflow
-    have h_partial_bound := ih (fun j => f j.castSucc)
-                               (fun j => h_bound j.castSucc)
-                               (by
-                                 -- k * M < (k+1) * M < p
-                                 apply Nat.lt_of_le_of_lt _ h_no_overflow
-                                 apply Nat.mul_le_mul_right
-                                 exact Nat.le_succ k)
-
-    -- Show that the partial sum + new element doesn't overflow
-    have h_add_lt : (Fin.foldl k (fun sum j => sum + f j.castSucc) 0).val + (f (Fin.last k)).val < p := by
-      apply Nat.lt_of_le_of_lt
-      · apply Nat.add_le_add h_partial_bound (h_bound (Fin.last k))
-      · rw [← Nat.succ_mul]
-        exact h_no_overflow
-
-    -- Use the fact that ZMod.val preserves addition when no overflow
-    rw [ZMod.val_add_of_lt h_add_lt]
-    -- We want to show: partial_sum + element ≤ (k+1) * M
-    -- We know: partial_sum ≤ k * M and element ≤ M
-    -- So: partial_sum + element ≤ k * M + M = (k+1) * M
-    have h_succ : (k + 1) * M = k * M + M := by rw [Nat.succ_mul]
-    rw [h_succ]
-    apply Nat.add_le_add h_partial_bound (h_bound (Fin.last k))
 
 -- Lemma: The sum of ops n-bit numbers fits in nbits((2^n - 1) * ops) bits
 omit [Fact (p > 2)] in
@@ -102,7 +68,7 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- The sum is bounded by ops * (2^n - 1)
   have h_sum_bound : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val ≤ ops * (2^n - 1) := by
     -- Apply our general lemma about foldl sum bounds
-    apply foldl_sum_val_bound (fun j => fieldFromBits inputs[j]) (2^n - 1)
+    apply Fin.foldl_sum_val_bound (fun j => fieldFromBits inputs[j]) (2^n - 1)
     · -- Prove each element is bounded
       intro j
       exact h_individual_bound j j.isLt
@@ -161,57 +127,6 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F
     Circuit.foldlRange ops lin fun lin j => do
       return lin + inp[j][k] * e2
 
--- Lemma: Expression.eval distributes over Fin.foldl with addition
-omit [Fact (p > 2)] in
-lemma Expression.eval_foldl (env : Environment (F p)) (n : ℕ)
-    (f : Expression (F p) → Fin n → Expression (F p)) (init : Expression (F p))
-    (hf : ∀ (e : Expression (F p)) (i : Fin n),
-      Expression.eval env (f e i) = Expression.eval env (f (Expression.const (Expression.eval env e)) i)) :
-    Expression.eval env (Fin.foldl n f init) =
-    Fin.foldl n (fun (acc : F p) (i : Fin n) => Expression.eval env (f (Expression.const acc) i)) (Expression.eval env init) := by
-  induction n with
-  | zero => simp [Fin.foldl_zero]
-  | succ n' ih =>
-    rw [Fin.foldl_succ_last, Fin.foldl_succ_last]
-    -- Apply the inductive hypothesis with the appropriate function and assumption
-    have hf' : ∀ (e : Expression (F p)) (i : Fin n'),
-      Expression.eval env (f e i.castSucc) = Expression.eval env (f (Expression.const (Expression.eval env e)) i.castSucc) := by
-      intros e i
-      exact hf e i.castSucc
-
-    have h1 : Expression.eval env (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) =
-              Fin.foldl n' (fun acc i => Expression.eval env (f (Expression.const acc) i.castSucc)) (Expression.eval env init) :=
-      ih (fun x i => f x i.castSucc) hf'
-
-    -- Now apply the assumption to relate the two sides
-    rw [hf (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) (Fin.last n')]
-    -- Rewrite using h1
-    rw [h1]
-
--- Helper lemma: Factoring out a constant from a foldl sum
-omit [Fact (p > 2)] in
-lemma foldl_factor_const {n : ℕ} (f : Fin n → F p) (c : F p) (init : F p) :
-    Fin.foldl n (fun acc i => acc + f i * c) init =
-    init + c * Fin.foldl n (fun acc i => acc + f i) 0 := by
-  induction n generalizing init with
-  | zero => simp [Fin.foldl_zero]
-  | succ m ih =>
-    -- Unfold the foldl on both sides
-    simp only [Fin.foldl_succ_last]
-    -- Apply IH to the castSucc part
-    have h_eq : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc * c) init =
-                Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2 * c) init := by
-      congr
-    rw [h_eq, ih (f ∘ Fin.castSucc)]
-    -- Now simplify the RHS
-    have h_rhs : Fin.foldl m (fun x1 x2 => x1 + f x2.castSucc) 0 =
-                 Fin.foldl m (fun x1 x2 => x1 + (f ∘ Fin.castSucc) x2) 0 := by
-      congr
-    rw [← h_rhs]
-    -- Now we have: init + c * (foldl of castSucc) + f(last) * c
-    -- We want: init + c * (foldl of castSucc + f(last))
-    ring
-
 -- Lemma 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
 omit [Fact (p > 2)] in
 lemma circuit_eval_nested_sum {n ops : ℕ}
@@ -223,60 +138,27 @@ lemma circuit_eval_nested_sum {n ops : ℕ}
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   -- The main function uses nested Circuit.foldlRange
   simp only [main, circuit_norm]
-  rw [Expression.eval_foldl]
+  rw [eval_foldl]
   · simp only [circuit_norm]
     congr 1
     ext acc k
-    rw [Expression.eval_foldl]
+    rw [eval_foldl]
     · simp only [circuit_norm]
       -- Apply the factorization lemma with proper coercions
-      have h := foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
+      have h := Fin.foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
       -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
       convert h
     · intros e i
       simp only [circuit_norm]
   · intros e i
-    rw [Expression.eval_foldl]
+    rw [eval_foldl]
     · simp only [circuit_norm]
-      rw [Expression.eval_foldl]
+      rw [eval_foldl]
       · simp only [circuit_norm]
       · intros e' i'
         simp only [circuit_norm]
     · intros e' i'
       simp only [circuit_norm]
-
--- Lemma to convert Fin.foldl to Finset.sum via range
-omit [Fact (p > 2)] in
-lemma foldl_eq_sum_range {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : Fin n' → α),
-    Fin.foldl n' (fun acc i => acc + f' i) 0 = ∑ i ∈ Finset.range n', if h : i < n' then f' ⟨i, h⟩ else 0 := by
-  intro n' f'
-  induction n' with
-  | zero =>
-    simp [Fin.foldl_zero, Finset.range_zero, Finset.sum_empty]
-  | succ n'' ih =>
-    rw [Fin.foldl_succ_last]
-    rw [Finset.sum_range_succ]
-    simp only [ih]
-    -- We need to show that the sum equals itself plus the last term
-    congr 1
-    -- For the sum part, we need to show the functions are equal
-    · apply Finset.sum_congr rfl
-      intro i hi
-      simp only [Finset.mem_range] at hi
-      simp only [Fin.castSucc_mk]
-      simp only [hi]
-      simp only [↓reduceDIte]
-      have hi' : i < n'' + 1 := by omega
-      simp only [hi', ↓reduceDIte]
-    · -- For the last term
-      simp only [Fin.last, Nat.lt_succ_self, dif_pos]
-
-omit [Fact p.Prime] [Fact (p > 2)] in
-lemma foldl_to_sum : ∀ (n' : ℕ) (f' : Fin n' → F p),
-    Fin.foldl n' (fun acc i => acc + f' i) 0 = ∑ i : Fin n', f' i := by
-  intro n' f'
-  simp only [Finset.sum_fin_eq_sum_range]
-  exact foldl_eq_sum_range n' f'
 
 -- Lemma 2: Summation interchange for the double sum
 omit [Fact (p > 2)] in
@@ -289,19 +171,19 @@ lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
   have lhs_eq : Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
       Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
       ∑ k : Fin n, (2^k.val : F p) * (∑ j : Fin ops, f j k) := by
-    rw [foldl_to_sum]
+    rw [Fin.foldl_to_sum]
     congr 1
     ext k
-    rw [foldl_to_sum]
+    rw [Fin.foldl_to_sum]
 
   -- Convert the RHS
   have rhs_eq : Fin.foldl ops (fun acc j => acc +
       Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 =
       ∑ j : Fin ops, (∑ k : Fin n, f j k * (2^k.val : F p)) := by
-    rw [foldl_to_sum]
+    rw [Fin.foldl_to_sum]
     congr 1
     ext j
-    rw [foldl_to_sum]
+    rw [Fin.foldl_to_sum]
 
   rw [lhs_eq, rhs_eq]
   -- Now we have: ∑ k, 2^k * (∑ j, f j k) = ∑ j, (∑ k, f j k * 2^k)
@@ -312,42 +194,6 @@ lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
   rw [Finset.sum_comm]
   -- Just need to show 2^k * f j k = f j k * 2^k
   simp only [mul_comm]
-
--- Lemma: fieldFromBits decomposes as sum of first n bits + bit_n * 2^n
-omit [Fact (p > 2)] in
-lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
-    fieldFromBits bits =
-    fieldFromBits (bits.take n) + bits[n] * (2^n : F p) := by
-  simp only [fieldFromBits, fromBits, Fin.foldl_succ_last, Fin.coe_castSucc, Fin.val_last]
-  have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
-  simp only [Vector.getElem_map, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow,
-    Nat.cast_ofNat, Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
-    Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop']
-  congr
-  · norm_num
-  · -- Show the function equality via HEq
-    -- The two functions are equal - they just have different variable names
-    -- But we need to handle the type equality: Fin n vs Fin (min n (n + 1))
-    have h_min : min n (n + 1) = n := min_eq_left (Nat.le_succ n)
-    apply Function.hfunext
-    · rfl
-    · intro a0 a1 h_a
-      have : a0 = a1 := by
-        apply eq_of_heq
-        assumption
-      rw[this]
-      apply Function.hfunext
-      · rw [h_min]
-      · intros b0 b1 h_b
-        simp only [heq_eq_eq]
-        congr
-        rw [h_min]
-        rw [h_min]
-  · -- Show bits[n].cast = bits[n]
-    -- The cast here is ZMod.cast from F p to F p, which should be identity
-    rw [ZMod.cast_id']
-    rfl
-
 
 -- Lemma 3: The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits)
 omit [Fact (p > 2)] in
@@ -361,7 +207,7 @@ lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
     simp only [fieldFromBits, fromBits, Fin.foldl_zero]
     norm_cast
   · rename_i pre_n ih
-    rw [fieldFromBits_succ]
+    rw [Utils.Bits.fieldFromBits_succ]
     have min_pre_h : (min pre_n (pre_n + 1)) = pre_n := by omega
     calc
       _ = fieldFromBits (Vector.cast min_pre_h (bits.take pre_n)) + bits[pre_n] * 2 ^ pre_n := by
@@ -445,8 +291,8 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   -- Now substitute this equality in our sum
   simp only [offset_eval_elem]
 
-  -- Step 3: Apply sum_interchange_binsum to swap the order of summation
-  rw [sum_interchange_binsum (fun j k => input_val[j][k])]
+  -- Step 3: Apply sum_interchange to swap the order of summation
+  rw [Fin.sum_interchange (fun j k => input_val[j][k]) (fun k => (2^k : F p))]
 
   -- Step 4: Now we need to show that each inner sum equals fieldFromBits
   -- The goal should be:
@@ -534,23 +380,7 @@ def main (n : ℕ) (bits : Vector (Expression (F p)) n) : Circuit (F p) (Express
     return (sum, e2 + e2)
   return sum
 
--- Specific version for our use case
-omit [Fact (p > 2)] in
-lemma fieldFromBits_empty_expr (bits : Vector (Expression (F p)) 0) (env : Environment (F p)) :
-    fieldFromBits (Vector.map (Expression.eval env) bits) = 0 := by
-  -- For a vector of length 0, fieldFromBits should return 0
-  simp only [fieldFromBits, fromBits]
-  -- Fin.foldl 0 returns the initial value 0
-  simp only [Fin.foldl_zero]
-  -- ↑0 = 0
-  simp
-
--- Lemma: map and take commute for vectors
-lemma Vector.map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n) (i : ℕ) :
-    (xs.map f).take i = (xs.take i).map f := by
-  ext j hj
-  simp only [Vector.getElem_map, Vector.getElem_take]
-
+-- The lemma fieldFromBits_empty_expr has been moved to Clean.Utils.Bits
 
 
 -- Helper lemma: The Fin.foldl maintains the invariant that the first component is the partial sum
@@ -567,7 +397,7 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
     simp only [Fin.getElem_fin, Fin.foldl_zero, pow_zero]
     constructor
     · -- First component: Expression.eval env 0 = fieldFromBits empty_vector
-      simp only [Expression.eval, fieldFromBits_empty_expr]
+      simp only [Expression.eval, Utils.Bits.fieldFromBits_empty_expr]
     · -- Second component: Expression.eval env 1 = 2^0 = 1
       simp only [Expression.eval]
   | succ n ih =>
@@ -594,7 +424,7 @@ lemma foldl_pair_inv : ∀ (n : ℕ) (bits : Vector (Expression (F p)) n) (env :
 
     constructor
     · -- First component
-      simp only [Expression.eval, ih1, ih2, InputLinearSum.fieldFromBits_succ]
+      simp only [Expression.eval, ih1, ih2, Utils.Bits.fieldFromBits_succ]
       congr
       · -- Goal: LHS = fieldFromBits ((Vector.map (Expression.eval env) bits).take n)
         -- We have ih1: LHS = fieldFromBits (Vector.map (Expression.eval env) bits.pop)
@@ -817,7 +647,7 @@ def circuit (nout : ℕ) (_ : 2^nout < p) :
       -- BinaryWeightedSum enforces out[i] * (out[i] - 1) = 0 which means IsBool
       -- The output is varFromOffset which maps to the witnessed variables
       simp only [ElaboratedCircuit.output]
-      simp only [varFromOffset, eval, fromVars, fromElements, toVars]
+      simp only [varFromOffset, ProvableType.eval, fromVars, fromElements, toVars]
       simp only [toElements, size, fields]
       simp only [Vector.getElem_map, Vector.getElem_mapRange]
       -- The constraint tells us the witnessed variables are binary
@@ -831,7 +661,7 @@ def circuit (nout : ℕ) (_ : 2^nout < p) :
 
       -- First, simplify the output
       simp only [ElaboratedCircuit.output]
-      simp only [varFromOffset, eval, fromVars, fromElements, toVars]
+      simp only [varFromOffset, ProvableType.eval, fromVars, fromElements, toVars]
 
       -- From h_constraints_hold, we have:
       -- 1. All bits are binary (h_constraints_hold.1)
@@ -852,7 +682,7 @@ def circuit (nout : ℕ) (_ : 2^nout < p) :
       rw [← h_eq]
       -- Now we need: Expression.eval h_assumptions offset = env
       -- h_input_eval gives us this (after expanding eval)
-      simp only [eval, fromVars, fromElements, toVars] at h_input_eval
+      simp only [ProvableType.eval, fromVars, fromElements, toVars] at h_input_eval
       -- For field type, this should be the identity
       exact h_input_eval
 
@@ -1101,7 +931,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
     · -- First: all outputs are binary
       intro i hi
       -- The output is varFromOffset at position offset + input
-      simp only [varFromOffset, eval, fromVars, fromElements, toVars, fields, size]
+      simp only [varFromOffset, ProvableType.eval, fromVars, fromElements, toVars, fields, size]
       -- Apply the binary constraint from OutputBitsDecomposition
       -- First we need to prove that the sum is less than 2^nbits((2^n - 1) * ops)
       have h_sum_bound : (Expression.eval h_assumptions ((InputLinearSum.main n ops offset).output input)).val <
