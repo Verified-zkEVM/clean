@@ -19,9 +19,9 @@ instance : Fact (0 < 2) := ⟨by norm_num⟩
 def BinSubInput (n : ℕ) := ProvableVector (fields n) 2
 
 -- Define output type for BinSub
--- Represents n output bits plus 1 aux bit
+-- Represents n output bits
 @[reducible]
-def BinSubOutput (n : ℕ) := fields (n + 1)
+def BinSubOutput (n : ℕ) := fields n
 
 /-
 Original source code:
@@ -105,23 +105,14 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   -- Ensure the equation holds
   lin === lout
   
-  -- Create the final output vector with n bits for out and 1 bit for aux
-  let result ← witnessVector (n + 1) fun env => 
-    Vector.ofFn fun i : Fin (n + 1) =>
-      if h : i.val < n then
-        have hi : i.val < n := h
-        out[i.val]'hi |>.eval env
-      else
-        aux.eval env
-      
-  return result
+  return out
 
 -- n: number of bits per operand
 def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) : 
-    GeneralFormalCircuit (F p) (BinSubInput n) (BinSubOutput n) where
+    FormalCircuit (F p) (BinSubInput n) (BinSubOutput n) where
   main input := main n input
   
-  localLength _ := n + 1
+  localLength _ := n
   localLength_eq := by sorry
   
   output _ i := varFromOffset (BinSubOutput n) i
@@ -137,14 +128,13 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
   Spec input output := 
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
-    -- All output bits are binary (first n bits)
+    -- All output bits are binary
     ∧ (∀ i (hi : i < n), IsBool output[i])
-    -- aux bit is binary (the n-th bit)
-    ∧ IsBool output[n]
     -- The equation (in[0] + 2^n) - in[1] = out + aux*2^n holds
-    ∧ let out_bits : Vector (F p) n := ⟨Array.mk (List.ofFn fun i : Fin n => output[i.val]), by simp⟩
-      fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] = 
-        fieldFromBits out_bits + output[n] * (2^n : F p)
+    -- where aux is either 0 or 1 (the borrow bit)
+    ∧ ∃ aux : F p, IsBool aux ∧
+        fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] = 
+          fieldFromBits output + aux * (2^n : F p)
   
   soundness := by
     sorry
