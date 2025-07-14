@@ -259,6 +259,90 @@ def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
       exact h_spec2.2.2.2
   )
 
+/--
+Combines four rounds with permutation using two twoRoundsWithPermute operations.
+This performs four rounds with message permutation between them.
+-/
+def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
+  twoRoundsWithPermute.concat twoRoundsWithPermute (by
+    -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
+    -- then second twoRoundsWithPermute assumptions hold
+    intro input mid h_asm h_spec
+    -- twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec input mid' ∧ roundWithPermute.Spec mid' mid
+    obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
+    -- We need to show twoRoundsWithPermute.Assumptions mid
+    -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
+    simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
+    constructor
+    · -- mid.state.Normalized
+      exact h_spec2.2.1
+    · -- ∀ i : Fin 16, mid.message[i].Normalized
+      exact h_spec2.2.2.2
+  ) (by
+    -- Prove h_localLength_stable: twoRoundsWithPermute.localLength doesn't depend on input
+    intro mid mid'
+    -- twoRoundsWithPermute.localLength is constant
+    rfl
+  )
+
+/--
+Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
+This performs:
+- First round, permute message
+- Second round, permute message  
+- Third round, permute message
+- Fourth round, permute message
+Returns the final state and permuted message.
+-/
+def applyFourRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
+  let (state2, msg2) := applyTwoRounds state message
+  applyTwoRounds state2 msg2
+
+/--
+Specification for four rounds that matches the pattern of the full ApplyRounds.Spec.
+-/
+def FourRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : Prop :=
+  let (final_state, final_message) := applyFourRounds input.state.value (input.message.map U32.value)
+  output.state.value = final_state ∧
+  output.message.map U32.value = final_message ∧
+  output.state.Normalized ∧
+  (∀ i : Fin 16, output.message[i].Normalized)
+
+/--
+Four rounds with permute, but with a spec matching the applyRounds pattern.
+-/
+def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
+  fourRoundsWithPermute.weakenSpec FourRoundsSpec (by
+    -- Prove that fourRoundsWithPermute's spec implies our FourRoundsSpec
+    intro input output h_assumptions h_spec
+    -- fourRoundsWithPermute.Spec says ∃ mid, twoRoundsWithPermute.Spec input mid ∧ twoRoundsWithPermute.Spec mid output
+    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    -- Each twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
+    obtain ⟨mid1, h_spec1_1, h_spec1_2⟩ := h_spec1
+    obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
+    
+    simp only [roundWithPermute] at h_spec1_1 h_spec1_2 h_spec2_1 h_spec2_2
+    simp only [FourRoundsSpec, applyFourRounds, applyTwoRounds]
+    
+    -- Build the result by chaining the four rounds
+    constructor
+    · -- Prove: output.state.value = final_state after 4 rounds
+      rw [h_spec2_2.1, h_spec2_1.1, h_spec1_2.1, h_spec1_1.1]
+      -- Use the fact that BLAKE3State.value = Vector.map U32.value
+      rw [h_spec2_1.2.2.1, h_spec1_2.2.2.1, h_spec1_1.2.2.1]
+      rfl
+    constructor
+    · -- Prove: output.message.map U32.value = final_message after 4 rounds
+      rw [← blake3_value_eq_map_value output.message]
+      rw [h_spec2_2.2.2.1, h_spec2_1.2.2.1, h_spec1_2.2.2.1, h_spec1_1.2.2.1]
+      rw [blake3_value_eq_map_value input.message]
+    constructor
+    · -- Prove: output.state.Normalized
+      exact h_spec2_2.2.1
+    · -- Prove: ∀ i : Fin 16, output.message[i].Normalized
+      exact h_spec2_2.2.2.2
+  )
+
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
