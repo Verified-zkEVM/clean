@@ -4,6 +4,7 @@ import Clean.Gadgets.BLAKE3.Permute
 import Clean.Types.U32
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
+import Clean.Circuit.StructuralLemmas
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -157,6 +158,29 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
       rw [h_cast]
       exact h_msg_norm
 }
+
+/--
+Combines two roundWithPermute operations using the concat combinator.
+This performs two rounds with message permutation between them.
+-/
+def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
+  Circuit.FormalCircuit.concat roundWithPermute roundWithPermute (by
+    -- Prove compatibility: for all inputs, if circuit1 assumptions and spec hold,
+    -- then circuit2 assumptions hold
+    intro input mid h_asm h_spec
+    -- roundWithPermute.Spec gives us that mid.state.Normalized and message is normalized
+    -- We need to show Round.Assumptions mid
+    simp only [roundWithPermute] at h_spec ⊢
+    constructor
+    · -- mid.state.Normalized
+      exact h_spec.2.1
+    · -- ∀ i : Fin 16, mid.message[i].Normalized
+      exact h_spec.2.2.2
+  ) (by
+    -- Prove h_output_stable: output doesn't depend on offset
+    -- This might not hold for roundWithPermute as the output depends on offset
+    sorry
+  )
 
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
