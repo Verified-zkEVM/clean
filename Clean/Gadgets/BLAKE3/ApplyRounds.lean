@@ -468,6 +468,63 @@ def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
     rfl
   )
 
+/--
+Apply seven rounds of BLAKE3 compression, starting from a Round.Inputs state.
+This follows the same pattern as applyRounds but for 7 rounds:
+- First through sixth rounds, each followed by permute message
+- Seventh round (final, no permutation)
+Returns the final BLAKE3State.
+-/
+def applySevenRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 :=
+  let state1 := round state message
+  let msg1 := permute message
+  let state2 := round state1 msg1
+  let msg2 := permute msg1
+  let state3 := round state2 msg2
+  let msg3 := permute msg2
+  let state4 := round state3 msg3
+  let msg4 := permute msg3
+  let state5 := round state4 msg4
+  let msg5 := permute msg4
+  let state6 := round state5 msg5
+  let msg6 := permute msg5
+  let state7 := round state6 msg6
+  state7
+
+/--
+Specification for seven rounds that matches the pattern of the full ApplyRounds.Spec.
+-/
+def SevenRoundsSpec (input : Round.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
+  let final_state := applySevenRounds input.state.value (input.message.map U32.value)
+  output.value = final_state ∧
+  output.Normalized
+
+/--
+Seven rounds with spec matching the applyRounds pattern.
+-/
+def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
+  sevenRoundsFinal.weakenSpec SevenRoundsSpec (by
+    -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
+    intro input output h_assumptions h_spec
+    -- sevenRoundsFinal.Spec says ∃ mid, sixRoundsApplyStyle.Spec input mid ∧ Round.circuit.Spec mid output
+    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    -- Break down the specs similar to previous proofs
+    simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec] at h_spec1
+    simp only [Round.circuit, Round.Spec] at h_spec2
+    simp only [SevenRoundsSpec, applySevenRounds, applySixRounds]
+
+    -- Build the result by chaining all seven rounds
+    constructor
+    · -- Prove: output.value = final_state after 7 rounds
+      rw [h_spec2.1, h_spec1.1]
+      simp only [applySixRounds]
+      congr 1
+      rw [h_spec1.2.1]
+      simp only [applySixRounds]
+    · -- Prove: output.Normalized
+      exact h_spec2.2
+  )
+
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
