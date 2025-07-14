@@ -907,6 +907,39 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     size_toArray := by simp
   } := by rfl
 
+  have h_chaining_0_eq : (eval env chaining_value_var[0]).value = chaining_value[0].value := by
+    sorry
+  have h_chaining_1_eq : (eval env chaining_value_var[1]).value = chaining_value[1].value := by
+    sorry
+  have h_chaining_2_eq : (eval env chaining_value_var[2]).value = chaining_value[2].value := by
+    sorry
+  have h_chaining_3_eq : (eval env chaining_value_var[3]).value = chaining_value[3].value := by
+    sorry
+  have h_chaining_4_eq : (eval env chaining_value_var[4]).value = chaining_value[4].value := by
+    sorry
+  have h_chaining_5_eq : (eval env chaining_value_var[5]).value = chaining_value[5].value := by
+    sorry
+  have h_chaining_6_eq : (eval env chaining_value_var[6]).value = chaining_value[6].value := by
+    sorry
+  have h_chaining_7_eq : (eval env chaining_value_var[7]).value = chaining_value[7].value := by
+    sorry
+
+  -- Equations for IV constants
+  have h_iv_0_eq : (eval env (U32.decomposeNatExpr iv[0])).value = iv[0] := by
+    sorry
+  have h_iv_1_eq : (eval env (U32.decomposeNatExpr iv[1])).value = iv[1] := by
+    sorry
+  have h_iv_2_eq : (eval env (U32.decomposeNatExpr iv[2])).value = iv[2] := by
+    sorry
+  have h_iv_3_eq : (eval env (U32.decomposeNatExpr iv[3])).value = iv[3] := by
+    sorry
+
+  -- Equations for counter values
+  have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
+    sorry
+  have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
+    sorry
+
   -- Apply h_holds with the proven assumptions
   rw [← h_state_vec_eq] at h_state_normalized
   have h_spec := h_holds ⟨h_state_normalized, h_message_normalized⟩
@@ -934,7 +967,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     calc
       _ = _ := h_value
       _ = _ := by
-        sorry
+        clear h_value
+        rw [h_eval_block_words]
+        simp only[eval_vector]
+        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
+          Nat.reducePow, Nat.add_mul_mod_self_left, state_vec, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
+        simp only [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
+          h_chaining_6_eq, h_chaining_7_eq]
+        simp only [h_iv_0_eq, h_iv_1_eq, h_iv_2_eq, h_iv_3_eq]
+        simp only [h_counter_low_eq, h_counter_high_eq]
 
   · -- Show out.Normalized
     exact h_normalized
