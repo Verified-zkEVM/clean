@@ -536,7 +536,7 @@ lemma roundWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for twoRoundsWithPermute are exactly Round.Assumptions.
 -/
 lemma twoRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-  twoRoundsWithPermute.Assumptions input = Round.Assumptions input := by
+    twoRoundsWithPermute.Assumptions input = Round.Assumptions input := by
   simp only [twoRoundsWithPermute, FormalCircuit.concat]
   rfl
 
@@ -544,7 +544,7 @@ lemma twoRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for twoRoundsApplyStyle are exactly Round.Assumptions.
 -/
 lemma twoRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-  twoRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
+    twoRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
   simp only [twoRoundsApplyStyle, FormalCircuit.weakenSpec]
   rw [twoRoundsWithPermute_assumptions_eq]
 
@@ -552,7 +552,7 @@ lemma twoRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for fourRoundsWithPermute are exactly Round.Assumptions.
 -/
 lemma fourRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-  fourRoundsWithPermute.Assumptions input = Round.Assumptions input := by
+    fourRoundsWithPermute.Assumptions input = Round.Assumptions input := by
   simp only [fourRoundsWithPermute, FormalCircuit.concat]
   rw [twoRoundsWithPermute_assumptions_eq]
 
@@ -560,7 +560,7 @@ lemma fourRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for fourRoundsApplyStyle are exactly Round.Assumptions.
 -/
 lemma fourRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-  fourRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
+    fourRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
   simp only [fourRoundsApplyStyle, FormalCircuit.weakenSpec]
   rw [fourRoundsWithPermute_assumptions_eq]
 
@@ -568,7 +568,7 @@ lemma fourRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for sixRoundsWithPermute are exactly Round.Assumptions.
 -/
 lemma sixRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-  sixRoundsWithPermute.Assumptions input = Round.Assumptions input := by
+    sixRoundsWithPermute.Assumptions input = Round.Assumptions input := by
   simp only [sixRoundsWithPermute, FormalCircuit.concat]
   rw [fourRoundsWithPermute_assumptions_eq]
 
@@ -576,7 +576,7 @@ lemma sixRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for sixRoundsApplyStyle are exactly Round.Assumptions.
 -/
 lemma sixRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-  sixRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
+    sixRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
   simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec]
   rw [sixRoundsWithPermute_assumptions_eq]
 
@@ -584,7 +584,7 @@ lemma sixRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
 The assumptions for sevenRoundsFinal are exactly Round.Assumptions.
 -/
 lemma sevenRoundsFinal_assumptions_eq (input : Round.Inputs (F p)) :
-  sevenRoundsFinal.Assumptions input = Round.Assumptions input := by
+    sevenRoundsFinal.Assumptions input = Round.Assumptions input := by
   simp only [sevenRoundsFinal, FormalCircuit.concat]
   rw [sixRoundsApplyStyle_assumptions_eq]
 
@@ -593,7 +593,7 @@ The assumptions for sevenRoundsApplyStyle are exactly Round.Assumptions.
 This means the input state and message must be normalized.
 -/
 lemma sevenRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-  sevenRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
+    sevenRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
   simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec]
   rw [sevenRoundsFinal_assumptions_eq]
 
