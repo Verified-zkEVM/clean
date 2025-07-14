@@ -601,8 +601,8 @@ lemma sevenRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
 The concrete assumptions for sevenRoundsApplyStyle: both state and message must be normalized.
 -/
 lemma sevenRoundsApplyStyle_assumptions_concrete (input : Round.Inputs (F p)) :
-  sevenRoundsApplyStyle.Assumptions input ↔
-  (input.state.Normalized ∧ ∀ i : Fin 16, input.message[i].Normalized) := by
+    sevenRoundsApplyStyle.Assumptions input ↔
+    (input.state.Normalized ∧ ∀ i : Fin 16, input.message[i].Normalized) := by
   rw [sevenRoundsApplyStyle_assumptions_eq]
   simp only [Round.Assumptions]
 
