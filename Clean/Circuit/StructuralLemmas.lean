@@ -24,7 +24,7 @@ theorem soundness_with_subcircuit
     (subcircuit : FormalCircuit F Mid Output)
     (prepare : Var Input F → Circuit F (Var Mid F))
     (h_main_eq : ∀ input, elaborated.main input = prepare input >>= fun mid => subcircuit mid)
-    (h_output_eq : ∀ input offset, elaborated.output input offset = 
+    (h_output_eq : ∀ input offset, elaborated.output input offset =
       subcircuit.output ((prepare input).output offset) (offset + (prepare input).localLength offset))
     (h_spec_implication : ∀ input mid output,
       Assumptions input →
@@ -39,33 +39,33 @@ theorem soundness_with_subcircuit
       subcircuit.Assumptions mid) :
     Soundness F elaborated Assumptions Spec := by
   intro offset env input_var input h_eval h_assumptions h_holds
-  
+
   -- Rewrite using the main equation
   rw [h_main_eq] at h_holds
   simp only [Circuit.bind_def, circuit_norm] at h_holds
-  
+
   -- Extract constraints for prepare and subcircuit
   obtain ⟨h_holds_prepare, h_holds_subcircuit⟩ := h_holds
-  
+
   -- Get the intermediate values
   let mid_var := (prepare input_var).output offset
   let mid := eval env mid_var
   let prepare_len := (prepare input_var).localLength offset
-  
+
   -- Prove the subcircuit assumptions hold
   have h_mid_assumptions : subcircuit.Assumptions mid := by
     apply h_prepare_spec offset env input_var input h_eval h_assumptions h_holds_prepare
-  
+
   -- The subcircuit soundness gives us the spec
   simp only [subcircuit_norm, FormalCircuit.toSubcircuit] at h_holds_subcircuit
-  
+
   -- Apply subcircuit soundness
   have h_subcircuit_spec : subcircuit.Spec mid (eval env (subcircuit.output mid_var (offset + prepare_len))) := by
     exact h_holds_subcircuit h_mid_assumptions
-  
+
   -- Use the output equation
   rw [h_output_eq]
-  
+
   -- Apply the spec implication
   apply h_spec_implication input mid _ h_assumptions h_mid_assumptions h_subcircuit_spec
 
@@ -87,7 +87,7 @@ theorem soundness_compose_circuits
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
     (h_main_eq : ∀ input, elaborated.main input = circuit1 input >>= circuit2)
-    (h_output_eq : ∀ input offset, elaborated.output input offset = 
+    (h_output_eq : ∀ input offset, elaborated.output input offset =
       circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input))
     (h_assumptions_implication : ∀ input,
       Assumptions input → circuit1.Assumptions input)
@@ -102,23 +102,23 @@ theorem soundness_compose_circuits
       Spec input output) :
     Soundness F elaborated Assumptions Spec := by
   intro offset env input_var input h_eval h_assumptions h_holds
-  
+
   -- Rewrite using the main equation
   rw [h_main_eq] at h_holds
   simp only [Circuit.bind_def, circuit_norm] at h_holds
-  
+
   -- Extract constraints for circuit1 and circuit2
   obtain ⟨h_holds_circuit1, h_holds_circuit2⟩ := h_holds
-  
+
   -- Get intermediate values
   let mid_var := circuit1.output input_var offset
   let mid := eval env mid_var
   let circuit1_len := circuit1.localLength input_var
-  
+
   -- Circuit1 assumptions hold
   have h_circuit1_assumptions : circuit1.Assumptions input := by
     apply h_assumptions_implication input h_assumptions
-  
+
   -- Apply circuit1 soundness
   simp only [subcircuit_norm, FormalCircuit.toSubcircuit] at h_holds_circuit1
   have h_circuit1_spec : circuit1.Spec input mid := by
@@ -126,19 +126,19 @@ theorem soundness_compose_circuits
     have h_mid_eq : eval env (circuit1.output input_var offset) = mid := rfl
     rw [h_eq, h_mid_eq] at h_holds_circuit1
     exact h_holds_circuit1 h_circuit1_assumptions
-  
+
   -- Circuit2 assumptions hold
   have h_circuit2_assumptions : circuit2.Assumptions mid := by
     apply h_mid_assumptions input mid h_assumptions h_circuit1_spec
-  
+
   -- Apply circuit2 soundness
   simp only [subcircuit_norm, FormalCircuit.toSubcircuit] at h_holds_circuit2
   have h_circuit2_spec : circuit2.Spec mid (eval env (circuit2.output mid_var (offset + circuit1_len))) := by
     exact h_holds_circuit2 h_circuit2_assumptions
-  
+
   -- Use the output equation
   rw [h_output_eq]
-  
+
   -- Apply the spec composition
   apply h_spec_composition input mid _ h_assumptions h_circuit1_spec h_circuit2_spec
 
@@ -147,29 +147,27 @@ Concatenate two FormalCircuits into a single FormalCircuit.
 
 This combinator requires:
 - A compatibility proof that the first circuit's spec implies the second circuit's assumptions
-- A proof that circuit2's localLength is independent of the offset it's called at
+- A proof that circuit1's output is independent of the offset (h_output_stable)
 
 The composite circuit:
 - Has the assumptions of the first circuit
 - Has a spec stating that there exists an intermediate value such that both component specs hold
+
+Note: The completeness proof is left as sorry due to complexity of witness generation.
 -/
 def FormalCircuit.concat
-    (circuit1 : FormalCircuit F Input Mid) 
+    (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
     (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
-    (h_localLength : ∀ mid_var offset, circuit2.localLength mid_var = 
-      (circuit2 mid_var).localLength offset) :
+    (h_output_stable : ∀ input offset offset', circuit1.output input offset = circuit1.output input offset') :
     FormalCircuit F Input Output := {
   elaborated := {
     main := fun input => circuit1 input >>= circuit2
     localLength := fun input => circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
     localLength_eq := by
       intro input offset
-      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
-      -- The issue is that circuit2's localLength is evaluated at different offsets
-      -- We need h_localLength to handle this
-      sorry
-    output := fun input offset => 
+      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm, h_output_stable _ offset 0]
+    output := fun input offset =>
       circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input)
     output_eq := by
       intro input offset
@@ -177,7 +175,7 @@ def FormalCircuit.concat
     subcircuitsConsistent := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
-      sorry  -- Need to handle the offset arithmetic
+      ring
   }
   Assumptions := circuit1.Assumptions
   Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
@@ -191,7 +189,14 @@ def FormalCircuit.concat
       exact h_compat input mid h_assumptions h_spec1
     · intro input mid output h_input h_spec1 h_spec2
       exact ⟨mid, h_spec1, h_spec2⟩
-  completeness := sorry  -- Complex proof involving witness generation
+  completeness := by
+    -- The completeness proof is complex because it requires:
+    -- 1. Showing that if the environment uses local witnesses for the composed circuit,
+    --    then it uses local witnesses for each subcircuit
+    -- 2. Extracting that circuit1's spec holds to establish circuit2's assumptions
+    -- 3. Properly handling the witness generation across the composition
+    -- This would require a deeper integration with the witness generation machinery
+    sorry
 }
 
 end Circuit
