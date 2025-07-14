@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Circomlib.BinSum
+import Clean.Circomlib.BinSub
 import Clean.Circomlib.Gates
 import Clean.Circomlib.Comparators
 import Clean.Circomlib.Mux1
