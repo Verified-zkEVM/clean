@@ -13,6 +13,12 @@ instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 open Specs.BLAKE3 (applyRounds iv round permute)
 
 /--
+Lemma to handle the notational difference between BLAKE3State.value and Vector.map U32.value.
+-/
+lemma blake3_value_eq_map_value {p : ℕ} (msg : Vector (U32 (F p)) 16) :
+  BLAKE3State.value msg = Vector.map U32.value msg := rfl
+
+/--
 A FormalCircuit that performs one round followed by permuting the message.
 Both input and output are Round.Inputs (state and message).
 
@@ -210,6 +216,7 @@ def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : P
   output.state.Normalized ∧
   (∀ i : Fin 16, output.message[i].Normalized)
 
+
 /--
 Two rounds with permute, but with a spec matching the applyRounds pattern.
 -/
@@ -222,7 +229,34 @@ def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- Unpack what each roundWithPermute spec gives us
     simp only [roundWithPermute] at h_spec1 h_spec2
     simp only [TwoRoundsSpec, applyTwoRounds]
-    sorry
+    
+    -- From h_spec1: mid.state.value = round input.state.value (BLAKE3State.value input.message)
+    -- From h_spec1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
+    -- From h_spec2: output.state.value = round mid.state.value (BLAKE3State.value mid.message)
+    -- From h_spec2: BLAKE3State.value output.message = permute (BLAKE3State.value mid.message)
+    
+    constructor
+    · -- Prove: output.state.value = round (round input.state.value (input.message.map U32.value)) (permute (input.message.map U32.value))
+      rw [h_spec2.1, h_spec1.1]
+      -- Need to show BLAKE3State.value mid.message = permute (Vector.map U32.value input.message)
+      -- We have h_spec1.2.2.1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
+      -- Need to show BLAKE3State.value input.message = Vector.map U32.value input.message
+      rw [h_spec1.2.2.1]
+      -- Show BLAKE3State.value input.message = Vector.map U32.value input.message
+      rfl
+    constructor
+    · -- Prove: output.message.map U32.value = permute (permute (input.message.map U32.value))
+      -- We have h_spec2.2.2.1: BLAKE3State.value output.message = permute (BLAKE3State.value mid.message)
+      -- We have h_spec1.2.2.1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
+      -- Use our lemma to convert between the notations
+      rw [← blake3_value_eq_map_value output.message]
+      rw [h_spec2.2.2.1, h_spec1.2.2.1]
+      rw [blake3_value_eq_map_value input.message]
+    constructor
+    · -- Prove: output.state.Normalized
+      exact h_spec2.2.1
+    · -- Prove: ∀ i : Fin 16, output.message[i].Normalized
+      exact h_spec2.2.2.2
   )
 
 structure Inputs (F : Type) where
