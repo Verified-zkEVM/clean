@@ -207,6 +207,8 @@ def FormalCircuit.concat
         assumption
 }
 
+end Circuit
+
 /--
 Weaken the specification of a FormalCircuit.
 
@@ -221,6 +223,8 @@ The requirements are:
 - The stronger spec implies the weaker spec
 -/
 def FormalCircuit.weakenSpec
+    {F : Type} [Field F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output)
     (WeakerSpec : Input F → Output F → Prop)
     (h_spec_implication : ∀ input output, 
@@ -242,5 +246,3 @@ def FormalCircuit.weakenSpec
     -- and the same assumptions
     exact circuit.completeness
 }
-
-end Circuit

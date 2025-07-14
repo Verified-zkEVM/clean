@@ -184,6 +184,47 @@ def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     rfl
   )
 
+/--
+Apply two rounds of BLAKE3 compression, starting from a Round.Inputs state.
+This is a truncated version of the full applyRounds, performing only:
+- First round
+- Permute message
+- Second round
+- Permute message
+Returns the final state and permuted message.
+-/
+def applyTwoRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
+  let state1 := round state message
+  let msg1 := permute message
+  let state2 := round state1 msg1
+  let msg2 := permute msg1
+  (state2, msg2)
+
+/--
+Specification for two rounds that matches the pattern of the full ApplyRounds.Spec.
+-/
+def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : Prop :=
+  let (final_state, final_message) := applyTwoRounds input.state.value (input.message.map U32.value)
+  output.state.value = final_state ∧
+  output.message.map U32.value = final_message ∧
+  output.state.Normalized ∧
+  (∀ i : Fin 16, output.message[i].Normalized)
+
+/--
+Two rounds with permute, but with a spec matching the applyRounds pattern.
+-/
+def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
+  twoRoundsWithPermute.weakenSpec TwoRoundsSpec (by
+    -- Prove that twoRoundsWithPermute's spec implies our TwoRoundsSpec
+    intro input output h_assumptions h_spec
+    -- twoRoundsWithPermute.Spec says ∃ mid, roundWithPermute.Spec input mid ∧ roundWithPermute.Spec mid output
+    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    -- Unpack what each roundWithPermute spec gives us
+    simp only [roundWithPermute] at h_spec1 h_spec2
+    simp only [TwoRoundsSpec, applyTwoRounds]
+    sorry
+  )
+
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
