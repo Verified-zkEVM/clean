@@ -155,8 +155,6 @@ This combinator requires:
 The composite circuit:
 - Has the assumptions of the first circuit
 - Has a spec stating that there exists an intermediate value such that both component specs hold
-
-Note: The completeness proof is left as sorry due to complexity of witness generation.
 -/
 def FormalCircuit.concat
     {F : Type} [Field F]
