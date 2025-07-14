@@ -192,11 +192,9 @@ def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 
 /--
 Apply two rounds of BLAKE3 compression, starting from a Round.Inputs state.
-This is a truncated version of the full applyRounds, performing only:
-- First round
-- Permute message
-- Second round
-- Permute message
+This follows the same pattern as applyRounds but for only 2 rounds:
+- First round, permute message
+- Second round, permute message
 Returns the final state and permuted message.
 -/
 def applyTwoRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
@@ -287,7 +285,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
-This performs:
+This follows the same pattern as applyRounds but for only 4 rounds:
 - First round, permute message
 - Second round, permute message  
 - Third round, permute message
@@ -295,8 +293,15 @@ This performs:
 Returns the final state and permuted message.
 -/
 def applyFourRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
-  let (state2, msg2) := applyTwoRounds state message
-  applyTwoRounds state2 msg2
+  let state1 := round state message
+  let msg1 := permute message
+  let state2 := round state1 msg1
+  let msg2 := permute msg1
+  let state3 := round state2 msg2
+  let msg3 := permute msg2
+  let state4 := round state3 msg3
+  let msg4 := permute msg3
+  (state4, msg4)
 
 /--
 Specification for four rounds that matches the pattern of the full ApplyRounds.Spec.
