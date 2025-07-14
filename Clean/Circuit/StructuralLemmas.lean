@@ -142,4 +142,56 @@ theorem soundness_compose_circuits
   -- Apply the spec composition
   apply h_spec_composition input mid _ h_assumptions h_circuit1_spec h_circuit2_spec
 
+/--
+Concatenate two FormalCircuits into a single FormalCircuit.
+
+This combinator requires:
+- A compatibility proof that the first circuit's spec implies the second circuit's assumptions
+- A proof that circuit2's localLength is independent of the offset it's called at
+
+The composite circuit:
+- Has the assumptions of the first circuit
+- Has a spec stating that there exists an intermediate value such that both component specs hold
+-/
+def FormalCircuit.concat
+    (circuit1 : FormalCircuit F Input Mid) 
+    (circuit2 : FormalCircuit F Mid Output)
+    (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
+    (h_localLength : ∀ mid_var offset, circuit2.localLength mid_var = 
+      (circuit2 mid_var).localLength offset) :
+    FormalCircuit F Input Output := {
+  elaborated := {
+    main := fun input => circuit1 input >>= circuit2
+    localLength := fun input => circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
+    localLength_eq := by
+      intro input offset
+      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
+      -- The issue is that circuit2's localLength is evaluated at different offsets
+      -- We need h_localLength to handle this
+      sorry
+    output := fun input offset => 
+      circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input)
+    output_eq := by
+      intro input offset
+      simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    subcircuitsConsistent := by
+      intro input offset
+      simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
+      sorry  -- Need to handle the offset arithmetic
+  }
+  Assumptions := circuit1.Assumptions
+  Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
+  soundness := by
+    apply soundness_compose_circuits (Mid := Mid)
+    · intro; rfl
+    · intro input offset
+      simp only [ElaboratedCircuit.output]
+    · intro input h; exact h
+    · intro input mid h_assumptions h_spec1
+      exact h_compat input mid h_assumptions h_spec1
+    · intro input mid output h_input h_spec1 h_spec2
+      exact ⟨mid, h_spec1, h_spec2⟩
+  completeness := sorry  -- Complex proof involving witness generation
+}
+
 end Circuit
