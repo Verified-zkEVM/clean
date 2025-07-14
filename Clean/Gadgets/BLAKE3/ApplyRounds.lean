@@ -348,6 +348,103 @@ def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
       exact h_spec2_2.2.2.2
   )
 
+/--
+Combines six rounds with permutation using fourRoundsWithPermute and twoRoundsWithPermute.
+This performs six rounds with message permutation between them.
+-/
+def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
+  fourRoundsWithPermute.concat twoRoundsWithPermute (by
+    -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
+    -- then twoRoundsWithPermute assumptions hold
+    intro input mid h_asm h_spec
+    -- fourRoundsWithPermute.Spec says ∃ mid', twoRoundsWithPermute.Spec ... ∧ twoRoundsWithPermute.Spec ...
+    obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
+    -- Each twoRoundsWithPermute.Spec says ∃ mid'', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
+    obtain ⟨mid'', h_spec2_1, h_spec2_2⟩ := h_spec2
+    -- We need to show twoRoundsWithPermute.Assumptions mid
+    -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
+    simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
+    constructor
+    · -- mid.state.Normalized
+      exact h_spec2_2.2.1
+    · -- ∀ i : Fin 16, mid.message[i].Normalized
+      exact h_spec2_2.2.2.2
+  ) (by
+    -- Prove h_localLength_stable: twoRoundsWithPermute.localLength doesn't depend on input
+    intro mid mid'
+    -- twoRoundsWithPermute.localLength is constant
+    rfl
+  )
+
+/--
+Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.
+This follows the same pattern as applyRounds but for only 6 rounds:
+- First through sixth rounds, each followed by permute message
+Returns the final state and permuted message.
+-/
+def applySixRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
+  let state1 := round state message
+  let msg1 := permute message
+  let state2 := round state1 msg1
+  let msg2 := permute msg1
+  let state3 := round state2 msg2
+  let msg3 := permute msg2
+  let state4 := round state3 msg3
+  let msg4 := permute msg3
+  let state5 := round state4 msg4
+  let msg5 := permute msg4
+  let state6 := round state5 msg5
+  let msg6 := permute msg5
+  (state6, msg6)
+
+/--
+Specification for six rounds that matches the pattern of the full ApplyRounds.Spec.
+-/
+def SixRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : Prop :=
+  let (final_state, final_message) := applySixRounds input.state.value (input.message.map U32.value)
+  output.state.value = final_state ∧
+  output.message.map U32.value = final_message ∧
+  output.state.Normalized ∧
+  (∀ i : Fin 16, output.message[i].Normalized)
+
+/--
+Six rounds with permute, but with a spec matching the applyRounds pattern.
+-/
+def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
+  sixRoundsWithPermute.weakenSpec SixRoundsSpec (by
+    -- Prove that sixRoundsWithPermute's spec implies our SixRoundsSpec
+    intro input output h_assumptions h_spec
+    -- sixRoundsWithPermute.Spec says ∃ mid, fourRoundsWithPermute.Spec input mid ∧ twoRoundsWithPermute.Spec mid output
+    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    -- Break down fourRoundsWithPermute.Spec
+    obtain ⟨mid1, h_spec1_1, h_spec1_2⟩ := h_spec1
+    obtain ⟨mid1_1, h_spec1_1_1, h_spec1_1_2⟩ := h_spec1_1
+    obtain ⟨mid1_2, h_spec1_2_1, h_spec1_2_2⟩ := h_spec1_2
+    -- Break down twoRoundsWithPermute.Spec
+    obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
+    
+    simp only [roundWithPermute] at h_spec1_1_1 h_spec1_1_2 h_spec1_2_1 h_spec1_2_2 h_spec2_1 h_spec2_2
+    simp only [SixRoundsSpec, applySixRounds]
+    
+    -- Build the result by chaining the six rounds
+    constructor
+    · -- Prove: output.state.value = final_state after 6 rounds
+      rw [h_spec2_2.1, h_spec2_1.1, h_spec1_2_2.1, h_spec1_2_1.1, h_spec1_1_2.1, h_spec1_1_1.1]
+      -- Use the fact that BLAKE3State.value = Vector.map U32.value
+      rw [h_spec2_1.2.2.1, h_spec1_2_2.2.2.1, h_spec1_2_1.2.2.1, h_spec1_1_2.2.2.1, h_spec1_1_1.2.2.1]
+      rfl
+    constructor
+    · -- Prove: output.message.map U32.value = final_message after 6 rounds
+      rw [← blake3_value_eq_map_value output.message]
+      rw [h_spec2_2.2.2.1, h_spec2_1.2.2.1, h_spec1_2_2.2.2.1, h_spec1_2_1.2.2.1, h_spec1_1_2.2.2.1, h_spec1_1_1.2.2.1]
+      rw [blake3_value_eq_map_value input.message]
+    constructor
+    · -- Prove: output.state.Normalized
+      exact h_spec2_2.2.1
+    · -- Prove: ∀ i : Fin 16, output.message[i].Normalized
+      exact h_spec2_2.2.2.2
+  )
+
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
