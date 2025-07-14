@@ -45,11 +45,11 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
   }
   Assumptions := Round.Assumptions
   Spec := fun input output =>
-    let state' := round input.state.value (input.message.map U32.value)
+    let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
     output.state.Normalized ∧
-    output.message.map U32.value = permute (input.message.map U32.value) ∧
-    (∀ i : Fin 16, output.message[i].Normalized)
+    BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
+    BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     simp only [circuit_norm, subcircuit_norm] at h_holds
@@ -66,8 +66,49 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
     simp only [Permute.circuit, Permute.Assumptions] at h_holds2
     rcases h_assumptions with ⟨ asm1, asm2 ⟩
 
-    -- The proof needs to establish that running Round then Permute satisfies our spec
-    sorry
+    have asm2' : (eval env input_var.message : BLAKE3State _).Normalized := by
+      have h_msg_eq : (eval env input_var.message : BLAKE3State _) = input_msg := by
+        injection h1
+      rw [h_msg_eq]
+      exact asm2
+
+    -- h_holds2 requires the message to be normalized
+    specialize h_holds2 asm2'
+
+    -- Now we need to show the spec holds for the output
+    intro output
+
+    have h_output_struct : output = {
+      state := eval env (Round.circuit.output input_var offset),
+      message := eval env (Permute.circuit.output input_var.message (offset + Round.circuit.localLength input_var))
+    } := by
+      unfold output
+      simp only [roundWithPermute.output_eq]
+      rw [ProvableStruct.eval_eq_eval]
+      simp only [ProvableStruct.eval]
+      rfl
+
+    constructor
+    · rw [h_output_struct]
+      simp only [Round.Spec] at h_holds1
+      exact h_holds1.1
+    constructor
+    · rw [h_output_struct]
+      simp only [Round.Spec] at h_holds1
+      exact h_holds1.2
+    constructor
+    · rw [h_output_struct]
+      simp only [Permute.Spec] at h_holds2
+      have h_msg_eq : (eval env input_var.message : BLAKE3State _) = input_msg := by
+        injection h1
+      rw [h_msg_eq] at h_holds2
+      exact h_holds2.1
+    · rw [h_output_struct]
+      simp only [Permute.Spec] at h_holds2
+      have h_msg_eq : (eval env input_var.message : BLAKE3State _) = input_msg := by
+        injection h1
+      rw [h_msg_eq] at h_holds2
+      exact h_holds2.2
 
   completeness := by
     -- The proof shows that if we have witnesses for the composed circuit,
