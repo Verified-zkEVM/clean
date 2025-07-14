@@ -552,11 +552,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   ]
 
   -- Apply 7 rounds with message permutation between rounds (except the last)
-  let result ← subcircuit sixRoundsApplyStyle ⟨state, block_words⟩
-  let state := result.state
-  let block_words := result.message
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
+  let state ← subcircuit sevenRoundsApplyStyle ⟨state, block_words⟩
 
   return state
 
@@ -566,7 +562,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376
   localLength_eq input i0 := by
-    dsimp only [main, Round.circuit, sixRoundsApplyStyle, sixRoundsWithPermute,
+    dsimp only [main, Round.circuit, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
       fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
       FormalCircuit.concat,
       Permute.circuit, Circuit.pure_def, Circuit.bind_def,
