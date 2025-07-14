@@ -692,10 +692,119 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2],
     U32.decomposeNatExpr iv[3], counter_low_var, counter_high_var, block_len_var, flags_var
   ]
+  have state_vec_0_Normalized : (eval env chaining_value_var[0]).Normalized := by sorry
+  have state_vec_1_Normalized : (eval env chaining_value_var[1]).Normalized := by sorry
+  have state_vec_2_Normalized : (eval env chaining_value_var[2]).Normalized := by sorry
+  have state_vec_3_Normalized : (eval env chaining_value_var[3]).Normalized := by sorry
+  have state_vec_4_Normalized : (eval env chaining_value_var[4]).Normalized := by sorry
+  have state_vec_5_Normalized : (eval env chaining_value_var[5]).Normalized := by sorry
+  have state_vec_6_Normalized : (eval env chaining_value_var[6]).Normalized := by sorry
+  have state_vec_7_Normalized : (eval env chaining_value_var[7]).Normalized := by sorry
+  have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0])).Normalized := by sorry
+  have state_vec_9_Normalized : (eval env (U32.decomposeNatExpr iv[1])).Normalized := by sorry
+  have state_vec_10_Normalized : (eval env (U32.decomposeNatExpr iv[2])).Normalized := by sorry
+  have state_vec_11_Normalized : (eval env (U32.decomposeNatExpr iv[3])).Normalized := by sorry
+  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by sorry
+  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by sorry
+  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by sorry
+  have state_vec_15_Normalized : (eval env flags_var).Normalized := by sorry
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
-    sorry -- The full proof requires showing each element is normalized
+    simp only [BLAKE3State.Normalized, state_vec, eval_vector]
+    intro i
+    fin_cases i
+    -- First 8 elements are from chaining_value
+    case «0» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_zero, state_vec, state_vec_0_Normalized]
+    )
+    case «1» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_1_Normalized]
+    )
+    case «2» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_2_Normalized]
+    )
+    case «3» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_3_Normalized]
+    )
+    case «4» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_4_Normalized]
+    )
+    case «5» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_5_Normalized]
+    )
+    case «6» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_6_Normalized]
+    )
+    case «7» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map, getElem_eval_vector]
+      simp only [eval_vector]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_7_Normalized]
+    )
+    -- Next 4 are IV constants
+    case «8» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_8_Normalized]
+    )
+    case «9» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_9_Normalized]
+    )
+    case «10» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_10_Normalized]
+    )
+    case «11» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_11_Normalized]
+    )
+    -- Last 4 are counter_low, counter_high, block_len, flags
+    case «12» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_12_Normalized]
+    )
+    case «13» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_13_Normalized]
+    )
+    case «14» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_14_Normalized]
+    )
+    case «15» => (
+      simp only [Vector.getElem_mk]; rw [Vector.getElem_map]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, state_vec, state_vec_15_Normalized]
+    )
 
   -- Show the message is normalized
   have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
