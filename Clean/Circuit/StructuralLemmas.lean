@@ -190,13 +190,17 @@ def FormalCircuit.concat
     · intro input mid output h_input h_spec1 h_spec2
       exact ⟨mid, h_spec1, h_spec2⟩
   completeness := by
-    -- The completeness proof is complex because it requires:
-    -- 1. Showing that if the environment uses local witnesses for the composed circuit,
-    --    then it uses local witnesses for each subcircuit
-    -- 2. Extracting that circuit1's spec holds to establish circuit2's assumptions
-    -- 3. Properly handling the witness generation across the composition
-    -- This would require a deeper integration with the witness generation machinery
-    sorry
+    simp only [circuit_norm]
+    rintro offset env input_var ⟨ use1, use2 ⟩ input h_input asm1
+    constructor
+    · simp only [subcircuit_norm, h_input, asm1]
+    · simp only [subcircuit_norm]
+      apply h_compat
+      · apply asm1
+      · simp only [subcircuit_norm] at use1
+        simp only [h_input] at use1
+        apply use1
+        assumption
 }
 
 end Circuit
