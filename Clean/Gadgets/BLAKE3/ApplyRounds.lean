@@ -472,23 +472,9 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   ]
 
   -- Apply 7 rounds with message permutation between rounds (except the last)
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
+  let result ← subcircuit sixRoundsApplyStyle ⟨state, block_words⟩
+  let state := result.state
+  let block_words := result.message
 
   let state ← subcircuit Round.circuit ⟨state, block_words⟩
 
@@ -500,7 +486,10 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376
   localLength_eq input i0 := by
-    dsimp only [main, Round.circuit, Permute.circuit, Circuit.pure_def, Circuit.bind_def,
+    dsimp only [main, Round.circuit, sixRoundsApplyStyle, sixRoundsWithPermute,
+      fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
+      FormalCircuit.concat,
+      Permute.circuit, Circuit.pure_def, Circuit.bind_def,
       subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
       ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
@@ -530,34 +519,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
-
-  obtain ⟨round1, h_holds⟩ := h_holds
-
-  simp [circuit_norm, subcircuit_norm, Round.circuit, Round.Assumptions, Round.Spec] at round1
-
-  rw [eval_vector, BLAKE3State.Normalized] at round1
-  -- prove all the assumptions of the first round invocation
-  specialize round1 (by
-    simp [eval_vector, BLAKE3State.Normalized, Fin.forall_fin_succ]
-    sorry)
-  specialize round1 sorry
-
-  -- permute 1
-  obtain ⟨permute1, h_holds⟩ := h_holds
-  simp [circuit_norm, subcircuit_norm, Permute.circuit, Permute.Assumptions, Permute.Spec] at permute1
-  specialize permute1 sorry
-
-  -- round 2
-  obtain ⟨round2, h_holds⟩ := h_holds
-  simp [circuit_norm, subcircuit_norm, Round.circuit, Round.Assumptions, Round.Spec] at round2
-  rw [round1.left] at round2
-  specialize round2 round1.right permute1.right
-
-  -- permute 2
-  obtain ⟨permute2, h_holds⟩ := h_holds
-  simp [circuit_norm, subcircuit_norm, Permute.circuit, Permute.Assumptions, Permute.Spec] at permute2
-  rw [permute1.left] at permute2
-  specialize permute2 permute1.right
 
   sorry
 
