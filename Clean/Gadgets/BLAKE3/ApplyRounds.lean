@@ -134,7 +134,28 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
       -- and h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg
 
       dsimp only [Permute.circuit, Permute.Assumptions]
-      sorry
+      -- We need to show (eval env input_var.message).Normalized
+      -- We know from h_eval that eval env input_var = { state := input_state, message := input_msg }
+      -- So eval env input_var.message = input_msg
+      -- We need to show that eval env input_var.message = input_msg
+      -- From h1 and h_eval we can derive this
+      have h_eq : Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p)) =
+                  Round.Inputs.mk input_state input_msg := by
+        calc Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p))
+          _ = eval env input_var := h1
+          _ = Round.Inputs.mk input_state input_msg := h_eval
+
+      -- Extract the message equality
+      have h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg := by
+        injection h_eq
+
+      -- Now we need to cast this to the right type for Normalized
+      have h_cast : (eval env input_var.message : BLAKE3State (F p)) = input_msg := by
+        exact h_msg_eq
+
+      -- Now we can rewrite and apply h_msg_norm
+      rw [h_cast]
+      exact h_msg_norm
 }
 
 structure Inputs (F : Type) where
