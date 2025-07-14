@@ -177,9 +177,11 @@ def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     · -- ∀ i : Fin 16, mid.message[i].Normalized
       exact h_spec.2.2.2
   ) (by
-    -- Prove h_output_stable: output doesn't depend on offset
-    -- This might not hold for roundWithPermute as the output depends on offset
-    sorry
+    -- Prove h_localLength_stable: roundWithPermute.localLength doesn't depend on input
+    intro mid mid'
+    -- roundWithPermute.localLength is defined as fun _ => constant
+    -- So it's the same for any input
+    rfl
   )
 
 structure Inputs (F : Type) where

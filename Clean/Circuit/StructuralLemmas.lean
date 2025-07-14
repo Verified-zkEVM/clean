@@ -159,14 +159,18 @@ def FormalCircuit.concat
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
     (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
-    (h_output_stable : ∀ input offset offset', circuit1.output input offset = circuit1.output input offset') :
+    (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
     FormalCircuit F Input Output := {
   elaborated := {
     main := fun input => circuit1 input >>= circuit2
     localLength := fun input => circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
     localLength_eq := by
       intro input offset
-      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm, h_output_stable _ offset 0]
+      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
+      -- We need to show that circuit2.localLength at different offsets is the same
+      -- This requires that circuit2.localLength is stable (doesn't depend on its input)
+      congr 1
+      apply h_localLength_stable
     output := fun input offset =>
       circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input)
     output_eq := by
