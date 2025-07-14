@@ -601,7 +601,7 @@ lemma sevenRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
 The concrete assumptions for sevenRoundsApplyStyle: both state and message must be normalized.
 -/
 lemma sevenRoundsApplyStyle_assumptions_concrete (input : Round.Inputs (F p)) :
-  sevenRoundsApplyStyle.Assumptions input ↔ 
+  sevenRoundsApplyStyle.Assumptions input ↔
   (input.state.Normalized ∧ ∀ i : Fin 16, input.message[i].Normalized) := by
   rw [sevenRoundsApplyStyle_assumptions_eq]
   simp only [Round.Assumptions]
@@ -678,10 +678,47 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
 
   simp only [circuit_norm, main, Spec]
+  simp only [circuit_norm, main, subcircuit_norm] at h_holds
+  simp only [sevenRoundsApplyStyle_assumptions_concrete] at h_holds
+  simp only [Assumptions] at h_normalized
+
+  -- Apply h_holds by proving its assumptions
+  -- We need to prove that the state is normalized and the message is normalized
+
+  -- First create a proper state vector variable
+  let state_vec : Var BLAKE3State (F p) := #v[
+    chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
+    chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
+    U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2],
+    U32.decomposeNatExpr iv[3], counter_low_var, counter_high_var, block_len_var, flags_var
+  ]
+
+  -- Show the state is normalized
+  have h_state_normalized : (eval env state_vec).Normalized := by
+    sorry -- The full proof requires showing each element is normalized
+
+  -- Show the message is normalized
+  have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
+    intro i
+    rw [h_eval_block_words]
+    exact h_normalized.2.1 i
+
+  -- Now we need to show that state_vec matches what's expected in h_holds
+  have h_state_vec_eq : eval env state_vec = eval env {
+    toArray := #[chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
+                 chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
+                 U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2],
+                 U32.decomposeNatExpr iv[3], counter_low_var, counter_high_var, block_len_var, flags_var],
+    size_toArray := by simp
+  } := by rfl
+
+  -- Apply h_holds with the proven assumptions
+  rw [← h_state_vec_eq] at h_state_normalized
+  have h_spec := h_holds ⟨h_state_normalized, h_message_normalized⟩
+
   constructor
   · sorry
-  · simp only [circuit_norm, main, subcircuit_norm] at h_holds
-    sorry
+  · sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   sorry
