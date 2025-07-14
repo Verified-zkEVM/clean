@@ -207,4 +207,40 @@ def FormalCircuit.concat
         assumption
 }
 
+/--
+Weaken the specification of a FormalCircuit.
+
+This combinator takes a FormalCircuit with a strong specification and produces
+a new FormalCircuit with a weaker specification. This is useful when:
+- You have a circuit that proves more than you need
+- You want to compose circuits where the specs don't match exactly
+- You need to adapt a specific circuit to a more general interface
+
+The requirements are:
+- The assumptions remain the same or can be strengthened
+- The stronger spec implies the weaker spec
+-/
+def FormalCircuit.weakenSpec
+    (circuit : FormalCircuit F Input Output)
+    (WeakerSpec : Input F → Output F → Prop)
+    (h_spec_implication : ∀ input output, 
+      circuit.Assumptions input → 
+      circuit.Spec input output → 
+      WeakerSpec input output) :
+    FormalCircuit F Input Output := {
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := WeakerSpec
+  soundness := by
+    intro offset env input_var input h_eval h_assumptions h_holds
+    -- Use the original circuit's soundness
+    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds
+    -- Apply the implication to get the weaker spec
+    exact h_spec_implication input _ h_assumptions h_strong_spec
+  completeness := by
+    -- Completeness is preserved since we use the same elaborated circuit
+    -- and the same assumptions
+    exact circuit.completeness
+}
+
 end Circuit
