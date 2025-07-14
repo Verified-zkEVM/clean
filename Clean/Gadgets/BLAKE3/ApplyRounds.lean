@@ -445,6 +445,29 @@ def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
       exact h_spec2_2.2.2.2
   )
 
+/--
+Seven rounds with permutation: combines sixRoundsApplyStyle with a final round.
+This represents the complete 7-round BLAKE3 compression function.
+-/
+def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
+  sixRoundsApplyStyle.concat Round.circuit (by
+    -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
+    intro input mid h_asm h_spec
+    -- sixRoundsApplyStyle.Spec gives us normalized outputs
+    simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec] at h_spec
+    -- We need to show Round.Assumptions mid
+    constructor
+    · -- mid.state.Normalized
+      exact h_spec.2.2.1
+    · -- ∀ i : Fin 16, mid.message[i].Normalized
+      exact h_spec.2.2.2
+  ) (by
+    -- Prove h_localLength_stable: Round.circuit.localLength doesn't depend on input
+    intro mid mid'
+    -- Round.circuit.localLength is constant
+    rfl
+  )
+
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
@@ -519,38 +542,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
-  -- Extract the constraints from the main function structure
-  obtain ⟨h_six_rounds, h_final_round⟩ := h_holds
-  
-  -- We need to prove that the output satisfies the full applyRounds specification
-  -- The main function structure is:
-  -- 1. Initialize state with chaining_value, IV, counter, block_len, flags
-  -- 2. Apply sixRoundsApplyStyle to get intermediate result
-  -- 3. Apply final Round.circuit to get final result
-  
-  -- First, let's establish what the initial state looks like
-  have h_initial_state : eval env ⟨{
-    toArray := #v[
-      chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
-      chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-      U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2], U32.decomposeNatExpr iv[3],
-      counter_low_var, counter_high_var, block_len_var, flags_var
-    ]
-  }, block_words_var⟩ = ⟨{
-    toArray := #v[
-      chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
-      chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
-      eval env (U32.decomposeNatExpr iv[0]), eval env (U32.decomposeNatExpr iv[1]), 
-      eval env (U32.decomposeNatExpr iv[2]), eval env (U32.decomposeNatExpr iv[3]),
-      counter_low, counter_high, block_len, flags
-    ]
-  }, block_words⟩ := by
-    simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, ProvableStruct.eval.go]
-    simp only [h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, 
-               h_eval_counter_low, h_eval_block_len, h_eval_flags]
-    simp only [eval_vector]
-    rfl
-  
+
+  simp only [circuit_norm, main]
   sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
