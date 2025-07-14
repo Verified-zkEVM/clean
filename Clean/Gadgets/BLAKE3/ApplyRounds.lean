@@ -9,7 +9,57 @@ namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-open Specs.BLAKE3 (applyRounds iv)
+open Specs.BLAKE3 (applyRounds iv round permute)
+
+/--
+A FormalCircuit that performs one round followed by permuting the message.
+Both input and output are Round.Inputs (state and message).
+
+The spec follows the pattern from the applyRounds function: 
+- Apply round to get new state
+- Permute the message
+-/
+def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
+  elaborated := {
+    main := fun input => do
+      let state ← subcircuit Round.circuit input
+      let permuted_message ← subcircuit Permute.circuit input.message
+      return ⟨state, permuted_message⟩
+    localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
+    localLength_eq := by
+      intro input offset
+      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
+      rfl
+    output := fun input offset => 
+      let state_out := Round.circuit.output input offset
+      let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
+      ⟨state_out, msg_out⟩
+    output_eq := by
+      intro input offset  
+      simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    subcircuitsConsistent := by
+      intro input offset
+      simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
+      have h : offset + Round.circuit.localLength input = Round.circuit.localLength input + offset := by ring
+      rw [h]
+  }
+  Assumptions := Round.Assumptions
+  Spec := fun input output => 
+    let state' := round input.state.value (input.message.map U32.value)
+    output.state.value = state' ∧
+    output.state.Normalized ∧
+    output.message.map U32.value = permute (input.message.map U32.value) ∧
+    (∀ i : Fin 16, output.message[i].Normalized)
+  soundness := by
+    intro offset env input_var input h_eval h_assumptions h_holds
+    -- The proof needs to establish that running Round then Permute satisfies our spec
+    sorry
+      
+  completeness := by
+    -- The proof shows that if we have witnesses for the composed circuit,
+    -- then the constraints hold for both Round and Permute
+    sorry
+}
 
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
