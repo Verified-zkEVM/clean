@@ -21,14 +21,14 @@ instance : ProvableStruct Inputs where
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, message } := input
   -- TODO: refactor using a for loop
-  let state ← subcircuit (G.circuit 0 4 8 12) ⟨state, message[0], message[1]⟩
-  let state ← subcircuit (G.circuit 1 5 9 13) ⟨state, message[2], message[3]⟩
-  let state ← subcircuit (G.circuit 2 6 10 14) ⟨state, message[4], message[5]⟩
-  let state ← subcircuit (G.circuit 3 7 11 15) ⟨state, message[6], message[7]⟩
-  let state ← subcircuit (G.circuit 0 5 10 15) ⟨state, message[8], message[9]⟩
-  let state ← subcircuit (G.circuit 1 6 11 12) ⟨state, message[10], message[11]⟩
-  let state ← subcircuit (G.circuit 2 7 8 13) ⟨state, message[12], message[13]⟩
-  let state ← subcircuit (G.circuit 3 4 9 14) ⟨state, message[14], message[15]⟩
+  let state ← G.circuit 0 4 8 12 ⟨state, message[0], message[1]⟩
+  let state ← G.circuit 1 5 9 13 ⟨state, message[2], message[3]⟩
+  let state ← G.circuit 2 6 10 14 ⟨state, message[4], message[5]⟩
+  let state ← G.circuit 3 7 11 15 ⟨state, message[6], message[7]⟩
+  let state ← G.circuit 0 5 10 15 ⟨state, message[8], message[9]⟩
+  let state ← G.circuit 1 6 11 12 ⟨state, message[10], message[11]⟩
+  let state ← G.circuit 2 7 8 13 ⟨state, message[12], message[13]⟩
+  let state ← G.circuit 3 4 9 14 ⟨state, message[14], message[15]⟩
   return state
 
 -- #eval! main (p:=pBabybear) default |>.localLength

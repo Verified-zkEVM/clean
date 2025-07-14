@@ -529,7 +529,7 @@ def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
 The assumptions for roundWithPermute are exactly Round.Assumptions.
 -/
 lemma roundWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-  roundWithPermute.Assumptions input = Round.Assumptions input := by
+    roundWithPermute.Assumptions input = Round.Assumptions input := by
   simp only [roundWithPermute]
 
 /--
