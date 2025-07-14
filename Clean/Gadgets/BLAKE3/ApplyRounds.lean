@@ -111,9 +111,30 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
       exact h_holds2.2
 
   completeness := by
-    -- The proof shows that if we have witnesses for the composed circuit,
-    -- then the constraints hold for both Round and Permute
-    sorry
+    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+
+    rcases input with ⟨ input_state, input_msg ⟩
+    have h1 : Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p)) = eval env input_var := by
+      rw [ProvableStruct.eval_eq_eval]
+      simp only [ProvableStruct.eval]
+      rfl
+
+    -- Unpack what we have
+    simp only [circuit_norm, subcircuit_norm] at h_env_uses_witnesses ⊢
+    obtain ⟨h_round_uses, h_permute_uses⟩ := h_env_uses_witnesses
+
+    constructor
+    · rw [← h_eval] at h_assumptions
+      rw [h1]
+      exact h_assumptions
+
+    · -- Show Permute assumptions hold (message is normalized)
+      rcases h_assumptions with ⟨_, h_msg_norm⟩
+      -- Now h_state_eq : eval env input_var.state = input_state
+      -- and h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg
+
+      dsimp only [Permute.circuit, Permute.Assumptions]
+      sorry
 }
 
 structure Inputs (F : Type) where
