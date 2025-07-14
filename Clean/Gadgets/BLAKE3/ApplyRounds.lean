@@ -668,6 +668,28 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
     flags.value ∧
   out.Normalized
 
+/--
+Lemma showing that applyRounds can be expressed using applySevenRounds.
+This connects the spec-level function with our circuit implementation.
+-/
+lemma applyRounds_eq_applySevenRounds
+    (chaining_value : Vector Nat 8)
+    (block_words : Vector Nat 16)
+    (counter : Nat)
+    (block_len : Nat)
+    (flags : Nat) :
+    applyRounds chaining_value block_words counter block_len flags =
+    applySevenRounds
+      (#v[
+        chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
+        chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
+        iv[0], iv[1], iv[2], iv[3],
+        counter % 2^32, counter / 2^32, block_len, flags
+      ])
+      block_words := by
+  -- applyRounds constructs the same initial state and then applies 7 rounds
+  simp only [applyRounds, applySevenRounds]
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
   intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
@@ -692,22 +714,86 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2],
     U32.decomposeNatExpr iv[3], counter_low_var, counter_high_var, block_len_var, flags_var
   ]
-  have state_vec_0_Normalized : (eval env chaining_value_var[0]).Normalized := by sorry
-  have state_vec_1_Normalized : (eval env chaining_value_var[1]).Normalized := by sorry
-  have state_vec_2_Normalized : (eval env chaining_value_var[2]).Normalized := by sorry
-  have state_vec_3_Normalized : (eval env chaining_value_var[3]).Normalized := by sorry
-  have state_vec_4_Normalized : (eval env chaining_value_var[4]).Normalized := by sorry
-  have state_vec_5_Normalized : (eval env chaining_value_var[5]).Normalized := by sorry
-  have state_vec_6_Normalized : (eval env chaining_value_var[6]).Normalized := by sorry
-  have state_vec_7_Normalized : (eval env chaining_value_var[7]).Normalized := by sorry
-  have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0])).Normalized := by sorry
-  have state_vec_9_Normalized : (eval env (U32.decomposeNatExpr iv[1])).Normalized := by sorry
-  have state_vec_10_Normalized : (eval env (U32.decomposeNatExpr iv[2])).Normalized := by sorry
-  have state_vec_11_Normalized : (eval env (U32.decomposeNatExpr iv[3])).Normalized := by sorry
-  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by sorry
-  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by sorry
-  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by sorry
-  have state_vec_15_Normalized : (eval env flags_var).Normalized := by sorry
+  have state_vec_0_Normalized : (eval env chaining_value_var[0]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 0
+  have state_vec_1_Normalized : (eval env chaining_value_var[1]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 1
+  have state_vec_2_Normalized : (eval env chaining_value_var[2]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 2
+  have state_vec_3_Normalized : (eval env chaining_value_var[3]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 3
+  have state_vec_4_Normalized : (eval env chaining_value_var[4]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 4
+  have state_vec_5_Normalized : (eval env chaining_value_var[5]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 5
+  have state_vec_6_Normalized : (eval env chaining_value_var[6]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 6
+  have state_vec_7_Normalized : (eval env chaining_value_var[7]).Normalized := by
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
+    exact h_normalized.1 7
+  have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0])).Normalized := by
+    -- decomposeNatExpr produces a U32 of Expression.const values
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
+    -- Prove each limb is normalized
+    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
+      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
+      rw [FieldUtils.val_lt_p]
+      assumption
+      linarith [p_large_enough.elim]
+    exact ⟨h _, h _, h _, h _⟩
+  have state_vec_9_Normalized : (eval env (U32.decomposeNatExpr iv[1])).Normalized := by
+    -- decomposeNatExpr produces a U32 of Expression.const values
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
+    -- Prove each limb is normalized
+    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
+      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
+      rw [FieldUtils.val_lt_p]
+      assumption
+      linarith [p_large_enough.elim]
+    exact ⟨h _, h _, h _, h _⟩
+  have state_vec_10_Normalized : (eval env (U32.decomposeNatExpr iv[2])).Normalized := by
+    -- decomposeNatExpr produces a U32 of Expression.const values
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
+    -- Prove each limb is normalized
+    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
+      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
+      rw [FieldUtils.val_lt_p]
+      assumption
+      linarith [p_large_enough.elim]
+    exact ⟨h _, h _, h _, h _⟩
+  have state_vec_11_Normalized : (eval env (U32.decomposeNatExpr iv[3])).Normalized := by
+    -- decomposeNatExpr produces a U32 of Expression.const values
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
+    -- Prove each limb is normalized
+    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
+      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
+      rw [FieldUtils.val_lt_p]
+      assumption
+      linarith [p_large_enough.elim]
+    exact ⟨h _, h _, h _, h _⟩
+  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
+    rw [h_eval_counter_low]
+    exact h_normalized.2.2.2.1
+  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by
+    rw [h_eval_counter_high]
+    exact h_normalized.2.2.1
+  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by
+    rw [h_eval_block_len]
+    exact h_normalized.2.2.2.2.1
+  have state_vec_15_Normalized : (eval env flags_var).Normalized := by
+    rw [h_eval_flags]
+    exact h_normalized.2.2.2.2.2
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
@@ -824,10 +910,34 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Apply h_holds with the proven assumptions
   rw [← h_state_vec_eq] at h_state_normalized
   have h_spec := h_holds ⟨h_state_normalized, h_message_normalized⟩
+  clear h_holds
+
+  -- Now we need to show that the spec holds
+  -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
+  -- We need to unpack what this means and relate it to our Spec
+
+  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal,
+             FormalCircuit.concat] at h_spec
+
+  -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
+  simp only [SevenRoundsSpec] at h_spec
+
+  obtain ⟨h_value, h_normalized⟩ := h_spec
 
   constructor
-  · sorry
-  · sorry
+  · -- Show out.value = applyRounds ...
+    -- Use our lemma to express applyRounds in terms of applySevenRounds
+    rw [applyRounds_eq_applySevenRounds]
+
+    -- h_value tells us the output equals applySevenRounds on our constructed state
+    simp only [BLAKE3State.value] at h_value ⊢
+    calc
+      _ = _ := h_value
+      _ = _ := by
+        sorry
+
+  · -- Show out.Normalized
+    exact h_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   sorry
