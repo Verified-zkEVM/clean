@@ -32,17 +32,13 @@ template Sign() {
 }
 -/
 
-def main (input : Vector (Expression (F p)) 254) := do
+def main (input : Vector (Expression (F p)) 254) :=
   -- Use (p-1)/2 as the constant for comparison
-  let halfPrime := (p - 1) / 2
-  
-  -- Instantiate CompConstant subcircuit
-  let compOut ← CompConstant.circuit halfPrime input
-  return compOut
+  CompConstant.circuit ((p - 1) / 2) input
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
-  localLength _ := 0  -- No local variables besides the subcircuit output
+  localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
   localLength_eq := by sorry
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
