@@ -142,6 +142,9 @@ theorem soundness_compose_circuits
   -- Apply the spec composition
   apply h_spec_composition input mid _ h_assumptions h_circuit1_spec h_circuit2_spec
 
+
+end Circuit
+
 /--
 Concatenate two FormalCircuits into a single FormalCircuit.
 
@@ -156,6 +159,8 @@ The composite circuit:
 Note: The completeness proof is left as sorry due to complexity of witness generation.
 -/
 def FormalCircuit.concat
+    {F : Type} [Field F]
+    {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
     (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
@@ -184,7 +189,7 @@ def FormalCircuit.concat
   Assumptions := circuit1.Assumptions
   Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
-    apply soundness_compose_circuits (Mid := Mid)
+    apply Circuit.soundness_compose_circuits (Mid := Mid)
     · intro; rfl
     · intro input offset
       simp only [ElaboratedCircuit.output]
@@ -206,8 +211,6 @@ def FormalCircuit.concat
         apply use1
         assumption
 }
-
-end Circuit
 
 /--
 Weaken the specification of a FormalCircuit.

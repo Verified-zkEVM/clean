@@ -164,7 +164,7 @@ Combines two roundWithPermute operations using the concat combinator.
 This performs two rounds with message permutation between them.
 -/
 def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
-  Circuit.FormalCircuit.concat roundWithPermute roundWithPermute (by
+  roundWithPermute.concat roundWithPermute (by
     -- Prove compatibility: for all inputs, if circuit1 assumptions and spec hold,
     -- then circuit2 assumptions hold
     intro input mid h_asm h_spec
