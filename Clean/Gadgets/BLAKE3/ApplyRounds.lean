@@ -56,14 +56,15 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     simp only [Round.circuit] at h_holds1
     rcases input with ⟨ input_state, input_msg ⟩
-    have state_eq : eval env input_var.state = input_state := by
-      sorry
-    have message_eq : (eval env input_var.message : ProvableVector _ _ _) = (input_msg : ProvableVector _ _ _) := by
-      sorry
-    simp only [state_eq, message_eq] at h_holds1 h_holds2
+    have h1 : Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p)) = eval env input_var := by
+      rw [ProvableStruct.eval_eq_eval]
+      simp only [ProvableStruct.eval]
+      rfl
+    rw [h_eval] at h1
+    simp only [h1] at h_holds1 h_holds2
     specialize h_holds1 h_assumptions
-
-
+    simp only [Permute.circuit, Permute.Assumptions] at h_holds2
+    rcases h_assumptions with ⟨ asm1, asm2 ⟩
 
     -- The proof needs to establish that running Round then Permute satisfies our spec
     sorry
