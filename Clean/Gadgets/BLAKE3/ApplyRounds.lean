@@ -519,7 +519,38 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
-
+  -- Extract the constraints from the main function structure
+  obtain ⟨h_six_rounds, h_final_round⟩ := h_holds
+  
+  -- We need to prove that the output satisfies the full applyRounds specification
+  -- The main function structure is:
+  -- 1. Initialize state with chaining_value, IV, counter, block_len, flags
+  -- 2. Apply sixRoundsApplyStyle to get intermediate result
+  -- 3. Apply final Round.circuit to get final result
+  
+  -- First, let's establish what the initial state looks like
+  have h_initial_state : eval env ⟨{
+    toArray := #v[
+      chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
+      chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
+      U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2], U32.decomposeNatExpr iv[3],
+      counter_low_var, counter_high_var, block_len_var, flags_var
+    ]
+  }, block_words_var⟩ = ⟨{
+    toArray := #v[
+      chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
+      chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
+      eval env (U32.decomposeNatExpr iv[0]), eval env (U32.decomposeNatExpr iv[1]), 
+      eval env (U32.decomposeNatExpr iv[2]), eval env (U32.decomposeNatExpr iv[3]),
+      counter_low, counter_high, block_len, flags
+    ]
+  }, block_words⟩ := by
+    simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, ProvableStruct.eval.go]
+    simp only [h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, 
+               h_eval_counter_low, h_eval_block_len, h_eval_flags]
+    simp only [eval_vector]
+    rfl
+  
   sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
