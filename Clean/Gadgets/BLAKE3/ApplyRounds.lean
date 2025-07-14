@@ -690,6 +690,42 @@ lemma applyRounds_eq_applySevenRounds
   -- applyRounds constructs the same initial state and then applies 7 rounds
   simp only [applyRounds, applySevenRounds]
 
+/--
+Lemma showing that evaluating U32.decomposeNatExpr of iv[0] gives iv[0].
+-/
+lemma eval_decomposeNatExpr_iv_0 (env : Environment (F p)) : 
+    (eval env (U32.decomposeNatExpr iv[0])).value = iv[0] := by
+  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
+  sorry
+
+/--
+Lemma showing that evaluating U32.decomposeNatExpr of iv[1] gives iv[1].
+-/
+lemma eval_decomposeNatExpr_iv_1 (env : Environment (F p)) : 
+    (eval env (U32.decomposeNatExpr iv[1])).value = iv[1] := by
+  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
+  sorry
+
+/--
+Lemma showing that evaluating U32.decomposeNatExpr of iv[2] gives iv[2].
+-/
+lemma eval_decomposeNatExpr_iv_2 (env : Environment (F p)) : 
+    (eval env (U32.decomposeNatExpr iv[2])).value = iv[2] := by
+  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
+  sorry
+
+/--
+Lemma showing that evaluating U32.decomposeNatExpr of iv[3] gives iv[3].
+-/
+lemma eval_decomposeNatExpr_iv_3 (env : Environment (F p)) : 
+    (eval env (U32.decomposeNatExpr iv[3])).value = iv[3] := by
+  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
+  sorry
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
   intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
@@ -924,23 +960,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   have h_chaining_7_eq : (eval env chaining_value_var[7]).value = chaining_value[7].value := by
     rw [getElem_eval_vector, h_eval_chaining_block_value]
 
-  -- Equations for IV constants
-  have h_iv_0_eq : (eval env (U32.decomposeNatExpr iv[0])).value = iv[0] := by
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-    sorry
-  have h_iv_1_eq : (eval env (U32.decomposeNatExpr iv[1])).value = iv[1] := by
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-    sorry
-  have h_iv_2_eq : (eval env (U32.decomposeNatExpr iv[2])).value = iv[2] := by
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-    sorry
-  have h_iv_3_eq : (eval env (U32.decomposeNatExpr iv[3])).value = iv[3] := by
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-    sorry
+  -- Equations for IV constants (using the external lemmas)
+  have h_iv_0_eq := eval_decomposeNatExpr_iv_0 env
+  have h_iv_1_eq := eval_decomposeNatExpr_iv_1 env
+  have h_iv_2_eq := eval_decomposeNatExpr_iv_2 env
+  have h_iv_3_eq := eval_decomposeNatExpr_iv_3 env
 
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
