@@ -908,37 +908,54 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   } := by rfl
 
   have h_chaining_0_eq : (eval env chaining_value_var[0]).value = chaining_value[0].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_1_eq : (eval env chaining_value_var[1]).value = chaining_value[1].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_2_eq : (eval env chaining_value_var[2]).value = chaining_value[2].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_3_eq : (eval env chaining_value_var[3]).value = chaining_value[3].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_4_eq : (eval env chaining_value_var[4]).value = chaining_value[4].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_5_eq : (eval env chaining_value_var[5]).value = chaining_value[5].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_6_eq : (eval env chaining_value_var[6]).value = chaining_value[6].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
   have h_chaining_7_eq : (eval env chaining_value_var[7]).value = chaining_value[7].value := by
-    sorry
+    rw [getElem_eval_vector, h_eval_chaining_block_value]
 
   -- Equations for IV constants
   have h_iv_0_eq : (eval env (U32.decomposeNatExpr iv[0])).value = iv[0] := by
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
     sorry
   have h_iv_1_eq : (eval env (U32.decomposeNatExpr iv[1])).value = iv[1] := by
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
     sorry
   have h_iv_2_eq : (eval env (U32.decomposeNatExpr iv[2])).value = iv[2] := by
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
     sorry
   have h_iv_3_eq : (eval env (U32.decomposeNatExpr iv[3])).value = iv[3] := by
+    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
+    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
     sorry
 
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
-    sorry
+    apply Nat.mod_eq_of_lt
+    exact U32.value_lt_of_normalized h_normalized.2.2.2.1
   have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
-    sorry
+    -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
+    -- Since counter_low.value < 2^32, this follows from properties of division
+    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_normalized.2.2.2.1
+    have h2 : 4294967296 > 0 := by norm_num
+    -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
+    -- This equals counter_high.value + counter_low.value / 2^32
+    rw [Nat.add_mul_div_left _ _ h2]
+    rw [Nat.div_eq_of_lt h1]
+    simp
 
   -- Apply h_holds with the proven assumptions
   rw [← h_state_vec_eq] at h_state_normalized
