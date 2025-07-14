@@ -227,12 +227,12 @@ def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- Unpack what each roundWithPermute spec gives us
     simp only [roundWithPermute] at h_spec1 h_spec2
     simp only [TwoRoundsSpec, applyTwoRounds]
-    
+
     -- From h_spec1: mid.state.value = round input.state.value (BLAKE3State.value input.message)
     -- From h_spec1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
     -- From h_spec2: output.state.value = round mid.state.value (BLAKE3State.value mid.message)
     -- From h_spec2: BLAKE3State.value output.message = permute (BLAKE3State.value mid.message)
-    
+
     constructor
     · -- Prove: output.state.value = round (round input.state.value (input.message.map U32.value)) (permute (input.message.map U32.value))
       rw [h_spec2.1, h_spec1.1]
@@ -287,7 +287,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
 This follows the same pattern as applyRounds but for only 4 rounds:
 - First round, permute message
-- Second round, permute message  
+- Second round, permute message
 - Third round, permute message
 - Fourth round, permute message
 Returns the final state and permuted message.
@@ -325,10 +325,10 @@ def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- Each twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
     obtain ⟨mid1, h_spec1_1, h_spec1_2⟩ := h_spec1
     obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
-    
+
     simp only [roundWithPermute] at h_spec1_1 h_spec1_2 h_spec2_1 h_spec2_2
     simp only [FourRoundsSpec, applyFourRounds, applyTwoRounds]
-    
+
     -- Build the result by chaining the four rounds
     constructor
     · -- Prove: output.state.value = final_state after 4 rounds
@@ -422,10 +422,10 @@ def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     obtain ⟨mid1_2, h_spec1_2_1, h_spec1_2_2⟩ := h_spec1_2
     -- Break down twoRoundsWithPermute.Spec
     obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
-    
+
     simp only [roundWithPermute] at h_spec1_1_1 h_spec1_1_2 h_spec1_2_1 h_spec1_2_2 h_spec2_1 h_spec2_2
     simp only [SixRoundsSpec, applySixRounds]
-    
+
     -- Build the result by chaining the six rounds
     constructor
     · -- Prove: output.state.value = final_state after 6 rounds
@@ -491,12 +491,6 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let block_words ← subcircuit Permute.circuit block_words
 
   let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
-  let block_words ← subcircuit Permute.circuit block_words
-
-  let state ← subcircuit Round.circuit ⟨state, block_words⟩
 
   return state
 
@@ -504,7 +498,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 -- #eval! main (p:=pBabybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
-  localLength _ := 6912
+  localLength _ := 5376
   localLength_eq input i0 := by
     dsimp only [main, Round.circuit, Permute.circuit, Circuit.pure_def, Circuit.bind_def,
       subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
