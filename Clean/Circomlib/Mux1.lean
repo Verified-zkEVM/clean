@@ -207,8 +207,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector (α := ProvablePair field field)]
-    simp only [Vector.getElem_map]
-    simp only [Vector.getElem_singleton]
     -- The goal is now about pairs (Expression.eval env input_var.c[0], Expression.eval env input_var.c[1])
 
     -- Connect the condition using h_input
@@ -219,7 +217,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     -- Now we need to show the branches match
     -- First simplify the vector map on the singleton vector
     -- Now we have (eval env (input_var.c[0], input_var.c[1])).1 or .2
-    simp only [eval, Prod.fst, Prod.snd]
 
     split_ifs with h
     · -- Case: s = 0
