@@ -67,9 +67,10 @@ template BinSub(n) {
 -- n: number of bits per operand
 def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   -- Calculate input linear sum: lin = 2^n + in[0] - in[1]
-  let lin ← Circuit.foldlRange n ((2^n : F p) : Expression (F p)) fun lin i => do
-    let e2 : Expression (F p) := (2^i.val : F p)
-    return lin + inp[0][i] * e2 - inp[1][i] * e2
+  let lin := Fin.foldl n (fun lin i =>
+      let e2 : Expression (F p) := (2^i.val : F p)
+      lin + inp[0][i] * e2 - inp[1][i] * e2)
+    (2^n : F p)
 
   -- Witness output bits
   let out ← witnessVector n fun env =>
