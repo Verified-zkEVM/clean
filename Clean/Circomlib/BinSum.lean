@@ -113,55 +113,32 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
     exact Nat.lt_log2_self
 namespace BinSum
 
-/-
-Circuit that computes the linear sum of multiple binary numbers.
-Takes n-bit binary numbers and computes their weighted sum.
--/
-namespace InputLinearSum
-
 -- Compute the linear sum of input bits weighted by powers of 2
-def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Expression (F p) :=
+def inputLinearSum (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Expression (F p) :=
   -- Calculate input linear sum
   Fin.foldl n (fun lin k =>
     Fin.foldl ops (fun lin j => lin + inp[j][k] * (2^k.val : F p)) lin) 0
 
--- Lemma 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
-omit [Fact (p > 2)] in
-lemma eval_nested_sum {n ops : ℕ}
-    (env : Environment (F p))
-    (offset : Var (BinSumInput n ops) (F p)) :
-    Expression.eval env (main n ops offset) =
-    Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
-      Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
-  -- The main function uses nested Fin.foldl
-  simp only [main, circuit_norm, eval_foldl]
-  congr 1
-  ext acc k
-  have h := Fin.foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
-  -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
-  convert h
-
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
-lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
-    (env : Environment (F p))
-    (input : Var (BinSumInput n ops) (F p))
-    (input_val : BinSumInput n ops (F p))
-    (h_eval : eval env input = input_val) :
-    Expression.eval env (main n ops input) =
+lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
+  (env : Environment (F p))
+  (input : Var (BinSumInput n ops) (F p))
+  (input_val : BinSumInput n ops (F p))
+  (h_eval : eval env input = input_val) :
+    Expression.eval env (inputLinearSum n ops input) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0 := by
   -- The main function uses input[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
 
-  -- Step 1: Apply eval_nested_sum to show how the circuit evaluates
-  rw [eval_nested_sum env input]
+  -- Step 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
+  simp only [inputLinearSum, circuit_norm, eval_foldl, Fin.foldl_factor_const]
 
   -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
-  simp only [Fin.getElem_fin, ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
 
   rw [Fin.sum_interchange]
   simp only [fieldFromBits_as_sum]
-end InputLinearSum
 
 /-
 template BinSum(n, ops) {
