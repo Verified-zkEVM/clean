@@ -65,10 +65,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
-  localLength_eq := by
-    intros input offset
-    simp only [main, circuit_norm]
-  subcircuitsConsistent := by sorry -- TODO: prove
 
   Assumptions input :=
     let ⟨c, s⟩ := input
