@@ -681,6 +681,18 @@ lemma eval_decomposeNatExpr_iv_3 (env : Environment (F p)) :
   have h4 : ZMod.val (165 : F p) = 165 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 165 < p)
   rw [h1, h2, h3, h4]
 
+-- Helper lemma for extracting elements from chaining_value evaluation
+omit p_large_enough in
+lemma eval_chaining_value_elem {env : Environment (F p)}
+    {chaining_value_var : Vector (U32 (Expression (F p))) 8}
+    {chaining_value : Vector (U32 (F p)) 8}
+    (h_eval : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value)
+    (i : Fin 8) :
+    (eval env chaining_value_var[i]).value = chaining_value[i].value := by
+  have h := congrArg (fun v => v[i]) h_eval
+  simp only [eval_vector, Vector.getElem_map, circuit_norm] at h
+  congr
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
   intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
@@ -897,22 +909,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     size_toArray := by simp
   } := by rfl
 
-  have h_chaining_0_eq : (eval env chaining_value_var[0]).value = chaining_value[0].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_1_eq : (eval env chaining_value_var[1]).value = chaining_value[1].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_2_eq : (eval env chaining_value_var[2]).value = chaining_value[2].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_3_eq : (eval env chaining_value_var[3]).value = chaining_value[3].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_4_eq : (eval env chaining_value_var[4]).value = chaining_value[4].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_5_eq : (eval env chaining_value_var[5]).value = chaining_value[5].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_6_eq : (eval env chaining_value_var[6]).value = chaining_value[6].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-  have h_chaining_7_eq : (eval env chaining_value_var[7]).value = chaining_value[7].value := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
+  have h_chaining_0_eq : (eval env chaining_value_var[0]).value = chaining_value[0].value := eval_chaining_value_elem h_eval_chaining_block_value 0
+  have h_chaining_1_eq : (eval env chaining_value_var[1]).value = chaining_value[1].value := eval_chaining_value_elem h_eval_chaining_block_value 1
+  have h_chaining_2_eq : (eval env chaining_value_var[2]).value = chaining_value[2].value := eval_chaining_value_elem h_eval_chaining_block_value 2
+  have h_chaining_3_eq : (eval env chaining_value_var[3]).value = chaining_value[3].value := eval_chaining_value_elem h_eval_chaining_block_value 3
+  have h_chaining_4_eq : (eval env chaining_value_var[4]).value = chaining_value[4].value := eval_chaining_value_elem h_eval_chaining_block_value 4
+  have h_chaining_5_eq : (eval env chaining_value_var[5]).value = chaining_value[5].value := eval_chaining_value_elem h_eval_chaining_block_value 5
+  have h_chaining_6_eq : (eval env chaining_value_var[6]).value = chaining_value[6].value := eval_chaining_value_elem h_eval_chaining_block_value 6
+  have h_chaining_7_eq : (eval env chaining_value_var[7]).value = chaining_value[7].value := eval_chaining_value_elem h_eval_chaining_block_value 7
 
   -- Equations for IV constants (using the external lemmas)
   have h_iv_0_eq := eval_decomposeNatExpr_iv_0 env
