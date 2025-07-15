@@ -218,12 +218,11 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [Vector.getElem_map]
     simp only [id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
     rw [eval_pair (α := field) (β := field)]
+    simp only []
     split_ifs with h
     · -- Case: s = 0
-      simp only []
       rfl
     · -- Case: s ≠ 0
-      simp only []
       rfl
 
   completeness := by
