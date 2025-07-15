@@ -96,31 +96,25 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       simp only [Vector.getElem_mapRange] at this
       exact this
 
-    -- Now we need to evaluate the expression
-    have h_c : input.c = (eval env input_var.c : ProvableVector (ProvablePair field field) _ _) := by
-      rw [← h_input]
-
     simp only [circuit_norm] at h_output_i
     simp only [h_output_i]
 
     -- Now we can work with the components
-    rw [h_c]
     rw [← h_input] at h_assumptions ⊢
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
     simp only [eval_vector (α := (ProvablePair field field))]
     simp only [Vector.getElem_map]
+    simp only [] at h_assumptions
 
     cases h_assumptions with
       | inl h0 =>
-        simp only [] at h0
         -- When s = 0
         rw [h0]
         simp only [mul_zero, add_zero, if_pos rfl, circuit_norm]
         norm_num
         rfl
       | inr h1 =>
-        simp only [] at h1
         -- When s = 1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
