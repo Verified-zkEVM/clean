@@ -291,8 +291,8 @@ template MultiAND(n) {
         ands[0] = MultiAND(n1);
         ands[1] = MultiAND(n2);
         var i;
-        for (i=0; i<n1; i++) ands[0].in[i] <== in[i];
-        for (i=0; i<n2; i++) ands[1].in[i] <== in[n1+i];
+        for (i=0; i < n1; i++) ands[0].in[i] <== in[i];
+        for (i=0; i < n2; i++) ands[1].in[i] <== in[n1+i];
         and2.a <== ands[0].out;
         and2.b <== ands[1].out;
         out <== and2.out;
