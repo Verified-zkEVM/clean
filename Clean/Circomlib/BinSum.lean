@@ -133,29 +133,13 @@ lemma eval_nested_sum {n ops : ℕ}
     Expression.eval env (main n ops offset) =
     Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
-  -- The main function uses nested Circuit.foldlRange
-  simp only [main, circuit_norm]
-  rw [eval_foldl]
-  · simp only [circuit_norm]
-    congr 1
-    ext acc k
-    rw [eval_foldl]
-    · simp only [circuit_norm]
-      -- Apply the factorization lemma with proper coercions
-      have h := Fin.foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
-      -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
-      convert h
-    · intros e i
-      simp only [circuit_norm]
-  · intros e i
-    rw [eval_foldl]
-    · simp only [circuit_norm]
-      rw [eval_foldl]
-      · simp only [circuit_norm]
-      · intros e' i'
-        simp only [circuit_norm]
-    · intros e' i'
-      simp only [circuit_norm]
+  -- The main function uses nested Fin.foldl
+  simp only [main, circuit_norm, eval_foldl]
+  congr 1
+  ext acc k
+  have h := Fin.foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
+  -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
+  convert h
 
 -- Lemma 2: Summation interchange for the double sum
 omit [Fact (p > 2)] in
@@ -164,33 +148,9 @@ lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
       Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
     Fin.foldl ops (fun acc j => acc +
       Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 := by
-  -- Now convert the LHS
-  have lhs_eq : Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
-      Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
-      ∑ k : Fin n, (2^k.val : F p) * (∑ j : Fin ops, f j k) := by
-    rw [Fin.foldl_to_sum]
-    congr 1
-    ext k
-    rw [Fin.foldl_to_sum]
-
-  -- Convert the RHS
-  have rhs_eq : Fin.foldl ops (fun acc j => acc +
-      Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 =
-      ∑ j : Fin ops, (∑ k : Fin n, f j k * (2^k.val : F p)) := by
-    rw [Fin.foldl_to_sum]
-    congr 1
-    ext j
-    rw [Fin.foldl_to_sum]
-
-  rw [lhs_eq, rhs_eq]
-  -- Now we have: ∑ k, 2^k * (∑ j, f j k) = ∑ j, (∑ k, f j k * 2^k)
-  -- Distribute multiplication
-  simp only [Finset.mul_sum]
-  -- Now: ∑ k, (∑ j, 2^k * f j k) = ∑ j, (∑ k, f j k * 2^k)
-  -- Use sum_comm to swap order
+  simp only [Fin.foldl_to_sum, Finset.mul_sum]
   rw [Finset.sum_comm]
-  -- Just need to show 2^k * f j k = f j k * 2^k
-  simp only [mul_comm]
+  ac_rfl
 
 -- Lemma 3: The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits)
 omit [Fact (p > 2)] in

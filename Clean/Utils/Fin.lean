@@ -105,28 +105,7 @@ lemma sum_interchange {α : Type*} [CommSemiring α] {n ops : ℕ} (f : Fin ops 
       Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
     Fin.foldl ops (fun acc j => acc +
       Fin.foldl n (fun acc' k => acc' + f j k * g k.val) 0) 0 := by
-  -- Now convert the LHS
-  have lhs_eq : Fin.foldl n (fun acc k => acc + g k.val *
-      Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
-      ∑ k : Fin n, g k.val * (∑ j : Fin ops, f j k) := by
-    rw [foldl_to_sum]
-    congr 1
-    ext k
-    rw [foldl_to_sum]
-
-  -- Convert the RHS
-  have rhs_eq : Fin.foldl ops (fun acc j => acc +
-      Fin.foldl n (fun acc' k => acc' + f j k * g k.val) 0) 0 =
-      ∑ j : Fin ops, (∑ k : Fin n, f j k * g k.val) := by
-    rw [foldl_to_sum]
-    congr 1
-    ext j
-    rw [foldl_to_sum]
-
-  rw [lhs_eq, rhs_eq]
-  -- Now we have: ∑ k, g k * (∑ j, f j k) = ∑ j, (∑ k, f j k * g k)
-  -- Distribute multiplication
-  simp only [Finset.mul_sum]
+  simp only [foldl_to_sum, Finset.mul_sum]
   -- Now: ∑ k, (∑ j, g k * f j k) = ∑ j, (∑ k, f j k * g k)
   -- Use sum_comm to swap order
   rw [Finset.sum_comm]
