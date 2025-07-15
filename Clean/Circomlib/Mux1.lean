@@ -96,12 +96,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       simp only [Vector.getElem_mapRange] at this
       exact this
 
-    -- Extract values from h_input
-    -- h_input says: { c := eval env input_var.c, s := Expression.eval env input_var.s } = input
-    -- So: eval env input_var.c = input.c
-    have h_s : Expression.eval env input_var.s = input.s := by
-      rw [← h_input]
-
     -- Now we need to evaluate the expression
     have h_c : input.c = (eval env input_var.c : ProvableVector (ProvablePair field field) _ _) := by
       rw [← h_input]
@@ -111,7 +105,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
     -- Now we can work with the components
     rw [h_c]
-    rw [← h_s] at h_assumptions ⊢
+    rw [← h_input] at h_assumptions ⊢
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
     simp only [eval_vector (α := (ProvablePair field field))]
@@ -119,12 +113,14 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
     cases h_assumptions with
       | inl h0 =>
+        simp only [] at h0
         -- When s = 0
         rw [h0]
         simp only [mul_zero, add_zero, if_pos rfl, circuit_norm]
         norm_num
         rfl
       | inr h1 =>
+        simp only [] at h1
         -- When s = 1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
