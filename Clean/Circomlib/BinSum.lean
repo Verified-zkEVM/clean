@@ -563,216 +563,6 @@ def circuit (n : ℕ) : GeneralFormalCircuit (F p) (fields n) field where
 end BinaryWeightedSum
 
 /-
-Circuit that decomposes a number into binary representation and verifies each bit.
--/
-namespace OutputBitsDecomposition
-
--- Witness output bits and verify they are binary
-def main (nout : ℕ) (lin : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) nout) := do
-  -- Witness output bits
-  let out ← witnessVector nout fun env =>
-    fieldToBits nout (lin.eval env)
-
-  -- Use BinaryWeightedSum subcircuit to compute the sum and verify bits are binary
-  let lout ← BinaryWeightedSum.circuit nout out
-
-  -- Ensure the sum is correct
-  lin === lout
-
-  return out
-
-def circuit (nout : ℕ) :
-    FormalCircuit (F p) field (fields nout) where
-  main input := main nout input
-
-  localLength _ := nout
-  localLength_eq := by
-    intro offset
-    simp only [circuit_norm, main]
-    simp only [BinaryWeightedSum.circuit]
-    simp
-
-  output _ i := varFromOffset (fields nout) i
-  output_eq := by simp +arith [circuit_norm, main]
-
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
-
-  Assumptions input := input.val < 2^nout
-
-  Spec input output :=
-    -- All outputs are binary
-    (∀ i (hi : i < nout), IsBool output[i])
-    -- Output bits represent the input value
-    ∧ fieldFromBits output = input
-
-  soundness := by
-    intros input h_assumptions offset env h_input_eval h_constraints
-    intro h_constraints_hold
-    -- OutputBitsDecomposition enforces:
-    -- 1. Each output bit is binary (0 or 1)
-    -- 2. The sum of output bits equals the input
-
-    -- Extract the constraints from h_constraints_hold
-    simp only [circuit_norm, main, BinaryWeightedSum.circuit, subcircuit_norm, Gadgets.Equality.circuit] at h_constraints_hold
-
-    -- The constraints now come from BinaryWeightedSum subcircuit:
-    -- 1. For each i: out[i] * (out[i] - 1) = 0 (binary constraint)
-    -- 2. Plus our assertEq: lin = lout (sum constraint)
-
-    constructor
-    · -- First: prove all outputs are binary
-      intro i hi
-      -- BinaryWeightedSum enforces out[i] * (out[i] - 1) = 0 which means IsBool
-      -- The output is varFromOffset which maps to the witnessed variables
-      simp only [ElaboratedCircuit.output]
-      simp only [varFromOffset, ProvableType.eval, fromVars, fromElements, toVars]
-      simp only [toElements, size, fields]
-      simp only [Vector.getElem_map, Vector.getElem_mapRange]
-      -- The constraint tells us the witnessed variables are binary
-      have h_binary_all := h_constraints_hold.1.1
-      exact h_binary_all i hi
-
-    · -- Second: prove fieldFromBits output = input
-      -- BinaryWeightedSum.Spec says: lout = fieldFromBits out
-      -- We have the constraint: lin = lout
-      -- Therefore: fieldFromBits output = lout = lin = input
-
-      -- First, simplify the output
-      simp only [ElaboratedCircuit.output]
-      simp only [varFromOffset, ProvableType.eval, fromVars, fromElements, toVars]
-
-      -- From h_constraints_hold, we have:
-      -- 1. All bits are binary (h_constraints_hold.1)
-      -- 2. BinaryWeightedSum output = fieldFromBits of the bits (h_constraints_hold.2.1)
-      -- 3. input = BinaryWeightedSum output (h_constraints_hold.2.2)
-
-      -- Extract the parts of the constraint
-      have ⟨h_binary_and_sum, h_eq⟩ := h_constraints_hold
-      have ⟨h_binary, h_sum⟩ := h_binary_and_sum
-
-      -- First simplify the goal
-      simp only [toElements, size, fields]
-      -- Now we need to show: fieldFromBits(...) = env
-      -- We have the chain: fieldFromBits(...) = BinaryWeightedSum output = offset = env
-      -- Work backwards from the goal
-      rw [← h_sum]
-      -- Now we need: BinaryWeightedSum output = env
-      rw [← h_eq]
-      -- Now we need: Expression.eval h_assumptions offset = env
-      -- h_input_eval gives us this (after expanding eval)
-      simp only [ProvableType.eval, fromVars, fromElements, toVars] at h_input_eval
-      -- For field type, this should be the identity
-      exact h_input_eval
-
-  completeness := by
-    intros witness_offset env lin_var h_witness_extends lin_value h_lin_eval h_assumptions
-    -- We can always witness the binary decomposition of the input
-    -- The circuit witnesses out = fieldToBits(input)
-    -- This satisfies all constraints:
-    -- 1. Binary constraints: fieldToBits produces binary values
-    -- 2. Sum constraint: fieldFromBits(fieldToBits(x)) = x (when x < 2^nout)
-    simp only [circuit_norm, main, BinaryWeightedSum.circuit, subcircuit_norm, Gadgets.Equality.circuit]
-
-    -- The witnessing uses fieldToBits which:
-    -- 1. Produces binary values
-    -- 2. Has the property fieldFromBits(fieldToBits(x)) = x
-
-    -- This proof requires showing that:
-    -- 1. fieldToBits produces binary values (for BinaryWeightedSum constraints)
-    -- 2. fieldFromBits(fieldToBits(input)) = input (for the assertEq)
-
-    -- h_assumptions gives us that lin_value.val < 2^nout
-    constructor
-    · -- First: show the witnessed bits are binary
-      intro i hi
-      -- The circuit witnesses out[i] = fieldToBits(lin_value)[i]
-      -- We need to show this is binary
-      -- The key property is that fieldToBits produces values in {0, 1}
-
-      -- h_witness_extends tells us that the environment extends the witness vector at offset witness_offset
-      -- The witness vector is fieldToBits nout (lin.eval env) from the main function
-      have h_witness : env.get (witness_offset + i) =
-                       (fieldToBits nout (Expression.eval env lin_var))[i] := by
-        -- h_witness_extends contains ExtendsVector for the witness operation
-        simp only [Environment.UsesLocalWitnessesCompleteness] at h_witness_extends
-        have ⟨h_extends, _⟩ := h_witness_extends
-        simp only [Environment.ExtendsVector] at h_extends
-        exact h_extends ⟨i, hi⟩
-
-      rw [h_witness]
-      have h_binary := fieldToBits_bits (i := i) hi (x := Expression.eval env lin_var)
-      cases h_binary with
-      | inl h => left; exact h
-      | inr h => right; exact h
-
-    ·
-      have h_witness_vec : Vector.map (Expression.eval env)
-                           (Vector.mapRange nout fun i ↦ var { index := witness_offset + i }) =
-                           fieldToBits nout (Expression.eval env lin_var) := by
-        rw [Vector.ext_iff]
-        intro i hi
-        simp only [Vector.getElem_map, Vector.getElem_mapRange]
-        -- Use h_witness_extends to get the witness value
-        simp only [Environment.UsesLocalWitnessesCompleteness] at h_witness_extends
-        have ⟨h_extends, _⟩ := h_witness_extends
-        simp only [Environment.ExtendsVector] at h_extends
-        simp only [Expression.eval]
-        exact h_extends ⟨i, hi⟩
-
-      -- Now we need to prove that the evaluation of lin_var equals the evaluation of BinaryWeightedSum output
-      -- The LHS is Expression.eval env lin_var = lin_value
-      -- The RHS is the output of BinaryWeightedSum.main applied to the witness vector
-
-      -- Let's think about what BinaryWeightedSum.main computes:
-      -- It takes a vector of bits and computes Σ_i bits[i] * 2^i
-      -- When applied to fieldToBits(lin_value), it should return lin_value
-
-      -- First, let's use h_lin_eval to replace the LHS
-      have h_lhs : Expression.eval env lin_var = lin_value := h_lin_eval
-      rw [h_lhs]
-
-      -- Now we need to show that the RHS also equals lin_value
-      -- The RHS is the evaluation of BinaryWeightedSum.main on the witness vector
-      -- The witness vector evaluates to fieldToBits nout lin_value (by h_witness_vec)
-
-      -- To proceed, we need to use the lemma about what BinaryWeightedSum.main computes
-      -- It computes fieldFromBits of its input vector
-
-      -- The goal is: lin_value = Expression.eval env (BinaryWeightedSum.main ...)
-      -- We know lin_value = Expression.eval env lin_var
-      -- And the witness vector evaluates to fieldToBits nout lin_value
-
-      -- Apply the lemma about BinaryWeightedSum.main
-      have h_bws_output := BinaryWeightedSum.main_computes_fieldFromBits nout
-                           (Vector.mapRange nout fun i ↦ var { index := witness_offset + i })
-                           (witness_offset + nout) env
-
-      -- Simplify the RHS using our lemma
-      rw [h_bws_output]
-
-      -- Now we need: lin_value = fieldFromBits (fieldToBits nout lin_value)
-      -- This follows from fieldFromBits_fieldToBits with appropriate bounds
-
-      -- We need lin_value < 2^nout for the theorem to apply
-      -- This is given by h_assumptions
-      have h_lt : lin_value.val < 2^nout := h_assumptions
-
-      -- Now we use h_witness_vec and h_lhs to rewrite
-      -- h_witness_vec tells us the witness vector equals fieldToBits nout (Expression.eval env lin_var)
-      -- h_lhs tells us Expression.eval env lin_var = lin_value
-      rw [h_lhs] at h_witness_vec
-
-      -- Now we can rewrite the goal using h_witness_vec
-      -- The goal has fieldFromBits (Vector.map ...) and h_witness_vec tells us this equals fieldToBits nout lin_value
-      rw [h_witness_vec]
-
-      -- Now the goal is: lin_value = fieldFromBits (fieldToBits nout lin_value)
-      -- This follows from fieldFromBits_fieldToBits (with symmetry)
-      exact (fieldFromBits_fieldToBits h_lt).symm
-
-end OutputBitsDecomposition
-
-/-
 template BinSum(n, ops) {
     var nout = nbits((2**n - 1)*ops);
     signal input in[ops][n];
@@ -820,7 +610,7 @@ def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n 
   -- Use InputLinearSum subcircuit to calculate the sum
   let lin ← InputLinearSum.circuit n ops hops inp
 
-  -- Use OutputBitsDecomposition subcircuit to decompose into bits
+  -- Use Num2Bits subcircuit to decompose into bits
   let out ← Num2Bits.arbitraryBitLengthCircuit nout lin
 
   return out
@@ -835,8 +625,6 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   localLength_eq := by
     intros
     simp only [circuit_norm, main, subcircuit]
-    -- The localLength of InputLinearSum is 0
-    -- The localLength of OutputBitsDecomposition is nout
     simp only [InputLinearSum.circuit, Num2Bits.arbitraryBitLengthCircuit]
     simp only [zero_add]
 
@@ -894,8 +682,8 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       intro i hi
       -- The output is varFromOffset at position offset + input
       simp only [varFromOffset, ProvableType.eval, fromVars, fromElements, toVars, fields, size]
-      -- Apply the binary constraint from OutputBitsDecomposition
-      have h_binary := (h_output_decomp).1 i hi
+      -- Apply the binary constraint from Num2Bits
+      have h_binary := h_output_decomp.1 i hi
       simp only [varFromOffset] at h_binary
       exact h_binary
 
@@ -909,8 +697,8 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       -- Apply InputLinearSum spec with binary inputs
       have h_lin_sum := h_input_sum h_inputs_binary
 
-      -- Apply OutputBitsDecomposition spec
-      have h_output_sum := (h_output_decomp).2
+      -- Apply Num2Bits spec
+      have h_output_sum := h_output_decomp.2
 
       -- Chain the equalities
       -- The goal is about ElaboratedCircuit.output which is varFromOffset
@@ -928,7 +716,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
     -- We need to show that when inputs are binary, the circuit constraints can be satisfied
     -- The completeness follows from:
     -- 1. InputLinearSum has no constraints, so it's trivially complete
-    -- 2. OutputBitsDecomposition witnesses the correct binary decomposition
+    -- 2. Num2Bits witnesses the correct binary decomposition
 
     -- The circuit constraints come from the subcircuits
     simp only [circuit_norm, main, subcircuit, subcircuit_norm]
@@ -943,7 +731,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       rw [h_inputs_eval]
       exact h_inputs_binary j k hj hk
 
-    · -- Second part: OutputBitsDecomposition completeness
+    · -- Second part: Num2Bits completeness
       -- We need to prove that the sum is less than 2^nbits((2^n - 1) * ops)
       -- We have the sum from InputLinearSum
       have h_sum_eq : Expression.eval env ((InputLinearSum.main n ops inputs_var).output witness_offset) =
