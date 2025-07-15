@@ -82,6 +82,12 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intro offset env input_var input h_input h_assumptions h_output
     -- We need to show the spec holds for all i < n
     intro i hi
+    -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
+    -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
+
+    -- First, understand what h_output says
+    -- eval env (varFromOffset (ProvableVector field n) offset) =
+    -- eval env (input_var.c.provable_map field fun x => (x.2 - x.1) * input_var.s + x.1)
 
     -- Get the i-th element equality from h_output
     have h_output_i : Expression.eval env (var { index := offset + i }) =
@@ -100,39 +106,57 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     have h_s : Expression.eval env input_var.s = input.s := by
       rw [← h_input]
 
-    have h_c1 : Expression.eval env input_var.c[i].1 = input.c[i].1 := by
+    -- Now we need to evaluate the expression
+    have h_c : (eval env input_var.c : ProvableVector (ProvablePair field field) _ _) = input.c := by
       rw [← h_input]
-      simp only [circuit_norm]
-      sorry
+
+    have h_i : (eval env input_var.c : ProvableVector (ProvablePair field field) _ _)[i] = input.c[i] := by
+      rw [h_c]
+      rfl
+
+    have h_c1 : Expression.eval env input_var.c[i].1 = input.c[i].1 := by
+      -- First, we know that (eval env input_var.c)[i] = input.c[i]
+      -- input_var.c[i] has type Var (ProvablePair field field) F
+      -- So eval env input_var.c[i] = (eval env input_var.c[i].1, eval env input_var.c[i].2)
+      -- And (eval env input_var.c)[i] = (eval env input_var.c[i].1, eval env input_var.c[i].2)
+      simp only [eval_pair] at h_i
+      rw [← h_i]
+      simp only [eval_vector (α := (ProvablePair field field))]
+      simp only [Vector.getElem_map]
+      rfl
 
     have h_c2 : Expression.eval env input_var.c[i].2 = input.c[i].2 := by
-      rw [← h_input]
-      simp only [circuit_norm]
-      sorry
+      -- First, we know that (eval env input_var.c)[i] = input.c[i]
+      simp only [eval_pair] at h_i
+      rw [← h_i]
+      simp only [eval_vector (α := (ProvablePair field field))]
+      simp only [Vector.getElem_map]
+      rfl
 
     simp only [circuit_norm] at h_output_i
     simp only [h_output_i]
 
-    -- We have input_var.c : Var (ProvableVector (ProvablePair field field) n)
-    -- So eval env input_var.c : Vector (field (F p) × field (F p)) n
-    -- And (eval env input_var.c)[i] : field (F p) × field (F p)
-
     -- Now we can work with the components
-    rw [← h_s] at h_assumptions ⊢
+    rw [← h_s]
+    rw [← h_c]
 
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
     cases h_assumptions with
       | inl h0 =>
         -- When s = 0
+        rw [← h_s] at h0
         rw [h0]
-        simp only [mul_zero, add_zero, if_pos rfl, circuit_norm, h_c1]
+        simp only [mul_zero, add_zero, if_pos rfl, circuit_norm]
         norm_num
+        rw [h_c1, h_c]
       | inr h1 =>
         -- When s = 1
+        rw [← h_s] at h1
         rw [h1]
-        simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm, h_c2]
-        ring
+        simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
+        norm_num
+        rw [h_c2, h_c]
 
   completeness := by
     simp only [circuit_norm, main]
