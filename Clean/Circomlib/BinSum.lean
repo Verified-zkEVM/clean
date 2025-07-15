@@ -102,7 +102,7 @@ def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) := do
 -- n: number of bits per operand
 -- ops: number of operands to sum
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) : 
-    GeneralFormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
+    FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops input
   
   localLength _ := nbits ((2^n - 1) * ops)
