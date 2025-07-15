@@ -320,7 +320,7 @@ template BinSum(n, ops) {
 -/
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops)
+def main (n ops : ℕ)
     (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Vector (Expression (F p)) (nbits ((2^n - 1) * ops))) := do
   let nout := nbits ((2^n - 1) * ops)
 
@@ -336,7 +336,7 @@ def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops)
 -- ops: number of operands to sum
 def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
     FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
-  main input := main n ops hops input
+  main input := main n ops input
 
   localLength _ := nbits ((2^n - 1) * ops)
   localLength_eq := by
