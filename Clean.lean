@@ -1,6 +1,7 @@
 import Clean.Circuit
 import Clean.Circomlib.AliasCheck
 import Clean.Circomlib.BinSum
+import Clean.Circomlib.BinSub
 import Clean.Circomlib.Bitify
 import Clean.Circomlib.Bitify2
 import Clean.Circomlib.Gates
