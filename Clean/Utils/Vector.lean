@@ -269,6 +269,12 @@ theorem append_take_drop {v : Vector α (n + m)} :
   congr
   omega
 
+/-- map and take commute for vectors -/
+lemma map_take {α β : Type} {n : ℕ} (f : α → β) (xs : Vector α n) (i : ℕ) :
+    (xs.map f).take i = (xs.take i).map f := by
+  ext j hj
+  simp only [Vector.getElem_map, Vector.getElem_take]
+
 end Vector
 
 -- helpers for `Vector.toChunks`

@@ -453,6 +453,11 @@ theorem getElem_eval_toElements {F : Type} [Field F] {α: TypeMap} [ProvableType
 theorem getElem_eval_toVars {F : Type} [Field F] {α: TypeMap} [ProvableType α]
   {env : Environment F} (x : Var α F) (i : ℕ) (hi : i < size α) :
     Expression.eval env (toVars x)[i] = (toElements (eval env x))[i] := getElem_eval_toElements ..
+
+theorem getElem_eval_fields {F : Type} [Field F] {n: ℕ} {env : Environment F}
+  (x : Var (fields n) F) (i : ℕ) (hi : i < n) :
+    Expression.eval env x[i] = (eval env x)[i] := by
+  simp only [eval, fromElements, instProvableTypeFields, toVars, Vector.getElem_map]
 end ProvableType
 
 -- more concrete ProvableType instances

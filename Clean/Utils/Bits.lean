@@ -229,4 +229,21 @@ theorem fieldFromBits_fieldToBits {n: ℕ} {x : F p} (hx : x.val < 2^n) :
   simp only [fieldToBits, fieldFromBits]
   rw [Vector.map_map, val_natCast_toBits, fromBits_toBits hx, ZMod.natCast_zmod_val]
 
+/-! ## Additional lemmas about fieldFromBits -/
+
+/-- fieldFromBits decomposes as sum of first n bits + bit_n * 2^n -/
+lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
+    fieldFromBits bits = fieldFromBits bits.pop + bits[n] * (2^n : F p) := by
+  simp only [fieldFromBits, fromBits, Vector.getElem_map, Fin.foldl_succ_last, Fin.coe_castSucc,
+    Fin.val_last, Nat.add_one_sub_one, Vector.map_pop, Vector.getElem_pop']
+  rw [Nat.cast_add, Nat.cast_mul, ZMod.natCast_zmod_val, Nat.cast_pow]
+  rfl
+
+/-- The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits) -/
+lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
+    fieldFromBits bits =
+    Fin.foldl n (fun acc k => acc + bits[k.val] * (2^k.val : F p)) 0 := by
+  induction n with
+  | zero => simp [fieldFromBits, fromBits, Fin.foldl_zero]
+  | succ n ih => simp [fieldFromBits_succ, ih, Fin.foldl_succ_last]
 end Utils.Bits
