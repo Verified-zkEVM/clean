@@ -7,6 +7,7 @@ import Clean.Circomlib.Gates
 import Clean.Circomlib.Comparators
 import Clean.Circomlib.CompConstant
 import Clean.Circomlib.Mux1
+import Clean.Circomlib.Sign
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
