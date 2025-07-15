@@ -932,8 +932,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [input_var2, input2]
         apply Vector.ext
         intro i hi
-        simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
-        exact eval_index_helper h_env (n1 + i) (by omega)
+        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
         -- input1[i] = input[i] since input1 is take of input
