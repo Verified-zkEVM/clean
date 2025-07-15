@@ -106,25 +106,19 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     have h_c : input.c = (eval env input_var.c : ProvableVector (ProvablePair field field) _ _) := by
       rw [← h_input]
 
-    have h_i : (eval env input_var.c : ProvableVector (ProvablePair field field) _ _)[i] = input.c[i] := by
-      rw [h_c]
-      rfl
-
-    simp only [eval_pair] at h_i
-
     have h_c1 : Expression.eval env input_var.c[i].1 = input.c[i].1 := by
       -- First, we know that (eval env input_var.c)[i] = input.c[i]
       -- input_var.c[i] has type Var (ProvablePair field field) F
       -- So eval env input_var.c[i] = (eval env input_var.c[i].1, eval env input_var.c[i].2)
       -- And (eval env input_var.c)[i] = (eval env input_var.c[i].1, eval env input_var.c[i].2)
-      rw [← h_i]
+      rw [h_c]
       simp only [eval_vector (α := (ProvablePair field field))]
       simp only [Vector.getElem_map]
       rfl
 
     have h_c2 : Expression.eval env input_var.c[i].2 = input.c[i].2 := by
       -- First, we know that (eval env input_var.c)[i] = input.c[i]
-      rw [← h_i]
+      rw [h_c]
       simp only [eval_vector (α := (ProvablePair field field))]
       simp only [Vector.getElem_map]
       rfl
