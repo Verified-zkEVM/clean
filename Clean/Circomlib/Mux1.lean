@@ -223,17 +223,13 @@ def circuit : FormalCircuit (F p) Inputs field where
 
     split_ifs with h
     · -- Case: s = 0
-      have h_c0 : Expression.eval env input_var.c[0] = input.c[0] := by
-        have h := congrArg (fun x => x.c[0]) h_input
-        simp only [Vector.getElem_map] at h
-        exact h
-      exact h_c0
+      have h := congrArg (fun x => x.c[0]) h_input
+      simp only [Vector.getElem_map] at h
+      exact h
     · -- Case: s ≠ 0
-      have h_c1 : Expression.eval env input_var.c[1] = input.c[1] := by
-        have h := congrArg (fun x => x.c[1]) h_input
-        simp only [Vector.getElem_map] at h
-        exact h
-      exact h_c1
+      have h := congrArg (fun x => x.c[1]) h_input
+      simp only [Vector.getElem_map] at h
+      exact h
 
   completeness := by
     simp only [circuit_norm, main]
