@@ -16,7 +16,7 @@ https://github.com/iden3/circomlib/blob/master/circuits/mux1.circom
 namespace MultiMux1
 
 structure Inputs (n : ℕ) (F : Type) where
-  c : Vector (F × F) n  -- n pairs of constants
+  c : ProvableVector (ProvablePair field field) n F  -- n pairs of constants
   s : F                 -- selector
 
 instance {n : ℕ} : ProvableStruct (Inputs n) where
@@ -100,7 +100,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     rw [← h_input] at h_assumptions ⊢
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
-    simp only [eval_vector (α := (ProvablePair field field))]
+    simp only [eval_vector]
     simp only [Vector.getElem_map]
     simp only [] at h_assumptions
 
@@ -203,7 +203,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
-    simp only [eval_vector (α := ProvablePair field field), Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, eval_pair (α := field) (β := field)]
+    simp only [eval_vector, Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, eval_pair]
     rfl
 
   completeness := by
