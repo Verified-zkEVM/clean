@@ -202,19 +202,12 @@ def circuit : FormalCircuit (F p) Inputs field where
     clear input
     clear h_input
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
-    have h_asm' : IsBool (Expression.eval env input_var.s) := by
-      exact h_assumptions
-    specialize h_subcircuit_sound h_asm' 0 (by omega)
+    specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector (α := ProvablePair field field)]
     -- The goal is now about pairs (Expression.eval env input_var.c[0], Expression.eval env input_var.c[1])
-
-    -- Now we need to show the branches match
-    -- First simplify the vector map on the singleton vector
-    -- Now we have (eval env (input_var.c[0], input_var.c[1])).1 or .2
-
     simp only [Vector.getElem_map]
     simp only [id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
     rw [eval_pair (α := field) (β := field)]
