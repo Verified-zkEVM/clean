@@ -39,8 +39,6 @@ def main (input : Vector (Expression (F p)) 254) :=
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
-  localLength_eq := by sorry
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := 
     -- Input should be binary representation of a field element
