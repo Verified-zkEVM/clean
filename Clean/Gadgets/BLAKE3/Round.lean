@@ -39,7 +39,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, subcircuit_norm, G.elaborated]
 
-
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
@@ -140,7 +139,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_normalized
 
   simp only [h_normalized, getElem_eval_vector, h_input.right, and_self]
-
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
