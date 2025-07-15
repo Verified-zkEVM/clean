@@ -106,23 +106,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     have h_c : input.c = (eval env input_var.c : ProvableVector (ProvablePair field field) _ _) := by
       rw [← h_input]
 
-    have h_c1 : Expression.eval env input_var.c[i].1 = input.c[i].1 := by
-      -- First, we know that (eval env input_var.c)[i] = input.c[i]
-      -- input_var.c[i] has type Var (ProvablePair field field) F
-      -- So eval env input_var.c[i] = (eval env input_var.c[i].1, eval env input_var.c[i].2)
-      -- And (eval env input_var.c)[i] = (eval env input_var.c[i].1, eval env input_var.c[i].2)
-      rw [h_c]
-      simp only [eval_vector (α := (ProvablePair field field))]
-      simp only [Vector.getElem_map]
-      rfl
-
-    have h_c2 : Expression.eval env input_var.c[i].2 = input.c[i].2 := by
-      -- First, we know that (eval env input_var.c)[i] = input.c[i]
-      rw [h_c]
-      simp only [eval_vector (α := (ProvablePair field field))]
-      simp only [Vector.getElem_map]
-      rfl
-
     simp only [circuit_norm] at h_output_i
     simp only [h_output_i]
 
@@ -131,19 +114,22 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     rw [← h_s] at h_assumptions ⊢
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
+    simp only [eval_vector (α := (ProvablePair field field))]
+    simp only [Vector.getElem_map]
+
     cases h_assumptions with
       | inl h0 =>
         -- When s = 0
         rw [h0]
         simp only [mul_zero, add_zero, if_pos rfl, circuit_norm]
         norm_num
-        rw [h_c1, h_c]
+        rfl
       | inr h1 =>
         -- When s = 1
         rw [h1]
         simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm]
         norm_num
-        rw [h_c2, h_c]
+        rfl
 
   completeness := by
     simp only [circuit_norm, main]
