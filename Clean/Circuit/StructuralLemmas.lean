@@ -186,19 +186,9 @@ def FormalCircuit.concat
   Assumptions := circuit1.Assumptions
   Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
-    apply Circuit.soundness_compose_circuits (Mid := Mid)
-    · intro; rfl
-    · intro input offset
-      simp only [ElaboratedCircuit.output]
-    · intro input h; exact h
-    · intro input mid h_assumptions h_spec1
-      exact h_compat input mid h_assumptions h_spec1
-    · intro input mid output h_input h_spec1 h_spec2
-      exact ⟨mid, h_spec1, h_spec2⟩
+    apply Circuit.soundness_compose_circuits (Mid := Mid) <;> aesop
   completeness := by
     simp only [circuit_norm]
-    rintro offset env input_var ⟨ use1, use2 ⟩ input h_input asm1
-    simp only [subcircuit_norm, h_input, asm1] at use1 ⊢
     aesop
 }
 
