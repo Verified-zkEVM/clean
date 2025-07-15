@@ -8,66 +8,41 @@ variable {F : Type} [Field F]
 variable {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
 
 /--
-Structural soundness lemma for elaborated circuits that consist of preparation followed by a subcircuit call.
+Soundness lemma for circuits composed with bind (>>=).
 
-This lemma allows proving soundness of a composite circuit by:
-1. Proving that the preparation phase produces values that satisfy the subcircuit's assumptions
-2. Proving that when the subcircuit's spec holds, it implies the overall circuit's spec
+This lemma proves that if two FormalCircuits are composed with bind,
+and their individual specs and assumptions satisfy certain conditions,
+then the composite circuit satisfies the composite spec.
 
-This is useful for circuits like BLAKE3's ApplyRounds where the main computation delegates to
-a subcircuit (like Round) after some initial setup.
+This is a more general version of soundness_compose_circuits that works
+directly with the bind operation.
 -/
-theorem soundness_with_subcircuit
-    (elaborated : ElaboratedCircuit F Input Output)
+theorem soundness_bind_circuits
+    {F : Type} [Field F]
+    {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
+    (circuit1 : FormalCircuit F Input Mid)
+    (circuit2 : FormalCircuit F Mid Output)
     (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop)
-    (subcircuit : FormalCircuit F Mid Output)
-    (prepare : Var Input F → Circuit F (Var Mid F))
-    (h_main_eq : ∀ input, elaborated.main input = prepare input >>= fun mid => subcircuit mid)
-    (h_output_eq : ∀ input offset, elaborated.output input offset =
-      subcircuit.output ((prepare input).output offset) (offset + (prepare input).localLength offset))
-    (h_spec_implication : ∀ input mid output,
+    (h_assumptions_implication : ∀ input,
+      Assumptions input → circuit1.Assumptions input)
+    (h_mid_assumptions : ∀ input mid,
       Assumptions input →
-      subcircuit.Assumptions mid →
-      subcircuit.Spec mid output →
-      Spec input output)
-    (h_prepare_spec : ∀ offset env input_var input,
+      circuit1.Spec input mid →
+      circuit2.Assumptions mid)
+    (h_spec_composition : ∀ input mid output,
+      Assumptions input →
+      circuit1.Spec input mid →
+      circuit2.Spec mid output →
+      Spec input output) :
+    ∀ offset env input_var input,
       eval env input_var = input →
       Assumptions input →
-      ConstraintsHold.Soundness env (prepare input_var |>.operations offset) →
-      let mid := eval env (prepare input_var |>.output offset)
-      subcircuit.Assumptions mid) :
-    Soundness F elaborated Assumptions Spec := by
-  intro offset env input_var input h_eval h_assumptions h_holds
-
-  -- Rewrite using the main equation
-  rw [h_main_eq] at h_holds
+      ConstraintsHold.Soundness env ((circuit1 input_var >>= circuit2).operations offset) →
+      Spec input (eval env (circuit2.output (circuit1.output input_var offset) (offset + circuit1.localLength input_var))) := by
+  intro _ _ _ _ _ _ h_holds
   simp only [Circuit.bind_def, circuit_norm] at h_holds
-
-  -- Extract constraints for prepare and subcircuit
-  obtain ⟨h_holds_prepare, h_holds_subcircuit⟩ := h_holds
-
-  -- Get the intermediate values
-  let mid_var := (prepare input_var).output offset
-  let mid := eval env mid_var
-  let prepare_len := (prepare input_var).localLength offset
-
-  -- Prove the subcircuit assumptions hold
-  have h_mid_assumptions : subcircuit.Assumptions mid := by
-    apply h_prepare_spec offset env input_var input h_eval h_assumptions h_holds_prepare
-
-  -- The subcircuit soundness gives us the spec
-  simp only [subcircuit_norm, FormalCircuit.toSubcircuit] at h_holds_subcircuit
-
-  -- Apply subcircuit soundness
-  have h_subcircuit_spec : subcircuit.Spec mid (eval env (subcircuit.output mid_var (offset + prepare_len))) := by
-    exact h_holds_subcircuit h_mid_assumptions
-
-  -- Use the output equation
-  rw [h_output_eq]
-
-  -- Apply the spec implication
-  apply h_spec_implication input mid _ h_assumptions h_mid_assumptions h_subcircuit_spec
+  aesop
 
 /--
 Structural soundness lemma for composing two FormalCircuits.
