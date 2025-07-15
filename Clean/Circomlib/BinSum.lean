@@ -37,13 +37,10 @@ def nbits (a : ℕ) : ℕ :=
 
 -- Lemma: The sum of ops n-bit numbers fits in nbits((2^n - 1) * ops) bits
 omit [Fact (p > 2)] in
-lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
-    (hnout : 2^(nbits ((2^n - 1) * ops)) < p)
-    (inputs : BinSumInput n ops (F p))
-    (h_binary : ∀ j k (hj : j < ops) (hk : k < n), IsBool inputs[j][k])
-    (h_sum : F p)
-    (h_sum_eq : h_sum = Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0) :
-    h_sum.val < 2^(nbits ((2^n - 1) * ops)) := by
+lemma sum_bound_of_binary_inputs {n ops : ℕ}
+  (hnout : 2^(nbits ((2^n - 1) * ops)) < p) (inputs : BinSumInput n ops (F p))
+  (h_binary : ∀ j k (hj : j < ops) (hk : k < n), IsBool inputs[j][k]) :
+    (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val < 2^(nbits ((2^n - 1) * ops)) := by
   -- Each input[j] is n-bit binary, so fieldFromBits inputs[j] ≤ 2^n - 1
   -- The sum of ops such numbers is at most ops * (2^n - 1)
   -- We need to show this is < 2^(nbits(ops * (2^n - 1)))
@@ -51,20 +48,16 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
   -- First, bound each individual fieldFromBits
   have h_individual_bound : ∀ j (hj : j < ops), (fieldFromBits inputs[j]).val ≤ 2^n - 1 := by
     intro j hj
-    -- Apply the bound theorem for binary inputs
-    have h_binary_j : ∀ k (hk : k < n), IsBool inputs[j][k] := fun k hk => h_binary j k hj hk
-    have h_binary_alt : ∀ k (hk : k < n), inputs[j][k] = 0 ∨ inputs[j][k] = 1 := by
-      intro k hk
-      cases h_binary_j k hk with
-      | inl h => left; exact h
-      | inr h => right; exact h
     -- Use the fieldFromBits bound
-    have h_lt := fieldFromBits_lt inputs[j] h_binary_alt
+    have h_lt := fieldFromBits_lt inputs[j] (h_binary j · hj)
     -- We have fieldFromBits inputs[j] < 2^n, so its value is ≤ 2^n - 1
     omega
 
-  -- Now bound the sum using h_sum_eq
-  rw [h_sum_eq]
+  have h_log_bound (n : ℕ) : ops * (2 ^ n - 1) < 2 ^ nbits ((2 ^ n - 1) * ops) := by
+    simp only [nbits]
+    rw [mul_comm]
+    split_ifs with h <;> simp [h, Nat.lt_log2_self]
+
   -- The sum is bounded by ops * (2^n - 1)
   have h_sum_bound : (Fin.foldl ops (fun sum j => sum + fieldFromBits inputs[j]) 0).val ≤ ops * (2^n - 1) := by
     -- Apply our general lemma about foldl sum bounds
@@ -74,43 +67,10 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ} [hn : NeZero n] (hops : 0 < ops)
       exact h_individual_bound j j.isLt
     · -- Prove no overflow: ops * (2^n - 1) < p
       -- This follows from hnout and the definition of nbits
-      rw [mul_comm]
-      apply Nat.lt_trans _ hnout
-      simp only [nbits]
-      split_ifs with h
-      · -- Case (2^n - 1) * ops = 0, but this contradicts our assumptions
-        have pos_prod : 0 < (2^n - 1) * ops := by
-          apply Nat.mul_pos
-          · have : 1 < 2^n := by
-              apply Nat.one_lt_pow
-              · exact NeZero.ne n
-              · norm_num
-            omega
-          · exact hops
-        omega
-      · -- Case (2^n - 1) * ops ≠ 0
-        exact Nat.lt_log2_self
+      apply Nat.lt_trans (h_log_bound _) hnout
 
   -- Apply the bound we just proved
-  apply Nat.lt_of_le_of_lt h_sum_bound
-  -- We need to apply the nbits property to (2^n - 1) * ops
-  rw [mul_comm]
-  -- The goal is (2^n - 1) * ops < 2^(nbits ((2^n - 1) * ops))
-  -- This follows from the definition of nbits
-  simp only [nbits]
-  split_ifs with h
-  · -- Case (2^n - 1) * ops = 0, contradicts our assumptions
-    have pos_prod : 0 < (2^n - 1) * ops := by
-      apply Nat.mul_pos
-      · have : 1 < 2^n := by
-          apply Nat.one_lt_pow
-          · exact NeZero.ne n
-          · norm_num
-        omega
-      · exact hops
-    omega
-  · -- Case (2^n - 1) * ops ≠ 0
-    exact Nat.lt_log2_self
+  apply Nat.lt_of_le_of_lt h_sum_bound (h_log_bound n)
 namespace BinSum
 
 -- Compute the linear sum of input bits weighted by powers of 2
@@ -195,7 +155,7 @@ def main (n ops : ℕ)
 
 -- n: number of bits per operand
 -- ops: number of operands to sum
-def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
+def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
     FormalCircuit (F p) (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main n ops input
 
@@ -288,7 +248,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   completeness := by
     intros witness_offset env inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
     simp only [circuit_norm, main, subcircuit, subcircuit_norm, Num2Bits.arbitraryBitLengthCircuit]
-    apply sum_bound_of_binary_inputs hops hnout inputs h_inputs_binary
+    convert sum_bound_of_binary_inputs hnout inputs h_inputs_binary
     exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval
 
 end BinSum
