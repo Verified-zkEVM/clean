@@ -7,10 +7,7 @@ import Clean.Gadgets.Boolean
 
 namespace Circomlib
 open Utils.Bits
-variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
-
--- Instance to show that 2 > 0
-instance : Fact (0 < 2) := ⟨by norm_num⟩
+variable {p : ℕ} [Fact p.Prime]
 
 -- Define a 2D vector type for BinSub inputs
 -- Represents 2 operands, each with n bits
