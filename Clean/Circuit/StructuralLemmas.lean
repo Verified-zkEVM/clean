@@ -203,14 +203,13 @@ def FormalCircuit.concat
     · simp only [subcircuit_norm]
       apply h_compat
       · apply asm1
-      · simp only [subcircuit_norm] at use1
-        simp only [h_input] at use1
+      · simp only [subcircuit_norm, h_input] at use1
         apply use1
         assumption
 }
 
 @[circuit_norm]
-lemma concat_Assumptions {F Input Mid Output} [Field F] [ProvableType Input] [ProvableType Mid] [ProvableType Output]
+lemma FormalCircuit.concat_Assumptions {F Input Mid Output} [Field F] [ProvableType Input] [ProvableType Mid] [ProvableType Output]
     (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
   simp only [FormalCircuit.concat]
