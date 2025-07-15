@@ -1,9 +1,14 @@
 import Clean.Circuit
+import Clean.Circomlib.AliasCheck
 import Clean.Circomlib.BinSum
 import Clean.Circomlib.BinSub
+import Clean.Circomlib.Bitify
+import Clean.Circomlib.Bitify2
 import Clean.Circomlib.Gates
 import Clean.Circomlib.Comparators
+import Clean.Circomlib.CompConstant
 import Clean.Circomlib.Mux1
+import Clean.Circomlib.Sign
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
