@@ -525,87 +525,6 @@ def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
       exact h_spec2.2
   )
 
-/--
-The assumptions for roundWithPermute are exactly Round.Assumptions.
--/
-lemma roundWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-    roundWithPermute.Assumptions input = Round.Assumptions input := by
-  simp only [roundWithPermute]
-
-/--
-The assumptions for twoRoundsWithPermute are exactly Round.Assumptions.
--/
-lemma twoRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-    twoRoundsWithPermute.Assumptions input = Round.Assumptions input := by
-  simp only [twoRoundsWithPermute, FormalCircuit.concat]
-  rfl
-
-/--
-The assumptions for twoRoundsApplyStyle are exactly Round.Assumptions.
--/
-lemma twoRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-    twoRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
-  simp only [twoRoundsApplyStyle, FormalCircuit.weakenSpec]
-  rw [twoRoundsWithPermute_assumptions_eq]
-
-/--
-The assumptions for fourRoundsWithPermute are exactly Round.Assumptions.
--/
-lemma fourRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-    fourRoundsWithPermute.Assumptions input = Round.Assumptions input := by
-  simp only [fourRoundsWithPermute, FormalCircuit.concat]
-  rw [twoRoundsWithPermute_assumptions_eq]
-
-/--
-The assumptions for fourRoundsApplyStyle are exactly Round.Assumptions.
--/
-lemma fourRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-    fourRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
-  simp only [fourRoundsApplyStyle, FormalCircuit.weakenSpec]
-  rw [fourRoundsWithPermute_assumptions_eq]
-
-/--
-The assumptions for sixRoundsWithPermute are exactly Round.Assumptions.
--/
-lemma sixRoundsWithPermute_assumptions_eq (input : Round.Inputs (F p)) :
-    sixRoundsWithPermute.Assumptions input = Round.Assumptions input := by
-  simp only [sixRoundsWithPermute, FormalCircuit.concat]
-  rw [fourRoundsWithPermute_assumptions_eq]
-
-/--
-The assumptions for sixRoundsApplyStyle are exactly Round.Assumptions.
--/
-lemma sixRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-    sixRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
-  simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec]
-  rw [sixRoundsWithPermute_assumptions_eq]
-
-/--
-The assumptions for sevenRoundsFinal are exactly Round.Assumptions.
--/
-lemma sevenRoundsFinal_assumptions_eq (input : Round.Inputs (F p)) :
-    sevenRoundsFinal.Assumptions input = Round.Assumptions input := by
-  simp only [sevenRoundsFinal, FormalCircuit.concat]
-  rw [sixRoundsApplyStyle_assumptions_eq]
-
-/--
-The assumptions for sevenRoundsApplyStyle are exactly Round.Assumptions.
-This means the input state and message must be normalized.
--/
-lemma sevenRoundsApplyStyle_assumptions_eq (input : Round.Inputs (F p)) :
-    sevenRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
-  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec]
-  rw [sevenRoundsFinal_assumptions_eq]
-
-/--
-The concrete assumptions for sevenRoundsApplyStyle: both state and message must be normalized.
--/
-lemma sevenRoundsApplyStyle_assumptions_concrete (input : Round.Inputs (F p)) :
-    sevenRoundsApplyStyle.Assumptions input ↔
-    (input.state.Normalized ∧ ∀ i : Fin 16, input.message[i].Normalized) := by
-  rw [sevenRoundsApplyStyle_assumptions_eq]
-  simp only [Round.Assumptions]
-
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
@@ -773,7 +692,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main, subcircuit_norm] at h_holds
-  simp only [sevenRoundsApplyStyle_assumptions_concrete] at h_holds
   simp only [Assumptions] at h_normalized
 
   -- Apply h_holds by proving its assumptions
@@ -1063,7 +981,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
   simp only [circuit_norm, main, subcircuit_norm] at henv ⊢
-  simp only [sevenRoundsApplyStyle_assumptions_concrete] at henv ⊢
 
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,

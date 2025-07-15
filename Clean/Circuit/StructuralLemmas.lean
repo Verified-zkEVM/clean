@@ -210,6 +210,12 @@ def FormalCircuit.concat
         assumption
 }
 
+@[circuit_norm]
+lemma concat_Assumptions {F Input Mid Output} [Field F] [ProvableType Input] [ProvableType Mid] [ProvableType Output]
+    (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
+    (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
+  simp only [FormalCircuit.concat]
+
 /--
 Weaken the specification of a FormalCircuit.
 
@@ -228,9 +234,9 @@ def FormalCircuit.weakenSpec
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output)
     (WeakerSpec : Input F → Output F → Prop)
-    (h_spec_implication : ∀ input output, 
-      circuit.Assumptions input → 
-      circuit.Spec input output → 
+    (h_spec_implication : ∀ input output,
+      circuit.Assumptions input →
+      circuit.Spec input output →
       WeakerSpec input output) :
     FormalCircuit F Input Output := {
   elaborated := circuit.elaborated
