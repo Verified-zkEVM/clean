@@ -215,17 +215,14 @@ def circuit : FormalCircuit (F p) Inputs field where
     -- First simplify the vector map on the singleton vector
     -- Now we have (eval env (input_var.c[0], input_var.c[1])).1 or .2
 
+    simp only [Vector.getElem_map]
+    simp only [id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
+    rw [eval_pair (α := field) (β := field)]
     split_ifs with h
     · -- Case: s = 0
-      simp only [Vector.getElem_map]
-      simp only [id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
-      rw [eval_pair (α := field) (β := field)]
       simp only []
       rfl
     · -- Case: s ≠ 0
-      simp only [Vector.getElem_map]
-      simp only [id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
-      rw [eval_pair (α := field) (β := field)]
       simp only []
       rfl
 
