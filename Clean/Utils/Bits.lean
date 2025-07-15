@@ -242,7 +242,7 @@ lemma fieldFromBits_succ (n : ℕ) (bits : Vector (F p) (n + 1)) :
 /-- The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits) -/
 lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
     fieldFromBits bits =
-    Fin.foldl n (fun acc k => acc + bits[k] * (2^k.val : F p)) 0 := by
+    Fin.foldl n (fun acc k => acc + bits[k.val] * (2^k.val : F p)) 0 := by
   induction n with
   | zero => simp [fieldFromBits, fromBits, Fin.foldl_zero]
   | succ n ih => simp [fieldFromBits_succ, ih, Fin.foldl_succ_last]

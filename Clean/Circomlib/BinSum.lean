@@ -150,50 +150,17 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
     (h_eval : eval env input = input_val) :
     Expression.eval env (main n ops input) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0 := by
-  -- The main function uses offset[j][k] which evaluates to input_val[j][k]
+  -- The main function uses input[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
 
   -- Step 1: Apply eval_nested_sum to show how the circuit evaluates
   rw [eval_nested_sum env input]
 
-  -- Step 2: We need to replace Expression.eval env offset[j][k] with input_val[j][k]
-  -- First, let's establish this equality
-  have offset_eval_elem : ∀ (j : Fin ops) (k : Fin n), Expression.eval env input[j][k] = input_val[j][k] := by
-    intro j k
-    simp only [Fin.getElem_fin]
-    have h_fields_eval : ∀ (v : Var (fields n) (F p)) (i : Fin n),
-      (eval env v)[i] = Expression.eval env v[i] := by
-      intro v i
-      simp only [ProvableType.eval_fields]
-      -- Now we have (Vector.map (Expression.eval env) v)[i] = Expression.eval env v[i]
-      -- This follows from the property of Vector.map
-      have i_lt : ↑i < n := by omega
-      unfold BinSumInput at *
-      have vget := Vector.getElem_map (xs := v) (Expression.eval env) i_lt
-      simp only [Fin.getElem_fin, Vector.getElem_map]
+  -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
+  simp only [Fin.getElem_fin, ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
 
-    -- The goal has Expression.eval env input[↑j][↑k] = input_val[↑j][↑k]
-    -- We need to be careful about the coercions
-
-    -- First, let's understand what input[↑j] is
-    -- input : Var (BinSumInput n ops) (F p)
-    -- input[↑j] : Var (fields n) (F p) = fields n (Expression (F p))
-    -- input[↑j][↑k] : Expression (F p)
-
-    have h_step1 := h_fields_eval input[↑j] k
-    simp only [Fin.getElem_fin] at h_step1
-    rw[← h_step1]
-    congr
-    rw[getElem_eval_vector]
-    rw[h_eval]
-
-  -- Now substitute this equality in our sum
-  simp only [offset_eval_elem]
-
-  rw [Fin.sum_interchange (fun j k => input_val[j][k]) (fun k => (2^k : F p))]
-  congr 1
-  ext j
-  rw [← fieldFromBits_as_sum]
+  rw [Fin.sum_interchange]
+  simp only [fieldFromBits_as_sum]
 end InputLinearSum
 
 /-
