@@ -173,22 +173,10 @@ def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   roundWithPermute.concat roundWithPermute (by
     -- Prove compatibility: for all inputs, if circuit1 assumptions and spec hold,
     -- then circuit2 assumptions hold
-    intro input mid h_asm h_spec
-    -- roundWithPermute.Spec gives us that mid.state.Normalized and message is normalized
-    -- We need to show Round.Assumptions mid
-    simp only [roundWithPermute] at h_spec ⊢
-    constructor
-    · -- mid.state.Normalized
-      exact h_spec.2.1
-    · -- ∀ i : Fin 16, mid.message[i].Normalized
-      exact h_spec.2.2.2
-  ) (by
-    -- Prove h_localLength_stable: roundWithPermute.localLength doesn't depend on input
-    intro mid mid'
-    -- roundWithPermute.localLength is defined as fun _ => constant
-    -- So it's the same for any input
-    rfl
-  )
+    intros
+    simp_all only [roundWithPermute, Round.Assumptions]
+    aesop
+  ) (by aesop)
 
 /--
 Apply two rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -225,36 +213,11 @@ def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- twoRoundsWithPermute.Spec says ∃ mid, roundWithPermute.Spec input mid ∧ roundWithPermute.Spec mid output
     obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
     -- Unpack what each roundWithPermute spec gives us
-    simp only [roundWithPermute] at h_spec1 h_spec2
-    simp only [TwoRoundsSpec, applyTwoRounds]
-
-    -- From h_spec1: mid.state.value = round input.state.value (BLAKE3State.value input.message)
-    -- From h_spec1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
-    -- From h_spec2: output.state.value = round mid.state.value (BLAKE3State.value mid.message)
-    -- From h_spec2: BLAKE3State.value output.message = permute (BLAKE3State.value mid.message)
+    simp_all only [roundWithPermute, TwoRoundsSpec, applyTwoRounds]
 
     constructor
-    · -- Prove: output.state.value = round (round input.state.value (input.message.map U32.value)) (permute (input.message.map U32.value))
-      rw [h_spec2.1, h_spec1.1]
-      -- Need to show BLAKE3State.value mid.message = permute (Vector.map U32.value input.message)
-      -- We have h_spec1.2.2.1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
-      -- Need to show BLAKE3State.value input.message = Vector.map U32.value input.message
-      rw [h_spec1.2.2.1]
-      -- Show BLAKE3State.value input.message = Vector.map U32.value input.message
-      rfl
-    constructor
-    · -- Prove: output.message.map U32.value = permute (permute (input.message.map U32.value))
-      -- We have h_spec2.2.2.1: BLAKE3State.value output.message = permute (BLAKE3State.value mid.message)
-      -- We have h_spec1.2.2.1: BLAKE3State.value mid.message = permute (BLAKE3State.value input.message)
-      -- Use our lemma to convert between the notations
-      rw [← blake3_value_eq_map_value output.message]
-      rw [h_spec2.2.2.1, h_spec1.2.2.1]
-      rw [blake3_value_eq_map_value input.message]
-    constructor
-    · -- Prove: output.state.Normalized
-      exact h_spec2.2.1
-    · -- Prove: ∀ i : Fin 16, output.message[i].Normalized
-      exact h_spec2.2.2.2
+    · rfl
+    constructor <;> aesop
   )
 
 /--
@@ -271,17 +234,8 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- We need to show twoRoundsWithPermute.Assumptions mid
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
-    constructor
-    · -- mid.state.Normalized
-      exact h_spec2.2.1
-    · -- ∀ i : Fin 16, mid.message[i].Normalized
-      exact h_spec2.2.2.2
-  ) (by
-    -- Prove h_localLength_stable: twoRoundsWithPermute.localLength doesn't depend on input
-    intro mid mid'
-    -- twoRoundsWithPermute.localLength is constant
-    rfl
-  )
+    constructor <;> aesop
+  ) (by aesop)
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -330,22 +284,7 @@ def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     simp only [FourRoundsSpec, applyFourRounds, applyTwoRounds]
 
     -- Build the result by chaining the four rounds
-    constructor
-    · -- Prove: output.state.value = final_state after 4 rounds
-      rw [h_spec2_2.1, h_spec2_1.1, h_spec1_2.1, h_spec1_1.1]
-      -- Use the fact that BLAKE3State.value = Vector.map U32.value
-      rw [h_spec2_1.2.2.1, h_spec1_2.2.2.1, h_spec1_1.2.2.1]
-      rfl
-    constructor
-    · -- Prove: output.message.map U32.value = final_message after 4 rounds
-      rw [← blake3_value_eq_map_value output.message]
-      rw [h_spec2_2.2.2.1, h_spec2_1.2.2.1, h_spec1_2.2.2.1, h_spec1_1.2.2.1]
-      rw [blake3_value_eq_map_value input.message]
-    constructor
-    · -- Prove: output.state.Normalized
-      exact h_spec2_2.2.1
-    · -- Prove: ∀ i : Fin 16, output.message[i].Normalized
-      exact h_spec2_2.2.2.2
+    constructor <;> aesop
   )
 
 /--
@@ -364,17 +303,8 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     -- We need to show twoRoundsWithPermute.Assumptions mid
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
-    constructor
-    · -- mid.state.Normalized
-      exact h_spec2_2.2.1
-    · -- ∀ i : Fin 16, mid.message[i].Normalized
-      exact h_spec2_2.2.2.2
-  ) (by
-    -- Prove h_localLength_stable: twoRoundsWithPermute.localLength doesn't depend on input
-    intro mid mid'
-    -- twoRoundsWithPermute.localLength is constant
-    rfl
-  )
+    constructor <;> aesop
+  ) (by aesop)
 
 /--
 Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -425,24 +355,7 @@ def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 
     simp only [roundWithPermute] at h_spec1_1_1 h_spec1_1_2 h_spec1_2_1 h_spec1_2_2 h_spec2_1 h_spec2_2
     simp only [SixRoundsSpec, applySixRounds]
-
-    -- Build the result by chaining the six rounds
-    constructor
-    · -- Prove: output.state.value = final_state after 6 rounds
-      rw [h_spec2_2.1, h_spec2_1.1, h_spec1_2_2.1, h_spec1_2_1.1, h_spec1_1_2.1, h_spec1_1_1.1]
-      -- Use the fact that BLAKE3State.value = Vector.map U32.value
-      rw [h_spec2_1.2.2.1, h_spec1_2_2.2.2.1, h_spec1_2_1.2.2.1, h_spec1_1_2.2.2.1, h_spec1_1_1.2.2.1]
-      rfl
-    constructor
-    · -- Prove: output.message.map U32.value = final_message after 6 rounds
-      rw [← blake3_value_eq_map_value output.message]
-      rw [h_spec2_2.2.2.1, h_spec2_1.2.2.1, h_spec1_2_2.2.2.1, h_spec1_2_1.2.2.1, h_spec1_1_2.2.2.1, h_spec1_1_1.2.2.1]
-      rw [blake3_value_eq_map_value input.message]
-    constructor
-    · -- Prove: output.state.Normalized
-      exact h_spec2_2.2.1
-    · -- Prove: ∀ i : Fin 16, output.message[i].Normalized
-      exact h_spec2_2.2.2.2
+    aesop
   )
 
 /--
@@ -454,19 +367,8 @@ def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
     intro input mid h_asm h_spec
     -- sixRoundsApplyStyle.Spec gives us normalized outputs
-    simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec] at h_spec
-    -- We need to show Round.Assumptions mid
-    constructor
-    · -- mid.state.Normalized
-      exact h_spec.2.2.1
-    · -- ∀ i : Fin 16, mid.message[i].Normalized
-      exact h_spec.2.2.2
-  ) (by
-    -- Prove h_localLength_stable: Round.circuit.localLength doesn't depend on input
-    intro mid mid'
-    -- Round.circuit.localLength is constant
-    rfl
-  )
+    simp_all [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Assumptions]
+  ) (by aesop)
 
 /--
 Apply seven rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -538,9 +440,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   ]
 
   -- Apply 7 rounds with message permutation between rounds (except the last)
-  let state ← subcircuit sevenRoundsApplyStyle ⟨state, block_words⟩
-
-  return state
+  sevenRoundsApplyStyle ⟨state, block_words⟩
 
 -- #eval! main (p:=pBabybear) default |>.localLength
 -- #eval! main (p:=pBabybear) default |>.output
