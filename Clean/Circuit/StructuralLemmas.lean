@@ -142,7 +142,6 @@ theorem soundness_compose_circuits
   -- Apply the spec composition
   apply h_spec_composition input mid _ h_assumptions h_circuit1_spec h_circuit2_spec
 
-
 end Circuit
 
 /--
