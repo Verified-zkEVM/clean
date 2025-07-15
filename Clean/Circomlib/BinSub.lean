@@ -18,11 +18,6 @@ instance : Fact (0 < 2) := ⟨by norm_num⟩
 @[reducible]
 def BinSubInput (n : ℕ) := ProvableVector (fields n) 2
 
--- Define output type for BinSub
--- Represents n output bits
-@[reducible]
-def BinSubOutput (n : ℕ) := fields n
-
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/binsub.circom
@@ -78,54 +73,54 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   let lin ← Circuit.foldlRange n ((2^n : F p) : Expression (F p)) fun lin i => do
     let e2 : Expression (F p) := (2^i.val : F p)
     return lin + inp[0][i] * e2 - inp[1][i] * e2
-  
+
   -- Witness output bits
-  let out ← witnessVector n fun env => 
+  let out ← witnessVector n fun env =>
     fieldToBits n (lin.eval env)
-  
+
   -- Witness aux bit
   let aux ← witness fun env =>
     let lin_val := lin.eval env
     -- Extract the nth bit (borrow bit)
     if (lin_val.val / (2^n)) % 2 = 1 then (1 : F p) else (0 : F p)
-  
+
   -- Calculate output linear sum and constrain bits
   let (lout, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
     -- Ensure out[i] is binary
     out[i] * (out[i] - (1 : Expression (F p))) === (0 : Expression (F p))
     let lout := lout + out[i] * e2
     return (lout, e2 + e2)
-  
+
   -- Ensure aux is binary
   aux * (aux - (1 : Expression (F p))) === (0 : Expression (F p))
-  
+
   -- Add aux contribution to lout
   let lout := lout + aux * ((2^n : F p) : Expression (F p))
-  
+
   -- Ensure the equation holds
   lin === lout
-  
+
   return out
 
 -- n: number of bits per operand
-def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) : 
-    FormalCircuit (F p) (BinSubInput n) (BinSubOutput n) where
+def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) :
+    FormalCircuit (F p) (BinSubInput n) (fields n) where
   main input := main n input
-  
+
   localLength _ := n
   localLength_eq := by sorry
-  
-  output _ i := varFromOffset (BinSubOutput n) i
-  
+
+  output _ i := varFromOffset (fields n) i
+
   output_eq := by sorry
-  
+
   subcircuitsConsistent := by sorry
-  
-  Assumptions input := 
+
+  Assumptions input :=
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
-  
-  Spec input output := 
+
+  Spec input output :=
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     -- All output bits are binary
@@ -133,12 +128,12 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
     -- The equation (in[0] + 2^n) - in[1] = out + aux*2^n holds
     -- where aux is either 0 or 1 (the borrow bit)
     ∧ ∃ aux : F p, IsBool aux ∧
-        fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] = 
+        fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] =
           fieldFromBits output + aux * (2^n : F p)
-  
+
   soundness := by
     sorry
-  
+
   completeness := by
     sorry
 
