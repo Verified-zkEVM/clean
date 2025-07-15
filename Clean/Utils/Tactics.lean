@@ -4,7 +4,6 @@ import Lean.Elab.Exception
 open Lean.Elab.Tactic
 open Lean.Meta
 
-
 partial def getMaxMatchingHyp (e : Lean.Expr) : Lean.Elab.Tactic.TacticM (List Lean.Expr) := do
   -- it suffices to reduce to whnf to look at the outer structure
   let e ← whnf e
@@ -26,7 +25,6 @@ partial def getMaxMatchingHyp (e : Lean.Expr) : Lean.Elab.Tactic.TacticM (List L
       return [res] ++ other_hyps
     | none => do return []
   | _ => return []
-
 
 partial def SpecializeAuto (e_term : Lean.Term): Lean.Elab.Tactic.TacticM Unit := do
   let (e, mvarIds') ← elabTermWithHoles e_term none `specialize_auto (allowNaturalHoles := true)

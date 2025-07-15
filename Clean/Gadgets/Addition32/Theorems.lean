@@ -26,7 +26,6 @@ lemma zify_bool {b : (F p)} (b_bool : IsBool b) : (↑(b.val) : ℤ) = 0 ∨ (�
   · rw [b_one, ZMod.val_one]
     simp only [Nat.cast_one, one_ne_zero, or_true]
 
-
 theorem add32_soundness {x0 x1 x2 x3 y0 y1 y2 y3 carry_in c0 c1 c2 c3 z0 z1 z2 z3 : F p}
     (x0_byte : x0.val < 256) (x1_byte : x1.val < 256) (x2_byte : x2.val < 256) (x3_byte : x3.val < 256)
     (y0_byte : y0.val < 256) (y1_byte : y1.val < 256) (y2_byte : y2.val < 256) (y3_byte : y3.val < 256)
@@ -115,7 +114,6 @@ theorem add32_soundness {x0 x1 x2 x3 y0 y1 y2 y3 carry_in c0 c1 c2 c3 z0 z1 z2 z
       ring
     -- simplify
     _ = x + y + carry_in := by ring
-
 
   have z_lt_2_32 : z < 2^32 := by dsimp only [z]; linarith
   have z_pos : 0 ≤ z := by dsimp [z]; linarith

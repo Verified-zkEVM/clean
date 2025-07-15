@@ -585,7 +585,6 @@ end FlatOperation
 
 -- theorem about relationship between FormalCircuit and GeneralFormalCircuit
 
-
 /--
 `FormalCircuit.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` a generalization of
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness

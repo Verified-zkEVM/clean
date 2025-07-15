@@ -63,7 +63,6 @@ lemma ext {x y : U64 (F p)}
     simp only [h0, h1, h2, h3, h4, h5, h6, h7] at *
     simp only [h0, h1, h2, h3, h4, h5, h6, h7]
 
-
 /--
   A 64-bit unsigned integer is normalized if all its limbs are less than 256.
 -/

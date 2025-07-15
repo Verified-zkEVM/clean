@@ -1,7 +1,6 @@
 import Clean.Utils.Field
 import Clean.Gadgets.Boolean
 
-
 namespace Gadgets.Addition8.Theorems
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
@@ -54,7 +53,6 @@ theorem soundness_one_carry (x y out carry_in: F p):
     simp at hb
     apply Nat.add_le_add hb sum_bound
   rw [xy_not_wrap, ←add_assoc] at sum_le_511
-
 
   set x := x.val
   set y := y.val

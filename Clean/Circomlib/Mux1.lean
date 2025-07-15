@@ -3,7 +3,6 @@ import Clean.Utils.Field
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 
-
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

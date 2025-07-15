@@ -175,7 +175,6 @@ theorem not_eq_val_not {a : F p} (ha : IsBool a) :
 
 end BinaryOps
 
-
 end IsBool
 
 section

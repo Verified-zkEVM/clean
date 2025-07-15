@@ -5,7 +5,6 @@ import Clean.Utils.Primes
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 
-
 /--
   Rotate the 64-bit integer by increments of 8 positions
   This gadget does not introduce constraints

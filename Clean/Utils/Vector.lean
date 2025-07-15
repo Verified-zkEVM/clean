@@ -6,7 +6,6 @@ variable {α β : Type} {n m : ℕ}
 
 open Vector (finRange)
 
-
 namespace Vector
 def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 

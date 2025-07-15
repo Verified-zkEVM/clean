@@ -36,7 +36,6 @@ instance : ToJson (CellAssignment W S) where
       ("vars", toJson vars.toArray),
     ]
 
-
 instance : ToJson (TableContext W S F) where
   toJson ctx := Json.mkObj [
     ("circuit", toJson ctx.circuit),

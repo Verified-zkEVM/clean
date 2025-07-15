@@ -120,7 +120,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp [Assumptions] at h_normalized
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
 
-
   specialize c1 h_normalized.left (h_normalized.right 0) (h_normalized.right 1)
   specialize c2 c1.right (h_normalized.right 2) (h_normalized.right 3)
   specialize c3 c2.right (h_normalized.right 4) (h_normalized.right 5)
