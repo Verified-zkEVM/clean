@@ -536,16 +536,16 @@ lemma extract_preserves_element {p n n1 : ℕ} (input : fields n (F p)) (i : ℕ
     input1[i]'hi = input[i]'(by omega) := by
   simp only [getElem]
   have h_extract : (input.toArray.extract 0 n1)[i]'(by
-    simp only [Array.size_extract]
-    have h1 : i < n1 := hi
-    have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
-    rw [h2, min_eq_left h_n1_lt]
-    exact h1) =
-                  input.toArray[i]'(by
-                    have h1 : i < n1 := hi
-                    have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
-                    rw [h2]
-                    omega) := by
+      simp only [Array.size_extract]
+      have h1 : i < n1 := hi
+      have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
+      rw [h2, min_eq_left h_n1_lt]
+      exact h1) =
+    input.toArray[i]'(by
+      have h1 : i < n1 := hi
+      have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
+      rw [h2]
+      omega) := by
     rw [Array.getElem_extract]
     simp
   exact h_extract
