@@ -505,24 +505,10 @@ Seven rounds with spec matching the applyRounds pattern.
 def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sevenRoundsFinal.weakenSpec SevenRoundsSpec (by
     -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
-    intro input output h_assumptions h_spec
-    -- sevenRoundsFinal.Spec says ∃ mid, sixRoundsApplyStyle.Spec input mid ∧ Round.circuit.Spec mid output
-    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    rintro input output h_assumptions ⟨mid, h_spec1, h_spec2⟩
     -- Break down the specs similar to previous proofs
-    simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec] at h_spec1
-    simp only [Round.circuit, Round.Spec] at h_spec2
-    simp only [SevenRoundsSpec, applySevenRounds, applySixRounds]
-
-    -- Build the result by chaining all seven rounds
-    constructor
-    · -- Prove: output.value = final_state after 7 rounds
-      rw [h_spec2.1, h_spec1.1]
-      simp only [applySixRounds]
-      congr 1
-      rw [h_spec1.2.1]
-      simp only [applySixRounds]
-    · -- Prove: output.Normalized
-      exact h_spec2.2
+    simp_all only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Spec, SevenRoundsSpec, applySevenRounds, applySixRounds]
+    aesop
   )
 
 structure Inputs (F : Type) where
