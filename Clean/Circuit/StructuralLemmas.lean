@@ -198,14 +198,8 @@ def FormalCircuit.concat
   completeness := by
     simp only [circuit_norm]
     rintro offset env input_var ⟨ use1, use2 ⟩ input h_input asm1
-    constructor
-    · simp only [subcircuit_norm, h_input, asm1]
-    · simp only [subcircuit_norm]
-      apply h_compat
-      · apply asm1
-      · simp only [subcircuit_norm, h_input] at use1
-        apply use1
-        assumption
+    simp only [subcircuit_norm, h_input, asm1] at use1 ⊢
+    aesop
 }
 
 @[circuit_norm]
