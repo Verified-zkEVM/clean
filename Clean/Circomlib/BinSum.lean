@@ -133,29 +133,13 @@ lemma eval_nested_sum {n ops : ℕ}
     Expression.eval env (main n ops offset) =
     Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
-  -- The main function uses nested Circuit.foldlRange
-  simp only [main, circuit_norm]
-  rw [eval_foldl]
-  · simp only [circuit_norm]
-    congr 1
-    ext acc k
-    rw [eval_foldl]
-    · simp only [circuit_norm]
-      -- Apply the factorization lemma with proper coercions
-      have h := Fin.foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
-      -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
-      convert h
-    · intros e i
-      simp only [circuit_norm]
-  · intros e i
-    rw [eval_foldl]
-    · simp only [circuit_norm]
-      rw [eval_foldl]
-      · simp only [circuit_norm]
-      · intros e' i'
-        simp only [circuit_norm]
-    · intros e' i'
-      simp only [circuit_norm]
+  -- The main function uses nested Fin.foldl
+  simp only [main, circuit_norm, eval_foldl]
+  congr 1
+  ext acc k
+  have h := Fin.foldl_factor_const (fun i => Expression.eval env offset[↑i][↑k]) (2 ^ k.val) acc
+  -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
+  convert h
 
 -- Lemma 2: Summation interchange for the double sum
 omit [Fact (p > 2)] in
