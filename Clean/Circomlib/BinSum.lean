@@ -141,49 +141,6 @@ lemma eval_nested_sum {n ops : ℕ}
   -- The lemma gives us exactly what we need after recognizing that ↑k = k.val
   convert h
 
--- Lemma 2: Summation interchange for the double sum
-omit [Fact (p > 2)] in
-lemma sum_interchange_binsum {n ops : ℕ} (f : Fin ops → Fin n → F p) :
-    Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
-      Fin.foldl ops (fun acc' j => acc' + f j k) 0) 0 =
-    Fin.foldl ops (fun acc j => acc +
-      Fin.foldl n (fun acc' k => acc' + f j k * (2^k.val : F p)) 0) 0 := by
-  simp only [Fin.foldl_to_sum, Finset.mul_sum]
-  rw [Finset.sum_comm]
-  ac_rfl
-
--- Lemma 3: The sum Σ_k bits[k] * 2^k equals fieldFromBits(bits)
-omit [Fact (p > 2)] in
-lemma fieldFromBits_as_sum {n : ℕ} (bits : Vector (F p) n) :
-    fieldFromBits bits =
-    Fin.foldl n (fun acc k => acc + bits[k] * (2^k.val : F p)) 0 := by
-  -- fieldFromBits uses fromBits which sums bits[k].val * 2^k
-  -- We need to show this equals the sum of bits[k] * 2^k (without .val)
-  induction n
-  · -- Base case: n = 0
-    simp only [fieldFromBits, fromBits, Fin.foldl_zero]
-    norm_cast
-  · rename_i pre_n ih
-    rw [Utils.Bits.fieldFromBits_succ]
-    have min_pre_h : (min pre_n (pre_n + 1)) = pre_n := by omega
-    calc
-      _ = fieldFromBits (Vector.cast min_pre_h (bits.take pre_n)) + bits[pre_n] * 2 ^ pre_n := by
-        congr
-        simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
-          Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl]
-        apply Vector.cast_heq
-      _ = _ := by
-        rw [ih]
-        simp only [Fin.foldl_succ_last]
-        congr
-        ext acc k
-        simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
-          Nat.add_one_sub_one, Nat.sub_zero, Fin.getElem_fin, Fin.coe_castSucc, add_right_inj,
-          mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq]
-        left
-        repeat rw[Vector.getElem_cast]
-        simp only [Vector.getElem_pop']
-
 -- Lemma showing that evaluating the main circuit computes the correct sum
 omit [Fact (p > 2)] in
 lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
