@@ -86,15 +86,12 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- h_output gives us the equality of evaluated vectors
 
     -- Get the i-th element equality from h_output
-    have h_output_i : Expression.eval env (var { index := offset + i }) =
-                      Expression.eval env ((input_var.c[i].2 - input_var.c[i].1) * input_var.s + input_var.c[i].1) := by
-      -- h_output gives us equality of vectors, extract element i
-      have := congrArg (fun v => v[i]) h_output
-      -- Simplify the outer Vector.map on both sides
-      simp only [Vector.getElem_map] at this
-      -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }
-      simp only [Vector.getElem_mapRange] at this
-      exact this
+    -- h_output gives us equality of vectors, extract element i
+    have h_output_i := congrArg (fun v => v[i]) h_output
+    -- Simplify the outer Vector.map on both sides
+    simp only [Vector.getElem_map] at h_output_i
+    -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }
+    simp only [Vector.getElem_mapRange] at h_output_i
 
     simp only [circuit_norm] at h_output_i
     simp only [h_output_i]
