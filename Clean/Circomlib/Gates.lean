@@ -17,7 +17,6 @@ https://github.com/iden3/circomlib/blob/master/circuits/gates.circom
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime]
 
--- Import the moved lemmas
 open Circuit (bind_output_eq bind_localLength_eq bind_forAll)
 open Operations (append_localLength)
 open BinaryOps (List.foldl_and_IsBool List.and_foldl_eq_foldl)
@@ -319,9 +318,6 @@ def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expressi
     let out2 ← main input2
 
     AND.circuit.main (out1, out2)
-
-
-
 
 -- Helper lemma for localLength
 theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
@@ -882,7 +878,7 @@ lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
     (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     IsBool output := by
-  exact (soundness n offset env input_var input h_eval h_assumptions 
+  exact (soundness n offset env input_var input h_eval h_assumptions
     (Circuit.can_replace_soundness h_constraints)).2
 
 lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
@@ -1053,9 +1049,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   Assumptions := Assumptions n
   Spec := Spec n
 
-  -- TODO: Future work - update the FormalCircuit Soundness definition to have
-  -- h_env : input = eval env input_var instead of eval env input_var = input
-  -- for more natural theorem statements
   soundness := by
     intro offset env input_var input h_env h_assumptions h_hold
     exact soundness n offset env input_var input h_env.symm h_assumptions h_hold
