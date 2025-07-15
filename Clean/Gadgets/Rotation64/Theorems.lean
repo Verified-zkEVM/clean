@@ -7,7 +7,6 @@ variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation64.Theorems
-open Bitwise (rotRight64)
 open Utils.Rotation
 
 /--
