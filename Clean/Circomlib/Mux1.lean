@@ -197,7 +197,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_subcircuit_sound
+    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
     rw[← h_input] at *
     clear input
     clear h_input
