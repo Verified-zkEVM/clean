@@ -186,7 +186,7 @@ def main (n ops : ℕ)
   let nout := nbits ((2^n - 1) * ops)
 
   -- Use InputLinearSum subcircuit to calculate the sum
-  let lin := InputLinearSum.main n ops inp
+  let lin := inputLinearSum n ops inp
 
   -- Use Num2Bits subcircuit to decompose into bits
   let out ← Num2Bits.arbitraryBitLengthCircuit nout lin
@@ -269,7 +269,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
         exact h_assumptions j k hj hk
 
       -- Apply InputLinearSum spec with binary inputs
-      have h_lin_sum := InputLinearSum.main_eval_eq_sum env input_var input h_input_eval
+      have h_lin_sum := inputLinearSum_eval_eq_sum env input_var input h_input_eval
 
       -- Apply Num2Bits spec
       have h_output_sum := h_output_decomp.2
@@ -289,7 +289,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
     intros witness_offset env inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
     simp only [circuit_norm, main, subcircuit, subcircuit_norm, Num2Bits.arbitraryBitLengthCircuit]
     apply sum_bound_of_binary_inputs hops hnout inputs h_inputs_binary
-    exact InputLinearSum.main_eval_eq_sum _ _ _ h_inputs_eval
+    exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval
 
 end BinSum
 
