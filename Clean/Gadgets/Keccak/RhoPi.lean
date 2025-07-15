@@ -6,7 +6,6 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
-open Bitwise (rotLeft64)
 
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
@@ -55,7 +54,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [h_input, state_norm, main, circuit_norm, subcircuit_norm,
     Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated,
     Vector.getElem_zip] at h_holds ⊢
-  simp_all [rhoPiConstants, Bitwise.rotLeft64_eq_rotRight64]
+  simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm

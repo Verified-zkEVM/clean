@@ -1,7 +1,6 @@
 import Mathlib.Analysis.Normed.Ring.Lemmas
 import Clean.Utils.Field
-
-namespace Bitwise
+import Mathlib.Data.Nat.Bitwise
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
@@ -94,4 +93,21 @@ theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
   exact h_u64
   rw [UInt64.le_iff_toNat_le, UInt64.toNat_ofNat_of_lt' x_lt]
   exact Nat.le_pred_of_lt x_lt
-end Bitwise
+
+-- Bitwise AND theorems
+
+/-- For binary values, 0 is the absorbing element for `&&&` -/
+theorem and_zero_absorb (a : ℕ) :
+    0 &&& a = 0 := by
+  -- 0 &&& a = Nat.land 0 a = 0
+  simp only [HAnd.hAnd, AndOp.and]
+  -- land 0 a = 0
+  simp only [Nat.land]
+  apply Nat.bitwise_zero_left
+
+/-- For binary values, 1 is the identity element for `&&&` -/
+theorem and_one_id_binary (a : ℕ) (ha : a = 0 ∨ a = 1) :
+    1 &&& a = a := by
+  cases ha with
+  | inl h0 => rw [h0]; rfl
+  | inr h1 => rw [h1]; rfl
