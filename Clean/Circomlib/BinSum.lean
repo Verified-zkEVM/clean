@@ -120,20 +120,17 @@ Takes n-bit binary numbers and computes their weighted sum.
 namespace InputLinearSum
 
 -- Compute the linear sum of input bits weighted by powers of 2
-def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Circuit (F p) (Expression (F p)) := do
+def main (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Expression (F p) :=
   -- Calculate input linear sum
-  Circuit.foldlRange n (0 : Expression (F p)) fun lin k => do
-    let e2 : Expression (F p) := (2^k.val : F p)
-    Circuit.foldlRange ops lin fun lin j => do
-      return lin + inp[j][k] * e2
+  Fin.foldl n (fun lin k =>
+    Fin.foldl ops (fun lin j => lin + inp[j][k] * (2^k.val : F p)) lin) 0
 
 -- Lemma 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
 omit [Fact (p > 2)] in
-lemma circuit_eval_nested_sum {n ops : ℕ}
+lemma eval_nested_sum {n ops : ℕ}
     (env : Environment (F p))
-    (offset : Var (BinSumInput n ops) (F p))
-    (input_offset : ℕ) :
-    Expression.eval env ((main n ops offset input_offset).1) =
+    (offset : Var (BinSumInput n ops) (F p)) :
+    Expression.eval env (main n ops offset) =
     Fin.foldl n (fun acc k => acc + (2^k.val : F p) *
       Fin.foldl ops (fun acc' j => acc' + Expression.eval env offset[j][k]) 0) 0 := by
   -- The main function uses nested Circuit.foldlRange
@@ -233,15 +230,14 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
     (env : Environment (F p))
     (input : Var (BinSumInput n ops) (F p))
     (input_val : BinSumInput n ops (F p))
-    (h_eval : eval env input = input_val)
-    (input_offset : ℕ) :
-    Expression.eval env ((main n ops input input_offset).1) =
+    (h_eval : eval env input = input_val) :
+    Expression.eval env (main n ops input) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j]) 0 := by
   -- The main function uses offset[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
 
-  -- Step 1: Apply circuit_eval_nested_sum to show how the circuit evaluates
-  rw [circuit_eval_nested_sum env input input_offset]
+  -- Step 1: Apply eval_nested_sum to show how the circuit evaluates
+  rw [eval_nested_sum env input]
 
   -- Step 2: We need to replace Expression.eval env offset[j][k] with input_val[j][k]
   -- First, let's establish this equality
@@ -281,66 +277,6 @@ lemma main_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   congr 1
   ext j
   rw [← fieldFromBits_as_sum]
-
-def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) :
-    FormalCircuit (F p) (BinSumInput n ops) field where
-  main input := main n ops input
-
-  localLength _ := 0
-  localLength_eq := by
-    simp only [circuit_norm, main]
-    -- Need to show that the conditional expression equals 0
-    simp only [mul_zero]
-    -- Both branches of the if-then-else evaluate to 0
-    split_ifs <;> simp
-
-  output input offset := Circuit.output (main n ops input) offset
-  output_eq := by
-    intros
-    rfl
-
-  subcircuitsConsistent := by simp +arith [circuit_norm, main]
-
-  Assumptions input :=
-    -- All inputs are binary
-    ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
-
-  Spec input output :=
-    -- Output equals the sum of all input bits interpreted as numbers
-    output = Fin.foldl ops (fun sum (j : Fin ops) =>
-      sum + fieldFromBits input[j]) (0 : F p)
-
-  soundness := by
-    intros input h_assumptions offset env h_input_eval h_constraints
-    intro h_constraints_hold
-    -- InputLinearSum has no internal constraints, just computes the sum
-    -- The soundness proof shows that the output equals the weighted sum of inputs
-
-    -- The circuit output is the result of the nested foldl computation
-    simp only [ElaboratedCircuit.output, circuit_norm]
-
-    -- We need to show that the output equals the sum of fieldFromBits
-    -- The main function computes: sum over k of (2^k * sum over j of inp[j][k])
-    -- This is equivalent to: sum over j of (sum over k of (2^k * inp[j][k]))
-    -- Which equals: sum over j of fieldFromBits(inp[j])
-
-    -- The circuit has no constraints, so h_constraints_hold is trivial
-    -- We just need to show the computation is correct
-    simp only [main]
-
-    -- The output is the evaluation of the circuit's output expression
-    -- We need to show it equals the sum of fieldFromBits of the inputs
-
-    -- Apply our lemma to show the circuit computes the correct sum
-    exact main_eval_eq_sum h_assumptions offset env h_input_eval input
-
-  completeness := by
-    intros input_var h_uses_local_witnesses input_val h_input_eval h_assumptions
-    -- InputLinearSum has no constraints, so it's always satisfiable
-    -- The circuit just computes a value, no constraints to satisfy
-    simp only [circuit_norm, main]
-    -- The constraints are empty (True), so they're trivially satisfied
-
 end InputLinearSum
 
 /-
@@ -389,7 +325,7 @@ def main (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops)
   let nout := nbits ((2^n - 1) * ops)
 
   -- Use InputLinearSum subcircuit to calculate the sum
-  let lin ← InputLinearSum.circuit n ops hops inp
+  let lin := InputLinearSum.main n ops inp
 
   -- Use Num2Bits subcircuit to decompose into bits
   let out ← Num2Bits.arbitraryBitLengthCircuit nout lin
@@ -405,9 +341,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
   localLength _ := nbits ((2^n - 1) * ops)
   localLength_eq := by
     intros
-    simp only [circuit_norm, main, subcircuit]
-    simp only [InputLinearSum.circuit, Num2Bits.arbitraryBitLengthCircuit]
-    simp only [zero_add]
+    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
 
   output _ i := varFromOffset (fields (nbits ((2^n - 1) * ops))) i
 
@@ -434,16 +368,14 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
           sum + fieldFromBits input[j]) (0 : F p)
 
   soundness := by
-    intros input h_assumptions offset env h_input_eval h_circuit_constraints
-    -- Extract what h_circuit_constraints says
-    intro h_constraints_hold
+    intros offset env input_var input h_input_eval h_assumptions h_constraints_hold
     -- h_circuit_constraints contains our assumptions about the input (they are binary)
     -- h_constraints_hold contains the fact that circuit constraints hold
 
     -- We need to analyze what constraints are generated by our main circuit
     simp only [circuit_norm, main, subcircuit, subcircuit_norm] at h_constraints_hold
     -- Unfold the subcircuit definitions to access their specs
-    simp only [InputLinearSum.circuit, Num2Bits.arbitraryBitLengthCircuit] at h_constraints_hold
+    simp only [Num2Bits.arbitraryBitLengthCircuit] at h_constraints_hold
 
     -- Now we can see the constraints from both subcircuits
     -- The constraints are:
@@ -455,7 +387,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
     -- - Num2Bits.Spec: outputs are binary and represent the input
 
     -- Extract the two parts of the constraint
-    obtain ⟨h_input_sum, ⟨ h_sum_bound, h_output_decomp⟩⟩ := h_constraints_hold
+    obtain ⟨h_sum_bound, h_output_decomp⟩ := h_constraints_hold
 
     -- We need to prove the output specification
     constructor
@@ -470,13 +402,13 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
 
     · -- Second: the sum property
       -- We know inputs are binary from h_circuit_constraints
-      have h_inputs_binary : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval h_assumptions offset)[j][k] := by
+      have h_inputs_binary : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval env input_var)[j][k] := by
         intro j k hj hk
         rw [h_input_eval]
-        exact h_circuit_constraints j k hj hk
+        exact h_assumptions j k hj hk
 
       -- Apply InputLinearSum spec with binary inputs
-      have h_lin_sum := h_input_sum h_inputs_binary
+      have h_lin_sum := InputLinearSum.main_eval_eq_sum env input_var input h_input_eval
 
       -- Apply Num2Bits spec
       have h_output_sum := h_output_decomp.2
@@ -486,57 +418,17 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hops : 0 < ops) (hnout : 2^(nbits ((2
       simp only [ElaboratedCircuit.output]
       -- Now we need to connect this with our hypotheses
       -- h_output_sum tells us about fieldFromBits of the output
-      have h_output_eq : fieldFromBits (eval h_assumptions (varFromOffset (fields (nbits ((2^n - 1) * ops))) input)) =
-                         fieldFromBits (Vector.map (Expression.eval h_assumptions)
-                           (varFromOffset (fields (nbits ((2^n - 1) * ops))) (input + 0))) := by
+      have h_output_eq : fieldFromBits (eval env (varFromOffset (fields (nbits ((2^n - 1) * ops))) offset)) =
+                         fieldFromBits (Vector.map (Expression.eval env)
+                           (varFromOffset (fields (nbits ((2^n - 1) * ops))) offset)) := by
         congr 1
-      rw [h_output_eq, h_output_sum, h_lin_sum, h_input_eval]
+      rw [h_output_eq, h_output_sum, h_lin_sum]
 
   completeness := by
-    intros witness_offset env inputs_var h_witness_extends inputs_value
-    -- We need to show that when inputs are binary, the circuit constraints can be satisfied
-    -- The completeness follows from:
-    -- 1. InputLinearSum has no constraints, so it's trivially complete
-    -- 2. Num2Bits witnesses the correct binary decomposition
-
-    -- The circuit constraints come from the subcircuits
-    simp only [circuit_norm, main, subcircuit, subcircuit_norm]
-    simp only [InputLinearSum.circuit, Num2Bits.arbitraryBitLengthCircuit]
-
-    -- We have implications to handle
-    intro h_inputs_eval h_inputs_binary
-    -- Now we need to prove the conjunction
-    constructor
-    · -- First part: inputs remain binary after evaluation
-      intro j k hj hk
-      rw [h_inputs_eval]
-      exact h_inputs_binary j k hj hk
-
-    · -- Second part: Num2Bits completeness
-      -- We need to prove that the sum is less than 2^nbits((2^n - 1) * ops)
-      -- We have the sum from InputLinearSum
-      have h_sum_eq : Expression.eval env ((InputLinearSum.main n ops inputs_var).output witness_offset) =
-                       Fin.foldl ops (fun sum j => sum + fieldFromBits (eval env inputs_var)[j]) 0 := by
-        -- This follows from InputLinearSum.Spec
-        -- We need to extract the relevant part from h_witness_extends
-        simp only [subcircuit_norm, main, circuit_norm, InputLinearSum.circuit] at h_witness_extends
-        -- h_witness_extends tells us that InputLinearSum.circuit is satisfied
-        -- Extract the first part of the conjunction which gives us the InputLinearSum.Spec
-        have h_input_spec := h_witness_extends.1
-        -- We need to prove the inputs are binary to apply h_input_spec
-        have h_inputs_binary_eval : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval env inputs_var)[j][k] := by
-          intro j k hj hk
-          rw [h_inputs_eval]
-          exact h_inputs_binary j k hj hk
-        -- Apply the spec
-        exact h_input_spec h_inputs_binary_eval
-      -- Now apply our lemma
-      have h_binary_eval : ∀ j k (hj : j < ops) (hk : k < n), IsBool (eval env inputs_var)[j][k] := by
-        intro j k hj hk
-        rw [h_inputs_eval]
-        exact h_inputs_binary j k hj hk
-      apply sum_bound_of_binary_inputs hops hnout (eval env inputs_var) h_binary_eval
-      exact h_sum_eq
+    intros witness_offset env inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
+    simp only [circuit_norm, main, subcircuit, subcircuit_norm, Num2Bits.arbitraryBitLengthCircuit]
+    apply sum_bound_of_binary_inputs hops hnout inputs h_inputs_binary
+    exact InputLinearSum.main_eval_eq_sum _ _ _ h_inputs_eval
 
 end BinSum
 
