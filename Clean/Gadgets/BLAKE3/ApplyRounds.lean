@@ -413,66 +413,6 @@ def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
     aesop
   )
 
-structure Inputs (F : Type) where
-  chaining_value : Vector (U32 F) 8
-  block_words : Vector (U32 F) 16
-  counter_high : U32 F
-  counter_low : U32 F
-  block_len : U32 F
-  flags : U32 F
-
-instance : ProvableStruct Inputs where
-  components := [ProvableVector U32 8, ProvableVector U32 16, U32, U32, U32, U32]
-  toComponents := fun { chaining_value, block_words, counter_high, counter_low, block_len, flags } =>
-    .cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))
-  fromComponents := fun (.cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))) =>
-    { chaining_value, block_words, counter_high, counter_low, block_len, flags }
-
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
-  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
-
-  let state : Var BLAKE3State (F p) := #v[
-    chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
-    chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
-    U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1],
-    U32.decomposeNatExpr iv[2], U32.decomposeNatExpr iv[3],
-    counter_low, counter_high, block_len, flags
-  ]
-
-  -- Apply 7 rounds with message permutation between rounds (except the last)
-  sevenRoundsApplyStyle ⟨state, block_words⟩
-
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main
-  localLength _ := 5376
-  localLength_eq input i0 := by
-    dsimp only [main, Round.circuit, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
-      fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
-      FormalCircuit.concat,
-      Permute.circuit, Circuit.pure_def, Circuit.bind_def,
-      subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
-      ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
-      List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
-      Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
-
-def Assumptions (input : Inputs (F p)) :=
-  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
-  (∀ i : Fin 8, chaining_value[i].Normalized) ∧
-  (∀ i : Fin 16, block_words[i].Normalized) ∧
-  counter_high.Normalized ∧ counter_low.Normalized ∧ block_len.Normalized ∧ flags.Normalized
-
-def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
-  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
-  out.value = applyRounds
-    (chaining_value.map U32.value)
-    (block_words.map U32.value)
-    (counter_low.value + 2^32 * counter_high.value)
-    block_len.value
-    flags.value ∧
-  out.Normalized
-
 /--
 Lemma showing that applyRounds can be expressed using applySevenRounds.
 This connects the spec-level function with our circuit implementation.
@@ -597,6 +537,66 @@ lemma eval_chaining_value_elem {env : Environment (F p)}
   have h := congrArg (fun v => v[i]) h_eval
   simp only [eval_vector, Vector.getElem_map, circuit_norm] at h
   congr
+
+structure Inputs (F : Type) where
+  chaining_value : Vector (U32 F) 8
+  block_words : Vector (U32 F) 16
+  counter_high : U32 F
+  counter_low : U32 F
+  block_len : U32 F
+  flags : U32 F
+
+instance : ProvableStruct Inputs where
+  components := [ProvableVector U32 8, ProvableVector U32 16, U32, U32, U32, U32]
+  toComponents := fun { chaining_value, block_words, counter_high, counter_low, block_len, flags } =>
+    .cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))
+  fromComponents := fun (.cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))) =>
+    { chaining_value, block_words, counter_high, counter_low, block_len, flags }
+
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
+  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
+
+  let state : Var BLAKE3State (F p) := #v[
+    chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
+    chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
+    U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1],
+    U32.decomposeNatExpr iv[2], U32.decomposeNatExpr iv[3],
+    counter_low, counter_high, block_len, flags
+  ]
+
+  -- Apply 7 rounds with message permutation between rounds (except the last)
+  sevenRoundsApplyStyle ⟨state, block_words⟩
+
+-- #eval! main (p:=pBabybear) default |>.localLength
+-- #eval! main (p:=pBabybear) default |>.output
+instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
+  main := main
+  localLength _ := 5376
+  localLength_eq input i0 := by
+    dsimp only [main, Round.circuit, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
+      fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
+      FormalCircuit.concat,
+      Permute.circuit, Circuit.pure_def, Circuit.bind_def,
+      subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
+      ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
+      List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
+      Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
+
+def Assumptions (input : Inputs (F p)) :=
+  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
+  (∀ i : Fin 8, chaining_value[i].Normalized) ∧
+  (∀ i : Fin 16, block_words[i].Normalized) ∧
+  counter_high.Normalized ∧ counter_low.Normalized ∧ block_len.Normalized ∧ flags.Normalized
+
+def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
+  out.value = applyRounds
+    (chaining_value.map U32.value)
+    (block_words.map U32.value)
+    (counter_low.value + 2^32 * counter_high.value)
+    block_len.value
+    flags.value ∧
+  out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
