@@ -82,82 +82,56 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intro offset env input_var input h_input h_assumptions h_output
     -- We need to show the spec holds for all i < n
     intro i hi
-    -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
-    -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
 
-    -- First, understand what h_output says
-    -- eval env (varFromOffset (ProvableVector field n) offset) =
-    -- eval env (input_var.c.provable_map field fun x => (x.2 - x.1) * input_var.s + x.1)
-
-    -- This means the i-th elements are also equal
-    have h_eq : eval env (varFromOffset (ProvableVector field n) offset) =
-                eval env (input_var.c.provable_map field fun x => (x.2 - x.1) * input_var.s + x.1) := h_output
-
-    -- Now get the i-th element equality
-    have h_output_i : Expression.eval env ((varFromOffset (ProvableVector field n) offset)[i]) =
-                      Expression.eval env ((input_var.c.provable_map field fun x => (x.2 - x.1) * input_var.s + x.1)[i]) := by
-      simp only [eval_vector] at h_eq
-      -- Extract the i-th element from both sides
-      have h_vec := congrArg (fun v => v[i]) h_eq
-      simp only [Vector.getElem_map] at h_vec
-      exact h_vec
-
-    -- The issue is that varFromOffset returns a Var (ProvableVector field n)
-    -- which is Vector (field (Expression (F p))) n
-    -- But in the goal we need Vector (Expression (F p)) n
-    
-    -- Let's unfold what varFromOffset actually gives us
-    simp only [varFromOffset_vector, eval_vector] at h_output_i ⊢
-    
-    -- Simplify the left side first
-    simp only [Vector.getElem_mapRange] at h_output_i ⊢
-    simp only [size, mul_one] at h_output_i ⊢
-    
-    -- Now we can rewrite
-    rw [h_output_i]
-    -- Now simplify the right side step by step
-    simp only [ProvableVector.provable_map, Vector.getElem_map]
+    -- Get the i-th element equality from h_output
+    have h_output_i : Expression.eval env (var { index := offset + i }) =
+                      Expression.eval env ((input_var.c[i].2 - input_var.c[i].1) * input_var.s + input_var.c[i].1) := by
+      -- h_output gives us equality of vectors, extract element i
+      have := congrArg (fun v => v[i]) h_output
+      -- Simplify the outer Vector.map on both sides
+      simp only [Vector.getElem_map] at this
+      -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }
+      simp only [Vector.getElem_mapRange] at this
+      exact this
 
     -- Extract values from h_input
     -- h_input says: { c := eval env input_var.c, s := Expression.eval env input_var.s } = input
     -- So: eval env input_var.c = input.c
-    have h_c : eval env input_var.c = input.c := by
-      rw [← h_input]
     have h_s : Expression.eval env input_var.s = input.s := by
       rw [← h_input]
 
-    -- Now we need to evaluate the expression
-    -- The goal is: Expression.eval env ((input_var.c[i].2 - input_var.c[i].1) * input_var.s + input_var.c[i].1)
-    simp only [Expression.eval]
-    
+    have h_c1 : Expression.eval env input_var.c[i].1 = input.c[i].1 := by
+      rw [← h_input]
+      simp only [circuit_norm]
+      sorry
+
+    have h_c2 : Expression.eval env input_var.c[i].2 = input.c[i].2 := by
+      rw [← h_input]
+      simp only [circuit_norm]
+      sorry
+
+    simp only [circuit_norm] at h_output_i
+    simp only [h_output_i]
+
     -- We have input_var.c : Var (ProvableVector (ProvablePair field field) n)
     -- So eval env input_var.c : Vector (field (F p) × field (F p)) n
     -- And (eval env input_var.c)[i] : field (F p) × field (F p)
-    
-    -- Get the pair at index i
-    have h_ci : (eval env input_var.c)[i] = input.c[i] := by
-      rw [h_c]
-    
+
     -- Now we can work with the components
-    rw [← h_s]
-    conv_lhs => 
-      arg 1; arg 1; arg 2; rw [← h_ci]
-      arg 1; arg 2; rw [← h_ci]
-      arg 2; rw [← h_ci]
+    rw [← h_s] at h_assumptions ⊢
 
     -- Extract the fact that s is boolean
     -- IsBool means s = 0 ∨ s = 1
     cases h_assumptions with
-      -- When s = 0 or s = 1
-      cases hs with
       | inl h0 =>
         -- When s = 0
         rw [h0]
-        simp only [mul_zero, add_zero, if_pos rfl]
+        simp only [mul_zero, add_zero, if_pos rfl, circuit_norm, h_c1]
+        norm_num
       | inr h1 =>
         -- When s = 1
         rw [h1]
-        simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0)]
+        simp only [mul_one, if_neg (by norm_num : (1 : F p) ≠ 0), circuit_norm, h_c2]
         ring
 
   completeness := by
