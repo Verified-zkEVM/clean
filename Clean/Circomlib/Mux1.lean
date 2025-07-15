@@ -206,12 +206,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
-    simp only [eval_vector (α := ProvablePair field field)]
-    -- The goal is now about pairs (Expression.eval env input_var.c[0], Expression.eval env input_var.c[1])
-    simp only [Vector.getElem_map]
-    simp only [id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
-    rw [eval_pair (α := field) (β := field)]
-    simp only []
+    simp only [eval_vector (α := ProvablePair field field), Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, eval_pair (α := field) (β := field)]
     rfl
 
   completeness := by
