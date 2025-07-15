@@ -621,30 +621,18 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2],
     U32.decomposeNatExpr iv[3], counter_low_var, counter_high_var, block_len_var, flags_var
   ]
-  have state_vec_0_Normalized : (eval env chaining_value_var[0]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 0
-  have state_vec_1_Normalized : (eval env chaining_value_var[1]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 1
-  have state_vec_2_Normalized : (eval env chaining_value_var[2]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 2
-  have state_vec_3_Normalized : (eval env chaining_value_var[3]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 3
-  have state_vec_4_Normalized : (eval env chaining_value_var[4]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 4
-  have state_vec_5_Normalized : (eval env chaining_value_var[5]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 5
-  have state_vec_6_Normalized : (eval env chaining_value_var[6]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 6
-  have state_vec_7_Normalized : (eval env chaining_value_var[7]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 7
+  -- Helper to prove normalization of chaining value elements
+  have h_chaining_value_normalized : ∀ (i : Fin 8), (eval env chaining_value_var[i]).Normalized := by
+    rintro ⟨ i, h_i ⟩
+    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
+    have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
+      rw [h]
+    simp only [eval_vector, Vector.getElem_map] at h_i
+    convert h_normalized.1 i
+    simp_all only [circuit_norm]
+    congr
+    norm_num
+    omega
   have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0])).Normalized := by
     -- decomposeNatExpr produces a U32 of Expression.const values
     simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
@@ -708,14 +696,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» => state_vec_norm_simp; simp only [state_vec, state_vec_0_Normalized]
-    case «1» => state_vec_norm_simp; simp only [state_vec, state_vec_1_Normalized]
-    case «2» => state_vec_norm_simp; simp only [state_vec, state_vec_2_Normalized]
-    case «3» => state_vec_norm_simp; simp only [state_vec, state_vec_3_Normalized]
-    case «4» => state_vec_norm_simp; simp only [state_vec, state_vec_4_Normalized]
-    case «5» => state_vec_norm_simp; simp only [state_vec, state_vec_5_Normalized]
-    case «6» => state_vec_norm_simp; simp only [state_vec, state_vec_6_Normalized]
-    case «7» => state_vec_norm_simp; simp only [state_vec, state_vec_7_Normalized]
+    case «0» => state_vec_norm_simp; exact h_chaining_value_normalized 0
+    case «1» => state_vec_norm_simp; exact h_chaining_value_normalized 1
+    case «2» => state_vec_norm_simp; exact h_chaining_value_normalized 2
+    case «3» => state_vec_norm_simp; exact h_chaining_value_normalized 3
+    case «4» => state_vec_norm_simp; exact h_chaining_value_normalized 4
+    case «5» => state_vec_norm_simp; exact h_chaining_value_normalized 5
+    case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6
+    case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7
     -- Next 4 are IV constants
     case «8» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_8_Normalized]
     case «9» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_9_Normalized]
@@ -830,30 +818,18 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     U32.decomposeNatExpr iv[0], U32.decomposeNatExpr iv[1], U32.decomposeNatExpr iv[2],
     U32.decomposeNatExpr iv[3], counter_low_var, counter_high_var, block_len_var, flags_var
   ]
-  have state_vec_0_Normalized : (eval env chaining_value_var[0]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 0
-  have state_vec_1_Normalized : (eval env chaining_value_var[1]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 1
-  have state_vec_2_Normalized : (eval env chaining_value_var[2]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 2
-  have state_vec_3_Normalized : (eval env chaining_value_var[3]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 3
-  have state_vec_4_Normalized : (eval env chaining_value_var[4]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 4
-  have state_vec_5_Normalized : (eval env chaining_value_var[5]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 5
-  have state_vec_6_Normalized : (eval env chaining_value_var[6]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 6
-  have state_vec_7_Normalized : (eval env chaining_value_var[7]).Normalized := by
-    rw [getElem_eval_vector, h_eval_chaining_block_value]
-    exact h_normalized.1 7
+  -- Helper to prove normalization of chaining value elements
+  have h_chaining_value_normalized : ∀ (i : Fin 8), (eval env chaining_value_var[i]).Normalized := by
+    rintro ⟨ i, h_i ⟩
+    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
+    have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
+      rw [h]
+    simp only [eval_vector, Vector.getElem_map] at h_i
+    convert h_normalized.1 i
+    simp_all only [circuit_norm]
+    congr
+    norm_num
+    omega
   have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0])).Normalized := by
     -- decomposeNatExpr produces a U32 of Expression.const values
     simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
@@ -917,14 +893,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» => state_vec_norm_simp; simp only [state_vec, state_vec_0_Normalized]
-    case «1» => state_vec_norm_simp; simp only [state_vec, state_vec_1_Normalized]
-    case «2» => state_vec_norm_simp; simp only [state_vec, state_vec_2_Normalized]
-    case «3» => state_vec_norm_simp; simp only [state_vec, state_vec_3_Normalized]
-    case «4» => state_vec_norm_simp; simp only [state_vec, state_vec_4_Normalized]
-    case «5» => state_vec_norm_simp; simp only [state_vec, state_vec_5_Normalized]
-    case «6» => state_vec_norm_simp; simp only [state_vec, state_vec_6_Normalized]
-    case «7» => state_vec_norm_simp; simp only [state_vec, state_vec_7_Normalized]
+    case «0» => state_vec_norm_simp; exact h_chaining_value_normalized 0
+    case «1» => state_vec_norm_simp; exact h_chaining_value_normalized 1
+    case «2» => state_vec_norm_simp; exact h_chaining_value_normalized 2
+    case «3» => state_vec_norm_simp; exact h_chaining_value_normalized 3
+    case «4» => state_vec_norm_simp; exact h_chaining_value_normalized 4
+    case «5» => state_vec_norm_simp; exact h_chaining_value_normalized 5
+    case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6
+    case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7
     -- Next 4 are IV constants
     case «8» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_8_Normalized]
     case «9» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_9_Normalized]

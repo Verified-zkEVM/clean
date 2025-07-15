@@ -235,3 +235,9 @@ def FormalCircuit.weakenSpec
     -- and the same assumptions
     exact circuit.completeness
 }
+
+@[circuit_norm]
+lemma FormalCircuit.weakenSpec_Assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
+  simp only [FormalCircuit.weakenSpec]
