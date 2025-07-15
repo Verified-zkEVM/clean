@@ -8,43 +8,6 @@ variable {F : Type} [Field F]
 variable {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
 
 /--
-Soundness lemma for circuits composed with bind (>>=).
-
-This lemma proves that if two FormalCircuits are composed with bind,
-and their individual specs and assumptions satisfy certain conditions,
-then the composite circuit satisfies the composite spec.
-
-This is a more general version of soundness_compose_circuits that works
-directly with the bind operation.
--/
-theorem soundness_bind_circuits
-    {F : Type} [Field F]
-    {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
-    (circuit1 : FormalCircuit F Input Mid)
-    (circuit2 : FormalCircuit F Mid Output)
-    (Assumptions : Input F → Prop)
-    (Spec : Input F → Output F → Prop)
-    (h_assumptions_implication : ∀ input,
-      Assumptions input → circuit1.Assumptions input)
-    (h_mid_assumptions : ∀ input mid,
-      Assumptions input →
-      circuit1.Spec input mid →
-      circuit2.Assumptions mid)
-    (h_spec_composition : ∀ input mid output,
-      Assumptions input →
-      circuit1.Spec input mid →
-      circuit2.Spec mid output →
-      Spec input output) :
-    ∀ offset env input_var input,
-      eval env input_var = input →
-      Assumptions input →
-      ConstraintsHold.Soundness env ((circuit1 input_var >>= circuit2).operations offset) →
-      Spec input (eval env (circuit2.output (circuit1.output input_var offset) (offset + circuit1.localLength input_var))) := by
-  intro _ _ _ _ _ _ h_holds
-  simp only [Circuit.bind_def, circuit_norm] at h_holds
-  aesop
-
-/--
 Structural soundness lemma for composing two FormalCircuits.
 
 This lemma allows proving soundness of a composite circuit that consists of
@@ -77,45 +40,10 @@ theorem soundness_compose_circuits
       Spec input output) :
     Soundness F elaborated Assumptions Spec := by
   intro offset env input_var input h_eval h_assumptions h_holds
-
   -- Rewrite using the main equation
   rw [h_main_eq] at h_holds
   simp only [Circuit.bind_def, circuit_norm] at h_holds
-
-  -- Extract constraints for circuit1 and circuit2
-  obtain ⟨h_holds_circuit1, h_holds_circuit2⟩ := h_holds
-
-  -- Get intermediate values
-  let mid_var := circuit1.output input_var offset
-  let mid := eval env mid_var
-  let circuit1_len := circuit1.localLength input_var
-
-  -- Circuit1 assumptions hold
-  have h_circuit1_assumptions : circuit1.Assumptions input := by
-    apply h_assumptions_implication input h_assumptions
-
-  -- Apply circuit1 soundness
-  simp only [subcircuit_norm, FormalCircuit.toSubcircuit] at h_holds_circuit1
-  have h_circuit1_spec : circuit1.Spec input mid := by
-    have h_eq : eval env input_var = input := h_eval
-    have h_mid_eq : eval env (circuit1.output input_var offset) = mid := rfl
-    rw [h_eq, h_mid_eq] at h_holds_circuit1
-    exact h_holds_circuit1 h_circuit1_assumptions
-
-  -- Circuit2 assumptions hold
-  have h_circuit2_assumptions : circuit2.Assumptions mid := by
-    apply h_mid_assumptions input mid h_assumptions h_circuit1_spec
-
-  -- Apply circuit2 soundness
-  simp only [subcircuit_norm, FormalCircuit.toSubcircuit] at h_holds_circuit2
-  have h_circuit2_spec : circuit2.Spec mid (eval env (circuit2.output mid_var (offset + circuit1_len))) := by
-    exact h_holds_circuit2 h_circuit2_assumptions
-
-  -- Use the output equation
-  rw [h_output_eq]
-
-  -- Apply the spec composition
-  apply h_spec_composition input mid _ h_assumptions h_circuit1_spec h_circuit2_spec
+  aesop
 
 end Circuit
 
