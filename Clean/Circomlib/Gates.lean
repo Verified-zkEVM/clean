@@ -769,15 +769,13 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [input_var1, input1]
         apply Vector.ext
         intro i hi
-        simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
-        exact eval_index_helper h_env i (by omega)
+        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
         apply Vector.ext
         intro i hi
-        simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
-        exact eval_index_helper h_env (n1 + i) (by omega)
+        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_drop]
 
       have h_assumptions1 : Assumptions n1 input1 := by
         intro i hi
@@ -928,10 +926,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         apply Vector.ext
         intro i hi
         -- Need to show: input[i] = (eval env (Vector.cast _ (Vector.take input_var n1)))[i]
-        simp only [ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
-        have hi' : i < n1 := hi
-        have hi'' : i < m + 3 := by omega
-        exact eval_index_helper h_env i (by omega)
+        simp only [h_env, ProvableType.eval_fields, Vector.getElem_map, Vector.getElem_cast, Vector.getElem_take]
 
       have h_eval2 : input2 = eval env input_var2 := by
         simp only [input_var2, input2]
