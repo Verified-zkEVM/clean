@@ -2,51 +2,6 @@ import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Theorems
 
-namespace Circuit
-
-variable {F : Type} [Field F]
-variable {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
-
-/--
-Structural soundness lemma for composing two FormalCircuits.
-
-This lemma allows proving soundness of a composite circuit that consists of
-two FormalCircuits executed in sequence, where:
-1. The first circuit transforms Input to Mid
-2. The second circuit transforms Mid to Output
-3. The spec of the composite relates Input to Output
-
-This is useful for circuits that naturally decompose into two sequential stages.
--/
-theorem soundness_compose_circuits
-    (elaborated : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop)
-    (Spec : Input F → Output F → Prop)
-    (circuit1 : FormalCircuit F Input Mid)
-    (circuit2 : FormalCircuit F Mid Output)
-    (h_main_eq : ∀ input, elaborated.main input = circuit1 input >>= circuit2)
-    (h_output_eq : ∀ input offset, elaborated.output input offset =
-      circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input))
-    (h_assumptions_implication : ∀ input,
-      Assumptions input → circuit1.Assumptions input)
-    (h_mid_assumptions : ∀ input mid,
-      Assumptions input →
-      circuit1.Spec input mid →
-      circuit2.Assumptions mid)
-    (h_spec_composition : ∀ input mid output,
-      Assumptions input →
-      circuit1.Spec input mid →
-      circuit2.Spec mid output →
-      Spec input output) :
-    Soundness F elaborated Assumptions Spec := by
-  intro offset env input_var input h_eval h_assumptions h_holds
-  -- Rewrite using the main equation
-  rw [h_main_eq] at h_holds
-  simp only [Circuit.bind_def, circuit_norm] at h_holds
-  aesop
-
-end Circuit
-
 /--
 Concatenate two FormalCircuits into a single FormalCircuit.
 
@@ -89,7 +44,11 @@ def FormalCircuit.concat
   Assumptions := circuit1.Assumptions
   Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
-    apply Circuit.soundness_compose_circuits (Mid := Mid) <;> aesop
+    simp only [Soundness]
+    intros
+    rename_i h_hold
+    simp only [Circuit.bind_def, circuit_norm] at h_hold
+    aesop
   completeness := by
     simp only [circuit_norm]
     aesop
