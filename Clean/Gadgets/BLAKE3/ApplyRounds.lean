@@ -443,12 +443,6 @@ lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
   apply U32.value_of_decomposedNat_of_small
   assumption
 
-lemma eval_fromUInt32_value (env : Environment (F p)) (x : UInt32) :
-    (eval env (const (U32.fromUInt32 x))).value = x.toNat := by
-  refine eval_decomposeNatExpr_small env x.toNat ?_
-  have := UInt32.toNat_lt_size x
-  omega
-
 -- Tactic for common steps in state vector normalization proof
 syntax "state_vec_norm_simp" : tactic
 macro_rules
@@ -591,10 +585,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» => 
+    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
       state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
-    case «8» | «9» | «10» | «11» => 
+    case «8» | «9» | «10» | «11» =>
       state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
@@ -674,7 +668,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
           Nat.reducePow, Nat.add_mul_mod_self_left, state_vec, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
         simp [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
-          h_chaining_6_eq, h_chaining_7_eq, eval_fromUInt32_value, h_counter_low_eq, h_counter_high_eq]
+          h_chaining_6_eq, h_chaining_7_eq, circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
 
   · -- Show out.Normalized
     exact h_normalized
