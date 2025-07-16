@@ -36,10 +36,6 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
-    subcircuitsConsistent := by
-      intro input offset
-      simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
-      ring
   }
   Assumptions := circuit1.Assumptions
   Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
