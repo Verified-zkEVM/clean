@@ -463,10 +463,8 @@ macro_rules
 syntax "state_vec_norm_simp_simple" : tactic
 macro_rules
   | `(tactic| state_vec_norm_simp_simple) => `(tactic|
-      simp only [Vector.getElem_mk];
-      rw [Vector.getElem_map];
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
-        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero])
+      simp only [Vector.getElem_mk, Vector.getElem_map, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, circuit_norm, U32.fromUInt32_normalized])
 
 -- Helper lemma for extracting elements from chaining_value evaluation
 omit p_large_enough in
@@ -602,10 +600,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6 (by omega)
     case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7 (by omega)
     -- Next 4 are IV constants
-    case «8» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
-    case «9» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
-    case «10» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
-    case «11» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
+    case «8» => state_vec_norm_simp_simple
+    case «9» => state_vec_norm_simp_simple
+    case «10» => state_vec_norm_simp_simple
+    case «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
     case «13» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_13_Normalized]
