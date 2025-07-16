@@ -27,8 +27,8 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
     rfl
   output := fun input offset =>
     let applyRounds_out := ApplyRounds.circuit.output input offset
-    FinalStateUpdate.circuit.output 
-      ⟨applyRounds_out, input.chaining_value⟩ 
+    FinalStateUpdate.circuit.output
+      ⟨applyRounds_out, input.chaining_value⟩
       (offset + ApplyRounds.circuit.localLength input)
   output_eq := by
     intro input offset
@@ -43,7 +43,7 @@ def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
 
 def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
-  output.value = compress 
+  output.value = compress
     (chaining_value.map U32.value)
     (block_words.map U32.value)
     (counter_low.value + 2^32 * counter_high.value)
@@ -51,10 +51,28 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
     flags.value ∧
   output.Normalized
 
+lemma ApplyRounds.circuit_assumptions_is :
+  ApplyRounds.circuit.Assumptions (F := F p) = ApplyRounds.Assumptions := rfl
+
+lemma ApplyRounds.circuit_spec_is :
+  ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
+
+lemma FinalStateUpdate.circuit_assumptions_is :
+  FinalStateUpdate.circuit.Assumptions (F := F p) = FinalStateUpdate.Assumptions := rfl
+
+lemma FinalStateUpdate.circuit_spec_is :
+  FinalStateUpdate.circuit.Spec (F := F p) = FinalStateUpdate.Spec := rfl
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  sorry
+  intro offset env input_var input h_eval h_assumptions h_holds
+  simp_all only [main, circuit_norm, subcircuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
+    FinalStateUpdate.circuit_assumptions_is, ApplyRounds.circuit_spec_is, ApplyRounds.Spec, FinalStateUpdate.Assumptions,
+    compress]
+  rcases h_holds with ⟨ ⟨ h_holds1_eq, h_holds1_normal ⟩, h_holds2 ⟩
+  simp_all only [ApplyRounds.Assumptions, h_eval.symm, circuit_norm, FinalStateUpdate.circuit_spec_is, FinalStateUpdate.Spec]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
+  intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
   sorry
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
