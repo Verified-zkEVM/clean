@@ -706,8 +706,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     const (U32.fromUInt32 iv[3]), counter_low_var, counter_high_var, block_len_var, flags_var
   ]
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized : ∀ (i : Fin 8), (eval env chaining_value_var[i]).Normalized := by
-    rintro ⟨ i, h_i ⟩
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
     have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
     have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
       rw [h]
@@ -780,19 +779,19 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» => state_vec_norm_simp; exact h_chaining_value_normalized 0
-    case «1» => state_vec_norm_simp; exact h_chaining_value_normalized 1
-    case «2» => state_vec_norm_simp; exact h_chaining_value_normalized 2
-    case «3» => state_vec_norm_simp; exact h_chaining_value_normalized 3
-    case «4» => state_vec_norm_simp; exact h_chaining_value_normalized 4
-    case «5» => state_vec_norm_simp; exact h_chaining_value_normalized 5
-    case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6
-    case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7
+    case «0» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «1» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «2» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «3» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «4» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «5» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «6» => state_vec_norm_simp; simp [h_chaining_value_normalized]
+    case «7» => state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
-    case «8» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_8_Normalized]
-    case «9» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_9_Normalized]
-    case «10» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_10_Normalized]
-    case «11» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_11_Normalized]
+    case «8» => state_vec_norm_simp_simple
+    case «9» => state_vec_norm_simp_simple
+    case «10» => state_vec_norm_simp_simple
+    case «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
     case «13» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_13_Normalized]
