@@ -46,7 +46,7 @@ def deriveKeyMaterial : Nat := 2^6
 The initialization constants for BLAKE3.
 (Same as in BLAKE2s. See Table 1 in the BLAKE3 paper.)
 -/
-def iv : Vector Nat 8 := #v[
+def iv : Vector UInt32 8 := #v[
   0x6a09e667,
   0xbb67ae85,
   0x3c6ef372,
@@ -145,7 +145,7 @@ def applyRounds (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (cou
   let state := #v[
     chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
     chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
-    iv[0], iv[1], iv[2], iv[3],
+    iv[0].toNat, iv[1].toNat, iv[2].toNat, iv[3].toNat,
     counter_low, counter_high, block_len, flags
   ]
 
