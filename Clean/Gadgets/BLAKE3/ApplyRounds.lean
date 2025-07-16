@@ -26,30 +26,29 @@ The spec follows the pattern from the applyRounds function:
 - Apply round to get new state
 - Permute the message
 -/
-def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
-  elaborated := {
-    main := fun input => do
-      let state ← subcircuit Round.circuit input
-      let permuted_message ← subcircuit Permute.circuit input.message
-      return ⟨state, permuted_message⟩
-    localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
-    localLength_eq := by
-      intro input offset
-      simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
-      rfl
-    output := fun input offset =>
-      let state_out := Round.circuit.output input offset
-      let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
-      ⟨state_out, msg_out⟩
-    output_eq := by
-      intro input offset
-      simp only [Circuit.bind_def, Circuit.output, circuit_norm]
-    subcircuitsConsistent := by
-      intro input offset
-      simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
-      have h : offset + Round.circuit.localLength input = Round.circuit.localLength input + offset := by ring
-      rw [h]
-  }
+def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
+  main := fun input => do
+    let state ← subcircuit Round.circuit input
+    let permuted_message ← subcircuit Permute.circuit input.message
+    return ⟨state, permuted_message⟩
+  localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
+  localLength_eq := by
+    intro input offset
+    simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
+    rfl
+  output := fun input offset =>
+    let state_out := Round.circuit.output input offset
+    let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
+    ⟨state_out, msg_out⟩
+  output_eq := by
+    intro input offset
+    simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+  subcircuitsConsistent := by
+    intro input offset
+    simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
+    have h : offset + Round.circuit.localLength input = Round.circuit.localLength input + offset := by ring
+    rw [h]
+
   Assumptions := Round.Assumptions
   Spec := fun input output =>
     let state' := round input.state.value (BLAKE3State.value input.message)
@@ -163,7 +162,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs := {
       -- Now we can rewrite and apply h_msg_norm
       rw [h_cast]
       exact h_msg_norm
-}
 
 /--
 Combines two roundWithPermute operations using the concat combinator.
