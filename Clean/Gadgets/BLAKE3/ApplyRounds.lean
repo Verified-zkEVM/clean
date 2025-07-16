@@ -43,11 +43,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   output_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [Circuit.bind_def, Circuit.operations, circuit_norm]
-    have h : offset + Round.circuit.localLength input = Round.circuit.localLength input + offset := by ring
-    rw [h]
 
   Assumptions := Round.Assumptions
   Spec := fun input output =>
