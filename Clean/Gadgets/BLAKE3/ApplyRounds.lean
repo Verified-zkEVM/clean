@@ -474,7 +474,7 @@ lemma eval_chaining_value_elem {env : Environment (F p)}
     {chaining_value_var : Vector (U32 (Expression (F p))) 8}
     {chaining_value : Vector (U32 (F p)) 8}
     (h_eval : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value)
-    (i : Fin 8) :
+    (i : ℕ) (_ : i < 8) :
     (eval env chaining_value_var[i]).value = chaining_value[i].value := by
   have h := congrArg (fun v => v[i]) h_eval
   simp only [eval_vector, Vector.getElem_map, circuit_norm] at h
@@ -672,14 +672,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     size_toArray := by simp
   } := by rfl
 
-  have h_chaining_0_eq : (eval env chaining_value_var[0]).value = chaining_value[0].value := eval_chaining_value_elem h_eval_chaining_block_value 0
-  have h_chaining_1_eq : (eval env chaining_value_var[1]).value = chaining_value[1].value := eval_chaining_value_elem h_eval_chaining_block_value 1
-  have h_chaining_2_eq : (eval env chaining_value_var[2]).value = chaining_value[2].value := eval_chaining_value_elem h_eval_chaining_block_value 2
-  have h_chaining_3_eq : (eval env chaining_value_var[3]).value = chaining_value[3].value := eval_chaining_value_elem h_eval_chaining_block_value 3
-  have h_chaining_4_eq : (eval env chaining_value_var[4]).value = chaining_value[4].value := eval_chaining_value_elem h_eval_chaining_block_value 4
-  have h_chaining_5_eq : (eval env chaining_value_var[5]).value = chaining_value[5].value := eval_chaining_value_elem h_eval_chaining_block_value 5
-  have h_chaining_6_eq : (eval env chaining_value_var[6]).value = chaining_value[6].value := eval_chaining_value_elem h_eval_chaining_block_value 6
-  have h_chaining_7_eq : (eval env chaining_value_var[7]).value = chaining_value[7].value := eval_chaining_value_elem h_eval_chaining_block_value 7
+  have h_chaining_0_eq := eval_chaining_value_elem h_eval_chaining_block_value 0 (by omega)
+  have h_chaining_1_eq := eval_chaining_value_elem h_eval_chaining_block_value 1 (by omega)
+  have h_chaining_2_eq := eval_chaining_value_elem h_eval_chaining_block_value 2 (by omega)
+  have h_chaining_3_eq := eval_chaining_value_elem h_eval_chaining_block_value 3 (by omega)
+  have h_chaining_4_eq := eval_chaining_value_elem h_eval_chaining_block_value 4 (by omega)
+  have h_chaining_5_eq := eval_chaining_value_elem h_eval_chaining_block_value 5 (by omega)
+  have h_chaining_6_eq := eval_chaining_value_elem h_eval_chaining_block_value 6 (by omega)
+  have h_chaining_7_eq := eval_chaining_value_elem h_eval_chaining_block_value 7 (by omega)
 
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
