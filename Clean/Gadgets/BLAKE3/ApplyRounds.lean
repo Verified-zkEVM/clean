@@ -442,8 +442,7 @@ macro_rules
   | `(tactic| state_vec_norm_simp) => `(tactic|
       simp only [Vector.getElem_mk];
       rw [Vector.getElem_map, getElem_eval_vector];
-      simp only [eval_vector];
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+      simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
         List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero])
 
 -- Tactic for cases 8-15 which don't use getElem_eval_vector
@@ -695,50 +694,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     congr
     norm_num
     omega
-  have state_vec_8_Normalized : (eval env (const (U32.fromUInt32 iv[0]))).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
-  have state_vec_9_Normalized : (eval env (const (U32.fromUInt32 iv[1]))).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
-  have state_vec_10_Normalized : (eval env (const (U32.fromUInt32 iv[2]))).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
-  have state_vec_11_Normalized : (eval env (const (U32.fromUInt32 iv[3]))).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
   have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
     rw [h_eval_counter_low]
     exact h_normalized.2.2.2.1
