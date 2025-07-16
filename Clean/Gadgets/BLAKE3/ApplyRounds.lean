@@ -560,12 +560,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   let state_vec : Var BLAKE3State (F p) := #v[
     chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
     chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-    U32.decomposeNatExpr iv[0].toNat, U32.decomposeNatExpr iv[1].toNat, U32.decomposeNatExpr iv[2].toNat,
-    U32.decomposeNatExpr iv[3].toNat, counter_low_var, counter_high_var, block_len_var, flags_var
+    const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]), const (U32.fromUInt32 iv[2]),
+    const (U32.fromUInt32 iv[3]), counter_low_var, counter_high_var, block_len_var, flags_var
   ]
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized : ∀ (i : Fin 8), (eval env chaining_value_var[i]).Normalized := by
-    rintro ⟨ i, h_i ⟩
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
     have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
     have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
       rw [h]
@@ -575,50 +574,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     congr
     norm_num
     omega
-  have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0].toNat)).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
-  have state_vec_9_Normalized : (eval env (U32.decomposeNatExpr iv[1].toNat)).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
-  have state_vec_10_Normalized : (eval env (U32.decomposeNatExpr iv[2].toNat)).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
-  have state_vec_11_Normalized : (eval env (U32.decomposeNatExpr iv[3].toNat)).Normalized := by
-    -- decomposeNatExpr produces a U32 of Expression.const values
-    simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-    simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
-    -- Prove each limb is normalized
-    have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
-      have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-      rw [FieldUtils.val_lt_p]
-      assumption
-      linarith [p_large_enough.elim]
-    exact ⟨h _, h _, h _, h _⟩
   have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
     rw [h_eval_counter_low]
     exact h_normalized.2.2.2.1
@@ -638,19 +593,19 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» => state_vec_norm_simp; exact h_chaining_value_normalized 0
-    case «1» => state_vec_norm_simp; exact h_chaining_value_normalized 1
-    case «2» => state_vec_norm_simp; exact h_chaining_value_normalized 2
-    case «3» => state_vec_norm_simp; exact h_chaining_value_normalized 3
-    case «4» => state_vec_norm_simp; exact h_chaining_value_normalized 4
-    case «5» => state_vec_norm_simp; exact h_chaining_value_normalized 5
-    case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6
-    case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7
+    case «0» => state_vec_norm_simp; exact h_chaining_value_normalized 0 (by omega)
+    case «1» => state_vec_norm_simp; exact h_chaining_value_normalized 1 (by omega)
+    case «2» => state_vec_norm_simp; exact h_chaining_value_normalized 2 (by omega)
+    case «3» => state_vec_norm_simp; exact h_chaining_value_normalized 3 (by omega)
+    case «4» => state_vec_norm_simp; exact h_chaining_value_normalized 4 (by omega)
+    case «5» => state_vec_norm_simp; exact h_chaining_value_normalized 5 (by omega)
+    case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6 (by omega)
+    case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7 (by omega)
     -- Next 4 are IV constants
-    case «8» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_8_Normalized]
-    case «9» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_9_Normalized]
-    case «10» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_10_Normalized]
-    case «11» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_11_Normalized]
+    case «8» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
+    case «9» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
+    case «10» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
+    case «11» => state_vec_norm_simp_simple; simp only [circuit_norm, U32.fromUInt32_normalized]
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
     case «13» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_13_Normalized]
@@ -697,7 +652,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp
 
   -- Apply h_holds with the proven assumptions
-  rw [← h_state_vec_eq] at h_state_normalized
+  rw [h_state_vec_eq] at h_state_normalized
   have h_spec := h_holds ⟨h_state_normalized, h_message_normalized⟩
   clear h_holds
 
