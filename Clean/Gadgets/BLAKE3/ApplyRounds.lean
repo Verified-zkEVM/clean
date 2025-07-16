@@ -435,77 +435,45 @@ lemma applyRounds_eq_applySevenRounds
   -- applyRounds constructs the same initial state and then applies 7 rounds
   simp only [applyRounds, applySevenRounds]
 
+lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
+    x < 256^4 ->
+    (eval env (U32.decomposeNatExpr x)).value = x := by
+  intro _
+  simp only [U32.decomposeNatExpr]
+  apply U32.value_of_decomposedNat_of_small
+  assumption
+
 /--
 Lemma showing that evaluating U32.decomposeNatExpr of iv[0] gives iv[0].
 -/
 lemma eval_decomposeNatExpr_iv_0 (env : Environment (F p)) :
     (eval env (U32.decomposeNatExpr iv[0])).value = iv[0] := by
-  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-  simp only [iv, Vector.getElem_mk]
-  simp only [List.getElem_toArray, List.getElem_cons_zero, Nat.reduceMod, Nat.cast_ofNat,
-    Nat.reduceDiv, Nat.reducePow, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval]
-  -- All these values are less than p, so ZMod.val gives back the original value
-  have h1 : ZMod.val (103 : F p) = 103 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 103 < p)
-  have h2 : ZMod.val (230 : F p) = 230 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 230 < p)
-  have h3 : ZMod.val (9 : F p) = 9 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 9 < p)
-  have h4 : ZMod.val (106 : F p) = 106 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 106 < p)
-  rw [h1, h2, h3, h4]
+  apply eval_decomposeNatExpr_small
+  simp [iv]
 
 /--
 Lemma showing that evaluating U32.decomposeNatExpr of iv[1] gives iv[1].
 -/
 lemma eval_decomposeNatExpr_iv_1 (env : Environment (F p)) :
     (eval env (U32.decomposeNatExpr iv[1])).value = iv[1] := by
-  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-  simp only [iv, Vector.getElem_mk]
-  simp only [List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ,
-    Nat.reduceMod, Nat.cast_ofNat, Nat.reduceDiv, Nat.reducePow, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval]
-  -- All these values are less than p, so ZMod.val gives back the original value
-  have h1 : ZMod.val (133 : F p) = 133 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 133 < p)
-  have h2 : ZMod.val (174 : F p) = 174 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 174 < p)
-  have h3 : ZMod.val (103 : F p) = 103 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 103 < p)
-  have h4 : ZMod.val (187 : F p) = 187 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 187 < p)
-  rw [h1, h2, h3, h4]
+  apply eval_decomposeNatExpr_small
+  simp [iv]
 
 /--
 Lemma showing that evaluating U32.decomposeNatExpr of iv[2] gives iv[2].
 -/
 lemma eval_decomposeNatExpr_iv_2 (env : Environment (F p)) :
     (eval env (U32.decomposeNatExpr iv[2])).value = iv[2] := by
-  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-  simp only [iv, Vector.getElem_mk]
-  simp only [List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ,
-    Nat.reduceMod, Nat.cast_ofNat, Nat.reduceDiv, Nat.reducePow, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval]
-  -- All these values are less than p, so ZMod.val gives back the original value
-  have h1 : ZMod.val (114 : F p) = 114 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 114 < p)
-  have h2 : ZMod.val (243 : F p) = 243 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 243 < p)
-  have h3 : ZMod.val (60 : F p) = 60 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 60 < p)
-  have h4 : ZMod.val (110 : F p) = 110 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : _ < p)
-  rw [h1, h2, h3, h4]
+  apply eval_decomposeNatExpr_small
+  simp [iv]
 
 /--
 Lemma showing that evaluating U32.decomposeNatExpr of iv[3] gives iv[3].
 -/
 lemma eval_decomposeNatExpr_iv_3 (env : Environment (F p)) :
     (eval env (U32.decomposeNatExpr iv[3])).value = iv[3] := by
-  simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
-  simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.value, U32.vals]
-  simp only [iv, Vector.getElem_mk]
-  simp only [List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ,
-    Nat.reduceMod, Nat.cast_ofNat, Nat.reduceDiv, Nat.reducePow, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval]
-  -- All these values are less than p, so ZMod.val gives back the original value
-  have h1 : ZMod.val (58 : F p) = 58 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 58 < p)
-  have h2 : ZMod.val (245 : F p) = 245 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 245 < p)
-  have h3 : ZMod.val (79 : F p) = 79 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 79 < p)
-  have h4 : ZMod.val (165 : F p) = 165 := ZMod.val_cast_of_lt (by linarith [p_large_enough.elim] : 165 < p)
-  rw [h1, h2, h3, h4]
+  apply eval_decomposeNatExpr_small
+  simp [iv]
 
 -- Tactic for common steps in state vector normalization proof
 syntax "state_vec_norm_simp" : tactic
