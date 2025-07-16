@@ -73,7 +73,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-  sorry
+  simp_all only [main, circuit_norm, subcircuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
+    FinalStateUpdate.circuit_assumptions_is, ApplyRounds.circuit_spec_is, ApplyRounds.Spec, FinalStateUpdate.Assumptions,
+    compress]
+  simp_all only [ApplyRounds.Assumptions, h_eval.symm, circuit_norm, FinalStateUpdate.circuit_spec_is, FinalStateUpdate.Spec]
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
