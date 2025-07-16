@@ -43,18 +43,6 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
     flags.value ∧
   output.Normalized
 
-lemma ApplyRounds.circuit_assumptions_is :
-  ApplyRounds.circuit.Assumptions (F := F p) = ApplyRounds.Assumptions := rfl
-
-lemma ApplyRounds.circuit_spec_is :
-  ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
-
-lemma FinalStateUpdate.circuit_assumptions_is :
-  FinalStateUpdate.circuit.Assumptions (F := F p) = FinalStateUpdate.Assumptions := rfl
-
-lemma FinalStateUpdate.circuit_spec_is :
-  FinalStateUpdate.circuit.Spec (F := F p) = FinalStateUpdate.Spec := rfl
-
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro offset env input_var input h_eval h_assumptions h_holds
   simp_all only [main, circuit_norm, subcircuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,

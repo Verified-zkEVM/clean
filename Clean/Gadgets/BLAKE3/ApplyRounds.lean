@@ -693,4 +693,10 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 
+lemma circuit_assumptions_is :
+  circuit.Assumptions (F := F p) = Assumptions := rfl
+
+lemma circuit_spec_is :
+  circuit.Spec (F := F p) = Spec := rfl
+
 end Gadgets.BLAKE3.ApplyRounds
