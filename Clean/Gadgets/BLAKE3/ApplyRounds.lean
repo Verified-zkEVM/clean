@@ -693,9 +693,11 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 
+@[circuit_norm]
 lemma circuit_assumptions_is :
   circuit.Assumptions (F := F p) = Assumptions := rfl
 
+@[circuit_norm]
 lemma circuit_spec_is :
   circuit.Spec (F := F p) = Spec := rfl
 
