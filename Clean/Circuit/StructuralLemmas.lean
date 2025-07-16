@@ -66,8 +66,8 @@ a new FormalCircuit with a weaker specification. This is useful when:
 - You need to adapt a specific circuit to a more general interface
 
 The requirements are:
-- The assumptions remain the same or can be strengthened
-- The stronger spec implies the weaker spec
+- The assumptions remain the same
+- The stronger spec and the assumption imply the weaker spec
 -/
 def FormalCircuit.weakenSpec
     {F : Type} [Field F]
