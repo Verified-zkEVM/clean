@@ -48,7 +48,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp_all only [main, circuit_norm, subcircuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
     FinalStateUpdate.circuit_assumptions_is, ApplyRounds.circuit_spec_is, ApplyRounds.Spec, FinalStateUpdate.Assumptions,
     compress]
-  rcases h_holds with ⟨ ⟨ h_holds1_eq, h_holds1_normal ⟩, h_holds2 ⟩
   simp_all only [ApplyRounds.Assumptions, h_eval.symm, circuit_norm, FinalStateUpdate.circuit_spec_is, FinalStateUpdate.Spec]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
