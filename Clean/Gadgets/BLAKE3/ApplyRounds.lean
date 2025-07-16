@@ -591,19 +591,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» => state_vec_norm_simp; exact h_chaining_value_normalized 0 (by omega)
-    case «1» => state_vec_norm_simp; exact h_chaining_value_normalized 1 (by omega)
-    case «2» => state_vec_norm_simp; exact h_chaining_value_normalized 2 (by omega)
-    case «3» => state_vec_norm_simp; exact h_chaining_value_normalized 3 (by omega)
-    case «4» => state_vec_norm_simp; exact h_chaining_value_normalized 4 (by omega)
-    case «5» => state_vec_norm_simp; exact h_chaining_value_normalized 5 (by omega)
-    case «6» => state_vec_norm_simp; exact h_chaining_value_normalized 6 (by omega)
-    case «7» => state_vec_norm_simp; exact h_chaining_value_normalized 7 (by omega)
+    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» => 
+      state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
-    case «8» => state_vec_norm_simp_simple
-    case «9» => state_vec_norm_simp_simple
-    case «10» => state_vec_norm_simp_simple
-    case «11» => state_vec_norm_simp_simple
+    case «8» | «9» | «10» | «11» => 
+      state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
     case «13» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_13_Normalized]
@@ -779,10 +771,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
-    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» => 
+    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
       state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
-    case «8» | «9» | «10» | «11» => 
+    case «8» | «9» | «10» | «11» =>
       state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
