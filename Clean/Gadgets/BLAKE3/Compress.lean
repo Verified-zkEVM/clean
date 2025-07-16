@@ -19,12 +19,8 @@ def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) (Var BLAKE3State
   FinalStateUpdate.circuit ⟨state, input.chaining_value⟩
 
 instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State where
-  main := main
+  main
   localLength input := ApplyRounds.circuit.localLength input + FinalStateUpdate.circuit.localLength ⟨default, input.chaining_value⟩
-  localLength_eq := by
-    intro input offset
-    simp only [main, Circuit.bind_def, Circuit.localLength, circuit_norm]
-    rfl
   output := fun input offset =>
     let applyRounds_out := ApplyRounds.circuit.output input offset
     FinalStateUpdate.circuit.output
@@ -33,10 +29,6 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
   output_eq := by
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [main, Circuit.bind_def, Circuit.operations, circuit_norm]
-    ring
 
 def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.Assumptions input
