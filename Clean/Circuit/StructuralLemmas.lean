@@ -22,7 +22,7 @@ def FormalCircuit.concat
     (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
     FormalCircuit F Input Output := {
   elaborated := {
-    main := fun input => circuit1 input >>= circuit2
+    main := (circuit1 · >>= circuit2)
     localLength := fun input => circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
     localLength_eq := by
       intro input offset
