@@ -14,9 +14,9 @@ Main circuit that chains ApplyRounds and FinalStateUpdate.
 -/
 def main (input : Var ApplyRounds.Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   -- First apply the 7 rounds
-  let state ← subcircuit ApplyRounds.circuit input
+  let state ← ApplyRounds.circuit input
   -- Then apply final state update
-  subcircuit FinalStateUpdate.circuit ⟨state, input.chaining_value⟩
+  FinalStateUpdate.circuit ⟨state, input.chaining_value⟩
 
 instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State where
   main := main
