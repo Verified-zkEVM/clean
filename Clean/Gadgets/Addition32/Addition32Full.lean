@@ -29,7 +29,6 @@ instance : ProvableStruct Outputs where
   toComponents := fun {z, carryOut} => .cons z ( .cons carryOut .nil)
   fromComponents := fun (.cons z ( .cons carryOut .nil)) => ⟨ z, carryOut ⟩
 
-
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
   let { z := z0, carryOut := c0 } ← Addition8FullCarry.main ⟨ x.x0, y.x0, carryIn ⟩
@@ -102,7 +101,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     z0_byte z1_byte z2_byte z3_byte
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
-
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as

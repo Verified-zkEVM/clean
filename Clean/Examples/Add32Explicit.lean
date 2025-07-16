@@ -4,7 +4,6 @@ import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Examples.AddOperations
 import Clean.Gadgets.Boolean
 
-
 open Gadgets.Addition32Full (Inputs)
 
 -- `infer_explicit_circuit(s)` seem to work for all circuits

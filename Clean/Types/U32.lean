@@ -212,7 +212,6 @@ def U32.witness (compute : Environment (F p) → U32 (F p)) := do
   U32.AssertNormalized.circuit x
   return x
 
-
 namespace U32.ByteVector
 -- results about U32 when viewed as a vector of bytes, via `toLimbs` and `fromLimbs`
 

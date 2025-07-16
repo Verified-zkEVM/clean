@@ -82,7 +82,6 @@ lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
   congr; symm
   exact and_mul_two_pow
 
-
 theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
     not64 x = 2^64 - 1 - x := by
   rw [not64]

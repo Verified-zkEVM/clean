@@ -3,8 +3,6 @@ import Clean.Utils.Bits
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Boolean
 
-
-
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime]

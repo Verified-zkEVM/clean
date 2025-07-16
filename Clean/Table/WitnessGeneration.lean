@@ -18,7 +18,6 @@ def buildAuxMap (as : CellAssignment W S) : Std.HashMap Nat Nat := Id.run do
 
   map
 
-
 /--
   Given a trace row, compute the next row in the trace, which includes the auxiliary values.
   The computation logic is obtained from the `TableConstraint` witness generators, each of which

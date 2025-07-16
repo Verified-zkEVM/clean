@@ -100,7 +100,6 @@ theorem fromBits_toBits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
   apply toBits_injective n (fromBits_lt _ h_bits) hx
   rw [toBits_fromBits _ h_bits]
 
-
 -- field variant of `toBits` and `fromBits`
 variable {p : ℕ} [prime: Fact p.Prime]
 

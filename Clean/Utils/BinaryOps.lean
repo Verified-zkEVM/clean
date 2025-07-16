@@ -14,7 +14,6 @@ namespace BinaryOps
 
 variable {p : ℕ} [Fact p.Prime]
 
-
 section ListOperations
 
 /-- Folding AND over any list of natural numbers starting from 1 gives an IsBool result -/
@@ -51,6 +50,5 @@ theorem List.and_foldl_eq_foldl (a : ℕ) (orig : ℕ) (l : List ℕ) :
     exact (Nat.land_assoc a orig hd).symm
 
 end ListOperations
-
 
 end BinaryOps

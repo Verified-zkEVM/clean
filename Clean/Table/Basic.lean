@@ -92,7 +92,6 @@ lemma toList_length : (trace : Trace F S) → trace.toList.length = trace.len
 
 end Trace
 
-
 /--
   A trace of length N is a trace with exactly N rows.
 -/
@@ -548,7 +547,6 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
 
     -- if the trace is empty, we are done
     | <+>, _ => True
-
 
 structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] where
   /-- list of constraints that are applied over the table -/

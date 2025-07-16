@@ -211,7 +211,6 @@ theorem output_eq :
   case cons x xs ih =>
     rw [foldlM_cons, bind_output_eq, ih, constant.localLength_eq (init, x), finFoldl_cons_succ]
 
-
 def foldlAcc (n : ℕ) (xs : Vector α m) (circuit : β → α → Circuit F β) (init : β) (j : Fin m) : β :=
   Fin.foldl j (fun acc i => (circuit acc xs[i.val]).output (n + i*(circuit acc xs[i.val]).localLength)) init
 

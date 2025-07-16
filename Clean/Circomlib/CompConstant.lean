@@ -11,7 +11,6 @@ namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
-
 namespace CompConstant
 /-
 template CompConstant(ct) {

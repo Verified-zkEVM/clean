@@ -364,8 +364,6 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
       conv => rhs; rw [← h_sum]
       omega
 
-
-
 -- Helper lemma: SubcircuitsConsistent preserved by bind
 theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α) (g : α → Circuit (F p) β) (offset : ℕ)
     (hf : Operations.SubcircuitsConsistent offset (f.operations offset))
@@ -407,7 +405,6 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
           apply IH n2 h_n2_lt input2
         · apply AND.circuit.subcircuitsConsistent
 
-
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
 lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : Environment (F p)) :
     offset1 = offset2 ->
@@ -439,7 +436,6 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         simp only [Fin.isValue, Nat.add_zero, id_eq]
         unfold Environment.UsesLocalWitnesses Operations.forAllFlat
         unfold Operations.forAll
-
 
         constructor
         · simp only [Environment.ExtendsVector, Vector.getElem_mk]
@@ -737,7 +733,6 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
       change IsBool (env input_var[1])
       rw [h_eval1]
       exact h_binary1
-
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))

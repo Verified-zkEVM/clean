@@ -3,7 +3,6 @@ import Clean.Types.U32
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
-
 namespace Gadgets.Addition32
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
@@ -30,7 +29,6 @@ def Assumptions (input : Inputs (F p)) :=
 def Spec (input : Inputs (F p)) (z: U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
-
 
 -- def c := main (p:=p_babybear) default
 -- #eval c.localLength

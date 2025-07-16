@@ -204,7 +204,6 @@ lemma rotRight64_testBit (x r i : ℕ) (h : x < 2^64) :
   · rw [rotRight64_testBit_of_ge]
     repeat omega
 
-
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
@@ -219,7 +218,6 @@ theorem rotRight64_toBits (x r : ℕ) (h : x < 2^64):
   simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
   split <;> (congr; omega)
   linarith
-
 
 theorem rotRight64_lt (x r : ℕ) (h : x < 2^64) :
     rotRight64 x r < 2^64 := by
@@ -252,7 +250,6 @@ theorem rotRight64_composition (x n m : ℕ) (h : x < 2^64) :
 
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
-
 
 -- Theorems about 32-bit rotation
 
@@ -452,7 +449,6 @@ lemma rotRight32_testBit (x r i : ℕ) (h : x < 2^32) :
   · rw [rotRight32_testBit_of_ge]
     repeat omega
 
-
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
@@ -467,7 +463,6 @@ theorem rotRight32_toBits (x r : ℕ) (h : x < 2^32):
   simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
   split <;> (congr; omega)
   linarith
-
 
 theorem rotRight32_lt (x r : ℕ) (h : x < 2^32) :
     rotRight32 x r < 2^32 := by
@@ -500,7 +495,6 @@ theorem rotRight32_composition (x n m : ℕ) (h : x < 2^32) :
 
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
-
 
 -- helpful lemmas for {32, 64}-bit rotation with offset in [0, 7]
 
@@ -555,7 +549,6 @@ lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
     first
     | contradiction
     | simp
-
 
 lemma shifted_decomposition_eq {offset : ℕ} (ho : offset < 8) {x1 x2 : ℕ} :
     (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256 =

@@ -140,5 +140,4 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   completeness := completeness a b c d
 }
 
-
 end Gadgets.BLAKE3.G

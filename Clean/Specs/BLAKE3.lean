@@ -112,7 +112,6 @@ def round (state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
     g state a b c d m[i] m[j]
   ) state
 
-
 /--
 The permutation function, which permutes the message words after each
 round (except the last one where it would be useless).
