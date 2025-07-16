@@ -133,6 +133,28 @@ def fromUInt32 (x : UInt32) : U32 (F p) :=
 def valueU32 (x : U32 (F p)) (h : x.Normalized) : UInt32 :=
   UInt32.ofNatLT x.value (value_lt_of_normalized h)
 
+lemma value_of_decomposedNat_of_small (x : ℕ) :
+    x < 256^4 ->
+    (decomposeNat (p := p) x).value = x := by
+  intro hx
+  simp only [value, decomposeNat]
+  -- Need to show that ZMod.val of each component equals the component itself
+  have h (y : ℕ) : y < 256 → ZMod.val (n:=p) (y : ℕ) = y := by
+    intro hy
+    rw [ZMod.val_cast_of_lt]
+    linarith [p_large_enough.elim]
+  -- Apply h to each component
+  rw [h (x % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+  rw [h (x / 256 % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+  rw [h (x / 256^2 % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+  rw [h (x / 256^3 % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+
+  have h1 := Nat.div_add_mod x 256
+  have h2 := Nat.div_add_mod (x / 256) 256
+  have h3 := Nat.div_add_mod (x / 256 ^ 2) 256
+  have h4 := Nat.div_add_mod (x / 256 ^ 3) 256
+  omega
+
 lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt32, decomposeNat]
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
@@ -143,23 +165,9 @@ lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := b
   simp [h]
 
 theorem value_fromUInt32 (x : UInt32) : value (fromUInt32 (p:=p) x) = x.toNat := by
-  simp only [valueU32, value_horner, fromUInt32, decomposeNat, UInt32.toFin_val]
-  set x := x.toNat
-  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
-    rw [ZMod.val_cast_of_lt]
-    have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-    linarith [p_large_enough.elim]
-  simp only [h]
-  have : 2^8 = 256 := rfl
-  simp only [this]
-  have : x < 256^4 := by simp [x, UInt32.toNat_lt_size]
-  have : x / 256^3 % 256 = x / 256^3 := by rw [Nat.mod_eq_of_lt]; omega
-  rw [this]
-  have div_succ_pow (n : ℕ) : x / 256^(n + 1) = (x / 256^n) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  have mod_add_div (n : ℕ) : x / 256^n % 256 + 256 * (x / 256^(n + 1)) = x / 256^n := by
-    rw [div_succ_pow n, Nat.mod_add_div]
-  simp only [mod_add_div]
-  rw [div_succ_pow 1, Nat.pow_one, Nat.mod_add_div, Nat.mod_add_div]
+  simp only [fromUInt32, UInt32.toFin_val]
+  apply value_of_decomposedNat_of_small
+  simp [UInt32.toNat_lt_size]
 
 def fromByte (x: Fin 256) : U32 (F p) :=
   ⟨ x.val, 0, 0, 0 ⟩
