@@ -443,8 +443,8 @@ lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
   apply U32.value_of_decomposedNat_of_small
   assumption
 
-lemma eval_decomposeNatExpr_toNat_value (env : Environment (F p)) (x : UInt32) :
-    (eval env (U32.decomposeNatExpr x.toNat)).value = x.toNat := by
+lemma eval_fromUInt32_value (env : Environment (F p)) (x : UInt32) :
+    (eval env (const (U32.fromUInt32 x))).value = x.toNat := by
   refine eval_decomposeNatExpr_small env x.toNat ?_
   have := UInt32.toNat_lt_size x
   omega
@@ -501,8 +501,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let state : Var BLAKE3State (F p) := #v[
     chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
     chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
-    U32.decomposeNatExpr iv[0].toNat, U32.decomposeNatExpr iv[1].toNat,
-    U32.decomposeNatExpr iv[2].toNat, U32.decomposeNatExpr iv[3].toNat,
+    const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]),
+    const (U32.fromUInt32 iv[2]), const (U32.fromUInt32 iv[3]),
     counter_low, counter_high, block_len, flags
   ]
 
@@ -729,7 +729,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
           Nat.reducePow, Nat.add_mul_mod_self_left, state_vec, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
         simp [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
-          h_chaining_6_eq, h_chaining_7_eq, eval_decomposeNatExpr_toNat_value, h_counter_low_eq, h_counter_high_eq]
+          h_chaining_6_eq, h_chaining_7_eq, eval_fromUInt32_value, h_counter_low_eq, h_counter_high_eq]
 
   · -- Show out.Normalized
     exact h_normalized
@@ -749,8 +749,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   let state_vec : Var BLAKE3State (F p) := #v[
     chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
     chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-    U32.decomposeNatExpr iv[0].toNat, U32.decomposeNatExpr iv[1].toNat, U32.decomposeNatExpr iv[2].toNat,
-    U32.decomposeNatExpr iv[3].toNat, counter_low_var, counter_high_var, block_len_var, flags_var
+    const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]), const (U32.fromUInt32 iv[2]),
+    const (U32.fromUInt32 iv[3]), counter_low_var, counter_high_var, block_len_var, flags_var
   ]
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized : ∀ (i : Fin 8), (eval env chaining_value_var[i]).Normalized := by
@@ -764,7 +764,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     congr
     norm_num
     omega
-  have state_vec_8_Normalized : (eval env (U32.decomposeNatExpr iv[0].toNat)).Normalized := by
+  have state_vec_8_Normalized : (eval env (const (U32.fromUInt32 iv[0]))).Normalized := by
     -- decomposeNatExpr produces a U32 of Expression.const values
     simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
     simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
@@ -775,7 +775,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       assumption
       linarith [p_large_enough.elim]
     exact ⟨h _, h _, h _, h _⟩
-  have state_vec_9_Normalized : (eval env (U32.decomposeNatExpr iv[1].toNat)).Normalized := by
+  have state_vec_9_Normalized : (eval env (const (U32.fromUInt32 iv[1]))).Normalized := by
     -- decomposeNatExpr produces a U32 of Expression.const values
     simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
     simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
@@ -786,7 +786,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       assumption
       linarith [p_large_enough.elim]
     exact ⟨h _, h _, h _, h _⟩
-  have state_vec_10_Normalized : (eval env (U32.decomposeNatExpr iv[2].toNat)).Normalized := by
+  have state_vec_10_Normalized : (eval env (const (U32.fromUInt32 iv[2]))).Normalized := by
     -- decomposeNatExpr produces a U32 of Expression.const values
     simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
     simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
@@ -797,7 +797,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       assumption
       linarith [p_large_enough.elim]
     exact ⟨h _, h _, h _, h _⟩
-  have state_vec_11_Normalized : (eval env (U32.decomposeNatExpr iv[3].toNat)).Normalized := by
+  have state_vec_11_Normalized : (eval env (const (U32.fromUInt32 iv[3]))).Normalized := by
     -- decomposeNatExpr produces a U32 of Expression.const values
     simp only [U32.decomposeNatExpr, U32.decomposeNat, eval, toVars, fromElements, toElements]
     simp only [Vector.map, Vector.getElem_mk, Expression.eval, U32.Normalized]
