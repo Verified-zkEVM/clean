@@ -62,7 +62,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
 
   soundness := by
     intro i env x_var x h_input x_norm h_holds
-    simp_all only [circuit_norm, subcircuit_norm, eval_not]
+    simp_all only [circuit_norm, eval_not]
     exact not_bytewise_value_spec x_norm
 
   completeness _ := by

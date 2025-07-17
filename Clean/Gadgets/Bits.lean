@@ -36,7 +36,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   soundness := by
     intro k eval x_var x h_input h_holds
     simp only [main, circuit_norm] at *
-    simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
+    simp only [h_input, circuit_norm] at h_holds
     clear h_input
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
@@ -55,7 +55,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   completeness := by
     intro k eval x_var h_env x h_input h_assumptions
     simp only [main, circuit_norm] at *
-    simp only [h_input, circuit_norm, subcircuit_norm] at h_env ⊢
+    simp only [h_input, circuit_norm] at h_env ⊢
 
     constructor
     · intro i
@@ -85,8 +85,8 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   Assumptions _ := True
   Spec (x : F p) := x.val < 2^n
 
-  soundness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
-  completeness := by simp_all only [circuit_norm, subcircuit_norm, toBits]
+  soundness := by simp_all only [circuit_norm, toBits]
+  completeness := by simp_all only [circuit_norm, toBits]
 
 end ToBits
 export ToBits (toBits)

@@ -53,7 +53,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
-    simp only [circuit_norm, subcircuit_norm] at h_holds
+    simp only [circuit_norm] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     simp only [Round.circuit] at h_holds1
     rcases input with ⟨ input_state, input_msg ⟩
@@ -121,7 +121,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
       rfl
 
     -- Unpack what we have
-    simp only [circuit_norm, subcircuit_norm] at h_env_uses_witnesses ⊢
+    simp only [circuit_norm] at h_env_uses_witnesses ⊢
     obtain ⟨h_round_uses, h_permute_uses⟩ := h_env_uses_witnesses
 
     constructor
@@ -528,13 +528,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
   intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
 
-  -- dsimp [main, elaborated, circuit_norm, subcircuit_norm] at h_holds
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
 
   simp only [circuit_norm, main, Spec]
-  simp only [circuit_norm, main, subcircuit_norm] at h_holds
+  simp only [circuit_norm, main] at h_holds
   simp only [Assumptions] at h_normalized
 
   -- Apply h_holds by proving its assumptions
@@ -670,7 +669,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro henv ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
 
   -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
-  simp only [circuit_norm, main, subcircuit_norm] at henv ⊢
+  simp only [circuit_norm, main] at henv ⊢
 
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,

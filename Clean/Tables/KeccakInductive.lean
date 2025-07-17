@@ -22,14 +22,14 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
 
   soundness := by
     intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
-    simp_all only [circuit_norm, subcircuit_norm,
+    simp_all only [circuit_norm,
       AbsorbBlock.circuit, AbsorbBlock.Assumptions, AbsorbBlock.Spec,
       KeccakBlock.normalized, absorbBlocks]
     rw [List.concat_eq_append, List.map_append, List.map_cons, List.map_nil, List.foldl_concat]
 
   completeness := by
     simp_all only [circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
-      subcircuit_norm, AbsorbBlock.Assumptions, AbsorbBlock.Spec]
+      AbsorbBlock.Assumptions, AbsorbBlock.Spec]
 
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)

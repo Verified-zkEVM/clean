@@ -41,7 +41,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
   dsimp only [circuit_norm, Spec, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
-  simp only [circuit_norm, subcircuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
+  simp only [circuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
   simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
   simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
 
@@ -77,7 +77,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions
   simp only [Assumptions, KeccakRow.normalized_iff] at h_assumptions
   dsimp only [circuit_norm, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
-  simp_all only [circuit_norm, subcircuit_norm, getElem_eval_vector, h_input,
+  simp_all only [circuit_norm, getElem_eval_vector, h_input,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, h_assumptions, true_and, true_implies]
 

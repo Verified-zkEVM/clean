@@ -71,7 +71,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, main,
+    simp_all only [circuit_norm, h_inputs, Spec, Assumptions, main,
       ByteTable]
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -96,7 +96,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, main,
+    simp only [circuit_norm, h_inputs, Assumptions, main,
       ByteTable] at *
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
@@ -134,7 +134,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, subcircuit_norm, circuit, main,
+    simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
       Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
