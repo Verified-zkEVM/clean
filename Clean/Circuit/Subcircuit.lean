@@ -353,3 +353,37 @@ attribute [subcircuit_norm]
 -- instead, `circuit_norm` will use these theorems to unfold subcircuits
 attribute [circuit_norm] Circuit.subcircuit_localLength_eq Circuit.assertion_localLength_eq
   Circuit.subcircuitWithAssertion_localLength_eq
+
+-- Simplification lemmas for toSubcircuit.UsesLocalWitnesses
+
+/--
+Simplifies UsesLocalWitnesses for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem FormalCircuit.toSubcircuit_usesLocalWitnesses
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
+    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
+  rfl
+
+/--
+Simplifies UsesLocalWitnesses for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env =
+    (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
+  rfl
+
+/--
+Simplifies UsesLocalWitnesses for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem FormalAssertion.toSubcircuit_usesLocalWitnesses
+    {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).UsesLocalWitnesses env = True := by
+  rfl
