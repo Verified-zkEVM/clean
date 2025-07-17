@@ -45,13 +45,13 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro offset env input_var input h_eval h_assumptions h_holds
-  simp_all only [main, circuit_norm, subcircuit_norm, Spec, Assumptions,
+  simp_all only [main, circuit_norm, Spec, Assumptions,
     ApplyRounds.Spec, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, h_eval.symm, FinalStateUpdate.Spec]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-  simp_all only [main, circuit_norm, subcircuit_norm, Spec, Assumptions,
+  simp_all only [main, circuit_norm, Spec, Assumptions,
     ApplyRounds.Spec, FinalStateUpdate.Assumptions,
     compress, ApplyRounds.Assumptions, h_eval.symm, circuit_norm, FinalStateUpdate.Spec]
 

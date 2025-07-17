@@ -135,16 +135,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
   simp_all only [gt_iff_lt, forall_const, and_self]
 
+/-
+The `@[simps! ...] attributes add equations to `circuit_norm` so that `FinalStateUpdate.circuit.{Assumption, (or any other field)}`
+gets replaced with the definition. This leads to much less `simp only [FinalStateUpdate.circuit]` and we avoid seeing a big struct
+literal in the goal state.
+-/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
-
-@[circuit_norm]
-lemma circuit_assumptions_is :
-  circuit.Assumptions (F := F p) = Assumptions := rfl
-
-@[circuit_norm]
-lemma circuit_spec_is :
-  circuit.Spec (F := F p) = Spec := rfl
 
 end Gadgets.BLAKE3.FinalStateUpdate
