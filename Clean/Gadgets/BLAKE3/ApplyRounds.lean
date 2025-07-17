@@ -748,8 +748,11 @@ lemma initial_state_and_messages_are_normalized
   · apply h_message_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-  intro henv ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
+  intro i0 env input_var
+  intro henv input h_input h_normalized
+
+  rcases input_var with ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+  rcases input with ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩
 
   -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
   simp only [circuit_norm, main] at henv ⊢
