@@ -741,16 +741,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [circuit_norm, main] at henv ⊢
 
   -- Use the helper lemma to prove normalization
-  have ⟨h_state_normalized, h_message_normalized⟩ :=
-    initial_state_and_messages_are_normalized env input_var input h_input h_normalized
-
-  -- Create the state vector variable using the helper function
-  let state_vec := initializeStateVector input_var
-
-  constructor
-  · apply h_state_normalized
-  · apply h_message_normalized
-
+  exact initial_state_and_messages_are_normalized env input_var input h_input h_normalized
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
