@@ -546,6 +546,44 @@ theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : En
   simp only [eval, toVars, toElements, fromElements, Vector.map_append]
   rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
 
+-- Specialized lemmas for Expression F to handle type inference issues
+@[circuit_norm ↓ high]
+theorem eval_pair_left_expr {β: TypeMap} [ProvableType β] (env : Environment F)
+  (a : Expression F) (b : Var β F) :
+    eval (α:=ProvablePair field β) env (a, b) = (Expression.eval env a, eval env b) :=
+  eval_pair (α := field) env a b
+
+@[circuit_norm ↓ high]
+theorem eval_pair_right_expr {α: TypeMap} [ProvableType α] (env : Environment F)
+  (a : Var α F) (b : Expression F) :
+    eval (α:=ProvablePair α field) env (a, b) = (eval env a, Expression.eval env b) :=
+  eval_pair (β := field) env a b
+
+@[circuit_norm ↓ high]
+theorem eval_pair_both_expr (env : Environment F)
+  (a b : Expression F) :
+    eval (α:=ProvablePair field field) env (a, b) = (Expression.eval env a, Expression.eval env b) :=
+  eval_pair (α := field) (β := field) env a b
+
+-- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
+@[circuit_norm ↓ high]
+theorem eval_pair_left_vector_expr {n : ℕ} {β: TypeMap} [ProvableType β] (env : Environment F)
+  (a : Vector (Expression F) n) (b : Var β F) :
+    eval (α:=ProvablePair (fields n) β) env (a, b) = (eval env a, eval env b) :=
+  eval_pair (α := fields n) env a b
+
+@[circuit_norm ↓ high]
+theorem eval_pair_right_vector_expr {n : ℕ} {α: TypeMap} [ProvableType α] (env : Environment F)
+  (a : Var α F) (b : Vector (Expression F) n) :
+    eval (α:=ProvablePair α (fields n)) env (a, b) = (eval env a, eval env b) :=
+  eval_pair (β := fields n) env a b
+
+@[circuit_norm ↓ high]
+theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
+  (a : Vector (Expression F) n) (b : Vector (Expression F) m) :
+    eval (α:=ProvablePair (fields n) (fields m)) env (a, b) = (eval env a, eval env b) :=
+  eval_pair (α := fields n) (β := fields m) env a b
+
 omit [Field F] in
 @[circuit_norm ↓ high]
 theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
