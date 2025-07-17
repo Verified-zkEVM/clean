@@ -529,142 +529,6 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
     flags.value ∧
   out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-  intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
-
-  simp [circuit_norm] at h_input
-  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
-    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
-
-  simp only [circuit_norm, main, Spec]
-  simp only [circuit_norm, main] at h_holds
-  simp only [Assumptions] at h_normalized
-
-  -- Apply h_holds by proving its assumptions
-  -- We need to prove that the state is normalized and the message is normalized
-
-  -- First create a proper state vector variable
-  let state_vec := initializeStateVector ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-  -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
-    have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
-      rw [h]
-    simp only [eval_vector, Vector.getElem_map] at h_i
-    convert h_normalized.1 i
-    simp_all only [circuit_norm]
-    congr
-    norm_num
-    omega
-  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
-    rw [h_eval_counter_low]
-    exact h_normalized.2.2.2.1
-  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by
-    rw [h_eval_counter_high]
-    exact h_normalized.2.2.1
-  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by
-    rw [h_eval_block_len]
-    exact h_normalized.2.2.2.2.1
-  have state_vec_15_Normalized : (eval env flags_var).Normalized := by
-    rw [h_eval_flags]
-    exact h_normalized.2.2.2.2.2
-
-  -- Show the state is normalized
-  have h_state_normalized : (eval env state_vec).Normalized := by
-    simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
-    intro i
-    fin_cases i
-    -- First 8 elements are from chaining_value
-    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
-      state_vec_norm_simp; simp [h_chaining_value_normalized]
-    -- Next 4 are IV constants
-    case «8» | «9» | «10» | «11» =>
-      state_vec_norm_simp_simple
-    -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» => state_vec_norm_simp_simple; simp only [state_vec_12_Normalized]
-    case «13» => state_vec_norm_simp_simple; simp only [state_vec_13_Normalized]
-    case «14» => state_vec_norm_simp_simple; simp only [state_vec_14_Normalized]
-    case «15» => state_vec_norm_simp_simple; simp only [state_vec_15_Normalized]
-
-  -- Show the message is normalized
-  have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
-    intro i
-    rw [h_eval_block_words]
-    exact h_normalized.2.1 i
-
-  -- Now we need to show that state_vec matches what's expected in h_holds
-  have h_state_vec_eq : eval env state_vec = eval env {
-    toArray := #[chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
-                 chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-                 U32.decomposeNatExpr iv[0].toNat, U32.decomposeNatExpr iv[1].toNat, U32.decomposeNatExpr iv[2].toNat,
-                 U32.decomposeNatExpr iv[3].toNat, counter_low_var, counter_high_var, block_len_var, flags_var],
-    size_toArray := by simp
-  } := by rfl
-
-  have h_chaining_0_eq := eval_chaining_value_elem h_eval_chaining_block_value 0 (by omega)
-  have h_chaining_1_eq := eval_chaining_value_elem h_eval_chaining_block_value 1 (by omega)
-  have h_chaining_2_eq := eval_chaining_value_elem h_eval_chaining_block_value 2 (by omega)
-  have h_chaining_3_eq := eval_chaining_value_elem h_eval_chaining_block_value 3 (by omega)
-  have h_chaining_4_eq := eval_chaining_value_elem h_eval_chaining_block_value 4 (by omega)
-  have h_chaining_5_eq := eval_chaining_value_elem h_eval_chaining_block_value 5 (by omega)
-  have h_chaining_6_eq := eval_chaining_value_elem h_eval_chaining_block_value 6 (by omega)
-  have h_chaining_7_eq := eval_chaining_value_elem h_eval_chaining_block_value 7 (by omega)
-
-  -- Equations for counter values
-  have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
-    apply Nat.mod_eq_of_lt
-    exact U32.value_lt_of_normalized h_normalized.2.2.2.1
-  have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
-    -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
-    -- Since counter_low.value < 2^32, this follows from properties of division
-    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_normalized.2.2.2.1
-    have h2 : 4294967296 > 0 := by norm_num
-    -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
-    -- This equals counter_high.value + counter_low.value / 2^32
-    rw [Nat.add_mul_div_left _ _ h2]
-    rw [Nat.div_eq_of_lt h1]
-    simp
-
-  -- Apply h_holds with the proven assumptions
-  rw [h_state_vec_eq] at h_state_normalized
-  have h_spec := h_holds ⟨h_state_normalized, h_message_normalized⟩
-  clear h_holds
-
-  -- Now we need to show that the spec holds
-  -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
-  -- We need to unpack what this means and relate it to our Spec
-
-  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal,
-             FormalCircuit.concat] at h_spec
-
-  -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
-  simp only [SevenRoundsSpec] at h_spec
-
-  obtain ⟨h_value, h_normalized⟩ := h_spec
-
-  constructor
-  · -- Show out.value = applyRounds ...
-    -- Use our lemma to express applyRounds in terms of applySevenRounds
-    rw [applyRounds_eq_applySevenRounds]
-
-    -- h_value tells us the output equals applySevenRounds on our constructed state
-    simp only [BLAKE3State.value] at h_value ⊢
-    calc
-      _ = _ := h_value
-      _ = _ := by
-        clear h_value
-        simp only [initializeStateVector]
-        rw [h_eval_block_words]
-        simp only[eval_vector]
-        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
-          Nat.reducePow, Nat.add_mul_mod_self_left, state_vec, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
-        simp [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
-          h_chaining_6_eq, h_chaining_7_eq, circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
-
-  · -- Show out.Normalized
-    exact h_normalized
-
 -- Helper lemma that proves the initial state and messages are normalized
 lemma initial_state_and_messages_are_normalized
     (env : Environment (F p))
@@ -732,6 +596,88 @@ lemma initial_state_and_messages_are_normalized
   constructor
   · apply h_state_normalized
   · apply h_message_normalized
+
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+  intro i0 env input_var
+  intro input h_input h_normalized h_holds
+  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
+  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
+
+  have normalized := initial_state_and_messages_are_normalized env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+    ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
+
+  simp [circuit_norm] at h_input
+
+  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
+    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
+
+  simp only [circuit_norm, main, Spec]
+  simp only [circuit_norm, main] at h_holds
+  simp only [Assumptions] at h_normalized
+
+  simp only [initializeStateVector] at normalized
+
+  have h_chaining_0_eq := eval_chaining_value_elem h_eval_chaining_block_value 0 (by omega)
+  have h_chaining_1_eq := eval_chaining_value_elem h_eval_chaining_block_value 1 (by omega)
+  have h_chaining_2_eq := eval_chaining_value_elem h_eval_chaining_block_value 2 (by omega)
+  have h_chaining_3_eq := eval_chaining_value_elem h_eval_chaining_block_value 3 (by omega)
+  have h_chaining_4_eq := eval_chaining_value_elem h_eval_chaining_block_value 4 (by omega)
+  have h_chaining_5_eq := eval_chaining_value_elem h_eval_chaining_block_value 5 (by omega)
+  have h_chaining_6_eq := eval_chaining_value_elem h_eval_chaining_block_value 6 (by omega)
+  have h_chaining_7_eq := eval_chaining_value_elem h_eval_chaining_block_value 7 (by omega)
+
+  -- Equations for counter values
+  have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
+    apply Nat.mod_eq_of_lt
+    exact U32.value_lt_of_normalized h_normalized.2.2.2.1
+  have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
+    -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
+    -- Since counter_low.value < 2^32, this follows from properties of division
+    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_normalized.2.2.2.1
+    have h2 : 4294967296 > 0 := by norm_num
+    -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
+    -- This equals counter_high.value + counter_low.value / 2^32
+    rw [Nat.add_mul_div_left _ _ h2]
+    rw [Nat.div_eq_of_lt h1]
+    simp
+
+  -- Apply h_holds with the proven assumptions
+  have h_spec := h_holds normalized
+  clear h_holds
+
+  -- Now we need to show that the spec holds
+  -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
+  -- We need to unpack what this means and relate it to our Spec
+
+  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal,
+             FormalCircuit.concat] at h_spec
+
+  -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
+  simp only [SevenRoundsSpec] at h_spec
+
+  obtain ⟨h_value, h_normalized⟩ := h_spec
+
+  constructor
+  · -- Show out.value = applyRounds ...
+    -- Use our lemma to express applyRounds in terms of applySevenRounds
+    rw [applyRounds_eq_applySevenRounds]
+
+    -- h_value tells us the output equals applySevenRounds on our constructed state
+    simp only [BLAKE3State.value] at h_value ⊢
+    calc
+      _ = _ := h_value
+      _ = _ := by
+        clear h_value
+        simp only [initializeStateVector]
+        rw [h_eval_block_words]
+        simp only[eval_vector]
+        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
+          Nat.reducePow, Nat.add_mul_mod_self_left, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
+        simp [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
+          h_chaining_6_eq, h_chaining_7_eq, circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
+
+  · -- Show out.Normalized
+    exact h_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env input_var
