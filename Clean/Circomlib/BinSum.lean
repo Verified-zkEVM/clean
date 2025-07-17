@@ -168,10 +168,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
 
   output_eq := by
     intros input offset
-    simp only [circuit_norm, main, subcircuit]
-    -- The output of the main circuit is the output of Num2Bits
-    simp only [Num2Bits.arbitraryBitLengthCircuit]
-    rfl
+    simp only [circuit_norm, main, subcircuit, Num2Bits.arbitraryBitLengthCircuit]
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 

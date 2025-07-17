@@ -70,6 +70,7 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 -- circuits
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   main block := .forEach block (assertion U64.AssertNormalized.circuit)
   Assumptions _ := True

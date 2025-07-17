@@ -34,6 +34,7 @@ def main (input : Expression (F p)) := do
   input * out === 0
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) field field where
   main
   localLength _ := 2
@@ -69,6 +70,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out ← IsZero.circuit diff
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 2
@@ -83,7 +85,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   completeness := by
     simp only [circuit_norm, main]
-    sorry
 end IsEqual
 
 namespace ForceEqualIfEnabled
@@ -113,6 +114,7 @@ def main (inputs : Var Inputs (F p)) := do
   let isz ← IsZero.circuit (inp.2 - inp.1)
   enabled * (1 - isz) === 0
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalAssertion (F p) Inputs where
   main
   localLength _ := 2
@@ -152,6 +154,7 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
   let out <== 1 - bits[n]
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
   localLength _ := n + 2
@@ -186,6 +189,7 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
@@ -230,6 +234,7 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
@@ -261,6 +266,7 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)

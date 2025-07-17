@@ -98,6 +98,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumpti
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated rc with
   Spec := Spec rc

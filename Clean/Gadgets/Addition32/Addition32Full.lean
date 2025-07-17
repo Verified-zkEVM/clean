@@ -155,6 +155,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs Outputs where
   Assumptions
   Spec

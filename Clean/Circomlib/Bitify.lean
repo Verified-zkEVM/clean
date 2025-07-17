@@ -64,6 +64,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
@@ -113,6 +114,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     rw [this, fieldFromBits_fieldToBits h_holds]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main input := arbitraryBitLengthCircuit n input
   localLength _ := n
@@ -160,6 +162,7 @@ def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
   let out <== lc1
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _ := 1

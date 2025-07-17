@@ -197,6 +197,7 @@ def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
   lookup ByteTable x2
   lookup ByteTable x3
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalAssertion (F p) U32 where
   main
   Assumptions _ := True

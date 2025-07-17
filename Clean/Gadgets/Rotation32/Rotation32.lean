@@ -98,6 +98,7 @@ theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) 
   rw [h_eval]
   simp only [x_normalized, true_and, h_norm]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
   elaborated offset with
   Assumptions

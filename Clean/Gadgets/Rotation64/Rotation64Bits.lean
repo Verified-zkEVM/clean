@@ -110,13 +110,14 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
-  simp only [main, elaborated, circuit_norm,
-    ByteDecomposition.circuit, ByteDecomposition.Assumptions]
+  set_option diagnostics true in
+  simp only [main, circuit_norm, elaborated]
 
   -- we only have to prove the byte decomposition assumptions
   rw [Assumptions, U64.ByteVector.normalized_iff] at x_normalized
   simp_all only [size, U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated offset with
   Assumptions

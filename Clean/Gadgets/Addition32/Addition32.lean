@@ -49,6 +49,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs U32 where
   Assumptions
   Spec

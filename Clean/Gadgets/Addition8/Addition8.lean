@@ -8,6 +8,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
   main := fun inputs => do
     let { z, .. } ← Addition8FullCarry.circuit inputs
@@ -43,6 +44,7 @@ instance : ProvableStruct Inputs where
 Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs field where
   main := fun { x, y } =>
     Addition8Full.circuit { x, y, carryIn := 0 }

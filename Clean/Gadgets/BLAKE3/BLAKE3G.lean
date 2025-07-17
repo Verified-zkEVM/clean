@@ -132,6 +132,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const, and_true]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated a b c d with
   Assumptions

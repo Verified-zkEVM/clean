@@ -111,6 +111,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   elaborated with
   Assumptions, Spec, soundness

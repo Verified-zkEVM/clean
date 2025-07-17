@@ -133,6 +133,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   simp only [h_normalized, getElem_eval_vector, h_input.right, and_self]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }

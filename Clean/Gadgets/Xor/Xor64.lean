@@ -123,6 +123,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs U64 where
   Assumptions
   Spec

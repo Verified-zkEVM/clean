@@ -60,6 +60,7 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
@@ -169,6 +170,7 @@ def main (input : Var Inputs (F p)) := do
   let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
@@ -176,9 +178,6 @@ def circuit : FormalCircuit (F p) Inputs field where
   localLength_eq := by
     intro input offset
     simp only [main, circuit_norm]
-    -- The goal is about MultiMux1.circuit's localLength with n=1
-    -- which is defined as n = 1
-    rfl
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]
@@ -208,7 +207,6 @@ def circuit : FormalCircuit (F p) Inputs field where
   completeness := by
     simp only [circuit_norm, main]
     intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
     rw [← h_input] at h_s
     simp_all
 

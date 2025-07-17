@@ -37,6 +37,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a + b - 2*a*b
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
@@ -79,6 +80,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a*b
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
@@ -119,6 +121,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a + b - a*b
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
@@ -159,6 +162,7 @@ def main (input : Expression (F p)) := do
   let out <== 1 + inp - 2*inp
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) field field where
   main
   localLength _ := 1
@@ -201,6 +205,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== 1 - a*b
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
@@ -243,6 +248,7 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a*b + 1 - a - b
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
@@ -717,7 +723,6 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
   apply AND.circuit.completeness
   · exact h_local_witnesses
   · subst h_env
-    simp_all only [forall_eq', id_eq, Fin.isValue]
     rfl
   · simp only [Assumptions] at h_assumptions
     constructor
@@ -1029,6 +1034,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_rest.1
               · exact h_comp2
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
   localLength _ := n - 1

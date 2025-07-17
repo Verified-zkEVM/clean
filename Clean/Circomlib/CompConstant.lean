@@ -94,12 +94,13 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let out <== bits[127]
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
+  localLength_eq := by simp only [circuit_norm, main]
   subcircuitsConsistent input n := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
+    simp only [circuit_norm, main]
     and_intros <;> ac_rfl
 
   Assumptions input :=
@@ -113,7 +114,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
     sorry
 
   completeness := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
+    simp only [circuit_norm, main]
     sorry
 end CompConstant
 

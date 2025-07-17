@@ -64,6 +64,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs KeccakState :=
   { elaborated with Assumptions, Spec, soundness, completeness }
 

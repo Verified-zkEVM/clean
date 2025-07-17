@@ -65,6 +65,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) KeccakState KeccakRow :=
  { elaborated with Assumptions, Spec, soundness, completeness }
 

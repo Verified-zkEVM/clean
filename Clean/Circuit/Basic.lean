@@ -237,6 +237,7 @@ class ElaboratedCircuit (F: Type) (Input Output: TypeMap) [Field F] [ProvableTyp
       try first | ac_rfl | trivial
     )
 
+initialize_simps_projections ElaboratedCircuit (-main, -localLength, -localLength_eq, -output, -output_eq, -subcircuitsConsistent)
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 @[circuit_norm]
@@ -284,6 +285,8 @@ structure FormalCircuit (F: Type) [Field F] (Input Output: TypeMap) [ProvableTyp
   Spec : Input F → Output F → Prop
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
+
+initialize_simps_projections FormalCircuit (-soundness, -completeness, -main, -localLength, -localLength_eq, -output, -output_eq, -subcircuitsConsistent)
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
@@ -347,6 +350,8 @@ structure FormalAssertion (F: Type) (Input: TypeMap) [Field F] [ProvableType Inp
   -- the output has to be unit
   output _ _ := ()
 
+initialize_simps_projections FormalAssertion (-soundness, -completeness, -main, -localLength, -localLength_eq, -output, -output_eq, -subcircuitsConsistent)
+
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F: Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec: Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
@@ -392,6 +397,8 @@ structure GeneralFormalCircuit (F: Type) (Input Output: TypeMap) [Field F] [Prov
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
+
+initialize_simps_projections GeneralFormalCircuit (-soundness, -completeness, -main, -localLength, -localLength_eq, -output, -output_eq, -subcircuitsConsistent)
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
 

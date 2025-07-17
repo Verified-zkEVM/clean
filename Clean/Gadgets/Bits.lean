@@ -19,6 +19,7 @@ def main (n: ℕ) (x : Expression (F p)) := do
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n
@@ -75,6 +76,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
   main x := do
     -- we wrap the toBits circuit but ignore the output

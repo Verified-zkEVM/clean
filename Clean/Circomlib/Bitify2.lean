@@ -43,6 +43,7 @@ def main (input : Expression (F p)) := do
 
 set_option linter.constructorNameAsVariable false
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
@@ -121,6 +122,7 @@ def main (input : Vector (Expression (F p)) 254) := do
   -- Convert bits to number
   Bits2Num.main 254 input
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
@@ -185,6 +187,7 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   return out
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
   main := main n
   localLength _ := n + 2 -- witness + IsZero

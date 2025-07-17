@@ -26,6 +26,7 @@ The spec follows the pattern from the applyRounds function:
 - Apply round to get new state
 - Permute the message
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   main := fun input => do
     let state ← subcircuit Round.circuit input
@@ -162,6 +163,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 Combines two roundWithPermute operations using the concat combinator.
 This performs two rounds with message permutation between them.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def twoRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   roundWithPermute.concat roundWithPermute (by
     -- Prove compatibility: for all inputs, if circuit1 assumptions and spec hold,
@@ -199,6 +201,7 @@ def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : P
 /--
 Two rounds with permute, but with a spec matching the applyRounds pattern.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.weakenSpec TwoRoundsSpec (by
     -- Prove that twoRoundsWithPermute's spec implies our TwoRoundsSpec
@@ -217,6 +220,7 @@ def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 Combines four rounds with permutation using two twoRoundsWithPermute operations.
 This performs four rounds with message permutation between them.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
@@ -263,6 +267,7 @@ def FourRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : 
 /--
 Four rounds with permute, but with a spec matching the applyRounds pattern.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.weakenSpec FourRoundsSpec (by
     -- Prove that fourRoundsWithPermute's spec implies our FourRoundsSpec
@@ -284,6 +289,7 @@ def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 Combines six rounds with permutation using fourRoundsWithPermute and twoRoundsWithPermute.
 This performs six rounds with message permutation between them.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
@@ -333,6 +339,7 @@ def SixRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : P
 /--
 Six rounds with permute, but with a spec matching the applyRounds pattern.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   sixRoundsWithPermute.weakenSpec SixRoundsSpec (by
     -- Prove that sixRoundsWithPermute's spec implies our SixRoundsSpec
@@ -355,6 +362,7 @@ def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 Seven rounds with permutation: combines sixRoundsApplyStyle with a final round.
 This represents the complete 7-round BLAKE3 compression function.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sixRoundsApplyStyle.concat Round.circuit (by
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
@@ -397,6 +405,7 @@ def SevenRoundsSpec (input : Round.Inputs (F p)) (output : BLAKE3State (F p)) : 
 /--
 Seven rounds with spec matching the applyRounds pattern.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sevenRoundsFinal.weakenSpec SevenRoundsSpec (by
     -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
@@ -734,6 +743,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · apply h_message_normalized
 
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
 }

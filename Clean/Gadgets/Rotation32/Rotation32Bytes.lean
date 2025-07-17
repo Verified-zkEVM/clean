@@ -75,6 +75,7 @@ theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumpt
     intro Assumptions
     simp [elaborated, main, circuit_norm]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
   elaborated off with
   main := main off

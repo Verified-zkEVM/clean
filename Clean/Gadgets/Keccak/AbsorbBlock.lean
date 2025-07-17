@@ -115,6 +115,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Input KeccakState :=
   { elaborated with Assumptions, Spec, soundness, completeness }
 end Gadgets.Keccak256.AbsorbBlock

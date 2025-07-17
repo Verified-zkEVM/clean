@@ -86,6 +86,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs U64 where
   Assumptions
   Spec

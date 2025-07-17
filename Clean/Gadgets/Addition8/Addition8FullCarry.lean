@@ -55,6 +55,7 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main
   Assumptions

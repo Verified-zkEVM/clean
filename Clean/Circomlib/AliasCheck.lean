@@ -30,6 +30,7 @@ def main (input : Vector (Expression (F p)) 254) := do
   let comp_out ← CompConstant.circuit (p - 1) input
   comp_out === 0
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit : FormalAssertion (F p) (fields 254) where
   main
   localLength _ := 127 + 1 + 135 + 1
@@ -39,13 +40,13 @@ def circuit : FormalAssertion (F p) (fields 254) where
   Spec bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [circuit_norm, main, eval_vector]
     simp_all
     have : p > 2^135 := hp135.elim
     omega
 
   completeness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [circuit_norm, main, eval_vector]
     simp_all
     omega
 end AliasCheck
