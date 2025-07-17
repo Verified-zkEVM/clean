@@ -135,8 +135,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
   constructor
-  · simp only [Gadgets.Equality.circuit] at h_eq
-    apply h_eq; trivial
+  · exact h_eq
   rw [Gadgets.Addition32.Assumptions, Gadgets.Addition32.Spec] at h_add
   intro h_norm_x h_norm_y
   specialize h_add ⟨ h_norm_x, h_norm_y ⟩
