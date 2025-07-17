@@ -55,9 +55,9 @@ def circuit : FormalCircuit (F p) Inputs field where
   Spec | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
-  soundness := by 
+  soundness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
-  completeness := by 
+  completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
 
 end Addition8
