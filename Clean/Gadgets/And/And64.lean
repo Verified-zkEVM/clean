@@ -73,7 +73,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
   cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
-  simp only [circuit_norm, subcircuit_norm, explicit_provable_type, Vector.mapRange,
+  simp only [circuit_norm, explicit_provable_type, Vector.mapRange,
     main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
@@ -81,7 +81,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
-  simp only [circuit_norm, subcircuit_norm, explicit_provable_type,
+  simp only [circuit_norm, explicit_provable_type,
     main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all

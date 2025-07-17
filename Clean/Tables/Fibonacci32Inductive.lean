@@ -30,10 +30,10 @@ def table : InductiveTable (F p) Row unit where
     row.y.value = fib32 (i + 1) ∧
     row.x.Normalized ∧ row.y.Normalized
 
-  soundness := by simp_all [fib32, circuit_norm, subcircuit_norm,
+  soundness := by simp_all [fib32, circuit_norm,
     Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
-  completeness := by simp_all [fib32, circuit_norm, subcircuit_norm,
+  completeness := by simp_all [fib32, circuit_norm,
     Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
 -- the input is hard-coded to (0, 1)

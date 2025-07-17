@@ -23,10 +23,10 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
     z.val = (x.val + y.val + carryIn.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
-  soundness := by simp_all [circuit_norm, subcircuit_norm,
+  soundness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
-  completeness := by simp_all [circuit_norm, subcircuit_norm,
+  completeness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
 
 namespace Addition8
@@ -56,9 +56,9 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by 
-    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit, IsBool]
+    simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by 
-    simp_all [circuit_norm, subcircuit_norm, Addition8Full.circuit, IsBool]
+    simp_all [circuit_norm, Addition8Full.circuit, IsBool]
 
 end Addition8
 end Gadgets

@@ -61,7 +61,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   -- simplify statements
   dsimp only [circuit_norm, elaborated, main,
     ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
-  simp only [Spec, circuit_norm, elaborated, subcircuit_norm,
+  simp only [Spec, circuit_norm, elaborated,
     ByteDecomposition.Assumptions, ByteDecomposition.Spec] at h_holds ⊢
 
   -- targeted rewriting of the assumptions
@@ -113,7 +113,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
-  simp only [main, elaborated, circuit_norm, subcircuit_norm,
+  simp only [main, elaborated, circuit_norm,
     ByteDecomposition.circuit, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions

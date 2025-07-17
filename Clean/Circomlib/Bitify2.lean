@@ -57,7 +57,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   soundness := by
     intro i0 env input_var input h_input assumptions h_holds
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
-    simp_all only [circuit_norm, subcircuit_norm, AliasCheck.circuit,
+    simp_all only [circuit_norm, AliasCheck.circuit,
       Vector.map_mapRange, Vector.map_map, Function.comp_apply]
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
@@ -77,7 +77,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   completeness := by
     intro i0 env input_var h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
-    dsimp only [circuit_norm, subcircuit_norm, AliasCheck.circuit] at h_env ⊢
+    dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
@@ -190,7 +190,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
-    simp +arith only [circuit_norm, main, subcircuit_norm, IsZero.circuit]
+    simp +arith only [circuit_norm, main, IsZero.circuit]
 
   Spec input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)

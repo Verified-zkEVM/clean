@@ -90,7 +90,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     and_intros
     · apply fieldFromBits_lt
       intro i hi
-      simp only [circuit_norm, subcircuit_norm]
+      simp only [circuit_norm]
       simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
     · intro i hi
       simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
@@ -124,14 +124,14 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
-    simp_all only [circuit_norm, subcircuit_norm,
+    simp_all only [circuit_norm,
       arbitraryBitLengthCircuit, Vector.map_mapRange]
     intro i0 env input_var input h_input ⟨ _, h_bits, h_holds ⟩
     rw [← h_holds, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits
 
   completeness := by
-    simp_all only [circuit_norm, subcircuit_norm, arbitraryBitLengthCircuit]
+    simp_all only [circuit_norm, arbitraryBitLengthCircuit]
 
 end Num2Bits
 

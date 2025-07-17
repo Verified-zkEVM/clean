@@ -432,7 +432,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
-        simp only [AND.circuit, subcircuit_norm, AND.main, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
+        simp only [AND.circuit, AND.main, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
         simp only [Fin.isValue, Nat.add_zero, id_eq]
         unfold Environment.UsesLocalWitnesses Operations.forAllFlat
         unfold Operations.forAll
@@ -458,7 +458,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           apply subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
-        simp only [circuit_norm, subcircuit_norm] at h_completeness ⊢
+        simp only [circuit_norm] at h_completeness ⊢
         rcases h_completeness with ⟨ h_c1, h_c2, h_c3 ⟩
 
         rw[Environment.UsesLocalWitnesses, Operations.forAllFlat]

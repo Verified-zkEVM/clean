@@ -198,7 +198,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   soundness := by
     intro i env input (x, y) h_input assumptions h_holds
-    simp_all only [circuit_norm, subcircuit_norm, LessThan.circuit, Prod.mk.injEq]
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
     have : 2^n < 2^(n + 1) := by gcongr; repeat linarith
     have hy : y.val + (1 : F p).val < p := by
       simp only [ZMod.val_one]; linarith
@@ -212,7 +212,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input assumptions
-    simp_all only [circuit_norm, subcircuit_norm, LessThan.circuit, Prod.mk.injEq]
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
     -- TODO impossible to prove
     sorry
 end LessEqThan
@@ -242,10 +242,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
-    simp_all [circuit_norm, subcircuit_norm, LessThan.circuit]
+    simp_all [circuit_norm, LessThan.circuit]
 
   completeness := by
-    simp_all [circuit_norm, subcircuit_norm, LessThan.circuit]
+    simp_all [circuit_norm, LessThan.circuit]
 end GreaterThan
 
 namespace GreaterEqThan
