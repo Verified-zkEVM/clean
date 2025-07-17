@@ -36,7 +36,8 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   soundness := by
     intro k eval x_var x h_input h_holds
     simp only [main, circuit_norm] at *
-    simp only [h_input, circuit_norm, subcircuit_norm] at h_holds
+    simp only [Equality.circuit] at h_holds
+    simp only [h_input, circuit_norm, eval_pair (β := field)] at h_holds
     clear h_input
 
     obtain ⟨ h_bits, h_eq ⟩ := h_holds

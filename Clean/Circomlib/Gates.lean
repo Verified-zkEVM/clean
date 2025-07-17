@@ -172,7 +172,8 @@ def circuit : FormalCircuit (F p) field field where
 
   soundness := by
     rintro _ _ _ _ h_env h_in h_hold
-    simp only [circuit_norm, main] at h_env h_hold ⊢
+    simp only [circuit_norm, main, Gadgets.Equality.circuit, eval_pair] at h_env h_hold ⊢
+    simp only [circuit_norm, main, Gadgets.Equality.circuit, eval_pair (α := field) (β := field)] at h_env h_hold ⊢
     rw [h_env] at h_hold
     simp_all only [h_hold]
     constructor
