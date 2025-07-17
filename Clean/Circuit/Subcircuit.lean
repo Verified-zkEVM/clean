@@ -489,3 +489,35 @@ theorem FormalAssertion.toSubcircuit_completeness
     (circuit.toSubcircuit n input_var).Completeness env =
     (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
   rfl
+
+-- Simplification lemmas for toSubcircuit.ops
+
+/--
+Simplifies ops for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem FormalCircuit.toSubcircuit_ops
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) :
+    (circuit.toSubcircuit n input_var).ops = (circuit.main input_var |>.operations n).toFlat := by
+  rfl
+
+/--
+Simplifies ops for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem GeneralFormalCircuit.toSubcircuit_ops
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) :
+    (circuit.toSubcircuit n input_var).ops = (circuit.main input_var |>.operations n).toFlat := by
+  rfl
+
+/--
+Simplifies ops for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem FormalAssertion.toSubcircuit_ops
+    {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) :
+    (circuit.toSubcircuit n input_var).ops = (circuit.main input_var |>.operations n).toFlat := by
+  rfl
