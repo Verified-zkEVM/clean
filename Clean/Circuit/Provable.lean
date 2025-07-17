@@ -565,6 +565,25 @@ theorem eval_pair_both_expr (env : Environment F)
     eval (α:=ProvablePair field field) env (a, b) = (Expression.eval env a, Expression.eval env b) :=
   eval_pair (α := field) (β := field) env a b
 
+-- Specialized lemmas for Vector (Expression F) to handle type inference issues with vectors
+@[circuit_norm ↓ high]
+theorem eval_pair_left_vector_expr {n : ℕ} {β: TypeMap} [ProvableType β] (env : Environment F)
+  (a : Vector (Expression F) n) (b : Var β F) :
+    eval (α:=ProvablePair (fields n) β) env (a, b) = (eval env a, eval env b) :=
+  eval_pair (α := fields n) env a b
+
+@[circuit_norm ↓ high]
+theorem eval_pair_right_vector_expr {n : ℕ} {α: TypeMap} [ProvableType α] (env : Environment F)
+  (a : Var α F) (b : Vector (Expression F) n) :
+    eval (α:=ProvablePair α (fields n)) env (a, b) = (eval env a, eval env b) :=
+  eval_pair (β := fields n) env a b
+
+@[circuit_norm ↓ high]
+theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
+  (a : Vector (Expression F) n) (b : Vector (Expression F) m) :
+    eval (α:=ProvablePair (fields n) (fields m)) env (a, b) = (eval env a, eval env b) :=
+  eval_pair (α := fields n) (β := fields m) env a b
+
 omit [Field F] in
 @[circuit_norm ↓ high]
 theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
