@@ -454,3 +454,38 @@ theorem FormalAssertion.toSubcircuit_soundness
     (circuit.toSubcircuit n input_var).Soundness env =
     (circuit.Assumptions (eval env input_var) → circuit.Spec (eval env input_var)) := by
   rfl
+
+-- Simplification lemmas for toSubcircuit.Completeness
+
+/--
+Simplifies Completeness for FormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem FormalCircuit.toSubcircuit_completeness
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).Completeness env =
+    circuit.Assumptions (eval env input_var) := by
+  rfl
+
+/--
+Simplifies Completeness for GeneralFormalCircuit.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem GeneralFormalCircuit.toSubcircuit_completeness
+    {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).Completeness env =
+    circuit.Assumptions (eval env input_var) := by
+  rfl
+
+/--
+Simplifies Completeness for FormalAssertion.toSubcircuit to avoid unfolding the entire subcircuit structure.
+-/
+@[circuit_norm]
+theorem FormalAssertion.toSubcircuit_completeness
+    {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
+    (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).Completeness env =
+    (circuit.Assumptions (eval env input_var) ∧ circuit.Spec (eval env input_var)) := by
+  rfl

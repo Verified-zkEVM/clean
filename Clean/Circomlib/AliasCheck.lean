@@ -46,7 +46,6 @@ def circuit : FormalAssertion (F p) (fields 254) where
 
   completeness := by
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
-    simp only [subcircuit_norm, circuit_norm]
     simp_all
     omega
 end AliasCheck
