@@ -49,9 +49,16 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, h_eval.symm, FinalStateUpdate.Spec]
 
+lemma ApplyRounds.circuit_assumptions_is :
+  ApplyRounds.circuit.Assumptions (F := F p) = ApplyRounds.Assumptions := rfl
+
+lemma ApplyRouunds.circuit_spec_is :
+  ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
+
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-  simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit,
+  simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
+    ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     compress, ApplyRounds.Assumptions, h_eval.symm, circuit_norm, FinalStateUpdate.Spec]
 
