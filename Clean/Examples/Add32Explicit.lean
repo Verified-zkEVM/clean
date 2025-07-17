@@ -55,4 +55,4 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Var field (F pBabybear)) env (i0 : â„
   -- simp `ConstraintsHold` expression
   simp only [Circuit.ConstraintsHold.append_soundness, Circuit.ConstraintsHold.Soundness, Gadgets.ByteTable]
   -- simp boolean subcircuit soundness and logical/arithmetic/vector expressions
-  simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd]
+  simp only [circuit_norm, Nat.reduceAdd]

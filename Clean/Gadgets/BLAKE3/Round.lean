@@ -37,7 +37,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 768
   localLength_eq input i0 := by
-    simp only [main, circuit_norm, G.circuit, subcircuit_norm, G.elaborated]
+    simp only [main, circuit_norm, G.circuit, G.elaborated]
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
@@ -105,13 +105,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨state_var, message_var⟩ henv ⟨state, message⟩ h_input h_normalized
 
-  dsimp only [elaborated, main, Fin.isValue, G.circuit, Circuit.pure_def, Circuit.bind_def,
-    subcircuit.eq_1, ElaboratedCircuit.output, Fin.coe_ofNat_eq_mod, Nat.reduceMod,
-    FormalCircuit.toSubcircuit.eq_1, ElaboratedCircuit.main, Circuit.operations, G.Assumptions,
-    G.Spec, ElaboratedCircuit.localLength, List.cons_append, List.nil_append, Fin.val_two,
-    Operations.localLength.eq_5, Operations.localLength.eq_1, Nat.add_zero, Fin.val_one,
-    Fin.val_zero, Circuit.output, Circuit.ConstraintsHold.Completeness.eq_5,
-    Circuit.ConstraintsHold.Completeness.eq_1] at ⊢ henv h_input
+  simp only [main, circuit_norm, G.circuit, G.Assumptions, G.Spec] at ⊢ henv h_input
   simp only [↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Inputs.mk.injEq, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢

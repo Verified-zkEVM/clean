@@ -45,7 +45,7 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
-  simp [circuit_norm, main, elaborated, subcircuit_norm,
+  simp [circuit_norm, main, elaborated,
     Rotation32Bits.circuit, Rotation32Bits.elaborated] at h_holds
 
   -- abstract away intermediate U32
@@ -83,10 +83,10 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
 theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
-  simp [circuit_norm, main, elaborated, subcircuit_norm,
+  simp [circuit_norm, main, elaborated,
     Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Assumptions,
     Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions]
-  simp [circuit_norm, elaborated, main, subcircuit_norm,
+  simp [circuit_norm, elaborated, main,
     Rotation32Bytes.circuit, Rotation32Bytes.Assumptions, Rotation32Bytes.Spec] at h_env
 
   obtain ⟨h0, _⟩ := h_env

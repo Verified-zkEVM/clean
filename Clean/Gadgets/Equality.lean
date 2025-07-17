@@ -99,12 +99,12 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 @[circuit_norm]
 theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit]
+  simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit]
+  simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :

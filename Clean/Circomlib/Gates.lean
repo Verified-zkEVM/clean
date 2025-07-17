@@ -481,7 +481,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           simp only [AND.main, circuit_norm] at h_c3 ⊢
           constructor
           · exact h_c3
-          · simp only [circuit_norm, subcircuit_norm, Gadgets.Equality.main]
+          · simp only [circuit_norm, Gadgets.Equality.main]
             rw [Circuit.forEach]
             simp_all [toVars, assertZero, var, circuit_norm, Operations.toFlat, FlatOperation.forAll]
 
