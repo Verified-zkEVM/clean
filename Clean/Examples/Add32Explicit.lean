@@ -38,14 +38,14 @@ example (x0 x1 x2 x3 y0 y1 y2 y3 carryIn : Var field (F pBabybear)) env (i0 : â„
 
   -- these are equivalent ways of rewriting the constraints
   -- the second one relies on prior inference of a `ExplicitCircuit` instance
-  -- note that the second one only uses a handful of theorems (much fewer than `circuit_norm` + `subcircuit_norm`)
+  -- note that the second one only uses a handful of theorems (much fewer than `circuit_norm`)
   -- for 90% of the unfolding; and doesn't even need to unfold names like `Addition32Full.main` and `Addition8FullCarry.main`
 
   -- TODO on the whole, which is better?
 
   -- first version: using `circuit_norm`
   -- dsimp only [circuit_norm, circuit32, Addition32Full.main, Addition8FullCarry.main, Gadgets.ByteTable]
-  -- simp only [subcircuit_norm, circuit_norm, Nat.reduceAdd, and_assoc]
+  -- simp only [circuit_norm, Nat.reduceAdd, and_assoc]
   -- simp only [Gadgets.ByteTable]
 
   -- second version: using `ExplicitCircuit`

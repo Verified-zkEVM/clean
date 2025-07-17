@@ -345,12 +345,7 @@ theorem Circuit.subcircuit_computableWitnesses (circuit: FormalCircuit F β α) 
     Operations.forAllFlat, Operations.forAll_toFlat_iff]
   exact circuit.compose_computableWitnesses input n h env env'
 
--- simp set to unfold subcircuits
-attribute [subcircuit_norm]
-  FormalCircuit.toSubcircuit FormalAssertion.toSubcircuit GeneralFormalCircuit.toSubcircuit
-
--- to just reduce offsets, it's much better to _not_ use `subcircuit_norm`
--- instead, `circuit_norm` will use these theorems to unfold subcircuits
+-- to reduce offsets, `circuit_norm` will use these theorems to unfold subcircuits
 attribute [circuit_norm] Circuit.subcircuit_localLength_eq Circuit.assertion_localLength_eq
   Circuit.subcircuitWithAssertion_localLength_eq
 
