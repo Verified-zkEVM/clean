@@ -47,7 +47,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
-  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock, subcircuit_norm,
+  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
     Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
     Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
     Input.mk.injEq] at *
@@ -82,7 +82,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
-  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock, subcircuit_norm,
+  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
     Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
     Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
     Input.mk.injEq] at *

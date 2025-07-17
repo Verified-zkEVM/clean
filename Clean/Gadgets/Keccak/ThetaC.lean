@@ -46,7 +46,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, subcircuit_norm, h_input, eval_vector,
+  simp only [circuit_norm, h_input, eval_vector,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
   simp only [and_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
@@ -60,7 +60,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [h_input, circuit_norm, subcircuit_norm, Assumptions, eval_vector,
+  simp only [h_input, circuit_norm, Assumptions, eval_vector,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec, KeccakState.Normalized] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
