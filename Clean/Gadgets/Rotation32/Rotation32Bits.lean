@@ -46,10 +46,9 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
   localLength _ := 8
   output _inputs i0 := output off i0
   localLength_eq _ i0 := by
-    simp only [circuit_norm]
-    simp only [main]
+    simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
-    simp only [circuit_norm, main, output]
+    simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U32.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
   subcircuitsConsistent _ _ := by
@@ -114,7 +113,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
-  simp only [elaborated, main, circuit_norm]
+  simp only [elaborated, main, circuit_norm, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions
   rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized

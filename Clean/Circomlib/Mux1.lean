@@ -177,7 +177,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   localLength _ := 1
   localLength_eq := by
     intro input offset
-    simp only [main, circuit_norm]
+    simp only [main, circuit_norm, MultiMux1.circuit]
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]

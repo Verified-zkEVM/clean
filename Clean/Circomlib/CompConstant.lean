@@ -98,7 +98,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp only [circuit_norm, main]
+  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
   subcircuitsConsistent input n := by
     simp only [circuit_norm, main]
     and_intros <;> ac_rfl

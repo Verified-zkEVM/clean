@@ -78,7 +78,6 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   completeness := by
     intro i0 env input_var h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
-    dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢

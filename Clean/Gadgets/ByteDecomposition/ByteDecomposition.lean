@@ -123,7 +123,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
-@[simps!? (config := {isSimp := false, attrs := [`circuit_norm]})]
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   elaborated offset with
   main := main offset
