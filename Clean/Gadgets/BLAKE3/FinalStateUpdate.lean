@@ -130,7 +130,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
     Fin.getElem_fin] at state_norm chaining_value_norm
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
+  dsimp only [main, circuit_norm] at henv ⊢
   simp only [h_input, circuit_norm, and_imp,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
   simp_all only [gt_iff_lt, forall_const, and_self]

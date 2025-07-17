@@ -105,7 +105,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   rintro i0 env ⟨state_var, message_var⟩ henv ⟨state, message⟩ h_input h_normalized
 
-  simp only [main, circuit_norm, G.circuit, G.Assumptions, G.Spec] at ⊢ henv h_input
+  simp only [main, circuit_norm, G.Assumptions, G.Spec] at ⊢ henv h_input
   simp only [↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Inputs.mk.injEq, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢
