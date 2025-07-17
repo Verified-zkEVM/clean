@@ -202,7 +202,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
-    simp only [eval_vector, Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, eval_pair]
+    simp only [eval_vector, Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
     rfl
 
   completeness := by
