@@ -40,7 +40,6 @@ def circuit : FormalAssertion (F p) (fields 254) where
 
   soundness := by
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
-    simp only [subcircuit_norm, circuit_norm]
     simp_all
     have : p > 2^135 := hp135.elim
     omega
