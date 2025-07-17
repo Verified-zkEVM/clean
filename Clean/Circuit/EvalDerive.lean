@@ -22,12 +22,27 @@ theorem eval_pair_fst {α β : TypeMap} [ProvableType α] [ProvableType β]
     eval env p.1 = (eval env p).1 := by
   rw [eval_pair]
 
+@[circuit_norm]
+theorem eval_pair_fst_exp {β : TypeMap} [ProvableType β]
+    (env : Environment F) (p : Var (ProvablePair field β) F) :
+    Expression.eval env p.1 = (eval env p).1 := by
+  rw [← eval_pair_fst]
+  simp only [id_eq, ↓ProvableType.eval_field]
+
 -- Lemma for pair second projection
 @[circuit_norm]
 theorem eval_pair_snd {α β : TypeMap} [ProvableType α] [ProvableType β]
     (env : Environment F) (p : Var (ProvablePair α β) F) :
     eval env p.2 = (eval env p).2 := by
   rw [eval_pair]
+
+-- Lemma for pair second projection
+@[circuit_norm]
+theorem eval_pair_snd_exp {α : TypeMap} [ProvableType α]
+    (env : Environment F) (p : Var (ProvablePair α field) F) :
+    Expression.eval env p.2 = (eval env p).2 := by
+  rw [← eval_pair_snd]
+  simp only [id_eq, ↓ProvableType.eval_field]
 
 -- Lemma for vector indexing with ProvableVector
 @[circuit_norm]
@@ -68,12 +83,6 @@ theorem eval_triple_2_2 (env : Environment F) (t : Var fieldTriple F) :
   simp only [eval, toElements, fromElements, fieldTriple, Expression.eval]
   rfl
 
--- Convenience tactic for decomposing eval assumptions
-macro "eval_decompose" h:ident : tactic => `(tactic|
-  simp only [eval_pair_fst, eval_pair_snd, eval_fields_index,
-             eval_triple_1, eval_triple_2_1, eval_triple_2_2] at $h ⊢
-)
-
 end EvalDerive
 
 -- Example usage:
@@ -81,40 +90,4 @@ example {env : Environment F} {input_var : Var (ProvablePair field field) F}
     {input : ProvablePair field field F}
     (h_input : eval env input_var = input) :
     eval env input_var.1 = input.1 ∧ eval env input_var.2 = input.2 := by
-  rw [EvalDerive.eval_pair_fst, EvalDerive.eval_pair_snd, h_input]
-  exact ⟨rfl, rfl⟩
-
--- Example with triple decomposition
-example {env : Environment F} {input_var : Var fieldTriple F} {input : fieldTriple F}
-    (h_input : eval env input_var = input) :
-    input_var.1.eval env = input.1 ∧
-    input_var.2.1.eval env = input.2.1 ∧
-    input_var.2.2.eval env = input.2.2 := by
-  eval_decompose h_input
-  rw [h_input]
-  exact ⟨rfl, rfl, rfl⟩
-
--- Example showing how to use with existing patterns in the codebase
-example {env : Environment F} {input_var : Var fieldTriple F}
-    {x y carry_in : F}
-    (h_inputs : eval env input_var = (x, y, carry_in)) :
-    input_var.1.eval env = x ∧ input_var.2.1.eval env = y ∧ input_var.2.2.eval env = carry_in := by
-  -- Before: would need manual decomposition
-  -- Now: can use the lemmas
-  have h1 : input_var.1.eval env = (eval env input_var).1 :=
-    EvalDerive.eval_triple_1 env input_var
-  have h2 : input_var.2.1.eval env = (eval env input_var).2.1 :=
-    EvalDerive.eval_triple_2_1 env input_var
-  have h3 : input_var.2.2.eval env = (eval env input_var).2.2 :=
-    EvalDerive.eval_triple_2_2 env input_var
-  rw [h_inputs] at h1 h2 h3
-  exact ⟨h1, h2, h3⟩
-
--- Alternative approach using the tactic
-example {env : Environment F} {input_var : Var fieldTriple F}
-    {x y carry_in : F}
-    (h_inputs : eval env input_var = (x, y, carry_in)) :
-    input_var.1.eval env = x ∧ input_var.2.1.eval env = y ∧ input_var.2.2.eval env = carry_in := by
-  eval_decompose h_inputs
-  rw [h_inputs]
-  exact ⟨rfl, rfl, rfl⟩
+  simp only [circuit_norm, h_input]
