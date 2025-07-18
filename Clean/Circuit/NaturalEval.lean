@@ -54,3 +54,11 @@ instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
   natural env x := by
     rcases x with ⟨ x, y ⟩
     simp only [eval_pair]
+
+@[circuit_norm]
+lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
+    [NaturalEval F M N f]
+    (env : Environment F) (input_var : Var M F) (input : M F)
+    (h_eval : ProvableType.eval env input_var = input) :
+    ProvableType.eval env (f (Expression F) input_var) = f F input := by
+  rw [NaturalEval.natural, h_eval]
