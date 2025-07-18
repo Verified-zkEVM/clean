@@ -98,10 +98,6 @@ set_option diagnostics true
 Simple example: Working with a pair of field elements.
 This demonstrates basic usage of transpose with pair projections.
 -/
--- Let's first understand what the projection actually is
-example (pair_var : Var (ProvablePair field field) F) :
-    pair_var.1 = (fun α (p : ProvablePair field field α) => p.1) (Expression F) pair_var := by
-  rfl
 
 example (env : Environment F)
     (pair_var : Var (ProvablePair field field) F)
