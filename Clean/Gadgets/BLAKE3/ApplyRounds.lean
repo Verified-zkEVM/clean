@@ -479,10 +479,13 @@ instance : ProvableStruct Inputs where
   fromComponents := fun (.cons chaining_value (.cons block_words (.cons counter_high (.cons counter_low (.cons block_len (.cons flags .nil)))))) =>
     { chaining_value, block_words, counter_high, counter_low, block_len, flags }
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
-  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
-
-  let state : Var BLAKE3State (F p) := #v[
+/--
+Initializes the BLAKE3 state vector from input variables.
+This combines the chaining value with IV constants and counter/flags.
+-/
+def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p) :=
+  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input_var
+  #v[
     chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
     chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
     const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]),
@@ -490,8 +493,10 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
     counter_low, counter_high, block_len, flags
   ]
 
+def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
+  let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)
-  sevenRoundsApplyStyle ⟨state, block_words⟩
+  sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
 -- #eval! main (p:=pBabybear) default |>.localLength
 -- #eval! main (p:=pBabybear) default |>.output
@@ -524,28 +529,23 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
     flags.value ∧
   out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-  intro ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized h_holds
-
+-- Helper lemma that proves the initial state and messages are normalized
+lemma initial_state_and_messages_are_normalized
+    (env : Environment (F p))
+    (input_var : Var Inputs (F p))
+    (input : Inputs (F p))
+    (h_input : eval env input_var = input)
+    (h_normalized : Assumptions input) :
+    let state_vec := initializeStateVector input_var
+    (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
+  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
+  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
+  set state_vec := initializeStateVector ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+  -- Create the state vector variable
   simp [circuit_norm] at h_input
   obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
     h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
 
-  simp only [circuit_norm, main, Spec]
-  simp only [circuit_norm, main] at h_holds
-  simp only [Assumptions] at h_normalized
-
-  -- Apply h_holds by proving its assumptions
-  -- We need to prove that the state is normalized and the message is normalized
-
-  -- First create a proper state vector variable
-  let state_vec : Var BLAKE3State (F p) := #v[
-    chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
-    chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-    const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]), const (U32.fromUInt32 iv[2]),
-    const (U32.fromUInt32 iv[3]), counter_low_var, counter_high_var, block_len_var, flags_var
-  ]
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
     have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
@@ -572,7 +572,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
-    simp only [BLAKE3State.Normalized, state_vec, eval_vector]
+    simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
@@ -582,10 +582,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     case «8» | «9» | «10» | «11» =>
       state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
-    case «13» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_13_Normalized]
-    case «14» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_14_Normalized]
-    case «15» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_15_Normalized]
+    case «12» => state_vec_norm_simp_simple; simp only [state_vec_12_Normalized]
+    case «13» => state_vec_norm_simp_simple; simp only [state_vec_13_Normalized]
+    case «14» => state_vec_norm_simp_simple; simp only [state_vec_14_Normalized]
+    case «15» => state_vec_norm_simp_simple; simp only [state_vec_15_Normalized]
 
   -- Show the message is normalized
   have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
@@ -593,14 +593,29 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [h_eval_block_words]
     exact h_normalized.2.1 i
 
-  -- Now we need to show that state_vec matches what's expected in h_holds
-  have h_state_vec_eq : eval env state_vec = eval env {
-    toArray := #[chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
-                 chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-                 U32.decomposeNatExpr iv[0].toNat, U32.decomposeNatExpr iv[1].toNat, U32.decomposeNatExpr iv[2].toNat,
-                 U32.decomposeNatExpr iv[3].toNat, counter_low_var, counter_high_var, block_len_var, flags_var],
-    size_toArray := by simp
-  } := by rfl
+  constructor
+  · apply h_state_normalized
+  · apply h_message_normalized
+
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+  intro i0 env input_var
+  intro input h_input h_normalized h_holds
+  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
+  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
+
+  have normalized := initial_state_and_messages_are_normalized env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+    ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
+
+  simp [circuit_norm] at h_input
+
+  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
+    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
+
+  simp only [circuit_norm, main, Spec]
+  simp only [circuit_norm, main] at h_holds
+  simp only [Assumptions] at h_normalized
+
+  simp only [initializeStateVector] at normalized
 
   have h_chaining_0_eq := eval_chaining_value_elem h_eval_chaining_block_value 0 (by omega)
   have h_chaining_1_eq := eval_chaining_value_elem h_eval_chaining_block_value 1 (by omega)
@@ -627,8 +642,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp
 
   -- Apply h_holds with the proven assumptions
-  rw [h_state_vec_eq] at h_state_normalized
-  have h_spec := h_holds ⟨h_state_normalized, h_message_normalized⟩
+  have h_spec := h_holds normalized
   clear h_holds
 
   -- Now we need to show that the spec holds
@@ -654,10 +668,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       _ = _ := h_value
       _ = _ := by
         clear h_value
+        simp only [initializeStateVector]
         rw [h_eval_block_words]
         simp only[eval_vector]
         simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
-          Nat.reducePow, Nat.add_mul_mod_self_left, state_vec, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
+          Nat.reducePow, Nat.add_mul_mod_self_left, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
         simp [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
           h_chaining_6_eq, h_chaining_7_eq, circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
 
@@ -665,74 +680,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     exact h_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-  intro henv ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
+  intro i0 env input_var
+  intro henv input h_input h_normalized
 
   -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
   simp only [circuit_norm, main] at henv ⊢
 
-  simp [circuit_norm] at h_input
-  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
-    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
-
-  -- Create the state vector variable
-  let state_vec : Var BLAKE3State (F p) := #v[
-    chaining_value_var[0], chaining_value_var[1], chaining_value_var[2], chaining_value_var[3],
-    chaining_value_var[4], chaining_value_var[5], chaining_value_var[6], chaining_value_var[7],
-    const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]), const (U32.fromUInt32 iv[2]),
-    const (U32.fromUInt32 iv[3]), counter_low_var, counter_high_var, block_len_var, flags_var
-  ]
-  -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
-    have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
-      rw [h]
-    simp only [eval_vector, Vector.getElem_map] at h_i
-    convert h_normalized.1 i
-    simp_all only [circuit_norm]
-    congr
-    norm_num
-    omega
-  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
-    rw [h_eval_counter_low]
-    exact h_normalized.2.2.2.1
-  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by
-    rw [h_eval_counter_high]
-    exact h_normalized.2.2.1
-  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by
-    rw [h_eval_block_len]
-    exact h_normalized.2.2.2.2.1
-  have state_vec_15_Normalized : (eval env flags_var).Normalized := by
-    rw [h_eval_flags]
-    exact h_normalized.2.2.2.2.2
-
-  -- Show the state is normalized
-  have h_state_normalized : (eval env state_vec).Normalized := by
-    simp only [BLAKE3State.Normalized, state_vec, eval_vector]
-    intro i
-    fin_cases i
-    -- First 8 elements are from chaining_value
-    case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
-      state_vec_norm_simp; simp [h_chaining_value_normalized]
-    -- Next 4 are IV constants
-    case «8» | «9» | «10» | «11» =>
-      state_vec_norm_simp_simple
-    -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_12_Normalized]
-    case «13» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_13_Normalized]
-    case «14» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_14_Normalized]
-    case «15» => state_vec_norm_simp_simple; simp only [state_vec, state_vec_15_Normalized]
-
-  -- Show the message is normalized
-  have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
-    intro i
-    rw [h_eval_block_words]
-    exact h_normalized.2.1 i
-
-  constructor
-  · apply h_state_normalized
-  · apply h_message_normalized
-
+  -- Use the helper lemma to prove normalization
+  exact initial_state_and_messages_are_normalized env input_var input h_input h_normalized
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
