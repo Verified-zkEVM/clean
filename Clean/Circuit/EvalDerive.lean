@@ -47,7 +47,7 @@ theorem eval_pair_snd_exp {α : TypeMap} [ProvableType α]
 -- Lemma for vector indexing with ProvableVector
 @[circuit_norm]
 theorem eval_provable_vector_index {α : TypeMap} [NonEmptyProvableType α] {n : ℕ}
-    (env : Environment F) (v : Var (ProvableVector α n) F) (i : Fin n) :
+    (env : Environment F) (v : Var (ProvableVector α n) F) (i : ℕ) (h_i : i < n) :
     eval env v[i] = (eval env v)[i] := by
   rw [eval_vector]
   simp [Vector.getElem_map]
