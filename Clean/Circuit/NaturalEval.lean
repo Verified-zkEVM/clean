@@ -105,7 +105,7 @@ example (pair_var : Var (ProvablePair field field) F) :
 
 example (env : Environment F)
     (pair_var : Var (ProvablePair field field) F)
-    (a b : field F)
-    (h_eval : ProvableType.eval env pair_var = (a, b)) :
-    ProvableType.eval env (Prod.fst pair_var) = a := by
+    (pair_val : ProvablePair field field F)
+    (h_eval : ProvableType.eval env pair_var = pair_val) :
+    ProvableType.eval env pair_var.1 = pair_val.1 := by
   simp only [natural_eval, h_eval]
