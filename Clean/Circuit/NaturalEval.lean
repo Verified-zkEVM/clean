@@ -55,7 +55,6 @@ instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
     rcases x with ⟨ x, y ⟩
     simp only [eval_pair]
 
-@[circuit_norm]
 lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
     [NaturalEval F M N f]
     (env : Environment F) (input_var : Var M F) (input : M F)
