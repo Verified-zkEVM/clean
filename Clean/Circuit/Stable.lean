@@ -215,7 +215,11 @@ def StableGeneralFormalCircuit.toGeneralFormalCircuit
     apply h_constraints
   completeness := by
     intro offset env input_var h_uses_local input h_eval h_assumptions
-    sorry -- Similar to stableCompleteness_implies_completeness
+    rw [circuit.elaborated.constraintsCompletenessStable, h_eval]
+    apply circuit.completeness
+    · rw [circuit.elaborated.usesLocalWitnessesStable, h_eval] at h_uses_local
+      exact h_uses_local
+    · exact h_assumptions
 
 /-- Convert a `StableFormalAssertion` to a `FormalAssertion` -/
 def StableFormalAssertion.toFormalAssertion (circuit : StableFormalAssertion F Input) :
@@ -225,10 +229,18 @@ def StableFormalAssertion.toFormalAssertion (circuit : StableFormalAssertion F I
   Spec := circuit.Spec
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_constraints
-    sorry
+    apply circuit.soundness
+    · exact h_assumptions
+    · rw [circuit.elaborated.constraintsSoundnessStable, h_eval] at h_constraints
+      exact h_constraints
   completeness := by
     intro offset env input_var h_uses_local input h_eval h_assumptions h_spec
-    sorry -- Similar to other completeness conversions
+    rw [circuit.elaborated.constraintsCompletenessStable, h_eval]
+    apply circuit.completeness
+    · rw [circuit.elaborated.usesLocalWitnessesStable, h_eval] at h_uses_local
+      exact h_uses_local
+    · exact h_assumptions
+    · exact h_spec
 
 end Conversions
 
@@ -250,20 +262,6 @@ def StableFormalAssertion.toSubcircuit (circuit : StableFormalAssertion F Input)
   circuit.toFormalAssertion.toSubcircuit n input_var
 
 end Subcircuits
-
-section Lemmas
-
-/-- Constraint soundness at const input equals soundness at any variable with that value -/
-lemma StableElaboratedCircuit.soundness_const_eq
-    (circuit : StableElaboratedCircuit F Input Output) (env : Environment F)
-    (input : Input F) (offset : ℕ) :
-    ConstraintsHold.Soundness env (circuit.main (const input) |>.operations offset) ↔
-    ∀ input_var, eval env input_var = input →
-      ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) := by
-  sorry
-
-
-end Lemmas
 
 end
 
