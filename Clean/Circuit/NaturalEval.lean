@@ -55,6 +55,27 @@ instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
     rcases x with ⟨ x, y ⟩
     simp only [eval_pair]
 
+/--
+Function composition preserves naturality. If f : M → N and g : N → P are both natural
+with respect to evaluation, then their composition g ∘ f : M → P is also natural.
+-/
+instance {M N P : TypeMap} [ProvableType M] [ProvableType N] [ProvableType P]
+    (f : ∀ α, M α → N α) (g : ∀ α, N α → P α)
+    [NaturalEval F M N f] [NaturalEval F N P g] :
+    NaturalEval F M P (fun α => g α ∘ f α) where
+  natural env x := by
+    -- We need to show: eval env (g ∘ f) x = (g ∘ f) (eval env x)
+    -- Which expands to: eval env (g (f x)) = g (eval env (f x))
+    simp only [Function.comp_apply]
+    -- Apply naturality of g
+    rw [NaturalEval.natural (f := g)]
+    -- Apply naturality of f
+    rw [NaturalEval.natural (f := f)]
+
+
+
+-- Note: This lemma should NOT have the @[circuit_norm] attribute as it can cause
+-- infinite reduction cycles. Use it explicitly when needed.
 lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
     [NaturalEval F M N f]
     (env : Environment F) (input_var : Var M F) (input : M F)
