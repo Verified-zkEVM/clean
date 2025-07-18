@@ -1,3 +1,8 @@
+import Mathlib.Init
+import Lean.Meta.Tactic.Simp.SimpTheorems
+import Lean.Meta.Tactic.Simp.RegisterCommand
+import Lean.LabelAttribute
+
 import Clean.Circuit.Provable
 import Clean.Circuit.Expression
 import Clean.Circuit.Basic
@@ -39,7 +44,7 @@ variable {F : Type} [Field F]
 First projection from a pair is natural with respect to evaluation.
 -/
 instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
-    NaturalEval F (ProvablePair A B) A (fun _ p => p.1) where
+    NaturalEval F (ProvablePair A B) A (fun α => Prod.fst (α := A α) (β := B α)) where
   natural (env : Environment F) x := by
     -- We need to show: eval env x.1 = (eval env x).1
     -- Unfold the definition of eval for pairs
@@ -50,7 +55,7 @@ instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
 Second projection from a pair is natural with respect to evaluation.
 -/
 instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
-    NaturalEval F (ProvablePair A B) B (fun _ p => p.2) where
+    NaturalEval F (ProvablePair A B) B (fun α => Prod.snd (α := A α) (β := B α)) where
   natural env x := by
     rcases x with ⟨ x, y ⟩
     simp only [eval_pair]
@@ -76,12 +81,32 @@ instance {M N P : TypeMap} [ProvableType M] [ProvableType N] [ProvableType P]
 
 -- Note: This lemma should NOT have the @[circuit_norm] attribute as it can cause
 -- infinite reduction cycles. Use it explicitly when needed.
+@[natural_eval]
 lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
     [NaturalEval F M N f]
     (env : Environment F) (input_var : Var M F) (input : M F)
     (h_eval : ProvableType.eval env input_var = input) :
     ProvableType.eval env (f (Expression F) input_var) = f F input := by
   rw [NaturalEval.natural, h_eval]
+
+/-- Helper to connect projection notation .1 with Prod.fst -/
+@[natural_eval]
+lemma proj_fst_eq_Prod_fst {A B : TypeMap} {α : Type} (p : ProvablePair A B α) :
+    p.1 = Prod.fst p := rfl
+
+/-- Helper to connect projection notation .2 with Prod.snd -/
+@[natural_eval]
+lemma proj_snd_eq_Prod_snd {A B : TypeMap} {α : Type} (p : ProvablePair A B α) :
+    p.2 = Prod.snd p := rfl
+
+/-- The transpose lemma can be used in natural_eval simp -/
+@[natural_eval]
+lemma transpose' {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
+    [NaturalEval F M N f]
+    (env : Environment F) (input_var : Var M F) (input : M F)
+    (h_eval : ProvableType.eval env input_var = input) :
+    ProvableType.eval env (f (Expression F) input_var) = f F input :=
+  transpose f env input_var input h_eval
 
 section Examples
 
@@ -94,5 +119,5 @@ example (env : Environment F)
     (a b : field F)
     (h_eval : ProvableType.eval env pair_var = (a, b)) :
     ProvableType.eval env pair_var.1 = a := by
-  -- First component
-  rw [transpose (f := fun _ p => p.1) (h_eval := h_eval) ]
+  -- Use the natural_eval simp set
+  simp only [natural_eval]
