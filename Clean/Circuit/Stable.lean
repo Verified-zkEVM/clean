@@ -207,8 +207,12 @@ def StableGeneralFormalCircuit.toGeneralFormalCircuit
   Assumptions := circuit.Assumptions
   Spec := circuit.Spec
   soundness := by
-    intro offset env input_var input h_eval h_constraints
-    sorry
+    intro offset env input_var input h_eval h_constraints output
+    simp only [output]
+    rw [circuit.outputStable, h_eval]
+    apply circuit.soundness
+    rw [circuit.constraintsSoundnessStable, h_eval] at h_constraints
+    apply h_constraints
   completeness := by
     intro offset env input_var h_uses_local input h_eval h_assumptions
     sorry -- Similar to stableCompleteness_implies_completeness
