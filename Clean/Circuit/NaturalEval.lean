@@ -85,9 +85,6 @@ lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M
 
 section Examples
 
-instance ex1 : NaturalEval (F := F) (M := ProvablePair field field) (N := field) (f := fun _ p => p.1) := by
-  infer_instance
-
 /--
 Simple example: Working with a pair of field elements.
 This demonstrates basic usage of transpose with pair projections.
