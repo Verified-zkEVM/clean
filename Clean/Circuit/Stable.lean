@@ -3,7 +3,6 @@ import Clean.Circuit.Subcircuit
 
 namespace Circuit
 
--- TODO: rename fields according to Lean Mathlib naming conventions.
 
 /-!
 # Stable Circuits
@@ -11,10 +10,10 @@ namespace Circuit
 This module defines circuits with stable outputs and constraints - circuits whose behavior depends only
 on the input values, not on the specific variable representation. This property is captured by four
 stability fields:
-1. `outputStable`: The output depends only on the input value
-2. `constraintsSoundnessStable`: Constraint soundness is unchanged when using const inputs
-3. `constraintsCompletenessStable`: Constraint completeness is unchanged when using const inputs
-4. `usesLocalWitnessesStable`: UsesLocalWitnessesCompleteness is unchanged when using const inputs
+1. `output_stable`: The output depends only on the input value
+2. `constraints_soundness_stable`: Constraint soundness is unchanged when using const inputs
+3. `constraints_completeness_stable`: Constraint completeness is unchanged when using const inputs
+4. `uses_local_witnesses_stable`: UsesLocalWitnessesCompleteness is unchanged when using const inputs
 
 This allows reasoning about `Input F` values directly rather than `Var Input F`.
 -/
@@ -29,21 +28,21 @@ that the circuit's behavior depends only on input values, not variable represent
 class StableElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends ElaboratedCircuit F Input Output where
   /-- The output is stable: it depends only on the input value -/
-  outputStable : ∀ (env : Environment F) input offset,
+  output_stable : ∀ (env : Environment F) input offset,
     eval env (output input offset) = eval env (output (const (eval env input)) offset)
 
   /-- Constraint soundness is stable under const substitution -/
-  constraintsSoundnessStable : ∀ (env : Environment F) input_var offset,
+  constraints_soundness_stable : ∀ (env : Environment F) input_var offset,
     ConstraintsHold.Soundness env (main input_var |>.operations offset) ↔
     ConstraintsHold.Soundness env (main (const (eval env input_var)) |>.operations offset)
 
   /-- Constraint completeness is stable under const substitution -/
-  constraintsCompletenessStable : ∀ (env : Environment F) input_var offset,
+  constraints_completeness_stable : ∀ (env : Environment F) input_var offset,
     ConstraintsHold.Completeness env (main input_var |>.operations offset) ↔
     ConstraintsHold.Completeness env (main (const (eval env input_var)) |>.operations offset)
 
   /-- UsesLocalWitnessesCompleteness is stable under const substitution -/
-  usesLocalWitnessesStable : ∀ (env : Environment F) input_var offset,
+  uses_local_witnesses_stable : ∀ (env : Environment F) input_var offset,
     env.UsesLocalWitnessesCompleteness offset (main input_var |>.operations offset) ↔
     env.UsesLocalWitnessesCompleteness offset (main (const (eval env input_var)) |>.operations offset)
 
@@ -86,10 +85,10 @@ theorem stableSoundness_implies_soundness
   specialize h offset env input h_assumptions
 
   simp only [output]
-  rw [circuit.outputStable, h_eval]
+  rw [circuit.output_stable, h_eval]
   apply h
 
-  rw [circuit.constraintsSoundnessStable, h_eval] at h_constraints
+  rw [circuit.constraints_soundness_stable, h_eval] at h_constraints
   exact h_constraints
 
 /-- StableCompleteness implies regular Completeness -/
@@ -104,11 +103,11 @@ theorem stableCompleteness_implies_completeness
   -- Note: circuit.toElaboratedCircuit.main = circuit.main by construction
   have h_main_eq : circuit.toElaboratedCircuit.main = circuit.main := rfl
 
-  rw [circuit.constraintsCompletenessStable, h_eval]
+  rw [circuit.constraints_completeness_stable, h_eval]
 
   simp only [StableCompleteness] at h
   apply h
-  · rw [circuit.usesLocalWitnessesStable, h_eval] at h_uses_local
+  · rw [circuit.uses_local_witnesses_stable, h_eval] at h_uses_local
     apply h_uses_local
   · assumption
 
@@ -209,15 +208,15 @@ def StableGeneralFormalCircuit.toGeneralFormalCircuit
   soundness := by
     intro offset env input_var input h_eval h_constraints output
     simp only [output]
-    rw [circuit.outputStable, h_eval]
+    rw [circuit.output_stable, h_eval]
     apply circuit.soundness
-    rw [circuit.constraintsSoundnessStable, h_eval] at h_constraints
+    rw [circuit.constraints_soundness_stable, h_eval] at h_constraints
     apply h_constraints
   completeness := by
     intro offset env input_var h_uses_local input h_eval h_assumptions
-    rw [circuit.elaborated.constraintsCompletenessStable, h_eval]
+    rw [circuit.elaborated.constraints_completeness_stable, h_eval]
     apply circuit.completeness
-    · rw [circuit.elaborated.usesLocalWitnessesStable, h_eval] at h_uses_local
+    · rw [circuit.elaborated.uses_local_witnesses_stable, h_eval] at h_uses_local
       exact h_uses_local
     · exact h_assumptions
 
@@ -231,13 +230,13 @@ def StableFormalAssertion.toFormalAssertion (circuit : StableFormalAssertion F I
     intro offset env input_var input h_eval h_assumptions h_constraints
     apply circuit.soundness
     · exact h_assumptions
-    · rw [circuit.elaborated.constraintsSoundnessStable, h_eval] at h_constraints
+    · rw [circuit.elaborated.constraints_soundness_stable, h_eval] at h_constraints
       exact h_constraints
   completeness := by
     intro offset env input_var h_uses_local input h_eval h_assumptions h_spec
-    rw [circuit.elaborated.constraintsCompletenessStable, h_eval]
+    rw [circuit.elaborated.constraints_completeness_stable, h_eval]
     apply circuit.completeness
-    · rw [circuit.elaborated.usesLocalWitnessesStable, h_eval] at h_uses_local
+    · rw [circuit.elaborated.uses_local_witnesses_stable, h_eval] at h_uses_local
       exact h_uses_local
     · exact h_assumptions
     · exact h_spec
