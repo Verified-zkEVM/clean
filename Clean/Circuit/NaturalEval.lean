@@ -13,3 +13,13 @@ variable (F : Type) [Field F]
 lemma reduce_fst {M N : TypeMap} [ProvableType M] [ProvableType N] env (i_var : Var (ProvablePair M N) F) :
     eval env i_var.1 = (eval env i_var).1 := by
   rw [eval_pair]
+
+@[natural_eval]
+lemma reduce_snd {M N : TypeMap} [ProvableType M] [ProvableType N] env (i_var : Var (ProvablePair M N) F) :
+    eval env i_var.2 = (eval env i_var).2 := by
+  rw [eval_pair]
+
+@[natural_eval]
+lemma reduce_vector_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} env
+    (v_var : Var (ProvableVector M n) F) (i : Fin n) :
+    eval env v_var[i] = (eval env v_var)[i] := by apply getElem_eval_vector
