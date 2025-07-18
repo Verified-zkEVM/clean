@@ -54,34 +54,24 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     simp only [circuit_norm] at h_holds
-    rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
-    simp only [Round.circuit] at h_holds1
+    simp only [Round.circuit] at h_holds
     rcases input with ⟨ input_state, input_msg ⟩
-    have h1 : Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p)) = eval env input_var := by
-      rw [ProvableStruct.eval_eq_eval]
-      simp only [ProvableStruct.eval]
-      rfl
-    rw [h_eval] at h1
-    simp only [h1] at h_holds1 h_holds2
+    rcases input_var with ⟨ state_var, msg_var ⟩
+    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
+    simp only [circuit_norm, h_eval] at h_holds
+    rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
     simp only [Permute.circuit, Permute.Assumptions] at h_holds2
     rcases h_assumptions with ⟨ asm1, asm2 ⟩
-
-    have asm2' : (eval env input_var.message : BLAKE3State _).Normalized := by
-      have h_msg_eq : (eval env input_var.message : BLAKE3State _) = input_msg := by
-        injection h1
-      rw [h_msg_eq]
-      exact asm2
-
     -- h_holds2 requires the message to be normalized
-    specialize h_holds2 asm2'
+    specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
     intro output
 
     have h_output_struct : output = {
-      state := eval env (Round.circuit.output input_var offset),
-      message := eval env (Permute.circuit.output input_var.message (offset + Round.circuit.localLength input_var))
+      state := eval env (Round.circuit.output { state := state_var, message := msg_var } offset),
+      message := eval env (Permute.circuit.output msg_var (offset + Round.circuit.localLength { state := state_var, message := msg_var }))
     } := by
       unfold output
       simp only [roundWithPermute.output_eq]
@@ -89,44 +79,28 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
       simp only [ProvableStruct.eval]
       rfl
 
+    simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
+    rw [h_output_struct]
+
     constructor
-    · rw [h_output_struct]
-      simp only [Round.Spec] at h_holds1
-      exact h_holds1.1
+    · exact h_holds1.1
     constructor
-    · rw [h_output_struct]
-      simp only [Round.Spec] at h_holds1
-      exact h_holds1.2
-    constructor
-    · rw [h_output_struct]
-      simp only [Permute.Spec] at h_holds2
-      have h_msg_eq : (eval env input_var.message : BLAKE3State _) = input_msg := by
-        injection h1
-      rw [h_msg_eq] at h_holds2
-      exact h_holds2.1
-    · rw [h_output_struct]
-      simp only [Permute.Spec] at h_holds2
-      have h_msg_eq : (eval env input_var.message : BLAKE3State _) = input_msg := by
-        injection h1
-      rw [h_msg_eq] at h_holds2
-      exact h_holds2.2
+    · exact h_holds1.2
+    · exact h_holds2
 
   completeness := by
     intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
 
     rcases input with ⟨ input_state, input_msg ⟩
-    have h1 : Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p)) = eval env input_var := by
-      rw [ProvableStruct.eval_eq_eval]
-      simp only [ProvableStruct.eval]
-      rfl
+    rcases input_var with ⟨ state_var, msg_var ⟩
+    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
 
     -- Unpack what we have
     simp only [circuit_norm] at h_env_uses_witnesses ⊢
     obtain ⟨h_round_uses, h_permute_uses⟩ := h_env_uses_witnesses
 
     constructor
-    · rw [← h_eval] at h_assumptions
-      rw [h1]
+    · simp only [Round.circuit, h_eval]
       exact h_assumptions
 
     · -- Show Permute assumptions hold (message is normalized)
@@ -135,27 +109,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
       -- and h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg
 
       dsimp only [Permute.circuit, Permute.Assumptions]
-      -- We need to show (eval env input_var.message).Normalized
-      -- We know from h_eval that eval env input_var = { state := input_state, message := input_msg }
-      -- So eval env input_var.message = input_msg
-      -- We need to show that eval env input_var.message = input_msg
-      -- From h1 and h_eval we can derive this
-      have h_eq : Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p)) =
-                  Round.Inputs.mk input_state input_msg := by
-        calc Round.Inputs.mk (eval env input_var.state) (eval env input_var.message : ProvableVector U32 16 (F p))
-          _ = eval env input_var := h1
-          _ = Round.Inputs.mk input_state input_msg := h_eval
-
-      -- Extract the message equality
-      have h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg := by
-        injection h_eq
-
-      -- Now we need to cast this to the right type for Normalized
-      have h_cast : (eval env input_var.message : BLAKE3State (F p)) = input_msg := by
-        exact h_msg_eq
-
       -- Now we can rewrite and apply h_msg_norm
-      rw [h_cast]
+      simp only [h_eval]
       exact h_msg_norm
 
 /--
