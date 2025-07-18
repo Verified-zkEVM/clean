@@ -82,3 +82,20 @@ lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M
     (h_eval : ProvableType.eval env input_var = input) :
     ProvableType.eval env (f (Expression F) input_var) = f F input := by
   rw [NaturalEval.natural, h_eval]
+
+section Examples
+
+instance ex1 : NaturalEval (F := F) (M := ProvablePair field field) (N := field) (f := fun _ p => p.1) := by
+  infer_instance
+
+/--
+Simple example: Working with a pair of field elements.
+This demonstrates basic usage of transpose with pair projections.
+-/
+example (env : Environment F)
+    (pair_var : Var (ProvablePair field field) F)
+    (a b : field F)
+    (h_eval : ProvableType.eval env pair_var = (a, b)) :
+    ProvableType.eval env pair_var.1 = a := by
+  -- First component
+  rw [transpose (f := fun _ p => p.1) (h_eval := h_eval) ]
