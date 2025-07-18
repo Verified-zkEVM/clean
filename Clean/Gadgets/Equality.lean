@@ -43,30 +43,20 @@ instance stable_elaborated (α : TypeMap) [ProvableType α] : Circuit.StableElab
   output_stable _ _ _ := rfl  -- output is always unit
 
   constraints_soundness_stable env input_var offset := by
-    -- The constraints are just assertZero on differences, which are stable
-    simp only [main, circuit_norm]
-    constructor
-    · intro orig ⟨ i, h_i ⟩
-      specialize orig ⟨ i, h_i ⟩
-      simp only [circuit_norm] at ⊢ orig
-      rw [← orig]
-      clear orig
-      congr 1
-      · simp only [Vector.getElem_zip]
-        sorry
-      · congr 1
-        sorry
-    · sorry
+    -- We need to show that the constraints are equivalent
+    -- The key insight: the differences evaluate to the same values
+    -- whether we use input_var or const (eval env input_var)
+    sorry -- This requires proving that the forEach assertZero constraints are stable
 
   constraints_completeness_stable env input_var offset := by
-    -- Same as soundness - the constraints don't change
-    simp only [main, circuit_norm]
-    constructor <;> intro h <;> exact h
+    -- Same reasoning as soundness
+    sorry -- This requires proving that the forEach assertZero constraints are stable
 
   uses_local_witnesses_stable env input_var offset := by
     -- No local witnesses, so trivially stable
     simp only [main, circuit_norm]
-    constructor <;> intro h <;> exact h
+    -- Both sides are True since there are no witness operations
+    simp only [Environment.UsesLocalWitnessesCompleteness]
 
 -- First define the stable circuit without simps
 def stable_circuit (α : TypeMap) [ProvableType α] : Circuit.StableFormalAssertion F (ProvablePair α α) where

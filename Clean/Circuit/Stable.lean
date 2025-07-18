@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
+import Clean.Circuit.Loops
 
 namespace Circuit
 
@@ -87,9 +88,8 @@ theorem stableSoundness_implies_soundness
   simp only [output]
   rw [circuit.output_stable, h_eval]
   apply h
-
   rw [circuit.constraints_soundness_stable, h_eval] at h_constraints
-  exact h_constraints
+  assumption
 
 /-- StableCompleteness implies regular Completeness -/
 theorem stableCompleteness_implies_completeness
@@ -261,6 +261,93 @@ def StableFormalAssertion.toSubcircuit (circuit : StableFormalAssertion F Input)
   circuit.toFormalAssertion.toSubcircuit n input_var
 
 end Subcircuits
+
+section StabilityLemmas
+
+/-- Key lemma: evaluating a const expression gives back the original value -/
+theorem const_eval {α : TypeMap} [ProvableType α] (env : Environment F) (x : α F) :
+    eval env (const x : Var α F) = x := by
+  simp only [const, eval]
+  conv_rhs => rw [← ProvableType.fromElements_toElements x]
+  congr 1
+  simp only [fromVars, Vector.map_map]
+  ext i _
+  simp only [Vector.getElem_map, Expression.const, Expression.eval]
+  rfl
+
+/-- Corollary: components of const also evaluate correctly -/
+theorem toVars_const_eval {α : TypeMap} [ProvableType α] (env : Environment F) (x : Var α F) (i : Fin (size α)) :
+    Expression.eval env ((toVars (const (eval env x)))[i]) = Expression.eval env ((toVars x)[i]) := by
+  simp only [toVars, toElements]
+  simp only [const, fromVars, Vector.getElem_map]
+  simp only [Expression.const, Expression.eval, eval]
+  rw [ProvableType.fromElements_toElements]
+  simp only [Vector.getElem_map]
+  rfl
+
+/--
+If all individual operations satisfy a stability property (that their constraints are equivalent
+when expressions are replaced by their evaluated constants), then ConstraintsHold.Soundness is stable.
+-/
+theorem ConstraintsHold.Soundness_stable {ops : List (Operation F)} (env : Environment F)
+    (h_stable : ∀ op ∈ ops, match op with
+      | .witness _ _ => True
+      | .assert e => ∃ e', Expression.eval env e' = Expression.eval env e ∧
+          ConstraintsHold.Soundness env [.assert e] ↔ ConstraintsHold.Soundness env [.assert e']
+      | .lookup { table, entry } => ∃ entry', entry'.map (Expression.eval env) = entry.map (Expression.eval env) ∧
+          ConstraintsHold.Soundness env [.lookup { table, entry }] ↔
+          ConstraintsHold.Soundness env [.lookup { table, entry := entry' }]
+      | .subcircuit s => True  -- Subcircuits handle their own stability
+    ) :
+    ∀ ops', (∀ i, ∃ op' ∈ ops', match ops[i]?, ops'[i]? with
+      | some (Operation.assert e), some (Operation.assert e') => Expression.eval env e' = Expression.eval env e
+      | some (Operation.lookup l), some (Operation.lookup l') =>
+          l'.entry.map (Expression.eval env) = l.entry.map (Expression.eval env) ∧ l'.table = l.table
+      | some op, some op' => op = op'
+      | _, _ => True
+    ) → ops.length = ops'.length →
+    ConstraintsHold.Soundness env ops ↔ ConstraintsHold.Soundness env ops' := by
+  sorry
+
+/-- Special case: ConstraintsHold.Soundness is stable for assert operations when expressions evaluate to the same value -/
+theorem ConstraintsHold.Soundness_stable_assert (env : Environment F) (e e' : Expression F)
+    (h : e.eval env = e'.eval env) :
+    ConstraintsHold.Soundness env [.assert e] ↔ ConstraintsHold.Soundness env [.assert e'] := by
+  simp only [ConstraintsHold.Soundness]
+  simp only [h]
+
+/-- ConstraintsHold.Completeness has the same stability property -/
+theorem ConstraintsHold.Completeness_stable_assert (env : Environment F) (e e' : Expression F)
+    (h : e.eval env = e'.eval env) :
+    ConstraintsHold.Completeness env [.assert e] ↔ ConstraintsHold.Completeness env [.assert e'] := by
+  simp only [ConstraintsHold.Completeness]
+  simp only [h]
+
+/-- Stability for forEach with a body that produces stable constraints -/
+theorem ConstraintsHold.Soundness_forEach_stable {α : Type} [Inhabited α] {n : ℕ} {xs ys : Vector α n}
+    {body : α → Circuit F Unit} [h_const : Circuit.ConstantLength body]
+    (env : Environment F) (offset : ℕ)
+    (h_body_stable : ∀ x y offset',
+      ConstraintsHold.Soundness env ((body x).operations offset') ↔
+      ConstraintsHold.Soundness env ((body y).operations offset')) :
+    ConstraintsHold.Soundness env ((forEach xs body h_const).operations offset) ↔
+    ConstraintsHold.Soundness env ((forEach ys body h_const).operations offset) := by
+  sorry
+
+/-- Special case for forEach with assertZero when expressions evaluate to the same values -/
+theorem ConstraintsHold.Soundness_forEach_assertZero_stable {n : ℕ} {xs ys : Vector (Expression F) n}
+    (env : Environment F) (offset : ℕ)
+    (h_eval : ∀ (i : Fin n), Expression.eval env xs[i] = Expression.eval env ys[i]) :
+    ConstraintsHold.Soundness env ((forEach xs assertZero).operations offset) ↔
+    ConstraintsHold.Soundness env ((forEach ys assertZero).operations offset) := by
+  -- We can't use Soundness_forEach_stable directly because Expression F doesn't have Inhabited
+  -- Instead, we'll prove this directly
+  simp only [forEach, Circuit.bind_def, Circuit.pure_def]
+  simp only [Circuit.operations]
+  -- The proof would show that the constraints are equivalent element by element
+  sorry
+
+end StabilityLemmas
 
 end
 
