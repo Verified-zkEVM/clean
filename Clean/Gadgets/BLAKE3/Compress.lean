@@ -2,6 +2,7 @@ import Clean.Gadgets.BLAKE3.ApplyRounds
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
+import Clean.Circuit.NaturalEval
 
 namespace Gadgets.BLAKE3.Compress
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -44,8 +45,9 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
   output.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env ⟨_, _, _, _, _, _⟩ ⟨_, _, _, _, _, _⟩ h_eval h_assumptions h_holds
-  simp only [circuit_norm, ApplyRounds.Inputs.mk.injEq] at h_eval
+  intro offset env input_var input h_eval h_assumptions h_holds
+  simp only [ElaboratedCircuit.main, main, circuit_norm] at h_holds
+  simp only [natural_eval] at h_holds
   simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
