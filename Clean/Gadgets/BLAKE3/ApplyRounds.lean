@@ -452,18 +452,6 @@ macro_rules
       simp only [Vector.getElem_mk, Vector.getElem_map, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
         List.getElem_toArray, List.getElem_cons_succ, List.getElem_cons_zero, circuit_norm, U32.fromUInt32_normalized])
 
--- Helper lemma for extracting elements from chaining_value evaluation
-omit p_large_enough in
-lemma eval_chaining_value_elem {env : Environment (F p)}
-    {chaining_value_var : Vector (U32 (Expression (F p))) 8}
-    {chaining_value : Vector (U32 (F p)) 8}
-    (h_eval : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value)
-    (i : ℕ) (_ : i < 8) :
-    (eval env chaining_value_var[i]).value = chaining_value[i].value := by
-  have h := congrArg (fun v => v[i]) h_eval
-  simp only [eval_vector, Vector.getElem_map, circuit_norm] at h
-  congr
-
 structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
   block_words : Vector (U32 F) 16
