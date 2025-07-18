@@ -5,6 +5,7 @@ import Clean.Types.U32
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
+import Clean.Circuit.EvalDerive
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -53,6 +54,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
+    simp only [circuit_norm, h_eval]
     simp only [circuit_norm] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     simp only [Round.circuit] at h_holds1
