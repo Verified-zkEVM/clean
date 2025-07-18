@@ -34,9 +34,9 @@ open ProvableType ProvableStruct
 -- ProvablePair (A (Expression F)) (B (Expression F)) -> A (Expression F)
 -- ProvablePair X Y -> X
 
-class NaturalEval (F : Type) [Field F] (M N : TypeMap) [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α) where
+class NaturalEval (F : Type) [Field F] (M N : TypeMap) [ProvableType M] [ProvableType N] (f : ∀ {α}, M α → N α) where
   natural (env : Environment F) (x : Var M F) :
-    ProvableType.eval env (f (Expression F) x) = f F (ProvableType.eval env x)
+    ProvableType.eval env (f x) = f (ProvableType.eval env x)
 
 variable {F : Type} [Field F]
 
@@ -44,7 +44,7 @@ variable {F : Type} [Field F]
 First projection from a pair is natural with respect to evaluation.
 -/
 instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
-    NaturalEval F (ProvablePair A B) A (fun α => Prod.fst (α := A α) (β := B α)) where
+    NaturalEval F (ProvablePair A B) A (fun {α} => Prod.fst (α := A α) (β := B α)) where
   natural (env : Environment F) x := by
     -- We need to show: eval env x.1 = (eval env x).1
     -- Unfold the definition of eval for pairs
@@ -55,7 +55,7 @@ instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
 Second projection from a pair is natural with respect to evaluation.
 -/
 instance {A B : TypeMap} [ProvableType A] [ProvableType B] :
-    NaturalEval F (ProvablePair A B) B (fun α => Prod.snd (α := A α) (β := B α)) where
+    NaturalEval F (ProvablePair A B) B (fun {α} => Prod.snd (α := A α) (β := B α)) where
   natural env x := by
     rcases x with ⟨ x, y ⟩
     simp only [eval_pair]
@@ -65,9 +65,9 @@ Function composition preserves naturality. If f : M → N and g : N → P are bo
 with respect to evaluation, then their composition g ∘ f : M → P is also natural.
 -/
 instance {M N P : TypeMap} [ProvableType M] [ProvableType N] [ProvableType P]
-    (f : ∀ α, M α → N α) (g : ∀ α, N α → P α)
+    (f : ∀ {α}, M α → N α) (g : ∀ {α}, N α → P α)
     [NaturalEval F M N f] [NaturalEval F N P g] :
-    NaturalEval F M P (fun α => g α ∘ f α) where
+    NaturalEval F M P (fun {α} => g (α := α) ∘ f (α := α)) where
   natural env x := by
     -- We need to show: eval env (g ∘ f) x = (g ∘ f) (eval env x)
     -- Which expands to: eval env (g (f x)) = g (eval env (f x))
@@ -82,11 +82,11 @@ instance {M N P : TypeMap} [ProvableType M] [ProvableType N] [ProvableType P]
 -- Note: This lemma should NOT have the @[circuit_norm] attribute as it can cause
 -- infinite reduction cycles. Use it explicitly when needed.
 @[natural_eval]
-lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
+lemma transpose {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ {α}, M α → N α)
     [NaturalEval F M N f]
     (env : Environment F) (input_var : Var M F) (input : M F)
     (h_eval : ProvableType.eval env input_var = input) :
-    ProvableType.eval env (f (Expression F) input_var) = f F input := by
+    ProvableType.eval env (f input_var) = f input := by
   rw [NaturalEval.natural, h_eval]
 
 /-- Helper to connect projection notation .1 with Prod.fst -/
@@ -101,11 +101,11 @@ lemma proj_snd_eq_Prod_snd {A B : TypeMap} {α : Type} (p : ProvablePair A B α)
 
 /-- The transpose lemma can be used in natural_eval simp -/
 @[natural_eval]
-lemma transpose' {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α)
+lemma transpose' {M N : TypeMap} [ProvableType M] [ProvableType N] (f : ∀ {α}, M α → N α)
     [NaturalEval F M N f]
     (env : Environment F) (input_var : Var M F) (input : M F)
     (h_eval : ProvableType.eval env input_var = input) :
-    ProvableType.eval env (f (Expression F) input_var) = f F input :=
+    ProvableType.eval env (f input_var) = f input :=
   transpose f env input_var input h_eval
 
 section Examples
