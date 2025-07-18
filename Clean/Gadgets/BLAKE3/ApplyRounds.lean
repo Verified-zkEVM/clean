@@ -606,25 +606,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   have normalized := initial_state_and_messages_are_normalized env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
     ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
 
-  simp [circuit_norm] at h_input
-
-  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
-    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
+  simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main] at h_holds
   simp only [Assumptions] at h_normalized
 
   simp only [initializeStateVector] at normalized
-
-  have h_chaining_0_eq := eval_chaining_value_elem h_eval_chaining_block_value 0 (by omega)
-  have h_chaining_1_eq := eval_chaining_value_elem h_eval_chaining_block_value 1 (by omega)
-  have h_chaining_2_eq := eval_chaining_value_elem h_eval_chaining_block_value 2 (by omega)
-  have h_chaining_3_eq := eval_chaining_value_elem h_eval_chaining_block_value 3 (by omega)
-  have h_chaining_4_eq := eval_chaining_value_elem h_eval_chaining_block_value 4 (by omega)
-  have h_chaining_5_eq := eval_chaining_value_elem h_eval_chaining_block_value 5 (by omega)
-  have h_chaining_6_eq := eval_chaining_value_elem h_eval_chaining_block_value 6 (by omega)
-  have h_chaining_7_eq := eval_chaining_value_elem h_eval_chaining_block_value 7 (by omega)
 
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
@@ -668,13 +656,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       _ = _ := h_value
       _ = _ := by
         clear h_value
-        simp only [initializeStateVector]
-        rw [h_eval_block_words]
-        simp only[eval_vector]
-        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_map,
-          Nat.reducePow, Nat.add_mul_mod_self_left, h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high, h_eval_counter_low, h_eval_block_len, h_eval_flags]
-        simp [h_chaining_0_eq, h_chaining_1_eq, h_chaining_2_eq, h_chaining_3_eq, h_chaining_4_eq, h_chaining_5_eq,
-          h_chaining_6_eq, h_chaining_7_eq, circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
+        simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
+        simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
 
   · -- Show out.Normalized
     exact h_normalized
