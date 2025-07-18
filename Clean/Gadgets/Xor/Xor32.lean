@@ -5,6 +5,7 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
 import Clean.Circuit.Basic
+import Clean.Circuit.NaturalEval
 import Clean.Utils.Field
 import Clean.Types.U32
 import Clean.Gadgets.Xor.ByteXorTable
@@ -23,6 +24,25 @@ instance : ProvableStruct Inputs where
   components := [U32, U32]
   toComponents := fun { x, y } => .cons x (.cons y .nil)
   fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
+
+/--
+Field projection for x is natural with respect to evaluation.
+-/
+instance : NaturalEval (F p) Inputs U32 (fun _ inputs => inputs.x) where
+  natural env input_var := by
+    simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, 
+               ProvableStruct.toComponents, ProvableStruct.fromComponents]
+    rfl
+
+/--
+Field projection for y is natural with respect to evaluation.
+-/
+instance : NaturalEval (F p) Inputs U32 (fun _ inputs => inputs.y) where
+  natural env input_var := by
+    simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, 
+               ProvableStruct.toComponents, ProvableStruct.fromComponents]
+    rfl
+
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
