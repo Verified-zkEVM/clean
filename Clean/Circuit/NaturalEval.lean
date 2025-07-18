@@ -27,6 +27,14 @@ open ProvableType ProvableStruct
 
 variable {F : Type} [Field F]
 
+-- Var (ProvablePair a b) -> Var a
+-- ProvablePair (A (Expression F)) (B (Expression F)) -> A (Expression F)
+-- ProvablePair X Y -> X
+
+class NaturalEval (M N : TypeMap) [ProvableType M] [ProvableType N] (f : ∀ α, M α → N α) where
+  natural (env : Environment F) (x : Var M F) :
+    ProvableType.eval env (f (Expression F) x) = f F (ProvableType.eval env x)
+
 /--
 For ProvableStruct types, when we know the whole struct evaluates to a value,
 we can extract what each component evaluates to.
@@ -34,7 +42,7 @@ we can extract what each component evaluates to.
 theorem eval_struct_component {α : TypeMap} [ProvableStruct α]
     (env : Environment F) (struct_var : Var α F) (struct_val : α F)
     (h_eval : ProvableType.eval env struct_var = struct_val) :
-    ProvableStruct.toComponents (α := α) (ProvableType.eval env struct_var) = 
+    ProvableStruct.toComponents (α := α) (ProvableType.eval env struct_var) =
     ProvableStruct.toComponents struct_val := by
   rw [h_eval]
 
@@ -44,7 +52,7 @@ is the same as constructing from evaluated components.
 -/
 theorem eval_struct_from_components {α : TypeMap} [ProvableStruct α]
     (env : Environment F) (comps : ProvableTypeList (Expression F) (components α)) :
-    ProvableType.eval env (fromComponents comps : α (Expression F)) = 
+    ProvableType.eval env (fromComponents comps : α (Expression F)) =
     fromComponents (ProvableStruct.eval.go env (components α) comps) := by
   -- Use ProvableStruct.eval definition
   rw [ProvableStruct.eval_eq_eval]
@@ -86,7 +94,7 @@ we can extract field equalities. This is the pattern that replaces `injection`.
 theorem eval_struct_injective {α : TypeMap} [ProvableStruct α]
     (env : Environment F) (struct_var : Var α F) (struct_val : α F)
     (h_eval : ProvableType.eval env struct_var = struct_val) :
-    ProvableStruct.toComponents (ProvableType.eval env struct_var) = 
+    ProvableStruct.toComponents (ProvableType.eval env struct_var) =
     ProvableStruct.toComponents struct_val := by
   rw [h_eval]
 
@@ -116,16 +124,16 @@ theorem eval_with_cast {α β : TypeMap} [ProvableType α] [ProvableType β]
 Tactic for automatically applying natural evaluation lemmas.
 This simplifies proofs involving `eval env` on structured data.
 -/
-macro "natural_eval" : tactic => 
-  `(tactic| simp only [eval_struct_component, eval_struct_from_components, 
+macro "natural_eval" : tactic =>
+  `(tactic| simp only [eval_struct_component, eval_struct_from_components,
                       eval_vector_mk, eval_preserves_property, eval_vector_get,
                       eval_struct_reconstruction, eval_with_cast])
 
 /--
 Extended version that also applies circuit_norm simplifications.
 -/
-macro "natural_eval!" : tactic => 
-  `(tactic| simp only [eval_struct_component, eval_struct_from_components, 
+macro "natural_eval!" : tactic =>
+  `(tactic| simp only [eval_struct_component, eval_struct_from_components,
                       eval_vector_mk, eval_preserves_property, eval_vector_get,
                       eval_struct_reconstruction, eval_with_cast, circuit_norm])
 
@@ -133,7 +141,7 @@ macro "natural_eval!" : tactic =>
 Tactic that combines natural_eval with common proof patterns.
 Use this when you have `eval env struct_var = struct_val` and need field equalities.
 -/
-macro "natural_eval_struct" h:ident : tactic => 
+macro "natural_eval_struct" h:ident : tactic =>
   `(tactic| (
     have := eval_struct_injective _ _ _ $h;
     natural_eval!

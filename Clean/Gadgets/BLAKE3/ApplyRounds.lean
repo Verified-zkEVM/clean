@@ -5,6 +5,7 @@ import Clean.Types.U32
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
+import Clean.Circuit.NaturalEval
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
