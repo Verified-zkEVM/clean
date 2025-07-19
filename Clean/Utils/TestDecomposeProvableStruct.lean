@@ -22,7 +22,7 @@ theorem test_decompose_simple {F : Type} [Field F] (input : TestInputs F) :
   fail_if_success (exact input)
   -- x, y, z should exist
   have : F := x
-  have : F := y  
+  have : F := y
   have : F := z
   ring
 
@@ -67,12 +67,23 @@ theorem test_decompose_multiple_auto {F : Type} [Field F] (a : TestInputs F) (b 
     a.x + b.y = b.y + a.x := by
   decompose_provable_struct  -- This should decompose both a and b at once
   -- Now we should have x_1, y_1, z_1 from a and x, y, z from b
+  rename_i ax ay az bx b_y bz
+  -- a and b should no longer exist
+  fail_if_success (exact a)
+  fail_if_success (exact b)
   ring
 -- Test automatic decomposition with mixed types
 theorem test_decompose_mixed_auto {F : Type} [Field F] (a : TestInputs F) (b : NestedInputs F) :
     a.x + b.first.y = b.first.y + a.x := by
   decompose_provable_struct  -- This should decompose both a and b
   -- Now we should have x, y, z from a and first, second from b
+  rename_i ax ay az bfirst bsecond
+  -- a and b should no longer exist
+  fail_if_success (exact a)
+  fail_if_success (exact b)
+  -- Components should exist with correct types
+  have : F := ax
+  have : TestInputs F := bfirst
   ring
 
 -- Test decomposition finding variables through projections in hypotheses
@@ -91,12 +102,27 @@ theorem test_decompose_from_hypothesis {F : Type} [Field F] (input : TestInputs 
 theorem test_decompose_multiple_hypotheses {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F)
     (h1 : a.x = b.y) (h2 : b.z = 10) : a.x = a.x := by
   decompose_provable_struct  -- This should find and decompose both a and b
+  rename_i bx b_y bz ax ay az
+  -- a and b should no longer exist
+  fail_if_success (exact a)
+  fail_if_success (exact b)
+  -- h1 and h2 should be updated
+  have : ax = b_y := h1
+  have : bz = 10 := h2
   ring
 
 -- Test decomposition with nested projections in hypothesis
 theorem test_decompose_nested_hypothesis {F : Type} [Field F] (input : NestedInputs F)
     (h : input.first.x = 7) : input.second.y = input.second.y := by
   decompose_provable_struct  -- This should find and decompose input
+  rename_i first second
+  -- input should no longer exist
+  fail_if_success (exact input)
+  -- first and second should exist
+  have : TestInputs F := first
+  have : TestInputs F := second
+  -- h should be updated to use first.x
+  have : first.x = 7 := h
   rfl
 
 -- Test that variables without projections are not decomposed
@@ -104,6 +130,7 @@ theorem test_no_decompose_without_projection {F : Type} [Field F] (input : TestI
     input = input := by
   fail_if_success decompose_provable_struct  -- This should fail because input doesn't appear in any projections
   -- input should still be intact, not decomposed
+  have : TestInputs F := input  -- Verify input still exists
   rfl
 
 -- Test selective decomposition: only variables with projections are decomposed
