@@ -71,6 +71,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     rw [ProvableStruct.eval_eq_eval]
     simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
+
     constructor
     · exact h_holds1.1
     constructor
@@ -79,9 +80,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   completeness := by
     intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-
-    rcases input with ⟨ input_state, input_msg ⟩
-    rcases input_var with ⟨ state_var, msg_var ⟩
+    decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
 
     -- Unpack what we have
@@ -94,11 +93,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
     · -- Show Permute assumptions hold (message is normalized)
       rcases h_assumptions with ⟨_, h_msg_norm⟩
-      -- Now h_state_eq : eval env input_var.state = input_state
-      -- and h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg
-
       dsimp only [Permute.circuit, Permute.Assumptions]
-      -- Now we can rewrite and apply h_msg_norm
       simp only [h_eval]
       exact h_msg_norm
 
