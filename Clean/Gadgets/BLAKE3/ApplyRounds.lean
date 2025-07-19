@@ -456,6 +456,17 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
     flags.value ∧
   out.Normalized
 
+omit p_large_enough in
+@[circuit_norm]
+lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment (F p))
+    (vars : Vector (Var M (F p)) n)
+    (vals : Vector (M (F p)) n)
+    (h : Vector.map (eval env) vars = vals)
+    (i : ℕ) (h_i : i < n) :
+    eval env vars[i] = vals[i] := by
+  rw [← h]
+  rw [Vector.getElem_map]
+
 -- Helper lemma that proves the initial state and messages are normalized
 lemma initial_state_and_messages_are_normalized
     (env : Environment (F p))
