@@ -45,7 +45,7 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
   output.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env input_var input h_eval h_assumptions h_holds
+  intro _ _ _ _ h_eval _ _
   decompose_provable_struct
   simp only [circuit_norm, ApplyRounds.Inputs.mk.injEq] at h_eval
   simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit,

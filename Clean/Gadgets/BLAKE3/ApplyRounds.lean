@@ -527,12 +527,12 @@ lemma initial_state_and_messages_are_normalized
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var
   intro input h_input h_normalized h_holds
-  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
-  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
 
-  have normalized := initial_state_and_messages_are_normalized env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-    ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
+  have normalized := initial_state_and_messages_are_normalized env input_var
+    input h_input h_normalized
 
+  decompose_provable_struct
+  rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   simp only [circuit_norm, main, Spec]
