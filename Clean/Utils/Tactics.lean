@@ -71,26 +71,39 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
       | .fvar fvarId => 
         return fvarId :: acc
       | _ => go base acc
-    | .app f a => 
-      -- Check if this is a structure field access function
+    | .app _ _ => 
+      -- Check if this is a structure field access function application
+      -- Get the function and all its arguments
+      let f := e.getAppFn
+      let args := e.getAppArgs
       match f with
       | .const name _ =>
         -- Check if it's a structure field accessor
         let env ← getEnv
-        if let some _ := env.getProjectionFnInfo? name then
-          -- This is a projection function, check the argument
-          match a with
-          | .fvar fvarId =>
-            return fvarId :: acc
-          | _ => go a acc
+        if let some projInfo := env.getProjectionFnInfo? name then
+          -- This is a projection function
+          -- The struct instance is at position projInfo.numParams
+          if h : projInfo.numParams < args.size then
+            let structArg := args[projInfo.numParams]
+            match structArg with
+            | .fvar fvarId =>
+              -- Also continue searching in other arguments
+              let acc' ← args.foldlM (fun acc arg => go arg acc) acc
+              return fvarId :: acc'
+            | _ => 
+              -- Continue searching in all arguments
+              args.foldlM (fun acc arg => go arg acc) acc
+          else
+            -- Not enough arguments, continue searching
+            args.foldlM (fun acc arg => go arg acc) acc
         else
-          -- Regular application
+          -- Regular application, search in function and all arguments
           let acc' ← go f acc
-          go a acc'
+          args.foldlM (fun acc arg => go arg acc) acc'
       | _ =>
-        -- Regular application
+        -- Regular application, search in function and all arguments
         let acc' ← go f acc
-        go a acc'
+        args.foldlM (fun acc arg => go arg acc) acc'
     | .lam _ _ body _ | .forallE _ _ body _ => 
       -- For binders, check the body
       go body acc
@@ -104,39 +117,15 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
   go e' []
 
 /--
-  Find all variables in the context that have ProvableStruct instances,
-  including those that appear in field projections in hypotheses
+  Find all variables that have ProvableStruct instances AND appear in field projections
+  in hypotheses or the goal (not just any variable with a ProvableStruct type)
 -/
 def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
   withMainContext do
     let ctx ← Lean.MonadLCtx.getLCtx
     let mut result := []
     
-    -- First, find all variables that have ProvableStruct instances
-    for localDecl in ctx do
-      if localDecl.isImplementationDetail then
-        continue
-      
-      let type ← inferType localDecl.toExpr
-      -- Reduce the type to handle type synonyms like Var (using transparency mode that unfolds reducible definitions)
-      let type' ← withTransparency .reducible (whnf type)
-      let typeCtor := type'.getAppFn
-      
-      -- Check if it's a structure type with ProvableStruct instance
-      match typeCtor with
-      | .const name _ =>
-        let env ← getEnv
-        -- Check if it has structure info AND ProvableStruct instance
-        if (getStructureInfo? env name).isSome then
-          -- Check for ProvableStruct instance on the type constructor
-          try
-            let instType ← mkAppM ``ProvableStruct #[.const name []]
-            if let .some _ ← trySynthInstance instType then
-              result := localDecl.fvarId :: result
-          catch _ => continue
-      | _ => continue
-    
-    -- Also search for projections in the types of hypotheses
+    -- Search for projections in the types of hypotheses
     for localDecl in ctx do
       if localDecl.isImplementationDetail then
         continue
@@ -157,24 +146,11 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
           catch _ => continue
         | _ => continue
     
-    -- Remove duplicates and return
-    return result.eraseDups
-
-/--
-  Decompose all variables with ProvableStruct instances in the context
--/
-def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
-  withMainContext do
+    -- Also search for projections in the goal
     let goal ← getMainGoal
     let target ← goal.getType
-    
-    -- Find all variables with ProvableStruct instances in the context
-    let mut fvarIds ← findProvableStructVars
-    
-    -- Also search for projections in the goal
     let varsInGoal ← findStructVars target
     -- Filter to only include those with ProvableStruct instances
-    let mut filteredVarsInGoal := []
     for fvarId in varsInGoal do
       let type ← inferType (.fvar fvarId)
       let type' ← withTransparency .reducible (whnf type)
@@ -184,11 +160,22 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
         try
           let instType ← mkAppM ``ProvableStruct #[.const name []]
           if let .some _ ← trySynthInstance instType then
-            filteredVarsInGoal := fvarId :: filteredVarsInGoal
+            result := result ++ [fvarId]
         catch _ => continue
       | _ => continue
     
-    fvarIds := (fvarIds ++ filteredVarsInGoal).eraseDups
+    -- Remove duplicates and return
+    return result.eraseDups
+
+/--
+  Decompose all variables with ProvableStruct instances in the context
+-/
+def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
+  withMainContext do
+    let goal ← getMainGoal
+    
+    -- Find all variables with ProvableStruct instances that appear in projections
+    let fvarIds ← findProvableStructVars
     
     if fvarIds.isEmpty then
       throwError "No variables with ProvableStruct instances found in the context or goal"
@@ -247,29 +234,8 @@ elab "decompose_provable_struct" : tactic => decomposeProvableStruct
 -/
 elab "show_provable_struct_vars" : tactic => do
   withMainContext do
-    let goal ← getMainGoal
-    let target ← goal.getType
-    
-    -- Find all variables with ProvableStruct instances in the context
-    let mut fvarIds ← findProvableStructVars
-    
-    -- Also search for projections in the goal
-    let varsInGoal ← findStructVars target
-    -- Filter to only include those with ProvableStruct instances
-    for fvarId in varsInGoal do
-      let type ← inferType (.fvar fvarId)
-      let type' ← withTransparency .reducible (whnf type)
-      let typeCtor := type'.getAppFn
-      match typeCtor with
-      | .const name _ =>
-        try
-          let instType ← mkAppM ``ProvableStruct #[.const name []]
-          if let .some _ ← trySynthInstance instType then
-            fvarIds := fvarId :: fvarIds
-        catch _ => continue
-      | _ => continue
-    
-    fvarIds := fvarIds.eraseDups
+    -- Find all variables with ProvableStruct instances that appear in projections
+    let fvarIds ← findProvableStructVars
     
     if fvarIds.isEmpty then
       logInfo "No ProvableStruct variables found in context or goal"

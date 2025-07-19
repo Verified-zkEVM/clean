@@ -75,3 +75,20 @@ theorem test_decompose_nested_hypothesis {F : Type} [Field F] (input : NestedInp
     (h : input.first.x = 7) : input.second.y = input.second.y := by
   decompose_provable_struct  -- This should find and decompose input
   sorry
+
+-- Test that variables without projections are not decomposed
+theorem test_no_decompose_without_projection {F : Type} [Field F] (input : TestInputs F) :
+    input = input := by
+  fail_if_success decompose_provable_struct  -- This should fail because input doesn't appear in any projections
+  -- input should still be intact, not decomposed
+  rfl
+
+-- Test selective decomposition: only variables with projections are decomposed
+theorem test_selective_decompose {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) (c : TestInputs F) :
+    a.x + b.y = b.y + a.x := by
+  -- Only a and b appear in projections, so only they should be decomposed
+  -- c should remain intact
+  decompose_provable_struct
+  -- Now we should have x_1, y_1, z_1 from a and x, y, z from b
+  -- But c should still be c : TestInputs F
+  sorry
