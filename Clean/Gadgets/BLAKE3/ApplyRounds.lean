@@ -491,7 +491,7 @@ lemma initial_state_and_messages_are_normalized
       rw [h]
     simp only [eval_vector, Vector.getElem_map] at h_i
     convert h_normalized.1 i
-    simp_all only [circuit_norm]
+    simp only [h_i]
     congr
     norm_num
     omega
