@@ -484,27 +484,12 @@ lemma initial_state_and_messages_are_normalized
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := by simp [h_input]
-    have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
-      rw [h]
-    simp only [eval_vector, Vector.getElem_map] at h_i
+    simp only [circuit_norm, eval_vector] at h_input
+    simp_all [circuit_norm]
     convert h_normalized.1 i
-    simp only [h_i]
     congr
     norm_num
     omega
-  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
-    simp only [h_input]
-    exact h_normalized.2.2.2.1
-  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by
-    simp only [h_input]
-    exact h_normalized.2.2.1
-  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by
-    simp only [h_input]
-    exact h_normalized.2.2.2.2.1
-  have state_vec_15_Normalized : (eval env flags_var).Normalized := by
-    simp only [h_input]
-    exact h_normalized.2.2.2.2.2
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
@@ -515,14 +500,9 @@ lemma initial_state_and_messages_are_normalized
     case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
       state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
-    case «8» | «9» | «10» | «11» =>
-      state_vec_norm_simp_simple
+    case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» => state_vec_norm_simp_simple; simp only [state_vec_12_Normalized]
-    case «13» => state_vec_norm_simp_simple; simp only [state_vec_13_Normalized]
-    case «14» => state_vec_norm_simp_simple; simp only [state_vec_14_Normalized]
-    case «15» => state_vec_norm_simp_simple; simp only [state_vec_15_Normalized]
-
+    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all [Assumptions, h_input]
   -- Show the message is normalized
   have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
     intro i
