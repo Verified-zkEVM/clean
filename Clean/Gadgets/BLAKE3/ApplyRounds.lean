@@ -5,6 +5,7 @@ import Clean.Types.U32
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
+import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -53,10 +54,9 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
+    decompose_provable_struct
     simp only [circuit_norm] at h_holds
     simp only [Round.circuit] at h_holds
-    rcases input with ⟨ input_state, input_msg ⟩
-    rcases input_var with ⟨ state_var, msg_var ⟩
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
     simp only [circuit_norm, h_eval] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
@@ -67,21 +67,10 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    intro output
-
-    have h_output_struct : output = {
-      state := eval env (Round.circuit.output { state := state_var, message := msg_var } offset),
-      message := eval env (Permute.circuit.output msg_var (offset + Round.circuit.localLength { state := state_var, message := msg_var }))
-    } := by
-      unfold output
-      simp only [roundWithPermute.output_eq]
-      rw [ProvableStruct.eval_eq_eval]
-      simp only [ProvableStruct.eval]
-      rfl
-
+    simp only [roundWithPermute.output_eq]
+    rw [ProvableStruct.eval_eq_eval]
+    simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
-    rw [h_output_struct]
-
     constructor
     · exact h_holds1.1
     constructor
