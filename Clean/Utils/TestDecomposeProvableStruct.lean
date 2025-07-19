@@ -57,3 +57,22 @@ theorem test_decompose_mixed_auto {F : Type} [Field F] (a : TestInputs F) (b : N
   decompose_provable_struct  -- This should decompose both a and b
   -- Now we should have x, y, z from a and first, second from b
   sorry
+
+-- Test decomposition finding variables through projections in hypotheses
+theorem test_decompose_from_hypothesis {F : Type} [Field F] (input : TestInputs F) 
+    (h : input.x = 5) : input.y + input.z = input.z + input.y := by
+  decompose_provable_struct  -- This should find and decompose input via the projection in h
+  -- Now we should have x, y, z in context with h : x = 5
+  sorry
+
+-- Test decomposition with projections in multiple hypotheses
+theorem test_decompose_multiple_hypotheses {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F)
+    (h1 : a.x = b.y) (h2 : b.z = 10) : a.y + b.x = b.x + a.y := by
+  decompose_provable_struct  -- This should find and decompose both a and b
+  sorry
+
+-- Test decomposition with nested projections in hypothesis
+theorem test_decompose_nested_hypothesis {F : Type} [Field F] (input : NestedInputs F)
+    (h : input.first.x = 7) : input.second.y = input.second.y := by
+  decompose_provable_struct  -- This should find and decompose input
+  sorry

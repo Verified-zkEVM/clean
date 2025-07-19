@@ -120,13 +120,15 @@ partial def findProvableStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarI
   go e' []
 
 /--
-  Find all variables in the context that have a ProvableStruct instance
+  Find all variables in the context that have a ProvableStruct instance,
+  including those that appear in field projections in hypotheses
 -/
 def findAllProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
   withMainContext do
     let ctx ← Lean.MonadLCtx.getLCtx
     let mut result := []
     
+    -- First, find all variables that directly have ProvableStruct instances
     for localDecl in ctx do
       if localDecl.isImplementationDetail then
         continue
@@ -140,7 +142,17 @@ def findAllProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := d
       catch _ =>
         continue
     
-    return result.reverse
+    -- Also search for projections in the types of hypotheses
+    for localDecl in ctx do
+      if localDecl.isImplementationDetail then
+        continue
+      
+      -- Search in the type of each hypothesis
+      let varsInType ← findProvableStructVars localDecl.type
+      result := result ++ varsInType
+    
+    -- Remove duplicates and return
+    return result.eraseDups
 
 /--
   Decompose all variables with ProvableStruct instances in the context
@@ -148,12 +160,17 @@ def findAllProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := d
 def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   withMainContext do
     let goal ← getMainGoal
+    let target ← goal.getType
     
     -- Find all variables with ProvableStruct in the context
-    let fvarIds ← findAllProvableStructVars
+    let mut fvarIds ← findAllProvableStructVars
+    
+    -- Also search for projections in the goal
+    let varsInGoal ← findProvableStructVars target
+    fvarIds := (fvarIds ++ varsInGoal).eraseDups
     
     if fvarIds.isEmpty then
-      throwError "No variables with ProvableStruct instances found in the context"
+      throwError "No variables with ProvableStruct instances found in the context or goal"
     
     -- Apply cases on each variable
     let mut currentGoal := goal
@@ -203,14 +220,17 @@ def decomposeProvableStructVar (fvarId : Lean.FVarId) : Lean.Elab.Tactic.TacticM
       throwError s!"Unexpected result from cases on {localDecl.userName}"
 
 /--
-  Automatically decompose ALL variables with ProvableStruct instances in the context.
+  Automatically decompose ALL variables with ProvableStruct instances that either:
+  1. Are in the context as variables with ProvableStruct types
+  2. Appear in field projections in hypotheses (e.g., h : input.x = 5)
+  3. Appear in field projections in the goal
   
   Example:
   ```lean
-  theorem example_theorem (input : Inputs (F p)) (other : OtherStruct (F p)) : 
-    input.x + other.a = someValue := by
-    decompose_provable_struct  -- This will destruct both `input` and `other`
-    -- Now we have x, y, z from input and a, b from other in context
+  theorem example_theorem (input : Inputs (F p)) (h : input.x = 5) : 
+    input.y + input.z = someValue := by
+    decompose_provable_struct  -- This will destruct `input` (found via projections)
+    -- Now we have x, y, z in context with h : x = 5
     sorry
   ```
 -/
