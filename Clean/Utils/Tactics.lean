@@ -104,15 +104,15 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
   go e' []
 
 /--
-  Find all variables in the context that have structure types,
+  Find all variables in the context that have ProvableStruct instances,
   including those that appear in field projections in hypotheses
 -/
-def findAllStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
+def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
   withMainContext do
     let ctx ← Lean.MonadLCtx.getLCtx
     let mut result := []
     
-    -- First, find all variables that have structure types
+    -- First, find all variables that have ProvableStruct instances
     for localDecl in ctx do
       if localDecl.isImplementationDetail then
         continue
@@ -122,13 +122,18 @@ def findAllStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
       let type' ← withTransparency .reducible (whnf type)
       let typeCtor := type'.getAppFn
       
-      -- Check if it's a structure type
+      -- Check if it's a structure type with ProvableStruct instance
       match typeCtor with
       | .const name _ =>
         let env ← getEnv
-        -- Check if it has structure info (i.e., it's a structure)
+        -- Check if it has structure info AND ProvableStruct instance
         if (getStructureInfo? env name).isSome then
-          result := localDecl.fvarId :: result
+          -- Check for ProvableStruct instance on the type constructor
+          try
+            let instType ← mkAppM ``ProvableStruct #[.const name []]
+            if let .some _ ← trySynthInstance instType then
+              result := localDecl.fvarId :: result
+          catch _ => continue
       | _ => continue
     
     -- Also search for projections in the types of hypotheses
@@ -138,28 +143,55 @@ def findAllStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
       
       -- Search in the type of each hypothesis
       let varsInType ← findStructVars localDecl.type
-      result := result ++ varsInType
+      -- Filter to only include those with ProvableStruct instances
+      for fvarId in varsInType do
+        let type ← inferType (.fvar fvarId)
+        let type' ← withTransparency .reducible (whnf type)
+        let typeCtor := type'.getAppFn
+        match typeCtor with
+        | .const name _ =>
+          try
+            let instType ← mkAppM ``ProvableStruct #[.const name []]
+            if let .some _ ← trySynthInstance instType then
+              result := result ++ [fvarId]
+          catch _ => continue
+        | _ => continue
     
     -- Remove duplicates and return
     return result.eraseDups
 
 /--
-  Decompose all variables with structure types in the context
+  Decompose all variables with ProvableStruct instances in the context
 -/
-def decomposeStruct : Lean.Elab.Tactic.TacticM Unit := do
+def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   withMainContext do
     let goal ← getMainGoal
     let target ← goal.getType
     
-    -- Find all variables with structure types in the context
-    let mut fvarIds ← findAllStructVars
+    -- Find all variables with ProvableStruct instances in the context
+    let mut fvarIds ← findProvableStructVars
     
     -- Also search for projections in the goal
     let varsInGoal ← findStructVars target
-    fvarIds := (fvarIds ++ varsInGoal).eraseDups
+    -- Filter to only include those with ProvableStruct instances
+    let mut filteredVarsInGoal := []
+    for fvarId in varsInGoal do
+      let type ← inferType (.fvar fvarId)
+      let type' ← withTransparency .reducible (whnf type)
+      let typeCtor := type'.getAppFn
+      match typeCtor with
+      | .const name _ =>
+        try
+          let instType ← mkAppM ``ProvableStruct #[.const name []]
+          if let .some _ ← trySynthInstance instType then
+            filteredVarsInGoal := fvarId :: filteredVarsInGoal
+        catch _ => continue
+      | _ => continue
+    
+    fvarIds := (fvarIds ++ filteredVarsInGoal).eraseDups
     
     if fvarIds.isEmpty then
-      throwError "No variables with structure types found in the context or goal"
+      throwError "No variables with ProvableStruct instances found in the context or goal"
     
     -- Apply cases on each variable
     let mut currentGoal := goal
@@ -168,7 +200,6 @@ def decomposeStruct : Lean.Elab.Tactic.TacticM Unit := do
     for fvarId in fvarIds do
       let localDecl ← fvarId.getDecl
       let userName := localDecl.userName
-      let type ← inferType localDecl.toExpr
       
       try
         -- Use cases tactic on the variable
@@ -182,15 +213,19 @@ def decomposeStruct : Lean.Elab.Tactic.TacticM Unit := do
         | _ => 
           throwError s!"Unexpected result from cases on {userName}"
       catch _ =>
-        -- Skip variables that can't be decomposed (like Var types)
+        -- Skip variables that can't be decomposed
+        -- This can happen with type synonyms or other non-destructurable types
         continue
+    
+    if not decomposed then
+      throwError "Failed to decompose any variables with ProvableStruct instances"
     
     replaceMainGoal [currentGoal]
 
 
 /--
-  Automatically decompose ALL variables with structure types that either:
-  1. Are in the context as variables with structure types
+  Automatically decompose ALL variables with ProvableStruct instances that either:
+  1. Are in the context as variables with ProvableStruct instances
   2. Appear in field projections in hypotheses (e.g., h : input.x = 5)
   3. Appear in field projections in the goal
   
@@ -198,34 +233,48 @@ def decomposeStruct : Lean.Elab.Tactic.TacticM Unit := do
   ```lean
   theorem example_theorem (input : Inputs (F p)) (h : input.x = 5) : 
     input.y + input.z = someValue := by
-    decompose_struct  -- This will destruct `input` (found via projections)
+    decompose_provable_struct  -- This will destruct `input` (found via projections)
     -- Now we have x, y, z in context with h : x = 5
     sorry
   ```
 -/
-elab "decompose_struct" : tactic => decomposeStruct
+elab "decompose_provable_struct" : tactic => decomposeProvableStruct
 
 
 /--
-  Print all structure variables found in the context and goal
-  (useful for debugging decompose_struct)
+  Print all ProvableStruct variables found in the context and goal
+  (useful for debugging decompose_provable_struct)
 -/
-elab "show_struct_vars" : tactic => do
+elab "show_provable_struct_vars" : tactic => do
   withMainContext do
     let goal ← getMainGoal
     let target ← goal.getType
     
-    -- Find all variables with structure types in the context
-    let mut fvarIds ← findAllStructVars
+    -- Find all variables with ProvableStruct instances in the context
+    let mut fvarIds ← findProvableStructVars
     
     -- Also search for projections in the goal
     let varsInGoal ← findStructVars target
-    fvarIds := (fvarIds ++ varsInGoal).eraseDups
+    -- Filter to only include those with ProvableStruct instances
+    for fvarId in varsInGoal do
+      let type ← inferType (.fvar fvarId)
+      let type' ← withTransparency .reducible (whnf type)
+      let typeCtor := type'.getAppFn
+      match typeCtor with
+      | .const name _ =>
+        try
+          let instType ← mkAppM ``ProvableStruct #[.const name []]
+          if let .some _ ← trySynthInstance instType then
+            fvarIds := fvarId :: fvarIds
+        catch _ => continue
+      | _ => continue
+    
+    fvarIds := fvarIds.eraseDups
     
     if fvarIds.isEmpty then
-      logInfo "No structure variables found in context or goal"
+      logInfo "No ProvableStruct variables found in context or goal"
     else
-      logInfo "Found structure variables:"
+      logInfo "Found ProvableStruct variables:"
       for fvarId in fvarIds do
         let localDecl ← fvarId.getDecl
         let type ← inferType localDecl.toExpr
