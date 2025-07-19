@@ -461,10 +461,11 @@ omit p_large_enough in
 lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment (F p))
     (vars : Vector (Var M (F p)) n)
     (vals : Vector (M (F p)) n)
-    (h : Vector.map (eval env) vars = vals)
+    (h : (eval env vars : ProvableVector _ _ _) = (vals : ProvableVector _ _ _))
     (i : ℕ) (h_i : i < n) :
     eval env vars[i] = vals[i] := by
   rw [← h]
+  rw [eval_vector]
   rw [Vector.getElem_map]
 
 -- Helper lemma that proves the initial state and messages are normalized
@@ -484,7 +485,6 @@ lemma initial_state_and_messages_are_normalized
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    simp only [circuit_norm, eval_vector] at h_input
     simp_all [circuit_norm]
     convert h_normalized.1 i
     congr
