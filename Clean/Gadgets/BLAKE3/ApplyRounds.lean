@@ -44,7 +44,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
 
-  Assumptions := Round.Assumptions
+  Assumptions := Round.circuit.Assumptions
   Spec := fun input output =>
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
@@ -53,11 +53,33 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
-    simp only [circuit_norm] at h_holds
+
+    simp only [Circuit.operations] at h_holds
     simp only [Round.circuit] at h_holds
-    rcases input with ⟨ input_state, input_msg ⟩
-    rcases input_var with ⟨ state_var, msg_var ⟩
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
+    simp only [Round.elaborated] at h_holds
+    simp only [Circuit.bind_def] at h_holds
+    simp only [subcircuit, List.cons_append, List.nil_append, Circuit.pure_def] at h_holds
+    simp only [Circuit.ConstraintsHold.Soundness] at h_holds
+    simp only [FormalCircuit.toSubcircuit_soundness] at h_holds
+
+    -- Here I see
+    --- h_assumptions : Round.circuit.Assumptions input
+    --- h_holds : (Round.Assumptions (eval env input_var) →
+
+    simp only [ElaboratedCircuit.main, Circuit.pure_def, Circuit.bind_def,
+      subcircuit, List.cons_append, List.nil_append, Operations.localLength.eq_5,
+      Circuit.subcircuit_localLength_eq, Operations.localLength, add_zero, subcircuit.eq_1,
+      Operations.localLength.eq_1, Circuit.ConstraintsHold.Soundness.eq_5,
+      FormalCircuit.toSubcircuit_soundness,
+       ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval,
+      fromComponents, ProvableStruct.eval.go, Circuit.ConstraintsHold.Soundness,
+      and_true] at h_holds
+
+    simp? only [circuit_norm] at h_holds
+    -- why do I see Round.Assumptions applied to eval env things?
+
+
+    simp only [Round.circuit] at h_holds
     simp only [circuit_norm, h_eval] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
