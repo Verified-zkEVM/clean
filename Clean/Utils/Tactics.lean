@@ -120,23 +120,44 @@ partial def findProvableStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarI
   go e' []
 
 /--
-  Decompose variables with ProvableStruct instances that appear in field projections in the goal
+  Find all variables in the context that have a ProvableStruct instance
+-/
+def findAllProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
+  withMainContext do
+    let ctx ← Lean.MonadLCtx.getLCtx
+    let mut result := []
+    
+    for localDecl in ctx do
+      if localDecl.isImplementationDetail then
+        continue
+      
+      let type ← inferType localDecl.toExpr
+      let typeCtor := type.getAppFn
+      
+      try
+        let _ ← synthInstance (← mkAppM ``ProvableStruct #[typeCtor])
+        result := localDecl.fvarId :: result
+      catch _ =>
+        continue
+    
+    return result.reverse
+
+/--
+  Decompose all variables with ProvableStruct instances in the context
 -/
 def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   withMainContext do
     let goal ← getMainGoal
-    let target ← goal.getType
     
-    -- Find all variables with ProvableStruct that appear in projections
-    let fvarIds ← findProvableStructVars target
-    let uniqueFvarIds := fvarIds.eraseDups
+    -- Find all variables with ProvableStruct in the context
+    let fvarIds ← findAllProvableStructVars
     
-    if uniqueFvarIds.isEmpty then
-      throwError "No variables with ProvableStruct instances found in field projections"
+    if fvarIds.isEmpty then
+      throwError "No variables with ProvableStruct instances found in the context"
     
     -- Apply cases on each variable
     let mut currentGoal := goal
-    for fvarId in uniqueFvarIds do
+    for fvarId in fvarIds do
       let localDecl ← fvarId.getDecl
       let userName := localDecl.userName
       
@@ -182,15 +203,14 @@ def decomposeProvableStructVar (fvarId : Lean.FVarId) : Lean.Elab.Tactic.TacticM
       throwError s!"Unexpected result from cases on {localDecl.userName}"
 
 /--
-  Automatically decompose variables with ProvableStruct instances when they appear 
-  in field access patterns (like x.component) in the goal.
+  Automatically decompose ALL variables with ProvableStruct instances in the context.
   
   Example:
   ```lean
-  theorem example_theorem (input : Inputs (F p)) : 
-    input.x + input.y = someValue := by
-    decompose_provable_struct  -- This will automatically destruct `input`
-    -- Now we have x, y in context instead of input
+  theorem example_theorem (input : Inputs (F p)) (other : OtherStruct (F p)) : 
+    input.x + other.a = someValue := by
+    decompose_provable_struct  -- This will destruct both `input` and `other`
+    -- Now we have x, y, z from input and a, b from other in context
     sorry
   ```
 -/

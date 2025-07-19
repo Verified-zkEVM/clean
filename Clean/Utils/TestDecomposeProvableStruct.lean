@@ -36,10 +36,24 @@ theorem test_decompose_nested {F : Type} [Field F] (input : NestedInputs F) :
   -- This should decompose input into first and second
   ring
 
--- Test with multiple variables
-theorem test_decompose_multiple {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) :
+-- Test with multiple variables using explicit version
+theorem test_decompose_multiple_explicit {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) :
     a.x + b.y = b.y + a.x := by
   decompose_provable_struct a
   decompose_provable_struct b
   -- This should decompose both a and b
   ring
+
+-- Test with multiple variables using automatic version
+theorem test_decompose_multiple_auto {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) :
+    a.x + b.y = b.y + a.x := by
+  decompose_provable_struct  -- This should decompose both a and b at once
+  -- Now we should have x_1, y_1, z_1 from a and x, y, z from b
+  sorry
+
+-- Test automatic decomposition with mixed types
+theorem test_decompose_mixed_auto {F : Type} [Field F] (a : TestInputs F) (b : NestedInputs F) :
+    a.x + b.first.y = b.first.y + a.x := by
+  decompose_provable_struct  -- This should decompose both a and b
+  -- Now we should have x, y, z from a and first, second from b
+  sorry
