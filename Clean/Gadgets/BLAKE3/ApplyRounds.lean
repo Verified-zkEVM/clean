@@ -476,17 +476,15 @@ lemma initial_state_and_messages_are_normalized
     (h_normalized : Assumptions input) :
     let state_vec := initializeStateVector input_var
     (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
-  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
-  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
-  set state_vec := initializeStateVector ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+  set state_vec := initializeStateVector input_var
+  decompose_provable_struct
+  rename_i chaining_value _ _ _ _ _ chaining_value_var block_words_var counter_high_var counter_low_var block_len_var flags_var
   -- Create the state vector variable
-  simp [circuit_norm] at h_input
-  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
-    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
+  simp [circuit_norm, Inputs.mk.injEq] at h_input
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
+    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := by simp [h_input]
     have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
       rw [h]
     simp only [eval_vector, Vector.getElem_map] at h_i
@@ -496,16 +494,16 @@ lemma initial_state_and_messages_are_normalized
     norm_num
     omega
   have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
-    rw [h_eval_counter_low]
+    simp only [h_input]
     exact h_normalized.2.2.2.1
   have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by
-    rw [h_eval_counter_high]
+    simp only [h_input]
     exact h_normalized.2.2.1
   have state_vec_14_Normalized : (eval env block_len_var).Normalized := by
-    rw [h_eval_block_len]
+    simp only [h_input]
     exact h_normalized.2.2.2.2.1
   have state_vec_15_Normalized : (eval env flags_var).Normalized := by
-    rw [h_eval_flags]
+    simp only [h_input]
     exact h_normalized.2.2.2.2.2
 
   -- Show the state is normalized
@@ -528,7 +526,7 @@ lemma initial_state_and_messages_are_normalized
   -- Show the message is normalized
   have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
     intro i
-    rw [h_eval_block_words]
+    simp only[h_input]
     exact h_normalized.2.1 i
 
   constructor
