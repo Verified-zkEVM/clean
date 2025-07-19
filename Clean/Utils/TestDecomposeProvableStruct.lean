@@ -1,0 +1,45 @@
+import Clean.Utils.Tactics
+import Clean.Circuit.Provable
+
+-- Test structure with ProvableStruct instance
+structure TestInputs (F : Type) where
+  x : F
+  y : F
+  z : F
+
+instance : ProvableStruct TestInputs where
+  components := [field, field, field]
+  toComponents := fun { x, y, z } => .cons x (.cons y (.cons z .nil))
+  fromComponents := fun (.cons x (.cons y (.cons z .nil))) => { x, y, z }
+
+-- Test theorem using the new tactic
+theorem test_decompose_simple {F : Type} [Field F] (input : TestInputs F) :
+    input.x + input.y + input.z = input.z + input.y + input.x := by
+  decompose_provable_struct input
+  -- After decomposition, we should have x, y, z in context
+  -- Check the goal state here
+  ring
+
+-- Test with nested structures
+structure NestedInputs (F : Type) where
+  first : TestInputs F
+  second : TestInputs F
+
+instance : ProvableStruct NestedInputs where
+  components := [TestInputs, TestInputs]
+  toComponents := fun { first, second } => .cons first (.cons second .nil)
+  fromComponents := fun (.cons first (.cons second .nil)) => { first, second }
+
+theorem test_decompose_nested {F : Type} [Field F] (input : NestedInputs F) :
+    input.first.x + input.second.y = input.second.y + input.first.x := by
+  decompose_provable_struct input
+  -- This should decompose input into first and second
+  ring
+
+-- Test with multiple variables
+theorem test_decompose_multiple {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) :
+    a.x + b.y = b.y + a.x := by
+  decompose_provable_struct a
+  decompose_provable_struct b
+  -- This should decompose both a and b
+  ring
