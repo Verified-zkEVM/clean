@@ -17,7 +17,13 @@ theorem test_decompose_simple {F : Type} [Field F] (input : TestInputs F) :
     input.x + input.y + input.z = input.z + input.y + input.x := by
   decompose_provable_struct
   -- After decomposition, we should have x, y, z in context
-  -- Check the goal state here
+  rename_i x y z
+  -- input should no longer exist
+  fail_if_success (exact input)
+  -- x, y, z should exist
+  have : F := x
+  have : F := y  
+  have : F := z
   ring
 
 -- Test with nested structures
@@ -34,13 +40,26 @@ theorem test_decompose_nested {F : Type} [Field F] (input : NestedInputs F) :
     input.first.x + input.second.y = input.second.y + input.first.x := by
   decompose_provable_struct
   -- This should decompose input into first and second
+  rename_i first second
+  -- input should no longer exist
+  fail_if_success (exact input)
+  -- first and second should exist
+  have : TestInputs F := first
+  have : TestInputs F := second
   ring
 
 -- Test with multiple variables using automatic version
 theorem test_decompose_multiple {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) :
     a.x + b.y = b.y + a.x := by
   decompose_provable_struct  -- This should decompose both a and b at once
-  -- Now we should have x_1, y_1, z_1 from a and x, y, z from b
+  -- Now we should have 6 variables (3 from a, 3 from b)
+  rename_i ax ay az bx b_y bz
+  -- a and b should no longer exist
+  fail_if_success (exact a)
+  fail_if_success (exact b)
+  -- All components should exist
+  have : F := ax
+  have : F := bx
   ring
 
 -- Test with multiple variables using automatic version
@@ -61,6 +80,11 @@ theorem test_decompose_from_hypothesis {F : Type} [Field F] (input : TestInputs 
     (h : input.x = 5) : input.y + input.z = input.z + input.y := by
   decompose_provable_struct  -- This should find and decompose input via the projection in h
   -- Now we should have x, y, z in context with h : x = 5
+  rename_i x y z
+  -- input should no longer exist
+  fail_if_success (exact input)
+  -- h should now be about x, not input.x
+  have : x = 5 := h
   ring
 
 -- Test decomposition with projections in multiple hypotheses
@@ -89,6 +113,10 @@ theorem test_selective_decompose {F : Type} [Field F] (a : TestInputs F) (b : Te
   -- Only a and b appear in projections, so only they should be decomposed
   -- c should remain intact
   decompose_provable_struct
-  -- Now we should have x_1, y_1, z_1 from a and x, y, z from b
-  -- But c should still be c : TestInputs F
+  rename_i ax ay az bx b_y bz
+  -- a and b should no longer exist
+  fail_if_success (exact a)
+  fail_if_success (exact b)
+  -- But c should still exist!
+  have : TestInputs F := c
   ring
