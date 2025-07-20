@@ -471,10 +471,8 @@ lemma initial_state_and_messages_are_normalized
     (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
-  decompose_provable_struct
+  provable_struct_simp
   rename_i chaining_value _ _ _ _ _ chaining_value_var block_words_var counter_high_var counter_low_var block_len_var flags_var
-  -- Create the state vector variable
-  simp [circuit_norm, Inputs.mk.injEq] at h_input
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
@@ -514,9 +512,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [Assumptions] at h_normalized
   simp only [initializeStateVector] at normalized
 
-  decompose_provable_struct
+  provable_struct_simp
   rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main] at h_holds
