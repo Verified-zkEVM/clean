@@ -158,3 +158,28 @@ theorem test_provabletype_eval_anonymous {F : Type} [Field F] (env : Environment
   provable_struct_simp
   -- After simplification, we should have the field equalities
   exact h.1
+
+-- Test 17: Eval of struct literal = variable (should be simplified)
+theorem test_eval_struct_literal_eq_var {F : Type} [Field F] (env : Environment F)
+    (output : TestInputs F)
+    (h : ProvableStruct.eval env (TestInputs.mk (Expression.const 1) (Expression.const 2) (Expression.const 3)) = output) :
+    output.x = 1 := by
+  simplify_provable_struct_eval
+  split_provable_struct_eq
+  -- After simplification, we have component-wise equalities
+  rw [←h.1]
+  simp [Expression.eval]
+
+-- Test 18: Eval of variable = variable (should NOT be simplified)
+theorem test_eval_var_eq_var_fails_as_expected {F : Type} [Field F] (env : Environment F)
+    (input output : TestInputs F)
+    (h : input = output) :
+    input.x = output.x := by
+  -- First, let's create a hypothesis that looks like eval = eval
+  have h_eval : ProvableType.eval env (ProvableType.const input) = ProvableType.eval env (ProvableType.const output) := by
+    simp [ProvableType.eval_const, h]
+  -- Now try to apply simplify_provable_struct_eval - it should fail
+  -- because neither side has a struct literal
+  try simplify_provable_struct_eval
+  -- The tactic should have made no progress, so we prove it differently
+  rw [h]

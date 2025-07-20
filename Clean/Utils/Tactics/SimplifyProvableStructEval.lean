@@ -43,8 +43,20 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
         let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval || rhs.isAppOf ``ProvableType.eval
         
         if lhsIsEval || rhsIsEval then
+          let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
-          isStructLiteral otherSide
+          
+          -- Check if other side is a struct literal
+          let otherIsLiteral ← isStructLiteral otherSide
+          if otherIsLiteral then
+            return true
+          
+          -- If other side is just a variable, check if eval side has a struct literal
+          -- Extract the argument of eval (the struct being evaluated)
+          if let some evalArg := evalSide.getArg? 1 then
+            isStructLiteral evalArg
+          else
+            return false
         else
           return false
       else
@@ -73,10 +85,24 @@ elab "simplify_provable_struct_eval" : tactic => do
         let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval || rhs.isAppOf ``ProvableType.eval
         
         if lhsIsEval || rhsIsEval then
+          let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
-          let isStructLiteralOrVar ← isStructLiteral otherSide
           
-          if isStructLiteralOrVar then
+          -- Check if we should apply simplification
+          let shouldSimplify ← do
+            -- Check if other side is a struct literal
+            let otherIsLiteral ← isStructLiteral otherSide
+            if otherIsLiteral then
+              pure true
+            else
+              -- If other side is just a variable, check if eval side has a struct literal
+              -- Extract the argument of eval (the struct being evaluated)
+              if let some evalArg := evalSide.getArg? 1 then
+                isStructLiteral evalArg
+              else
+                pure false
+          
+          if shouldSimplify then
             -- Apply simp to this specific hypothesis only
             try
               let tac ← `(tactic| simp only [
