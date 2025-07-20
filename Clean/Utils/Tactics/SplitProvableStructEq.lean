@@ -100,7 +100,7 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
 /--
   Split struct equalities using mk.injEq for all ProvableStruct types
 -/
-def splitStructEq : TacticM Unit := do
+def splitProvableStructEq : TacticM Unit := do
   withMainContext do
     -- First, find and apply cases on struct variables in equalities
     let varsToCase ← findStructVarsInEqualities
@@ -189,11 +189,11 @@ def splitStructEq : TacticM Unit := do
   theorem example (input : TestInputs F)
       (h : TestInputs.mk 1 2 3 = input ∧ x = 7) : 
       input.x = 1 := by
-    split_struct_eq
+    split_provable_struct_eq
     -- input is automatically destructured via cases
     -- The struct equality inside the conjunction is found and split
     -- h.1 becomes: 1 = x ∧ 2 = y ∧ 3 = z
     exact h.1.1.symm
   ```
 -/
-elab "split_struct_eq" : tactic => splitStructEq
+elab "split_provable_struct_eq" : tactic => splitProvableStructEq
