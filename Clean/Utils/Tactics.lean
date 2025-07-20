@@ -215,12 +215,20 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   2. Appear in field projections in hypotheses (e.g., h : input.x = 5)
   3. Appear in field projections in the goal
 
+  Note: 
+  - The new variables introduced by decomposition are not explicitly named. 
+    Use `rename_i` after this tactic to give them names.
+  - This tactic only performs one level of decomposition. For nested structures,
+    it will decompose the outer structure but not the inner ones. Use under
+    `repeat` to decompose nested structures fully.
+
   Example:
   ```lean
   theorem example_theorem (input : Inputs (F p)) (h : input.x = 5) :
     input.y + input.z = someValue := by
     decompose_provable_struct  -- This will destruct `input` (found via projections)
-    -- Now we have x, y, z in context with h : x = 5
+    -- Now we have auto-named variables for x, y and z components in context
+    -- and h has been updated to reference the new x component
     sorry
   ```
 -/
