@@ -485,7 +485,7 @@ lemma initial_state_and_messages_are_normalized
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    simp_all [circuit_norm]
+    simp_all only [circuit_norm]
     convert h_normalized.1 i
     congr
     norm_num
