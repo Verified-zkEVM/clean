@@ -49,11 +49,12 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env input_var _ h_input h_normalized h_holds
+  intro i0 env input_var input h_input h_normalized h_holds
   provable_struct_simp
 
   dsimp only [Assumptions, Fin.getElem_fin] at h_normalized
   obtain ⟨h_state, h_message⟩ := h_normalized
+  obtain ⟨h_eval_state, h_eval_message⟩ := h_input
 
   dsimp only [ElaboratedCircuit.main, main, Fin.isValue, G.circuit, G.elaborated, Fin.val_zero,
     Fin.coe_ofNat_eq_mod, Nat.reduceMod, Rotation32.output, Fin.reduceMod, Nat.cast_ofNat,
@@ -63,9 +64,10 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
     Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
   simp only [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
-    ProvableStruct.eval.go, h_input, getElem_eval_vector, G.Spec, Fin.isValue,
+    ProvableStruct.eval.go, h_eval_state, getElem_eval_vector, h_eval_message, G.Spec, Fin.isValue,
     Nat.cast_zero, and_imp, and_true] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
+  simp_all only [forall_const]
 
   -- resolve chain of assumptions
   specialize c1 (h_message 0) (h_message 1)
@@ -102,15 +104,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · exact c8.right
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env _ henv _ h_input h_normalized
-  provable_struct_simp
+  rintro i0 env input_var henv input h_input h_normalized
 
   simp only [main, circuit_norm, G.circuit, G.Assumptions, G.Spec] at ⊢ henv h_input
+  provable_struct_simp
   simp only [↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢
 
-  simp only [h_input] at henv
+  rw [h_input.left, h_input.right] at henv
   simp [Assumptions] at h_normalized
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
 
@@ -131,7 +133,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_normalized
 
-  simp only [h_normalized, getElem_eval_vector, h_input, and_self]
+  simp only [h_normalized, getElem_eval_vector, h_input.right, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
