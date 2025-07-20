@@ -18,7 +18,7 @@ structure NonProvableStruct (F : Type) where
   b : F
 
 -- Test basic struct literal = struct literal
-theorem test_struct_literal_eq_literal {F : Type} [Field F] (dummy : TestInputs F)
+theorem test_struct_literal_eq_literal {F : Type} [Field F]
     (h : (TestInputs.mk 1 2 3 : TestInputs F) = TestInputs.mk 4 5 6) : 
     (1 : F) = 4 := by
   split_struct_eq
@@ -31,7 +31,8 @@ theorem test_struct_literal_eq_variable {F : Type} [Field F] (input : TestInputs
     input.x = 1 := by
   split_struct_eq
   -- The tactic should apply cases on input and then split the equality
-  sorry
+  -- Now we should have h : 1 = x ∧ 2 = y ∧ 3 = z
+  exact h.1.symm
 
 -- Test struct variable = struct literal
 theorem test_struct_variable_eq_literal {F : Type} [Field F] (input : TestInputs F)
@@ -39,15 +40,16 @@ theorem test_struct_variable_eq_literal {F : Type} [Field F] (input : TestInputs
     input.x = 1 := by
   split_struct_eq
   -- The tactic should apply cases on input and then split the equality
-  sorry
+  -- Now we should have h : x = 1 ∧ y = 2 ∧ z = 3
+  exact h.1
 
 -- Test that non-ProvableStruct types are ignored
-theorem test_non_provable_struct {F : Type} [Field F] (dummy : TestInputs F) 
+theorem test_non_provable_struct {F : Type} [Field F]
     (h : (NonProvableStruct.mk 1 2 : NonProvableStruct F) = NonProvableStruct.mk 3 4) :
     (1 : F) = 3 := by
   split_struct_eq
   -- The tactic runs but h should be unchanged since NonProvableStruct has no ProvableStruct instance
-  -- It only applies TestInputs.mk.injEq which doesn't affect h
+  -- We can't prove this because mk.injEq doesn't exist for NonProvableStruct
   sorry
 
 -- Test multiple struct equalities
@@ -56,8 +58,12 @@ theorem test_multiple_equalities {F : Type} [Field F] (input1 input2 : TestInput
     (h2 : input2 = TestInputs.mk 4 5 6) :
     input1.x = 1 ∧ input2.y = 5 := by
   split_struct_eq
-  -- Both h1 and h2 should be handled after cases
-  sorry
+  -- Both input1 and input2 should be destructured via cases
+  -- h1 becomes: 1 = x₁ ∧ 2 = y₁ ∧ 3 = z₁
+  -- h2 becomes: x₂ = 4 ∧ y₂ = 5 ∧ z₂ = 6
+  constructor
+  · exact h1.1.symm
+  · exact h2.2.1
 
 -- Test with type synonyms (like Var)
 @[reducible]
@@ -68,12 +74,13 @@ theorem test_type_synonym {F : Type} [Field F] (input : TestVar F)
     input.x = 1 := by
   split_struct_eq
   -- Should handle type synonyms properly
-  sorry
+  exact h.1.symm
 
 -- Test with conjunctions containing struct equalities
 theorem test_conjunction_with_struct_eq {F : Type} [Field F] (input : TestInputs F) (x : F)
     (h : TestInputs.mk 1 2 3 = input ∧ x = 7) :
     input.x = 1 ∧ x = 7 := by
   split_struct_eq
-  -- The struct equality inside the conjunction should be split
+  -- The struct equality inside the conjunction should be handled
+  -- but the tactic currently only looks at top-level equalities
   sorry
