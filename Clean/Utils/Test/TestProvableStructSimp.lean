@@ -108,7 +108,7 @@ theorem test_eval_simplification {F : Type} [Field F] (env : Environment F) (inp
   split_provable_struct_eq
   -- Now h is split into field equalities
   exact h.1
-  
+
 -- Test 12: Eval simplification - struct literal = eval env var
 theorem test_eval_simplification_reversed {F : Type} [Field F] (env : Environment F) (input : TestInputs (Expression F))
     (h : TestInputs.mk 1 2 3 = ProvableStruct.eval env input) :
@@ -138,3 +138,23 @@ theorem test_eval_in_conjunction {F : Type} [Field F] (env : Environment F) (inp
   -- Complete the proof
   rw [h.1.1, h.2]
   norm_num
+
+-- Test 15: Eval with anonymous constructor syntax (the case you mentioned)
+theorem test_eval_anonymous_constructor {F : Type} [Field F] (env : Environment F)
+    (input_var : TestInputs (Expression F)) (x y z : F)
+    (h : ProvableStruct.eval env input_var = { x := x, y := y, z := z }) :
+    Expression.eval env input_var.x = x := by
+  -- This should be simplified by provable_struct_simp
+  provable_struct_simp
+  -- After simplification, we should have the field equalities
+  exact h.1
+
+-- Test 16: ProvableType.eval with anonymous constructor (the exact case from Round.lean)
+theorem test_provabletype_eval_anonymous {F : Type} [Field F] (env : Environment F)
+    (input_var : Var TestInputs F) (x y z : F)
+    (h : ProvableType.eval env input_var = { x := x, y := y, z := z }) :
+    Expression.eval env input_var.x = x := by
+  -- This should be simplified by provable_struct_simp
+  provable_struct_simp
+  -- After simplification, we should have the field equalities
+  exact h.1

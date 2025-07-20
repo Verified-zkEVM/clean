@@ -39,8 +39,8 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
     -- Check if it's an equality with eval
     if e.isAppOf `Eq then
       if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
-        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval
-        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval
+        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval || lhs.isAppOf ``ProvableType.eval
+        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval || rhs.isAppOf ``ProvableType.eval
         
         if lhsIsEval || rhsIsEval then
           let otherSide := if lhsIsEval then rhs else lhs
@@ -69,8 +69,8 @@ elab "simplify_provable_struct_eval" : tactic => do
     -- First check if it's a direct equality
     if type.isAppOf `Eq then
       if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
-        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval
-        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval
+        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval || lhs.isAppOf ``ProvableType.eval
+        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval || rhs.isAppOf ``ProvableType.eval
         
         if lhsIsEval || rhsIsEval then
           let otherSide := if lhsIsEval then rhs else lhs

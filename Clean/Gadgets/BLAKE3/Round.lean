@@ -49,7 +49,7 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env _ _ h_input h_normalized h_holds
+  intro i0 env input_var _ h_input h_normalized h_holds
   provable_struct_simp
 
   dsimp only [Assumptions, Fin.getElem_fin] at h_normalized
@@ -66,7 +66,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     ProvableStruct.eval.go, h_input, getElem_eval_vector, G.Spec, Fin.isValue,
     Nat.cast_zero, and_imp, and_true] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
-  simp_all only [forall_const]
 
   -- resolve chain of assumptions
   specialize c1 (h_message 0) (h_message 1)
@@ -111,7 +110,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     ProvableStruct.eval.go, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢
 
-  rw [h_input.left, h_input.right] at henv
+  simp only [h_input] at henv
   simp [Assumptions] at h_normalized
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
 
