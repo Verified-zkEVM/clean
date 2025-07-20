@@ -1,0 +1,111 @@
+import Lean
+import Clean.Circuit.Provable
+
+open Lean Meta Elab Tactic
+
+/-- Helper function to check if an expression is a struct constructor or struct variable -/
+private def isStructLiteral (e : Expr) : MetaM Bool := do
+  -- First check the type to see if it's a ProvableStruct
+  try
+    let type ← inferType e
+    let typeWhnf ← whnf type
+    -- Check if the type is an application of a ProvableStruct type
+    match typeWhnf.getAppFn with
+    | .const typeName _ =>
+      let inst ← trySynthInstance (← mkAppM ``ProvableStruct #[.const typeName []])
+      match inst with
+      | .some _ => return true
+      | _ => pure ()
+    | _ => pure ()
+  catch _ => pure ()
+  
+  -- Also check if it's a constructor explicitly
+  let e' ← withTransparency .all (whnf e)
+  match e'.getAppFn with
+  | .const name _ =>
+    -- Check if it's a constructor (ends with .mk)
+    return name.components.getLast? == some `mk
+  | _ => return false
+
+/-- Check if an expression contains a struct eval equality pattern, including inside conjunctions -/
+private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
+  match e with
+  | .app (.app (.const ``And _) left) right =>
+    -- Check both sides of conjunction
+    let leftHas ← containsStructEvalPattern left
+    let rightHas ← containsStructEvalPattern right
+    return leftHas || rightHas
+  | _ =>
+    -- Check if it's an equality with eval
+    if e.isAppOf `Eq then
+      if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
+        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval
+        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval
+        
+        if lhsIsEval || rhsIsEval then
+          let otherSide := if lhsIsEval then rhs else lhs
+          isStructLiteral otherSide
+        else
+          return false
+      else
+        return false
+    else
+      return false
+
+/-- Simplifies `eval env` expressions in equalities with struct literals or struct variables.
+    When we have `eval env struct_var = struct_literal` or `eval env struct_var = struct_variable`,
+    this applies the necessary simp lemmas to unfold the eval on those specific hypotheses.
+    Also looks inside conjunctions. -/
+elab "simplify_provable_struct_eval" : tactic => do
+  let ctx ← getLCtx
+  let mut anyModified := false
+  
+  -- Process each hypothesis
+  for decl in ctx do
+    if decl.isImplementationDetail then continue
+    
+    let type ← instantiateMVars decl.type
+    
+    -- First check if it's a direct equality
+    if type.isAppOf `Eq then
+      if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
+        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval
+        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval
+        
+        if lhsIsEval || rhsIsEval then
+          let otherSide := if lhsIsEval then rhs else lhs
+          let isStructLiteralOrVar ← isStructLiteral otherSide
+          
+          if isStructLiteralOrVar then
+            -- Apply simp to this specific hypothesis only
+            try
+              let tac ← `(tactic| simp only [
+                ProvableStruct.eval_eq_eval,
+                ProvableStruct.eval,
+                ProvableStruct.fromComponents,
+                ProvableStruct.eval.go,
+                ProvableType.eval_field
+              ] at $(mkIdent decl.userName):ident)
+              evalTactic tac
+              anyModified := true
+            catch _ => continue
+    
+    -- Also check if it contains conjunctions with struct eval equalities
+    else if type.isAppOf ``And then
+      -- Apply simp to hypotheses that contain the pattern inside conjunctions
+      let hasPattern ← containsStructEvalPattern type
+      if hasPattern then
+        try
+          let tac ← `(tactic| simp only [
+            ProvableStruct.eval_eq_eval,
+            ProvableStruct.eval,
+            ProvableStruct.fromComponents,
+            ProvableStruct.eval.go,
+            ProvableType.eval_field
+          ] at $(mkIdent decl.userName):ident)
+          evalTactic tac
+          anyModified := true
+        catch _ => continue
+  
+  if !anyModified then
+    throwError "simplify_provable_struct_eval made no progress"

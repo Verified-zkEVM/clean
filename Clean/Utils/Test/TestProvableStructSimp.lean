@@ -98,3 +98,43 @@ theorem test_termination {F : Type} [Field F] (a b : TestInputs F)
     a.x = b.x := by
   provable_struct_simp
   exact h.1
+
+-- Test 11: Eval simplification - eval env var = struct literal
+theorem test_eval_simplification {F : Type} [Field F] (env : Environment F) (input : TestInputs (Expression F))
+    (h : ProvableStruct.eval env input = TestInputs.mk 1 2 3) :
+    Expression.eval env input.x = 1 := by
+  simplify_provable_struct_eval
+  -- After simplification, h is component-wise but still a struct equality
+  split_provable_struct_eq
+  -- Now h is split into field equalities
+  exact h.1
+  
+-- Test 12: Eval simplification - struct literal = eval env var
+theorem test_eval_simplification_reversed {F : Type} [Field F] (env : Environment F) (input : TestInputs (Expression F))
+    (h : TestInputs.mk 1 2 3 = ProvableStruct.eval env input) :
+    Expression.eval env input.x = 1 := by
+  simplify_provable_struct_eval
+  -- After simplification, h is component-wise but still a struct equality
+  split_provable_struct_eq
+  -- Now h is split into field equalities
+  exact h.1.symm
+
+-- Test 13: Simple eval with explicit constructor form
+theorem test_eval_explicit_constructor {F : Type} [Field F] (env : Environment F) (x y z : Expression F)
+    (h : ProvableStruct.eval env (TestInputs.mk x y z) = TestInputs.mk 1 2 3) :
+    Expression.eval env x = 1 := by
+  simplify_provable_struct_eval
+  split_provable_struct_eq
+  exact h.1
+
+-- Test 14: Eval simplification inside conjunction
+theorem test_eval_in_conjunction {F : Type} [Field F] (env : Environment F) (input : TestInputs (Expression F)) (w : F)
+    (h : ProvableStruct.eval env input = TestInputs.mk 1 2 3 ∧ w = 7) :
+    Expression.eval env input.x + w = 8 := by
+  -- First simplify the eval expression before other transformations
+  simplify_provable_struct_eval
+  -- Now split the struct equality
+  split_provable_struct_eq
+  -- Complete the proof
+  rw [h.1.1, h.2]
+  norm_num
