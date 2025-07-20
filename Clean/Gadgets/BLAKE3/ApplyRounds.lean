@@ -5,6 +5,7 @@ import Clean.Types.U32
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
+import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -53,10 +54,11 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
+    simp only [Circuit.ConstraintsHold.Soundness] at h_holds
+    simp only [Round.Assumptions] at h_assumptions
+    decompose_provable_struct
     simp only [circuit_norm] at h_holds
     simp only [Round.circuit] at h_holds
-    rcases input with ⟨ input_state, input_msg ⟩
-    rcases input_var with ⟨ state_var, msg_var ⟩
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
     simp only [circuit_norm, h_eval] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
@@ -67,20 +69,10 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    intro output
-
-    have h_output_struct : output = {
-      state := eval env (Round.circuit.output { state := state_var, message := msg_var } offset),
-      message := eval env (Permute.circuit.output msg_var (offset + Round.circuit.localLength { state := state_var, message := msg_var }))
-    } := by
-      unfold output
-      simp only [roundWithPermute.output_eq]
-      rw [ProvableStruct.eval_eq_eval]
-      simp only [ProvableStruct.eval]
-      rfl
-
+    simp only [roundWithPermute.output_eq]
+    rw [ProvableStruct.eval_eq_eval]
+    simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
-    rw [h_output_struct]
 
     constructor
     · exact h_holds1.1
@@ -90,9 +82,9 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   completeness := by
     intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-
-    rcases input with ⟨ input_state, input_msg ⟩
-    rcases input_var with ⟨ state_var, msg_var ⟩
+    simp only [Circuit.ConstraintsHold.Completeness]
+    simp only [Round.Assumptions] at h_assumptions
+    decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
 
     -- Unpack what we have
@@ -105,11 +97,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
     · -- Show Permute assumptions hold (message is normalized)
       rcases h_assumptions with ⟨_, h_msg_norm⟩
-      -- Now h_state_eq : eval env input_var.state = input_state
-      -- and h_msg_eq : (eval env input_var.message : ProvableVector U32 16 (F p)) = input_msg
-
       dsimp only [Permute.circuit, Permute.Assumptions]
-      -- Now we can rewrite and apply h_msg_norm
       simp only [h_eval]
       exact h_msg_norm
 
@@ -481,37 +469,19 @@ lemma initial_state_and_messages_are_normalized
     (h_normalized : Assumptions input) :
     let state_vec := initializeStateVector input_var
     (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
-  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
-  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
-  set state_vec := initializeStateVector ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
+  set state_vec := initializeStateVector input_var
+  simp only [Assumptions] at h_normalized
+  decompose_provable_struct
+  rename_i chaining_value _ _ _ _ _ chaining_value_var block_words_var counter_high_var counter_low_var block_len_var flags_var
   -- Create the state vector variable
-  simp [circuit_norm] at h_input
-  obtain ⟨h_eval_chaining_block_value, h_eval_block_words, h_eval_counter_high,
-    h_eval_counter_low, h_eval_block_len, h_eval_flags⟩ := h_input
+  simp [circuit_norm, Inputs.mk.injEq] at h_input
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    have h : (eval env chaining_value_var : ProvableVector _ _ _) = chaining_value := h_eval_chaining_block_value
-    have h_i : (eval env chaining_value_var : ProvableVector _ _ _)[i] = chaining_value[i] := by
-      rw [h]
-    simp only [eval_vector, Vector.getElem_map] at h_i
+    simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 i
-    simp_all only [circuit_norm]
-    congr
     norm_num
     omega
-  have state_vec_12_Normalized : (eval env counter_low_var).Normalized := by
-    rw [h_eval_counter_low]
-    exact h_normalized.2.2.2.1
-  have state_vec_13_Normalized : (eval env counter_high_var).Normalized := by
-    rw [h_eval_counter_high]
-    exact h_normalized.2.2.1
-  have state_vec_14_Normalized : (eval env block_len_var).Normalized := by
-    rw [h_eval_block_len]
-    exact h_normalized.2.2.2.2.1
-  have state_vec_15_Normalized : (eval env flags_var).Normalized := by
-    rw [h_eval_flags]
-    exact h_normalized.2.2.2.2.2
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
@@ -522,18 +492,13 @@ lemma initial_state_and_messages_are_normalized
     case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
       state_vec_norm_simp; simp [h_chaining_value_normalized]
     -- Next 4 are IV constants
-    case «8» | «9» | «10» | «11» =>
-      state_vec_norm_simp_simple
+    case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» => state_vec_norm_simp_simple; simp only [state_vec_12_Normalized]
-    case «13» => state_vec_norm_simp_simple; simp only [state_vec_13_Normalized]
-    case «14» => state_vec_norm_simp_simple; simp only [state_vec_14_Normalized]
-    case «15» => state_vec_norm_simp_simple; simp only [state_vec_15_Normalized]
-
+    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all [Assumptions, h_input]
   -- Show the message is normalized
   have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
     intro i
-    rw [h_eval_block_words]
+    simp only[h_input]
     exact h_normalized.2.1 i
 
   constructor
@@ -543,19 +508,18 @@ lemma initial_state_and_messages_are_normalized
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var
   intro input h_input h_normalized h_holds
-  let ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩ := input_var
-  let ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
 
-  have normalized := initial_state_and_messages_are_normalized env ⟨chaining_value_var, block_words_var, counter_high_var, counter_low_var, block_len_var, flags_var⟩
-    ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ h_input h_normalized
+  have normalized := initial_state_and_messages_are_normalized env input_var
+    input h_input h_normalized
+  simp only [Assumptions] at h_normalized
+  simp only [initializeStateVector] at normalized
 
+  decompose_provable_struct
+  rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main] at h_holds
-  simp only [Assumptions] at h_normalized
-
-  simp only [initializeStateVector] at normalized
 
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by

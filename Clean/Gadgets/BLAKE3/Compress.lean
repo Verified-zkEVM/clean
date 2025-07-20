@@ -2,6 +2,7 @@ import Clean.Gadgets.BLAKE3.ApplyRounds
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
+import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.Compress
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -44,7 +45,9 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
   output.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env ⟨_, _, _, _, _, _⟩ ⟨_, _, _, _, _, _⟩ h_eval h_assumptions h_holds
+  intro _ _ _ _ h_eval _ _
+  simp only [Assumptions, ApplyRounds.Assumptions] at *
+  decompose_provable_struct
   simp only [circuit_norm, ApplyRounds.Inputs.mk.injEq] at h_eval
   simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
@@ -57,7 +60,9 @@ lemma ApplyRouunds.circuit_spec_is :
   ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro offset env ⟨ _, _, _, _, _, _ ⟩ h_env_uses_witnesses ⟨ _, _, _, _, _, _⟩ h_eval h_assumptions
+  intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+  simp only [Assumptions, ApplyRounds.Assumptions] at *
+  decompose_provable_struct
   simp only [circuit_norm, ApplyRounds.Inputs.mk.injEq] at h_eval
   simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
     ApplyRouunds.circuit_spec_is,
