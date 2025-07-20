@@ -29,7 +29,7 @@ macro "provable_struct_simp" : tactic =>
       fail_if_no_progress (
       try split_provable_struct_eq;
       try decompose_provable_struct;
-      try simp only [] at *
+      try simp only [circuit_norm] at *
       )
     )
   )
