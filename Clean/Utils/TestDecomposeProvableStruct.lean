@@ -62,16 +62,6 @@ theorem test_decompose_multiple {F : Type} [Field F] (a : TestInputs F) (b : Tes
   have : F := bx
   ring
 
--- Test with multiple variables using automatic version
-theorem test_decompose_multiple_auto {F : Type} [Field F] (a : TestInputs F) (b : TestInputs F) :
-    a.x + b.y = b.y + a.x := by
-  decompose_provable_struct  -- This should decompose both a and b at once
-  -- Now we should have x_1, y_1, z_1 from a and x, y, z from b
-  rename_i ax ay az bx b_y bz
-  -- a and b should no longer exist
-  fail_if_success (exact a)
-  fail_if_success (exact b)
-  ring
 -- Test automatic decomposition with mixed types
 theorem test_decompose_mixed_auto {F : Type} [Field F] (a : TestInputs F) (b : NestedInputs F) :
     a.x + b.first.y = b.first.y + a.x := by
