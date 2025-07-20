@@ -54,6 +54,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
+    simp only [Circuit.ConstraintsHold.Soundness] at h_holds
+    simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
     simp only [Round.circuit] at h_holds
@@ -80,6 +82,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   completeness := by
     intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+    simp only [Circuit.ConstraintsHold.Completeness]
+    simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
 
@@ -478,6 +482,7 @@ lemma initial_state_and_messages_are_normalized
     let state_vec := initializeStateVector input_var
     (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
   set state_vec := initializeStateVector input_var
+  simp only [Assumptions] at h_normalized
   decompose_provable_struct
   rename_i chaining_value _ _ _ _ _ chaining_value_var block_words_var counter_high_var counter_low_var block_len_var flags_var
   -- Create the state vector variable
@@ -487,7 +492,6 @@ lemma initial_state_and_messages_are_normalized
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
     simp_all only [circuit_norm]
     convert h_normalized.1 i
-    congr
     norm_num
     omega
 
@@ -519,6 +523,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   have normalized := initial_state_and_messages_are_normalized env input_var
     input h_input h_normalized
+  simp only [Assumptions] at h_normalized
+  simp only [initializeStateVector] at normalized
 
   decompose_provable_struct
   rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
@@ -526,9 +532,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main] at h_holds
-  simp only [Assumptions] at h_normalized
-
-  simp only [initializeStateVector] at normalized
 
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by

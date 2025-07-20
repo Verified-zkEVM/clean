@@ -62,16 +62,15 @@ elab "specialize_auto" e:term : tactic => withMainContext do SpecializeAuto e
   Find field projections in an expression and return the base variable if it's a structure
 -/
 partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
-  let e' ← whnf e
   let rec go (e : Lean.Expr) (acc : List Lean.FVarId) : Lean.MetaM (List Lean.FVarId) := do
     match e with
-    | .proj _ _ base => 
+    | .proj _ _ base =>
       -- Found a projection, check if base is a variable
       match base with
-      | .fvar fvarId => 
+      | .fvar fvarId =>
         return fvarId :: acc
       | _ => go base acc
-    | .app _ _ => 
+    | .app _ _ =>
       -- Check if this is a structure field access function application
       -- Get the function and all its arguments
       let f := e.getAppFn
@@ -90,7 +89,7 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
               -- Also continue searching in other arguments
               let acc' ← args.foldlM (fun acc arg => go arg acc) acc
               return fvarId :: acc'
-            | _ => 
+            | _ =>
               -- Continue searching in all arguments
               args.foldlM (fun acc arg => go arg acc) acc
           else
@@ -104,7 +103,7 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
         -- Regular application, search in function and all arguments
         let acc' ← go f acc
         args.foldlM (fun acc arg => go arg acc) acc'
-    | .lam _ _ body _ | .forallE _ _ body _ => 
+    | .lam _ _ body _ | .forallE _ _ body _ =>
       -- For binders, check the body
       go body acc
     | .letE _ _ val body _ =>
@@ -113,8 +112,8 @@ partial def findStructVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
       go body acc'
     | .mdata _ expr => go expr acc
     | _ => return acc
-  
-  go e' []
+
+  go e []
 
 /--
   Find all variables that have ProvableStruct instances AND appear in field projections
@@ -124,12 +123,12 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
   withMainContext do
     let ctx ← Lean.MonadLCtx.getLCtx
     let mut result := []
-    
+
     -- Search for projections in the types of hypotheses
     for localDecl in ctx do
       if localDecl.isImplementationDetail then
         continue
-      
+
       -- Search in the type of each hypothesis
       let varsInType ← findStructVars localDecl.type
       -- Filter to only include those with ProvableStruct instances
@@ -145,7 +144,7 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
               result := result ++ [fvarId]
           catch _ => continue
         | _ => continue
-    
+
     -- Also search for projections in the goal
     let goal ← getMainGoal
     let target ← goal.getType
@@ -163,7 +162,7 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
             result := result ++ [fvarId]
         catch _ => continue
       | _ => continue
-    
+
     -- Remove duplicates and return
     return result.eraseDups
 
@@ -173,40 +172,40 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
 def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   withMainContext do
     let goal ← getMainGoal
-    
+
     -- Find all variables with ProvableStruct instances that appear in projections
     let fvarIds ← findProvableStructVars
-    
+
     if fvarIds.isEmpty then
       throwError "No variables with ProvableStruct instances found in the context or goal"
-    
+
     -- Apply cases on each variable
     let mut currentGoal := goal
     let mut decomposed := false
-    
+
     for fvarId in fvarIds do
       let localDecl ← fvarId.getDecl
       let userName := localDecl.userName
-      
+
       try
         -- Use cases tactic on the variable
         let casesResult ← currentGoal.cases fvarId
-        
+
         -- Get the new goal from the cases result
         match casesResult.toList with
-        | [subgoal] => 
+        | [subgoal] =>
           currentGoal := subgoal.mvarId
           decomposed := true
-        | _ => 
+        | _ =>
           throwError s!"Unexpected result from cases on {userName}"
       catch _ =>
         -- Skip variables that can't be decomposed
         -- This can happen with type synonyms or other non-destructurable types
         continue
-    
+
     if not decomposed then
       throwError "Failed to decompose any variables with ProvableStruct instances"
-    
+
     replaceMainGoal [currentGoal]
 
 
@@ -215,10 +214,10 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   1. Are in the context as variables with ProvableStruct instances
   2. Appear in field projections in hypotheses (e.g., h : input.x = 5)
   3. Appear in field projections in the goal
-  
+
   Example:
   ```lean
-  theorem example_theorem (input : Inputs (F p)) (h : input.x = 5) : 
+  theorem example_theorem (input : Inputs (F p)) (h : input.x = 5) :
     input.y + input.z = someValue := by
     decompose_provable_struct  -- This will destruct `input` (found via projections)
     -- Now we have x, y, z in context with h : x = 5
@@ -236,7 +235,7 @@ elab "show_provable_struct_vars" : tactic => do
   withMainContext do
     -- Find all variables with ProvableStruct instances that appear in projections
     let fvarIds ← findProvableStructVars
-    
+
     if fvarIds.isEmpty then
       logInfo "No ProvableStruct variables found in context or goal"
     else
