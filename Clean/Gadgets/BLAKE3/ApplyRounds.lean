@@ -13,8 +13,6 @@ instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (applyRounds iv round permute)
 
-attribute [circuit_norm] eval_vector_eq_get
-
 /--
 Lemma to handle the notational difference between BLAKE3State.value and Vector.map U32.value.
 -/
@@ -480,7 +478,7 @@ lemma initial_state_and_messages_are_normalized
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
-    simp_all only [circuit_norm]
+    simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 i
     norm_num
     omega
