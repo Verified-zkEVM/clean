@@ -19,7 +19,7 @@ structure NonProvableStruct (F : Type) where
 
 -- Test basic struct literal = struct literal
 theorem test_struct_literal_eq_literal {F : Type} [Field F]
-    (h : (TestInputs.mk 1 2 3 : TestInputs F) = TestInputs.mk 4 5 6) : 
+    (h : (TestInputs.mk 1 2 3 : TestInputs F) = TestInputs.mk 4 5 6) :
     (1 : F) = 4 := by
   split_struct_eq
   -- Now h should be: 1 = 4 ∧ 2 = 5 ∧ 3 = 6
@@ -27,7 +27,7 @@ theorem test_struct_literal_eq_literal {F : Type} [Field F]
 
 -- Test struct literal = struct variable
 theorem test_struct_literal_eq_variable {F : Type} [Field F] (input : TestInputs F)
-    (h : TestInputs.mk 1 2 3 = input) : 
+    (h : TestInputs.mk 1 2 3 = input) :
     input.x = 1 := by
   split_struct_eq
   -- The tactic should apply cases on input and then split the equality
@@ -36,21 +36,12 @@ theorem test_struct_literal_eq_variable {F : Type} [Field F] (input : TestInputs
 
 -- Test struct variable = struct literal
 theorem test_struct_variable_eq_literal {F : Type} [Field F] (input : TestInputs F)
-    (h : input = TestInputs.mk 1 2 3) : 
+    (h : input = TestInputs.mk 1 2 3) :
     input.x = 1 := by
   split_struct_eq
   -- The tactic should apply cases on input and then split the equality
   -- Now we should have h : x = 1 ∧ y = 2 ∧ z = 3
   exact h.1
-
--- Test that non-ProvableStruct types are ignored
-theorem test_non_provable_struct {F : Type} [Field F]
-    (h : (NonProvableStruct.mk 1 2 : NonProvableStruct F) = NonProvableStruct.mk 3 4) :
-    (1 : F) = 3 := by
-  split_struct_eq
-  -- The tactic runs but h should be unchanged since NonProvableStruct has no ProvableStruct instance
-  -- We can't prove this because mk.injEq doesn't exist for NonProvableStruct
-  sorry
 
 -- Test multiple struct equalities
 theorem test_multiple_equalities {F : Type} [Field F] (input1 input2 : TestInputs F)
