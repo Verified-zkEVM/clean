@@ -19,6 +19,24 @@ def isStructConstructor (e : Expr) : MetaM Bool := do
   | _ => return false
 
 /--
+  Extract all struct equalities from an expression (including inside conjunctions)
+-/
+partial def extractStructEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
+  -- Returns list of (equality_expr, lhs, rhs) triples
+  match e with
+  | .app (.app (.const ``And _) left) right =>
+    -- Handle conjunction
+    let leftEqs ← extractStructEqualities left
+    let rightEqs ← extractStructEqualities right
+    return leftEqs ++ rightEqs
+  | _ =>
+    -- Check if it's an equality
+    if e.isAppOf `Eq then
+      if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
+        return [(e, lhs, rhs)]
+    return []
+
+/--
   Find struct variables that appear in equalities with struct literals
   Returns a list of FVarIds that should have cases applied
 -/
@@ -27,55 +45,55 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
     let ctx ← getLCtx
     let mut structVarsToCase := []
     
-    -- Look for equalities in hypotheses
+    -- Look for equalities in hypotheses (including inside conjunctions)
     for localDecl in ctx do
       if localDecl.isImplementationDetail then
         continue
       
       let type := localDecl.type
       
-      -- Check if it's an equality using isAppOf
-      if type.isAppOf `Eq then
-        -- Get both sides of the equality
-        if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
-          -- Check if one side is a struct constructor and the other is a variable
-          let lhsIsConstructor ← isStructConstructor lhs
-          let rhsIsConstructor ← isStructConstructor rhs
-          
-          if lhsIsConstructor && !rhsIsConstructor then
-            -- struct_literal = variable
-            match rhs with
-            | .fvar fvarId =>
-              -- Check if the variable has ProvableStruct
-              let varType ← inferType rhs
-              let varType' ← withTransparency .reducible (whnf varType)
-              match varType'.getAppFn with
-              | .const typeName _ =>
-                try
-                  let instType ← mkAppM ``ProvableStruct #[.const typeName []]
-                  match ← trySynthInstance instType with
-                  | .some _ => structVarsToCase := fvarId :: structVarsToCase
-                  | _ => pure ()
-                catch _ => pure ()
-              | _ => pure ()
+      -- Extract all equalities from this hypothesis (handles conjunctions)
+      let equalities ← extractStructEqualities type
+      
+      for (_, lhs, rhs) in equalities do
+        -- Check if one side is a struct constructor and the other is a variable
+        let lhsIsConstructor ← isStructConstructor lhs
+        let rhsIsConstructor ← isStructConstructor rhs
+        
+        if lhsIsConstructor && !rhsIsConstructor then
+          -- struct_literal = variable
+          match rhs with
+          | .fvar fvarId =>
+            -- Check if the variable has ProvableStruct
+            let varType ← inferType rhs
+            let varType' ← withTransparency .reducible (whnf varType)
+            match varType'.getAppFn with
+            | .const typeName _ =>
+              try
+                let instType ← mkAppM ``ProvableStruct #[.const typeName []]
+                match ← trySynthInstance instType with
+                | .some _ => structVarsToCase := fvarId :: structVarsToCase
+                | _ => pure ()
+              catch _ => pure ()
             | _ => pure ()
-          else if rhsIsConstructor && !lhsIsConstructor then
-            -- variable = struct_literal
-            match lhs with
-            | .fvar fvarId =>
-              -- Check if the variable has ProvableStruct
-              let varType ← inferType lhs
-              let varType' ← withTransparency .reducible (whnf varType)
-              match varType'.getAppFn with
-              | .const typeName _ =>
-                try
-                  let instType ← mkAppM ``ProvableStruct #[.const typeName []]
-                  match ← trySynthInstance instType with
-                  | .some _ => structVarsToCase := fvarId :: structVarsToCase
-                  | _ => pure ()
-                catch _ => pure ()
-              | _ => pure ()
+          | _ => pure ()
+        else if rhsIsConstructor && !lhsIsConstructor then
+          -- variable = struct_literal
+          match lhs with
+          | .fvar fvarId =>
+            -- Check if the variable has ProvableStruct
+            let varType ← inferType lhs
+            let varType' ← withTransparency .reducible (whnf varType)
+            match varType'.getAppFn with
+            | .const typeName _ =>
+              try
+                let instType ← mkAppM ``ProvableStruct #[.const typeName []]
+                match ← trySynthInstance instType with
+                | .some _ => structVarsToCase := fvarId :: structVarsToCase
+                | _ => pure ()
+              catch _ => pure ()
             | _ => pure ()
+          | _ => pure ()
     
     return structVarsToCase.eraseDups
 
@@ -107,17 +125,20 @@ def splitStructEq : TacticM Unit := do
       let env ← getEnv
       let mut lemmasToApply : List Ident := []
       
-      -- Get all the types that appear in equalities
+      -- Get all the types that appear in equalities (including inside conjunctions)
       let ctx ← getLCtx
       for localDecl in ctx do
         if localDecl.isImplementationDetail then
           continue
           
         let type := localDecl.type
-        -- Check if it's an equality
-        if type.isAppOf `Eq then
+        
+        -- Extract all equalities from this hypothesis (handles conjunctions)
+        let equalities ← extractStructEqualities type
+        
+        for (eqExpr, _, _) in equalities do
           -- Get the type argument (first argument of Eq)
-          if let some typeExpr := type.getArg? 0 then
+          if let some typeExpr := eqExpr.getArg? 0 then
             -- Get the type name
             let typeExpr' ← whnf typeExpr
             match typeExpr'.getAppFn with
@@ -155,6 +176,10 @@ def splitStructEq : TacticM Unit := do
   - `StructName.mk f1 f2 ... = variable` into `f1 = v1 ∧ f2 = v2 ∧ ...` (after automatic cases)
   - `variable = StructName.mk f1 f2 ...` into `v1 = f1 ∧ v2 = f2 ∧ ...` (after automatic cases)
   
+  The tactic also looks inside conjunctions to find struct equalities:
+  - `(StructName.mk f1 f2 ... = variable ∧ P)` → struct equality is found and split
+  - Nested conjunctions are also supported
+  
   Note: The struct literal syntax `{ field1 := value1, ... }` is automatically handled.
   
   Only works on structures that have a ProvableStruct instance.
@@ -162,12 +187,13 @@ def splitStructEq : TacticM Unit := do
   Example:
   ```lean
   theorem example (input : TestInputs F)
-      (h : TestInputs.mk 1 2 3 = input) : 
+      (h : TestInputs.mk 1 2 3 = input ∧ x = 7) : 
       input.x = 1 := by
     split_struct_eq
     -- input is automatically destructured via cases
-    -- Then h is split into: 1 = x ∧ 2 = y ∧ 3 = z
-    sorry
+    -- The struct equality inside the conjunction is found and split
+    -- h.1 becomes: 1 = x ∧ 2 = y ∧ 3 = z
+    exact h.1.1.symm
   ```
 -/
 elab "split_struct_eq" : tactic => splitStructEq

@@ -72,6 +72,19 @@ theorem test_conjunction_with_struct_eq {F : Type} [Field F] (input : TestInputs
     (h : TestInputs.mk 1 2 3 = input ∧ x = 7) :
     input.x = 1 ∧ x = 7 := by
   split_struct_eq
-  -- The struct equality inside the conjunction should be handled
-  -- but the tactic currently only looks at top-level equalities
-  sorry
+  -- The struct equality inside the conjunction should now be handled
+  -- After cases on input and splitting, h.1 should be: 1 = x₁ ∧ 2 = y₁ ∧ 3 = z₁
+  -- and h.2 should remain: x = 7
+  constructor
+  · exact h.1.1.symm
+  · exact h.2
+
+-- Test with nested conjunctions and multiple struct equalities
+theorem test_nested_conjunctions {F : Type} [Field F] (input1 input2 : TestInputs F) (x : F)
+    (h : (TestInputs.mk 1 2 3 = input1 ∧ x = 7) ∧ input2 = TestInputs.mk 4 5 6) :
+    input1.x = 1 ∧ input2.y = 5 := by
+  split_struct_eq
+  -- Both struct equalities should be found and handled
+  constructor
+  · exact h.1.1.1.symm
+  · exact h.2.2.1
