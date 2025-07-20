@@ -13,6 +13,8 @@ instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
 open Specs.BLAKE3 (applyRounds iv round permute)
 
+attribute [circuit_norm] eval_vector_eq_get
+
 /--
 Lemma to handle the notational difference between BLAKE3State.value and Vector.map U32.value.
 -/
@@ -459,18 +461,6 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
     block_len.value
     flags.value ∧
   out.Normalized
-
-omit p_large_enough in
-@[circuit_norm]
-lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment (F p))
-    (vars : Vector (Var M (F p)) n)
-    (vals : Vector (M (F p)) n)
-    (h : (eval env vars : ProvableVector _ _ _) = (vals : ProvableVector _ _ _))
-    (i : ℕ) (h_i : i < n) :
-    eval env vars[i] = vals[i] := by
-  rw [← h]
-  rw [eval_vector]
-  rw [Vector.getElem_map]
 
 -- Helper lemma that proves the initial state and messages are normalized
 lemma initial_state_and_messages_are_normalized

@@ -491,6 +491,16 @@ theorem getElem_eval_vector (env : Environment F) (x : Var (ProvableVector α n)
     (eval env x[i]) = (eval env x)[i] := by
   rw [eval_vector, Vector.getElem_map]
 
+lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment F)
+    (vars : Vector (Var M F) n)
+    (vals : Vector (M F) n)
+    (h : (eval env vars : ProvableVector _ _ _) = (vals : ProvableVector _ _ _))
+    (i : ℕ) (h_i : i < n) :
+    eval env vars[i] = vals[i] := by
+  rw [← h]
+  rw [eval_vector]
+  rw [Vector.getElem_map]
+
 theorem varFromOffset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
     varFromOffset (F:=F) (ProvableVector α n) offset
     = .mapRange n fun i => varFromOffset α (offset + (size α)*i) := by
