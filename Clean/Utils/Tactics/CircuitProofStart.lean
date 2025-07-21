@@ -31,7 +31,6 @@ partial def circuitProofStartCore : TacticM Unit := do
       let names := [`offset, `env, `input_var, `input, `h_input, `h_asm, `h_holds]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      evalTactic (← `(tactic| provable_simp))
       evalTactic (← `(tactic| simp only [circuit_norm] at *))
       return
     else if isCompleteness then
@@ -42,7 +41,6 @@ partial def circuitProofStartCore : TacticM Unit := do
       for name in names1 do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       -- Use rintro for the remaining parameters
-      evalTactic (← `(tactic| provable_simp))
       evalTactic (← `(tactic| simp only [circuit_norm] at *))
       return
 
@@ -67,8 +65,6 @@ partial def circuitProofStartCore : TacticM Unit := do
           | .app (.app (.const ``ConstraintsHold.Soundness _) _) _ =>
             -- This is the h_holds parameter in soundness
             evalTactic (← `(tactic| intro h_holds))
-            -- Now apply provable_struct_simp and unfold
-            evalTactic (← `(tactic| provable_simp))
             try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
             return
           | .app (.app (.app (.const ``Environment.UsesLocalWitnessesCompleteness _) _) _) _ =>
@@ -76,7 +72,6 @@ partial def circuitProofStartCore : TacticM Unit := do
             evalTactic (← `(tactic| intro henv))
             -- Continue with the remaining intros for completeness
             evalTactic (← `(tactic| rintro input h_input h_normalized))
-            evalTactic (← `(tactic| provable_simp))
             try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
             return
           | _ =>
@@ -89,7 +84,6 @@ partial def circuitProofStartCore : TacticM Unit := do
           circuitProofStartCore
     | _ =>
       -- No more foralls, we're done
-      evalTactic (← `(tactic| provable_simp))
       try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
 
 /--
@@ -164,5 +158,6 @@ elab "circuit_proof_start" : tactic => do
   try (evalTactic (← `(tactic| delta Assumptions Spec))) catch _ => pure ()
   -- Unfold the elaborated circuit definition
   try (evalTactic (← `(tactic| unfold elaborated at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| provable_simp))) catch _ => pure ()
 
 end ProvenZK

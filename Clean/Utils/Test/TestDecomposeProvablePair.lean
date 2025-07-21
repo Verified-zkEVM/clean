@@ -34,6 +34,30 @@ example (input : Var fieldPair (F p)) (h : input.1 = Expression.const 5) :
   intro h2
   constructor <;> assumption
 
+-- Test with Var fieldPair appearing in Expression.eval (similar to Gates.lean case)
+example (env : Environment (F p)) (input_var : Var fieldPair (F p)) 
+    (h : Expression.eval env input_var.1 = 5) : 
+    Expression.eval env input_var.2 = 3 → 
+    (Expression.eval env input_var.1, Expression.eval env input_var.2) = (5, 3) := by
+  decompose_provable_pair
+  -- input_var should be decomposed since it appears in projections
+  simp at h ⊢
+  intro h2
+  constructor <;> assumption
+
+-- Test that variables appearing in pair literals are NOT decomposed
+example (x : F p × F p) (h : (x.1, x.2) = (5, 3)) : x = (5, 3) := by
+  decompose_provable_pair
+  -- x should be decomposed because it appears in projections x.1 and x.2
+  simp at h ⊢
+  assumption
+
+-- Test with variable only in pair literal (no projections)
+example (x : F p × F p) (h : (x) = (5, 3)) : x = (5, 3) := by
+  decompose_provable_pair
+  -- x should NOT be decomposed because it doesn't appear in projections
+  assumption
+
 -- Test with Var fieldTriple (F p) - fieldTriple is also a pair type (nested)
 example (input : Var fieldTriple (F p)) (h : input.1 = Expression.const 1) :
     input.2.1 = Expression.const 2 → input.2.2 = Expression.const 3 →
