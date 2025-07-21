@@ -21,7 +21,7 @@ partial def findPairVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
         if name == ``Prod.fst || name == ``Prod.snd then
           -- The pair should be the last argument
           match a with
-          | .fvar fvarId => 
+          | .fvar fvarId =>
             let acc' ← go f acc
             return fvarId :: acc'
           | _ =>
@@ -49,21 +49,116 @@ partial def findPairVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
     | _ => return acc
   go e []
 
-/--
-  Check if a type is a product type (Prod or similar)
--/
-def isProdType (type : Lean.Expr) : Lean.MetaM Bool := do
-  let type ← whnf type
-  match type with
-  | .app (.app (.const ``Prod _) _) _ => return true
-  | _ => return false
+mutual
+  /--
+    Check if a type looks like it comes from a ProvableType or ProvableStruct
+  -/
+  partial def isProvableTypeOrStruct (type : Lean.Expr) : Lean.MetaM Bool := do
+    try
+      -- Case 1: Check if the type has a Field instance (covers F, F p, etc.)
+      let fieldClass ← mkAppM ``Field #[type]
+      logInfo m!"checking synthesis of {fieldClass}"
+      let fieldInst? ← trySynthInstance fieldClass
+      match fieldInst? with
+      | .some _ => return true
+      | _ =>
+        -- Case 2: Check if it's a product type that's provable
+        if ← isProdTypeWithProvableType type then
+          return true
+
+        -- Case 3: Application of a TypeMap with ProvableType
+        match type with
+        | .app typeMap _ =>
+          let provableTypeClass ← mkAppM ``ProvableType #[typeMap]
+          let inst? ← trySynthInstance provableTypeClass
+          match inst? with
+          | .some _ => return true
+          | _ =>
+            -- Case 4: Application of a TypeMap with ProvableStruct
+            let provableStructClass ← mkAppM ``ProvableStruct #[typeMap]
+            let inst? ← trySynthInstance provableStructClass
+            match inst? with
+            | .some _ => return true
+            | _ => return false
+        | _ =>
+          -- Case 5: Check if there's a TypeMap that when applied gives this type
+          -- This handles cases where the type itself might come from a ProvableType/Struct
+          -- For example, if we have MyStruct F, we want to check if MyStruct has instances
+
+          -- Try to construct a TypeMap by abstracting over potential field parameter
+          let typeMapCandidates ← extractTypeMapCandidates type
+          for typeMap in typeMapCandidates do
+            -- Check ProvableType
+            let provableTypeClass ← mkAppM ``ProvableType #[typeMap]
+            let inst? ← trySynthInstance provableTypeClass
+            match inst? with
+            | .some _ => return true
+            | _ =>
+              -- Check ProvableStruct
+              let provableStructClass ← mkAppM ``ProvableStruct #[typeMap]
+              let inst? ← trySynthInstance provableStructClass
+              match inst? with
+              | .some _ => return true
+              | _ => continue
+          return false
+    catch _ =>
+      return false
+  where
+    -- Extract potential TypeMap expressions from a type
+    extractTypeMapCandidates (type : Lean.Expr) : Lean.MetaM (List Lean.Expr) := do
+      -- If type looks like `SomeType F` where F might be a field,
+      -- return [SomeType] as a candidate TypeMap
+      match type with
+      | .app f _ => return [f]
+      | _ => return []
+
+  /--
+    Check if a type is a product type (Prod or similar) that comes from a ProvableType
+  -/
+  partial def isProdTypeWithProvableType (type : Lean.Expr) : Lean.MetaM Bool := do
+    let type ← whnf type
+    -- First check if it's a product type
+    match type with
+    | .app (.app (.const ``Prod _) α) β =>
+      -- General case: check if both components are provable
+      try
+        let αProvable ← isProvableTypeOrStruct α
+        let βProvable ← isProvableTypeOrStruct β
+
+        if αProvable && βProvable then
+          -- Both components are provable, so this pair should be decomposable
+          return true
+        else
+          if !αProvable then
+            logInfo m!"Rejected {α} (not provable)"
+          if !βProvable then
+            logInfo m!"Rejected {β} (not provable)"
+          return false
+      catch _ =>
+        return false
+    | _ =>
+      -- Check if it's a direct application of a TypeMap with ProvableType
+      try
+        match type with
+        | .app typeMap _ =>
+          -- Check if typeMap has ProvableType instance
+          let provableTypeClass ← mkAppM ``ProvableType #[typeMap]
+          let inst? ← trySynthInstance provableTypeClass
+          match inst? with
+          | .some _ => return true
+          | .none => return false
+          | .undef => return false
+        | _ => return false
+      catch _ =>
+        return false
+end
 
 /--
   Find all pair variables that appear in projections in the context and goal
 -/
 def findPairVarsInContext : TacticM (List Lean.FVarId) := withMainContext do
   let mut fvarIds : List Lean.FVarId := []
-  
+
   -- Check hypotheses
   let ctx ← getLCtx
   for decl in ctx do
@@ -73,20 +168,25 @@ def findPairVarsInContext : TacticM (List Lean.FVarId) := withMainContext do
       if let some value := decl.value? then
         let vars ← findPairVars value
         fvarIds := fvarIds ++ vars
-  
+
   -- Check goal
   let goal ← getMainTarget
   let vars ← findPairVars goal
   fvarIds := fvarIds ++ vars
-  
-  -- Remove duplicates and filter for actual pairs
+
+  -- Remove duplicates and filter for actual pairs with ProvableType
   let mut uniqueFVarIds : List Lean.FVarId := []
   for fvarId in fvarIds do
     if !uniqueFVarIds.contains fvarId then
       let type ← inferType (.fvar fvarId)
-      if ← isProdType type then
+      let isProvable ← isProdTypeWithProvableType type
+      if isProvable then
         uniqueFVarIds := uniqueFVarIds.cons fvarId
-  
+      else
+        -- Record it's not provable
+        let ldecl ← fvarId.getDecl
+        logInfo m!"Rejected {ldecl.userName} : {type} (not provable)"
+
   return uniqueFVarIds
 
 /--
@@ -95,11 +195,11 @@ def findPairVarsInContext : TacticM (List Lean.FVarId) := withMainContext do
 def decomposePairVar (fvarId : Lean.FVarId) : TacticM Unit := do
   let ldecl ← fvarId.getDecl
   let userName := ldecl.userName
-  
+
   -- Generate names for components
   let fstName := Name.mkSimple (userName.toString ++ "_fst")
   let sndName := Name.mkSimple (userName.toString ++ "_snd")
-  
+
   -- Use rcases tactic syntax
   evalTactic (← `(tactic| rcases $(mkIdent userName):ident with ⟨$(mkIdent fstName):ident, $(mkIdent sndName):ident⟩))
 
@@ -108,7 +208,7 @@ def decomposePairVar (fvarId : Lean.FVarId) : TacticM Unit := do
 -/
 def decomposeProvablePair : TacticM Unit := do
   let fvarIds ← findPairVarsInContext
-  
+
   if fvarIds.isEmpty then
     -- Don't log anything when no pairs found
     return ()
@@ -122,10 +222,10 @@ def decomposeProvablePair : TacticM Unit := do
 
 /--
   Tactic to decompose variables of pair types (like ProvablePair or fieldPair) that appear in projections.
-  
-  This tactic finds all variables of product type that appear in projections like `.1`, `.2`, 
+
+  This tactic finds all variables of product type that appear in projections like `.1`, `.2`,
   `Prod.fst`, or `Prod.snd` and decomposes them into their components.
-  
+
   Example:
   ```lean
   example (input : F × F) (h : input.1 = 5) : input.2 + 5 = input.1 + input.2 := by
@@ -149,6 +249,7 @@ elab "show_pair_vars" : tactic => do
     else
       logInfo "Found pair variables in projections:"
       for fvarId in fvarIds do
-        let ldecl ← fvarId.getDecl  
+        let ldecl ← fvarId.getDecl
         let type ← inferType (.fvar fvarId)
-        logInfo m!"  {ldecl.userName} : {type}"
+        let typeProvable ← isProdTypeWithProvableType type
+        logInfo m!"  {ldecl.userName} : {type} (provable: {typeProvable})"
