@@ -63,12 +63,33 @@ partial def circuitProofStartCore : TacticM Unit := do
       evalTactic (← `(tactic| simp only [circuit_norm] at *))
 
 /--
+  Try to unfold local definitions by looking them up in the context
+-/
+def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
+  withMainContext do
+    for name in names do
+      -- Try both the simple name and with current namespace
+      let candidates := [name, (← getCurrNamespace) ++ name]
+      for candidate in candidates do
+        try
+          -- Check if this constant exists and is a definition
+          let info ← getConstInfo candidate
+          match info with
+          | .defnInfo _ => 
+            -- It's a definition, try to unfold it
+            let ident := mkIdent candidate
+            try (evalTactic (← `(tactic| simp only [$ident:ident] at *))) catch _ => pure ()
+          | _ => pure ()
+        catch _ => pure ()
+
+/--
   Standard tactic for starting soundness and completeness proofs.
   
   This tactic:
   1. Automatically introduces all parameters until reaching the proof obligations
   2. Applies provable_struct_simp to decompose structs and simplify eval
   3. Unfolds circuit definitions using circuit_norm
+  4. Unfolds local Assumptions and Spec definitions
   
   For soundness proofs, it introduces:
   - Any theorem parameters (like offset)
@@ -105,13 +126,12 @@ elab "circuit_proof_start" : tactic => do
   circuitProofStartCore
   -- Unfold the circuit definition and common definitions
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.main, Circuit.bind_def, Circuit.output, main] at *))) catch _ => pure ()
-  -- Unfold Assumptions and Spec definitions
-  try (evalTactic (← `(tactic| simp only [Assumptions, Spec] at *))) catch _ => pure ()
-  -- If Spec or Assumptions contain references to other Specs/Assumptions, unfold those too
-  -- This handles cases like Assumptions := SomeModule.Assumptions
-  try (evalTactic (← `(tactic| simp only [Assumptions, Spec] at *))) catch _ => pure ()
+  -- Try to unfold Assumptions and Spec as local definitions
+  tryUnfoldLocalDefs [`Assumptions, `Spec]
+  -- Also try with delta reduction which is more aggressive
+  try (evalTactic (← `(tactic| delta Assumptions Spec))) catch _ => pure ()
   -- Unfold the elaborated circuit definition
-  try (evalTactic (← `(tactic| simp only [elaborated] at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold elaborated at *))) catch _ => pure ()
   -- Try to obtain struct fields from hypotheses if they exist
   try (evalTactic (← `(tactic| obtain ⟨_, _⟩ := h_normalized))) catch _ => pure ()
   try (evalTactic (← `(tactic| obtain ⟨_, _⟩ := h_input))) catch _ => pure ()
