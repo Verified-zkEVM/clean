@@ -51,11 +51,27 @@ partial def findPairVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
 
 mutual
   /--
-    Check if a type looks like it comes from a ProvableType or ProvableStruct
+    Check if a type looks like it comes from a ProvableType, ProvableStruct, or is an Expression type
   -/
-  partial def isProvableTypeOrStruct (type : Lean.Expr) : Lean.MetaM Bool := do
+  partial def isProvableTypeOrStructOrExpression (type : Lean.Expr) : Lean.MetaM Bool := do
     try
-      -- Case 1: Check if the type has a Field instance (covers F, F p, etc.)
+      -- Case 1: Check if it's an Expression type
+      match type with
+      | .app (.const ``Expression _) fieldType =>
+        -- Check if the underlying field type has a Field instance
+        let fieldClass ← mkAppM ``Field #[fieldType]
+        logInfo m!"checking synthesis of {fieldClass}"
+        let fieldInst? ← trySynthInstance fieldClass
+        match fieldInst? with
+        | .some _ =>
+          logInfo m!".. yes! to checking synthesis of {fieldClass}"
+          return true
+        | _ =>
+          logInfo m!".. no! to checking synthesis of {fieldClass}"
+          pure ()
+      | _ => pure ()
+
+      -- Case 2: Check if the type has a Field instance (covers F, F p, etc.)
       let fieldClass ← mkAppM ``Field #[type]
       logInfo m!"checking synthesis of {fieldClass}"
       let fieldInst? ← trySynthInstance fieldClass
@@ -116,14 +132,23 @@ mutual
     Check if a type is a product type (Prod or similar) that comes from a ProvableType
   -/
   partial def isProdTypeWithProvableType (type : Lean.Expr) : Lean.MetaM Bool := do
+    -- Special case: Check if it's Var fieldPair _ or Var fieldTriple _ BEFORE reduction
+    match type with
+    | .app (.app (.const ``Var _) (.const ``fieldPair _)) _ =>
+      return true
+    | .app (.app (.const ``Var _) (.const ``fieldTriple _)) _ =>
+      return true
+    | _ => pure ()
+
     let type ← whnf type
+
     -- First check if it's a product type
     match type with
     | .app (.app (.const ``Prod _) α) β =>
       -- General case: check if both components are provable
       try
-        let αProvable ← isProvableTypeOrStruct α
-        let βProvable ← isProvableTypeOrStruct β
+        let αProvable ← isProvableTypeOrStructOrExpression α
+        let βProvable ← isProvableTypeOrStructOrExpression β
 
         if αProvable && βProvable then
           -- Both components are provable, so this pair should be decomposable
@@ -181,6 +206,9 @@ def findPairVarsInContext : TacticM (List Lean.FVarId) := withMainContext do
       let type ← inferType (.fvar fvarId)
       let isProvable ← isProdTypeWithProvableType type
       if isProvable then
+        -- Record it's not provable
+        let ldecl ← fvarId.getDecl
+        logInfo m!"Accepted {ldecl.userName} : {type}"
         uniqueFVarIds := uniqueFVarIds.cons fvarId
       else
         -- Record it's not provable
@@ -199,6 +227,7 @@ def decomposePairVar (fvarId : Lean.FVarId) : TacticM Unit := do
   -- Generate names for components
   let fstName := Name.mkSimple (userName.toString ++ "_fst")
   let sndName := Name.mkSimple (userName.toString ++ "_snd")
+  logInfo m!"decomposing {ldecl.userName} into {fstName} and {sndName}"
 
   -- Use rcases tactic syntax
   evalTactic (← `(tactic| rcases $(mkIdent userName):ident with ⟨$(mkIdent fstName):ident, $(mkIdent sndName):ident⟩))
@@ -206,7 +235,7 @@ def decomposePairVar (fvarId : Lean.FVarId) : TacticM Unit := do
 /--
   Main tactic: decompose all pair variables that appear in projections
 -/
-def decomposeProvablePair : TacticM Unit := do
+def decomposeProvablePair : TacticM Unit := withMainContext do
   let fvarIds ← findPairVarsInContext
 
   if fvarIds.isEmpty then
@@ -215,8 +244,12 @@ def decomposeProvablePair : TacticM Unit := do
   else
     for fvarId in fvarIds do
       try
+        let ldecl ← fvarId.getDecl
+        logInfo m!"working on {ldecl.userName}"
+
         decomposePairVar fvarId
-      catch _ =>
+      catch e =>
+        logInfo m!"bah {e.toMessageData}"
         -- Silently skip errors
         return ()
 

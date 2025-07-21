@@ -1,6 +1,7 @@
 import Clean.Utils.Tactics.DecomposeProvablePair
 import Clean.Circuit.Provable
 import Clean.Utils.Field
+import Clean.Circuit.Expression
 
 namespace TestDecomposeProvablePair
 
@@ -23,6 +24,31 @@ example (input : fieldPair (F p)) (h1 : input.1 ≠ 0) (h2 : input.2 ≠ 0) : in
   simp at h1 h2 ⊢
   -- Now h1 : input_fst ≠ 0 and h2 : input_snd ≠ 0
   exact ⟨h1, h2⟩
+
+-- Test with Var fieldPair (F p)
+example (input : Var fieldPair (F p)) (h : input.1 = Expression.const 5) :
+    input.2 = Expression.const 3 → input = (Expression.const 5, Expression.const 3) := by
+  decompose_provable_pair
+  -- input should be decomposed into input_fst and input_snd
+  simp at h ⊢
+  intro h2
+  constructor <;> assumption
+
+-- Test with Var fieldTriple (F p) - fieldTriple is also a pair type (nested)
+example (input : Var fieldTriple (F p)) (h : input.1 = Expression.const 1) :
+    input.2.1 = Expression.const 2 → input.2.2 = Expression.const 3 →
+    input = (Expression.const 1, Expression.const 2, Expression.const 3) := by
+  decompose_provable_pair
+  -- input should be decomposed to input_fst and input_snd where input_snd is still a pair
+  simp at h ⊢
+  intros h2 h3
+  -- Now we need to further decompose input_snd
+  decompose_provable_pair
+  -- After second decomposition, input_snd is decomposed to input_snd_fst and input_snd_snd
+  constructor
+  · assumption
+  · simp at h2 h3 ⊢
+    constructor <;> assumption
 
 -- Test with Prod.fst and Prod.snd
 example (input : F p × F p) (h1 : Prod.fst input = 1) (h2 : Prod.snd input = 2) :
