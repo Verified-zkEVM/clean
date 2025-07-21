@@ -504,15 +504,7 @@ lemma initial_state_and_messages_are_normalized
   · apply h_message_normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env input_var
-  intro input h_input h_normalized h_holds
-
-  have normalized := initial_state_and_messages_are_normalized env input_var
-    input h_input h_normalized
-  simp only [Assumptions] at h_normalized
-  simp only [initializeStateVector] at normalized
-
-  provable_struct_simp
+  circuit_proof_start
   rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
 
   simp only [circuit_norm, main, Spec]
@@ -534,7 +526,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp
 
   -- Apply h_holds with the proven assumptions
-  have h_spec := h_holds normalized
+  have h_spec := h_holds (by
+    apply initial_state_and_messages_are_normalized
+    · simp only [circuit_norm, h_input]
+      rfl
+    · simp only [Assumptions]
+      aesop
+  )
   clear h_holds
 
   -- Now we need to show that the spec holds
