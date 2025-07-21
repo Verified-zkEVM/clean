@@ -513,11 +513,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
     apply Nat.mod_eq_of_lt
-    exact U32.value_lt_of_normalized h_normalized.2.2.2.1
+    exact U32.value_lt_of_normalized h_asm.2.2.2.1
   have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
     -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
     -- Since counter_low.value < 2^32, this follows from properties of division
-    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_normalized.2.2.2.1
+    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_asm.2.2.2.1
     have h2 : 4294967296 > 0 := by norm_num
     -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
     -- This equals counter_high.value + counter_low.value / 2^32

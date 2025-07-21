@@ -4,6 +4,7 @@ import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Rotation32.Rotation32
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
+import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -76,9 +77,8 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
-  intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
+  circuit_proof_start
+  dsimp only [Assumptions, BLAKE3State.Normalized] at h_asm
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
   simp only [circuit_norm, and_imp,
@@ -98,7 +98,6 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
   -- case-by-case reasoning on the indices.
   -- NOTE: This is not a bug, we are following the BLAKE specification of the g function verbatim.
   -- See, for example, https://www.ietf.org/archive/id/draft-aumasson-blake3-00.html#name-quarter-round-function-g
-  simp only [Spec, ElaboratedCircuit.output]
   constructor
   · ext i hi
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
@@ -117,15 +116,15 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
     · exact c12.right
     · exact c14.right
     · exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_normalized]
+    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_asm]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
-  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
+  circuit_proof_start
+
+  dsimp only [Assumptions, BLAKE3State.Normalized] at h_asm
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
-  simp only [h_input, circuit_norm, and_imp,
+  simp only [circuit_norm, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
 
