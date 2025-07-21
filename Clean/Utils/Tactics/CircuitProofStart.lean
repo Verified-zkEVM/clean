@@ -103,8 +103,15 @@ partial def circuitProofStartCore : TacticM Unit := do
 -/
 elab "circuit_proof_start" : tactic => do
   circuitProofStartCore
-  -- Additional unfolding that's commonly needed
-  try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.main, Circuit.bind_def, Circuit.output, main, elaborated, Assumptions, Spec] at *))) catch _ => pure ()
+  -- Unfold the circuit definition and common definitions
+  try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.main, Circuit.bind_def, Circuit.output, main] at *))) catch _ => pure ()
+  -- Unfold Assumptions and Spec definitions
+  try (evalTactic (← `(tactic| simp only [Assumptions, Spec] at *))) catch _ => pure ()
+  -- If Spec or Assumptions contain references to other Specs/Assumptions, unfold those too
+  -- This handles cases like Assumptions := SomeModule.Assumptions
+  try (evalTactic (← `(tactic| simp only [Assumptions, Spec] at *))) catch _ => pure ()
+  -- Unfold the elaborated circuit definition
+  try (evalTactic (← `(tactic| simp only [elaborated] at *))) catch _ => pure ()
   -- Try to obtain struct fields from hypotheses if they exist
   try (evalTactic (← `(tactic| obtain ⟨_, _⟩ := h_normalized))) catch _ => pure ()
   try (evalTactic (← `(tactic| obtain ⟨_, _⟩ := h_input))) catch _ => pure ()
