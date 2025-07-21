@@ -15,8 +15,8 @@ section BasicTests
 
 -- Test that the tactic works for simple soundness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) 
-    (Spec : Input F → Output F → Prop) : 
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop)
+    (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
   circuit_proof_start
   -- At this point:
@@ -25,9 +25,9 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   -- - circuit_norm has been applied
   sorry
 
--- Test that the tactic works for simple completeness proofs  
+-- Test that the tactic works for simple completeness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) : 
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point:
@@ -38,8 +38,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test parametrized soundness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output) 
-    (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) : 
+    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
     Soundness F (circuit offset) Assumptions (Spec offset) := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
@@ -47,8 +47,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test parametrized completeness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output) 
-    (Assumptions : Input F → Prop) : 
+    (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Prop) :
     Completeness F (circuit offset) Assumptions := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
@@ -56,8 +56,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test multiple parameters
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F Input Output) 
-    (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) : 
+    (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
     Soundness F (circuit n k) Assumptions (Spec n k) := by
   circuit_proof_start
   -- n and k are introduced first, then standard parameters
@@ -69,7 +69,7 @@ section NamePreservationTests
 -- Test that parameter names are preserved correctly
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) 
+    (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
@@ -77,16 +77,16 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   -- At this point we should have: offset, env, input_var, input, h_input, h_normalized, h_holds
   -- Check that these names exist by using them
   have : ℕ := offset
-  have : Environment F := env  
+  have : Environment F := env
   have : Input (Expression F) := input_var
   have : Input F := input
   have : eval env input_var = input := h_input
-  have : Assumptions input := h_normalized
+  have : Assumptions input := h_asm
   have : ConstraintsHold.Soundness env (circuit.main input_var offset).2 := h_holds
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) 
+    (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
@@ -113,13 +113,13 @@ namespace UnfoldTest1
 def TestAssumptions (_ : unit (F p)) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
-def Assumptions (input : unit (F p)) : Prop := 
+def Assumptions (input : unit (F p)) : Prop :=
   TestAssumptions input
 
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) unit unit := 
+def testCircuit : ElaboratedCircuit (F p) unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
@@ -134,14 +134,14 @@ def TestAssumptions (_ : unit (F p)) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
 def Assumptions (input : unit (F p)) : Prop :=
-  TestAssumptions input ∧ 
+  TestAssumptions input ∧
   TestAssumptions input
 
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
-  TestSpec input output ∧ 
+  TestSpec input output ∧
   TestSpec input output
 
-def testCircuit : ElaboratedCircuit (F p) unit unit := 
+def testCircuit : ElaboratedCircuit (F p) unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
@@ -152,7 +152,7 @@ end UnfoldTest2
 
 namespace UnfoldTest3
 -- Test that elaborated definition is unfolded
-def testCircuit : ElaboratedCircuit (F p) unit unit := 
+def testCircuit : ElaboratedCircuit (F p) unit unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
 def elaborated : ElaboratedCircuit (F p) unit unit :=
@@ -175,10 +175,10 @@ section ProvableStructSimpTests
 variable {p : ℕ} [Fact p.Prime]
 
 -- Test circuit with fieldPair input
-def pairCircuit : ElaboratedCircuit (F p) fieldPair unit := 
+def pairCircuit : ElaboratedCircuit (F p) fieldPair unit :=
   { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
 
-def PairAssumptions (input : fieldPair (F p)) : Prop := 
+def PairAssumptions (input : fieldPair (F p)) : Prop :=
   input.1 ≠ 0 ∧ input.2 ≠ 0
 
 def PairSpec (input : fieldPair (F p)) (_ : unit (F p)) : Prop :=

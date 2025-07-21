@@ -15,20 +15,20 @@ partial def circuitProofStartCore : TacticM Unit := do
   withMainContext do
     let goal ← getMainGoal
     let goalType ← goal.getType
-    
+
     -- First check if this is a Soundness or Completeness type that needs unfolding
     -- We need to check the head constant of the expression
     let headConst? := goalType.getAppFn.constName?
-    
+
     -- Check if this is a Soundness or Completeness proof
     let isSoundness := headConst? == some ``Soundness
     let isCompleteness := headConst? == some ``Completeness
-    
+
     if isSoundness then
       -- This is a Soundness proof, unfold it and introduce all parameters with names
       evalTactic (← `(tactic| unfold Soundness))
       -- Introduce parameters with explicit names using introN
-      let names := [`offset, `env, `input_var, `input, `h_input, `h_normalized, `h_holds]
+      let names := [`offset, `env, `input_var, `input, `h_input, `h_asm, `h_holds]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       evalTactic (← `(tactic| provable_struct_simp))
@@ -38,18 +38,17 @@ partial def circuitProofStartCore : TacticM Unit := do
       -- This is a Completeness proof, unfold it and introduce all parameters with names
       evalTactic (← `(tactic| unfold Completeness))
       -- Introduce parameters one by one
-      let names1 := [`offset, `env, `input_var, `henv]
+      let names1 := [`offset, `env, `input_var, `henv, `input, `h_input, `h_asm]
       for name in names1 do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       -- Use rintro for the remaining parameters
-      evalTactic (← `(tactic| rintro input h_input h_normalized))
       evalTactic (← `(tactic| provable_struct_simp))
       evalTactic (← `(tactic| simp only [circuit_norm] at *))
       return
-    
+
     -- Otherwise, continue with the original logic for parametrized theorems
     let goalType' ← whnf goalType
-    
+
     match goalType' with
     | .forallE _ _ body _ =>
       -- Look ahead to see if this is the last intro before the implication
@@ -106,7 +105,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
           -- Check if this constant exists and is a definition
           let info ← getConstInfo candidate
           match info with
-          | .defnInfo _ => 
+          | .defnInfo _ =>
             -- It's a definition, try to unfold it
             let ident := mkIdent candidate
             try (evalTactic (← `(tactic| simp only [$ident:ident] at *))) catch _ => pure ()
@@ -115,13 +114,13 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
 
 /--
   Standard tactic for starting soundness and completeness proofs.
-  
+
   This tactic:
   1. Automatically introduces all parameters until reaching the proof obligations
   2. Applies provable_struct_simp to decompose structs and simplify eval
   3. Unfolds circuit definitions using circuit_norm
   4. Unfolds local Assumptions and Spec definitions
-  
+
   For soundness proofs, it introduces:
   - Any theorem parameters (like offset)
   - offset (offset parameter)
@@ -131,23 +130,23 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   - h_input (eval env input_var = input)
   - h_normalized (Assumptions input)
   - h_holds (ConstraintsHold.Soundness ...)
-  
+
   For completeness proofs, it introduces:
   - Any theorem parameters
   - offset (offset parameter)
   - env (environment)
   - input_var (variable)
   - henv (UsesLocalWitnessesCompleteness ...)
-  - input (value) 
+  - input (value)
   - h_input (eval env input_var = input)
   - h_normalized (Assumptions input)
-  
+
   Example usage:
   ```lean
   theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     circuit_proof_start
     -- Goal is now unfolded with all struct equalities split
-  
+
   theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
     circuit_proof_start
     -- offset is introduced first, then standard soundness parameters
@@ -165,8 +164,5 @@ elab "circuit_proof_start" : tactic => do
   try (evalTactic (← `(tactic| delta Assumptions Spec))) catch _ => pure ()
   -- Unfold the elaborated circuit definition
   try (evalTactic (← `(tactic| unfold elaborated at *))) catch _ => pure ()
-  -- Try to obtain struct fields from hypotheses if they exist
-  try (evalTactic (← `(tactic| obtain ⟨_, _⟩ := h_normalized))) catch _ => pure ()
-  try (evalTactic (← `(tactic| obtain ⟨_, _⟩ := h_input))) catch _ => pure ()
 
 end ProvenZK
