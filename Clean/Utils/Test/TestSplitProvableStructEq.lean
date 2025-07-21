@@ -1,6 +1,8 @@
 import Clean.Utils.Tactics
 import Clean.Circuit.Provable
 
+namespace TestSplitProvableStructEq
+
 -- Test structure with ProvableStruct instance
 structure TestInputs (F : Type) where
   x : F
@@ -88,3 +90,5 @@ theorem test_nested_conjunctions {F : Type} [Field F] (input1 input2 : TestInput
   constructor
   · exact h.1.1.1.symm
   · exact h.2.2.1
+
+end TestSplitProvableStructEq

@@ -1,6 +1,8 @@
 import Clean.Utils.Tactics
 import Clean.Circuit.Provable
 
+namespace TestProvableStructSimp
+
 -- Test structures with ProvableStruct instances
 structure TestInputs (F : Type) where
   x : F
@@ -183,3 +185,5 @@ theorem test_eval_var_eq_var_fails_as_expected {F : Type} [Field F] (env : Envir
   fail_if_success simplify_provable_struct_eval
   -- The tactic failed as expected, so we prove it differently
   rw [h]
+
+end TestProvableStructSimp

@@ -1,6 +1,8 @@
 import Clean.Utils.Tactics
 import Clean.Circuit.Provable
 
+namespace TestDecomposeProvableStruct
+
 -- Test structure with ProvableStruct instance
 structure TestInputs (F : Type) where
   x : F
@@ -137,3 +139,5 @@ theorem test_selective_decompose {F : Type} [Field F] (a : TestInputs F) (b : Te
   -- But c should still exist!
   have : TestInputs F := c
   ring
+
+end TestDecomposeProvableStruct
