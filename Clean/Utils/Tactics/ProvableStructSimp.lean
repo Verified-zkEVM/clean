@@ -14,7 +14,7 @@ import Clean.Utils.Tactics.SimplifyProvableStructEval
   as it automatically:
   - Splits equalities like `s1 = s2` into `s1.f1 = s2.f1 ∧ s1.f2 = s2.f2 ∧ ...` if some components of `s1` or `s2` are explicitly mentioned
   - Destructures variables like `input` that appear in projections like `input.x` to expose components
-  - Simplifies `eval env var = struct_literal` to expose the structure
+  - Simplifies `eval env var = struct_literal` to expose components
   - Handles these transformations even inside conjunctions
 
   Example:
