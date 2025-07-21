@@ -2,13 +2,17 @@ import Clean.Utils.Tactics.SplitProvableStructEq
 import Clean.Utils.Tactics.DecomposeProvableStruct
 import Clean.Utils.Tactics.DecomposeProvablePair
 import Clean.Utils.Tactics.SimplifyProvableStructEval
+import Clean.Utils.Tactics.SplitPairEq
+import Clean.Utils.Tactics.SimplifyPairEval
 
 /--
   Simplify all provable struct and pair expressions by repeatedly applying:
   1. `split_provable_struct_eq` - splits struct equalities into field-wise equalities
-  2. `decompose_provable_struct` - destructures struct variables that appear in projections
-  3. `decompose_provable_pair` - destructures pair variables that appear in projections
-  4. `simplify_provable_struct_eval` - simplifies eval expressions in equalities with struct literals
+  2. `split_pair_eq` - splits pair equalities into component-wise equalities
+  3. `decompose_provable_struct` - destructures struct variables that appear in projections
+  4. `decompose_provable_pair` - destructures pair variables that appear in projections
+  5. `simplify_provable_struct_eval` - simplifies eval expressions in equalities with struct literals
+  6. `simplify_pair_eval` - simplifies eval expressions in equalities with pair literals
 
   The tactic continues until no transformation makes any more progress.
 
@@ -40,9 +44,11 @@ macro "provable_simp" : tactic =>
     repeat (
       fail_if_no_progress (
       try split_provable_struct_eq;
+      try split_pair_eq;
       try decompose_provable_struct;
       try decompose_provable_pair;
       try simplify_provable_struct_eval;
+      try simplify_pair_eval;
       try simp only [] at *
       )
     )
