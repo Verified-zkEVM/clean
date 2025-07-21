@@ -69,7 +69,7 @@ partial def circuitProofStartCore : TacticM Unit := do
             evalTactic (← `(tactic| intro h_holds))
             -- Now apply provable_struct_simp and unfold
             evalTactic (← `(tactic| provable_simp))
-            evalTactic (← `(tactic| simp only [circuit_norm] at *))
+            try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
             return
           | .app (.app (.app (.const ``Environment.UsesLocalWitnessesCompleteness _) _) _) _ =>
             -- This is the henv parameter in completeness
@@ -77,7 +77,7 @@ partial def circuitProofStartCore : TacticM Unit := do
             -- Continue with the remaining intros for completeness
             evalTactic (← `(tactic| rintro input h_input h_normalized))
             evalTactic (← `(tactic| provable_simp))
-            evalTactic (← `(tactic| simp only [circuit_norm] at *))
+            try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
             return
           | _ =>
             -- Regular implication, just intro
@@ -90,7 +90,7 @@ partial def circuitProofStartCore : TacticM Unit := do
     | _ =>
       -- No more foralls, we're done
       evalTactic (← `(tactic| provable_simp))
-      evalTactic (← `(tactic| simp only [circuit_norm] at *))
+      try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
 
 /--
   Try to unfold local definitions by looking them up in the context
