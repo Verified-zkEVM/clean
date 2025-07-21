@@ -16,7 +16,38 @@ partial def circuitProofStartCore : TacticM Unit := do
     let goal ← getMainGoal
     let goalType ← goal.getType
     
-    -- Check if we're done by looking for ConstraintsHold.Soundness or UsesLocalWitnessesCompleteness
+    -- First check if this is a Soundness or Completeness type that needs unfolding
+    -- We need to check the head constant of the expression
+    let headConst? := goalType.getAppFn.constName?
+    
+    -- Check if this is a Soundness or Completeness proof
+    let isSoundness := headConst? == some ``Soundness
+    let isCompleteness := headConst? == some ``Completeness
+    
+    if isSoundness then
+      -- This is a Soundness proof, unfold it and introduce all parameters with names
+      evalTactic (← `(tactic| unfold Soundness))
+      -- Introduce parameters with explicit names using introN
+      let names := [`offset, `env, `input_var, `input, `h_input, `h_normalized, `h_holds]
+      for name in names do
+        evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      evalTactic (← `(tactic| provable_struct_simp))
+      evalTactic (← `(tactic| simp only [circuit_norm] at *))
+      return
+    else if isCompleteness then
+      -- This is a Completeness proof, unfold it and introduce all parameters with names
+      evalTactic (← `(tactic| unfold Completeness))
+      -- Introduce parameters one by one
+      let names1 := [`offset, `env, `input_var, `henv]
+      for name in names1 do
+        evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      -- Use rintro for the remaining parameters
+      evalTactic (← `(tactic| rintro input h_input h_normalized))
+      evalTactic (← `(tactic| provable_struct_simp))
+      evalTactic (← `(tactic| simp only [circuit_norm] at *))
+      return
+    
+    -- Otherwise, continue with the original logic for parametrized theorems
     let goalType' ← whnf goalType
     
     match goalType' with
@@ -93,7 +124,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   
   For soundness proofs, it introduces:
   - Any theorem parameters (like offset)
-  - i0 (offset)
+  - offset (offset parameter)
   - env (environment)
   - input_var (variable)
   - input (value)
@@ -103,7 +134,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   
   For completeness proofs, it introduces:
   - Any theorem parameters
-  - i0 (offset)
+  - offset (offset parameter)
   - env (environment)
   - input_var (variable)
   - henv (UsesLocalWitnessesCompleteness ...)
@@ -123,7 +154,9 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   ```
 -/
 elab "circuit_proof_start" : tactic => do
+  -- First run the core logic which handles intro and unfolding
   circuitProofStartCore
+  -- Then apply additional unfolding and simplification
   -- Unfold the circuit definition and common definitions
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.main, Circuit.bind_def, Circuit.output, main] at *))) catch _ => pure ()
   -- Try to unfold Assumptions and Spec as local definitions
