@@ -169,8 +169,8 @@ end UnfoldTest3
 
 end LocalDefinitionUnfoldingTests
 
-section ProvableStructSimpTests
--- Test interaction with provable_struct_simp using fieldPair
+section ProvableSimpTests
+-- Test interaction with provable_simp using fieldPair
 
 variable {p : ℕ} [Fact p.Prime]
 
@@ -186,9 +186,9 @@ def PairSpec (input : fieldPair (F p)) (_ : unit (F p)) : Prop :=
 
 example : Soundness (F p) pairCircuit PairAssumptions PairSpec := by
   circuit_proof_start
-  -- provable_struct_simp should decompose the pair
+  -- provable_simp should decompose the pair
   sorry
 
-end ProvableStructSimpTests
+end ProvableSimpTests
 
 end TestCircuitProofStart

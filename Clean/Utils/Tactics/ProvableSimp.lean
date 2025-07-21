@@ -1,39 +1,52 @@
 import Clean.Utils.Tactics.SplitProvableStructEq
 import Clean.Utils.Tactics.DecomposeProvableStruct
+import Clean.Utils.Tactics.DecomposeProvablePair
 import Clean.Utils.Tactics.SimplifyProvableStructEval
 
 /--
-  Simplify all provable struct expressions by repeatedly applying:
+  Simplify all provable struct and pair expressions by repeatedly applying:
   1. `split_provable_struct_eq` - splits struct equalities into field-wise equalities
   2. `decompose_provable_struct` - destructures struct variables that appear in projections
-  3. `simplify_provable_struct_eval` - simplifies eval expressions in equalities with struct literals
+  3. `decompose_provable_pair` - destructures pair variables that appear in projections
+  4. `simplify_provable_struct_eval` - simplifies eval expressions in equalities with struct literals
 
   The tactic continues until no transformation makes any more progress.
 
-  This is useful for normalizing goal states involving structures with ProvableStruct instances,
-  as it automatically:
+  This is useful for normalizing goal states involving structures with ProvableStruct instances
+  or pairs (ProvablePair, fieldPair, Prod), as it automatically:
   - Splits equalities like `s1 = s2` into `s1.f1 = s2.f1 ∧ s1.f2 = s2.f2 ∧ ...` if some components of `s1` or `s2` are explicitly mentioned
-  - Destructures variables like `input` that appear in projections like `input.x` to expose components
+  - Destructures variables like `input` that appear in projections like `input.x` or `input.1` to expose components
   - Simplifies `eval env var = struct_literal` to expose components
   - Handles these transformations even inside conjunctions
 
-  Example:
+  Example with struct:
   ```lean
   theorem example (a b : MyStruct F) (h : a = b ∧ a.x = 5) : b.x = 5 := by
-    provable_struct_simp
+    provable_simp
     -- Now a and b are destructured, and h.1 is split into field equalities
-    -- The proof becomes straightforward
+    sorry
+  ```
+  
+  Example with pair:
+  ```lean
+  theorem example (p : F × F) (h : p.1 = 5) : p.2 + 5 = p.1 + p.2 := by
+    provable_simp
+    -- Now p is destructured into p_fst and p_snd
     sorry
   ```
 -/
-macro "provable_struct_simp" : tactic =>
+macro "provable_simp" : tactic =>
   `(tactic|
     repeat (
       fail_if_no_progress (
       try split_provable_struct_eq;
       try decompose_provable_struct;
+      try decompose_provable_pair;
       try simplify_provable_struct_eval;
       try simp only [] at *
       )
     )
   )
+
+-- Backward compatibility alias
+macro "provable_struct_simp" : tactic => `(tactic| provable_simp)
