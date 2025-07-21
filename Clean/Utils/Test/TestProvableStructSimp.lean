@@ -180,6 +180,6 @@ theorem test_eval_var_eq_var_fails_as_expected {F : Type} [Field F] (env : Envir
     simp [ProvableType.eval_const, h]
   -- Now try to apply simplify_provable_struct_eval - it should fail
   -- because neither side has a struct literal
-  try simplify_provable_struct_eval
-  -- The tactic should have made no progress, so we prove it differently
+  fail_if_success simplify_provable_struct_eval
+  -- The tactic failed as expected, so we prove it differently
   rw [h]
