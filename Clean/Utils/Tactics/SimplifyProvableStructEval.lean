@@ -72,6 +72,17 @@ elab "simplify_provable_struct_eval" : tactic => do
   let ctx ← getLCtx
   let mut anyModified := false
   
+  -- Helper to apply the simp lemmas to a specific hypothesis
+  let applySimpToHyp (declName : Lean.Name) : Lean.Elab.Tactic.TacticM Unit := do
+    let tac ← `(tactic| simp only [
+      ProvableStruct.eval_eq_eval,
+      ProvableStruct.eval,
+      ProvableStruct.fromComponents,
+      ProvableStruct.eval.go,
+      ProvableType.eval_field
+    ] at $(mkIdent declName):ident)
+    evalTactic tac
+  
   -- Process each hypothesis
   for decl in ctx do
     if decl.isImplementationDetail then continue
@@ -105,14 +116,7 @@ elab "simplify_provable_struct_eval" : tactic => do
           if shouldSimplify then
             -- Apply simp to this specific hypothesis only
             try
-              let tac ← `(tactic| simp only [
-                ProvableStruct.eval_eq_eval,
-                ProvableStruct.eval,
-                ProvableStruct.fromComponents,
-                ProvableStruct.eval.go,
-                ProvableType.eval_field
-              ] at $(mkIdent decl.userName):ident)
-              evalTactic tac
+              applySimpToHyp decl.userName
               anyModified := true
             catch _ => continue
     
@@ -122,14 +126,7 @@ elab "simplify_provable_struct_eval" : tactic => do
       let hasPattern ← containsStructEvalPattern type
       if hasPattern then
         try
-          let tac ← `(tactic| simp only [
-            ProvableStruct.eval_eq_eval,
-            ProvableStruct.eval,
-            ProvableStruct.fromComponents,
-            ProvableStruct.eval.go,
-            ProvableType.eval_field
-          ] at $(mkIdent decl.userName):ident)
-          evalTactic tac
+          applySimpToHyp decl.userName
           anyModified := true
         catch _ => continue
   

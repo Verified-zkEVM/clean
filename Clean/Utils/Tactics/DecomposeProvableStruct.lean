@@ -72,6 +72,22 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
     let ctx ← Lean.MonadLCtx.getLCtx
     let mut result := []
 
+    -- Helper function to check if an fvarId has a ProvableStruct instance
+    let hasProvableStructInstance (fvarId : Lean.FVarId) : Lean.MetaM Bool := do
+      let type ← inferType (.fvar fvarId)
+      let type' ← withTransparency .reducible (whnf type)
+      let typeCtor := type'.getAppFn
+      match typeCtor with
+      | .const name _ =>
+        try
+          let instType ← mkAppM ``ProvableStruct #[.const name []]
+          if let .some _ ← trySynthInstance instType then
+            return true
+          else
+            return false
+        catch _ => return false
+      | _ => return false
+
     -- Search for projections in the types of hypotheses
     for localDecl in ctx do
       if localDecl.isImplementationDetail then
@@ -81,17 +97,8 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
       let varsInType ← findStructVars localDecl.type
       -- Filter to only include those with ProvableStruct instances
       for fvarId in varsInType do
-        let type ← inferType (.fvar fvarId)
-        let type' ← withTransparency .reducible (whnf type)
-        let typeCtor := type'.getAppFn
-        match typeCtor with
-        | .const name _ =>
-          try
-            let instType ← mkAppM ``ProvableStruct #[.const name []]
-            if let .some _ ← trySynthInstance instType then
-              result := result ++ [fvarId]
-          catch _ => continue
-        | _ => continue
+        if ← hasProvableStructInstance fvarId then
+          result := result ++ [fvarId]
 
     -- Also search for projections in the goal
     let goal ← getMainGoal
@@ -99,17 +106,8 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
     let varsInGoal ← findStructVars target
     -- Filter to only include those with ProvableStruct instances
     for fvarId in varsInGoal do
-      let type ← inferType (.fvar fvarId)
-      let type' ← withTransparency .reducible (whnf type)
-      let typeCtor := type'.getAppFn
-      match typeCtor with
-      | .const name _ =>
-        try
-          let instType ← mkAppM ``ProvableStruct #[.const name []]
-          if let .some _ ← trySynthInstance instType then
-            result := result ++ [fvarId]
-        catch _ => continue
-      | _ => continue
+      if ← hasProvableStructInstance fvarId then
+        result := result ++ [fvarId]
 
     -- Remove duplicates and return
     return result.eraseDups
