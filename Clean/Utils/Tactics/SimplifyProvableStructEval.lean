@@ -10,9 +10,12 @@ private def isStructLiteral (e : Expr) : MetaM Bool := do
     let type ← inferType e
     let typeWhnf ← whnf type
     -- Check if the type is an application of a ProvableStruct type
-    match typeWhnf.getAppFn with
-    | .const typeName _ =>
-      let inst ← trySynthInstance (← mkAppM ``ProvableStruct #[.const typeName []])
+    -- For types like MyStruct n (F p), we want to check ProvableStruct (MyStruct n)
+    match typeWhnf with
+    | .app typeCtor _ =>
+      -- typeWhnf is something like MyStruct n (F p)
+      -- typeCtor is MyStruct n
+      let inst ← trySynthInstance (← mkAppM ``ProvableStruct #[typeCtor])
       match inst with
       | .some _ => return true
       | _ => pure ()

@@ -67,10 +67,11 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
             -- Check if the variable has ProvableStruct
             let varType ← inferType rhs
             let varType' ← withTransparency .reducible (whnf varType)
-            match varType'.getAppFn with
-            | .const typeName _ =>
+            -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
+            match varType' with
+            | .app typeCtor _ =>
               try
-                let instType ← mkAppM ``ProvableStruct #[.const typeName []]
+                let instType ← mkAppM ``ProvableStruct #[typeCtor]
                 match ← trySynthInstance instType with
                 | .some _ => structVarsToCase := fvarId :: structVarsToCase
                 | _ => pure ()
@@ -84,10 +85,11 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
             -- Check if the variable has ProvableStruct
             let varType ← inferType lhs
             let varType' ← withTransparency .reducible (whnf varType)
-            match varType'.getAppFn with
-            | .const typeName _ =>
+            -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
+            match varType' with
+            | .app typeCtor _ =>
               try
-                let instType ← mkAppM ``ProvableStruct #[.const typeName []]
+                let instType ← mkAppM ``ProvableStruct #[typeCtor]
                 match ← trySynthInstance instType with
                 | .some _ => structVarsToCase := fvarId :: structVarsToCase
                 | _ => pure ()
@@ -139,16 +141,20 @@ def splitProvableStructEq : TacticM Unit := do
         for (eqExpr, _, _) in equalities do
           -- Get the type argument (first argument of Eq)
           if let some typeExpr := eqExpr.getArg? 0 then
-            -- Get the type name
+            -- Get the type constructor for finding mk.injEq
             let typeExpr' ← whnf typeExpr
             match typeExpr'.getAppFn with
             | .const typeName _ =>
               -- Check if mk.injEq exists for this type
               let mkInjEqName := typeName ++ `mk ++ `injEq
               if env.contains mkInjEqName then
-                -- Check if type has ProvableStruct instance
+                -- Check if the full type (not just the constructor) has ProvableStruct instance
+                -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
                 try
-                  let instType ← mkAppM ``ProvableStruct #[.const typeName []]
+                  let typeForInstance := match typeExpr' with
+                    | .app typeCtor _ => typeCtor  -- Use MyStruct n for MyStruct n (F p)
+                    | _ => typeExpr'                -- Use the whole type otherwise
+                  let instType ← mkAppM ``ProvableStruct #[typeForInstance]
                   match ← trySynthInstance instType with
                   | .some _ =>
                     let lemmaIdent := mkIdent mkInjEqName
