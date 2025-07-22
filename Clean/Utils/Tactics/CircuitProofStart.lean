@@ -31,7 +31,6 @@ partial def circuitProofStartCore : TacticM Unit := do
       let names := [`offset, `env, `input_var, `input, `h_input, `h_asm, `h_holds]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      evalTactic (← `(tactic| simp only [circuit_norm] at *))
       return
     else if isCompleteness then
       -- This is a Completeness proof, unfold it and introduce all parameters with names
@@ -40,8 +39,6 @@ partial def circuitProofStartCore : TacticM Unit := do
       let names1 := [`offset, `env, `input_var, `henv, `input, `h_input, `h_asm]
       for name in names1 do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
-      -- Use rintro for the remaining parameters
-      evalTactic (← `(tactic| simp only [circuit_norm] at *))
       return
 
     -- Otherwise, continue with the original logic for parametrized theorems
@@ -65,14 +62,12 @@ partial def circuitProofStartCore : TacticM Unit := do
           | .app (.app (.const ``ConstraintsHold.Soundness _) _) _ =>
             -- This is the h_holds parameter in soundness
             evalTactic (← `(tactic| intro h_holds))
-            try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
             return
           | .app (.app (.app (.const ``Environment.UsesLocalWitnessesCompleteness _) _) _) _ =>
             -- This is the henv parameter in completeness
             evalTactic (← `(tactic| intro henv))
             -- Continue with the remaining intros for completeness
             evalTactic (← `(tactic| rintro input h_input h_normalized))
-            try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
             return
           | _ =>
             -- Regular implication, just intro
@@ -84,7 +79,7 @@ partial def circuitProofStartCore : TacticM Unit := do
           circuitProofStartCore
     | _ =>
       -- No more foralls, we're done
-      try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
+      return
 
 /--
   Try to unfold local definitions by looking them up in the context
@@ -149,6 +144,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
 elab "circuit_proof_start" : tactic => do
   -- First run the core logic which handles intro and unfolding
   circuitProofStartCore
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
   -- Then apply additional unfolding and simplification
   -- Unfold the circuit definition and common definitions
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.main, Circuit.bind_def, Circuit.output, main] at *))) catch _ => pure ()
