@@ -52,67 +52,73 @@ partial def findPairVars (e : Lean.Expr) : Lean.MetaM (List Lean.FVarId) := do
 mutual
   /--
     Check if a type looks like it comes from a ProvableType, ProvableStruct, or is an Expression type
+    Optimized to reduce the number of type class instance lookups
   -/
   partial def isProvableTypeOrStructOrExpression (type : Lean.Expr) : Lean.MetaM Bool := do
     try
-      -- Case 1: Check if it's an Expression type
+      -- Fast path: Check common patterns first before expensive instance synthesis
+      
+      -- Case 1: Direct Expression type (very common)
       match type with
       | .app (.const ``Expression _) fieldType =>
-        -- Check if the underlying field type has a Field instance
+        -- Expression F requires Field F
         let fieldClass ← mkAppM ``Field #[fieldType]
-        let fieldInst? ← trySynthInstance fieldClass
-        match fieldInst? with
-        | .some _ =>
-          return true
-        | _ =>
-          pure ()
+        match ← trySynthInstance fieldClass with
+        | .some _ => return true
+        | _ => pure ()
       | _ => pure ()
 
-      -- Case 2: Check if the type has a Field instance (covers F, F p, etc.)
+      -- Case 2: Check if it's a known Field type (F, F p, etc.)
+      -- This is cheaper than checking product types
       let fieldClass ← mkAppM ``Field #[type]
-      let fieldInst? ← trySynthInstance fieldClass
-      match fieldInst? with
+      match ← trySynthInstance fieldClass with
       | .some _ => return true
-      | _ =>
-        -- Case 2: Check if it's a product type that's provable
+      | _ => pure ()
+
+      -- Case 3: Check if it's a product type - but avoid recursive call if possible
+      match type with
+      | .app (.app (.const ``Prod _) α) β =>
+        -- For Prod α β, both components must be provable
+        -- Do a quick check first - if either is obviously not provable, skip
+        let αSimple := α.isSort || α.isFVar || α.isMVar
+        let βSimple := β.isSort || β.isFVar || β.isMVar
+        if αSimple || βSimple then
+          return false
+        -- Otherwise do the full check
         if ← isProdTypeWithProvableType type then
           return true
+      | _ => pure ()
 
-        -- Case 3: Application of a TypeMap with ProvableType
-        match type with
-        | .app typeMap _ =>
+      -- Case 4: For type applications, check the type constructor
+      match type with
+      | .app typeMap _ =>
+        -- Try both ProvableType and ProvableStruct in one go
+        let provableTypeClass ← mkAppM ``ProvableType #[typeMap]
+        let provableStructClass ← mkAppM ``ProvableStruct #[typeMap]
+        
+        -- Check both type classes
+        match ← trySynthInstance provableTypeClass with
+        | .some _ => return true
+        | _ => 
+          match ← trySynthInstance provableStructClass with
+          | .some _ => return true
+          | _ => return false
+      | _ =>
+        -- Case 5: Abstract type map candidates
+        -- This is the most expensive case, so we do it last
+        let typeMapCandidates ← extractTypeMapCandidates type
+        for typeMap in typeMapCandidates do
+          -- Check both instances for each candidate
           let provableTypeClass ← mkAppM ``ProvableType #[typeMap]
-          let inst? ← trySynthInstance provableTypeClass
-          match inst? with
+          match ← trySynthInstance provableTypeClass with
           | .some _ => return true
           | _ =>
-            -- Case 4: Application of a TypeMap with ProvableStruct
             let provableStructClass ← mkAppM ``ProvableStruct #[typeMap]
-            let inst? ← trySynthInstance provableStructClass
-            match inst? with
+            match ← trySynthInstance provableStructClass with
             | .some _ => return true
-            | _ => return false
-        | _ =>
-          -- Case 5: Check if there's a TypeMap that when applied gives this type
-          -- This handles cases where the type itself might come from a ProvableType/Struct
-          -- For example, if we have MyStruct F, we want to check if MyStruct has instances
-
-          -- Try to construct a TypeMap by abstracting over potential field parameter
-          let typeMapCandidates ← extractTypeMapCandidates type
-          for typeMap in typeMapCandidates do
-            -- Check ProvableType
-            let provableTypeClass ← mkAppM ``ProvableType #[typeMap]
-            let inst? ← trySynthInstance provableTypeClass
-            match inst? with
-            | .some _ => return true
-            | _ =>
-              -- Check ProvableStruct
-              let provableStructClass ← mkAppM ``ProvableStruct #[typeMap]
-              let inst? ← trySynthInstance provableStructClass
-              match inst? with
-              | .some _ => return true
-              | _ => continue
-          return false
+            | _ => continue
+        
+        return false
     catch _ =>
       return false
   where
