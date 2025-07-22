@@ -565,14 +565,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     exact h_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env input_var
-  intro henv input h_input h_normalized
+  circuit_proof_start
 
   -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
   simp only [circuit_norm, main] at henv ⊢
 
   -- Use the helper lemma to prove normalization
-  exact initial_state_and_messages_are_normalized env input_var input h_input h_normalized
+  apply initial_state_and_messages_are_normalized env
+  · simp only [circuit_norm, h_input]
+    rfl
+  · simp only [Assumptions]
+    aesop
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
