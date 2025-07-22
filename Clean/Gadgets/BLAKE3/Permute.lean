@@ -16,11 +16,11 @@ instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
 def Spec (state : BLAKE3State (F p)) (out: BLAKE3State (F p)) :=
-  out.value = permute state.value ∧ out.Normalized
+  out.rawValue = permute state.rawValue ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env state_var state h_input h_normalized h_holds
-  simp only [Spec, BLAKE3State.value, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
+  simp only [Spec, BLAKE3State.rawValue, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
     eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
     ↓Vector.getElem_toArray, Vector.mk_eq]
   constructor

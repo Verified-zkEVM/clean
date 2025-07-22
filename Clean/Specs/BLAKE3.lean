@@ -116,7 +116,7 @@ def round (state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
 The permutation function, which permutes the message words after each
 round (except the last one where it would be useless).
 -/
-def permute (state: Vector Nat 16) : Vector Nat 16 :=
+def permute (state: Vector UInt32 16) : Vector UInt32 16 :=
   Vector.ofFn (fun i => state[msgPermutation[i]])
 
 /--
