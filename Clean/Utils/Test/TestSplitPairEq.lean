@@ -32,7 +32,7 @@ example (x : fieldPair (F p)) (h : (5, 3) = x) : x.1 = 5 := by
   exact h.1.symm
 
 -- Test with Var fieldPair
-example (x : Var fieldPair (F p)) (h : (Expression.const 5, Expression.const 3) = x) : 
+example (x : Var fieldPair (F p)) (h : (Expression.const 5, Expression.const 3) = x) :
     x.1 = Expression.const 5 := by
   split_pair_eq
   -- x is destructured and equality is split
@@ -52,7 +52,7 @@ example (x : F p × F p) (h : (5, 3) = x ∧ x.1 + x.2 = 8) : x.1 = 5 := by
   exact h.1.1.symm
 
 -- Test nested conjunctions
-example (x y : F p × F p) 
+example (x y : F p × F p)
     (h : ((1, 2) = x ∧ x.1 ≠ 0) ∧ (y = (3, 4) ∧ y.2 ≠ 0)) :
     x.1 = 1 ∧ y.2 = 4 := by
   split_pair_eq
@@ -60,8 +60,8 @@ example (x y : F p × F p)
   exact ⟨h.1.1.1.symm, h.2.1.2⟩
 
 -- Test with Expression pairs (should work due to isProvableTypeOrStructOrExpression)
-example (x : Expression (F p) × Expression (F p)) 
-    (h : (Expression.const 5, Expression.const 3) = x) : 
+example (x : Expression (F p) × Expression (F p))
+    (h : (Expression.const 5, Expression.const 3) = x) :
     x.1 = Expression.const 5 := by
   split_pair_eq
   exact h.1.symm
@@ -86,7 +86,7 @@ example (x : ℕ × String) (h : (5, "hello") = x) : x = (5, "hello") := by
 end NonProvableTests
 
 -- Test interaction with provable_simp
-example (x : F p × F p) (y : F p) (h : (5, 3) = x ∧ x.1 + y = 8) : 
+example (x : F p × F p) (y : F p) (h : (5, 3) = x ∧ x.1 + y = 8) :
     x.2 + 5 = x.1 + x.2 := by
   provable_simp
   -- provable_simp should apply split_pair_eq among other tactics

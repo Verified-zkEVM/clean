@@ -39,19 +39,19 @@ private partial def containsPairEvalPattern (e : Expr) : MetaM Bool := do
         let rhsIsProvableEval := rhs.isAppOf ``ProvableType.eval
         let lhsIsExprEval := lhs.isAppOf ``Expression.eval
         let rhsIsExprEval := rhs.isAppOf ``Expression.eval
-        
+
         let lhsIsEval := lhsIsProvableEval || lhsIsExprEval
         let rhsIsEval := rhsIsProvableEval || rhsIsExprEval
-        
+
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
-          
+
           -- Check if other side is a pair literal
           let otherIsLiteral ← isPairLiteral otherSide
           if otherIsLiteral then
             return true
-          
+
           -- Check if other side is a pair variable with provable type
           let otherType ← inferType otherSide
           if ← isProdTypeWithProvableType otherType then
@@ -77,7 +77,7 @@ private partial def containsPairEvalPattern (e : Expr) : MetaM Bool := do
 elab "simplify_pair_eval" : tactic => do
   let ctx ← getLCtx
   let mut anyModified := false
-  
+
   -- Helper to apply the simp lemmas to a specific hypothesis
   let applySimpToHyp (declName : Lean.Name) : Lean.Elab.Tactic.TacticM Unit := do
     let tac ← `(tactic| simp only [
@@ -95,13 +95,13 @@ elab "simplify_pair_eval" : tactic => do
       Prod.mk.injEq
     ] at $(mkIdent declName):ident)
     evalTactic tac
-  
+
   -- Process each hypothesis
   for decl in ctx do
     if decl.isImplementationDetail then continue
-    
+
     let type ← instantiateMVars decl.type
-    
+
     -- First check if it's a direct equality
     if type.isAppOf `Eq then
       if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
@@ -109,21 +109,21 @@ elab "simplify_pair_eval" : tactic => do
         let rhsIsProvableEval := rhs.isAppOf ``ProvableType.eval
         let lhsIsExprEval := lhs.isAppOf ``Expression.eval
         let rhsIsExprEval := rhs.isAppOf ``Expression.eval
-        
+
         let lhsIsEval := lhsIsProvableEval || lhsIsExprEval
         let rhsIsEval := rhsIsProvableEval || rhsIsExprEval
-        
+
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
-          
+
           -- Check if other side is a pair literal
           let otherIsLiteral ← isPairLiteral otherSide
-          
+
           -- Check if other side has provable pair type
           let otherType ← inferType otherSide
           let otherIsProvablePair ← isProdTypeWithProvableType otherType
-          
+
           if otherIsLiteral || otherIsProvablePair then
             -- Apply simp lemmas to this hypothesis
             try
@@ -138,14 +138,14 @@ elab "simplify_pair_eval" : tactic => do
                   applySimpToHyp decl.userName
                   anyModified := true
                 catch _ => continue
-    
+
     -- Also check if the hypothesis contains pair eval patterns inside conjunctions
     else if ← containsPairEvalPattern type then
       try
         applySimpToHyp decl.userName
         anyModified := true
       catch _ => continue
-  
+
   -- Ensure the tactic made progress
   if !anyModified then
     throwError "simplify_pair_eval made no progress"
