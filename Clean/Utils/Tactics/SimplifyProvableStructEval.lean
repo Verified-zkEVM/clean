@@ -1,34 +1,20 @@
 import Lean
 import Clean.Circuit.Provable
+import Clean.Utils.Tactics.ProvableTacticUtils
 
-open Lean Meta Elab Tactic
+open Lean Meta Elab Tactic ProvenZK
 
 /-- Helper function to check if an expression is a struct constructor or struct variable -/
 private def isStructLiteral (e : Expr) : MetaM Bool := do
   -- First check the type to see if it's a ProvableStruct
   try
     let type ← inferType e
-    let typeWhnf ← whnf type
-    -- Check if the type is an application of a ProvableStruct type
-    -- For types like MyStruct n (F p), we want to check ProvableStruct (MyStruct n)
-    match typeWhnf with
-    | .app typeCtor _ =>
-      -- typeWhnf is something like MyStruct n (F p)
-      -- typeCtor is MyStruct n
-      let inst ← trySynthInstance (← mkAppM ``ProvableStruct #[typeCtor])
-      match inst with
-      | .some _ => return true
-      | _ => pure ()
-    | _ => pure ()
-  catch _ => pure ()
-  
-  -- Also check if it's a constructor explicitly
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
-  | .const name _ =>
-    -- Check if it's a constructor (ends with .mk)
-    return name.components.getLast? == some `mk
-  | _ => return false
+    if ← hasProvableStructInstance type then
+      -- Also check if it's a constructor explicitly
+      isMkConstructor e
+    else
+      return false
+  catch _ => return false
 
 /-- Check if an expression contains a struct eval equality pattern, including inside conjunctions -/
 private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
@@ -42,8 +28,8 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
     -- Check if it's an equality with eval
     if e.isAppOf `Eq then
       if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
-        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval || lhs.isAppOf ``ProvableType.eval
-        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval || rhs.isAppOf ``ProvableType.eval
+        let lhsIsEval := hasEvalPattern lhs
+        let rhsIsEval := hasEvalPattern rhs
         
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs
@@ -95,8 +81,8 @@ elab "simplify_provable_struct_eval" : tactic => do
     -- First check if it's a direct equality
     if type.isAppOf `Eq then
       if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
-        let lhsIsEval := lhs.isAppOf ``ProvableStruct.eval || lhs.isAppOf ``ProvableType.eval
-        let rhsIsEval := rhs.isAppOf ``ProvableStruct.eval || rhs.isAppOf ``ProvableType.eval
+        let lhsIsEval := hasEvalPattern lhs
+        let rhsIsEval := hasEvalPattern rhs
         
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs

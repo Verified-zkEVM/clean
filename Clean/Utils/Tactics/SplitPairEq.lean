@@ -2,42 +2,13 @@ import Lean.Elab.Tactic
 import Lean.Elab.Exception
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.DecomposeProvablePair
+import Clean.Utils.Tactics.ProvableTacticUtils
 
 open Lean.Elab.Tactic
 open Lean.Meta
 open Lean
 
 namespace ProvenZK
-
-/--
-  Check if an expression is a pair literal (Prod.mk application)
--/
-def isPairConstructor (e : Expr) : MetaM Bool := do
-  -- Use transparency to see through definitions
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
-  | .const name _ =>
-    -- Check if it's Prod.mk
-    return name == ``Prod.mk
-  | _ => return false
-
-/--
-  Extract all pair equalities from an expression (including inside conjunctions)
--/
-partial def extractPairEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
-  -- Returns list of (equality_expr, lhs, rhs) triples
-  match e with
-  | .app (.app (.const ``And _) left) right =>
-    -- Handle conjunction
-    let leftEqs ← extractPairEqualities left
-    let rightEqs ← extractPairEqualities right
-    return leftEqs ++ rightEqs
-  | _ =>
-    -- Check if it's an equality
-    if e.isAppOf `Eq then
-      if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
-        return [(e, lhs, rhs)]
-    return []
 
 /--
   Find pair variables that appear in equalities with pair literals
@@ -56,12 +27,12 @@ def findPairVarsInEqualities : TacticM (List FVarId) := do
       let type := localDecl.type
 
       -- Extract all equalities from this hypothesis (handles conjunctions)
-      let equalities ← extractPairEqualities type
+      let equalities ← extractEqualities type
 
       for (_, lhs, rhs) in equalities do
         -- Check if one side is a pair constructor and the other is a variable
-        let lhsIsConstructor ← isPairConstructor lhs
-        let rhsIsConstructor ← isPairConstructor rhs
+        let lhsIsConstructor ← isProdMkApp lhs
+        let rhsIsConstructor ← isProdMkApp rhs
 
         if lhsIsConstructor && !rhsIsConstructor then
           -- pair_literal = variable

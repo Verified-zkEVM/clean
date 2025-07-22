@@ -1,40 +1,12 @@
 import Lean.Elab.Tactic
 import Lean.Elab.Exception
 import Clean.Circuit.Provable
+import Clean.Utils.Tactics.ProvableTacticUtils
 
 open Lean.Elab.Tactic
 open Lean.Meta
 open Lean
-
-/--
-  Check if an expression is a struct literal (constructor application)
--/
-def isStructConstructor (e : Expr) : MetaM Bool := do
-  -- Use transparency to see through definitions
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
-  | .const name _ =>
-    -- Check if it's a constructor (ends with .mk)
-    return name.components.getLast? == some `mk
-  | _ => return false
-
-/--
-  Extract all struct equalities from an expression (including inside conjunctions)
--/
-partial def extractStructEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
-  -- Returns list of (equality_expr, lhs, rhs) triples
-  match e with
-  | .app (.app (.const ``And _) left) right =>
-    -- Handle conjunction
-    let leftEqs ← extractStructEqualities left
-    let rightEqs ← extractStructEqualities right
-    return leftEqs ++ rightEqs
-  | _ =>
-    -- Check if it's an equality
-    if e.isAppOf `Eq then
-      if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
-        return [(e, lhs, rhs)]
-    return []
+open ProvenZK
 
 /--
   Find struct variables that appear in equalities with struct literals
@@ -53,12 +25,12 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
       let type := localDecl.type
       
       -- Extract all equalities from this hypothesis (handles conjunctions)
-      let equalities ← extractStructEqualities type
+      let equalities ← extractEqualities type
       
       for (_, lhs, rhs) in equalities do
         -- Check if one side is a struct constructor and the other is a variable
-        let lhsIsConstructor ← isStructConstructor lhs
-        let rhsIsConstructor ← isStructConstructor rhs
+        let lhsIsConstructor ← isMkConstructor lhs
+        let rhsIsConstructor ← isMkConstructor rhs
         
         if lhsIsConstructor && !rhsIsConstructor then
           -- struct_literal = variable
@@ -66,17 +38,8 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
           | .fvar fvarId =>
             -- Check if the variable has ProvableStruct
             let varType ← inferType rhs
-            let varType' ← withTransparency .reducible (whnf varType)
-            -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
-            match varType' with
-            | .app typeCtor _ =>
-              try
-                let instType ← mkAppM ``ProvableStruct #[typeCtor]
-                match ← trySynthInstance instType with
-                | .some _ => structVarsToCase := fvarId :: structVarsToCase
-                | _ => pure ()
-              catch _ => pure ()
-            | _ => pure ()
+            if ← hasProvableStructInstance varType then
+              structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
         else if rhsIsConstructor && !lhsIsConstructor then
           -- variable = struct_literal
@@ -84,17 +47,8 @@ def findStructVarsInEqualities : TacticM (List FVarId) := do
           | .fvar fvarId =>
             -- Check if the variable has ProvableStruct
             let varType ← inferType lhs
-            let varType' ← withTransparency .reducible (whnf varType)
-            -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
-            match varType' with
-            | .app typeCtor _ =>
-              try
-                let instType ← mkAppM ``ProvableStruct #[typeCtor]
-                match ← trySynthInstance instType with
-                | .some _ => structVarsToCase := fvarId :: structVarsToCase
-                | _ => pure ()
-              catch _ => pure ()
-            | _ => pure ()
+            if ← hasProvableStructInstance varType then
+              structVarsToCase := fvarId :: structVarsToCase
           | _ => pure ()
     
     return structVarsToCase.eraseDups
@@ -139,7 +93,7 @@ def splitProvableStructEq : TacticM Unit := do
         let type := localDecl.type
         
         -- Extract all equalities from this hypothesis (handles conjunctions)
-        let equalities ← extractStructEqualities type
+        let equalities ← extractEqualities type
         
         for (eqExpr, _, _) in equalities do
           -- Get the type argument (first argument of Eq)
@@ -153,18 +107,10 @@ def splitProvableStructEq : TacticM Unit := do
               if env.contains mkInjEqName then
                 -- Check if the full type (not just the constructor) has ProvableStruct instance
                 -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
-                try
-                  let typeForInstance := match typeExpr' with
-                    | .app typeCtor _ => typeCtor  -- Use MyStruct n for MyStruct n (F p)
-                    | _ => typeExpr'                -- Use the whole type otherwise
-                  let instType ← mkAppM ``ProvableStruct #[typeForInstance]
-                  match ← trySynthInstance instType with
-                  | .some _ =>
-                    let lemmaIdent := mkIdent mkInjEqName
-                    if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
-                      lemmasToApply := lemmaIdent :: lemmasToApply
-                  | _ => pure ()
-                catch _ => pure ()
+                if ← hasProvableStructInstance typeExpr' then
+                  let lemmaIdent := mkIdent mkInjEqName
+                  if !lemmasToApply.any (fun l => l.getId == mkInjEqName) then
+                    lemmasToApply := lemmaIdent :: lemmasToApply
             | _ => pure ()
       
       -- Apply all the lemmas we found

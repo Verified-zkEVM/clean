@@ -1,6 +1,7 @@
 import Lean
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.DecomposeProvablePair
+import Clean.Utils.Tactics.ProvableTacticUtils
 
 open Lean Meta Elab Tactic
 
@@ -13,12 +14,7 @@ private def isPairLiteral (e : Expr) : MetaM Bool := do
     let type ← inferType e
     if ← isProdTypeWithProvableType type then
       -- Also check if it's a constructor explicitly
-      let e' ← withTransparency .all (whnf e)
-      match e'.getAppFn with
-      | .const name _ =>
-        -- Check if it's Prod.mk
-        return name == ``Prod.mk
-      | _ => return false
+      isProdMkApp e
     else
       return false
   catch _ => return false
