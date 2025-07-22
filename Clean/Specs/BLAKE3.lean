@@ -168,7 +168,7 @@ def applyRounds (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (cou
 Final state update that XORs the first 8 words with the last 8 words,
 and the last 8 words with the original chaining value.
 -/
-def finalStateUpdate (state: Vector Nat 16) (chaining_value: Vector Nat 8) : Vector Nat 16 :=
+def finalStateUpdate (state: Vector UInt32 16) (chaining_value: Vector UInt32 8) : Vector UInt32 16 :=
   #v[
     state[0] ^^^ state[8],
     state[1] ^^^ state[9],

@@ -22,24 +22,24 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let { state, chaining_value } := input
 
   -- XOR first 8 words with last 8 words
-  let s0 ← Xor32.circuit ⟨state[0], state[8]⟩
-  let s1 ← Xor32.circuit ⟨state[1], state[9]⟩
-  let s2 ← Xor32.circuit ⟨state[2], state[10]⟩
-  let s3 ← Xor32.circuit ⟨state[3], state[11]⟩
-  let s4 ← Xor32.circuit ⟨state[4], state[12]⟩
-  let s5 ← Xor32.circuit ⟨state[5], state[13]⟩
-  let s6 ← Xor32.circuit ⟨state[6], state[14]⟩
-  let s7 ← Xor32.circuit ⟨state[7], state[15]⟩
+  let s0 ← Xor32.UInt32.circuit ⟨state[0], state[8]⟩
+  let s1 ← Xor32.UInt32.circuit ⟨state[1], state[9]⟩
+  let s2 ← Xor32.UInt32.circuit ⟨state[2], state[10]⟩
+  let s3 ← Xor32.UInt32.circuit ⟨state[3], state[11]⟩
+  let s4 ← Xor32.UInt32.circuit ⟨state[4], state[12]⟩
+  let s5 ← Xor32.UInt32.circuit ⟨state[5], state[13]⟩
+  let s6 ← Xor32.UInt32.circuit ⟨state[6], state[14]⟩
+  let s7 ← Xor32.UInt32.circuit ⟨state[7], state[15]⟩
 
   -- XOR last 8 words with chaining value
-  let s8 ← Xor32.circuit ⟨chaining_value[0], state[8]⟩
-  let s9 ← Xor32.circuit ⟨chaining_value[1], state[9]⟩
-  let s10 ← Xor32.circuit ⟨chaining_value[2], state[10]⟩
-  let s11 ← Xor32.circuit ⟨chaining_value[3], state[11]⟩
-  let s12 ← Xor32.circuit ⟨chaining_value[4], state[12]⟩
-  let s13 ← Xor32.circuit ⟨chaining_value[5], state[13]⟩
-  let s14 ← Xor32.circuit ⟨chaining_value[6], state[14]⟩
-  let s15 ← Xor32.circuit ⟨chaining_value[7], state[15]⟩
+  let s8 ← Xor32.UInt32.circuit ⟨chaining_value[0], state[8]⟩
+  let s9 ← Xor32.UInt32.circuit ⟨chaining_value[1], state[9]⟩
+  let s10 ← Xor32.UInt32.circuit ⟨chaining_value[2], state[10]⟩
+  let s11 ← Xor32.UInt32.circuit ⟨chaining_value[3], state[11]⟩
+  let s12 ← Xor32.UInt32.circuit ⟨chaining_value[4], state[12]⟩
+  let s13 ← Xor32.UInt32.circuit ⟨chaining_value[5], state[13]⟩
+  let s14 ← Xor32.UInt32.circuit ⟨chaining_value[6], state[14]⟩
+  let s15 ← Xor32.UInt32.circuit ⟨chaining_value[7], state[15]⟩
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
@@ -68,7 +68,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   ]
 
   localLength_eq _ n := by
-    dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
+    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Xor32.elaborated]
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
@@ -76,18 +76,18 @@ def Assumptions (input : Inputs (F p)) :=
 
 def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   let { state, chaining_value } := input
-  out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
+  out.rawValue = finalStateUpdate state.rawValue (chaining_value.map U32.rawValueU32) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
+  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated, Xor32.UInt32.circuit_Assumptions, Xor32.UInt32.circuit, FormalCircuit.weakenSpec] at h_holds
   simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
-    ElaboratedCircuit.localLength, Xor32.Assumptions,
+    ElaboratedCircuit.localLength, Xor32.Assumptions, Xor32.UInt32.Spec,
     ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, getElem_eval_vector, h_input, Xor32.Spec, ElaboratedCircuit.output,
-    and_imp, Nat.add_zero, add_zero, and_true] at h_holds
+    and_imp, Nat.add_zero, add_zero, and_true, Xor32.UInt32.circuit_Assumptions] at h_holds
 
   ring_nf at h_holds
 
@@ -112,7 +112,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  simp [Spec, circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
+  simp [Spec, circuit_norm, eval_vector, BLAKE3State.rawValue, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
   simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
     true_and]
@@ -130,7 +130,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
     Fin.getElem_fin] at state_norm chaining_value_norm
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
+  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated, Xor32.UInt32.circuit_Assumptions] at henv ⊢
   simp only [h_input, circuit_norm, and_imp,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
   simp_all only [gt_iff_lt, forall_const, and_self]
