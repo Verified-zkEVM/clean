@@ -45,7 +45,7 @@ def Assumptions (input : Inputs (F p)) :=
 
 def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   let { state, message } := input
-  out.value = round state.value (message.map U32.value) ∧ out.Normalized
+  out.rawValue = round state.rawValue (message.map U32.rawValueU32) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, message_var⟩ ⟨state, message⟩ h_input h_normalized h_holds
@@ -65,6 +65,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, h_eval_state, getElem_eval_vector, h_eval_message, G.Spec, Fin.isValue,
     Nat.cast_zero, and_imp, and_true] at h_holds
+  -- something.value appears here instead of soething.rawValue, why?
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
   simp_all only [forall_const]
 
@@ -99,7 +100,25 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, List.foldl_toArray',
     List.foldl_cons, List.foldl_nil]
   constructor
-  · rw [←c8.left]; rfl
+  ·
+
+/- c8.1 RHS
+    Specs.BLAKE3.g
+      (Specs.BLAKE3.g
+        (Specs.BLAKE3.g
+          (Specs.BLAKE3.g
+            (Specs.BLAKE3.g
+              (Specs.BLAKE3.g
+                (Specs.BLAKE3.g (Specs.BLAKE3.g state.rawValue 0 4 8 12 ↑message[0].value ↑message[1].value) 1 5 9 13
+                  ↑message[2].value ↑message[3].value)
+                2 6 10 14 ↑message[4].value ↑message[5].value)
+              3 7 11 15 ↑message[6].value ↑message[7].value)
+            0 5 10 15 ↑message[8].value ↑message[9].value)
+          1 6 11 12 ↑message[10].value ↑message[11].value)
+        2 7 8 13 ↑message[12].value ↑message[13].value)
+      3 4 9 14 ↑message[14].value ↑message[15].value -/
+
+    rw [←c8.left]; rfl
   · exact c8.right
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by

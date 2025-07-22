@@ -24,22 +24,22 @@ instance : ProvableStruct Inputs where
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let { state, x, y } := input
 
-  let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
+  let state_a ← Addition32.UInt32.circuit ⟨state[a], ← Addition32.UInt32.circuit ⟨state[b], x⟩⟩
 
   let state_d ← Rotation32.UInt32.circuit 16 <|
     ← Xor32.UInt32.circuit ⟨state[d], state_a⟩
 
-  let state_c ← Addition32.circuit ⟨state[c], state_d⟩
+  let state_c ← Addition32.UInt32.circuit ⟨state[c], state_d⟩
 
   let state_b ← Rotation32.UInt32.circuit 12 <|
     ← Xor32.UInt32.circuit ⟨state[b], state_c⟩
 
-  let state_a ← Addition32.circuit ⟨state_a, ← Addition32.circuit ⟨state_b, y⟩⟩
+  let state_a ← Addition32.UInt32.circuit ⟨state_a, ← Addition32.UInt32.circuit ⟨state_b, y⟩⟩
 
   let state_d ← Rotation32.UInt32.circuit 8 <|
     ← Xor32.UInt32.circuit ⟨state_d, state_a⟩
 
-  let state_c ← Addition32.circuit ⟨state_c, state_d⟩
+  let state_c ← Addition32.UInt32.circuit ⟨state_c, state_d⟩
 
   let state_b ← Rotation32.UInt32.circuit 7 <|
     ← Xor32.UInt32.circuit ⟨state_b, state_c⟩
@@ -60,11 +60,11 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     |>.set d (Rotation32.output 8 (i0 + 68)) d.is_lt
 
   localLength_eq _ n := by
-    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
   output_eq _ _ := by
-    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
   subcircuitsConsistent _ _ := by
-    simp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    simp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 
 def Assumptions (input : Inputs (F p)) :=
@@ -80,9 +80,10 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
   dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, Rotation32.UInt32.circuit, Xor32.UInt32.circuit, FormalCircuit.weakenSpec] at h_holds
+  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit,
+    Rotation32.elaborated, Addition32.UInt32.circuit, Rotation32.UInt32.circuit, Xor32.UInt32.circuit, FormalCircuit.weakenSpec] at h_holds
   simp only [circuit_norm, and_imp,
-    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.UInt32.Spec,
+    Addition32.Assumptions, Addition32.UInt32.Spec, Rotation32.Assumptions, Rotation32.UInt32.Spec,
     Xor32.Assumptions, Xor32.UInt32.Spec, getElem_eval_vector, h_input] at h_holds
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
@@ -101,13 +102,17 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
   simp only [Spec, ElaboratedCircuit.output]
   constructor
   · ext i hi
-    simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
+    simp only [BLAKE3State.rawValue, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
     · rw [c11.left]
+      rfl
     · rw [c12.left]
+      rfl
     · rw [c14.left]
+      rfl
     · rw [c9.left]
+      rfl
     · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
 
   · intro i
@@ -124,10 +129,11 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
   dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
+  dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.UInt32.circuit, Rotation32.UInt32.circuit,
+    Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, FormalCircuit.weakenSpec] at henv ⊢
   simp only [h_input, circuit_norm, and_imp,
-    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
+    Addition32.Assumptions, Addition32.UInt32.Spec, Rotation32.Assumptions, Rotation32.UInt32.Spec,
+    Xor32.Assumptions, Xor32.UInt32.Spec, getElem_eval_vector] at henv ⊢
 
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const, and_true]
