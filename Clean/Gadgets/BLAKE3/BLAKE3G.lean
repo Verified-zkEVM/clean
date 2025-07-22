@@ -26,23 +26,23 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
 
   let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
 
-  let state_d ← Rotation32.circuit 16 <|
-    ← Xor32.circuit ⟨state[d], state_a⟩
+  let state_d ← Rotation32.UInt32.circuit 16 <|
+    ← Xor32.UInt32.circuit ⟨state[d], state_a⟩
 
   let state_c ← Addition32.circuit ⟨state[c], state_d⟩
 
-  let state_b ← Rotation32.circuit 12 <|
-    ← Xor32.circuit ⟨state[b], state_c⟩
+  let state_b ← Rotation32.UInt32.circuit 12 <|
+    ← Xor32.UInt32.circuit ⟨state[b], state_c⟩
 
   let state_a ← Addition32.circuit ⟨state_a, ← Addition32.circuit ⟨state_b, y⟩⟩
 
-  let state_d ← Rotation32.circuit 8 <|
-    ← Xor32.circuit ⟨state_d, state_a⟩
+  let state_d ← Rotation32.UInt32.circuit 8 <|
+    ← Xor32.UInt32.circuit ⟨state_d, state_a⟩
 
   let state_c ← Addition32.circuit ⟨state_c, state_d⟩
 
-  let state_b ← Rotation32.circuit 7 <|
-    ← Xor32.circuit ⟨state_b, state_c⟩
+  let state_b ← Rotation32.UInt32.circuit 7 <|
+    ← Xor32.UInt32.circuit ⟨state_b, state_c⟩
 
   return state
     |>.set a state_a
@@ -60,11 +60,11 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     |>.set d (Rotation32.output 8 (i0 + 68)) d.is_lt
 
   localLength_eq _ n := by
-    dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
   output_eq _ _ := by
-    dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    dsimp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
   subcircuitsConsistent _ _ := by
-    simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
+    simp only [main, circuit_norm, Xor32.UInt32.circuit, Addition32.circuit, Rotation32.UInt32.circuit, FormalCircuit.weakenSpec, Xor32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 
 def Assumptions (input : Inputs (F p)) :=
@@ -73,17 +73,17 @@ def Assumptions (input : Inputs (F p)) :=
 
 def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   let { state, x, y } := input
-  out.value = g state.value a b c d x.value y.value ∧ out.Normalized
+  out.rawValue = g state.rawValue a b c d x.value y.value ∧ out.Normalized
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
   intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
   dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
+  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, Rotation32.UInt32.circuit, Xor32.UInt32.circuit, FormalCircuit.weakenSpec] at h_holds
   simp only [circuit_norm, and_imp,
-    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector, h_input] at h_holds
+    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.UInt32.Spec,
+    Xor32.Assumptions, Xor32.UInt32.Spec, getElem_eval_vector, h_input] at h_holds
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 

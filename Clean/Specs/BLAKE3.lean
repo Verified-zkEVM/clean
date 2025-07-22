@@ -72,16 +72,16 @@ def msgPermutation : Vector (Fin 16) 16 :=
 ------------
 
 -- The mixing function, G, which mixes either a column or a diagonal.
-def g (state: Vector Nat 16) (a b c d : Fin 16) (mx my : Nat) : Vector Nat 16 :=
-  let state_a := add32 (state[a]) (add32 state[b] mx)
-  let state_d := rotRight32 (state[d] ^^^ state_a) 16
-  let state_c := add32 (state[c]) state_d
-  let state_b := rotRight32 (state[b] ^^^ state_c) 12
+def g (state: Vector UInt32 16) (a b c d : Fin 16) (mx my : UInt32) : Vector UInt32 16 :=
+  let state_a := state[a] + (state[b] + mx)
+  let state_d := UInt32.ofNat (rotRight32 (state[d].toNat ^^^ state_a.toNat) 16)
+  let state_c := state[c] + state_d
+  let state_b := UInt32.ofNat (rotRight32 (state[b].toNat ^^^ state_c.toNat) 12)
 
-  let state_a := add32 state_a (add32 state_b my)
-  let state_d := rotRight32 (state_d ^^^ state_a) 8
-  let state_c := add32 state_c state_d
-  let state_b := rotRight32 (state_b ^^^ state_c) 7
+  let state_a := state_a + (state_b + my)
+  let state_d := UInt32.ofNat (rotRight32 (state_d.toNat ^^^ state_a.toNat) 8)
+  let state_c := state_c + state_d
+  let state_b := UInt32.ofNat (rotRight32 (state_b.toNat ^^^ state_c.toNat) 7)
 
   state.set a state_a
         |>.set b state_b
@@ -107,7 +107,7 @@ def roundConstants : Vector (Fin 16 × Fin 16 × Fin 16 × Fin 16 × Fin 16 × F
 The round function, which applies the mixing function G
 to mix the state's columns and diagonals.
 -/
-def round (state: Vector Nat 16) (m: Vector Nat 16) : Vector Nat 16 :=
+def round (state: Vector UInt32 16) (m: Vector UInt32 16) : Vector UInt32 16 :=
   roundConstants.foldl (fun state (a, b, c, d, i, j) =>
     g state a b c d m[i] m[j]
   ) state
@@ -123,7 +123,7 @@ def permute (state: Vector UInt32 16) : Vector UInt32 16 :=
 Apply a single round of mixing with optional message permutation.
 Used in the fold operation for applying multiple rounds.
 -/
-def roundWithPermute (acc : Vector Nat 16 × Vector Nat 16) (round_num : Nat) : Vector Nat 16 × Vector Nat 16 :=
+def roundWithPermute (acc : Vector UInt32 16 × Vector UInt32 16) (round_num : Nat) : Vector UInt32 16 × Vector UInt32 16 :=
   let (state, block_words) := acc
   let new_state := round state block_words
   -- Permute block words except for the last round (round 6, 0-indexed)
@@ -135,7 +135,7 @@ Apply 7 rounds of mixing to the initialized state with message permutation.
 Takes chaining value, block words, counter, block length, and flags,
 initializes the state, and applies the rounds using foldl.
 -/
-def applyRounds (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector Nat 16 :=
+def applyRounds (chaining_value: Vector UInt32 8) (block_words: Vector UInt32 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector UInt32 16 :=
   -- Split counter into low and high parts
   let counter_low := counter % 2^32
   let counter_high := counter / 2^32
@@ -193,7 +193,7 @@ The compression function, which takes a chaining value, block words, counter,
 block length, and flags as input and produces a new state vector.
 This is the core function of BLAKE3.
 -/
-def compress (chaining_value: Vector Nat 8) (block_words: Vector Nat 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector Nat 16 :=
+def compress (chaining_value: Vector UInt32 8) (block_words: Vector UInt32 16) (counter: Nat) (block_len: Nat) (flags: Nat) : Vector UInt32 16 :=
   let state := applyRounds chaining_value block_words counter block_len flags
   finalStateUpdate state chaining_value
 
@@ -211,21 +211,21 @@ https://github.com/oconnor663/pure_python_blake3/blob/main/pure_blake3.py
 -/
 
 -- Test g function.
-def stateInitG : Vector Nat 16 := #v[1321565287, 1539917118, 1918974978, 1109417770, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
+def stateInitG : Vector UInt32 16 := #v[1321565287, 1539917118, 1918974978, 1109417770, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326]
 example : g stateInitG 0 1 2 3 4 5 = #v[3279123572, 367480655, 3947042124, 3663589532, 1286102396, 687960962, 441968613, 3595364146, 3111632159, 1102204962, 944689943, 3680149627, 3129663845, 3265095166, 606420953, 4183330326] := rfl
 
 -- Test round function.
-def stateInitRound : Vector Nat 16 := #v[1048429017, 869689525, 3373747814, 3881173978, 867318181, 93804160, 1095841330, 3806666906, 1528071400, 2951122214, 4271188711, 3509256835, 40453064, 3578515354, 1456976626, 243768026]
-def m : Vector Nat 16 := #v[3959934058, 3329161910, 3688806782, 3025089236, 897128991, 1111177342, 4132823147, 2420086736, 1951041921, 2483382132, 1478626316, 2397174491, 1858261849, 1494602388, 4275385857, 3719915132]
+def stateInitRound : Vector UInt32 16 := #v[1048429017, 869689525, 3373747814, 3881173978, 867318181, 93804160, 1095841330, 3806666906, 1528071400, 2951122214, 4271188711, 3509256835, 40453064, 3578515354, 1456976626, 243768026]
+def m : Vector UInt32 16 := #v[3959934058, 3329161910, 3688806782, 3025089236, 897128991, 1111177342, 4132823147, 2420086736, 1951041921, 2483382132, 1478626316, 2397174491, 1858261849, 1494602388, 4275385857, 3719915132]
 example : round stateInitRound m = #v[2183394319, 368400627, 2705018986, 1532359963, 184541119, 4093912516, 344508834, 154001542, 2580533130, 866577463, 1629990543, 2086044263, 618301763, 3154665623, 3243728413, 699478374] := rfl
 
 -- Test permutation function.
-def stateInitPermute : Vector Nat 16 := #v[3383581781, 3743774256, 2003572531, 1426274751, 826242452, 1591270934, 3844308220, 2585707362, 2245261223, 142878727, 3284326898, 338750343, 4278730886, 3963897632, 4264855050, 15597940]
+def stateInitPermute : Vector UInt32 16 := #v[3383581781, 3743774256, 2003572531, 1426274751, 826242452, 1591270934, 3844308220, 2585707362, 2245261223, 142878727, 3284326898, 338750343, 4278730886, 3963897632, 4264855050, 15597940]
 example : permute stateInitPermute = #v[2003572531, 3844308220, 1426274751, 3284326898, 2585707362, 3383581781, 826242452, 3963897632, 3743774256, 338750343, 4278730886, 1591270934, 142878727, 4264855050, 15597940, 2245261223] := rfl
 
 -- Test compress function.
-def chainingValue : Vector Nat 8 := #v[671114869, 2251103971, 1125212539, 2996205183, 1286164105, 2483632496, 367841012, 3199388477]
-def blockWords : Vector Nat 16 := #v[1260152445, 449952550, 2837099038, 716667674, 3544843723, 387900774, 3257147430, 2088822348, 4202301432, 2249467574, 1521610824, 186847680, 2726995727, 3572868764, 1936257617, 3338044720]
+def chainingValue : Vector UInt32 8 := #v[671114869, 2251103971, 1125212539, 2996205183, 1286164105, 2483632496, 367841012, 3199388477]
+def blockWords : Vector UInt32 16 := #v[1260152445, 449952550, 2837099038, 716667674, 3544843723, 387900774, 3257147430, 2088822348, 4202301432, 2249467574, 1521610824, 186847680, 2726995727, 3572868764, 1936257617, 3338044720]
 def counter : Nat := 953581910
 def blockLen : Nat := 2437728858
 def flags : Nat := 2498436276

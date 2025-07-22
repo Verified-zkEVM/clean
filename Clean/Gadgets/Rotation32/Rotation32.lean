@@ -4,6 +4,7 @@ import Clean.Utils.Rotation
 import Clean.Gadgets.Rotation32.Rotation32Bytes
 import Clean.Gadgets.Rotation32.Rotation32Bits
 import Clean.Circuit.Provable
+import Clean.Circuit.StructuralLemmas
 
 namespace Gadgets.Rotation32
 variable {p : ℕ} [Fact p.Prime]
@@ -107,3 +108,33 @@ def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
 }
 
 end Gadgets.Rotation32
+
+-- A version of Gadgets.Rotation32 whose specification is written in terms of UInt32
+namespace Gadgets.Rotation32.UInt32
+  variable {p : ℕ} [Fact p.Prime]
+  variable [p_large_enough: Fact (p > 2^16 + 2^8)]
+
+  instance : Fact (p > 512) := by
+    constructor
+    linarith [p_large_enough.elim]
+
+  def Spec (offset : Fin 32) (x : U32 (F p)) (y: U32 (F p)) :=
+    y.rawValueU32 = UInt32.ofNat (rotRight32 x.rawValueU32.toNat offset.val)
+    ∧ y.Normalized
+  def circuit (offset : Fin 32 ):=
+    Gadgets.Rotation32.circuit offset (p := p).weakenSpec (Spec offset) (by
+      intro input output
+      simp only[Gadgets.Rotation32.circuit]
+      simp only[Assumptions, Rotation32.Spec, Spec]
+      intro h_normalized h_spec
+      constructor
+      · simp only [U32.rawValueU32, h_spec]
+        rw [UInt32.toNat_ofNat_of_lt']
+        simp only [UInt32.size]
+        apply U32.value_lt_of_normalized
+        assumption
+      · tauto
+    )
+  lemma circuit_Assumptions offset :
+    circuit offset (p := p).Assumptions = Assumptions := by rfl
+end Gadgets.Rotation32.UInt32
