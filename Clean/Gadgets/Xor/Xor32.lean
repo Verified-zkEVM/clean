@@ -4,7 +4,9 @@ import Clean.Utils.Primes
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
+import Clean.Circuit.StructuralLemmas
 import Clean.Circuit.Basic
+import Clean.Circuit.StructuralLemmas
 import Clean.Utils.Field
 import Clean.Types.U32
 import Clean.Gadgets.Xor.ByteXorTable
@@ -123,3 +125,54 @@ def circuit : FormalCircuit (F p) Inputs U32 where
   soundness
   completeness
 end Gadgets.Xor32
+
+lemma UInt32.ofNat.inj_on_small (a b : ℕ) (h_a : a < UInt32.size) (h_b : b < UInt32.size) :
+    UInt32.ofNat a = UInt32.ofNat b →
+    a = b := by
+  intro h
+  rw[← UInt32.toNat_ofNat_of_lt' (n := a), ← UInt32.toNat_ofNat_of_lt' (n := b), h]
+  · assumption
+  · assumption
+
+lemma UInt32.ofNat.injEq_on_small (a b : ℕ) (h_a : a < UInt32.size) (h_b : b < UInt32.size) :
+    UInt32.ofNat a = UInt32.ofNat b ↔
+    a = b := by
+  constructor
+  · apply UInt32.ofNat.inj_on_small
+    · assumption
+    · assumption
+  · intro h
+    rw [h]
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma U32_value_rawValueU32_bridge (a b c : U32 (F p)) (h_a : a.Normalized) (h_b : b.Normalized) (c_b : c.Normalized) :
+    a.value = b.value ^^^ c.value ↔
+    a.rawValueU32 = b.rawValueU32 ^^^ c.rawValueU32 := by
+  simp only [U32.rawValueU32]
+  rw[← UInt32.ofNat_xor]
+  rw[UInt32.ofNat.injEq_on_small]
+  · apply U32.value_lt_of_normalized
+    assumption
+  · have : UInt32.size = 2 ^ 32 := by
+      simp[UInt32.size]
+    apply Nat.xor_lt_two_pow (n := 32)
+    · apply U32.value_lt_of_normalized; assumption
+    · apply U32.value_lt_of_normalized; assumption
+
+
+-- A version of Gadgets.Xor32 whose specification is written in terms of UInt32
+namespace Gadgets.Xor32.UInt32
+  def Spec (input: Gadgets.Xor32.Inputs (F p)) (z : U32 (F p)) :=
+    let ⟨x, y⟩ := input
+    z.rawValueU32 = x.rawValueU32 ^^^ y.rawValueU32 ∧ z.Normalized
+  def circuit :=
+    Gadgets.Xor32.circuit (p := p).weakenSpec Spec (by
+      intro input output
+      simp only[Gadgets.Xor32.circuit]
+      simp only[Assumptions, Xor32.Spec]
+      intro h_normalized h_spec
+      rw[U32_value_rawValueU32_bridge] at h_spec <;> tauto
+    )
+  lemma circuit_Assumptions :
+    circuit (p := p).Assumptions = Assumptions := by rfl
+end Gadgets.Xor32.UInt32

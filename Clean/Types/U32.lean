@@ -133,6 +133,14 @@ def fromUInt32 (x : UInt32) : U32 (F p) :=
 def valueU32 (x : U32 (F p)) (h : x.Normalized) : UInt32 :=
   UInt32.ofNatLT x.value (value_lt_of_normalized h)
 
+def rawValueU32 (x : U32 (F p)) : UInt32 :=
+  UInt32.ofNat x.value
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma rawValueU32Normalized (x : U32 (F p)) (h : x.Normalized) :
+    rawValueU32 x = valueU32 x h := by
+  simp only[valueU32, rawValueU32,  UInt32.ofNatLT_eq_ofNat]
+
 lemma value_of_decomposedNat_of_small (x : ℕ) :
     x < 256^4 ->
     (decomposeNat (p := p) x).value = x := by
