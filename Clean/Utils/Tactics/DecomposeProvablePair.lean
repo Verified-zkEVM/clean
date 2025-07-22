@@ -60,20 +60,16 @@ mutual
       | .app (.const ``Expression _) fieldType =>
         -- Check if the underlying field type has a Field instance
         let fieldClass ← mkAppM ``Field #[fieldType]
-        logInfo m!"checking synthesis of {fieldClass}"
         let fieldInst? ← trySynthInstance fieldClass
         match fieldInst? with
         | .some _ =>
-          logInfo m!".. yes! to checking synthesis of {fieldClass}"
           return true
         | _ =>
-          logInfo m!".. no! to checking synthesis of {fieldClass}"
           pure ()
       | _ => pure ()
 
       -- Case 2: Check if the type has a Field instance (covers F, F p, etc.)
       let fieldClass ← mkAppM ``Field #[type]
-      logInfo m!"checking synthesis of {fieldClass}"
       let fieldInst? ← trySynthInstance fieldClass
       match fieldInst? with
       | .some _ => return true
@@ -154,10 +150,6 @@ mutual
           -- Both components are provable, so this pair should be decomposable
           return true
         else
-          if !αProvable then
-            logInfo m!"Rejected {α} (not provable)"
-          if !βProvable then
-            logInfo m!"Rejected {β} (not provable)"
           return false
       catch _ =>
         return false
@@ -206,14 +198,7 @@ def findPairVarsInContext : TacticM (List Lean.FVarId) := withMainContext do
       let type ← inferType (.fvar fvarId)
       let isProvable ← isProdTypeWithProvableType type
       if isProvable then
-        -- Record it's not provable
-        let ldecl ← fvarId.getDecl
-        logInfo m!"Accepted {ldecl.userName} : {type}"
         uniqueFVarIds := uniqueFVarIds.cons fvarId
-      else
-        -- Record it's not provable
-        let ldecl ← fvarId.getDecl
-        logInfo m!"Rejected {ldecl.userName} : {type} (not provable)"
 
   return uniqueFVarIds
 
@@ -227,7 +212,6 @@ def decomposePairVar (fvarId : Lean.FVarId) : TacticM Unit := do
   -- Generate names for components
   let fstName := Name.mkSimple (userName.toString ++ "_fst")
   let sndName := Name.mkSimple (userName.toString ++ "_snd")
-  logInfo m!"decomposing {ldecl.userName} into {fstName} and {sndName}"
 
   -- Use rcases tactic syntax
   evalTactic (← `(tactic| rcases $(mkIdent userName):ident with ⟨$(mkIdent fstName):ident, $(mkIdent sndName):ident⟩))
@@ -244,12 +228,8 @@ def decomposeProvablePair : TacticM Unit := withMainContext do
   else
     for fvarId in fvarIds do
       try
-        let ldecl ← fvarId.getDecl
-        logInfo m!"working on {ldecl.userName}"
-
         decomposePairVar fvarId
-      catch e =>
-        logInfo m!"bah {e.toMessageData}"
+      catch _ =>
         -- Silently skip errors
         return ()
 
