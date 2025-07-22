@@ -147,4 +147,43 @@ example (input : ℕ × String) (h : input.1 = 5) : input.2 = "hello" → input 
 
 end NonProvableTypeTests
 
+section NoProjectionTests
+-- Test cases where the tactic does nothing because projections are never used
+
+-- Test pair variable with no projections used
+example (x : F p × F p) (h : x = (5, 3)) : x = (5, 3) := by
+  decompose_provable_pair
+  -- x should NOT be decomposed because no projections are used
+  assumption
+
+-- Test with Var fieldPair where projections are not used
+example (input : Var fieldPair (F p)) (h : input = (Expression.const 1, Expression.const 2)) :
+    input = (Expression.const 1, Expression.const 2) := by
+  decompose_provable_pair
+  -- input should NOT be decomposed because no projections are used
+  assumption
+
+-- Test with fieldTriple where no projections are used
+example (input : Var fieldTriple (F p)) (h : input = (Expression.const 1, Expression.const 2, Expression.const 3)) :
+    input = (Expression.const 1, Expression.const 2, Expression.const 3) := by
+  decompose_provable_pair
+  -- input should NOT be decomposed because no projections are used
+  assumption
+
+-- Test with multiple pair variables, none with projections
+example (x : F p × F p) (y : F p × F p) (z : F p × F p)
+    (hx : x = (1, 2)) (hy : y = (3, 4)) (hz : z = (5, 6)) :
+    x = (1, 2) ∧ y = (3, 4) ∧ z = (5, 6) := by
+  decompose_provable_pair
+  -- None should be decomposed
+  exact ⟨hx, hy, hz⟩
+
+-- Test where only the whole pair is used in operations
+example (x : F p × F p) (y : F p × F p) (h : x = y) : x = y := by
+  decompose_provable_pair
+  -- No decomposition should happen
+  assumption
+
+end NoProjectionTests
+
 end TestDecomposeProvablePair
