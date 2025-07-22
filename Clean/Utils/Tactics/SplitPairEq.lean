@@ -101,7 +101,10 @@ def splitPairEq : TacticM Unit := do
           let fstName := Name.mkSimple (userName.toString ++ "_fst")
           let sndName := Name.mkSimple (userName.toString ++ "_snd")
           evalTactic (← `(tactic| rcases $(mkIdent userName):ident with ⟨$(mkIdent fstName):ident, $(mkIdent sndName):ident⟩))
-        catch _ => continue
+        catch e =>
+          let ldecl ← fvarId.getDecl
+          trace[Meta.Tactic] "Failed to decompose pair variable {ldecl.userName}: {e.toMessageData}"
+          continue
 
     -- Apply Prod.mk.injEq lemma
     withMainContext do

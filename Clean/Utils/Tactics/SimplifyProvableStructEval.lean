@@ -121,7 +121,9 @@ elab "simplify_provable_struct_eval" : tactic => do
             try
               applySimpToHyp decl.userName
               anyModified := true
-            catch _ => continue
+            catch e =>
+              trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
+              continue
     
     -- Also check if it contains conjunctions with struct eval equalities
     else if type.isAppOf ``And then
@@ -131,7 +133,9 @@ elab "simplify_provable_struct_eval" : tactic => do
         try
           applySimpToHyp decl.userName
           anyModified := true
-        catch _ => continue
+        catch e =>
+          trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
+          continue
   
   if !anyModified then
     throwError "simplify_provable_struct_eval made no progress"

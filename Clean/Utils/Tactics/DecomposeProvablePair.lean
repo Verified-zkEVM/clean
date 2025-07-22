@@ -229,9 +229,11 @@ def decomposeProvablePair : TacticM Unit := withMainContext do
     for fvarId in fvarIds do
       try
         decomposePairVar fvarId
-      catch _ =>
-        -- Silently skip errors
-        return ()
+      catch e =>
+        -- Log the error for debugging but continue with other variables
+        trace[Meta.Tactic] "Failed to decompose pair variable: {e.toMessageData}"
+        -- Don't return early - continue with other variables
+        continue
 
 /--
   Tactic to decompose variables of pair types (like ProvablePair or fieldPair) that appear in projections.

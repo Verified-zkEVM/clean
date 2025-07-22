@@ -129,7 +129,9 @@ elab "simplify_pair_eval" : tactic => do
             try
               applySimpToHyp decl.userName
               anyModified := true
-            catch _ => continue
+            catch e =>
+              trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
+              continue
           else
             -- If other side is a variable, check if eval side has a pair literal
             if let some evalArg := evalSide.getArg? 1 then
@@ -137,14 +139,18 @@ elab "simplify_pair_eval" : tactic => do
                 try
                   applySimpToHyp decl.userName
                   anyModified := true
-                catch _ => continue
+                catch e =>
+                  trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
+                  continue
 
     -- Also check if the hypothesis contains pair eval patterns inside conjunctions
     else if ← containsPairEvalPattern type then
       try
         applySimpToHyp decl.userName
         anyModified := true
-      catch _ => continue
+      catch e =>
+        trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
+        continue
 
   -- Ensure the tactic made progress
   if !anyModified then

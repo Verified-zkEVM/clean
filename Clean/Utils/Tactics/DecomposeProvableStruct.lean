@@ -147,9 +147,10 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
           decomposed := true
         | _ =>
           throwError s!"Unexpected result from cases on {userName}"
-      catch _ =>
+      catch e =>
         -- Skip variables that can't be decomposed
         -- This can happen with type synonyms or other non-destructurable types
+        trace[Meta.Tactic] "Failed to decompose struct variable {userName}: {e.toMessageData}"
         continue
 
     if not decomposed then

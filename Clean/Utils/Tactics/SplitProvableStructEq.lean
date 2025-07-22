@@ -116,7 +116,10 @@ def splitProvableStructEq : TacticM Unit := do
           | [subgoal] =>
             currentGoal := subgoal.mvarId
           | _ => continue
-        catch _ => continue
+        catch e =>
+          let ldecl ← fvarId.getDecl
+          trace[Meta.Tactic] "Failed to apply cases to struct variable {ldecl.userName}: {e.toMessageData}"
+          continue
       
       -- Update the goal after cases
       replaceMainGoal [currentGoal]
@@ -168,7 +171,9 @@ def splitProvableStructEq : TacticM Unit := do
       for lemmaIdent in lemmasToApply do
         try
           evalTactic (← `(tactic| simp only [$lemmaIdent:ident] at *))
-        catch _ => continue
+        catch e =>
+          trace[Meta.Tactic] "Failed to apply lemma {lemmaIdent}: {e.toMessageData}"
+          continue
 
 /--
   Automatically split struct equalities (where struct has ProvableStruct instance) into field-wise equalities.
