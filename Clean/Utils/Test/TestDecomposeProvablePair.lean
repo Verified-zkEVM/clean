@@ -3,6 +3,8 @@ import Clean.Circuit.Provable
 import Clean.Utils.Field
 import Clean.Circuit.Expression
 
+set_option linter.unusedTactic false
+
 namespace TestDecomposeProvablePair
 
 variable {p : ℕ} [Fact p.Prime]

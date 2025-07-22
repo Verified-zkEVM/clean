@@ -3,6 +3,8 @@ import Clean.Utils.Tactics.ProvableSimp
 import Clean.Circuit.Provable
 import Clean.Utils.Field
 
+set_option linter.unusedTactic false
+
 namespace TestSplitPairEq
 
 variable {p : ℕ} [Fact p.Prime]
