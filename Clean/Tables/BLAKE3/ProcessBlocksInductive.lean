@@ -8,6 +8,7 @@ import Clean.Table.Inductive
 import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
+import Clean.Gadgets.ConditionalU32
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -85,25 +86,6 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   (input.block_exists = 0 ∨ input.block_exists = 1) ∧
   (∀ i : Fin 16, input.block_data[i].Normalized)
 
-/--
-Helper to create a conditional selection for U32.
-If cond = 1, returns ifTrue; if cond = 0, returns ifFalse.
-Assumes cond is boolean (0 or 1).
--/
-def conditionalU32 (cond : Var field (F p)) (ifTrue ifFalse : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
-  -- For each limb, compute: result_limb = cond * ifTrue_limb + (1 - cond) * ifFalse_limb
-  let x0 ← witness fun env => cond.eval env * ifTrue.x0.eval env + (1 - cond.eval env) * ifFalse.x0.eval env
-  let x1 ← witness fun env => cond.eval env * ifTrue.x1.eval env + (1 - cond.eval env) * ifFalse.x1.eval env
-  let x2 ← witness fun env => cond.eval env * ifTrue.x2.eval env + (1 - cond.eval env) * ifFalse.x2.eval env
-  let x3 ← witness fun env => cond.eval env * ifTrue.x3.eval env + (1 - cond.eval env) * ifFalse.x3.eval env
-
-  -- Add constraints for each limb
-  x0 === cond * ifTrue.x0 + (1 - cond) * ifFalse.x0
-  x1 === cond * ifTrue.x1 + (1 - cond) * ifFalse.x1
-  x2 === cond * ifTrue.x2 + (1 - cond) * ifFalse.x2
-  x3 === cond * ifTrue.x3 + (1 - cond) * ifFalse.x3
-
-  return ⟨x0, x1, x2, x3⟩
 
 /--
 Helper to check if a U32 is zero.
@@ -182,11 +164,22 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 
   -- Conditionally select between new state and old state based on block_exists
   -- If block_exists = 1, use newState; if block_exists = 0, use state
-  let muxedCV ← Vector.mapM (fun (i : Fin 8) =>
-    conditionalU32 input.block_exists newState.chaining_value[i] state.chaining_value[i]
+  let muxedCV ← Vector.mapM (fun (i : Fin 8) => do
+    let condInput : Var Gadgets.ConditionalU32.Inputs (F p) := {
+      cond := input.block_exists
+      ifTrue := newState.chaining_value[i]
+      ifFalse := state.chaining_value[i]
+    }
+    Gadgets.ConditionalU32.main condInput
   ) (Vector.ofFn id)
 
-  let muxedBlocksCompressed ← conditionalU32 input.block_exists newBlocksCompressed state.blocks_compressed
+  let muxedBlocksCompressed ← do
+    let condInput : Var Gadgets.ConditionalU32.Inputs (F p) := {
+      cond := input.block_exists
+      ifTrue := newBlocksCompressed
+      ifFalse := state.blocks_compressed
+    }
+    Gadgets.ConditionalU32.main condInput
 
   return {
     chaining_value := muxedCV

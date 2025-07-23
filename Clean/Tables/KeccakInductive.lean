@@ -19,6 +19,8 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     ∧ state.value = absorbBlocks (blocks.map KeccakBlock.value)
 
   InputAssumptions i block := block.Normalized
+  
+  InitialStateAssumptions _ := True
 
   soundness := by
     intro initialState i env state_var block_var state block blocks _ h_input h_holds spec_previous
@@ -30,7 +32,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
   completeness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     simp_all only [circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
-      AbsorbBlock.Assumptions, AbsorbBlock.Spec, InitialStateAssumptions]
+      AbsorbBlock.Assumptions, AbsorbBlock.Spec]
 
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)
