@@ -174,6 +174,36 @@ theorem splitIntoBlocks_longer (l : List Nat) (h : l.length > blockLen) :
   -- The goal should now match exactly after simplification
   rfl
 
+-- Lemma: First component of splitIntoBlocks for longer lists
+theorem splitIntoBlocks_longer_fst (l : List Nat) (h : l.length > blockLen) :
+    (splitIntoBlocks l).1 = l.take blockLen :: (splitIntoBlocks (l.drop blockLen)).1 := by
+  rw [splitIntoBlocks_longer l h]
+
+-- Lemma: Second component of splitIntoBlocks for longer lists
+theorem splitIntoBlocks_longer_snd (l : List Nat) (h : l.length > blockLen) :
+    (splitIntoBlocks l).2 = (splitIntoBlocks (l.drop blockLen)).2 := by
+  rw [splitIntoBlocks_longer l h]
+
+-- Lemma: First component of splitIntoBlocks for shorter lists
+theorem splitIntoBlocks_short_fst (l : List Nat) (h : l.length < blockLen) :
+    (splitIntoBlocks l).1 = [] := by
+  rw [splitIntoBlocks_short l h]
+
+-- Lemma: Second component of splitIntoBlocks for shorter lists
+theorem splitIntoBlocks_short_snd (l : List Nat) (h : l.length < blockLen) :
+    (splitIntoBlocks l).2 = l := by
+  rw [splitIntoBlocks_short l h]
+
+-- Lemma: First component of splitIntoBlocks for exact blockLen
+theorem splitIntoBlocks_exact_fst (l : List Nat) (h : l.length = blockLen) :
+    (splitIntoBlocks l).1 = [l] := by
+  rw [splitIntoBlocks_exact l h]
+
+-- Lemma: Second component of splitIntoBlocks for exact blockLen
+theorem splitIntoBlocks_exact_snd (l : List Nat) (h : l.length = blockLen) :
+    (splitIntoBlocks l).2 = [] := by
+  rw [splitIntoBlocks_exact l h]
+
 end Specs.BLAKE3.ChunkProcessing
 
 --------
@@ -243,8 +273,9 @@ example :
     let state := initialChunkState testCV 0
     let updated := updateChunk state testChunk1024
     updated.blocks_compressed = 16 ∧ updated.block_buffer = [] := by
-  simp [updateChunk, initialChunkState, testChunk1024, chunkLen, blockLen]
-  sorry -- This would require unfolding the recursive function 16 times
+  simp only [updateChunk, initialChunkState, testChunk1024, chunkLen, blockLen]
+  simp only [List.nil_append]
+  sorry
 
 -- Verify bytesToWords handles padding correctly for small input
 example :
