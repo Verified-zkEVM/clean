@@ -217,20 +217,20 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
 Create a trace for processBlocks with given input blocks.
 Pads with empty blocks to reach exactly 17 rows.
 -/
-def createTrace (initialCV : Vector (U32 (F p)) 8) (chunkCounter : U32 (F p))
+def createTrace (_initialCV : Vector (U32 (F p)) 8) (_chunkCounter : U32 (F p))
     (blocks : List (List Nat)) : List (BlockInput (F p)) :=
   -- Convert blocks to BlockInput format
   let blockInputs := blocks.map (fun block =>
     let words := (List.range 16).map (fun i =>
       let bytes := block.drop (i * 4) |>.take 4
-      let value := bytes.enum.foldl (fun acc (idx, byte) =>
+      let value := bytes.zipIdx.foldl (fun acc (byte, idx) =>
         acc + byte * 256^idx
       ) 0
       U32.fromByte ⟨value % 256, by omega⟩  -- Simplified: just use first byte
     )
     { block_exists := 1
     , block_data := Vector.mk words.toArray (by 
-      simp only [List.length_map, List.length_range, Array.size_toArray]
+      simp only [List.length_map, List.length_range, List.size_toArray]
       rfl) }
   )
   -- Pad with empty blocks
