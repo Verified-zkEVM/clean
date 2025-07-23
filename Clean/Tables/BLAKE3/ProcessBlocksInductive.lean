@@ -194,19 +194,13 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step := step
 
   Spec initialState inputs i _ state :=
-    -- The spec relates the current state to the mathematical processBlocks function
+    -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
     let validBlocks := inputs.take i |>.filter (·.block_exists = 1)
-    let blockData := validBlocks.map (fun b =>
-      (List.range 64).map (fun j =>
-        let wordIdx := j / 4
-        let byteIdx := j % 4
-        let word := b.block_data[wordIdx]!
-        (word.value / (256^byteIdx)) % 256
-      )
-    )
+    -- Extract the word data directly - no conversion needed!
+    let blockWords := validBlocks.map (fun b => b.block_data.map (·.value))
     -- Use the initial state passed as parameter
-    let finalState := processBlocks initialState.toChunkState blockData
+    let finalState := processBlocksWords initialState.toChunkState blockWords
     -- Current state matches the result of processing all valid blocks so far
     state.toChunkState = finalState ∧
     state.Normalized
