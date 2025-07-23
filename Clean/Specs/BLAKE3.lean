@@ -271,9 +271,7 @@ def splitIntoBlocks (bytes : List Nat) : (List (List Nat) × List Nat) :=
 where
   /-- Tail-recursive helper function -/
   go (bytes : List Nat) (acc : List (List Nat)) : (List (List Nat) × List Nat) :=
-    if bytes.length < blockLen then
-      (acc.reverse, bytes)
-    else if bytes.length = blockLen then
+    if bytes.length <= blockLen then
       -- If we have exactly one block worth of bytes, keep them as remainder
       -- This matches Python's behavior where a full block at the end stays in buffer
       (acc.reverse, bytes)
