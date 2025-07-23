@@ -218,9 +218,12 @@ example :
     let updated := updateChunk state testChunk65
     updated.blocks_compressed = 1 ∧ updated.block_buffer.length = 1 := by
   simp only [updateChunk, initialChunkState, testChunk65]
-  simp only [List.nil_append]
-  -- For now, using sorry to simplify the proof
-  sorry
+  simp only [List.nil_append, splitIntoBlocks]
+  rw [splitIntoBlocks.go, blockLen, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  decide
 
 -- Test full chunk (1024 bytes = 16 blocks)
 def testChunk1024 : List Nat := List.range 1024
@@ -230,8 +233,42 @@ example :
     let updated := updateChunk state testChunk1024
     updated.blocks_compressed = 16 ∧ updated.block_buffer = [] := by
   simp only [updateChunk, initialChunkState, testChunk1024, chunkLen, blockLen]
-  simp only [List.nil_append]
-  sorry
+  simp only [List.nil_append, splitIntoBlocks]
+  rw [splitIntoBlocks.go, blockLen, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
+  norm_num
+  decide
 
 -- Verify bytesToWords handles padding correctly for small input
 example :
@@ -243,9 +280,7 @@ example :
     words[1] = 0x00000005 ∧
     -- Rest are zeros
     words[2] = 0 := by
-  simp only [bytesToWords, Vector.ofFn]
-  -- For now, using sorry to get the file building
-  sorry
+  decide
 
 -- TODO: Add test vectors from Python reference implementation
 -- These would be examples with specific expected outputs matching the reference
