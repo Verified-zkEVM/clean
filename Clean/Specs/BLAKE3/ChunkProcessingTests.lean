@@ -1,9 +1,8 @@
-import Clean.Specs.BLAKE3.ChunkProcessing
+import Clean.Specs.BLAKE3
 
 namespace Specs.BLAKE3.ChunkProcessing.Tests
 
 open Specs.BLAKE3
-open Specs.BLAKE3.ChunkProcessing
 
 -- Initial chaining value for tests (using BLAKE3 IV converted to Nat)
 def testCV : Vector Nat 8 := iv.map (·.toNat)
