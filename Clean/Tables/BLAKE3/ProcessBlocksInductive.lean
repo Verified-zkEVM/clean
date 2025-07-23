@@ -200,7 +200,7 @@ The InductiveTable for processBlocks.
 def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step := step
 
-  Spec i state inputs _ :=
+  Spec initialState inputs i _ state :=
     -- The spec relates the current state to the mathematical processBlocks function
     -- applied to the first i blocks from inputs (where block_exists = 1)
     let validBlocks := inputs.take i |>.filter (·.block_exists = 1)
@@ -212,11 +212,9 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
         (word.value / (256^byteIdx)) % 256
       )
     )
-    -- Initial state for processBlocks
-    let initialCV := Vector.mk (List.replicate 8 0).toArray (by simp)
-    let initialState := initialChunkState initialCV state.chunk_counter.value
-    let finalState := processBlocks initialState blockData
-    -- Current state matches the result
+    -- Use the initial state passed as parameter
+    let finalState := processBlocks initialState.toChunkState blockData
+    -- Current state matches the result of processing all valid blocks so far
     state.toChunkState = finalState ∧
     state.Normalized
 
@@ -224,9 +222,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     input.Normalized
 
   soundness := by
+    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous
     sorry -- TODO: Prove soundness
 
   completeness := by
+    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     sorry -- TODO: Prove completeness
 
   subcircuitsConsistent := by
