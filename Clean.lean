@@ -25,3 +25,4 @@ import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Test
 import Clean.Specs.BLAKE3.ChunkProcessing
+import Clean.Specs.BLAKE3.ChunkProcessingTests
