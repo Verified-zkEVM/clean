@@ -22,9 +22,6 @@ example :
     let state := initialChunkState testCV 0
     let updated := updateChunk state testBlock64
     updated.blocks_compressed = 0 ∧ updated.block_buffer = testBlock64 := by
-  simp only [updateChunk, initialChunkState, testBlock64]
-  simp only [List.nil_append]
-  have h64 : (List.range 64).length = blockLen := by simp [List.length_range, blockLen]
   native_decide
 
 -- Test that CHUNK_START flag is only set on first block
@@ -33,9 +30,7 @@ example :
     let state1 := processBlock state testBlock64
     let state2 := processBlock state1 testBlock64
     startFlag state = chunkStart ∧ startFlag state1 = 0 ∧ startFlag state2 = 0 := by
-  simp only [startFlag, processBlock, initialChunkState, chunkStart]
-  simp only [Nat.add_comm 0 1, Nat.one_ne_zero, ite_false]
-  exact ⟨rfl, rfl, rfl⟩
+  decide
 
 -- Test chunk with partial final block (65 bytes = 1 full block + 1 byte)
 def testChunk65 : List Nat := List.range 65
@@ -44,13 +39,7 @@ example :
     let state := initialChunkState testCV 0
     let updated := updateChunk state testChunk65
     updated.blocks_compressed = 1 ∧ updated.block_buffer.length = 1 := by
-  simp only [updateChunk, initialChunkState, testChunk65]
-  simp only [List.nil_append, splitIntoBlocks]
-  rw [splitIntoBlocks.go, blockLen, List.length_range]
-  norm_num
-  rw [splitIntoBlocks.go, blockLen, List.length_drop, List.length_range]
-  norm_num
-  decide
+  native_decide
 
 -- Test full chunk (1024 bytes = 16 blocks)
 def testChunk1024 : List Nat := List.range 1024
