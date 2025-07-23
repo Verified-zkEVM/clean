@@ -25,8 +25,7 @@ example :
   simp only [updateChunk, initialChunkState, testBlock64]
   simp only [List.nil_append]
   have h64 : (List.range 64).length = blockLen := by simp [List.length_range, blockLen]
-  rw [splitIntoBlocks_exact _ h64]
-  simp [processBlocks]
+  native_decide
 
 -- Test that CHUNK_START flag is only set on first block
 example :

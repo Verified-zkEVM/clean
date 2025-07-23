@@ -320,45 +320,6 @@ def processChunk (cv : Vector Nat 8) (chunk_counter : Nat) (chunk_bytes : List N
   let updated := updateChunk initial chunk_bytes
   finalizeChunk updated base_flags
 
---------
--- LEMMAS
---------
-
--- Lemma: splitIntoBlocks with empty list returns empty blocks and empty remainder
-theorem splitIntoBlocks_nil :
-    splitIntoBlocks [] = ([], []) := by
-  rw [splitIntoBlocks, splitIntoBlocks.go]
-  simp [blockLen]
-
--- Lemma: splitIntoBlocks with list shorter than blockLen returns empty blocks and the list as remainder
-theorem splitIntoBlocks_short (l : List Nat) (h : l.length < blockLen) :
-    splitIntoBlocks l = ([], l) := by
-  rw [splitIntoBlocks, splitIntoBlocks.go]
-  simp [h]
-
--- Lemma: splitIntoBlocks with exact blockLen returns empty blocks and the list as remainder
--- This matches Python behavior where a full block at the end is kept for finalization
-theorem splitIntoBlocks_exact (l : List Nat) (h : l.length = blockLen) :
-    splitIntoBlocks l = ([], l) := by
-  rw [splitIntoBlocks, splitIntoBlocks.go]
-  have : ¬(l.length < blockLen) := by simp [h]
-  simp [this, h]
-
--- Lemma about foldl with a single element list
-theorem foldl_singleton {α β : Type} (f : β → α → β) (init : β) (x : α) :
-    List.foldl f init [x] = f init x := by
-  simp [List.foldl]
-
--- Lemma about processBlock incrementing blocks_compressed
-theorem processBlock_increments_counter (state : ChunkState) (block : List Nat) :
-    (processBlock state block).blocks_compressed = state.blocks_compressed + 1 := by
-  simp [processBlock]
-
--- Lemma about processBlocks with single block
-theorem processBlocks_single (state : ChunkState) (block : List Nat) :
-    (processBlocks state [block]).blocks_compressed = state.blocks_compressed + 1 := by
-  simp [processBlocks, foldl_singleton, processBlock_increments_counter]
-
 end Specs.BLAKE3
 
 --------
