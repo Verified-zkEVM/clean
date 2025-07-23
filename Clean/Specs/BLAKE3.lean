@@ -250,10 +250,10 @@ def startFlag (state : ChunkState) : Nat :=
 ------------
 
 /--
-Process a single 64-byte block, updating the chunk state.
+Process a single block given as 16 words, updating the chunk state.
+This avoids the bytes-to-words conversion when the data is already in word format.
 -/
-def processBlock (state : ChunkState) (block_bytes : List Nat) : ChunkState :=
-  let block_words := bytesToWords block_bytes
+def processBlockWords (state : ChunkState) (block_words : Vector Nat 16) : ChunkState :=
   let flags := startFlag state
   let new_cv := compress state.chaining_value block_words state.chunk_counter blockLen flags
   { state with
@@ -263,32 +263,35 @@ def processBlock (state : ChunkState) (block_bytes : List Nat) : ChunkState :=
   }
 
 /--
-Split a list of bytes into complete blocks of size blockLen and a remainder.
-Returns (complete_blocks, remainder).
+Split a list of bytes into complete blocks as words and a remainder.
+Returns (complete_blocks_as_words, remainder_bytes).
+Each block is returned as a Vector of 16 words.
 -/
-def splitIntoBlocks (bytes : List Nat) : (List (List Nat) × List Nat) :=
-  splitIntoBlocks.go bytes []
+def splitIntoBlockWords (bytes : List Nat) : (List (Vector Nat 16) × List Nat) :=
+  splitIntoBlockWords.go bytes []
 where
   /-- Tail-recursive helper function -/
-  go (bytes : List Nat) (acc : List (List Nat)) : (List (List Nat) × List Nat) :=
+  go (bytes : List Nat) (acc : List (Vector Nat 16)) : (List (Vector Nat 16) × List Nat) :=
     if bytes.length <= blockLen then
       -- If we have exactly one block worth of bytes, keep them as remainder
       -- This matches Python's behavior where a full block at the end stays in buffer
       (acc.reverse, bytes)
     else
-      let block := bytes.take blockLen
+      let blockBytes := bytes.take blockLen
+      let blockWords := bytesToWords blockBytes
       let rest := bytes.drop blockLen
-      go rest (block :: acc)
+      go rest (blockWords :: acc)
   termination_by bytes.length
   decreasing_by
     simp only [List.length_drop, blockLen] at *
     omega
 
 /--
-Process a list of blocks sequentially, updating the chunk state.
+Process a list of blocks given as words, updating the chunk state.
+Each block is 16 words (64 bytes).
 -/
-def processBlocks (state : ChunkState) (blocks : List (List Nat)) : ChunkState :=
-  blocks.foldl processBlock state
+def processBlocksWords (state : ChunkState) (blocks : List (Vector Nat 16)) : ChunkState :=
+  blocks.foldl processBlockWords state
 
 /--
 Main function for incremental chunk processing.
@@ -296,8 +299,8 @@ Accumulates input bytes and compresses full blocks.
 -/
 def updateChunk (state : ChunkState) (input_bytes : List Nat) : ChunkState :=
   let combined := state.block_buffer ++ input_bytes
-  let (blocks, remainder) := splitIntoBlocks combined
-  let newState := processBlocks state blocks
+  let (blockWords, remainder) := splitIntoBlockWords combined
+  let newState := processBlocksWords state blockWords
   { newState with block_buffer := remainder }
 
 /--

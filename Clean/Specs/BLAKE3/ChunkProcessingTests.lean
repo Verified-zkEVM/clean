@@ -27,8 +27,9 @@ example :
 -- Test that CHUNK_START flag is only set on first block
 example :
     let state := initialChunkState testCV 0
-    let state1 := processBlock state testBlock64
-    let state2 := processBlock state1 testBlock64
+    let testBlock64Words := bytesToWords testBlock64
+    let state1 := processBlockWords state testBlock64Words
+    let state2 := processBlockWords state1 testBlock64Words
     startFlag state = chunkStart ∧ startFlag state1 = 0 ∧ startFlag state2 = 0 := by
   decide
 
