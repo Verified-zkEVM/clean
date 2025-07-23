@@ -325,4 +325,67 @@ example :
                                 0x762d78d9, 0x60c0f859, 0xffc3d468, 0x4168e5a6][i.val]!) := by
   native_decide
 
+-- Test: 127 bytes (one byte short of 2 blocks)
+-- 127 bytes [0x00, 0x01, ..., 0x7E], chunk_counter=0, flags=0
+example :
+    let input := List.range 127
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0x45c6fdcd, 0x24bb59bd, 0x8b25df15, 0xf0a1970d,
+                                0x0f71687e, 0x1ee6e667, 0xf415aa78, 0xa2533d70][i.val]!) := by
+  native_decide
+
+-- Test: 128 bytes (exactly 2 blocks)
+-- 128 bytes [0x00, 0x01, ..., 0x7F], chunk_counter=0, flags=0
+example :
+    let input := List.range 128
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0x8d4a1ad4, 0xdc39d407, 0x5af49238, 0x4f936b29,
+                                0x66d9bb2f, 0x40869ff2, 0xdd158fe8, 0xc71500e2][i.val]!) := by
+  native_decide
+
+-- Test: 129 bytes (2 blocks + 1 byte)
+-- 129 bytes [0x00, 0x01, ..., 0x80], chunk_counter=0, flags=0
+example :
+    let input := List.range 129
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0xd035027a, 0x10ed22b6, 0x9f5c3ac0, 0x6bb3cf7f,
+                                0xfbaec82f, 0x5da9e350, 0x3edd8aed, 0x14621206][i.val]!) := by
+  native_decide
+
+-- Test: 256 bytes (exactly 4 blocks)
+-- 256 bytes [0x00, 0x01, ..., 0xFF], chunk_counter=0, flags=0
+example :
+    let input := List.range 256
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0xcf9d0b74, 0x6ae5eab9, 0xafe9997d, 0x63185e2a,
+                                0x2429193e, 0xea8836cf, 0x59bc2b40, 0x81fdfc97][i.val]!) := by
+  native_decide
+
+-- Test: 512 bytes (exactly 8 blocks)
+-- 512 bytes [0x00, 0x01, ..., 0xFF, 0x00, 0x01, ..., 0xFF], chunk_counter=0, flags=0
+example :
+    let input := (List.range 512).map (· % 256)
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0xad2b8f62, 0x267c8093, 0x8ea5ebf2, 0xc2c1eded,
+                                0xb4e7a6b7, 0x44ca9cf1, 0x20a09e2d, 0x4ede6cc6][i.val]!) := by
+  native_decide
+
+-- Test: 1023 bytes (one byte short of full chunk)
+-- 1023 bytes [0x00, 0x01, ..., 0xFE], chunk_counter=0, flags=0
+example :
+    let input := (List.range 1023).map (· % 256)
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0x55c83635, 0xe92dd55a, 0xc19a6f2a, 0x52bb39df,
+                                0x35e0db32, 0xf2ea92ee, 0x6e380d0f, 0x835aed33][i.val]!) := by
+  native_decide
+
+-- Test: 1024 bytes (full chunk)
+-- 1024 bytes [0x00, 0x01, ..., 0xFF, 0x00, 0x01, ..., 0xFF], chunk_counter=0, flags=0
+example :
+    let input := (List.range 1024).map (· % 256)
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0x7f132571, 0xbd1932d6, 0xa2fa19bb, 0x2991bd74,
+                                0xd7ac7427, 0xca0082a5, 0xc915e455, 0xeefa363f][i.val]!) := by
+  native_decide
+
 end Specs.BLAKE3.ChunkProcessing.Tests
