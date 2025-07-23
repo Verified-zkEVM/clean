@@ -284,6 +284,29 @@ example :
 
 -- Test vectors from Python reference implementation
 -- These ensure our implementation matches the reference
+--
+-- Test vectors were generated using the pure Python BLAKE3 implementation from:
+-- https://github.com/oconnor663/pure_python_blake3/blob/main/pure_blake3.py
+--
+-- The following Python code was used to generate these test vectors:
+-- ```python
+-- from pure_blake3 import *
+-- 
+-- def test_process_chunk(input_bytes, chunk_counter, flags):
+--     chunk_state = ChunkState(IV, chunk_counter, flags)
+--     chunk_state.update(input_bytes)
+--     output = chunk_state.output()
+--     cv = output.chaining_value()
+--     return cv
+--
+-- # Generate test vectors with different inputs and parameters
+-- cv = test_process_chunk(bytes([0x00]), 0, 0)  # One byte [0x00]
+-- cv = test_process_chunk(bytes([0x01]), 0, 0)  # One byte [0x01]
+-- cv = test_process_chunk(bytes([0x00]), 1, 0)  # Different chunk counter
+-- cv = test_process_chunk(bytes([0x00]), 0, KEYED_HASH)  # With flag
+-- cv = test_process_chunk(bytes(range(64)), 0, 0)  # Full block
+-- cv = test_process_chunk(bytes(), 0, 0)  # Empty input
+-- ```
 
 -- Test: One byte [0x00], chunk_counter=0, flags=0
 example :
