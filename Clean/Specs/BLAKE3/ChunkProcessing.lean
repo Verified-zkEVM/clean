@@ -189,18 +189,18 @@ def testCV : Vector Nat 8 := iv.map (·.toNat)
 
 -- Test empty chunk
 example :
-  let state := initialChunkState testCV 0
-  let expected := compress testCV (bytesToWords []) 0 0 (chunkStart ||| chunkEnd)
-  finalizeChunk state 0 = expected.take 8 := rfl
+    let state := initialChunkState testCV 0
+    let expected := compress testCV (bytesToWords []) 0 0 (chunkStart ||| chunkEnd)
+    finalizeChunk state 0 = expected.take 8 := rfl
 
 -- Test single block (64 bytes)
 def testBlock64 : List Nat := List.range 64
 
 -- Test single block processing
 example :
-  let state := initialChunkState testCV 0
-  let updated := updateChunk state testBlock64
-  updated.blocks_compressed = 1 ∧ updated.block_buffer = [] := by
+    let state := initialChunkState testCV 0
+    let updated := updateChunk state testBlock64
+    updated.blocks_compressed = 1 ∧ updated.block_buffer = [] := by
   simp only [updateChunk, initialChunkState, testBlock64]
   simp only [List.nil_append]
   have h64 : (List.range 64).length = blockLen := by simp [List.length_range, blockLen]
@@ -209,10 +209,10 @@ example :
 
 -- Test that CHUNK_START flag is only set on first block
 example :
-  let state := initialChunkState testCV 0
-  let state1 := processBlock state testBlock64
-  let state2 := processBlock state1 testBlock64
-  startFlag state = chunkStart ∧ startFlag state1 = 0 ∧ startFlag state2 = 0 := by
+    let state := initialChunkState testCV 0
+    let state1 := processBlock state testBlock64
+    let state2 := processBlock state1 testBlock64
+    startFlag state = chunkStart ∧ startFlag state1 = 0 ∧ startFlag state2 = 0 := by
   simp only [startFlag, processBlock, initialChunkState, chunkStart]
   simp only [Nat.add_comm 0 1, Nat.one_ne_zero, ite_false]
   exact ⟨rfl, rfl, rfl⟩
@@ -221,9 +221,9 @@ example :
 def testChunk65 : List Nat := List.range 65
 
 example :
-  let state := initialChunkState testCV 0
-  let updated := updateChunk state testChunk65
-  updated.blocks_compressed = 1 ∧ updated.block_buffer.length = 1 := by
+    let state := initialChunkState testCV 0
+    let updated := updateChunk state testChunk65
+    updated.blocks_compressed = 1 ∧ updated.block_buffer.length = 1 := by
   simp only [updateChunk, initialChunkState, testChunk65]
   simp only [List.nil_append]
   -- List.range 65 has length 65, which is blockLen + 1
@@ -240,22 +240,22 @@ example :
 def testChunk1024 : List Nat := List.range 1024
 
 example :
-  let state := initialChunkState testCV 0
-  let updated := updateChunk state testChunk1024
-  updated.blocks_compressed = 16 ∧ updated.block_buffer = [] := by
+    let state := initialChunkState testCV 0
+    let updated := updateChunk state testChunk1024
+    updated.blocks_compressed = 16 ∧ updated.block_buffer = [] := by
   simp [updateChunk, initialChunkState, testChunk1024, chunkLen, blockLen]
   sorry -- This would require unfolding the recursive function 16 times
 
 -- Verify bytesToWords handles padding correctly for small input
 example :
-  let bytes := [0x01, 0x02, 0x03, 0x04, 0x05]  -- 5 bytes
-  let words := bytesToWords bytes
-  -- First word is little-endian: 0x04030201
-  words[0] = 0x04030201 ∧
-  -- Second word has only one byte: 0x00000005
-  words[1] = 0x00000005 ∧
-  -- Rest are zeros
-  words[2] = 0 := by
+    let bytes := [0x01, 0x02, 0x03, 0x04, 0x05]  -- 5 bytes
+    let words := bytesToWords bytes
+    -- First word is little-endian: 0x04030201
+    words[0] = 0x04030201 ∧
+    -- Second word has only one byte: 0x00000005
+    words[1] = 0x00000005 ∧
+    -- Rest are zeros
+    words[2] = 0 := by
   simp only [bytesToWords, Vector.ofFn]
   -- For now, using sorry to get the file building
   sorry
