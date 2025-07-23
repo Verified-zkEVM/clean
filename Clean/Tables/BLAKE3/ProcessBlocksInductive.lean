@@ -42,6 +42,24 @@ instance : ProvableStruct ProcessBlocksState where
     rfl
 
 /--
+Convert ProcessBlocksState to ChunkState for integration with the spec.
+-/
+def ProcessBlocksState.toChunkState (state : ProcessBlocksState (F p)) : ChunkState :=
+  { chaining_value := state.chaining_value.map (·.value)
+  , chunk_counter := state.chunk_counter.value
+  , blocks_compressed := state.blocks_compressed.value
+  , block_buffer := []  -- ProcessBlocksState doesn't track partial blocks
+  }
+
+/--
+Predicate that all components of ProcessBlocksState are normalized (valid U32 values).
+-/
+def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
+  (∀ i : Fin 8, state.chaining_value[i].Normalized) ∧
+  state.chunk_counter.Normalized ∧
+  state.blocks_compressed.Normalized
+
+/--
 Input for each row: either a block to process or nothing.
 -/
 structure BlockInput (F : Type) where
@@ -59,6 +77,13 @@ instance : ProvableStruct BlockInput where
   fromComponents_toComponents := by
     intros
     rfl
+
+/--
+Predicate that all components of BlockInput are well-formed.
+-/
+def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
+  (input.block_exists = 0 ∨ input.block_exists = 1) ∧
+  (∀ i : Fin 16, input.block_data[i].Normalized)
 
 /--
 Helper to create a conditional selection for U32.
@@ -192,17 +217,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     let initialState := initialChunkState initialCV state.chunk_counter.value
     let finalState := processBlocks initialState blockData
     -- Current state matches the result
-    state.chaining_value.map (·.value) = finalState.chaining_value ∧
-    state.blocks_compressed.value = finalState.blocks_compressed ∧
-    state.chunk_counter.Normalized ∧
-    state.blocks_compressed.Normalized ∧
-    (∀ i : Fin 8, state.chaining_value[i].Normalized)
+    state.toChunkState = finalState ∧
+    state.Normalized
 
   InputAssumptions i input :=
-    -- block_exists must be 0 or 1
-    (input.block_exists = 0 ∨ input.block_exists = 1) ∧
-    -- block_data must be normalized
-    (∀ i : Fin 16, input.block_data[i].Normalized)
+    input.Normalized
 
   soundness := by
     sorry -- TODO: Prove soundness
