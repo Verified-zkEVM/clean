@@ -304,6 +304,7 @@ example :
 -- cv = test_process_chunk(bytes([0x01]), 0, 0)  # One byte [0x01]
 -- cv = test_process_chunk(bytes([0x00]), 1, 0)  # Different chunk counter
 -- cv = test_process_chunk(bytes([0x00]), 0, KEYED_HASH)  # With flag
+-- cv = test_process_chunk(bytes(range(63)), 0, 0)  # 63 bytes (partial block)
 -- cv = test_process_chunk(bytes(range(64)), 0, 0)  # Full block
 -- cv = test_process_chunk(bytes(), 0, 0)  # Empty input
 -- ```
@@ -338,6 +339,15 @@ example :
     let cv := processChunk testCV 0 input keyedHash
     cv = Vector.ofFn (fun i => [0x493433a9, 0x78e5fe64, 0x3bbfefc4, 0x7dd1ac29,
                                 0x9beae5b1, 0x31609733, 0x1a518b72, 0x626f54e0][i.val]!) := by
+  native_decide
+
+-- Test: 63 bytes [0x00, 0x01, ..., 0x3E], chunk_counter=0, flags=0
+-- This tests a partial block (one byte short of a full block)
+example :
+    let input := List.range 63
+    let cv := processChunk testCV 0 input 0
+    cv = Vector.ofFn (fun i => [0xf6b8fdee, 0x34b20c2d, 0xa2164bd9, 0x26b77e83,
+                                0x61880165, 0xef896a39, 0xfbd1289f, 0x24ca0f19][i.val]!) := by
   native_decide
 
 -- Test: 64 bytes [0x00, 0x01, ..., 0x3F], chunk_counter=0, flags=0
