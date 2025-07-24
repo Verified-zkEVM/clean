@@ -97,7 +97,7 @@ elab "simplify_provable_struct_eval" : tactic => do
             else
               -- If other side is just a variable, check if eval side has a struct literal
               -- Extract the argument of eval (the struct being evaluated)
-              if let some evalArg := evalSide.getArg? 1 then
+              if let some evalArg := evalSide.getArg? 5 /- very specific to ProvableType.eval -/ then
                 isStructLiteral evalArg
               else
                 pure false
