@@ -20,7 +20,7 @@ import Clean.Utils.Tactics.SimplifyProvableStructEval
   Example with struct:
   ```lean
   theorem example (a b : MyStruct F) (h : a = b ∧ a.x = 5) : b.x = 5 := by
-    provable_simp
+    provable_struct_simp
     -- Now a and b are destructured, and h.1 is split into field equalities
     sorry
   ```

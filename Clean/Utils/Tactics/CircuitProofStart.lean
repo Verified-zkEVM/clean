@@ -40,9 +40,9 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   This tactic:
   1. Automatically introduces all parameters for `Soundness` or `Completeness` goals
-  2. Applies provable_simp to decompose structs and decompose eval that mention struct components
+  2. Applies provable_struct_simp to decompose structs and decompose eval that mention struct components
   3. Unfolds local Assumptions and Spec definitions
-  4. Normalized the goal state using circuit_norm
+  4. Normalizes the goal state using circuit_norm
 
   **Limitation**: This tactic only works on direct `Soundness` or `Completeness` goals.
   It will fail with an error if the goal type is neither `Soundness` nor `Completeness`.
@@ -53,7 +53,7 @@ partial def circuitProofStartCore : TacticM Unit := do
     circuit_proof_start
     -- The assumptions in Soundness are introduced. All provable structs are decomposed when their components are mentioned
 
-  theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
+  theorem completeness : Completeness (F p) elaborated Assumptions := by
     circuit_proof_start
     -- The assumptions in Completeness are introduced. All provable structs are decomposed when their components are mentioned
   ```
