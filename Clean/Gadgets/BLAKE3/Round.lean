@@ -51,7 +51,6 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
 
-  dsimp only [Assumptions, Fin.getElem_fin] at h_asm
   obtain ⟨h_state, h_message⟩ := h_asm
 
   dsimp only [ElaboratedCircuit.main, main, Fin.isValue, G.circuit, G.elaborated, Fin.val_zero,
@@ -109,7 +108,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢
 
   simp only [h_input] at *
-  simp [Assumptions] at h_asm
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
 
   specialize c1 h_asm.left (h_asm.right 0) (h_asm.right 1)

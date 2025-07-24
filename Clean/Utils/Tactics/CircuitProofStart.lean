@@ -145,3 +145,4 @@ elab "circuit_proof_start" : tactic => do
   -- Try to unfold Assumptions and Spec as local definitions
   tryUnfoldLocalDefs [`Assumptions, `Spec]
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
