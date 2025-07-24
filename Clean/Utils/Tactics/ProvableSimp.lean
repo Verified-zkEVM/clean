@@ -36,7 +36,7 @@ import Clean.Utils.Tactics.SimplifyProvableStructEval
     sorry
   ```
 -/
-macro "provable_simp" : tactic =>
+macro "provable_struct_simp" : tactic =>
   `(tactic|
     repeat (
       fail_if_no_progress (
@@ -47,6 +47,3 @@ macro "provable_simp" : tactic =>
       )
     )
   )
-
--- Backward compatibility alias
-macro "provable_struct_simp" : tactic => `(tactic| provable_simp)
