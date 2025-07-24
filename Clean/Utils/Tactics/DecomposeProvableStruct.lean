@@ -128,7 +128,7 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
     let fvarIds ← findProvableStructVars
 
     if fvarIds.isEmpty then
-      throwError "No variables with ProvableStruct instances found in the context or goal"
+      throwError "decompose_provable_struct: No variables with ProvableStruct instances appear in field projections. This tactic only decomposes variables that appear in expressions like 'x.field_name'."
 
     -- Apply cases on each variable
     let mut currentGoal := goal

@@ -40,9 +40,10 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   This tactic:
   1. Automatically introduces all parameters for `Soundness` or `Completeness` goals
-  2. Applies provable_struct_simp to decompose structs and decompose eval that mention struct components
-  3. Unfolds local Assumptions and Spec definitions
-  4. Normalizes the goal state using circuit_norm
+  2. Unfolds `main`, `Assumptions`, and `Spec` definitions
+  3. Normalizes the goal state using circuit_norm
+  4. Applies provable_struct_simp to decompose structs and decompose eval that mention struct components
+  5. For soundness proofs, additionally simplifies h_holds with circuit_norm and h_input
 
   **Limitation**: This tactic only works on direct `Soundness` or `Completeness` goals.
   It will fail with an error if the goal type is neither `Soundness` nor `Completeness`.
@@ -61,8 +62,11 @@ partial def circuitProofStartCore : TacticM Unit := do
 elab "circuit_proof_start" : tactic => do
   -- First run the core logic which handles intro and unfolding
   circuitProofStartCore
-  -- Try to unfold Assumptions and Spec as local definitions
+  -- Try to unfold main, Assumptions and Spec as local definitions
+  try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
-  try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
+  -- Additional simplification for common patterns in soundness proofs
+  try (evalTactic (← `(tactic| simp only [circuit_norm, h_input] at h_holds))) catch _ => pure ()
