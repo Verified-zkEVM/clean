@@ -54,28 +54,14 @@ def Spec (input : Inputs (F p)) (output : U32 (F p)) : Prop :=
 
 omit [Fact (p > 512)] in
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env input_var input h_eval h_assumptions h_holds
-  rcases input with ⟨ cond, ifT, ifF ⟩
-  rcases input_var with ⟨ cond_var, ifT_var, ifF_var ⟩
-  simp only [circuit_norm, Inputs.mk.injEq] at h_eval
-  simp only [main, elaborated, circuit_norm, Circuit.ConstraintsHold.Soundness] at h_holds ⊢
-  simp only [Spec]
-  simp only [ProvableType.eval, fromElements, toVars, toElements] at h_eval ⊢
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, circuit_norm] at h_eval ⊢
+  intro offset env
+    ⟨ cond_var, ⟨ x0_var, x1_var, x2_var, x3_var ⟩, ⟨ y0_var, y1_var, y2_var, y3_var ⟩ ⟩
+    ⟨ cond, ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ ⟩
+    h_eval h_assumptions h_holds
+  simp only [circuit_norm, Inputs.mk.injEq, U32.mk.injEq, explicit_provable_type] at h_eval
+  simp only [main, circuit_norm, explicit_provable_type, Spec, Assumptions, h_eval] at *
   simp only [h_holds]
-  cases h_assumptions with
-  | inl h_asm =>
-      simp only at h_asm
-      simp only [h_asm, h_eval]
-      simp only [zero_ne_one, ↓reduceIte]
-      norm_num
-      simp only [h_eval]
-  | inr h_asm =>
-      simp only at h_asm
-      simp only [h_asm, h_eval]
-      simp only [zero_ne_one, ↓reduceIte]
-      norm_num
-      simp only [h_eval]
+  rcases h_assumptions with h_asm|h_asm <;> simp [h_asm]
 
 omit [Fact (p > 512)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
