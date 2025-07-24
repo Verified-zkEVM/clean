@@ -115,7 +115,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   - input_var (variable)
   - input (value)
   - h_input (eval env input_var = input)
-  - h_normalized (Assumptions input)
+  - h_assumptions (Assumptions input)
   - h_holds (ConstraintsHold.Soundness ...)
 
   For completeness proofs, it introduces:
@@ -126,7 +126,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   - henv (UsesLocalWitnessesCompleteness ...)
   - input (value)
   - h_input (eval env input_var = input)
-  - h_normalized (Assumptions input)
+  - h_assumptions (Assumptions input)
 
   Example usage:
   ```lean
