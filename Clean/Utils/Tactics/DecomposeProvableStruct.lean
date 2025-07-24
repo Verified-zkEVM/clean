@@ -1,10 +1,29 @@
 import Lean.Elab.Tactic
 import Lean.Elab.Exception
 import Clean.Circuit.Provable
+import Lean.Structure
 
 open Lean.Elab.Tactic
 open Lean.Meta
 open Lean
+
+/--
+  Get field names from a structure type
+-/
+def getStructureFieldNames (structName : Name) : MetaM (Array Name) := do
+  let env ← getEnv
+  match getStructureInfo? env structName with
+  | some _ => 
+    -- Get the field names from the structure
+    return getStructureFields env structName
+  | none => throwError "Not a structure: {structName}"
+
+/--
+  Generate field-based variable names from original variable name and field names
+  For example: input with fields [x, y, z] → [input_x, input_y, input_z]
+-/
+def generateFieldBasedNames (baseName : Name) (fieldNames : Array Name) : Array Name :=
+  fieldNames.map fun fieldName => baseName.appendAfter s!"_{fieldName}"
 
 /--
   Find field projections in an expression and return the base variable if it's a structure
@@ -137,8 +156,27 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
       let userName := localDecl.userName
 
       try
-        -- Use cases tactic on the variable
-        let casesResult ← currentGoal.cases fvarId
+        -- Get the type of the variable to extract structure name
+        let varType ← inferType (.fvar fvarId)
+        let varType' ← whnf varType
+        
+        -- Extract the structure name
+        let structName ← match varType' with
+        | .app (.const name _) _ => pure name
+        | .const name _ => pure name
+        | _ => throwError "Cannot extract structure name from type: {varType'}"
+        
+        -- Get field names for the structure
+        let fieldNames ← getStructureFieldNames structName
+        
+        -- Generate field-based names
+        let customNames := generateFieldBasedNames userName fieldNames
+        
+        -- Create AltVarNames for the single constructor case
+        let altVarNames : AltVarNames := { varNames := customNames.toList }
+        
+        -- Use cases tactic on the variable with custom names
+        let casesResult ← currentGoal.cases fvarId #[altVarNames]
 
         -- Get the new goal from the cases result
         match casesResult.toList with
@@ -164,8 +202,9 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   2. appear in field projections in the goal
 
   Note:
-  - The new variables introduced by decomposition are not explicitly named.
-    Use `rename_i` after this tactic to give them names.
+  - The new variables introduced by decomposition are named based on the original 
+    variable name and the structure field names. For example, if `input` has fields
+    `x`, `y`, and `z`, the decomposed variables will be `input_x`, `input_y`, `input_z`.
   - This tactic only performs one level of decomposition. For nested structures,
     it will decompose the outer structure but not the inner ones. Use under
     `repeat` to decompose nested structures fully. `provable_struct_simp` is one
@@ -176,8 +215,8 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   theorem example_theorem (input : Inputs (F p)) (h : input.x = 5) :
     input.y + input.z = someValue := by
     decompose_provable_struct  -- This will destruct `input` (found via projections)
-    -- Now we have auto-named variables for x, y and z components in context
-    -- and h has been updated to reference the new x component
+    -- Now we have input_x, input_y, and input_z in context
+    -- and h has been updated to reference input_x
     sorry
   ```
 -/
