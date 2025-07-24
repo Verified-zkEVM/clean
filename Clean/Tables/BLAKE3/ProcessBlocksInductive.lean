@@ -191,7 +191,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 The InductiveTable for processBlocks.
 -/
 def table : InductiveTable (F p) ProcessBlocksState BlockInput where
-  step := step
+  step
 
   Spec initialState inputs i _ state :=
     -- The spec relates the current state to the mathematical processBlocksWords function
@@ -235,7 +235,7 @@ def createTrace (_initialCV : Vector (U32 (F p)) 8) (_chunkCounter : U32 (F p))
       U32.fromByte ⟨value % 256, by omega⟩  -- Simplified: just use first byte
     )
     { block_exists := 1
-    , block_data := Vector.mk words.toArray (by 
+    , block_data := Vector.mk words.toArray (by
       simp only [List.length_map, List.length_range, List.size_toArray]
       rfl) }
   )
