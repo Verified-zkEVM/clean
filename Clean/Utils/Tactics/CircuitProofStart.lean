@@ -109,8 +109,8 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
   4. Unfolds local Assumptions and Spec definitions
 
   For soundness proofs, it introduces:
-  - Any theorem parameters (like offset)
-  - offset (offset parameter)
+  - Any theorem parameters
+  - i₀ (offset in the environment)
   - env (environment)
   - input_var (variable)
   - input (value)
@@ -120,7 +120,7 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
 
   For completeness proofs, it introduces:
   - Any theorem parameters
-  - offset (offset parameter)
+  - i₀ (offset in the environment)
   - env (environment)
   - input_var (variable)
   - henv (UsesLocalWitnessesCompleteness ...)
