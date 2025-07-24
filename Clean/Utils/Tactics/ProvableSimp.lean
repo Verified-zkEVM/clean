@@ -3,13 +3,10 @@ import Clean.Utils.Tactics.DecomposeProvableStruct
 import Clean.Utils.Tactics.SimplifyProvableStructEval
 
 /--
-  Simplify all provable struct and pair expressions by repeatedly applying:
+  Simplify all provable struct expressions by repeatedly applying:
   1. `split_provable_struct_eq` - splits struct equalities into field-wise equalities
-  2. `split_pair_eq` - splits pair equalities into component-wise equalities
-  3. `decompose_provable_struct` - destructures struct variables that appear in projections
-  4. `decompose_provable_pair` - destructures pair variables that appear in projections
-  5. `simplify_provable_struct_eval` - simplifies eval expressions in equalities with struct literals
-  6. `simplify_pair_eval` - simplifies eval expressions in equalities with pair literals
+  2. `decompose_provable_struct` - destructures struct variables that appear in projections
+  3. `simplify_provable_struct_eval` - simplifies eval expressions in equalities with struct literals
 
   The tactic continues until no transformation makes any more progress.
 
@@ -25,14 +22,6 @@ import Clean.Utils.Tactics.SimplifyProvableStructEval
   theorem example (a b : MyStruct F) (h : a = b ∧ a.x = 5) : b.x = 5 := by
     provable_simp
     -- Now a and b are destructured, and h.1 is split into field equalities
-    sorry
-  ```
-
-  Example with pair:
-  ```lean
-  theorem example (p : F × F) (h : p.1 = 5) : p.2 + 5 = p.1 + p.2 := by
-    provable_simp
-    -- Now p is destructured into p_fst and p_snd
     sorry
   ```
 -/
