@@ -43,7 +43,7 @@ macro "provable_struct_simp" : tactic =>
       try split_provable_struct_eq;
       try decompose_provable_struct;
       try simplify_provable_struct_eval;
-      try simp only [] at *
+      try simp only at *
       )
     )
   )
