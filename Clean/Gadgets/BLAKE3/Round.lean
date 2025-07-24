@@ -103,8 +103,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
 
-  simp only [main, circuit_norm, G.circuit, G.Assumptions, G.Spec] at ⊢ henv h_input
-  simp only [Environment.UsesLocalWitnessesCompleteness,
+  simp only [circuit_norm, G.circuit, G.Assumptions, G.Spec] at ⊢ henv h_input
+  simp only [circuit_norm, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true] at h_input henv ⊢
 
   simp only [h_input] at *

@@ -46,7 +46,7 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  simp_all only [main, circuit_norm, ApplyRounds.circuit,
+  simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
@@ -58,10 +58,10 @@ lemma ApplyRouunds.circuit_spec_is :
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-  simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
+  simp_all only [circuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
     ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
-    compress, ApplyRounds.Assumptions, circuit_norm, FinalStateUpdate.Spec]
+    compress, ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

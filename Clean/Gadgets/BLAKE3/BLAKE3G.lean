@@ -78,9 +78,9 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
   circuit_proof_start
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
+  dsimp only [BLAKE3State.Normalized] at h_assumptions
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
+  dsimp only [circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
   simp only [circuit_norm, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector, h_input] at h_holds
