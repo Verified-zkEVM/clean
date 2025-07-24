@@ -472,10 +472,9 @@ lemma initial_state_and_messages_are_normalized
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
   provable_struct_simp
-  rename_i chaining_value _ _ _ _ _ chaining_value_var block_words_var counter_high_var counter_low_var block_len_var flags_var
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 i
     norm_num
@@ -494,7 +493,7 @@ lemma initial_state_and_messages_are_normalized
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all [Assumptions, h_input]
   -- Show the message is normalized
-  have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
+  have h_message_normalized : ∀ (i : Fin 16), (eval env input_var_block_words : BLAKE3State _)[i].Normalized := by
     intro i
     simp only[h_input]
     exact h_normalized.2.1 i
@@ -505,7 +504,7 @@ lemma initial_state_and_messages_are_normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
+  rename_i _ _ counter_high counter_low _ _ -- TODO: why aren't the new variables named yet?
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main] at h_holds
@@ -513,6 +512,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
     apply Nat.mod_eq_of_lt
+
     exact U32.value_lt_of_normalized h_assumptions.2.2.2.1
   have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
     -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
