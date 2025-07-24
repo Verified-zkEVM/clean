@@ -190,7 +190,7 @@ theorem test_struct_comparison {F : Type} [Field F]
 
 -- Test with struct comparison
 theorem test_equality_not_triggar {F : Type} [Field F]
-    (a : TestInputs F) (_ : TestInputs F) (_ : a = {x := 1, y := 2, z := 4}) :
+    (a : TestInputs F) (_ : a = {x := 1, y := 2, z := 4}) :
     a = a := by
   fail_if_success decompose_provable_struct
   rfl
