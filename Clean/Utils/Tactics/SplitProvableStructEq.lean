@@ -125,7 +125,7 @@ def splitProvableStructEq : TacticM Unit := do
 
   This tactic:
   1. First applies `cases` on struct variables that appear in equalities with struct literals
-  2. Then applies `mk.injEq` lemmas for all ProvableStruct types found in the context
+  2. Then applies `mk.injEq` lemmas for all ProvableStruct types in equations involving struct literals
 
   It transforms equalities of the form:
   - `StructName.mk f1 f2 ... = StructName.mk v1 v2 ...` into `f1 = v1 ∧ f2 = v2 ∧ ...`
