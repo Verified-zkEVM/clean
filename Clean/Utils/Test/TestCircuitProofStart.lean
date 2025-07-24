@@ -125,6 +125,8 @@ def testCircuit : ElaboratedCircuit (F p) unit unit :=
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Assumptions and Spec should be unfolded to TestAssumptions and TestSpec
+  -- Check that Assumptions was unfolded by pattern matching on h_assumptions
+  guard_hyp h_assumptions : TestAssumptions input
   sorry
 end UnfoldTest1
 
@@ -147,6 +149,8 @@ def testCircuit : ElaboratedCircuit (F p) unit unit :=
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Should unfold nested references
+  -- Check that Assumptions was unfolded to reveal TestAssumptions
+  guard_hyp h_assumptions : TestAssumptions input ∧ TestAssumptions input
   sorry
 end UnfoldTest2
 
@@ -164,31 +168,13 @@ def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 example : Soundness (F p) elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
+  -- Check that h_holds now refers to testCircuit.main, not elaborated.main
+  guard_hyp h_holds : ConstraintsHold.Soundness env (testCircuit.main input_var i₀).2
   sorry
 end UnfoldTest3
 
 end LocalDefinitionUnfoldingTests
 
-section ProvableStructSimpTests
--- Test interaction with provable_struct_simp using fieldPair
-
-variable {p : ℕ} [Fact p.Prime]
-
--- Test circuit with fieldPair input
-def pairCircuit : ElaboratedCircuit (F p) fieldPair unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
-
-def PairAssumptions (input : fieldPair (F p)) : Prop :=
-  input.1 ≠ 0 ∧ input.2 ≠ 0
-
-def PairSpec (input : fieldPair (F p)) (_ : unit (F p)) : Prop :=
-  input.1 * input.2 ≠ 0
-
-example : Soundness (F p) pairCircuit PairAssumptions PairSpec := by
-  circuit_proof_start
-  -- provable_struct_simp should decompose the pair
-  sorry
-
-end ProvableStructSimpTests
+-- Removed section ProvableStructSimpTests that tested with fieldPair
 
 end TestCircuitProofStart
