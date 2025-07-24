@@ -23,4 +23,4 @@ import Clean.Gadgets.BLAKE3.Compress
 import Clean.Gadgets.BLAKE3.Permute
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
-import Clean.Utils.Test
+import Clean.Test
