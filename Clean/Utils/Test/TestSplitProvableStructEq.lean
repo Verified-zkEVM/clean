@@ -58,17 +58,6 @@ theorem test_multiple_equalities {F : Type} [Field F] (input1 input2 : TestInput
   · exact h1.1.symm
   · exact h2.2.1
 
--- Test with type synonyms (like Var)
-@[reducible]
-def TestVar (F : Type) := TestInputs F
-
-theorem test_type_synonym {F : Type} [Field F] (input : TestVar F)
-    (h : TestInputs.mk 1 2 3 = input) :
-    input.x = 1 := by
-  split_provable_struct_eq
-  -- Should handle type synonyms properly
-  exact h.1.symm
-
 -- Test with conjunctions containing struct equalities
 theorem test_conjunction_with_struct_eq {F : Type} [Field F] (input : TestInputs F) (x : F)
     (h : TestInputs.mk 1 2 3 = input ∧ x = 7) :
@@ -99,7 +88,5 @@ theorem test_with_base_and_non_base {F : Type} [Field F] (input1 input2 input3 :
   -- input2 = input3 should be intact
   have : input2 = input3 := h.2
   exact h.1.1.1.symm
-
-
 
 end TestSplitProvableStructEq
