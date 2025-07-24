@@ -145,15 +145,8 @@ elab "circuit_proof_start" : tactic => do
   -- First run the core logic which handles intro and unfolding
   circuitProofStartCore
   try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
-  -- Then apply additional unfolding and simplification
-  -- Unfold the circuit definition and common definitions
-  try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.main, Circuit.bind_def, Circuit.output, main] at *))) catch _ => pure ()
   -- Try to unfold Assumptions and Spec as local definitions
   tryUnfoldLocalDefs [`Assumptions, `Spec]
-  -- Also try with delta reduction which is more aggressive
-  try (evalTactic (← `(tactic| delta Assumptions Spec))) catch _ => pure ()
-  -- Unfold the elaborated circuit definition
-  try (evalTactic (← `(tactic| unfold elaborated at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| provable_simp))) catch _ => pure ()
 
 end ProvenZK
