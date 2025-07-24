@@ -38,6 +38,9 @@ partial def circuitProofStartCore : TacticM Unit := do
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
+    else
+      -- Goal is neither Soundness nor Completeness
+      throwError "circuitProofStartCore can only be used on direct Soundness or Completeness goals"
 
 /--
   Standard tactic for starting soundness and completeness proofs.
@@ -48,8 +51,10 @@ partial def circuitProofStartCore : TacticM Unit := do
   3. Unfolds circuit definitions using circuit_norm
   4. Unfolds local Assumptions and Spec definitions
 
+  **Limitation**: This tactic only works on direct `Soundness` or `Completeness` goals.
+  It will fail with an error if the goal type is neither `Soundness` nor `Completeness`.
+
   For soundness proofs, it introduces:
-  - Any theorem parameters
   - i₀ (offset in the environment)
   - env (environment)
   - input_var (variable)
@@ -59,7 +64,6 @@ partial def circuitProofStartCore : TacticM Unit := do
   - h_holds (ConstraintsHold.Soundness ...)
 
   For completeness proofs, it introduces:
-  - Any theorem parameters
   - i₀ (offset in the environment)
   - env (environment)
   - input_var (variable)
@@ -72,11 +76,11 @@ partial def circuitProofStartCore : TacticM Unit := do
   ```lean
   theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     circuit_proof_start
-    -- Goal is now unfolded with all struct equalities split
+    -- The assumptions in Soundness are introduced. All provable structs are decomposed when their components are mentioned
 
   theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
     circuit_proof_start
-    -- offset is introduced first, then standard soundness parameters
+    -- The assumptions in Completeness are introduced. All provable structs are decomposed when their components are mentioned
   ```
 -/
 elab "circuit_proof_start" : tactic => do
