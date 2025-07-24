@@ -51,7 +51,7 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
 
-  obtain ⟨h_state, h_message⟩ := h_asm
+  obtain ⟨h_state, h_message⟩ := h_assumptions
 
   dsimp only [ElaboratedCircuit.main, main, Fin.isValue, G.circuit, G.elaborated, Fin.val_zero,
     Fin.coe_ofNat_eq_mod, Nat.reduceMod, Rotation32.output, Fin.reduceMod, Nat.cast_ofNat,
@@ -110,23 +110,23 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [h_input] at *
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := henv
 
-  specialize c1 h_asm.left (h_asm.right 0) (h_asm.right 1)
-  specialize c2 c1.right (h_asm.right 2) (h_asm.right 3)
-  specialize c3 c2.right (h_asm.right 4) (h_asm.right 5)
-  specialize c4 c3.right (h_asm.right 6) (h_asm.right 7)
-  specialize c5 c4.right (h_asm.right 8) (h_asm.right 9)
-  specialize c6 c5.right (h_asm.right 10) (h_asm.right 11)
-  specialize c7 c6.right (h_asm.right 12) (h_asm.right 13)
-  specialize c8 c7.right (h_asm.right 14) (h_asm.right 15)
+  specialize c1 h_assumptions.left (h_assumptions.right 0) (h_assumptions.right 1)
+  specialize c2 c1.right (h_assumptions.right 2) (h_assumptions.right 3)
+  specialize c3 c2.right (h_assumptions.right 4) (h_assumptions.right 5)
+  specialize c4 c3.right (h_assumptions.right 6) (h_assumptions.right 7)
+  specialize c5 c4.right (h_assumptions.right 8) (h_assumptions.right 9)
+  specialize c6 c5.right (h_assumptions.right 10) (h_assumptions.right 11)
+  specialize c7 c6.right (h_assumptions.right 12) (h_assumptions.right 13)
+  specialize c8 c7.right (h_assumptions.right 14) (h_assumptions.right 15)
 
   simp only [Fin.isValue, c1.right, true_and, c2.right, c3.right, c4.right, c5.right, c6.right,
     c7.right]
   clear c1 c2 c3 c4 c5 c6 c7 c8
 
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
-    Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_asm
+    Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_assumptions
 
-  simp only [h_asm, getElem_eval_vector, and_self]
+  simp only [h_assumptions, getElem_eval_vector, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

@@ -164,7 +164,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
     -- then second twoRoundsWithPermute assumptions hold
-    intro input mid h_asm h_spec
+    intro input mid h_assumptions h_spec
     -- twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec input mid' ∧ roundWithPermute.Spec mid' mid
     obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
     -- We need to show twoRoundsWithPermute.Assumptions mid
@@ -231,7 +231,7 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
     -- then twoRoundsWithPermute assumptions hold
-    intro input mid h_asm h_spec
+    intro input mid h_assumptions h_spec
     -- fourRoundsWithPermute.Spec says ∃ mid', twoRoundsWithPermute.Spec ... ∧ twoRoundsWithPermute.Spec ...
     obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
     -- Each twoRoundsWithPermute.Spec says ∃ mid'', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
@@ -301,7 +301,7 @@ This represents the complete 7-round BLAKE3 compression function.
 def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sixRoundsApplyStyle.concat Round.circuit (by
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
-    intro input mid h_asm h_spec
+    intro input mid h_assumptions h_spec
     -- sixRoundsApplyStyle.Spec gives us normalized outputs
     simp_all [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Assumptions]
   ) (by aesop)
@@ -513,11 +513,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Equations for counter values
   have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
     apply Nat.mod_eq_of_lt
-    exact U32.value_lt_of_normalized h_asm.2.2.2.1
+    exact U32.value_lt_of_normalized h_assumptions.2.2.2.1
   have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
     -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
     -- Since counter_low.value < 2^32, this follows from properties of division
-    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_asm.2.2.2.1
+    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_assumptions.2.2.2.1
     have h2 : 4294967296 > 0 := by norm_num
     -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
     -- This equals counter_high.value + counter_low.value / 2^32

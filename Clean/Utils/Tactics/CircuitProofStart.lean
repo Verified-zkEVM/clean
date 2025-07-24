@@ -26,7 +26,7 @@ partial def circuitProofStartCore : TacticM Unit := do
       -- This is a Soundness proof, unfold it and introduce all parameters with names
       evalTactic (← `(tactic| unfold Soundness))
       -- Introduce parameters with explicit names using introN
-      let names := [`offset, `env, `input_var, `input, `h_input, `h_asm, `h_holds]
+      let names := [`offset, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
@@ -34,8 +34,8 @@ partial def circuitProofStartCore : TacticM Unit := do
       -- This is a Completeness proof, unfold it and introduce all parameters with names
       evalTactic (← `(tactic| unfold Completeness))
       -- Introduce parameters one by one
-      let names1 := [`offset, `env, `input_var, `henv, `input, `h_input, `h_asm]
-      for name in names1 do
+      let names := [`offset, `env, `input_var, `henv, `input, `h_input, `h_assumptions]
+      for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
 

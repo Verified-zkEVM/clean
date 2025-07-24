@@ -78,7 +78,7 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
   circuit_proof_start
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_asm
+  dsimp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
   simp only [circuit_norm, and_imp,
@@ -116,12 +116,12 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
     · exact c12.right
     · exact c14.right
     · exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_asm]
+    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
   circuit_proof_start
 
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_asm
+  dsimp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
   simp only [circuit_norm, and_imp,
