@@ -4,7 +4,7 @@ import Clean.Utils.Field
 
 namespace TestCircuitProofStart
 
-open ProvenZK Circuit
+open Circuit
 
 section BasicTests
 -- Simple example to test the circuit_proof_start tactic

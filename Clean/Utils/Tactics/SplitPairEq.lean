@@ -8,8 +8,6 @@ open Lean.Elab.Tactic
 open Lean.Meta
 open Lean
 
-namespace ProvenZK
-
 /--
   Find pair variables that appear in equalities with pair literals
   Returns a list of FVarIds that should have rcases applied
@@ -114,5 +112,3 @@ def splitPairEq : TacticM Unit := do
   ```
 -/
 elab "split_pair_eq" : tactic => splitPairEq
-
-end ProvenZK

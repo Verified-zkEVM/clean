@@ -2,8 +2,6 @@ import Lean
 import Clean.Circuit.Basic
 import Clean.Utils.Tactics.ProvableSimp
 
-namespace ProvenZK
-
 open Lean Elab Tactic Meta
 open Circuit
 
@@ -148,5 +146,3 @@ elab "circuit_proof_start" : tactic => do
   -- Try to unfold Assumptions and Spec as local definitions
   tryUnfoldLocalDefs [`Assumptions, `Spec]
   try (evalTactic (← `(tactic| provable_simp))) catch _ => pure ()
-
-end ProvenZK

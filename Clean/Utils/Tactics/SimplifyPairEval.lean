@@ -5,8 +5,6 @@ import Clean.Utils.Tactics.ProvableTacticUtils
 
 open Lean Meta Elab Tactic
 
-namespace ProvenZK
-
 /-- Helper function to check if an expression is a pair constructor or pair variable -/
 private def isPairLiteral (e : Expr) : MetaM Bool := do
   -- First check the type to see if it's a provable pair
@@ -151,5 +149,3 @@ elab "simplify_pair_eval" : tactic => do
   -- Ensure the tactic made progress
   if !anyModified then
     throwError "simplify_pair_eval made no progress"
-
-end ProvenZK

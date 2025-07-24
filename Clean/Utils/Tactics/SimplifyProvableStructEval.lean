@@ -2,7 +2,7 @@ import Lean
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableTacticUtils
 
-open Lean Meta Elab Tactic ProvenZK
+open Lean Meta Elab Tactic
 
 /-- Helper function to check if an expression is a struct constructor or struct variable -/
 private def isStructLiteral (e : Expr) : MetaM Bool := do
@@ -30,16 +30,16 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
       if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
         let lhsIsEval := hasEvalPattern lhs
         let rhsIsEval := hasEvalPattern rhs
-        
+
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
-          
+
           -- Check if other side is a struct literal
           let otherIsLiteral ← isStructLiteral otherSide
           if otherIsLiteral then
             return true
-          
+
           -- If other side is just a variable, check if eval side has a struct literal
           -- Extract the argument of eval (the struct being evaluated)
           if let some evalArg := evalSide.getArg? 1 then
@@ -60,7 +60,7 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
 elab "simplify_provable_struct_eval" : tactic => do
   let ctx ← getLCtx
   let mut anyModified := false
-  
+
   -- Helper to apply the simp lemmas to a specific hypothesis
   let applySimpToHyp (declName : Lean.Name) : Lean.Elab.Tactic.TacticM Unit := do
     let tac ← `(tactic| simp only [
@@ -71,23 +71,23 @@ elab "simplify_provable_struct_eval" : tactic => do
       ProvableType.eval_field
     ] at $(mkIdent declName):ident)
     evalTactic tac
-  
+
   -- Process each hypothesis
   for decl in ctx do
     if decl.isImplementationDetail then continue
-    
+
     let type ← instantiateMVars decl.type
-    
+
     -- First check if it's a direct equality
     if type.isAppOf `Eq then
       if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
         let lhsIsEval := hasEvalPattern lhs
         let rhsIsEval := hasEvalPattern rhs
-        
+
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
-          
+
           -- Check if we should apply simplification
           let shouldSimplify ← do
             -- Check if other side is a struct literal
@@ -101,7 +101,7 @@ elab "simplify_provable_struct_eval" : tactic => do
                 isStructLiteral evalArg
               else
                 pure false
-          
+
           if shouldSimplify then
             -- Apply simp to this specific hypothesis only
             try
@@ -110,7 +110,7 @@ elab "simplify_provable_struct_eval" : tactic => do
             catch e =>
               trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
               continue
-    
+
     -- Also check if it contains conjunctions with struct eval equalities
     else if type.isAppOf ``And then
       -- Apply simp to hypotheses that contain the pattern inside conjunctions
@@ -122,6 +122,6 @@ elab "simplify_provable_struct_eval" : tactic => do
         catch e =>
           trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
           continue
-  
+
   if !anyModified then
     throwError "simplify_provable_struct_eval made no progress"

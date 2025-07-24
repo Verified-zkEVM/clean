@@ -3,8 +3,6 @@ import Clean.Circuit.Provable
 
 open Lean Meta Elab Tactic
 
-namespace ProvenZK
-
 /-- Check if an expression is a constructor application (ends with .mk) -/
 def isMkConstructor (e : Expr) : MetaM Bool := do
   let e' ← withTransparency .all (whnf e)
@@ -97,5 +95,3 @@ def generateComponentNames (baseName : Name) (numComponents : Nat) : List Name :
     ]
   | _ => List.range numComponents |>.map fun i =>
       Name.mkSimple (baseName.toString ++ "_" ++ toString (i + 1))
-
-end ProvenZK

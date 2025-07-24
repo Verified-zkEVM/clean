@@ -77,7 +77,6 @@ def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
-  #check main
   circuit_proof_start
   dsimp only [Assumptions, BLAKE3State.Normalized] at h_asm
 
