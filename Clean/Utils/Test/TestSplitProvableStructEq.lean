@@ -91,4 +91,15 @@ theorem test_nested_conjunctions {F : Type} [Field F] (input1 input2 : TestInput
   · exact h.1.1.1.symm
   · exact h.2.2.1
 
+-- Test with some equation to be split and some not to be split
+theorem test_with_base_and_non_base {F : Type} [Field F] (input1 input2 input3 : TestInputs F) (x : F)
+    (h : (TestInputs.mk 1 2 3 = input1 ∧ x = 7) ∧ input2 = input3) :
+    input1.x = 1 := by
+  split_provable_struct_eq
+  -- input2 = input3 should be intact
+  have : input2 = input3 := h.2
+  exact h.1.1.1.symm
+
+
+
 end TestSplitProvableStructEq
