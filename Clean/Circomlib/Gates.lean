@@ -4,7 +4,6 @@ import Clean.Gadgets.Boolean
 import Clean.Utils.Bitwise
 import Clean.Utils.Vector
 import Clean.Utils.BinaryOps
-import Clean.Utils.Tactics
 import Clean.Circuit.Theorems
 import Mathlib.Data.Nat.Bitwise
 
@@ -92,9 +91,13 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    circuit_proof_start
-    simp only [circuit_norm, main] at h_input h_holds ⊢
-    simp_all [h_input, and_eq_val_and, and_is_bool (α := F p)]
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env.symm with ⟨ _, _ ⟩
+    simp_all only [h_hold]
+    constructor
+    · exact and_eq_val_and h_a h_b
+    · convert and_is_bool h_a h_b using 1
 
   completeness := by
     simp_all only [circuit_norm, main]
@@ -128,13 +131,15 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    circuit_proof_start
-    simp only [circuit_norm, main] at h_input h_holds ⊢
-    simp_all only [h_holds]
-    ring_nf
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    simp only [circuit_norm, main] at h_env h_hold ⊢
+    rcases h_env.symm with ⟨ _, _ ⟩
+    simp_all only [h_hold]
     constructor
-    · rw [or_eq_val_or] <;> simp_all
-    · apply or_is_bool (α := F p) <;> simp_all
+    · convert or_eq_val_or h_a h_b using 1
+      ring_nf
+    · convert or_is_bool h_a h_b using 1
+      ring_nf
 
   completeness := by
     simp_all only [circuit_norm, main]

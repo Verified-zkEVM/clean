@@ -1,9 +1,6 @@
 import Clean.Utils.Tactics.SplitProvableStructEq
 import Clean.Utils.Tactics.DecomposeProvableStruct
-import Clean.Utils.Tactics.DecomposeProvablePair
 import Clean.Utils.Tactics.SimplifyProvableStructEval
-import Clean.Utils.Tactics.SplitPairEq
-import Clean.Utils.Tactics.SimplifyPairEval
 
 /--
   Simplify all provable struct and pair expressions by repeatedly applying:
@@ -30,7 +27,7 @@ import Clean.Utils.Tactics.SimplifyPairEval
     -- Now a and b are destructured, and h.1 is split into field equalities
     sorry
   ```
-  
+
   Example with pair:
   ```lean
   theorem example (p : F × F) (h : p.1 = 5) : p.2 + 5 = p.1 + p.2 := by
@@ -44,11 +41,8 @@ macro "provable_simp" : tactic =>
     repeat (
       fail_if_no_progress (
       try split_provable_struct_eq;
-      try split_pair_eq;
       try decompose_provable_struct;
-      try decompose_provable_pair;
       try simplify_provable_struct_eval;
-      try simplify_pair_eval;
       try simp only [] at *
       )
     )

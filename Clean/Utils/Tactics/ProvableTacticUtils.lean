@@ -12,14 +12,6 @@ def isMkConstructor (e : Expr) : MetaM Bool := do
     return name.components.getLast? == some `mk
   | _ => return false
 
-/-- Check if an expression is specifically a Prod.mk application -/
-def isProdMkApp (e : Expr) : MetaM Bool := do
-  let e' ← withTransparency .all (whnf e)
-  match e'.getAppFn with
-  | .const name _ =>
-    return name == ``Prod.mk
-  | _ => return false
-
 /-- Extract all equalities from an expression (including inside conjunctions) -/
 partial def extractEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
   -- Returns list of (equality_expr, lhs, rhs) triples
@@ -80,18 +72,3 @@ def hasFieldInstance (type : Expr) : MetaM Bool := do
   match ← trySynthInstance fieldClass with
   | .some _ => return true
   | _ => return false
-
-/-- Generate component names for a decomposed variable -/
-def generateComponentNames (baseName : Name) (numComponents : Nat) : List Name :=
-  match numComponents with
-  | 2 => [
-      Name.mkSimple (baseName.toString ++ "_fst"),
-      Name.mkSimple (baseName.toString ++ "_snd")
-    ]
-  | 3 => [
-      Name.mkSimple (baseName.toString ++ "_fst"),
-      Name.mkSimple (baseName.toString ++ "_snd"),
-      Name.mkSimple (baseName.toString ++ "_thd")
-    ]
-  | _ => List.range numComponents |>.map fun i =>
-      Name.mkSimple (baseName.toString ++ "_" ++ toString (i + 1))
