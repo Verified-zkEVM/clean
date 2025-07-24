@@ -147,7 +147,7 @@ section NoProjectionTests
 theorem test_no_projection_struct {F : Type} [Field F] (input : TestInputs F)
     (h : input = ⟨5, 3, 1⟩) :
     input = ⟨5, 3, 1⟩ := by
-  try decompose_provable_struct
+  fail_if_success decompose_provable_struct
   -- input should NOT be decomposed because no projections are used
   assumption
 
@@ -156,7 +156,7 @@ theorem test_multiple_no_projection {F : Type} [Field F]
     (a : TestInputs F) (b : TestInputs F) (c : TestInputs F)
     (ha : a = ⟨1, 2, 3⟩) (hb : b = ⟨4, 5, 6⟩) (hc : c = ⟨7, 8, 9⟩) :
     a = ⟨1, 2, 3⟩ ∧ b = ⟨4, 5, 6⟩ ∧ c = ⟨7, 8, 9⟩ := by
-  try decompose_provable_struct
+  fail_if_success decompose_provable_struct
   -- None should be decomposed
   exact ⟨ha, hb, hc⟩
 
@@ -164,7 +164,7 @@ theorem test_multiple_no_projection {F : Type} [Field F]
 theorem test_whole_struct_equality {F : Type} [Field F]
     (x : TestInputs F) (y : TestInputs F) (h : x = y) :
     x = y := by
-  try decompose_provable_struct
+  fail_if_success decompose_provable_struct
   -- No decomposition should happen
   assumption
 
@@ -175,7 +175,7 @@ def processStruct {F : Type} [Field F] (input : TestInputs F) : F :=
 theorem test_struct_in_function {F : Type} [Field F]
     (input : TestInputs F) (h : processStruct input = 10) :
     processStruct input = 10 := by
-  try decompose_provable_struct
+  fail_if_success decompose_provable_struct
   -- input should NOT be decomposed because it's used as a whole in processStruct
   assumption
 
