@@ -80,26 +80,6 @@ partial def circuitProofStartCore : TacticM Unit := do
       return
 
 /--
-  Try to unfold local definitions by looking them up in the context
--/
-def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
-  withMainContext do
-    for name in names do
-      -- Try both the simple name and with current namespace
-      let candidates := [name, (← getCurrNamespace) ++ name]
-      for candidate in candidates do
-        try
-          -- Check if this constant exists and is a definition
-          let info ← getConstInfo candidate
-          match info with
-          | .defnInfo _ =>
-            -- It's a definition, try to unfold it
-            let ident := mkIdent candidate
-            try (evalTactic (← `(tactic| simp only [$ident:ident] at *))) catch _ => pure ()
-          | _ => pure ()
-        catch _ => pure ()
-
-/--
   Standard tactic for starting soundness and completeness proofs.
 
   This tactic:
@@ -143,6 +123,7 @@ elab "circuit_proof_start" : tactic => do
   -- First run the core logic which handles intro and unfolding
   circuitProofStartCore
   -- Try to unfold Assumptions and Spec as local definitions
-  tryUnfoldLocalDefs [`Assumptions, `Spec]
+  try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
