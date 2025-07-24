@@ -78,50 +78,14 @@ elab "simplify_provable_struct_eval" : tactic => do
 
     let type ← instantiateMVars decl.type
 
-    -- First check if it's a direct equality
-    if type.isAppOf `Eq then
-      if let (some lhs, some rhs) := (type.getArg? 1, type.getArg? 2) then
-        let lhsIsEval := hasEvalPattern lhs
-        let rhsIsEval := hasEvalPattern rhs
-
-        if lhsIsEval || rhsIsEval then
-          let evalSide := if lhsIsEval then lhs else rhs
-          let otherSide := if lhsIsEval then rhs else lhs
-
-          -- Check if we should apply simplification
-          let shouldSimplify ← do
-            -- Check if other side is a struct literal
-            let otherIsLiteral ← isStructLiteral otherSide
-            if otherIsLiteral then
-              pure true
-            else
-              -- If other side is just a variable, check if eval side has a struct literal
-              -- Extract the argument of eval (the struct being evaluated)
-              if let some evalArg := evalSide.getArg? 5 /- very specific to ProvableType.eval -/ then
-                isStructLiteral evalArg
-              else
-                pure false
-
-          if shouldSimplify then
-            -- Apply simp to this specific hypothesis only
-            try
-              applySimpToHyp decl.userName
-              anyModified := true
-            catch e =>
-              trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
-              continue
-
-    -- Also check if it contains conjunctions with struct eval equalities
-    else if type.isAppOf ``And then
-      -- Apply simp to hypotheses that contain the pattern inside conjunctions
-      let hasPattern ← containsStructEvalPattern type
-      if hasPattern then
-        try
-          applySimpToHyp decl.userName
-          anyModified := true
-        catch e =>
-          trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
-          continue
+    let hasPattern ← containsStructEvalPattern type
+    if hasPattern then
+      try
+        applySimpToHyp decl.userName
+        anyModified := true
+      catch e =>
+        trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
+        continue
 
   if !anyModified then
     throwError "simplify_provable_struct_eval made no progress"
