@@ -116,7 +116,7 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
     return result.eraseDups
 
 /--
-  Decompose all variables with ProvableStruct instances in the context
+  Decompose all ProvableStruct variables that appear in projections
 -/
 def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   withMainContext do
@@ -158,19 +158,18 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
 
     replaceMainGoal [currentGoal]
 
-
 /--
   Automatically decompose ALL variables with ProvableStruct instances that either:
-  1. Are in the context as variables with ProvableStruct instances
-  2. Appear in field projections in hypotheses (e.g., h : input.x = 5)
-  3. Appear in field projections in the goal
+  1. appear in field projections in hypotheses (e.g., h : input.x = 5)
+  2. appear in field projections in the goal
 
   Note: 
   - The new variables introduced by decomposition are not explicitly named. 
     Use `rename_i` after this tactic to give them names.
   - This tactic only performs one level of decomposition. For nested structures,
     it will decompose the outer structure but not the inner ones. Use under
-    `repeat` to decompose nested structures fully.
+    `repeat` to decompose nested structures fully. `provable_struct_simp` is one
+    implementation of such a loop.
 
   Example:
   ```lean
@@ -184,9 +183,8 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
 -/
 elab "decompose_provable_struct" : tactic => decomposeProvableStruct
 
-
 /--
-  Print all ProvableStruct variables found in the context and goal
+  Print all ProvableStruct variables found in projections in the context and goal
   (useful for debugging decompose_provable_struct)
 -/
 elab "show_provable_struct_vars" : tactic => do

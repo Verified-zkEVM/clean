@@ -17,23 +17,17 @@ partial def circuitProofStartCore : TacticM Unit := do
     -- First check if this is a Soundness or Completeness type that needs unfolding
     -- We need to check the head constant of the expression
     let headConst? := goalType.getAppFn.constName?
-
-    -- Check if this is a Soundness or Completeness proof
     let isSoundness := headConst? == some ``Soundness
     let isCompleteness := headConst? == some ``Completeness
 
     if isSoundness then
-      -- This is a Soundness proof, unfold it and introduce all parameters with names
       evalTactic (← `(tactic| unfold Soundness))
-      -- Introduce parameters with explicit names using introN
       let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
     else if isCompleteness then
-      -- This is a Completeness proof, unfold it and introduce all parameters with names
       evalTactic (← `(tactic| unfold Completeness))
-      -- Introduce parameters one by one
       let names := [`i₀, `env, `input_var, `henv, `input, `h_input, `h_assumptions]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
@@ -47,30 +41,12 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   This tactic:
   1. Automatically introduces all parameters for `Soundness` or `Completeness` goals
-  2. Applies provable_simp to decompose structs/pairs and simplify eval
-  3. Unfolds circuit definitions using circuit_norm
-  4. Unfolds local Assumptions and Spec definitions
+  2. Applies provable_simp to decompose structs and decompose eval that mention struct components
+  3. Unfolds local Assumptions and Spec definitions
+  4. Normalized the goal state using circuit_norm
 
   **Limitation**: This tactic only works on direct `Soundness` or `Completeness` goals.
   It will fail with an error if the goal type is neither `Soundness` nor `Completeness`.
-
-  For soundness proofs, it introduces:
-  - i₀ (offset in the environment)
-  - env (environment)
-  - input_var (variable)
-  - input (value)
-  - h_input (eval env input_var = input)
-  - h_assumptions (Assumptions input)
-  - h_holds (ConstraintsHold.Soundness ...)
-
-  For completeness proofs, it introduces:
-  - i₀ (offset in the environment)
-  - env (environment)
-  - input_var (variable)
-  - henv (UsesLocalWitnessesCompleteness ...)
-  - input (value)
-  - h_input (eval env input_var = input)
-  - h_assumptions (Assumptions input)
 
   Example usage:
   ```lean
