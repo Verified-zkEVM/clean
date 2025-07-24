@@ -12,7 +12,7 @@ namespace ProvableStructNaming
 def getStructureFieldNames (structName : Name) : MetaM (Array Name) := do
   let env ← getEnv
   match getStructureInfo? env structName with
-  | some _ => 
+  | some _ =>
     -- Get the field names from the structure
     return getStructureFields env structName
   | none => throwError "Not a structure: {structName}"
@@ -31,23 +31,23 @@ def generateFieldBasedNames (baseName : Name) (fieldNames : Array Name) : Array 
 def generateStructFieldNames (fvarId : FVarId) : MetaM AltVarNames := do
   let localDecl ← fvarId.getDecl
   let userName := localDecl.userName
-  
+
   -- Get the type of the variable to extract structure name
   let varType ← inferType (.fvar fvarId)
   let varType' ← whnf varType
-  
+
   -- Extract the structure name
   let structName ← match varType' with
   | .app (.const name _) _ => pure name
   | .const name _ => pure name
   | _ => throwError "Cannot extract structure name from type: {varType'}"
-  
+
   -- Get field names for the structure
   let fieldNames ← getStructureFieldNames structName
-  
+
   -- Generate field-based names
   let customNames := generateFieldBasedNames userName fieldNames
-  
+
   -- Create AltVarNames for the single constructor case
   return { varNames := customNames.toList }
 
