@@ -153,7 +153,7 @@ theorem test_no_projection_struct {F : Type} [Field F] (input : TestInputs F)
   assumption
 
 -- Test with multiple struct variables, none with projections
-theorem test_multiple_no_projection {F : Type} [Field F] 
+theorem test_multiple_no_projection {F : Type} [Field F]
     (a : TestInputs F) (b : TestInputs F) (c : TestInputs F)
     (ha : a = ⟨1, 2, 3⟩) (hb : b = ⟨4, 5, 6⟩) (hc : c = ⟨7, 8, 9⟩) :
     a = ⟨1, 2, 3⟩ ∧ b = ⟨4, 5, 6⟩ ∧ c = ⟨7, 8, 9⟩ := by
@@ -162,7 +162,7 @@ theorem test_multiple_no_projection {F : Type} [Field F]
   exact ⟨ha, hb, hc⟩
 
 -- Test where only the whole struct is used in operations
-theorem test_whole_struct_equality {F : Type} [Field F] 
+theorem test_whole_struct_equality {F : Type} [Field F]
     (x : TestInputs F) (y : TestInputs F) (h : x = y) :
     x = y := by
   try decompose_provable_struct
@@ -184,8 +184,15 @@ theorem test_struct_in_function {F : Type} [Field F]
 theorem test_struct_comparison {F : Type} [Field F]
     (a : TestInputs F) (b : TestInputs F) :
     a = b ↔ a = b := by
-  try decompose_provable_struct
+  fail_if_success decompose_provable_struct
   -- No decomposition should happen
+  rfl
+
+-- Test with struct comparison
+theorem test_equality_not_triggar {F : Type} [Field F]
+    (a : TestInputs F) (_ : TestInputs F) (_ : a = {x := 1, y := 2, z := 4}) :
+    a = a := by
+  fail_if_success decompose_provable_struct
   rfl
 
 end NoProjectionTests
