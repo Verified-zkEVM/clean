@@ -39,51 +39,11 @@ partial def circuitProofStartCore : TacticM Unit := do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
 
-    -- Otherwise, continue with the original logic for parametrized theorems
-    let goalType' ← whnf goalType
-
-    match goalType' with
-    | .forallE _ _ body _ =>
-      -- Look ahead to see if this is the last intro before the implication
-      let body' ← whnf body
-      match body' with
-      | .forallE _ _ _ _ =>
-        -- More foralls to go, just intro
-        evalTactic (← `(tactic| intro))
-        circuitProofStartCore
-      | _ =>
-        -- Check if this is an implication (non-dependent forall)
-        if !body.hasLooseBVars then
-          -- This is an implication, check if the premise is what we're looking for
-          let premise' ← whnf goalType'.bindingDomain!
-          match premise' with
-          | .app (.app (.const ``ConstraintsHold.Soundness _) _) _ =>
-            -- This is the h_holds parameter in soundness
-            evalTactic (← `(tactic| intro h_holds))
-            return
-          | .app (.app (.app (.const ``Environment.UsesLocalWitnessesCompleteness _) _) _) _ =>
-            -- This is the henv parameter in completeness
-            evalTactic (← `(tactic| intro henv))
-            -- Continue with the remaining intros for completeness
-            evalTactic (← `(tactic| rintro input h_input h_normalized))
-            return
-          | _ =>
-            -- Regular implication, just intro
-            evalTactic (← `(tactic| intro))
-            circuitProofStartCore
-        else
-          -- Not an implication, just intro
-          evalTactic (← `(tactic| intro))
-          circuitProofStartCore
-    | _ =>
-      -- No more foralls, we're done
-      return
-
 /--
   Standard tactic for starting soundness and completeness proofs.
 
   This tactic:
-  1. Automatically introduces all parameters until reaching the proof obligations
+  1. Automatically introduces all parameters for `Soundness` or `Completeness` goals
   2. Applies provable_simp to decompose structs/pairs and simplify eval
   3. Unfolds circuit definitions using circuit_norm
   4. Unfolds local Assumptions and Spec definitions
