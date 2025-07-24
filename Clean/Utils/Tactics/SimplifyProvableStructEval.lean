@@ -1,6 +1,7 @@
 import Lean
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableTacticUtils
+import Lean.PrettyPrinter.Delaborator.Basic
 
 open Lean Meta Elab Tactic
 
@@ -16,14 +17,15 @@ private def isStructLiteral (e : Expr) : MetaM Bool := do
       return false
   catch _ => return false
 
-/-- Check if an expression contains a struct eval equality pattern, including inside conjunctions -/
-private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
+/-- Check if an expression contains a struct eval equality pattern, including inside conjunctions.
+    Returns the struct expression being evaluated if a pattern is found. -/
+private partial def collectStructEvalPattern (e : Expr) : MetaM (List Expr) := do
   match e with
   | .app (.app (.const ``And _) left) right =>
     -- Check both sides of conjunction
-    let leftHas ← containsStructEvalPattern left
-    let rightHas ← containsStructEvalPattern right
-    return leftHas || rightHas
+    let leftStruct ← collectStructEvalPattern left
+    let rightStruct ← collectStructEvalPattern right
+    return leftStruct ++ rightStruct
   | _ =>
     -- Check if it's an equality with eval
     if e.isAppOf `Eq then
@@ -34,24 +36,39 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
         if lhsIsEval || rhsIsEval then
           let evalSide := if lhsIsEval then lhs else rhs
           let otherSide := if lhsIsEval then rhs else lhs
+          let otherSideIsEval := if lhsIsEval then rhsIsEval else lhsIsEval
 
           -- Check if other side is a struct literal
-          let otherIsLiteral ← isStructLiteral otherSide
+          let otherIsLiteral ← if otherSideIsEval then
+              if let some otherExpr := otherSide.getArg? 5 then
+                isStructLiteral otherExpr
+              else
+                pure false
+            else
+              isStructLiteral otherSide
           if otherIsLiteral then
-            return true
+            -- Extract the struct expression being evaluated (last argument of ProvableType.eval)
+            if let some structExpr := evalSide.getArg? 5 then
+              return [structExpr]
+            else
+              return []
 
           -- If other side is just a variable, check if eval side has a struct literal
           -- Extract the argument of eval (the struct being evaluated)
           if let some evalArg := evalSide.getArg? 5 /- very specific to ProvableType.eval -/ then
-            isStructLiteral evalArg
+            let isLit ← isStructLiteral evalArg
+            if isLit then
+              return [evalArg]
+            else
+              return []
           else
-            return false
+            return []
         else
-          return false
+          return []
       else
-        return false
+        return []
     else
-      return false
+      return []
 
 /-- Simplifies `eval env` expressions in equalities with struct literals or struct variables.
     When we have `eval env struct_var = struct_literal` or `eval env struct_var = struct_variable`,
@@ -59,33 +76,46 @@ private partial def containsStructEvalPattern (e : Expr) : MetaM Bool := do
     Also looks inside conjunctions. -/
 elab "simplify_provable_struct_eval" : tactic => do
   let ctx ← getLCtx
-  let mut anyModified := false
+  let mut allStructExprs : List (Lean.Name × Expr) := []
 
-  -- Helper to apply the simp lemmas to a specific hypothesis
-  let applySimpToHyp (declName : Lean.Name) : Lean.Elab.Tactic.TacticM Unit := do
-    let tac ← `(tactic| simp only [
-      ProvableStruct.eval_eq_eval,
-      ProvableStruct.eval,
-      ProvableStruct.fromComponents,
-      ProvableStruct.eval.go,
-      ProvableType.eval_field
-    ] at $(mkIdent declName):ident)
-    evalTactic tac
-
-  -- Process each hypothesis
+  -- First pass: collect all struct expressions from all hypotheses
   for decl in ctx do
     if decl.isImplementationDetail then continue
-
     let type ← instantiateMVars decl.type
+    let structExprs ← collectStructEvalPattern type
+    for expr in structExprs do
+      allStructExprs := allStructExprs ++ [(decl.userName, expr)]
 
-    let hasPattern ← containsStructEvalPattern type
-    if hasPattern then
-      try
-        applySimpToHyp decl.userName
-        anyModified := true
-      catch e =>
-        trace[Meta.Tactic] "Failed to apply simp to hypothesis {decl.userName}: {e.toMessageData}"
-        continue
-
-  if !anyModified then
+  if allStructExprs.isEmpty then
     throwError "simplify_provable_struct_eval made no progress"
+
+  -- Get all unique hypothesis names
+  let hypNames := allStructExprs.map (·.1) |>.eraseDups
+
+  -- Apply simp to each hypothesis
+  for hypName in hypNames do
+    -- Collect struct expressions for this hypothesis
+    let structExprsForHyp := allStructExprs.filter (fun (name, _) => name == hypName) |>.map (·.2)
+
+    -- Build simp lemmas for this hypothesis
+    let mut simpArgs : Array (TSyntax `Lean.Parser.Tactic.simpLemma) := #[]
+
+    -- Add eval_eq_eval for each struct expression
+    for structExpr in structExprsForHyp do
+      let structType ← inferType structExpr
+      let structSyntax ← Lean.PrettyPrinter.delab structExpr
+      let typeSyntax ← Lean.PrettyPrinter.delab structType
+      let castStructSyntax ← `(($structSyntax : $typeSyntax))
+      let evalLemma ← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval_eq_eval (x := $castStructSyntax))
+      simpArgs := simpArgs.push evalLemma
+
+    -- Add the other simp lemmas
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.fromComponents))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableStruct.eval.go))
+    simpArgs := simpArgs.push (← `(Lean.Parser.Tactic.simpLemma| ProvableType.eval_field))
+
+    -- Apply simp to this hypothesis
+    let hypIdent := mkIdent hypName
+    let tac ← `(tactic| simp only [$[$simpArgs],*] at $hypIdent:ident)
+    evalTactic tac

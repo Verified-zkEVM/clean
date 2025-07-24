@@ -107,8 +107,23 @@ theorem test_complex_eval {F : Type} [Field F] (env : Environment F)
     Expression.eval env (c_var * d_var) = 6 ∧
     Expression.eval env e_var = 7 := by
   simplify_provable_struct_eval
+  -- Should simplify the eval expression
   -- now h should be a conjunction of literal = literal
   simp only [TestInputs.mk.injEq, SimpleStruct.mk.injEq] at h
   exact h
+
+-- Test conjunction with an eval to be decomposed and another eval not to be decomposed
+theorem test_conjunction_with_base_and_non_base {F : Type} [Field F] (env : Environment F) (x : F)
+    (x_var y_var z_var : Var field F) (s1 s2 : Var SimpleStruct F)
+    (h : (eval env (TestInputs.mk x_var y_var z_var) = TestInputs.mk 1 2 3 ∧ x = 7) ∧
+         eval env s1 = eval env s2) :
+    Expression.eval env x_var = 1 := by
+  simplify_provable_struct_eval
+  -- eval env s1 = eval env s2 should be intact
+  simp only [TestInputs.mk.injEq] at h
+  -- Since eval env s1 = eval env s2 should be intact, this simplification should fail
+  fail_if_success simp only [SimpleStruct.mk.injEq] at h
+  -- Both eval equalities should be simplified
+  exact h.1.1.1
 
 end TestSimplifyProvableStructEval
