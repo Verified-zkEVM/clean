@@ -142,7 +142,6 @@ def tryUnfoldLocalDefs (names : List Name) : TacticM Unit := do
 elab "circuit_proof_start" : tactic => do
   -- First run the core logic which handles intro and unfolding
   circuitProofStartCore
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
   -- Try to unfold Assumptions and Spec as local definitions
   tryUnfoldLocalDefs [`Assumptions, `Spec]
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
