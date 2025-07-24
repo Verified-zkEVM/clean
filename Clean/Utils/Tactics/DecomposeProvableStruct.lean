@@ -101,7 +101,7 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
       -- Filter to only include those with ProvableStruct instances
       for fvarId in varsInType do
         if ← hasProvableStructInstance fvarId then
-          result := result ++ [fvarId]
+          result := fvarId :: result
 
     -- Also search for projections in the goal
     let goal ← getMainGoal
@@ -110,10 +110,10 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
     -- Filter to only include those with ProvableStruct instances
     for fvarId in varsInGoal do
       if ← hasProvableStructInstance fvarId then
-        result := result ++ [fvarId]
+        result := fvarId :: result
 
     -- Remove duplicates and return
-    return result.eraseDups
+    return result.reverse.eraseDups
 
 /--
   Decompose all ProvableStruct variables that appear in projections
@@ -163,8 +163,8 @@ def decomposeProvableStruct : Lean.Elab.Tactic.TacticM Unit := do
   1. appear in field projections in hypotheses (e.g., h : input.x = 5)
   2. appear in field projections in the goal
 
-  Note: 
-  - The new variables introduced by decomposition are not explicitly named. 
+  Note:
+  - The new variables introduced by decomposition are not explicitly named.
     Use `rename_i` after this tactic to give them names.
   - This tactic only performs one level of decomposition. For nested structures,
     it will decompose the outer structure but not the inner ones. Use under
