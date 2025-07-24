@@ -6,8 +6,7 @@ open Lean Elab Tactic Meta
 open Circuit
 
 /--
-  Apply intro until we've introduced all the standard parameters for
-  soundness or completeness proofs, then apply additional simplifications
+  Introduce all standard parameters and hypotheses for Soundness or Completeness.
 -/
 partial def circuitProofStartCore : TacticM Unit := do
   withMainContext do
