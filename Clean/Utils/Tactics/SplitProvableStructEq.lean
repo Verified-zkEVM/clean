@@ -2,6 +2,7 @@ import Lean.Elab.Tactic
 import Lean.Elab.Exception
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableTacticUtils
+import Clean.Utils.Tactics.DecomposeProvableStruct  -- Import for field-based naming functions
 
 open Lean.Elab.Tactic
 open Lean.Meta
@@ -64,7 +65,31 @@ def splitProvableStructEq : TacticM Unit := do
       let mut currentGoal ← getMainGoal
       for fvarId in varsToCase do
         try
-          let casesResult ← currentGoal.cases fvarId
+          let localDecl ← fvarId.getDecl
+          let userName := localDecl.userName
+          
+          -- Get the type of the variable to extract structure name
+          let varType ← inferType (.fvar fvarId)
+          let varType' ← whnf varType
+          
+          -- Extract the structure name
+          let structName ← match varType' with
+          | .app (.const name _) _ => pure name
+          | .const name _ => pure name
+          | _ => throwError "Cannot extract structure name from type: {varType'}"
+          
+          -- Get field names for the structure
+          let fieldNames ← getStructureFieldNames structName
+          
+          -- Generate field-based names
+          let customNames := generateFieldBasedNames userName fieldNames
+          
+          -- Create AltVarNames for the single constructor case
+          let altVarNames : AltVarNames := { varNames := customNames.toList }
+          
+          -- Use cases tactic on the variable with custom names
+          let casesResult ← currentGoal.cases fvarId #[altVarNames]
+          
           match casesResult.toList with
           | [subgoal] =>
             currentGoal := subgoal.mvarId

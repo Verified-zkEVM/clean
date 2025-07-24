@@ -504,23 +504,22 @@ lemma initial_state_and_messages_are_normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  rename_i _ _ counter_high counter_low _ _ -- TODO: why aren't the new variables named yet?
 
   simp only [circuit_norm, main, Spec]
   simp only [circuit_norm, main] at h_holds
 
   -- Equations for counter values
-  have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
+  have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
     apply Nat.mod_eq_of_lt
 
     exact U32.value_lt_of_normalized h_assumptions.2.2.2.1
-  have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
-    -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
-    -- Since counter_low.value < 2^32, this follows from properties of division
-    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_assumptions.2.2.2.1
+  have h_counter_high_eq : (input_counter_low.value + 4294967296 * input_counter_high.value) / 4294967296 = input_counter_high.value := by
+    -- We want to show (input_counter_low.value + 2^32 * input_counter_high.value) / 2^32 = input_counter_high.value
+    -- Since input_counter_low.value < 2^32, this follows from properties of division
+    have h1 : input_counter_low.value < 4294967296 := U32.value_lt_of_normalized h_assumptions.2.2.2.1
     have h2 : 4294967296 > 0 := by norm_num
-    -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
-    -- This equals counter_high.value + counter_low.value / 2^32
+    -- Now we have (2^32 * input_counter_high.value + input_counter_low.value) / 2^32
+    -- This equals input_counter_high.value + input_counter_low.value / 2^32
     rw [Nat.add_mul_div_left _ _ h2]
     rw [Nat.div_eq_of_lt h1]
     simp
