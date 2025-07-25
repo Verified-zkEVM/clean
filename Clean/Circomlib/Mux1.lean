@@ -120,7 +120,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   completeness := by
     circuit_proof_start
-    simp only [circuit_norm] at ⊢ henv
     -- We need to show that the witnessed values equal the computed expressions
     ext i hi
     -- Left side: eval of varFromOffset

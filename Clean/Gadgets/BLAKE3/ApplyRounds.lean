@@ -464,11 +464,11 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 lemma initial_state_and_messages_are_normalized
     (env : Environment (F p))
     (input_var : Var Inputs (F p))
-    (input : Inputs (F p))
-    (h_input : eval env input_var = input)
-    (h_normalized : Assumptions input) :
-    let state_vec := initializeStateVector input_var
-    (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
+    (block_words : BLAKE3State (F p))
+    (chaining_value counter_high counter_low block_len flags)
+    (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
+    (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
+    (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
   provable_struct_simp
@@ -492,21 +492,15 @@ lemma initial_state_and_messages_are_normalized
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all [Assumptions, h_input]
-  -- Show the message is normalized
-  have h_message_normalized : ∀ (i : Fin 16), (eval env input_var_block_words : BLAKE3State _)[i].Normalized := by
-    intro i
-    simp only[h_input]
-    exact h_normalized.2.1 i
 
   constructor
   · apply h_state_normalized
-  · apply h_message_normalized
+  · -- Show the message is normalized
+    intro i
+    exact h_normalized.2.1 i
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-
-  simp only [circuit_norm, main, Spec]
-  simp only [circuit_norm, main] at h_holds
 
   -- Equations for counter values
   have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
@@ -565,9 +559,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-
-  -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
-  simp only [circuit_norm, main] at henv ⊢
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized env
