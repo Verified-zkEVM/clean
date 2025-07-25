@@ -4,8 +4,8 @@ namespace Specs.BLAKE3.ChunkProcessing.Tests
 
 open Specs.BLAKE3
 
--- Initial chaining value for tests (using BLAKE3 IV converted to Nat)
-def testCV : Vector Nat 8 := iv.map (·.toNat)
+-- Initial chaining value for tests (using BLAKE3 IV converted to ℕ)
+def testCV : Vector ℕ 8 := iv.map (·.toNat)
 
 -- Test empty chunk
 example :
@@ -14,7 +14,7 @@ example :
     finalizeChunk state 0 = expected.take 8 := rfl
 
 -- Test single block (64 bytes)
-def testBlock64 : List Nat := List.range 64
+def testBlock64 : List ℕ := List.range 64
 
 -- Test single block processing
 -- With the fix, 64 bytes now stay in the buffer (matching Python behavior)
@@ -34,7 +34,7 @@ example :
   decide
 
 -- Test chunk with partial final block (65 bytes = 1 full block + 1 byte)
-def testChunk65 : List Nat := List.range 65
+def testChunk65 : List ℕ := List.range 65
 
 example :
     let state := initialChunkState testCV 0
@@ -43,7 +43,7 @@ example :
   native_decide
 
 -- Test full chunk (1024 bytes = 16 blocks)
-def testChunk1024 : List Nat := List.range 1024
+def testChunk1024 : List ℕ := List.range 1024
 
 -- Verify bytesToWords handles padding correctly for small input
 example :
@@ -135,7 +135,7 @@ example :
 
 -- Test: Empty input [], chunk_counter=0, flags=0
 example :
-    let input : List Nat := []
+    let input : List ℕ := []
     let cv := processChunk testCV 0 input 0
     cv = #v[0x3c6b68b4, 0x4d3f958d, 0xbc515d18, 0xe6bcd79c,
                                 0x762d78d9, 0x60c0f859, 0xffc3d468, 0x4168e5a6] := by
