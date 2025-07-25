@@ -45,9 +45,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro offset env x_var h_env_uses x h_eval h_assumptions
-  simp only [main, circuit_norm]
-  sorry
+  circuit_proof_start
+  simp [IsZero.circuit, IsZero.Assumptions]
 
 def circuit : FormalCircuit (F p) U32 field := {
   elaborated with Assumptions, Spec, soundness, completeness
