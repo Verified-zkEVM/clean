@@ -61,9 +61,41 @@ lemma U32_first_component_nonzero (x0 x1 x2 x3 : F p)
     exact h_x0_val
   contradiction
 
+omit [Fact (Nat.Prime p)] p_large_enough in
 lemma U32_second_component_nonzero (x0 x1 x2 x3 : F p)
-    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
-    x1 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by sorry
+    (_ : (U32.mk x0 x1 x2 x3).Normalized) :
+    x1 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by
+  intro h_nonzero
+  -- Use the horner form of value
+  rw [U32.value_horner]
+  simp only [U32.mk]
+  -- value = x0.val + 2^8 * (x1.val + 2^8 * (x2.val + 2^8 * x3.val))
+  intro h_eq
+  -- If the entire value is 0, then both x0.val = 0 and the multiplied term = 0
+  have h_x0_val : x0.val = 0 := by
+    have h_nonneg : 0 ≤ 2^8 * (x1.val + 2^8 * (x2.val + 2^8 * x3.val)) := by
+      simp only [mul_nonneg_iff_of_pos_left, pow_pos, zero_lt_two]
+      omega
+    omega
+  -- So we have 2^8 * (x1.val + 2^8 * (x2.val + 2^8 * x3.val)) = 0
+  have h_mult_zero : 2^8 * (x1.val + 2^8 * (x2.val + 2^8 * x3.val)) = 0 := by
+    rw [h_x0_val, zero_add] at h_eq
+    exact h_eq
+  -- Since 2^8 ≠ 0, we must have x1.val + 2^8 * (x2.val + 2^8 * x3.val) = 0
+  have h_inner : x1.val + 2^8 * (x2.val + 2^8 * x3.val) = 0 := by
+    have : (2 : ℕ)^8 ≠ 0 := by norm_num
+    exact (mul_eq_zero.mp h_mult_zero).resolve_left this
+  -- By similar reasoning, x1.val = 0
+  have h_x1_val : x1.val = 0 := by
+    have h_nonneg : 0 ≤ 2^8 * (x2.val + 2^8 * x3.val) := by
+      simp only [mul_nonneg_iff_of_pos_left, pow_pos, zero_lt_two]
+      omega
+    omega
+  -- But x1.val = 0 implies x1 = 0 in F p
+  have : x1 = 0 := by
+    rw [← ZMod.val_eq_zero]
+    exact h_x1_val
+  contradiction
 
 lemma U32_third_component_nonzero (x0 x1 x2 x3 : F p)
     (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
