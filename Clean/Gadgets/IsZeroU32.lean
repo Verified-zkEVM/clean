@@ -7,7 +7,7 @@ import Clean.Types.U32
 
 namespace Gadgets.IsZeroU32
 
-variable {p : ℕ} [Fact p.Prime]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
 Main circuit that checks if a U32 (32-bit unsigned integer) is zero.
@@ -33,17 +33,91 @@ instance elaborated : ElaboratedCircuit (F p) U32 field where
   localLength_eq := by
     simp [main, circuit_norm, IsZero.circuit, IsZero.elaborated]
 
-def Assumptions (_ : U32 (F p)) : Prop := True
+def Assumptions (x : U32 (F p)) : Prop := x.Normalized
 
 def Spec (x : U32 (F p)) (output : F p) : Prop :=
   output = if x.value = 0 then 1 else 0
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env x_var x h_eval h_assumptions h_holds
-  simp only [main, circuit_norm] at h_holds
-  simp only [Spec]
-  sorry
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma U32_first_component_nonzero (x0 x1 x2 x3 : F p)
+    (_ : (U32.mk x0 x1 x2 x3).Normalized) :
+    x0 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by
+  intro h_nonzero
+  -- Use the horner form of value
+  rw [U32.value_horner]
+  simp only [U32.mk]
+  -- If x0.val ≠ 0, then x0.val + 2^8 * (...) ≠ 0
+  intro h_eq
+  -- From h_eq: x0.val + 2^8 * (...) = 0
+  -- Since all terms are natural numbers, this means x0.val = 0
+  have h_x0_val : x0.val = 0 := by
+    have h_nonneg : 0 ≤ 2^8 * (x1.val + 2^8 * (x2.val + 2^8 * x3.val)) := by
+      simp only [mul_nonneg_iff_of_pos_left, pow_pos, zero_lt_two]
+      omega
+    omega
+  -- But x0.val = 0 implies x0 = 0 in F p
+  have : x0 = 0 := by
+    rw [← ZMod.val_eq_zero]
+    exact h_x0_val
+  contradiction
 
+lemma U32_second_component_nonzero (x0 x1 x2 x3 : F p)
+    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
+    x1 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by sorry
+
+lemma U32_third_component_nonzero (x0 x1 x2 x3 : F p)
+    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
+    x2 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by sorry
+
+lemma U32_fourth_component_nonzero (x0 x1 x2 x3 : F p)
+    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
+    x3 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by sorry
+
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+  circuit_proof_start
+  -- U32 is not a ProvableType so the automatic decomposition does not happen
+  rcases input
+  rename_i input_0 input_1 input_2 input_3
+  rcases input_var
+  rename_i input_var0 input_var1 input_var2 input_var3
+  simp only [IsZero.circuit, IsZero.Assumptions, IsZero.elaborated, explicit_provable_type] at h_holds ⊢
+  simp only [circuit_norm, U32.mk.injEq, explicit_provable_type] at h_input
+  simp only [h_input, IsZero.Spec] at h_holds
+  by_cases h0 : input_0 ≠ 0
+  · simp only [h0] at *
+    norm_num at h_holds
+    simp only [h_holds]
+    norm_num
+    rw [if_neg]
+    apply U32_first_component_nonzero <;> assumption
+  by_cases h1 : input_1 ≠ 0
+  · simp only [h1] at *
+    norm_num at h_holds
+    simp only [h_holds]
+    norm_num
+    rw [if_neg]
+    apply U32_second_component_nonzero <;> assumption
+  by_cases h2 : input_2 ≠ 0
+  · simp only [h2] at *
+    norm_num at h_holds
+    simp only [h_holds]
+    norm_num
+    rw [if_neg]
+    apply U32_third_component_nonzero <;> assumption
+  by_cases h3 : input_3 ≠ 0
+  · simp only [h3] at *
+    norm_num at h_holds
+    simp only [h_holds]
+    norm_num
+    rw [if_neg]
+    apply U32_fourth_component_nonzero <;> assumption
+  norm_num at h0 h1 h2 h3
+  simp only [h0, h1, h2, h3] at h_holds ⊢
+  simp_all only []
+  norm_num
+  simp only [U32.value, ZMod.val_zero, zero_mul, add_zero, Nat.reducePow, ↓reduceIte]
+
+omit p_large_enough in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   simp [IsZero.circuit, IsZero.Assumptions]
