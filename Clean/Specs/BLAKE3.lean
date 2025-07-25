@@ -231,13 +231,16 @@ Convert a list of bytes to 32-bit words (little-endian).
 Pads with zeros if less than 64 bytes.
 -/
 def bytesToWords (bytes : List ℕ) : Vector ℕ 16 :=
-  let paddedBytes := bytes ++ List.replicate (64 - bytes.length) 0
-  Vector.ofFn fun i =>
+  let paddedBytes : List ℕ := bytes ++ List.replicate (64 - bytes.length) 0
+  have : 64 ≤ paddedBytes.length := by
+    simp only [paddedBytes, List.length_append, List.length_replicate]
+    omega
+  Vector.ofFn fun (i : Fin 16) =>
     let byteIdx := i.val * 4
-    paddedBytes[byteIdx]! +
-    paddedBytes[byteIdx + 1]! * 256 +
-    paddedBytes[byteIdx + 2]! * 256^2 +
-    paddedBytes[byteIdx + 3]! * 256^3
+    paddedBytes[byteIdx] +
+    paddedBytes[byteIdx + 1] * 256 +
+    paddedBytes[byteIdx + 2] * 256^2 +
+    paddedBytes[byteIdx + 3] * 256^3
 
 /--
 Determine if CHUNK_START flag should be set based on blocks compressed.
