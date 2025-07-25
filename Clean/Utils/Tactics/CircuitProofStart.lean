@@ -60,14 +60,24 @@ partial def circuitProofStartCore : TacticM Unit := do
   ```
 -/
 elab "circuit_proof_start" : tactic => do
-  -- First run the core logic which handles intro and unfolding
+  -- intro all hypotheses
   circuitProofStartCore
-  -- Try to unfold main, Assumptions and Spec as local definitions
+
+  -- try to unfold main, Assumptions and Spec as local definitions
+  try (evalTactic (← `(tactic| simp only [ElaboratedCircuit.main, ElaboratedCircuit.output] at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at *))) catch _ => pure ()
-  -- circuit_norm exposes a `main` usually
+  try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
   try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
+
+  -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
-  -- Additional simplification for common patterns in soundness proofs
-  try (evalTactic (← `(tactic| simp only [circuit_norm, h_input] at h_holds henv ⊢))) catch _ => pure ()
+
+  -- Additional simplification for common patterns in soundness/completeness proofs
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `henv):ident))) catch _ => pure ()
+
+-- core version only, for experimentation with variants of this tactic
+elab "circuit_proof_start_core" : tactic => do
+  circuitProofStartCore
