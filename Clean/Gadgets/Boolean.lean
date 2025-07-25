@@ -75,7 +75,7 @@ theorem and_is_bool {α : Type*} [MulZeroOneClass α] {x y : α} (hx : IsBool x)
 
 /-- If x and y are boolean, then x OR y is boolean -/
 theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x + y - x * y) := by
+    IsBool (x - x * y + y) := by
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, sub_zero, hy]
   · rcases hy with hy0 | hy1
@@ -155,7 +155,7 @@ theorem and_eq_val_and {a b : F p} (ha : IsBool a) (hb : IsBool b) :
 
 /-- For boolean field elements, OR operation matches bitwise OR of values -/
 theorem or_eq_val_or {a b : F p} (ha : IsBool a) (hb : IsBool b) :
-    (a + b - a * b).val = a.val ||| b.val := by
+    (a - a * b + b).val = a.val ||| b.val := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
 
 /-- For boolean field elements, NAND operation matches 1 - AND of values -/

@@ -45,11 +45,8 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
   output.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro _ _ _ _ h_eval _ _
-  simp only [Assumptions, ApplyRounds.Assumptions] at *
-  decompose_provable_struct
-  simp only [circuit_norm, ApplyRounds.Inputs.mk.injEq] at h_eval
-  simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit,
+  circuit_proof_start
+  simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
@@ -60,14 +57,11 @@ lemma ApplyRouunds.circuit_spec_is :
   ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-  simp only [Assumptions, ApplyRounds.Assumptions] at *
-  decompose_provable_struct
-  simp only [circuit_norm, ApplyRounds.Inputs.mk.injEq] at h_eval
-  simp_all only [main, circuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
+  circuit_proof_start
+  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is,
     ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
-    compress, ApplyRounds.Assumptions, circuit_norm, FinalStateUpdate.Spec]
+    compress, ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

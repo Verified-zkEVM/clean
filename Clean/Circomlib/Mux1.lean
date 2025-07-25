@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Field
+import Clean.Utils.Tactics
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 
@@ -118,8 +119,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         rfl
 
   completeness := by
-    simp only [circuit_norm, main]
-    intro offset env input_var h_env input h_input h_assumptions
+    circuit_proof_start
     -- We need to show that the witnessed values equal the computed expressions
     ext i hi
     -- Left side: eval of varFromOffset

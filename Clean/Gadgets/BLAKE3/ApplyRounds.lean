@@ -164,7 +164,7 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
     -- then second twoRoundsWithPermute assumptions hold
-    intro input mid h_asm h_spec
+    intro input mid h_assumptions h_spec
     -- twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec input mid' ∧ roundWithPermute.Spec mid' mid
     obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
     -- We need to show twoRoundsWithPermute.Assumptions mid
@@ -231,7 +231,7 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
     -- then twoRoundsWithPermute assumptions hold
-    intro input mid h_asm h_spec
+    intro input mid h_assumptions h_spec
     -- fourRoundsWithPermute.Spec says ∃ mid', twoRoundsWithPermute.Spec ... ∧ twoRoundsWithPermute.Spec ...
     obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
     -- Each twoRoundsWithPermute.Spec says ∃ mid'', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
@@ -301,7 +301,7 @@ This represents the complete 7-round BLAKE3 compression function.
 def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sixRoundsApplyStyle.concat Round.circuit (by
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
-    intro input mid h_asm h_spec
+    intro input mid h_assumptions h_spec
     -- sixRoundsApplyStyle.Spec gives us normalized outputs
     simp_all [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Assumptions]
   ) (by aesop)
@@ -464,20 +464,17 @@ def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
 lemma initial_state_and_messages_are_normalized
     (env : Environment (F p))
     (input_var : Var Inputs (F p))
-    (input : Inputs (F p))
-    (h_input : eval env input_var = input)
-    (h_normalized : Assumptions input) :
-    let state_vec := initializeStateVector input_var
-    (eval env state_vec).Normalized ∧ ∀ (i : Fin 16), (eval env input_var.block_words : BLAKE3State _)[i].Normalized := by
+    (block_words : BLAKE3State (F p))
+    (chaining_value counter_high counter_low block_len flags)
+    (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
+    (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
+    (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
-  decompose_provable_struct
-  rename_i chaining_value _ _ _ _ _ chaining_value_var block_words_var counter_high_var counter_low_var block_len_var flags_var
-  -- Create the state vector variable
-  simp [circuit_norm, Inputs.mk.injEq] at h_input
+  provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env chaining_value_var[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 i
     norm_num
@@ -495,49 +492,40 @@ lemma initial_state_and_messages_are_normalized
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
     case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all [Assumptions, h_input]
-  -- Show the message is normalized
-  have h_message_normalized : ∀ (i : Fin 16), (eval env block_words_var : BLAKE3State _)[i].Normalized := by
-    intro i
-    simp only[h_input]
-    exact h_normalized.2.1 i
 
   constructor
   · apply h_state_normalized
-  · apply h_message_normalized
+  · -- Show the message is normalized
+    intro i
+    exact h_normalized.2.1 i
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env input_var
-  intro input h_input h_normalized h_holds
-
-  have normalized := initial_state_and_messages_are_normalized env input_var
-    input h_input h_normalized
-  simp only [Assumptions] at h_normalized
-  simp only [initializeStateVector] at normalized
-
-  decompose_provable_struct
-  rename_i _ _ counter_high counter_low _ _ _ _ _ _ _ _
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
-
-  simp only [circuit_norm, main, Spec]
-  simp only [circuit_norm, main] at h_holds
+  circuit_proof_start
 
   -- Equations for counter values
-  have h_counter_low_eq : counter_low.value % 4294967296 = counter_low.value := by
+  have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
     apply Nat.mod_eq_of_lt
-    exact U32.value_lt_of_normalized h_normalized.2.2.2.1
-  have h_counter_high_eq : (counter_low.value + 4294967296 * counter_high.value) / 4294967296 = counter_high.value := by
-    -- We want to show (counter_low.value + 2^32 * counter_high.value) / 2^32 = counter_high.value
-    -- Since counter_low.value < 2^32, this follows from properties of division
-    have h1 : counter_low.value < 4294967296 := U32.value_lt_of_normalized h_normalized.2.2.2.1
+
+    exact U32.value_lt_of_normalized h_assumptions.2.2.2.1
+  have h_counter_high_eq : (input_counter_low.value + 4294967296 * input_counter_high.value) / 4294967296 = input_counter_high.value := by
+    -- We want to show (input_counter_low.value + 2^32 * input_counter_high.value) / 2^32 = input_counter_high.value
+    -- Since input_counter_low.value < 2^32, this follows from properties of division
+    have h1 : input_counter_low.value < 4294967296 := U32.value_lt_of_normalized h_assumptions.2.2.2.1
     have h2 : 4294967296 > 0 := by norm_num
-    -- Now we have (2^32 * counter_high.value + counter_low.value) / 2^32
-    -- This equals counter_high.value + counter_low.value / 2^32
+    -- Now we have (2^32 * input_counter_high.value + input_counter_low.value) / 2^32
+    -- This equals input_counter_high.value + input_counter_low.value / 2^32
     rw [Nat.add_mul_div_left _ _ h2]
     rw [Nat.div_eq_of_lt h1]
     simp
 
   -- Apply h_holds with the proven assumptions
-  have h_spec := h_holds normalized
+  have h_spec := h_holds (by
+    apply initial_state_and_messages_are_normalized
+    · simp only [circuit_norm, h_input]
+      rfl
+    · simp only [Assumptions]
+      aesop
+  )
   clear h_holds
 
   -- Now we need to show that the spec holds
@@ -570,14 +558,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     exact h_normalized
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env input_var
-  intro henv input h_input h_normalized
-
-  -- Simplify goal using circuit_norm and use sevenRoundsApplyStyle completeness
-  simp only [circuit_norm, main] at henv ⊢
+  circuit_proof_start
 
   -- Use the helper lemma to prove normalization
-  exact initial_state_and_messages_are_normalized env input_var input h_input h_normalized
+  apply initial_state_and_messages_are_normalized env
+  · simp only [circuit_norm]
+    rfl
+  · simp only [Assumptions]
+    aesop
+
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
