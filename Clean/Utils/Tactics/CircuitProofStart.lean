@@ -27,7 +27,7 @@ partial def circuitProofStartCore : TacticM Unit := do
       return
     else if isCompleteness then
       evalTactic (← `(tactic| unfold Completeness))
-      let names := [`i₀, `env, `input_var, `henv, `input, `h_input, `h_assumptions]
+      let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
       for name in names do
         evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
@@ -75,7 +75,7 @@ elab "circuit_proof_start" : tactic => do
   -- Additional simplification for common patterns in soundness/completeness proofs
   try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `henv):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_env):ident))) catch _ => pure ()
 
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do

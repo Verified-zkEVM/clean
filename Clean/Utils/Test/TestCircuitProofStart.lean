@@ -90,13 +90,13 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
     (Assumptions : Input F → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
-  -- At this point we should have: i₀, env, input_var, henv
+  -- At this point we should have: i₀, env, input_var, h_env
   -- Note: provable_struct_simp eliminates input and h_input by substituting eval env input_var
   -- Check that these names exist by using them
   have : ℕ := i₀
   have : Environment F := env
   have : Input (Expression F) := input_var
-  have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := henv
+  have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input
   sorry
 

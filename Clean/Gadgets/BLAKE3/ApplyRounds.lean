@@ -566,6 +566,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rfl
   · simp only [Assumptions]
     aesop
+
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
