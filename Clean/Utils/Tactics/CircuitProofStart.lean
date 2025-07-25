@@ -70,4 +70,4 @@ elab "circuit_proof_start" : tactic => do
   try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
   -- Additional simplification for common patterns in soundness proofs
-  evalTactic (← `(tactic| try simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident $(mkIdent `henv):ident ⊢))
+  try evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident $(mkIdent `henv):ident ⊢)) catch _ => pure ()
