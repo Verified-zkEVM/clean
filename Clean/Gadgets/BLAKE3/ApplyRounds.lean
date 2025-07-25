@@ -521,7 +521,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
     apply initial_state_and_messages_are_normalized
-    · simp only [circuit_norm]
+    · simp only [circuit_norm, h_input]
       rfl
     · simp only [Assumptions]
       aesop
