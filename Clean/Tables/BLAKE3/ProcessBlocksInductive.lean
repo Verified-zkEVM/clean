@@ -9,6 +9,7 @@ import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.ConditionalU32
+import Clean.Gadgets.ConditionalVector8U32
 import Clean.Gadgets.IsZeroU32
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
@@ -136,14 +137,11 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 
   -- Conditionally select between new state and old state based on block_exists
   -- If block_exists = 1, use newState; if block_exists = 0, use state
-  let muxedCV ← Vector.mapM (fun (i : Fin 8) => do
-    let condInput : Var Gadgets.ConditionalU32.Inputs (F p) := {
-      cond := input.block_exists
-      ifTrue := newState.chaining_value[i]
-      ifFalse := state.chaining_value[i]
-    }
-    Gadgets.ConditionalU32.circuit condInput
-  ) (Vector.ofFn id)
+  let muxedCV ← ConditionalVector8U32.circuit {
+    cond := input.block_exists
+    ifTrue := newState.chaining_value
+    ifFalse := state.chaining_value
+  }
 
   let muxedBlocksCompressed ← do
     let condInput : Var Gadgets.ConditionalU32.Inputs (F p) := {
