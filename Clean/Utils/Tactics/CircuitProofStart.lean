@@ -72,6 +72,11 @@ elab "circuit_proof_start" : tactic => do
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
+  -- Additional simplification for common patterns in soundness/completeness proofs
+  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_env):ident))) catch _ => pure ()
+
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do
   circuitProofStartCore
