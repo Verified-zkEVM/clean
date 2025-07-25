@@ -142,7 +142,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
       ifTrue := newState.chaining_value[i]
       ifFalse := state.chaining_value[i]
     }
-    Gadgets.ConditionalU32.main condInput
+    Gadgets.ConditionalU32.circuit condInput
   ) (Vector.ofFn id)
 
   let muxedBlocksCompressed ← do
@@ -151,7 +151,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
       ifTrue := newBlocksCompressed
       ifFalse := state.blocks_compressed
     }
-    Gadgets.ConditionalU32.main condInput
+    Gadgets.ConditionalU32.circuit condInput
 
   return {
     chaining_value := muxedCV
