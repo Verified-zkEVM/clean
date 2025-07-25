@@ -9,6 +9,7 @@ import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.ConditionalU32
+import Clean.Gadgets.IsZero
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -93,25 +94,13 @@ Returns 1 if all limbs are 0, otherwise returns 0.
 -/
 def isZeroU32 (x : Var U32 (F p)) : Circuit (F p) (Var field (F p)) := do
   -- x is zero iff all limbs are zero
-  -- We'll use the fact that if any limb is non-zero, the product of all "isZero" flags will be 0
+  -- We'll use the IsZero gadget for each limb
 
-  -- For each limb, compute isZero flag
-  let isZero0 ← witness fun env => if x.x0.eval env = 0 then (1 : F p) else 0
-  let isZero1 ← witness fun env => if x.x1.eval env = 0 then (1 : F p) else 0
-  let isZero2 ← witness fun env => if x.x2.eval env = 0 then (1 : F p) else 0
-  let isZero3 ← witness fun env => if x.x3.eval env = 0 then (1 : F p) else 0
-
-  -- Add constraints: isZero_i * x_i = 0 for each limb
-  isZero0 * x.x0 === 0
-  isZero1 * x.x1 === 0
-  isZero2 * x.x2 === 0
-  isZero3 * x.x3 === 0
-
-  -- Add constraints: isZero_i is boolean
-  isZero0 * (isZero0 - 1) === 0
-  isZero1 * (isZero1 - 1) === 0
-  isZero2 * (isZero2 - 1) === 0
-  isZero3 * (isZero3 - 1) === 0
+  -- For each limb, check if it's zero using the IsZero gadget
+  let isZero0 ← IsZero.main x.x0
+  let isZero1 ← IsZero.main x.x1
+  let isZero2 ← IsZero.main x.x2
+  let isZero3 ← IsZero.main x.x3
 
   -- The U32 is zero iff all limbs are zero
   let result := isZero0 * isZero1 * isZero2 * isZero3
