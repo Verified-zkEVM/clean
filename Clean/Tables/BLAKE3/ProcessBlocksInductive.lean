@@ -118,7 +118,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   }
 
   -- Apply compress to get new chaining value
-  let newCV16 ← Gadgets.BLAKE3.Compress.main compressInput
+  let newCV16 ← Gadgets.BLAKE3.Compress.circuit compressInput
   -- Take first 8 elements for the chaining value
   let newCV8 : Vector (U32 (Expression (F p))) 8 :=
     Vector.mk (newCV16.toArray.toList.take 8).toArray (by simp)
