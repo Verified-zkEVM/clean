@@ -521,7 +521,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- Apply h_holds with the proven assumptions
   have h_spec := h_holds (by
     apply initial_state_and_messages_are_normalized
-    · simp only [circuit_norm, h_input]
+    · simp only [circuit_norm]
       rfl
     · simp only [Assumptions]
       aesop
@@ -562,7 +562,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized env
-  · simp only [circuit_norm, h_input]
+  · simp only [circuit_norm]
     rfl
   · simp only [Assumptions]
     aesop

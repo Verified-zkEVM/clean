@@ -58,7 +58,7 @@ lemma ApplyRouunds.circuit_spec_is :
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-  simp_all only [circuit_norm, Spec, Assumptions, ApplyRounds.circuit_assumptions_is,
+  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is,
     ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     compress, ApplyRounds.Assumptions, FinalStateUpdate.Spec]
