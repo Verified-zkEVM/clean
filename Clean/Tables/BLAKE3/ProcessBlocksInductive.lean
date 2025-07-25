@@ -9,7 +9,7 @@ import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.ConditionalU32
-import Clean.Gadgets.IsZero
+import Clean.Gadgets.IsZeroU32
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -88,23 +88,6 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   (∀ i : Fin 16, input.block_data[i].Normalized)
 
 
-/--
-Helper to check if a U32 is zero.
-Returns 1 if all limbs are 0, otherwise returns 0.
--/
-def isZeroU32 (x : Var U32 (F p)) : Circuit (F p) (Var field (F p)) := do
-  -- x is zero iff all limbs are zero
-  -- We'll use the IsZero gadget for each limb
-
-  -- For each limb, check if it's zero using the IsZero gadget
-  let isZero0 ← IsZero.main x.x0
-  let isZero1 ← IsZero.main x.x1
-  let isZero2 ← IsZero.main x.x2
-  let isZero3 ← IsZero.main x.x3
-
-  -- The U32 is zero iff all limbs are zero
-  let result := isZero0 * isZero1 * isZero2 * isZero3
-  return result
 
 /--
 The step function that processes one block or passes through the state.
@@ -116,7 +99,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   input.block_exists * (input.block_exists - 1) === 0
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
-  let isFirstBlock ← isZeroU32 state.blocks_compressed
+  let isFirstBlock ← IsZeroU32.circuit state.blocks_compressed
   let startFlagValue ← witness fun env => isFirstBlock.eval env * chunkStart
   let startFlagU32 : Var U32 (F p) := ⟨startFlagValue, 0, 0, 0⟩
 
