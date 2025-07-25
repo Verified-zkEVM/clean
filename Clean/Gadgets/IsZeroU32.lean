@@ -205,6 +205,7 @@ lemma U32_fourth_component_nonzero (x0 x1 x2 x3 : F p)
     exact h_x3_val
   contradiction
 
+omit p_large_enough in
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   -- U32 is not a ProvableType so the automatic decomposition does not happen
