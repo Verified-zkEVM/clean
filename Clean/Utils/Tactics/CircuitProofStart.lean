@@ -64,7 +64,6 @@ elab "circuit_proof_start" : tactic => do
   circuitProofStartCore
 
   -- try to unfold main, Assumptions and Spec as local definitions
-  try (evalTactic (← `(tactic| simp only [ElaboratedCircuit.main, ElaboratedCircuit.output] at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
