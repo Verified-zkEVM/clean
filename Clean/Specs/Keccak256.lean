@@ -16,7 +16,7 @@ def roundConstants : Vector UInt64 24 := #v[
   0x0000000080000001, 0x8000000080008008
 ]
 
-def bits2bytes (x : Nat) : Nat :=
+def bits2bytes (x : ℕ) : ℕ :=
   (x + 7) / 8
 
 def thetaC (state : Vector ℕ 25) : Vector ℕ 5 :=

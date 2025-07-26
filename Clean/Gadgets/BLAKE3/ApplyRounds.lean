@@ -121,7 +121,7 @@ This follows the same pattern as applyRounds but for only 2 rounds:
 - Second round, permute message
 Returns the final state and permuted message.
 -/
-def applyTwoRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
+def applyTwoRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector ℕ 16 × Vector ℕ 16 :=
   let state1 := round state message
   let msg1 := permute message
   let state2 := round state1 msg1
@@ -182,7 +182,7 @@ This follows the same pattern as applyRounds but for only 4 rounds:
 - Fourth round, permute message
 Returns the final state and permuted message.
 -/
-def applyFourRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
+def applyFourRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector ℕ 16 × Vector ℕ 16 :=
   let state1 := round state message
   let msg1 := permute message
   let state2 := round state1 msg1
@@ -248,7 +248,7 @@ This follows the same pattern as applyRounds but for only 6 rounds:
 - First through sixth rounds, each followed by permute message
 Returns the final state and permuted message.
 -/
-def applySixRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 × Vector Nat 16 :=
+def applySixRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector ℕ 16 × Vector ℕ 16 :=
   let state1 := round state message
   let msg1 := permute message
   let state2 := round state1 msg1
@@ -313,7 +313,7 @@ This follows the same pattern as applyRounds but for 7 rounds:
 - Seventh round (final, no permutation)
 Returns the final BLAKE3State.
 -/
-def applySevenRounds (state : Vector Nat 16) (message : Vector Nat 16) : Vector Nat 16 :=
+def applySevenRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector ℕ 16 :=
   let state1 := round state message
   let msg1 := permute message
   let state2 := round state1 msg1
@@ -354,11 +354,11 @@ Lemma showing that applyRounds can be expressed using applySevenRounds.
 This connects the spec-level function with our circuit implementation.
 -/
 lemma applyRounds_eq_applySevenRounds
-    (chaining_value : Vector Nat 8)
-    (block_words : Vector Nat 16)
-    (counter : Nat)
-    (block_len : Nat)
-    (flags : Nat) :
+    (chaining_value : Vector ℕ 8)
+    (block_words : Vector ℕ 16)
+    (counter : ℕ)
+    (block_len : ℕ)
+    (flags : ℕ) :
     applyRounds chaining_value block_words counter block_len flags =
     applySevenRounds
       (#v[

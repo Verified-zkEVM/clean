@@ -36,7 +36,7 @@ def Spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
-def output (offset : Fin 8) (i0 : Nat) : U32 (Expression (F p)) :=
+def output (offset : Fin 8) (i0 : ℕ) : U32 (Expression (F p)) :=
   U32.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
 
