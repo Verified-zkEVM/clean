@@ -8,7 +8,7 @@ import Clean.Table.Json
 open Tables.Fibonacci8Table
 
 -- Generate trace with specified steps and output path
-def generateTrace (steps : Nat) (output_path : String) : IO Unit := do
+def generateTrace (steps : ℕ) (output_path : String) : IO Unit := do
   let fib_relation_babybear := fib_relation (p := p_babybear)
   let init_row : RowType (F p_babybear) := { x := 0, y := 1 }
 
