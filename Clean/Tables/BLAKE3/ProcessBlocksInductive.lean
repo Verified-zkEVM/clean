@@ -187,7 +187,9 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     sorry -- TODO: Prove completeness
 
   subcircuitsConsistent := by
-    sorry -- TODO: Prove subcircuits consistency
+    intros
+    simp only [circuit_norm, step]
+    omega
 
 /--
 Create a trace for processBlocks with given input blocks.
