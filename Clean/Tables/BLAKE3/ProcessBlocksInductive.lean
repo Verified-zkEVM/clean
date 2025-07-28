@@ -24,6 +24,14 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
 )
 
 omit p_large in
+lemma U32_zero_is_Normalized (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+
+omit p_large in
 lemma U32_one_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
@@ -229,7 +237,7 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
         native_decide
       constructor
       · -- goal looks lemma-worthy
-        sorry
+        simp only [U32_zero_is_Normalized]
       constructor
       · simp_all
       constructor
