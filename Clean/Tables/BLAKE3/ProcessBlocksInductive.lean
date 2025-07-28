@@ -24,6 +24,14 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
 )
 
 omit p_large in
+lemma U32_Normalized_componentwise env (a b c d : Var field (F p)):
+    (eval (α := U32) env
+    { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
+    ((eval env a).val < 256 ∧ (eval env b).val < 256 ∧ (eval env c).val < 256 ∧ (eval env d).val < 256) := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements, Vector.map]
+  simp only [List.map_toArray, List.map_cons, List.map_nil, U32.Normalized]
+
+omit p_large in
 lemma U32_zero_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
@@ -128,8 +136,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
   let isFirstBlock ← IsZeroU32.circuit state.blocks_compressed
-  let startFlagValue ← witness fun env => isFirstBlock.eval env * chunkStart
-  let startFlagU32 : Var U32 (F p) := ⟨startFlagValue, 0, 0, 0⟩
+  let startFlagU32 : Var U32 (F p) := ⟨Expression.mul isFirstBlock (Expression.const chunkStart), 0, 0, 0⟩
 
   -- Prepare constants
   let zeroU32 : Var U32 (F p) := ⟨0, 0, 0, 0⟩
@@ -248,7 +255,17 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
             index :=
               [8 * 4, 4, 4].sum + [1, 16 * 4].sum + ElaboratedCircuit.localLength field acc_var_blocks_compressed },
       x1 := 0, x2 := 0, x3 := 0 ' -/
-      sorry
+      simp only [chunkStart]
+      rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
+      simp only [IsZeroU32.circuit, IsZeroU32.Assumptions] at h_witnesses_iszero
+      have : acc_blocks_compressed.Normalized := by simp_all
+      specialize h_witnesses_iszero this
+      simp only [IsZeroU32.Spec] at h_witnesses_iszero
+      split at h_witnesses_iszero
+      ·
+        simp only [h_witnesses_iszero]
+        sorry
+      · sorry
     constructor
     · dsimp only [Addition32.circuit, Addition32.Assumptions]
       constructor
