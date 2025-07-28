@@ -35,10 +35,10 @@ Uses Circuit.map to apply ConditionalU32 to each element of the vector.
 -/
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
   let { cond, ifTrue, ifFalse } := input
-  
+
   -- Create a vector of indices
   let indices : Vector (Fin 8) 8 := Vector.ofFn id
-  
+
   -- Map over indices, applying ConditionalU32 to each pair of elements
   Circuit.map indices fun i => do
     let condInput : Var ConditionalU32.Inputs (F p) := {
@@ -63,10 +63,25 @@ def Spec (input : Inputs (F p)) (output : Vector (U32 (F p)) 8) : Prop :=
 
 omit [Fact (p > 512)] in
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env input_var input h_eval h_assumptions h_holds
-  simp only [circuit_norm, Inputs.mk.injEq, main, Spec, Assumptions,
-    ConditionalU32.circuit, ConditionalU32.Assumptions, ConditionalU32.Spec] at *
-  sorry
+  circuit_proof_start
+  ext1
+  rename_i i h_i
+  simp only [eval_vector, Vector.getElem_map, Vector.getElem_mapIdx]
+  specialize h_holds ⟨ i, h_i ⟩
+  simp only [ConditionalU32.circuit, ConditionalU32.Assumptions] at h_holds
+  specialize h_holds h_assumptions
+  simp only [ConditionalU32.Spec] at h_holds
+  simp only [h_holds, id]
+  -- the following is for adding [i] to h_input equations, automate
+  simp only [eval_vector] at h_input
+  simp only [Vector.ext_iff] at h_input
+  rcases h_input with ⟨ h_input, h_true, h_false ⟩
+  specialize h_true i h_i
+  specialize h_false i h_i
+  simp only [Vector.getElem_map] at h_true h_false
+  norm_num
+  simp only [h_true, h_false]
+  split <;> rfl
 
 omit [Fact (p > 512)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
