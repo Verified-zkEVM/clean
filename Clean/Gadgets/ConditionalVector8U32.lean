@@ -85,10 +85,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
 omit [Fact (p > 512)] in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro offset env input_var h_env_uses input h_eval h_assumptions
-  simp only [circuit_norm, Inputs.mk.injEq, main, Assumptions,
-    ConditionalU32.circuit, ConditionalU32.Assumptions] at *
-  sorry
+  circuit_proof_start
+  intro i
+  simp only [ConditionalU32.circuit, ConditionalU32.Assumptions, h_input, h_assumptions]
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   elaborated with Assumptions, Spec, soundness, completeness
