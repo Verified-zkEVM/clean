@@ -222,7 +222,47 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
 
   soundness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous
-    sorry -- TODO: Prove soundness
+    rw [List.take_succ_eq_append_getElem]
+    · rw [List.filter_append]
+      have : (List.take row_index (xs.concat x)) = xs := by sorry
+      simp only [this]
+      have : (xs.concat x)[row_index]'(by simp_all) = x := by sorry
+      simp only [this]
+      have : (List.take row_index xs) = xs := by sorry
+      simp only [this] at spec_previous
+      simp only [List.filter_singleton]
+      by_cases h_x : x.block_exists = 1
+      · sorry
+      · simp only [h_x]
+        simp only [decide_false, cond_false, List.append_nil]
+        have no_op : (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))) = acc := by
+          simp only [circuit_norm, step] at h_holds
+          provable_struct_simp
+          rcases h_holds with ⟨ hh0, hh1 ⟩
+          have x_block_exists_zero : x_block_exists = 0 := by sorry
+          simp only [x_block_exists_zero] at *
+          clear x_block_exists_zero
+          clear hh0
+          rcases hh1 with ⟨ h_iszero, hh2 ⟩
+          clear h_iszero
+          rcases hh2 with ⟨ h_compress, hh3 ⟩
+          clear h_compress
+          rcases hh3 with ⟨ h_addition, hh4 ⟩
+          clear h_addition
+          rcases hh4 with ⟨ h_vector_cond, hh5 ⟩
+          simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec] at h_vector_cond
+          simp only [h_eval] at h_vector_cond
+          norm_num at h_vector_cond
+          simp only [ConditionalU32.circuit, ConditionalU32.Assumptions, ConditionalU32.Spec, h_eval] at hh5
+          norm_num at hh5
+          simp only [step, circuit_norm]
+          norm_num
+          simp only [h_vector_cond, hh5]
+          simp only [h_eval]
+          trivial
+        simp only [no_op]
+        exact spec_previous
+    · aesop
 
   completeness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
