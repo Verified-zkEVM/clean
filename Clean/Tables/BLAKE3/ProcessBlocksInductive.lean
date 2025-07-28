@@ -235,8 +235,7 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     · dsimp only [Addition32.circuit, Addition32.Assumptions]
       constructor
       · simp only [h_assumptions]
-      · -- goal looks lemma worth
-        sorry
+      · simp only [U32_one_is_Normalized]
     constructor
     · dsimp only [ConditionalVector8U32.circuit]
       dsimp only [ConditionalVector8U32.Assumptions]
