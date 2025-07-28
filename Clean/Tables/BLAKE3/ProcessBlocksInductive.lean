@@ -232,7 +232,17 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
       simp only [this] at spec_previous
       simp only [List.filter_singleton]
       by_cases h_x : x.block_exists = 1
-      · sorry
+      · simp only [h_x]
+        simp only [decide_true, cond_true]
+        constructor
+        · have one_op :
+            (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
+              processBlockWords acc.toChunkState (x.block_data.map (·.value)) := by sorry
+          simp only [one_op, spec_previous, List.map_append]
+          simp only [List.map_cons, List.map_nil, processBlocksWords]
+          simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
+        · -- statement looks lemma-worthy
+          sorry
       · simp only [h_x]
         simp only [decide_false, cond_false, List.append_nil]
         have no_op : (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))) = acc := by
