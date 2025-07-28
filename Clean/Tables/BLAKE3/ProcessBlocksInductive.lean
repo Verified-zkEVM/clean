@@ -199,6 +199,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     blocks_compressed := muxedBlocksCompressed
   }
 
+set_option maxHeartbeats 400000
+
 /--
 The InductiveTable for processBlocks.
 -/
@@ -206,6 +208,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step
 
   Spec initialState inputs i _ state :=
+    initialState.Normalized →
+    (∀ input ∈ inputs, input.Normalized) →
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
     let validBlocks := inputs.take i |>.filter (·.block_exists = 1)
@@ -221,7 +225,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     input.Normalized
 
   soundness := by
-    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous
+    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized
+    -- I think it's better to discharge conditions of spec_previous here
     rw [List.take_succ_eq_append_getElem]
     · rw [List.filter_append]
       have : (List.take row_index (xs.concat x)) = xs := by sorry
@@ -242,6 +247,27 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           simp only [List.map_cons, List.map_nil, processBlocksWords]
           simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
         · -- statement looks lemma-worthy
+          simp only [step, circuit_norm] at ⊢ h_holds
+          provable_struct_simp
+          simp only [h_eval] at ⊢ h_holds
+          simp only [h_x] at ⊢ h_holds
+          rcases h_holds with ⟨ h_binary, h_holds ⟩
+          clear h_binary
+          rcases h_holds with ⟨ h_iszero, h_holds ⟩
+          dsimp only [IsZeroU32.circuit, IsZeroU32.Assumptions, IsZeroU32.Spec] at h_iszero
+          have : acc_blocks_compressed.Normalized := by sorry
+          specialize h_iszero this
+          rcases h_holds with ⟨ h_compress, h_holds ⟩
+          dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
+          have h_compress' := h_compress (by
+            clear h_holds
+            simp only [ProcessBlocksState.Normalized] at spec_previous
+
+            sorry)
+
+
+
+
           sorry
       · simp only [h_x]
         simp only [decide_false, cond_false, List.append_nil]
