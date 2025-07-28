@@ -184,11 +184,61 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
 
   completeness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
-    sorry -- TODO: Prove completeness
+    simp only [circuit_norm, step] at ⊢ h_witnesses
+    provable_struct_simp
+    simp only [h_eval] at ⊢ h_witnesses
+    simp only [BlockInput.Normalized] at h_assumptions
+    dsimp only [ProcessBlocksState.Normalized] at h_assumptions
+    constructor
+    · have : x_block_exists = 0 ∨ x_block_exists = 1 := by tauto
+      cases this with
+      | inl h =>
+          simp only [h]
+          ring_nf
+      | inr h =>
+          simp only [h]
+          ring_nf
+    constructor
+    · simp only [IsZeroU32.circuit, IsZeroU32.Assumptions]
+      simp_all
+    constructor
+    · simp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
+      constructor
+      · simp_all
+      constructor
+      · simp only [h_assumptions]
+        native_decide
+      constructor
+      · -- goal looks lemma-worthy
+        sorry
+      constructor
+      · simp_all
+      constructor
+      · -- goal looks lemma-worthy
+        sorry
+      -- why am I seeing 'var
+/-           {
+            index :=
+              [8 * 4, 4, 4].sum + [1, 16 * 4].sum + ElaboratedCircuit.localLength field acc_var_blocks_compressed },
+      x1 := 0, x2 := 0, x3 := 0 ' -/
+      sorry
+    constructor
+    · dsimp only [Addition32.circuit, Addition32.Assumptions]
+      constructor
+      · simp only [h_assumptions]
+      · -- goal looks lemma worth
+        sorry
+    constructor
+    · dsimp only [ConditionalVector8U32.circuit]
+      dsimp only [ConditionalVector8U32.Assumptions]
+      simp_all
+    dsimp only [ConditionalU32.circuit, ConditionalU32.Assumptions]
+    simp_all
 
   subcircuitsConsistent := by
     intros
-    simp only [circuit_norm, step]
+    dsimp only [step]
+    simp only [circuit_norm]
     omega
 
 /--
