@@ -58,6 +58,14 @@ lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
   cases p_large
   rw [ZMod.val_natCast_of_lt] <;> omega
 
+omit p_large in
+lemma eval_env_mul (env : Environment (F p)) (a b : Var field (F p)) :
+    (eval (α := field) env (Expression.mul a b : Var field (F p)) : F p) =
+    (Expression.eval env a) * (Expression.eval env b) := by
+  simp only [ProvableType.eval, fromElements, toVars, toElements]
+  simp only [id_eq, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp [Expression.eval]
+
 /--
 State maintained during block processing.
 Corresponds to a simplified version of ChunkState.
@@ -221,8 +229,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     simp only [circuit_norm, step] at ⊢ h_witnesses
     provable_struct_simp
     simp only [h_eval] at ⊢ h_witnesses
-    simp only [BlockInput.Normalized] at h_assumptions
-    dsimp only [ProcessBlocksState.Normalized] at h_assumptions
+    dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
+    dsimp only [IsZeroU32.circuit, IsZeroU32.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor
     · have : x_block_exists = 0 ∨ x_block_exists = 1 := by tauto
       cases this with
@@ -233,11 +241,9 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           simp only [h]
           ring_nf
     constructor
-    · simp only [IsZeroU32.circuit, IsZeroU32.Assumptions]
-      simp_all
+    · simp_all
     constructor
-    · simp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
-      constructor
+    · constructor
       · simp_all
       constructor
       · simp only [h_assumptions]
@@ -251,21 +257,29 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
       · -- goal looks lemma-worthy
         simp only [U32_blockLen_is_Normalized]
       -- why am I seeing 'var
-/-           {
-            index :=
-              [8 * 4, 4, 4].sum + [1, 16 * 4].sum + ElaboratedCircuit.localLength field acc_var_blocks_compressed },
-      x1 := 0, x2 := 0, x3 := 0 ' -/
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZeroU32.circuit, IsZeroU32.Assumptions] at h_witnesses_iszero
       have : acc_blocks_compressed.Normalized := by simp_all
       specialize h_witnesses_iszero this
       simp only [IsZeroU32.Spec] at h_witnesses_iszero
-      split at h_witnesses_iszero
-      ·
-        simp only [h_witnesses_iszero]
-        sorry
-      · sorry
+      simp only [U32_Normalized_componentwise]
+      constructor
+      · split at h_witnesses_iszero
+        · rw [eval_env_mul]
+          simp only [h_witnesses_iszero]
+          simp only [Expression.eval]
+          norm_num
+          simp only [ZMod.val_one]
+          omega
+        · rw [eval_env_mul]
+          simp only [h_witnesses_iszero]
+          simp only [Expression.eval]
+          norm_num
+      · norm_num
+        simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map]
+        simp only [List.map_toArray, List.map_cons, List.map_nil, Expression.eval]
+        simp only [ZMod.val_zero, Nat.ofNat_pos]
     constructor
     · dsimp only [Addition32.circuit, Addition32.Assumptions]
       constructor
