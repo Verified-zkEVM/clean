@@ -23,6 +23,15 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
+omit p_large in
+lemma U32_one_is_Normalized (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
+  omega
+
 /--
 State maintained during block processing.
 Corresponds to a simplified version of ChunkState.
