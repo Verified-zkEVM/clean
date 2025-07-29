@@ -348,13 +348,12 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
               simp only [↓reduceIte]
               simp only [BLAKE3StateFirstHalf.circuit, h_first_half.2]
               trivial
-            · sorry
-
-/-             simp only [h_u32_cond]
-            simp only [h_vector_cond]
-            simp only [BLAKE3StateFirstHalf.circuit, h_first_half]
-
- -/
+            · simp only [h_u32_cond]
+              simp only [↓reduceIte]
+              simp only [h_addition.2]
+              dsimp only [ProcessBlocksState.Normalized] at spec_previous
+              simp only [spec_previous]
+              trivial
         constructor
         · simp only [one_op, spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
         · simp only [one_op]
