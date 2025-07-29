@@ -132,6 +132,34 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   (∀ i : Fin 16, input.block_data[i].Normalized)
 
 
+namespace BLAKE3StateFirstHalf
+
+def main (x : Var Gadgets.BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
+  return x.take 8
+
+/--
+A subcircuit that takes the first eight elements of BLAKE3State
+-/
+def circuit : FormalCircuit (F p) Gadgets.BLAKE3.BLAKE3State (ProvableVector U32 8) where
+  main := main
+  localLength := 0
+  Assumptions input := input.Normalized
+  Spec input output := output = input.take 8
+  soundness := by
+    circuit_proof_start
+    simp only [eval_vector, Vector.map_take]
+    ext1
+    rename_i i h_i
+    -- the following is for adding [i] to h_input equations, automate
+    simp only [eval_vector] at h_input
+    simp only [Vector.ext_iff] at h_input
+    specialize h_input i (by omega)
+    simp only [Vector.getElem_map] at ⊢ h_input
+    simp only [Vector.getElem_take]
+    simp only [h_input]
+  completeness := by circuit_proof_start
+
+end BLAKE3StateFirstHalf
 
 /--
 The step function that processes one block or passes through the state.
