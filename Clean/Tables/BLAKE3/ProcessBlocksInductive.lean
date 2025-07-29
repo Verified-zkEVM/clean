@@ -144,19 +144,35 @@ def circuit : FormalCircuit (F p) Gadgets.BLAKE3.BLAKE3State (ProvableVector U32
   main := main
   localLength := 0
   Assumptions input := input.Normalized
-  Spec input output := output = input.take 8
+  Spec input output := output = input.take 8 ∧ ∀ i : Fin 8, output[i].Normalized
   soundness := by
     circuit_proof_start
-    simp only [eval_vector, Vector.map_take]
-    ext1
-    rename_i i h_i
-    -- the following is for adding [i] to h_input equations, automate
-    simp only [eval_vector] at h_input
-    simp only [Vector.ext_iff] at h_input
-    specialize h_input i (by omega)
-    simp only [Vector.getElem_map] at ⊢ h_input
-    simp only [Vector.getElem_take]
-    simp only [h_input]
+    have : (eval env (Vector.take input_var 8) : ProvableVector U32 8 (F p)) = (Vector.take input 8 : ProvableVector U32 8 (F p)) := by
+      simp only [eval_vector, Vector.map_take]
+      ext1
+      rename_i i h_i
+      -- the following is for adding [i] to h_input equations, automate
+      simp only [eval_vector] at h_input
+      simp only [Vector.ext_iff] at h_input
+      specialize h_input i (by omega)
+      simp only [Vector.getElem_map] at ⊢ h_input
+      simp only [Vector.getElem_take]
+      simp only [h_input]
+    simp only [this]
+    simp only [BLAKE3.BLAKE3State.Normalized] at h_assumptions
+    constructor
+    · trivial
+    rintro ⟨ i, h_i ⟩
+    specialize h_assumptions i
+    simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
+    have getElem_take := Vector.getElem_take (xs := input) (i := i) (j := 8) (by omega)
+    conv =>
+      arg 1
+      change (input.take 8)[i]
+      rw [getElem_take]
+    convert h_assumptions
+    norm_num
+    omega
   completeness := by circuit_proof_start
 
 end BLAKE3StateFirstHalf
@@ -191,8 +207,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   -- Apply compress to get new chaining value
   let newCV16 ← Gadgets.BLAKE3.Compress.circuit compressInput
   -- Take first 8 elements for the chaining value
-  let newCV8 : Vector (U32 (Expression (F p))) 8 :=
-    Vector.mk (newCV16.toArray.toList.take 8).toArray (by simp)
+  let newCV8 ← BLAKE3StateFirstHalf.circuit newCV16
 
   -- Increment blocks_compressed
   let one32 : Var U32 (F p) := ⟨1, 0, 0, 0⟩
@@ -311,6 +326,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
                 List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
                 ZMod.val_zero, Nat.ofNat_pos]
           )
+          rcases h_holds with ⟨ h_first_half, h_holds ⟩
+          specialize h_first_half (by
+            simp only [BLAKE3StateFirstHalf.circuit]
+            simp only [h_compress]
+            )
           rcases h_holds with ⟨ h_addition, h_holds ⟩
           specialize h_addition (by sorry)
           simp only [Addition32.circuit, Addition32.Spec] at h_addition
@@ -344,6 +364,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           clear h_iszero
           rcases hh2 with ⟨ h_compress, hh3 ⟩
           clear h_compress
+          rcases hh3 with ⟨ h_first_half, hh3 ⟩
+          clear h_first_half
           rcases hh3 with ⟨ h_addition, hh4 ⟩
           clear h_addition
           rcases hh4 with ⟨ h_vector_cond, hh5 ⟩
