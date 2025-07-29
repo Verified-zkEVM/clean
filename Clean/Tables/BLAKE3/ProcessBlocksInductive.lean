@@ -308,7 +308,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩ ⟩ ⟩
     specialize h_assumptions (by assumption)
     specialize h_assumptions (by
-      sorry)
+      intro input input_mem
+      obtain ⟨ i, h_i, get_input ⟩ := List.getElem_of_mem input_mem
+      rw [← get_input]
+      apply h_inputs
+      omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
     provable_struct_simp
