@@ -341,13 +341,19 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           specialize h_u32_cond (by sorry)
           dsimp only [ConditionalU32.circuit, ConditionalU32.Spec] at h_u32_cond
           constructor
-          · simp only [h_u32_cond, h_vector_cond, ↓reduceIte]
-            -- simp only [h_addition]
-            -- Addition 32 is specified with something.value so it's kind of hard to rewrite
-            -- this suggests that the result here depends on the normalization.
-
-            simp only [BLAKE3StateFirstHalf.circuit, h_first_half.1]
-            sorry
+          · simp only [h_u32_cond, h_vector_cond, ↓reduceIte] at ⊢ h_addition h_compress
+            -- simp only [h_addition] doesn't work because h_addition is about the value
+            simp only [BLAKE3StateFirstHalf.circuit, h_first_half.1] at ⊢ h_addition h_compress
+            simp only [processBlockWords, ProcessBlocksState.toChunkState] at ⊢ h_addition h_compress
+            simp only [h_addition.1] at ⊢ h_compress
+            rw [← Vector.map_take]
+            norm_num at ⊢ h_compress
+            constructor
+            · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
+              simp only [h_compress.1]
+              -- getting close!
+              sorry
+            · sorry
           · simp only [ProcessBlocksState.Normalized]
             constructor
             · simp only [h_vector_cond]
