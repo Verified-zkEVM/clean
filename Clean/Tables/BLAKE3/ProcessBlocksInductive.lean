@@ -344,41 +344,26 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
       constructor
       · -- goal looks lemma-worthy
         simp only [U32_blockLen_is_Normalized]
-      -- why am I seeing 'var
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZeroU32.circuit, IsZeroU32.Assumptions] at h_witnesses_iszero
-      have : acc_blocks_compressed.Normalized := by simp_all
-      specialize h_witnesses_iszero this
+      specialize h_witnesses_iszero (by simp_all)
       simp only [IsZeroU32.Spec] at h_witnesses_iszero
       simp only [U32_Normalized_componentwise]
       constructor
-      · split at h_witnesses_iszero
-        · rw [eval_env_mul]
-          simp only [h_witnesses_iszero]
-          simp only [Expression.eval]
+      · rw [eval_env_mul]
+        split at h_witnesses_iszero
+        · simp only [h_witnesses_iszero, Expression.eval]
           norm_num
           simp only [ZMod.val_one]
           omega
-        · rw [eval_env_mul]
-          simp only [h_witnesses_iszero]
-          simp only [Expression.eval]
+        · simp only [h_witnesses_iszero, Expression.eval]
           norm_num
       · norm_num
-        simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map]
-        simp only [List.map_toArray, List.map_cons, List.map_nil, Expression.eval]
-        simp only [ZMod.val_zero, Nat.ofNat_pos]
-    constructor
-    · dsimp only [Addition32.circuit, Addition32.Assumptions]
-      constructor
-      · simp only [h_assumptions]
-      · simp only [U32_one_is_Normalized]
-    constructor
-    · dsimp only [ConditionalVector8U32.circuit]
-      dsimp only [ConditionalVector8U32.Assumptions]
-      simp_all
-    dsimp only [ConditionalU32.circuit, ConditionalU32.Assumptions]
-    simp_all
+        simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
+          List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
+          ZMod.val_zero, Nat.ofNat_pos]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalU32.circuit, ConditionalU32.Assumptions]
 
   subcircuitsConsistent := by
     intros
