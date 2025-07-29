@@ -331,19 +331,20 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
             simp only [BLAKE3StateFirstHalf.circuit]
             simp only [h_compress]
             )
+          dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
           rcases h_holds with ⟨ h_addition, h_holds ⟩
           specialize h_addition (by sorry)
-          simp only [Addition32.circuit, Addition32.Spec] at h_addition
+          dsimp only [Addition32.circuit, Addition32.Spec] at h_addition
           rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
           specialize h_vector_cond (by sorry)
-          simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Spec] at h_vector_cond
+          dsimp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Spec] at h_vector_cond
           specialize h_u32_cond (by sorry)
-          simp only [ConditionalU32.circuit, ConditionalU32.Spec] at h_u32_cond
+          dsimp only [ConditionalU32.circuit, ConditionalU32.Spec] at h_u32_cond
           constructor
           · sorry
           · simp only [h_u32_cond]
             simp only [h_vector_cond]
-            -- simp only [h_compress]
+            simp only [BLAKE3StateFirstHalf.circuit, h_first_half]
             sorry
         constructor
         · simp only [one_op, spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
