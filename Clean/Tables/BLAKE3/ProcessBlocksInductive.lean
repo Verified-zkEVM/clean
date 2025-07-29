@@ -346,12 +346,9 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
             -- simp only [h_compress]
             sorry
         constructor
-        · simp only [one_op, spec_previous, List.map_append]
-          simp only [List.map_cons, List.map_nil, processBlocksWords]
-          simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
+        · simp only [one_op, spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
         · simp only [one_op]
-      · simp only [h_x]
-        simp only [decide_false, cond_false, List.append_nil]
+      · simp only [h_x, decide_false, cond_false, List.append_nil]
         have no_op : (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))) = acc := by
           simp only [circuit_norm, step] at h_holds
           provable_struct_simp
@@ -369,16 +366,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           rcases hh3 with ⟨ h_addition, hh4 ⟩
           clear h_addition
           rcases hh4 with ⟨ h_vector_cond, hh5 ⟩
-          simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec] at h_vector_cond
-          simp only [h_eval] at h_vector_cond
+          simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec, h_eval] at h_vector_cond
           norm_num at h_vector_cond
           simp only [ConditionalU32.circuit, ConditionalU32.Assumptions, ConditionalU32.Spec, h_eval] at hh5
-          norm_num at hh5
-          simp only [step, circuit_norm]
-          norm_num
-          simp only [h_vector_cond, hh5]
-          simp only [h_eval]
-          trivial
+          norm_num at hh5 ⊢
+          simp [step, circuit_norm, h_vector_cond, hh5, h_eval]
         simp only [no_op]
         exact spec_previous
     · aesop
