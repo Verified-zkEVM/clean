@@ -285,9 +285,18 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           )
           rcases h_holds with ⟨ h_addition, h_holds ⟩
           specialize h_addition (by sorry)
-          simp only [Addition32.Spec] at h_addition
-
-          sorry
+          simp only [Addition32.circuit, Addition32.Spec] at h_addition
+          rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
+          specialize h_vector_cond (by sorry)
+          simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Spec] at h_vector_cond
+          specialize h_u32_cond (by sorry)
+          simp only [ConditionalU32.circuit, ConditionalU32.Spec] at h_u32_cond
+          constructor
+          · sorry
+          · simp only [h_u32_cond]
+            simp only [h_vector_cond]
+            -- simp only [h_compress]
+            sorry
         constructor
         · simp only [one_op, spec_previous, List.map_append]
           simp only [List.map_cons, List.map_nil, processBlocksWords]
