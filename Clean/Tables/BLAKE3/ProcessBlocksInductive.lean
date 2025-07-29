@@ -221,6 +221,7 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     state.toChunkState = finalState ∧
     state.Normalized
 
+  InitialStateAssumptions initialState := initialState.Normalized
   InputAssumptions i input :=
     input.Normalized
 
