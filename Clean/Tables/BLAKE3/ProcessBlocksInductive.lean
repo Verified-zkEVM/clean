@@ -383,8 +383,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
         exact spec_previous
     · aesop
 
-  completeness := by sorry
-/-     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
+  completeness := by
+    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩ ⟩ ⟩
     specialize h_assumptions (by assumption)
     specialize h_assumptions (by
@@ -443,8 +443,44 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
         simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
           List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
           ZMod.val_zero, Nat.ofNat_pos]
+    constructor
+    · dsimp only [BLAKE3StateFirstHalf.circuit]
+      dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
+      rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
+      -- The following is a repetition of the above
+      simp only [IsZeroU32.circuit, IsZeroU32.Assumptions] at h_witnesses_iszero
+      specialize h_witnesses_iszero (by simp_all)
+      simp only [IsZeroU32.Spec] at h_witnesses_iszero
+      specialize h_compress (by
+        simp only [h_assumptions]
+        simp only [U32_blockLen_is_Normalized, U32_zero_is_Normalized]
+        constructor
+        · trivial
+        constructor
+        · trivial
+        constructor
+        · trivial
+        constructor
+        · trivial
+        constructor
+        · trivial
+        simp only [U32_Normalized_componentwise, chunkStart]
+        constructor
+        · rw [eval_env_mul]
+          split at h_witnesses_iszero
+          · simp only [h_witnesses_iszero, Expression.eval]
+            norm_num
+            simp only [ZMod.val_one]
+            omega
+          · simp only [h_witnesses_iszero, Expression.eval]
+            norm_num
+        · norm_num
+          simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
+            List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
+            ZMod.val_zero, Nat.ofNat_pos])
+      simp only [h_compress]
     simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalU32.circuit, ConditionalU32.Assumptions]
- -/
+
   subcircuitsConsistent := by
     intros
     dsimp only [step]
