@@ -365,7 +365,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           have x_block_exists_zero : x_block_exists = 0 := by
             simp only [h_eval] at hh0
             rw [mul_eq_zero (M₀ := F p)] at hh0
-            sorry
+            cases hh0 with
+            | inl hh0 => assumption
+            | inr hh0 =>
+                rw [add_neg_eq_zero] at hh0
+                contradiction
           simp only [x_block_exists_zero] at *
           clear x_block_exists_zero
           clear hh0
