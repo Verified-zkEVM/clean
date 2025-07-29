@@ -226,6 +226,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
 
   soundness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized
+    specialize spec_previous (by assumption)
+    specialize spec_previous (by simp_all)
     -- I think it's better to discharge conditions of spec_previous here
     rw [List.take_succ_eq_append_getElem]
     · rw [List.filter_append]
