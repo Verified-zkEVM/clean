@@ -283,6 +283,10 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
                 List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
                 ZMod.val_zero, Nat.ofNat_pos]
           )
+          rcases h_holds with ⟨ h_addition, h_holds ⟩
+          specialize h_addition (by sorry)
+          simp only [Addition32.Spec] at h_addition
+
           sorry
         constructor
         · simp only [one_op, spec_previous, List.map_append]
@@ -320,8 +324,8 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
         exact spec_previous
     · aesop
 
-  completeness := by
-    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
+  completeness := by sorry
+/-     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩ ⟩ ⟩
     specialize h_assumptions (by assumption)
     specialize h_assumptions (by
@@ -381,7 +385,7 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
           ZMod.val_zero, Nat.ofNat_pos]
     simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalU32.circuit, ConditionalU32.Assumptions]
-
+ -/
   subcircuitsConsistent := by
     intros
     dsimp only [step]
