@@ -362,7 +362,10 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           simp only [circuit_norm, step] at h_holds
           provable_struct_simp
           rcases h_holds with ⟨ hh0, hh1 ⟩
-          have x_block_exists_zero : x_block_exists = 0 := by sorry
+          have x_block_exists_zero : x_block_exists = 0 := by
+            simp only [h_eval] at hh0
+            rw [mul_eq_zero (M₀ := F p)] at hh0
+            sorry
           simp only [x_block_exists_zero] at *
           clear x_block_exists_zero
           clear hh0
