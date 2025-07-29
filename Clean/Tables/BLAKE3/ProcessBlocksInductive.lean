@@ -40,6 +40,17 @@ lemma U32_zero_is_Normalized (env : Environment (F p)) :
   simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
 
 omit p_large in
+lemma U32_zero_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
+  simp only [U32.value]
+  simp only [Nat.reducePow, Nat.add_eq_zero, ZMod.val_eq_zero, mul_eq_zero, OfNat.ofNat_ne_zero,
+    or_false]
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+
+omit p_large in
 lemma U32_one_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
@@ -351,6 +362,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
             constructor
             · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
               simp only [h_compress.1]
+              clear h_compress
+              simp only [U32_zero_value]
+              simp only [startFlag]
+
+
               -- getting close!
               sorry
             · sorry
