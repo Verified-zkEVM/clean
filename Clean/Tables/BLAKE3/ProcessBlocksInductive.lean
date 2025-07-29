@@ -242,14 +242,10 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
       by_cases h_x : x.block_exists = 1
       · simp only [h_x]
         simp only [decide_true, cond_true]
-        constructor
-        · have one_op :
+        have one_op :
             (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
-              processBlockWords acc.toChunkState (x.block_data.map (·.value)) := by sorry
-          simp only [one_op, spec_previous, List.map_append]
-          simp only [List.map_cons, List.map_nil, processBlocksWords]
-          simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
-        · -- statement looks lemma-worthy
+              processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
+            (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
           simp only [step, circuit_norm] at ⊢ h_holds
           provable_struct_simp
           simp only [h_eval] at ⊢ h_holds
@@ -262,16 +258,37 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
           specialize h_iszero this
           rcases h_holds with ⟨ h_compress, h_holds ⟩
           dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
-          have h_compress' := h_compress (by
+          specialize h_compress (by
             clear h_holds
             simp only [ProcessBlocksState.Normalized] at spec_previous
-
-            sorry)
-
-
-
-
+            specialize input_Normalized { block_exists := x_block_exists, block_data := x_block_data }
+            specialize input_Normalized (by sorry)
+            simp only [BlockInput.Normalized] at input_Normalized
+            simp only [spec_previous, input_Normalized, U32_zero_is_Normalized, U32_blockLen_is_Normalized]
+            simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+              Nat.reduceAdd, and_self, true_and]
+            simp only [U32_Normalized_componentwise]
+            constructor
+            · rw [eval_env_mul]
+              split at h_iszero
+              · simp only [Expression.eval, chunkStart]
+                norm_num at h_iszero ⊢
+                simp only [h_iszero, ZMod.val_one]
+                omega
+              · norm_num at h_iszero ⊢
+                simp only [h_iszero, Expression.eval, chunkStart]
+                norm_num
+            · norm_num
+              simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
+                List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
+                ZMod.val_zero, Nat.ofNat_pos]
+          )
           sorry
+        constructor
+        · simp only [one_op, spec_previous, List.map_append]
+          simp only [List.map_cons, List.map_nil, processBlocksWords]
+          simp only [List.foldl_append, List.foldl_cons, List.foldl_nil]
+        · simp only [one_op]
       · simp only [h_x]
         simp only [decide_false, cond_false, List.append_nil]
         have no_op : (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))) = acc := by
