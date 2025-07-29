@@ -305,6 +305,11 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
 
   completeness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
+    rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩ ⟩ ⟩
+    specialize h_assumptions (by assumption)
+    specialize h_assumptions (by
+      sorry)
+    have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
     provable_struct_simp
     simp only [h_eval] at ⊢ h_witnesses
