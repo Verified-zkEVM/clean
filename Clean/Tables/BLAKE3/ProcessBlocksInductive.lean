@@ -384,12 +384,19 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           )
         dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
         rcases h_holds with ⟨ h_addition, h_holds ⟩
-        specialize h_addition (by sorry)
+        specialize h_addition (by
+          simp only [Addition32.circuit]
+          simp only [Addition32.Assumptions]
+          simp only [U32_one_is_Normalized]
+          simp only [ProcessBlocksState.Normalized] at spec_previous
+          simp [spec_previous])
         dsimp only [Addition32.circuit, Addition32.Spec] at h_addition
         rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-        specialize h_vector_cond (by sorry)
+        specialize h_vector_cond (by
+          simp [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions])
         dsimp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Spec] at h_vector_cond
-        specialize h_u32_cond (by sorry)
+        specialize h_u32_cond (by
+          simp [ConditionalU32.circuit, ConditionalU32.Assumptions])
         dsimp only [ConditionalU32.circuit, ConditionalU32.Spec] at h_u32_cond
         constructor
         · simp only [h_u32_cond, h_vector_cond, ↓reduceIte] at ⊢ h_addition h_compress
