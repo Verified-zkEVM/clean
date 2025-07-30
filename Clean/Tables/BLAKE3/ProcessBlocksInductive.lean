@@ -488,8 +488,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       · simp [spec_previous]
   · aesop
 
-set_option maxHeartbeats 400000
-
 /--
 The InductiveTable for processBlocks.
 -/
