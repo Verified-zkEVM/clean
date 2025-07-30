@@ -322,11 +322,11 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   -- I think it's better to discharge conditions of spec_previous here
   rw [List.take_succ_eq_append_getElem]
   · rw [List.filter_append]
-    have : (List.take row_index (xs.concat x)) = xs := by sorry
+    have : (List.take row_index (xs.concat x)) = xs := by simp_all
     simp only [this]
-    have : (xs.concat x)[row_index]'(by simp_all) = x := by sorry
+    have : (xs.concat x)[row_index]'(by simp_all) = x := by simp_all
     simp only [this]
-    have : (List.take row_index xs) = xs := by sorry
+    have : (List.take row_index xs) = xs := by simp_all
     simp only [this] at spec_previous
     simp only [List.filter_singleton]
     by_cases h_x : x.block_exists = 1
