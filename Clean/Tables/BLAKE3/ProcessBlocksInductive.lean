@@ -465,21 +465,14 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       · simp [spec_previous]
   · aesop
 
-/--
-The InductiveTable for processBlocks.
--/
-def table : InductiveTable (F p) ProcessBlocksState BlockInput where
-  step
+def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
 
-  Spec
-
-  InitialStateAssumptions initialState := initialState.Normalized
-  InputAssumptions i input :=
+def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
     input.Normalized ∧ i < 2^32
 
-  soundness
-  completeness := by
+lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
+    dsimp only [InitialStateAssumptions, InputAssumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩ ⟩
     specialize h_assumptions (by assumption)
     specialize h_assumptions (by
@@ -577,6 +570,20 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
       simp only [h_compress]
     simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalU32.circuit, ConditionalU32.Assumptions]
 
+/--
+The InductiveTable for processBlocks.
+-/
+def table : InductiveTable (F p) ProcessBlocksState BlockInput where
+  step
+
+  Spec
+
+  InitialStateAssumptions initialState := initialState.Normalized
+  InputAssumptions i input :=
+    input.Normalized ∧ i < 2^32
+
+  soundness
+  completeness
   subcircuitsConsistent := by
     intros
     dsimp only [step]
