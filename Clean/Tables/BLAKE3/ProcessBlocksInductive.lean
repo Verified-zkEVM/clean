@@ -69,6 +69,17 @@ lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
   cases p_large
   rw [ZMod.val_natCast_of_lt] <;> omega
 
+lemma U32_blockLen_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).value = blockLen := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [blockLen, U32.value]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+  rw [ZMod.val_natCast_of_lt]
+  · omega
+  · cases p_large; omega
+
 omit p_large in
 lemma eval_env_mul (env : Environment (F p)) (a b : Var field (F p)) :
     (eval (α := field) env (Expression.mul a b : Var field (F p)) : F p) =
@@ -365,7 +376,7 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
               clear h_compress
               simp only [U32_zero_value]
               simp only [startFlag]
-
+              simp only [U32_blockLen_value]
 
               -- getting close!
               sorry
