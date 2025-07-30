@@ -336,16 +336,14 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp only [this] at spec_previous
     simp only [List.filter_singleton]
     by_cases h_x : x.block_exists = 1
-    · simp only [h_x]
-      simp only [decide_true, cond_true]
+    · simp only [h_x, decide_true, cond_true]
       have one_op :
           (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
             processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
           (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
         simp only [step, circuit_norm] at ⊢ h_holds
         provable_struct_simp
-        simp only [h_eval] at ⊢ h_holds
-        simp only [h_x] at ⊢ h_holds
+        simp only [h_eval, h_x] at ⊢ h_holds
         rcases h_holds with ⟨ h_binary, h_holds ⟩
         clear h_binary
         rcases h_holds with ⟨ h_iszero, h_holds ⟩
@@ -359,15 +357,13 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         specialize h_compress (by
           clear h_holds
           simp only [ProcessBlocksState.Normalized] at spec_previous
-          specialize input_Normalized { block_exists := x_block_exists, block_data := x_block_data }
-          specialize input_Normalized (by
+          specialize input_Normalized { block_exists := x_block_exists, block_data := x_block_data } (by
             apply List.mem_of_getElem
             omega)
           simp only [BlockInput.Normalized] at input_Normalized
           simp only [spec_previous, input_Normalized, U32_zero_is_Normalized, U32_blockLen_is_Normalized]
           simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
-            Nat.reduceAdd, and_self, true_and]
-          simp only [U32_Normalized_componentwise]
+            Nat.reduceAdd, and_self, true_and, U32_Normalized_componentwise]
           constructor
           · rw [eval_env_mul]
             split at h_iszero
@@ -391,10 +387,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
         rcases h_holds with ⟨ h_addition, h_holds ⟩
         specialize h_addition (by
-          simp only [Addition32.circuit]
-          simp only [Addition32.Assumptions]
+          dsimp only [Addition32.circuit]
+          dsimp only [Addition32.Assumptions]
           simp only [U32_one_is_Normalized]
-          simp only [ProcessBlocksState.Normalized] at spec_previous
+          dsimp only [ProcessBlocksState.Normalized] at spec_previous
           simp [spec_previous])
         dsimp only [Addition32.circuit, Addition32.Spec] at h_addition
         rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
@@ -433,23 +429,20 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         · simp only [ProcessBlocksState.Normalized]
           constructor
           · simp only [h_vector_cond]
-            simp only [↓reduceIte]
-            simp only [BLAKE3StateFirstHalf.circuit, h_first_half.2]
+            simp only [↓reduceIte, BLAKE3StateFirstHalf.circuit, h_first_half.2]
             trivial
-          · simp only [h_u32_cond]
-            simp only [↓reduceIte]
-            simp only [h_addition.2]
+          · simp only [h_u32_cond, ↓reduceIte, h_addition.2]
             dsimp only [ProcessBlocksState.Normalized] at spec_previous
             simp only [spec_previous]
             trivial
+      simp only [one_op]
       constructor
-      · simp only [one_op, processBlockWords]
+      · simp only [processBlockWords]
         simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
           zero_add, add_lt_add_iff_right]
         omega
-      constructor
-      · simp only [one_op, spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
-      · simp only [one_op]
+      simp only [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
+      trivial
     · simp only [h_x, decide_false, cond_false, List.append_nil]
       have no_op : (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))) = acc := by
         simp only [circuit_norm, step] at h_holds
@@ -464,22 +457,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
               rw [add_neg_eq_zero] at hh0
               contradiction
         simp only [x_block_exists_zero] at *
-        clear x_block_exists_zero
-        clear hh0
-        rcases hh1 with ⟨ h_iszero, hh2 ⟩
-        clear h_iszero
-        rcases hh2 with ⟨ h_compress, hh3 ⟩
-        clear h_compress
-        rcases hh3 with ⟨ h_first_half, hh3 ⟩
-        clear h_first_half
-        rcases hh3 with ⟨ h_addition, hh4 ⟩
-        clear h_addition
-        rcases hh4 with ⟨ h_vector_cond, hh5 ⟩
-        simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec, h_eval] at h_vector_cond
-        norm_num at h_vector_cond
-        simp only [ConditionalU32.circuit, ConditionalU32.Assumptions, ConditionalU32.Spec, h_eval] at hh5
-        norm_num at hh5 ⊢
-        simp [step, circuit_norm, h_vector_cond, hh5, h_eval]
+        simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec, h_eval] at hh1
+        simp only [ConditionalU32.circuit, ConditionalU32.Assumptions, ConditionalU32.Spec, h_eval] at hh1
+        norm_num at hh1 ⊢
+        simp [step, circuit_norm, hh1, h_eval]
       simp only [no_op]
       constructor
       · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
