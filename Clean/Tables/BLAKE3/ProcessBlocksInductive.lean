@@ -352,7 +352,9 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           clear h_holds
           simp only [ProcessBlocksState.Normalized] at spec_previous
           specialize input_Normalized { block_exists := x_block_exists, block_data := x_block_data }
-          specialize input_Normalized (by sorry)
+          specialize input_Normalized (by
+            apply List.mem_of_getElem
+            omega)
           simp only [BlockInput.Normalized] at input_Normalized
           simp only [spec_previous, input_Normalized, U32_zero_is_Normalized, U32_blockLen_is_Normalized]
           simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
