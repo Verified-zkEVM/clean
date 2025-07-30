@@ -24,6 +24,23 @@ def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) 
     -- we can conclude the spec on the next row and inputs including the current input
     Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat) (eval env (step acc_var x_var |>.output ((size State) + (size Input))))
 
+def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+    (InputAssumptions : ℕ → Input F → Prop) (InitialStateAssumptions : State F → Prop)
+    (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → Prop)
+    (step : Var State F → Var Input F → Circuit F (Var State F)) :=
+  ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
+  -- for all rows and inputs
+  ∀ (acc_var : Var State F) (x_var : Var Input F)
+    (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
+    (eval env acc_var = acc) ∧ (eval env x_var = x) →
+  -- when using honest-prover witnesses
+  env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
+  -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
+  InitialStateAssumptions initialState ∧
+  (∀ prev_row_index (h: prev_row_index < row_index), InputAssumptions prev_row_index (xs[prev_row_index]'(by simp only [xs_len, h]))) ∧ Spec initialState xs row_index xs_len acc ∧ InputAssumptions row_index x →
+  -- the constraints hold
+  Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
+
 /--
 In the case of two-row windows, an `InductiveTable` is basically a `FormalCircuit` but
 - with the same input and output types
@@ -50,18 +67,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
 
   soundness : InductiveTable.Soundness F State Input Spec step
 
-  completeness : ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
-    -- for all rows and inputs
-    ∀ (acc_var : Var State F) (x_var : Var Input F)
-      (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
-      (eval env acc_var = acc) ∧ (eval env x_var = x) →
-    -- when using honest-prover witnesses
-    env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
-    -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
-    InitialStateAssumptions initialState ∧
-    (∀ prev_row_index (h: prev_row_index < row_index), InputAssumptions prev_row_index (xs[prev_row_index]'(by simp only [xs_len, h]))) ∧ Spec initialState xs row_index xs_len acc ∧ InputAssumptions row_index x →
-    -- the constraints hold
-    Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
+  completeness : InductiveTable.Completeness F State Input InputAssumptions InitialStateAssumptions Spec step
 
   subcircuitsConsistent : ∀ acc x, ((step acc x).operations ((size State) + (size Input))).SubcircuitsConsistent ((size State) + (size Input))
     := by intros; and_intros <;> (

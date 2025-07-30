@@ -374,8 +374,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             · norm_num at h_iszero ⊢
               simp only [h_iszero, Expression.eval, chunkStart]
               norm_num
-          · norm_num
-            simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
+          · simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
               List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
               ZMod.val_zero, Nat.ofNat_pos]
         )
@@ -387,8 +386,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
         rcases h_holds with ⟨ h_addition, h_holds ⟩
         specialize h_addition (by
-          dsimp only [Addition32.circuit]
-          dsimp only [Addition32.Assumptions]
+          dsimp only [Addition32.circuit, Addition32.Assumptions]
           simp only [U32_one_is_Normalized]
           dsimp only [ProcessBlocksState.Normalized] at spec_previous
           simp [spec_previous])
@@ -412,9 +410,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
             simp only [h_compress.1]
             clear h_compress
-            simp only [U32_zero_value]
-            simp only [startFlag]
-            simp only [U32_blockLen_value]
+            simp only [U32_zero_value, startFlag, U32_blockLen_value]
             norm_num at h_iszero
             rw [eval_acc_blocks_compressed (acc_chaining_value := acc_chaining_value) (acc_chunk_counter := acc_chunk_counter)
                   (acc_var_blocks_compressed := acc_var_blocks_compressed) (acc_blocks_compressed := acc_blocks_compressed) (h_iszero := h_iszero)]
@@ -457,8 +453,8 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
               rw [add_neg_eq_zero] at hh0
               contradiction
         simp only [x_block_exists_zero] at *
-        simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec, h_eval] at hh1
-        simp only [ConditionalU32.circuit, ConditionalU32.Assumptions, ConditionalU32.Spec, h_eval] at hh1
+        simp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions, ConditionalVector8U32.Spec, ConditionalU32.circuit,
+          ConditionalU32.Assumptions, ConditionalU32.Spec, h_eval] at hh1
         norm_num at hh1 ⊢
         simp [step, circuit_norm, hh1, h_eval]
       simp only [no_op]
