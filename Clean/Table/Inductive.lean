@@ -9,6 +9,21 @@ Thus far, only the common `k=2` case is handled.
 import Clean.Table.Theorems
 import Clean.Gadgets.Equality
 
+def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+    (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → Prop)
+    (step : Var State F → Var Input F → Circuit F (Var State F)) :=
+  ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
+  -- for all rows and inputs
+  ∀ (acc_var : Var State F) (x_var : Var Input F)
+    (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
+      (eval env acc_var = acc) ∧ (eval env x_var = x) →
+    -- if the constraints hold
+    Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
+    -- and assuming the spec on the current row and previous inputs
+    Spec initialState xs row_index xs_len acc →
+    -- we can conclude the spec on the next row and inputs including the current input
+    Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat) (eval env (step acc_var x_var |>.output ((size State) + (size Input))))
+
 /--
 In the case of two-row windows, an `InductiveTable` is basically a `FormalCircuit` but
 - with the same input and output types
@@ -33,17 +48,7 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
   InputAssumptions : ℕ → Input F → Prop := fun _ _ => True
   InitialStateAssumptions : State F → Prop := fun _ => True
 
-  soundness : ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
-    -- for all rows and inputs
-    ∀ (acc_var : Var State F) (x_var : Var Input F)
-      (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
-      (eval env acc_var = acc) ∧ (eval env x_var = x) →
-    -- if the constraints hold
-    Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
-    -- and assuming the spec on the current row and previous inputs
-    Spec initialState xs row_index xs_len acc →
-    -- we can conclude the spec on the next row and inputs including the current input
-    Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat) (eval env (step acc_var x_var |>.output ((size State) + (size Input))))
+  soundness : InductiveTable.Soundness F State Input Spec step
 
   completeness : ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
     -- for all rows and inputs
