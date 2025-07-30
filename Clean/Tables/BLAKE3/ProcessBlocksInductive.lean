@@ -395,7 +395,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             norm_num at h_iszero
             rw [eval_acc_blocks_compressed (acc_chaining_value := acc_chaining_value) (acc_chunk_counter := acc_chunk_counter)
                   (acc_var_blocks_compressed := acc_var_blocks_compressed) (acc_blocks_compressed := acc_blocks_compressed) (h_iszero := h_iszero)]
-            · rfl
+            · norm_num
             · simp only [h_eval]
             · simp only [spec_previous]
           · sorry
