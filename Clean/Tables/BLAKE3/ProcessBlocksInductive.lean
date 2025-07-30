@@ -344,7 +344,9 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         clear h_binary
         rcases h_holds with ⟨ h_iszero, h_holds ⟩
         dsimp only [IsZeroU32.circuit, IsZeroU32.Assumptions, IsZeroU32.Spec] at h_iszero
-        have : acc_blocks_compressed.Normalized := by sorry
+        have : acc_blocks_compressed.Normalized := by
+          simp only [ProcessBlocksState.Normalized] at spec_previous
+          simp only [spec_previous]
         specialize h_iszero this
         rcases h_holds with ⟨ h_compress, h_holds ⟩
         dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
