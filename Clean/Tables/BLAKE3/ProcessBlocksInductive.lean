@@ -59,6 +59,16 @@ lemma U32_one_is_Normalized (env : Environment (F p)) :
   simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
   omega
 
+omit p_large in
+lemma U32_one_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [U32.value]
+  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
+  omega
+
 lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
@@ -398,7 +408,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             · norm_num
             · simp only [h_eval]
             · simp only [spec_previous]
-          · sorry
+          · simp only [U32_one_value]
         · simp only [ProcessBlocksState.Normalized]
           constructor
           · simp only [h_vector_cond]
