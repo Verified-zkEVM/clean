@@ -304,6 +304,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
     initialState.Normalized →
     (∀ input ∈ inputs, input.Normalized) →
+    inputs.length < 2^32 →
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
     let validBlocks := inputs.take i |>.filter (·.block_exists = 1)
@@ -312,13 +313,18 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     -- Use the initial state passed as parameter
     let finalState := processBlocksWords initialState.toChunkState blockWords
     -- Current state matches the result of processing all valid blocks so far
+    state.toChunkState.blocks_compressed < inputs.length ∧
     state.toChunkState = finalState ∧
     state.Normalized
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
-  intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized
+  intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized inputs_short
   specialize spec_previous (by assumption)
   specialize spec_previous (by simp_all)
+  specialize spec_previous (by
+    simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+      zero_add, Nat.reducePow] at inputs_short
+    omega)
   -- I think it's better to discharge conditions of spec_previous here
   rw [List.take_succ_eq_append_getElem]
   · rw [List.filter_append]
@@ -420,6 +426,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             · simp only [h_eval]
             · simp only [spec_previous]
           · simp only [U32_one_value]
+            simp only [ProcessBlocksState.toChunkState] at spec_previous
+            simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+              zero_add, Nat.reducePow] at inputs_short
+            omega
         · simp only [ProcessBlocksState.Normalized]
           constructor
           · simp only [h_vector_cond]
@@ -432,6 +442,11 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             dsimp only [ProcessBlocksState.Normalized] at spec_previous
             simp only [spec_previous]
             trivial
+      constructor
+      · simp only [one_op, processBlockWords]
+        simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+          zero_add, add_lt_add_iff_right]
+        omega
       constructor
       · simp only [one_op, spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
       · simp only [one_op]
@@ -466,7 +481,11 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         norm_num at hh5 ⊢
         simp [step, circuit_norm, h_vector_cond, hh5, h_eval]
       simp only [no_op]
-      exact spec_previous
+      constructor
+      · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+        zero_add]
+        omega
+      · simp [spec_previous]
   · aesop
 
 set_option maxHeartbeats 400000
@@ -481,19 +500,20 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
 
   InitialStateAssumptions initialState := initialState.Normalized
   InputAssumptions i input :=
-    input.Normalized
+    input.Normalized ∧ i < 2^32
 
   soundness
   completeness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
-    rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩ ⟩ ⟩
+    rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩ ⟩
     specialize h_assumptions (by assumption)
     specialize h_assumptions (by
       intro input input_mem
       obtain ⟨ i, h_i, get_input ⟩ := List.getElem_of_mem input_mem
       rw [← get_input]
-      apply h_inputs
-      omega)
+      specialize h_inputs i (by omega)
+      simp only [h_inputs])
+    specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
     provable_struct_simp

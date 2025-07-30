@@ -261,8 +261,7 @@ def processBlockWords (state : ChunkState) (block_words : Vector ℕ 16) : Chunk
   let new_cv := compress state.chaining_value block_words state.chunk_counter blockLen flags
   { state with
     chaining_value := new_cv.take 8
-    -- modulo 2^32 is a hack. Alternative is to specify ProcessBlocksInductive table is not too tall.
-    blocks_compressed := (state.blocks_compressed + 1) % (2 ^ 32)
+    blocks_compressed := state.blocks_compressed + 1
     block_buffer := []
   }
 
