@@ -127,6 +127,33 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.chunk_counter.Normalized ∧
   state.blocks_compressed.Normalized
 
+lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
+    acc_blocks_compressed
+    (h_iszero : Expression.eval env (IsZeroU32.circuit.elaborated.output acc_var_blocks_compressed 105) =
+      if acc_blocks_compressed.value = 0 then 1 else 0) :
+    eval env acc_var_blocks_compressed = acc_blocks_compressed →
+    ProcessBlocksState.Normalized
+      { chaining_value := acc_chaining_value, chunk_counter := acc_chunk_counter,
+        blocks_compressed := acc_blocks_compressed } →
+    (eval env
+            (U32.mk
+                (Expression.mul (IsZeroU32.circuit.elaborated.output acc_var_blocks_compressed 105) (Expression.const ↑chunkStart))
+                0 0 0 )).value =
+    if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
+  intros h_eval h_normalized
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, h_eval]
+  simp only [ProcessBlocksState.Normalized] at h_normalized
+  simp only [Expression.eval]
+  simp only [chunkStart]
+  simp only [h_iszero]
+  split
+  · simp only [U32.value]
+    norm_num
+    simp only [ZMod.val_one]
+  · simp only [U32.value]
+    norm_num
+
 /--
 Input for each row: either a block to process or nothing.
 -/
@@ -377,9 +404,12 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
               simp only [U32_zero_value]
               simp only [startFlag]
               simp only [U32_blockLen_value]
-
-              -- getting close!
-              sorry
+              norm_num at h_iszero
+              rw [eval_acc_blocks_compressed (acc_chaining_value := acc_chaining_value) (acc_chunk_counter := acc_chunk_counter)
+                    (acc_var_blocks_compressed := acc_var_blocks_compressed) (acc_blocks_compressed := acc_blocks_compressed) (h_iszero := h_iszero)]
+              · rfl
+              · simp only [h_eval]
+              · simp only [spec_previous]
             · sorry
           · simp only [ProcessBlocksState.Normalized]
             constructor
