@@ -121,13 +121,12 @@ theorem binary_spec_holds {input : Inputs M F} {output : M F}
     simp only [one_mul]
 
 /--
-Binary scalar multiplication circuit with stronger assumptions and guarantees.
+Binary scalar multiplication circuit with weaker specification.
+Only guarantees behavior for binary scalars (0 or 1).
 -/
 def binaryCircuit : FormalCircuit F (Inputs M) M :=
-  (circuit (F := F) (M := M)).strengthenAssumption
-    (fun _ => True)
+  (circuit (F := F) (M := M)).weakenSpec
     BinarySpec
-    (fun _ _ => trivial)
     (fun _ _ _ h_spec => binary_spec_holds h_spec)
 
 end Gadgets.ElementwiseScalarMul
