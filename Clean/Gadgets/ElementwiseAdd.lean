@@ -1,4 +1,5 @@
 import Clean.Circuit.StructuralLemmas
+import Clean.Utils.Tactics
 
 namespace ElementwiseAdd
 
@@ -47,13 +48,22 @@ instance elaborated : ElaboratedCircuit F (Inputs M) M where
   localLength _ := 0
 
 theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec := by
-  intro i0 env input_var input h_input h_as h_holds
-  simp only [Spec, elaborated, eval, explicit_provable_type]
-  sorry
+  circuit_proof_start
+  rcases input
+  rcases input_var
+  simp only [Inputs.mk.injEq] at h_input
+  ext i h_i
+  simp only [Vector.getElem_ofFn]
+  rw [eval_fromElements]
+  simp only [toElements_fromElements]
+  simp only [Vector.getElem_map]
+  simp only [Vector.getElem_ofFn]
+  simp only [Expression.eval]
+  rw [getElem_eval_toElements, getElem_eval_toElements]
+  simp only [h_input.1, h_input.2]
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
-  intro i0 env input_var h_uses_local h_env_extends
-  simp only [elaborated, main, circuit_norm]
+  circuit_proof_start
 
 def circuit : FormalCircuit F (Inputs M) M where
   Assumptions := Assumptions
