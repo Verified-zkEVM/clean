@@ -135,11 +135,11 @@ def FormalCircuit.strengthenAssumption
     · assumption
     · apply circuit.soundness <;> simp_all
   completeness := by
-    intro offset env input_var h_env input h_eval h_stronger_assumptions
-    -- Use the assumption implication to get the original assumptions
-    have h_original_assumptions := h_assumptions_implication input h_stronger_assumptions
-    -- Apply the original circuit's completeness
-    exact circuit.completeness offset env input_var h_env input h_eval h_original_assumptions
+    intro _ _ _ _ _ _ _
+    apply circuit.completeness
+    · assumption
+    · assumption
+    · aesop
 }
 
 @[circuit_norm]
