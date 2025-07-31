@@ -65,6 +65,60 @@ def circuit : FormalCircuit F (Inputs M) M where
   soundness
   completeness
 
+/--
+Weaker specification for ElementwiseAdd that handles zero inputs specially.
+When either input is zero, the output equals the non-zero input.
+-/
+def WeakerSpec (input : Inputs M F) (output : M F) : Prop :=
+  (input.a = zero → output = input.b) ∧
+  (input.b = zero → output = input.a)
+
+/--
+Proof that the original spec implies the weaker spec.
+-/
+theorem spec_implies_weaker : ∀ (input : Inputs M F) (output : M F),
+    Assumptions input →
+    Spec input output →
+    WeakerSpec input output := by
+  intro input output h_assumptions h_spec
+  simp only [WeakerSpec, Spec] at *
+  constructor
+  · intro h_a_zero
+    -- When a is zero, we need to show output = b
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [h_spec]
+    simp only [Vector.getElem_ofFn]
+    rw [h_a_zero, zero]
+    simp only [toElements_fromElements, Vector.getElem_fill, zero_add]
+    simp only [Fin.getElem_fin, add_eq_right]
+    simp only [Vector.getElem_fill]
+  · intro h_b_zero
+    -- When b is zero, we need to show output = a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [h_spec]
+    simp only [Vector.getElem_ofFn]
+    rw [h_b_zero, zero]
+    simp only [toElements_fromElements, Vector.getElem_fill, add_zero, Vector.getElem_fill]
+    simp only [Fin.getElem_fin, add_eq_left]
+    simp only [Vector.getElem_fill]
+
+/--
+ElementwiseAdd circuit with weaker specification for zero handling.
+-/
+def circuitWithZeroSpec : FormalCircuit F (Inputs M) M :=
+  circuit.weakenSpec WeakerSpec spec_implies_weaker
+
+@[circuit_norm]
+lemma circuitWithZeroSpec_assumptions : (circuitWithZeroSpec (F := F) (M := M)).Assumptions = Assumptions := by
+  simp only [circuitWithZeroSpec, FormalCircuit.weakenSpec_assumptions]
+  rfl
+
+@[circuit_norm]
+lemma circuitWithZeroSpec_spec : (circuitWithZeroSpec (F := F) (M := M)).Spec = WeakerSpec := by
+  simp only [circuitWithZeroSpec, FormalCircuit.weakenSpec]
+
 end
 
 end ElementwiseAdd
