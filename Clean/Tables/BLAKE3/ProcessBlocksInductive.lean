@@ -379,10 +379,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
               ZMod.val_zero, Nat.ofNat_pos]
         )
         rcases h_holds with ⟨ h_first_half, h_holds ⟩
-        specialize h_first_half (by
-          simp only [BLAKE3StateFirstHalf.circuit]
-          simp only [h_compress]
-          )
+        specialize h_first_half (by simp only [BLAKE3StateFirstHalf.circuit, h_compress])
         dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
         rcases h_holds with ⟨ h_addition, h_holds ⟩
         specialize h_addition (by
@@ -392,15 +389,13 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           simp [spec_previous])
         dsimp only [Addition32.circuit, Addition32.Spec] at h_addition
         rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-        specialize h_vector_cond (by
-          simp [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions])
+        specialize h_vector_cond (by simp [ConditionalVector8U32.circuit, ConditionalVector8U32.Assumptions])
         dsimp only [ConditionalVector8U32.circuit, ConditionalVector8U32.Spec] at h_vector_cond
         specialize h_u32_cond (by
           simp [ConditionalU32.circuit, ConditionalU32.Assumptions])
         dsimp only [ConditionalU32.circuit, ConditionalU32.Spec] at h_u32_cond
         constructor
         · simp only [h_u32_cond, h_vector_cond, ↓reduceIte] at ⊢ h_addition h_compress
-          -- simp only [h_addition] doesn't work because h_addition is about the value
           simp only [BLAKE3StateFirstHalf.circuit, h_first_half.1] at ⊢ h_addition h_compress
           simp only [processBlockWords, ProcessBlocksState.toChunkState] at ⊢ h_addition h_compress
           simp only [h_addition.1] at ⊢ h_compress
