@@ -21,6 +21,7 @@ Ensures each output limb equals scalar * input limb and the output is normalized
 def Spec (input : ScalarMulU32.Inputs (F p)) (output : U32 (F p)) : Prop :=
   ScalarMulU32.Spec input output ∧ output.Normalized
 
+omit p_large_enough in
 /--
 Key theorem: multiplying a normalized U32 by a binary scalar preserves normalization.
 -/
@@ -56,7 +57,7 @@ def circuit : FormalCircuit (F p) ScalarMulU32.Inputs U32 :=
     Assumptions
     Spec
     (fun _ _ => trivial)  -- IsBool ∧ Normalized → True (original assumption)
-    (fun _ _ ⟨h_bool, h_norm⟩ h_spec => 
+    (fun _ _ ⟨h_bool, h_norm⟩ h_spec =>
       ⟨h_spec, binary_mul_preserves_normalized h_bool h_norm h_spec⟩)
 
 end Gadgets.BinaryMulU32
