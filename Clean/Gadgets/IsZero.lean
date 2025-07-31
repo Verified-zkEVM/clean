@@ -13,9 +13,6 @@ Main circuit that checks if a field element is zero.
 Returns 1 if the input is 0, otherwise returns 0.
 -/
 def main (x : Var field (F p)) : Circuit (F p) (Var field (F p)) := do
-  -- If x = 0, then isZero = 1
-  -- If x ≠ 0, then isZero = 0
-
   let isZero ← witness fun env => if x.eval env = 0 then (1 : F p) else 0
 
   -- When x ≠ 0, we need x_inv such that x * x_inv = 1
@@ -23,13 +20,10 @@ def main (x : Var field (F p)) : Circuit (F p) (Var field (F p)) := do
   let x_inv ← witness fun env =>
     if x.eval env = 0 then 0 else (x.eval env : F p)⁻¹
 
-  -- Add constraints
   isZero * x === 0  -- If isZero = 1, then x must be 0
   isZero * (isZero - 1) === 0  -- isZero must be boolean (0 or 1)
 
-  -- Key constraint: (1 - isZero) * x * x_inv = (1 - isZero)
-  -- If isZero = 0 (i.e., x ≠ 0), then x * x_inv = 1
-  -- If isZero = 1 (i.e., x = 0), then the constraint is 0 = 0
+  -- If isZero = 0 (i.e., x ≠ 0), then x * x_inv = 1, so x is non-zero
   (1 - isZero) * x * x_inv === (1 - isZero)
 
   return isZero
