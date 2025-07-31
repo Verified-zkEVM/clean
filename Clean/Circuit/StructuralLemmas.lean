@@ -99,4 +99,3 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableT
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
-
