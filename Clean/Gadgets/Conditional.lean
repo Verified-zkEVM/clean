@@ -31,13 +31,13 @@ and circuitWithZeroSpec for addition (handles zero cases).
 -/
 def main (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
-  
+
   -- Compute selector * ifTrue (using binaryCircuit since selector is binary)
   let scaledTrue ← Gadgets.ElementwiseScalarMul.binaryCircuit { scalar := selector, data := ifTrue }
-  
+
   -- Compute (1 - selector) * ifFalse (using binaryCircuit since 1-selector is binary when selector is binary)
   let scaledFalse ← Gadgets.ElementwiseScalarMul.binaryCircuit { scalar := 1 - selector, data := ifFalse }
-  
+
   -- Add them together (using circuitWithZeroSpec which handles zero cases)
   ElementwiseAdd.circuitWithZeroSpec { a := scaledTrue, b := scaledFalse }
 
@@ -59,10 +59,49 @@ instance elaborated : ElaboratedCircuit F (Inputs M) M where
   localLength _ := 0
 
 theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec := by
-  sorry -- Will need to compose the soundness proofs of ElementwiseScalarMul and ElementwiseAdd
+  circuit_proof_start
+  rcases input
+  simp only [Inputs.mk.injEq] at h_input
+  simp only [h_input] at ⊢ h_holds
+  constructor
+  · intros h_one
+    simp only [h_one] at h_holds
+    rcases h_holds with ⟨ h_scale1, h_holds ⟩
+    specialize h_scale1 (by simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm])
+    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec] at h_scale1
+    norm_num at h_scale1
+    simp only [h_scale1] at h_holds
+    rcases h_holds with ⟨ h_scale2, h_holds ⟩
+    specialize h_scale2 (by simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm])
+    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec] at h_scale2
+    norm_num at h_scale2
+    simp only [h_scale2] at h_holds
+    specialize h_holds (by simp only [ElementwiseAdd.Assumptions])
+    simp only [ElementwiseAdd.WeakerSpec] at h_holds
+    simp_all
+  · intros h_zero
+    simp only [h_zero] at h_holds
+    rcases h_holds with ⟨ h_scale1, h_holds ⟩
+    specialize h_scale1 (by simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm])
+    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec] at h_scale1
+    norm_num at h_scale1
+    simp only [h_scale1] at h_holds
+    rcases h_holds with ⟨ h_scale2, h_holds ⟩
+    specialize h_scale2 (by simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm])
+    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec] at h_scale2
+    norm_num at h_scale2
+    simp only [h_scale2] at h_holds
+    specialize h_holds (by simp only [ElementwiseAdd.Assumptions])
+    simp only [ElementwiseAdd.WeakerSpec] at h_holds
+    simp_all
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
-  sorry -- Will need to compose the completeness proofs
+  circuit_proof_start
+  constructor
+  · simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm]
+  constructor
+  · simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm]
+  simp only [ElementwiseAdd.Assumptions]
 
 def circuit : FormalCircuit F (Inputs M) M where
   Assumptions
