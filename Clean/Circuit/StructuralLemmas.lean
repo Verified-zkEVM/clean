@@ -130,13 +130,10 @@ def FormalCircuit.strengthenAssumption
   Assumptions := StrongerAssumptions
   Spec := NewSpec
   soundness := by
-    intro offset env input_var input h_eval h_stronger_assumptions h_holds
-    -- First, use the assumption implication to get the original assumptions
-    have h_original_assumptions := h_assumptions_implication input h_stronger_assumptions
-    -- Use the original circuit's soundness
-    have h_original_spec := circuit.soundness offset env input_var input h_eval h_original_assumptions h_holds
-    -- Apply the spec implication to get the new spec
-    exact h_spec_implication input _ h_stronger_assumptions h_original_spec
+    intros _ _ _ _ _ _ _
+    apply h_spec_implication
+    · assumption
+    · apply circuit.soundness <;> simp_all
   completeness := by
     intro offset env input_var h_env input h_eval h_stronger_assumptions
     -- Use the assumption implication to get the original assumptions
@@ -147,14 +144,14 @@ def FormalCircuit.strengthenAssumption
 
 @[circuit_norm]
 lemma FormalCircuit.strengthenAssumption_Assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
-    (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop) 
+    (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop)
     h_assumptions_implication h_spec_implication :
     (c.strengthenAssumption StrongerAssumptions NewSpec h_assumptions_implication h_spec_implication).Assumptions = StrongerAssumptions := by
   simp only [FormalCircuit.strengthenAssumption]
 
 @[circuit_norm]
 lemma FormalCircuit.strengthenAssumption_Spec {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
-    (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop) 
+    (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop)
     h_assumptions_implication h_spec_implication :
     (c.strengthenAssumption StrongerAssumptions NewSpec h_assumptions_implication h_spec_implication).Spec = NewSpec := by
   simp only [FormalCircuit.strengthenAssumption]
