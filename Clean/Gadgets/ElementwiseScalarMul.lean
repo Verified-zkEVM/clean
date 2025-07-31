@@ -60,15 +60,12 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   simp only [ProvableStruct.componentsFromElements] at h_input
   simp only [Inputs.mk.injEq] at h_input
   simp only [main, circuit_norm]
-  simp only [h_input.1.symm]
-  simp only [h_input.2.symm]
+  simp only [h_input.1.symm, h_input.2.symm]
   clear h_input
   ext i h_i
   simp only [Vector.getElem_map]
   simp only [main, circuit_norm]
-  simp only [ProvableType.toElements_fromElements]
-  simp only [Vector.getElem_map, Expression.eval]
-  simp only [Vector.instHAppendHAddNat, Vector.append]
+  simp only [Vector.instHAppendHAddNat, Vector.append, ProvableType.toElements_fromElements]
   aesop
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
@@ -106,19 +103,11 @@ theorem binarySpec_holds {input : Inputs M F} {output : M F}
     simp only [zero_mul, zero] at h_spec ⊢
     rw [ProvableType.ext_iff]
     intro i hi
-    rw [ProvableType.toElements_fromElements]
-    simp only [h_spec]
-    simp only [Vector.getElem_map]
-    simp only [h_zero]
-    simp only [zero_mul]
-    simp only [Vector.getElem_fill]
+    simp only [ProvableType.toElements_fromElements, h_spec, Vector.getElem_fill]
+    aesop
   · intro h_one
     rw [ProvableType.ext_iff]
-    intro i hi
-    simp only [h_spec]
-    simp only [Vector.getElem_map]
-    simp only [h_one]
-    simp only [one_mul]
+    aesop
 
 /--
 Binary scalar multiplication circuit with weaker specification.

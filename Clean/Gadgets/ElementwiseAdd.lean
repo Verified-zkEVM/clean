@@ -85,24 +85,18 @@ theorem spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
   constructor
   · intro h_a_zero
     -- When a is zero, we need to show output = b
-    rw [ProvableType.ext_iff]
+    simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
-    simp only [Vector.getElem_ofFn]
-    rw [h_a_zero, zero]
-    simp only [toElements_fromElements, Vector.getElem_fill, zero_add]
-    simp only [Fin.getElem_fin, add_eq_right]
-    simp only [Vector.getElem_fill]
+    simp only [Vector.getElem_ofFn, h_a_zero, zero]
+    simp only [toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
   · intro h_b_zero
     -- When b is zero, we need to show output = a
-    rw [ProvableType.ext_iff]
+    simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
-    simp only [Vector.getElem_ofFn]
-    rw [h_b_zero, zero]
-    simp only [toElements_fromElements, Vector.getElem_fill, add_zero, Vector.getElem_fill]
-    simp only [Fin.getElem_fin, add_eq_left]
-    simp only [Vector.getElem_fill]
+    simp only [Vector.getElem_ofFn, h_b_zero, zero]
+    simp only [toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
 
 /--
 ElementwiseAdd circuit with weaker specification for zero handling.
