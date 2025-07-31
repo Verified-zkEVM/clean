@@ -97,7 +97,7 @@ def BinarySpec (input : Inputs M F) (output : M F) : Prop :=
 /--
 Key theorem: binary scalar multiplication satisfies the stronger spec.
 -/
-theorem binary_spec_holds {input : Inputs M F} {output : M F}
+theorem binarySpec_holds {input : Inputs M F} {output : M F}
     (h_spec : Spec input output) :
     BinarySpec input output := by
   simp only [BinarySpec, Spec] at *
@@ -127,7 +127,7 @@ Only guarantees behavior for binary scalars (0 or 1).
 def binaryCircuit : FormalCircuit F (Inputs M) M :=
   (circuit (F := F) (M := M)).weakenSpec
     BinarySpec
-    (fun _ _ _ h_spec => binary_spec_holds h_spec)
+    (fun _ _ _ h_spec => binarySpec_holds h_spec)
 
 end Gadgets.ElementwiseScalarMul
 

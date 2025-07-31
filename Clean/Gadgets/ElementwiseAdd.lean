@@ -76,7 +76,7 @@ def WeakerSpec (input : Inputs M F) (output : M F) : Prop :=
 /--
 Proof that the original spec implies the weaker spec.
 -/
-theorem spec_implies_weaker : ∀ (input : Inputs M F) (output : M F),
+theorem spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     Assumptions input →
     Spec input output →
     WeakerSpec input output := by
@@ -108,7 +108,7 @@ theorem spec_implies_weaker : ∀ (input : Inputs M F) (output : M F),
 ElementwiseAdd circuit with weaker specification for zero handling.
 -/
 def circuitWithZeroSpec : FormalCircuit F (Inputs M) M :=
-  circuit.weakenSpec WeakerSpec spec_implies_weaker
+  circuit.weakenSpec WeakerSpec spec_implies_weakerSpec
 
 @[circuit_norm]
 lemma circuitWithZeroSpec_assumptions : (circuitWithZeroSpec (F := F) (M := M)).Assumptions = Assumptions := by
