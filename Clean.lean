@@ -18,6 +18,7 @@ import Clean.Tables.Fibonacci32Inductive
 import Clean.Tables.KeccakInductive
 import Clean.Gadgets.Bits
 import Clean.Gadgets.ScalarMulU32
+import Clean.Gadgets.BinaryMulU32
 import Clean.Gadgets.BLAKE3.ApplyRounds
 import Clean.Gadgets.BLAKE3.BLAKE3G
 import Clean.Gadgets.BLAKE3.Compress
