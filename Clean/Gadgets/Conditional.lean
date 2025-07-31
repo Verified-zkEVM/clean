@@ -23,27 +23,15 @@ instance : ProvableStruct (Inputs M) where
   toComponents := fun { selector, ifTrue, ifFalse } => .cons selector (.cons ifTrue (.cons ifFalse .nil))
   fromComponents := fun (.cons selector (.cons ifTrue (.cons ifFalse .nil))) => { selector, ifTrue, ifFalse }
 
-/--
-Main circuit that performs conditional selection.
-Computes: selector * ifTrue + (1 - selector) * ifFalse
-Using binaryCircuit for scalar multiplication (since selector and 1-selector are binary)
-and circuitWithZeroSpec for addition (handles zero cases).
--/
 def main (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
 
-  -- Compute selector * ifTrue (using binaryCircuit since selector is binary)
   let scaledTrue ← Gadgets.ElementwiseScalarMul.binaryCircuit { scalar := selector, data := ifTrue }
-
-  -- Compute (1 - selector) * ifFalse (using binaryCircuit since 1-selector is binary when selector is binary)
   let scaledFalse ← Gadgets.ElementwiseScalarMul.binaryCircuit { scalar := 1 - selector, data := ifFalse }
 
-  -- Add them together (using circuitWithZeroSpec which handles zero cases)
+  -- Add them together (using circuitWithZeroSpec which handles zero plus something)
   ElementwiseAdd.circuitWithZeroSpec { a := scaledTrue, b := scaledFalse }
 
-/--
-No assumptions needed for conditional selection.
--/
 def Assumptions (_ : Inputs M F) : Prop := True
 
 /--
@@ -102,6 +90,9 @@ theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions
   · trivial
   simp only [ElementwiseAdd.Assumptions]
 
+/--
+Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
+-/
 def circuit : FormalCircuit F (Inputs M) M where
   Assumptions
   Spec

@@ -33,9 +33,6 @@ def main (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let scaledVars := dataVars.map (scalar * ·)
   return fromVars scaledVars
 
-/--
-No assumptions needed for basic element-wise scalar multiplication.
--/
 def Assumptions (_ : Inputs M F) : Prop := True
 
 /--
@@ -72,9 +69,6 @@ theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions
   intro i0 env input_var h_env input h_input h_as
   simp only [circuit_norm, main]
 
-/--
-Formal circuit for element-wise scalar multiplication.
--/
 def circuit : FormalCircuit F (Inputs M) M := {
   elaborated := elaborated (F := F) (M := M)
   Assumptions
@@ -91,10 +85,7 @@ def BinarySpec (input : Inputs M F) (output : M F) : Prop :=
   (input.scalar = 0 → output = zero) ∧
   (input.scalar = 1 → output = input.data)
 
-/--
-Key theorem: binary scalar multiplication satisfies the stronger spec.
--/
-theorem binarySpec_holds {input : Inputs M F} {output : M F}
+lemma binarySpec_holds {input : Inputs M F} {output : M F}
     (h_spec : Spec input output) :
     BinarySpec input output := by
   simp only [BinarySpec, Spec] at *
@@ -111,7 +102,7 @@ theorem binarySpec_holds {input : Inputs M F} {output : M F}
 
 /--
 Binary scalar multiplication circuit with weaker specification.
-Only guarantees behavior for binary scalars (0 or 1).
+Guarantees that scalar 0 produces zero and scalar 1 preserves the data.
 -/
 def binaryCircuit : FormalCircuit F (Inputs M) M :=
   (circuit (F := F) (M := M)).weakenSpec

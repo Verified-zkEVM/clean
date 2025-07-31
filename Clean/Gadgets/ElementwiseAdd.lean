@@ -10,7 +10,7 @@ variable {M : TypeMap} [ProvableType M]
 open ProvableType
 
 /--
-Inputs for element-wise addition of two ProvableTypes.
+Inputs for element-wise addition of two ProvableTypes. No carries for overflows and each element just wraps around.
 -/
 structure Inputs (M : TypeMap) (F : Type) where
   a : M F
@@ -21,10 +21,6 @@ instance : ProvableStruct (Inputs M) where
   toComponents := fun { a, b } => .cons a (.cons b .nil)
   fromComponents := fun (.cons a (.cons b .nil)) => { a, b }
 
-/--
-Main circuit that performs element-wise addition.
-Adds corresponding elements of two ProvableTypes.
--/
 def main (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { a, b } := input
   let aVars := toVars a
@@ -32,9 +28,6 @@ def main (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let sumVars := Vector.ofFn fun i => aVars[i] + bVars[i]
   return fromVars sumVars
 
-/--
-No assumptions needed for basic element-wise addition.
--/
 def Assumptions (_ : Inputs M F) : Prop := True
 
 /--
@@ -73,10 +66,7 @@ def WeakerSpec (input : Inputs M F) (output : M F) : Prop :=
   (input.a = zero → output = input.b) ∧
   (input.b = zero → output = input.a)
 
-/--
-Proof that the original spec implies the weaker spec.
--/
-theorem spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
+lemma spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     Assumptions input →
     Spec input output →
     WeakerSpec input output := by
@@ -84,14 +74,12 @@ theorem spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
   simp only [WeakerSpec, Spec] at *
   constructor
   · intro h_a_zero
-    -- When a is zero, we need to show output = b
     simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
     simp only [Vector.getElem_ofFn, h_a_zero, zero]
     simp only [toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
   · intro h_b_zero
-    -- When b is zero, we need to show output = a
     simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
@@ -99,7 +87,7 @@ theorem spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     simp only [toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
 
 /--
-ElementwiseAdd circuit with weaker specification for zero handling.
+When either input is zero, the output equals the non-zero input.
 -/
 def circuitWithZeroSpec : FormalCircuit F (Inputs M) M :=
   circuit.weakenSpec WeakerSpec spec_implies_weakerSpec
