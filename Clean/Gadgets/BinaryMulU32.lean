@@ -12,7 +12,7 @@ Assumptions for binary multiplication of U32.
 Requires the scalar to be binary (0 or 1) and the input U32 to be normalized.
 -/
 def Assumptions (input : ScalarMulU32.Inputs (F p)) : Prop :=
-  IsBool input.scalar ∧ input.value.Normalized
+  IsBool input.scalar ∧ input.original.Normalized
 
 /--
 Specification for binary multiplication of U32.
@@ -27,7 +27,7 @@ Key theorem: multiplying a normalized U32 by a binary scalar preserves normaliza
 -/
 theorem binary_mul_preserves_normalized {input : ScalarMulU32.Inputs (F p)} {output : U32 (F p)}
     (h_binary : IsBool input.scalar)
-    (h_norm : input.value.Normalized)
+    (h_norm : input.original.Normalized)
     (h_spec : ScalarMulU32.Spec input output) :
     output.Normalized := by
   simp only [ScalarMulU32.Spec] at h_spec
