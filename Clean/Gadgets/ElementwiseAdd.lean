@@ -53,14 +53,7 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   rcases input_var
   simp only [Inputs.mk.injEq] at h_input
   ext i h_i
-  simp only [Vector.getElem_ofFn]
-  rw [eval_fromElements]
-  simp only [toElements_fromElements]
-  simp only [Vector.getElem_map]
-  simp only [Vector.getElem_ofFn]
-  simp only [Expression.eval]
-  rw [getElem_eval_toElements, getElem_eval_toElements]
-  simp only [h_input.1, h_input.2]
+  simp only [Vector.getElem_ofFn, eval_fromElements, toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn, Expression.eval, getElem_eval_toElements, getElem_eval_toElements, h_input.1, h_input.2]
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
   circuit_proof_start
