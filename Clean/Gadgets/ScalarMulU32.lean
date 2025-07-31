@@ -66,13 +66,12 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   -- manual steps follow because U32 is not a ProvableStruct
+  rcases input_value
   simp only [explicit_provable_type, toVars] at ⊢ h_input
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil] at ⊢ h_input
-  simp only [Expression.eval, h_input]
-  rcases input_value
   simp only [explicit_provable_type, U32.mk.injEq] at h_input
-  simp only [h_input]
-  trivial
+  simp [Expression.eval, h_input]
+
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
