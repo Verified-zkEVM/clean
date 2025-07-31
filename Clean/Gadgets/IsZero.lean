@@ -51,43 +51,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · aesop
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro offset env x_var h_env_uses x h_eval h_assumptions
-  simp only [main, circuit_norm]
-
-  -- Extract witness values from h_env_uses
-  have h_uses : env.UsesLocalWitnessesCompleteness offset (main x_var (offset)).2 := by
-    simp only [elaborated, ElaboratedCircuit.main] at h_env_uses
-    exact h_env_uses
-  simp only [main, circuit_norm] at h_uses
-  obtain ⟨h_wit_isZero, h_wit_x_inv⟩ := h_uses
-
-  -- The witnesses are exactly as specified
-  simp [h_eval] at h_wit_isZero h_wit_x_inv
-
-  refine ⟨?_, ?_, ?_⟩
-  · -- First constraint: isZero * x = 0
-    rw [h_wit_isZero]
-    by_cases hx : x = 0
-    · simp [hx]
-    · simp [hx]
-  · -- Second constraint: isZero * (isZero - 1) = 0
-    rw [h_wit_isZero]
-    by_cases hx : x = 0
-    · simp only [circuit_norm] at h_eval ⊢
-      simp only [h_eval]
-      simp [hx]
-    · simp only [circuit_norm] at h_eval ⊢
-      simp only [h_eval]
-      simp [hx]
-  · -- Third constraint: (1 - isZero) * x * x_inv = (1 - isZero)
-    simp only [circuit_norm] at h_eval ⊢
-    simp only [h_eval]
-    rw [h_wit_isZero, h_wit_x_inv]
-    by_cases hx : x = 0
-    · simp only [h_eval]
-      simp [hx]
-    · simp only [h_eval]
-      simp [hx]
+  circuit_proof_start
+  aesop
 
 def circuit : FormalCircuit (F p) field field := {
   elaborated with Assumptions, Spec, soundness, completeness
