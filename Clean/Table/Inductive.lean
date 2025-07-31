@@ -299,7 +299,7 @@ def toFormal (table : InductiveTable F State Input) (input output: State F) : Fo
   Spec {N} trace := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output
 
   soundness N trace env assumption constraints :=
-    table_soundness table input output ⟨N, assumption.left⟩ trace env assumption.right constraints
+    table.table_soundness input output ⟨N, assumption.left⟩ trace env assumption.right constraints
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
