@@ -143,14 +143,14 @@ def FormalCircuit.strengthenAssumption
 }
 
 @[circuit_norm]
-lemma FormalCircuit.strengthenAssumption_Assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+lemma FormalCircuit.strengthenAssumption_assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
     (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop)
     h_assumptions_implication h_spec_implication :
     (c.strengthenAssumption StrongerAssumptions NewSpec h_assumptions_implication h_spec_implication).Assumptions = StrongerAssumptions := by
   simp only [FormalCircuit.strengthenAssumption]
 
 @[circuit_norm]
-lemma FormalCircuit.strengthenAssumption_Spec {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+lemma FormalCircuit.strengthenAssumption_spec {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
     (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop)
     h_assumptions_implication h_spec_implication :
     (c.strengthenAssumption StrongerAssumptions NewSpec h_assumptions_implication h_spec_implication).Spec = NewSpec := by
