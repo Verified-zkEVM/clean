@@ -91,7 +91,6 @@ Alternative specification for binary scalar multiplication.
 Guarantees that scalar 0 produces zero and scalar 1 preserves the data.
 -/
 def BinarySpec (input : Inputs M F) (output : M F) : Prop :=
-  Spec input output ∧
   (input.scalar = 0 → output = zero) ∧
   (input.scalar = 1 → output = input.data)
 
@@ -102,8 +101,6 @@ theorem binary_spec_holds {input : Inputs M F} {output : M F}
     (h_spec : Spec input output) :
     BinarySpec input output := by
   simp only [BinarySpec, Spec] at *
-  constructor
-  · exact h_spec
   constructor
   · intro h_zero
     simp only [zero_mul, zero] at h_spec ⊢
