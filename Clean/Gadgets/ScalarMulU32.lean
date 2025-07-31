@@ -51,17 +51,14 @@ def Spec (input : Inputs (F p)) (output : U32 (F p)) : Prop :=
   output.x3 = input.scalar * input.value.x3
 
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
-  main := main
+  main
   localLength _ := 0
-  localLength_eq _ _ := by simp only [main, circuit_norm]
   output input_var _ := {
     x0 := input_var.scalar * input_var.value.x0
     x1 := input_var.scalar * input_var.value.x1
     x2 := input_var.scalar * input_var.value.x2
     x3 := input_var.scalar * input_var.value.x3
   }
-  output_eq _ _ := by simp only [main, circuit_norm]
-  subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
@@ -71,7 +68,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil] at ⊢ h_input
   simp only [explicit_provable_type, U32.mk.injEq] at h_input
   simp [Expression.eval, h_input]
-
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
