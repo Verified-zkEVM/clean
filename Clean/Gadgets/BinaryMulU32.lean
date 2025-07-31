@@ -30,23 +30,11 @@ theorem binary_mul_preserves_normalized {input : ScalarMulU32.Inputs (F p)} {out
     (h_norm : input.value.Normalized)
     (h_spec : ScalarMulU32.Spec input output) :
     output.Normalized := by
-  -- Unfold the spec to get the multiplication equations
   simp only [ScalarMulU32.Spec] at h_spec
-  obtain ⟨h_x0, h_x1, h_x2, h_x3⟩ := h_spec
-  -- Unfold normalization for input and output
   simp only [U32.Normalized] at h_norm ⊢
-  obtain ⟨h_in0, h_in1, h_in2, h_in3⟩ := h_norm
-  -- Case split on whether scalar is 0 or 1
   cases h_binary with
-  | inl h_zero =>
-    -- If scalar = 0, all outputs are 0
-    simp [h_zero, zero_mul] at h_x0 h_x1 h_x2 h_x3
-    simp [h_x0, h_x1, h_x2, h_x3, ZMod.val_zero]
-  | inr h_one =>
-    -- If scalar = 1, output = input
-    simp [h_one, one_mul] at h_x0 h_x1 h_x2 h_x3
-    simp [h_x0, h_x1, h_x2, h_x3]
-    exact ⟨h_in0, h_in1, h_in2, h_in3⟩
+  | inl h_zero => aesop
+  | inr h_one => aesop
 
 /--
 Binary multiplication circuit for U32.
