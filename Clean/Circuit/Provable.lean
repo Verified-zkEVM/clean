@@ -97,19 +97,25 @@ def const (x: α F) : Var α F :=
   let values : Vector F _ := toElements x
   fromVars (values.map .const)
 
-def synthesizeValue : α F :=
-  let zeros := Vector.fill (size α) 0
-  fromElements zeros
+/--
+Zero value for any ProvableType.
+Creates an instance filled with field zero elements.
+-/
+def zero : α F :=
+  fromElements (Vector.fill (size α) 0)
 
 instance [Field F] : Inhabited (α F) where
-  default := synthesizeValue
+  default := zero
 
-def synthesizeConstVar : Var α F :=
-  let zeros := Vector.fill (size α) 0
-  fromVars (zeros.map .const)
+/--
+Zero variable for any ProvableType.
+Creates a variable representing the zero value.
+-/
+def zeroVar : Var α F :=
+  const zero
 
 instance [Field F] : Inhabited (Var α F) where
-  default := synthesizeConstVar
+  default := zeroVar
 
 @[explicit_provable_type]
 def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
@@ -120,7 +126,7 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
 attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
 end ProvableType
 
-export ProvableType (eval const varFromOffset)
+export ProvableType (eval const zero zeroVar varFromOffset)
 
 @[reducible]
 def unit (_: Type) := Unit
