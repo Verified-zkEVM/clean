@@ -75,31 +75,40 @@ def circuit : FormalCircuit F (Inputs M) M := {
 }
 
 /--
+Assumptions for binary scalar multiplication.
+Requires the scalar to be boolean (0 or 1).
+-/
+def BinaryAssumptions (input : Inputs M F) : Prop :=
+  IsBool input.scalar
+
+/--
 Alternative specification for binary scalar multiplication.
 Guarantees that scalar 0 produces zero and scalar 1 preserves the data.
 -/
-def BinarySpec (input : Inputs M F) (output : M F) : Prop :=
-  (input.scalar = 0 → output = allZero) ∧
-  (input.scalar = 1 → output = input.data)
+def BinarySpec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
+  output = if input.scalar = 1 then input.data else allZero
 
-lemma binarySpec_holds {input : Inputs M F} {output : M F}
-    (h_spec : Spec input output) :
+lemma binarySpec_holds [DecidableEq F] {input : Inputs M F} {output : M F}
+      (h_bool : IsBool input.scalar)
+      (h_spec : Spec input output) :
     BinarySpec input output := by
   simp only [BinarySpec, Spec] at *
-  constructor
-  · intro h_zero
-    simp only [h_spec, h_zero, circuit_norm]
-  · intro h_one
-    simp only [h_spec, h_one, circuit_norm]
+  cases h_bool
+  · rename_i h_zero
+    simp [h_spec, h_zero, circuit_norm]
+  · rename_i h_one
+    simp [h_spec, h_one, circuit_norm]
 
 /--
-Binary scalar multiplication circuit with weaker specification.
-Guarantees that scalar 0 produces zero and scalar 1 preserves the data.
+Binary scalar multiplication circuit with boolean assumptions.
+Requires scalar to be 0 or 1, and guarantees clean if-then-else behavior.
 -/
-def binaryCircuit : FormalCircuit F (Inputs M) M :=
-  (circuit (F := F) (M := M)).weakenSpec
+def binaryCircuit [DecidableEq F] : FormalCircuit F (Inputs M) M :=
+  (circuit (F := F) (M := M)).strengthenAssumptions
+    BinaryAssumptions
     BinarySpec
-    (fun _ _ _ h_spec => binarySpec_holds h_spec)
+    (fun _ _ => True.intro)  -- BinaryAssumptions → Assumptions (which is True)
+    (fun _ _ => binarySpec_holds)
 
 end Gadgets.ElementwiseScalarMul
 
