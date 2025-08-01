@@ -655,7 +655,6 @@ theorem elementwiseAdd_allZero (a : M F) : a .+ allZero = a := by
   norm_num
   simp only [Vector.getElem_fill]
 
-@[circuit_norm]
 theorem elementwiseAdd_comm (a b : M F) : a .+ b = b .+ a := by
   rw [ProvableType.ext_iff]
   intros
