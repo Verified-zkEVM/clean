@@ -70,7 +70,7 @@ partial def circuitProofStartCore : TacticM Unit := do
 syntax "circuit_proof_start" ("[" term,* "]")? : tactic
 
 elab_rules : tactic
-  | `(tactic| circuit_proof_start) => do
+  | `(tactic| circuit_proof_start $[[$terms:term,*]]?) => do
   -- intro all hypotheses
   circuitProofStartCore
 
@@ -84,27 +84,12 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
   -- Additional simplification for common patterns in soundness/completeness proofs
-  try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_env):ident))) catch _ => pure ()
-  | `(tactic| circuit_proof_start [$terms:term,*]) => do
-  -- intro all hypotheses
-  circuitProofStartCore
-
-  -- try to unfold main, Assumptions and Spec as local definitions
-  try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
-  try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
-  try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
-  try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
-
-  -- simplify structs / eval first
-  try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
-
-  -- Additional simplification for common patterns in soundness/completeness proofs
-  -- Now including the extra terms provided by the user
-  -- We need to convert the terms to simpLemma syntax
-  let extraLemmas := terms.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+  -- Convert optional terms to simpLemma syntax
+  let extraLemmas := match terms with
+    | some terms => terms.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+    | none => #[]
   let lemmasArray ← extraLemmas.mapM id
+  
   try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
