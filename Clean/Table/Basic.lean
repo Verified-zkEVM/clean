@@ -516,14 +516,14 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
   foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
     Trace F S → (cs_iterator: List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
-    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩)::rest =>
+    | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
         constraint.ConstraintsHoldOnWindow window (env (trace.len + 1)) ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
-    | trace +> row, (⟨.boundary idx constraint, env⟩)::rest =>
+    | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
         let targetIdx := match idx with
@@ -532,13 +532,13 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
         (if trace.len = targetIdx then constraint.ConstraintsHoldOnWindow window (env trace.len) else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
-    | trace +> row, (⟨.everyRow constraint, env⟩)::rest =>
+    | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
         let others := foldl N cs (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
         constraint.ConstraintsHoldOnWindow window (env trace.len) ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
-    | trace, (⟨.everyRowExceptLast _, _⟩)::rest =>
+    | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
         foldl N cs trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row

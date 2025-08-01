@@ -89,7 +89,7 @@ def induct {motive : {n: ℕ} → Vector α n → Sort u}
     have : n = 0 := by rw [←h, List.length_eq_zero_iff]
     subst this
     congr
-  | ⟨ .mk (a::as), h ⟩ => by
+  | ⟨ .mk (a :: as), h ⟩ => by
     have : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
     subst this
     have ih := induct (n :=as.length) nil cons ⟨ .mk as, rfl ⟩
@@ -108,7 +108,7 @@ def inductPush {motive : {n: ℕ} → Vector α n → Sort u}
   match v with
   | ⟨ .mk [], (h : 0 = n) ⟩ =>
     cast (by subst h; rfl) nil
-  | ⟨ .mk (a::as), h ⟩ =>
+  | ⟨ .mk (a :: as), h ⟩ =>
     have hlen : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
     let ⟨ as', a', is_push ⟩ := toPush ⟨.mk (a :: as), rfl⟩
     cast (by subst hlen; rw [is_push]) (push as' a' (inductPush nil push as'))

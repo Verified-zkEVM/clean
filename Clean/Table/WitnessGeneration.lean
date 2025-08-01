@@ -92,7 +92,7 @@ def witnesses
   let mut trace := #[cur_row]
   let mut current := cur_row
 
-  for _ in [:n-1] do
+  for _ in [: n-1] do
     let next := generateNextRow tc current
     trace := trace.push next
     current := next
