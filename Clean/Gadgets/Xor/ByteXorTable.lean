@@ -34,7 +34,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
       repeat rw [fromByte, FieldUtils.val_of_natToField_eq]
       simp only [HXor.hXor, Xor.xor, Fin.xor]
       rw [Nat.mod_eq_iff_lt (by norm_num)]
-      apply Nat.xor_lt_two_pow (n :=8)
+      apply Nat.xor_lt_two_pow (n := 8)
       exact (splitTwoBytes i).1.is_lt
       exact (splitTwoBytes i).2.is_lt
     intro ⟨ hx, hy, h ⟩

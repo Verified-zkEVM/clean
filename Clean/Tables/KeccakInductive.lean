@@ -34,12 +34,12 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
 -- the input is hard-coded to the initial keccak state of all zeros
 def initialState : KeccakState (F p) := .fill 25 (U64.fromByte 0)
 
-lemma initialState_value : (initialState (p :=p)).value = .fill 25 0 := by
+lemma initialState_value : (initialState (p := p)).value = .fill 25 0 := by
   ext i hi
   simp only [initialState, KeccakState.value]
   rw [Vector.getElem_map, Vector.getElem_fill, Vector.getElem_fill, U64.fromByte_value, Fin.val_zero]
 
-lemma initialState_normalized : (initialState (p :=p)).Normalized := by
+lemma initialState_normalized : (initialState (p := p)).Normalized := by
   simp only [initialState, KeccakState.Normalized, Vector.getElem_fill, U64.fromByte_normalized]
   trivial
 

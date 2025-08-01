@@ -72,7 +72,7 @@ def everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
   intro N trace
   let P' (N : ℕ) (trace : TraceOfLength F S N) : Prop :=
     if h : N = 0 then True else P ⟨N, Nat.pos_iff_ne_zero.mpr h⟩ trace
-  have goal' := every_row_two_rows_induction (P :=P') trivial one (by
+  have goal' := every_row_two_rows_induction (P := P') trivial one (by
     intro N curr next rest h_rest h_curr
     exact more N curr next rest h_curr) N trace
   simpa [P', N.pos] using goal'

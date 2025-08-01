@@ -326,7 +326,7 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
   ∀ (i : ℕ) (hi : i + 1 < m),
     let acc := (circuit default xs[i]).output (n + i*(circuit default default).localLength);
     (circuit acc xs[i + 1]).forAll (n + (i + 1)*(circuit default default).localLength) prop := by
-  rw [forAll_iff (constant :=constant)]
+  rw [forAll_iff (constant := constant)]
   set k := (circuit default default).localLength
   simp only
   constructor
@@ -600,7 +600,7 @@ variable {env : Environment F} {m n : ℕ} [Inhabited β]
 lemma foldlRange.localLength_eq :
     (foldlRange m init body constant).localLength n =
       if h : m > 0 then m * (body default ⟨0, h⟩).localLength else 0 := by
-  rw [foldlRange, FoldlM.localLength_eq (constant :=constant)]
+  rw [foldlRange, FoldlM.localLength_eq (constant := constant)]
   rcases m with rfl | m; simp
   have : m+1 > 0 := by omega
   simp only [this, ↓reduceDIte]
@@ -610,7 +610,7 @@ lemma foldlRange.localLength_eq :
 lemma foldlRange.output_eq :
   (foldlRange m init body constant).output n =
     Fin.foldl m (fun acc i => (body acc i).output (n + i*(body default i).localLength)) init := by
-  rw [foldlRange, FoldlM.output_eq (constant :=constant)]
+  rw [foldlRange, FoldlM.output_eq (constant := constant)]
   simp only [Vector.getElem_finRange, Fin.eta]
   congr! 6
   rw [constant.localLength_eq (_, _)]
@@ -622,7 +622,7 @@ lemma foldlRange.forAll :
       body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
       |>.forAll (n + i * (body default i).localLength) prop := by
   simp only [foldlRange, ←forAll_def]
-  rw [FoldlM.forAll_iff_finRange (constant :=constant)]
+  rw [FoldlM.forAll_iff_finRange (constant := constant)]
   congr! 4
   rw [constant.localLength_eq (_, _), constant.localLength_eq (_, _)]
 

@@ -429,8 +429,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
--- #eval! main (p :=pBabybear) default |>.localLength
--- #eval! main (p :=pBabybear) default |>.output
+-- #eval! main (p := pBabybear) default |>.localLength
+-- #eval! main (p := pBabybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376

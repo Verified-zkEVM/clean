@@ -19,7 +19,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .map rhoPiConstants fun (i, s) =>
     Rotation64.circuit (-s) state[i.val]
 
-def Assumptions := KeccakState.Normalized (p :=p)
+def Assumptions := KeccakState.Normalized (p := p)
 
 def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized

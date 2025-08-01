@@ -36,8 +36,8 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output (offset % 8).val i0
 
--- #eval! (main (p :=p_babybear) 0) default |>.localLength
--- #eval! (main (p :=p_babybear) 0) default |>.output
+-- #eval! (main (p := p_babybear) 0) default |>.localLength
+-- #eval! (main (p := p_babybear) 0) default |>.output
 def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := main off
   localLength _ := 16
@@ -52,7 +52,7 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U64
   let byte_offset : ℕ := offset.val / 8
   let bit_offset : ℕ := (offset % 8).val
-  set byte_rotated := eval env (ElaboratedCircuit.output (self :=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
+  set byte_rotated := eval env (ElaboratedCircuit.output (self := Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
 
   simp [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Spec, Rotation64Bytes.Assumptions,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Spec, Rotation64Bits.Assumptions,
