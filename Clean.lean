@@ -18,6 +18,9 @@ import Clean.Tables.Fibonacci32Inductive
 import Clean.Tables.KeccakInductive
 import Clean.Tables.BLAKE3.ProcessBlocksInductive
 import Clean.Gadgets.Bits
+import Clean.Gadgets.Conditional
+import Clean.Gadgets.ElementwiseAdd
+import Clean.Gadgets.ElementwiseScalarMul
 import Clean.Gadgets.BLAKE3.ApplyRounds
 import Clean.Gadgets.BLAKE3.BLAKE3G
 import Clean.Gadgets.BLAKE3.Compress

@@ -23,7 +23,7 @@ instance : ProvableStruct Outputs where
   The low part is the least significant `offset` bits,
   and the high part is the most significant `8 - offset` bits.
 -/
-def main (offset : Fin 8) (x :  Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
   let high ← witness fun env => floorDiv (env x) (2^offset.val)
 

@@ -97,19 +97,25 @@ def const (x: α F) : Var α F :=
   let values : Vector F _ := toElements x
   fromVars (values.map .const)
 
-def synthesizeValue : α F :=
-  let zeros := Vector.fill (size α) 0
-  fromElements zeros
+/--
+All-zero value for any ProvableType.
+Creates an instance filled with field zero elements.
+-/
+def allZero : α F :=
+  fromElements (Vector.fill (size α) 0)
 
 instance [Field F] : Inhabited (α F) where
-  default := synthesizeValue
+  default := allZero
 
-def synthesizeConstVar : Var α F :=
-  let zeros := Vector.fill (size α) 0
-  fromVars (zeros.map .const)
+/--
+All-zero variable for any ProvableType.
+Creates a variable representing the elementwise zero value.
+-/
+def allZeroVar : Var α F :=
+  const allZero
 
 instance [Field F] : Inhabited (Var α F) where
-  default := synthesizeConstVar
+  default := allZeroVar
 
 @[explicit_provable_type]
 def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
@@ -118,9 +124,38 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
 
 -- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
 attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
+
+section Operations
+
+/--
+Element-wise addition for ProvableTypes.
+Adds corresponding elements from two ProvableType values. No carries. Each element wraps around.
+-/
+def elementwiseAdd [Field F] (a b : α F) : α F :=
+  fromElements (Vector.ofFn fun i => (toElements a)[i] + (toElements b)[i])
+
+/--
+Element-wise scalar multiplication for ProvableTypes.
+Multiplies each element by a scalar field element. No carries. Each element wraps around.
+-/
+def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
+  fromElements ((toElements v).map (s * ·))
+
+end Operations
+
 end ProvableType
 
-export ProvableType (eval const varFromOffset)
+/--
+Notation for element-wise addition of ProvableTypes.
+-/
+infixl:65 " .+ " => ProvableType.elementwiseAdd
+
+/--
+Notation for element-wise scalar multiplication of ProvableTypes.
+-/
+infixl:70 " .* " => ProvableType.elementwiseScalarMul
+
+export ProvableType (eval const allZero allZeroVar varFromOffset elementwiseAdd elementwiseScalarMul)
 
 @[reducible]
 def unit (_: Type) := Unit
@@ -364,11 +399,11 @@ variable {α: TypeMap} [ProvableType α]
 
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
-  ProvableType.eval env x = Expression.eval env x := by rfl
+  ProvableType.eval env x = Expression.eval env x := rfl
 
 @[circuit_norm ↓]
 theorem varFromOffset_field {F} (offset : ℕ) :
-  varFromOffset (F:=F) field offset = var ⟨offset⟩ := by rfl
+  varFromOffset (F:=F) field offset = var ⟨offset⟩ := rfl
 
 @[circuit_norm ↓]
 theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
@@ -513,7 +548,7 @@ theorem varFromOffset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvabl
     congr
     conv => rhs; congr; rhs; congr; intro i; rw [mul_comm, add_assoc]
     let create (i : ℕ) : Expression F := var ⟨ offset + i ⟩
-    have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := by rfl
+    have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := rfl
     rw [h_create, ←Vector.mapRange_add_eq_append]
     have h_size_succ : (n + 1) * size α = n * size α + size α := by rw [add_mul]; ac_rfl
     rw [←Vector.cast_mapRange h_size_succ]
