@@ -280,13 +280,13 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 
   -- Conditionally select between new state and old state based on block_exists
   -- If block_exists = 1, use newState; if block_exists = 0, use state
-  let muxedCV ← Conditional.main (M := ProvableVector U32 8) {
+  let muxedCV ← Conditional.circuit (M := ProvableVector U32 8) {
     selector := input.block_exists
     ifTrue := newState.chaining_value
     ifFalse := state.chaining_value
   }
 
-  let muxedBlocksCompressed ← Conditional.main (M := U32) {
+  let muxedBlocksCompressed ← Conditional.circuit (M := U32) {
     selector := input.block_exists
     ifTrue := newBlocksCompressed
     ifFalse := state.blocks_compressed
@@ -384,21 +384,46 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           simp only [U32_one_is_Normalized]
           dsimp only [ProcessBlocksState.Normalized] at spec_previous
           simp [spec_previous])
-        dsimp only [Addition32.circuit, Addition32.Spec] at h_addition
+        dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
         rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-        -- TODO: Fix the proof to work with generic Conditional
+        specialize h_vector_cond (by simp only [Conditional.circuit, Conditional.Assumptions])
+        dsimp only [Conditional.circuit, Conditional.Spec] at h_vector_cond
+        simp only [h_vector_cond] at h_addition ⊢
+        specialize h_u32_cond (by simp only [Conditional.circuit, Conditional.Assumptions])
+        dsimp only [Conditional.circuit, Conditional.Spec] at h_u32_cond
+        simp only [h_u32_cond] at h_addition ⊢
+        dsimp only [BLAKE3StateFirstHalf.circuit] at h_addition ⊢
+        simp only [h_first_half]
+        dsimp only [Addition32.circuit]
         constructor
-        · -- simp only [↓reduceIte] at ⊢ h_addition h_compress
-          simp only [BLAKE3StateFirstHalf.circuit, h_first_half.1] at ⊢ h_addition h_compress
-          simp only [processBlockWords, ProcessBlocksState.toChunkState] at ⊢ h_addition h_compress
-          -- simp only [h_addition.1] at ⊢ h_compress
-          sorry -- TODO: Fix to work with generic Conditional
+        · simp only [ProcessBlocksState.toChunkState]
+          simp only [h_addition, processBlockWords]
+          clear h_addition
+          rw [← Vector.map_take]
+          norm_num at ⊢ h_compress
+          constructor
+          · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
+            simp only [h_compress.1]
+            clear h_compress
+            simp only [U32_zero_value, startFlag, U32_blockLen_value]
+            norm_num at h_iszero
+            rw [eval_acc_blocks_compressed (acc_chaining_value := acc_chaining_value) (acc_chunk_counter := acc_chunk_counter)
+                  (acc_var_blocks_compressed := acc_var_blocks_compressed) (acc_blocks_compressed := acc_blocks_compressed) (h_iszero := h_iszero)]
+            · norm_num
+            · simp only [h_eval]
+            · simp only [spec_previous]
+          · simp only [U32_one_value]
+            simp only [ProcessBlocksState.toChunkState] at spec_previous
+            simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+              zero_add, Nat.reducePow] at inputs_short
+            omega
         · simp only [ProcessBlocksState.Normalized]
           constructor
-          · -- TODO: Fix to use h_vector_cond properly with generic Conditional
-            sorry
-          · -- TODO: Fix to use h_u32_cond properly with generic Conditional
-            sorry
+          · aesop
+          · simp only [h_addition.2]
+            dsimp only [ProcessBlocksState.Normalized] at spec_previous
+            simp only [spec_previous]
+            trivial
       simp only [one_op]
       constructor
       · simp only [processBlockWords]
@@ -421,8 +446,9 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
               rw [add_neg_eq_zero] at hh0
               contradiction
         simp only [x_block_exists_zero] at *
-        -- TODO: Fix to work with generic Conditional
-        sorry
+        simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at hh1 ⊢
+        norm_num at hh1 ⊢
+        simp only [step, circuit_norm, hh1, h_eval]
       simp only [no_op]
       constructor
       · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
@@ -534,7 +560,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
             ZMod.val_zero, Nat.ofNat_pos])
       simp only [h_compress]
-    sorry -- simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, Conditional.circuit, Conditional.Assumptions]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, Conditional.circuit, Conditional.Assumptions]
 
 /--
 The InductiveTable for processBlocks.
@@ -554,7 +580,7 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     intros
     dsimp only [step]
     simp only [circuit_norm]
-    sorry
+    omega
 
 /--
 Create a trace for processBlocks with given input blocks.
