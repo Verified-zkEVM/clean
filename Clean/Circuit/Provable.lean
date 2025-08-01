@@ -503,7 +503,7 @@ lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env :
 
 theorem varFromOffset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
     varFromOffset (F := F) (ProvableVector α n) offset
-    = .mapRange n fun i => varFromOffset α (offset + (size α)*i) := by
+    = .mapRange n fun i => varFromOffset α (offset + (size α) * i) := by
   induction n with
   | zero => rfl
   | succ n ih =>

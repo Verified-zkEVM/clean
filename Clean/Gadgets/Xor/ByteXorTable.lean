@@ -7,7 +7,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
   name := "ByteXor"
-  length := 256*256
+  length := 256 * 256
 
   row i :=
     let (x, y) := splitTwoBytes i

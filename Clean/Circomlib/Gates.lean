@@ -34,7 +34,7 @@ template XOR() {
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
-  let out <== a + b - 2*a*b
+  let out <== a + b - 2 * a * b
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where
@@ -76,7 +76,7 @@ template AND() {
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
-  let out <== a*b
+  let out <== a * b
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where
@@ -116,7 +116,7 @@ template OR() {
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
-  let out <== a + b - a*b
+  let out <== a + b - a * b
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where
@@ -156,7 +156,7 @@ template NOT() {
 -/
 def main (input : Expression (F p)) := do
   let inp := input
-  let out <== 1 + inp - 2*inp
+  let out <== 1 + inp - 2 * inp
   return out
 
 def circuit : FormalCircuit (F p) field field where
@@ -198,7 +198,7 @@ template NAND() {
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
-  let out <== 1 - a*b
+  let out <== 1 - a * b
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where
@@ -240,7 +240,7 @@ template NOR() {
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
-  let out <== a*b + 1 - a - b
+  let out <== a * b + 1 - a - b
   return out
 
 def circuit : FormalCircuit (F p) fieldPair field where

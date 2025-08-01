@@ -146,13 +146,13 @@ template LessThan(n) {
     out <== 1-n2b.out[n];
 }
 -/
-def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
+def main (n : ℕ) (hn : 2^(n + 1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits ← Num2Bits.circuit (n+1) hn diff
+  let bits ← Num2Bits.circuit (n + 1) hn diff
   let out <== 1 - bits[n]
   return out
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n + 1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
   localLength _ := n + 2
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
@@ -186,7 +186,7 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n + 1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
 
@@ -230,7 +230,7 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n + 1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
 
@@ -261,7 +261,7 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit (n : ℕ) (hn : 2^(n + 1) < p) : FormalCircuit (F p) fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
 

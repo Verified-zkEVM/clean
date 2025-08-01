@@ -36,7 +36,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
 
 def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
-    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
+    (var ⟨i0 + i * 2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
 
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := main off
@@ -78,7 +78,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
 
   have h_rot_vector (i : ℕ) (hi : i < 8) :
       ys[i].val < 2^8 ∧
-      ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 8].val % 2^o) * 2^(8-o) := by
+      ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 8].val % 2^o) * 2^(8 - o) := by
     simp only [ys, y, output, U64.ByteVector.eval_fromLimbs, U64.ByteVector.toLimbs_fromLimbs,
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
     set high := env.get (i0 + i * 2 + 1)
@@ -86,7 +86,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
     have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
     have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
-    have ⟨lt, eq⟩ := byteDecomposition_lt (8-o) neg_offset_le high_lt next_low_lt'
+    have ⟨lt, eq⟩ := byteDecomposition_lt (8 - o) neg_offset_le high_lt next_low_lt'
     use lt
     rw [eq, high_eq, next_low_eq]
 
