@@ -131,14 +131,14 @@ section Operations
 Element-wise addition for ProvableTypes.
 Adds corresponding elements from two ProvableType values.
 -/
-def add [Field F] (a b : α F) : α F :=
+def elementwiseAdd [Field F] (a b : α F) : α F :=
   fromElements (Vector.ofFn fun i => (toElements a)[i] + (toElements b)[i])
 
 /--
 Element-wise scalar multiplication for ProvableTypes.
 Multiplies each element by a scalar field element.
 -/
-def scalarMul [Field F] (s : F) (v : α F) : α F :=
+def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
   fromElements ((toElements v).map (s * ·))
 
 end Operations
@@ -148,14 +148,14 @@ end ProvableType
 /--
 Notation for element-wise addition of ProvableTypes.
 -/
-infixl:65 " .+ " => ProvableType.add
+infixl:65 " .+ " => ProvableType.elementwiseAdd
 
 /--
 Notation for element-wise scalar multiplication of ProvableTypes.
 -/
-infixl:70 " .* " => ProvableType.scalarMul
+infixl:70 " .* " => ProvableType.elementwiseScalarMul
 
-export ProvableType (eval const allZero allZeroVar varFromOffset add scalarMul)
+export ProvableType (eval const allZero allZeroVar varFromOffset elementwiseAdd elementwiseScalarMul)
 
 @[reducible]
 def unit (_: Type) := Unit

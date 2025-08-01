@@ -45,7 +45,7 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   rcases input
   rcases input_var
   simp only [Inputs.mk.injEq] at h_input
-  simp only [ProvableType.eval, ProvableType.add]
+  simp only [ProvableType.eval, ProvableType.elementwiseAdd]
   congr 1
   ext i h_i
   simp only [Vector.getElem_ofFn, eval_fromElements, toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn,
@@ -80,12 +80,12 @@ lemma spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
-    simp only [Vector.getElem_ofFn, h_a_zero, allZero, ProvableType.add, toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
+    simp only [Vector.getElem_ofFn, h_a_zero, allZero, ProvableType.elementwiseAdd, toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
   · intro h_b_zero
     simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
-    simp only [Vector.getElem_ofFn, h_b_zero, allZero, ProvableType.add, toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
+    simp only [Vector.getElem_ofFn, h_b_zero, allZero, ProvableType.elementwiseAdd, toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
 
 /--
 When either input is zero, the output equals the non-zero input.

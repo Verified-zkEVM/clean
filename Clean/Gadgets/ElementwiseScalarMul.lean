@@ -48,7 +48,7 @@ instance elaborated : ElaboratedCircuit F (Inputs M) M where
 
 theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec := by
   circuit_proof_start
-  simp only [ProvableType.scalarMul]
+  simp only [ProvableType.elementwiseScalarMul]
   rcases input_var
   rcases input
   simp only [ProvableType.eval, toVars, toElements, toComponents, fromElements, fromComponents, components, ProvableStruct.componentsToElements] at h_input
@@ -87,14 +87,14 @@ lemma binarySpec_holds {input : Inputs M F} {output : M F}
   simp only [BinarySpec, Spec] at *
   constructor
   · intro h_zero
-    rw [h_zero, ProvableType.scalarMul] at h_spec
+    rw [h_zero, ProvableType.elementwiseScalarMul] at h_spec
     rw [h_spec]
     rw [ProvableType.ext_iff]
     intro i hi
     simp only [ProvableType.toElements_fromElements, Vector.getElem_map, zero_mul, allZero]
     simp only [ProvableType.toElements_fromElements, Vector.getElem_fill]
   · intro h_one
-    rw [h_one, ProvableType.scalarMul] at h_spec
+    rw [h_one, ProvableType.elementwiseScalarMul] at h_spec
     rw [h_spec]
     rw [ProvableType.ext_iff]
     intro i hi
