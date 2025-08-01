@@ -191,13 +191,13 @@ namespace CellOffset
   Current row offset
 -/
 @[table_assignment_norm]
-def curr {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨0, j⟩
+def curr {W : ℕ+} (j : Fin (size S)) : CellOffset W S := ⟨0, j⟩
 
 /--
   Next row offset
 -/
 @[table_assignment_norm]
-def next {W : ℕ+} (j : Fin (size S)) :  CellOffset W S := ⟨1, j⟩
+def next {W : ℕ+} (j : Fin (size S)) : CellOffset W S := ⟨1, j⟩
 
 end CellOffset
 
