@@ -99,3 +99,67 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableT
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
+
+@[circuit_norm]
+lemma FormalCircuit.weakenSpec_spec {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Spec = WeakerSpec := by
+  simp only [FormalCircuit.weakenSpec]
+
+/--
+Strengthen the assumptions of a FormalCircuit.
+
+This combinator takes a FormalCircuit with weak assumptions and produces
+a new FormalCircuit with stronger assumptions. This is useful when:
+- You want to add constraints (like boolean constraints) to get a more useful spec
+- You have a circuit that works for general inputs but want to specialize it
+- You need to adapt a general circuit to a more specific interface
+
+The requirements are:
+- The stronger assumptions imply the original assumptions
+- The stronger assumptions combined with the original spec imply the new spec
+- The elaborated circuit remains the same
+-/
+def FormalCircuit.strengthenAssumptions
+    {F : Type} [Field F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : FormalCircuit F Input Output)
+    (StrongerAssumptions : Input F → Prop)
+    (NewSpec : Input F → Output F → Prop)
+    (h_assumptions : ∀ input,
+      StrongerAssumptions input → 
+      circuit.Assumptions input)
+    (h_spec : ∀ input output,
+      StrongerAssumptions input →
+      circuit.Spec input output →
+      NewSpec input output) :
+    FormalCircuit F Input Output := {
+  elaborated := circuit.elaborated
+  Assumptions := StrongerAssumptions
+  Spec := NewSpec
+  soundness := by
+    intro offset env input_var input h_eval h_stronger_assumptions h_holds
+    -- Use the original circuit's soundness
+    have h_original_assumptions := h_assumptions input h_stronger_assumptions
+    have h_original_spec := circuit.soundness offset env input_var input h_eval h_original_assumptions h_holds
+    -- Apply the spec transformation
+    exact h_spec input _ h_stronger_assumptions h_original_spec
+  completeness := by
+    intro offset env input_var h_witnesses input h_eval h_stronger_assumptions
+    -- Use the assumption implication
+    have h_original_assumptions := h_assumptions input h_stronger_assumptions
+    -- Use the original circuit's completeness
+    exact circuit.completeness offset env input_var h_witnesses input h_eval h_original_assumptions
+}
+
+@[circuit_norm]
+lemma FormalCircuit.strengthenAssumptions_assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop) h_assumptions h_spec :
+    (c.strengthenAssumptions StrongerAssumptions NewSpec h_assumptions h_spec).Assumptions = StrongerAssumptions := by
+  simp only [FormalCircuit.strengthenAssumptions]
+
+@[circuit_norm]
+lemma FormalCircuit.strengthenAssumptions_spec {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : FormalCircuit F Input Output) (StrongerAssumptions : Input F → Prop) (NewSpec : Input F → Output F → Prop) h_assumptions h_spec :
+    (c.strengthenAssumptions StrongerAssumptions NewSpec h_assumptions h_spec).Spec = NewSpec := by
+  simp only [FormalCircuit.strengthenAssumptions]
