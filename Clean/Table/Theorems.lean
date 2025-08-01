@@ -130,7 +130,7 @@ def pushVarInput_offset (assignment: CellAssignment W S) (off: CellOffset W S) :
   simp [pushVarInput, Vector.push]
 
 lemma pushRow_offset (assignment: CellAssignment W S) (row: Fin W) :
-  (assignment.pushRow row).offset = assignment.offset + size S := by rfl
+  (assignment.pushRow row).offset = assignment.offset + size S := rfl
 
 theorem assignmentFromCircuit_offset (as: CellAssignment W S) (ops: Operations F) :
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by

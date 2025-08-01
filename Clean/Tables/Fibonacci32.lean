@@ -149,8 +149,8 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
-  have hx : eval env (varFromOffset U32 0) = first_row.x := by rfl
-  have hy : eval env (varFromOffset U32 4) = first_row.y := by rfl
+  have hx : eval env (varFromOffset U32 0) = first_row.x := rfl
+  have hy : eval env (varFromOffset U32 4) = first_row.y := rfl
   rw [hx, hy]
   clear hx hy
   intro x_zero y_one

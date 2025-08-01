@@ -364,11 +364,11 @@ variable {α: TypeMap} [ProvableType α]
 
 @[circuit_norm ↓ high]
 theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) :
-  ProvableType.eval env x = Expression.eval env x := by rfl
+  ProvableType.eval env x = Expression.eval env x := rfl
 
 @[circuit_norm ↓]
 theorem varFromOffset_field {F} (offset : ℕ) :
-  varFromOffset (F:=F) field offset = var ⟨offset⟩ := by rfl
+  varFromOffset (F:=F) field offset = var ⟨offset⟩ := rfl
 
 @[circuit_norm ↓]
 theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
@@ -513,7 +513,7 @@ theorem varFromOffset_vector {F : Type} [Field F] {α: TypeMap} [NonEmptyProvabl
     congr
     conv => rhs; congr; rhs; congr; intro i; rw [mul_comm, add_assoc]
     let create (i : ℕ) : Expression F := var ⟨ offset + i ⟩
-    have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := by rfl
+    have h_create : (fun i => var ⟨ offset + (n * size α + i) ⟩) = (fun i ↦ create (n * size α + i)) := rfl
     rw [h_create, ←Vector.mapRange_add_eq_append]
     have h_size_succ : (n + 1) * size α = n * size α + size α := by rw [add_mul]; ac_rfl
     rw [←Vector.cast_mapRange h_size_succ]
