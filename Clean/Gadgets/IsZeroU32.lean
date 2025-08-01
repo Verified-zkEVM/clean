@@ -38,79 +38,25 @@ def Assumptions (x : U32 (F p)) : Prop := x.Normalized
 def Spec (x : U32 (F p)) (output : F p) : Prop :=
   output = if x.value = 0 then 1 else 0
 
--- Component nonzero lemmas
+-- Unified theorem about U32 zero representation
 
-lemma U32_first_component_nonzero {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (x0 x1 x2 x3 : F p)
-    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
-    x0 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by
-  intro h_nonzero h_value_eq_zero
-  -- If value = 0, then by injectivity, U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0
-  have h_eq : U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0 := by
-    apply U32.value_injective_on_normalized
-    · exact h_normalized
-    · simp [U32.Normalized]
-    · rw [h_value_eq_zero]
-      simp [U32.value]
-  -- But then x0 = 0, contradiction
-  have : x0 = 0 := by
-    have : (U32.mk x0 x1 x2 x3).x0 = (U32.mk 0 0 0 0).x0 := by rw [h_eq]
-    simp [U32.mk] at this
-    exact this
-  contradiction
-
-lemma U32_second_component_nonzero {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (x0 x1 x2 x3 : F p)
-    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
-    x1 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by
-  intro h_nonzero h_value_eq_zero
-  -- If value = 0, then by injectivity, U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0
-  have h_eq : U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0 := by
-    apply U32.value_injective_on_normalized
-    · exact h_normalized
-    · simp [U32.Normalized]
-    · rw [h_value_eq_zero]
-      simp [U32.value]
-  -- But then x1 = 0, contradiction
-  have : x1 = 0 := by
-    have : (U32.mk x0 x1 x2 x3).x1 = (U32.mk 0 0 0 0).x1 := by rw [h_eq]
-    simp [U32.mk] at this
-    exact this
-  contradiction
-
-lemma U32_third_component_nonzero {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (x0 x1 x2 x3 : F p)
-    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
-    x2 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by
-  intro h_nonzero h_value_eq_zero
-  -- If value = 0, then by injectivity, U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0
-  have h_eq : U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0 := by
-    apply U32.value_injective_on_normalized
-    · exact h_normalized
-    · simp [U32.Normalized]
-    · rw [h_value_eq_zero]
-      simp [U32.value]
-  -- But then x2 = 0, contradiction
-  have : x2 = 0 := by
-    have : (U32.mk x0 x1 x2 x3).x2 = (U32.mk 0 0 0 0).x2 := by rw [h_eq]
-    simp [U32.mk] at this
-    exact this
-  contradiction
-
-lemma U32_fourth_component_nonzero {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (x0 x1 x2 x3 : F p)
-    (h_normalized : (U32.mk x0 x1 x2 x3).Normalized) :
-    x3 ≠ 0 → (U32.mk x0 x1 x2 x3).value ≠ 0 := by
-  intro h_nonzero h_value_eq_zero
-  -- If value = 0, then by injectivity, U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0
-  have h_eq : U32.mk x0 x1 x2 x3 = U32.mk 0 0 0 0 := by
-    apply U32.value_injective_on_normalized
-    · exact h_normalized
-    · simp [U32.Normalized]
-    · rw [h_value_eq_zero]
-      simp [U32.value]
-  -- But then x3 = 0, contradiction
-  have : x3 = 0 := by
-    have : (U32.mk x0 x1 x2 x3).x3 = (U32.mk 0 0 0 0).x3 := by rw [h_eq]
-    simp [U32.mk] at this
-    exact this
-  contradiction
+lemma U32_value_eq_zero_iff_all_components_zero {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+    {x : U32 (F p)} (h_normalized : x.Normalized) :
+    x.value = 0 ↔ x.x0 = 0 ∧ x.x1 = 0 ∧ x.x2 = 0 ∧ x.x3 = 0 := by
+  constructor
+  · intro h_value_zero
+    -- If value = 0, then by injectivity, x = U32.mk 0 0 0 0
+    have h_eq : x = U32.mk 0 0 0 0 := by
+      apply U32.value_injective_on_normalized
+      · exact h_normalized
+      · simp [U32.Normalized]
+      · rw [h_value_zero]
+        simp [U32.value]
+    -- Extract components from the equality
+    rw [h_eq]
+    simp
+  · intro ⟨hx0, hx1, hx2, hx3⟩
+    simp [U32.value, hx0, hx1, hx2, hx3, ZMod.val_zero]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
@@ -122,39 +68,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [IsZero.circuit, IsZero.Assumptions, IsZero.elaborated, explicit_provable_type] at h_holds ⊢
   simp only [circuit_norm, U32.mk.injEq, explicit_provable_type] at h_input
   simp only [h_input, IsZero.Spec] at h_holds
-  by_cases h0 : input_0 ≠ 0
-  · simp only [h0] at *
-    norm_num at h_holds
-    simp only [h_holds]
-    norm_num
-    rw [if_neg]
-    apply U32_first_component_nonzero <;> assumption
-  by_cases h1 : input_1 ≠ 0
-  · simp only [h1] at *
-    norm_num at h_holds
-    simp only [h_holds]
-    norm_num
-    rw [if_neg]
-    apply U32_second_component_nonzero <;> assumption
-  by_cases h2 : input_2 ≠ 0
-  · simp only [h2] at *
-    norm_num at h_holds
-    simp only [h_holds]
-    norm_num
-    rw [if_neg]
-    apply U32_third_component_nonzero <;> assumption
-  by_cases h3 : input_3 ≠ 0
-  · simp only [h3] at *
-    norm_num at h_holds
-    simp only [h_holds]
-    norm_num
-    rw [if_neg]
-    apply U32_fourth_component_nonzero <;> assumption
-  norm_num at h0 h1 h2 h3
-  simp only [h0, h1, h2, h3] at h_holds ⊢
-  simp_all only []
-  norm_num
-  simp only [U32.value, ZMod.val_zero, zero_mul, add_zero, Nat.reducePow, ↓reduceIte]
+  conv =>
+    rhs
+    arg 1
+    rw [U32_value_eq_zero_iff_all_components_zero (by assumption)]
+  aesop
 
 omit p_large_enough in
 theorem completeness : Completeness (F p) elaborated Assumptions := by
