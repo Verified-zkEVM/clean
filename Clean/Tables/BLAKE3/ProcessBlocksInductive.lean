@@ -30,64 +30,29 @@ lemma U32_Normalized_componentwise env (a b c d : Var field (F p)):
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements, Vector.map]
   simp only [List.map_toArray, List.map_cons, List.map_nil, U32.Normalized]
 
-omit p_large in
-lemma U32_zero_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+-- Using common lemma from U32 module
+local notation "U32_zero_is_Normalized" => U32.zero_is_Normalized
 
-omit p_large in
-lemma U32_zero_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
-  simp only [U32.value]
-  simp only [Nat.reducePow, Nat.add_eq_zero, ZMod.val_eq_zero, mul_eq_zero, OfNat.ofNat_ne_zero,
-    or_false]
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+-- Using common lemma from U32 module
+local notation "U32_zero_value" => U32.zero_value
 
-omit p_large in
-lemma U32_one_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
-  omega
+-- Using common lemma from U32 module
+local notation "U32_one_is_Normalized" => U32.one_is_Normalized
 
-omit p_large in
-lemma U32_one_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [U32.value]
-  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
-  omega
+-- Using common lemma from U32 module
+local notation "U32_one_value" => U32.one_value
 
 lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+  apply U32.const_is_Normalized
   simp only [blockLen]
-  cases p_large
-  rw [ZMod.val_natCast_of_lt] <;> omega
+  omega
 
 lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).value = blockLen := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [blockLen, U32.value]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
-  rw [ZMod.val_natCast_of_lt]
-  · omega
-  · cases p_large; omega
+  apply U32.const_value
+  simp only [blockLen]
+  omega
 
 omit p_large in
 lemma eval_env_mul (env : Environment (F p)) (a b : Var field (F p)) :

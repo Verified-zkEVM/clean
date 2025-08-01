@@ -272,6 +272,66 @@ lemma value_injective_on_normalized (x y : U32 (F p))
 
 end ValueInjectivity
 
+omit p_large_enough in
+lemma zero_is_Normalized (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+
+omit p_large_enough in
+lemma zero_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
+  simp only [U32.value]
+  simp only [Nat.reducePow, Nat.add_eq_zero, ZMod.val_eq_zero, mul_eq_zero, OfNat.ofNat_ne_zero,
+    or_false]
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+
+omit p_large_enough in
+lemma one_is_Normalized (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
+  omega
+
+omit p_large_enough in
+lemma one_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [U32.value]
+  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
+  omega
+
+lemma const_is_Normalized (env : Environment (F p)) (n : ℕ) (h : n < 256) :
+    (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+  cases p_large_enough
+  rw [ZMod.val_natCast_of_lt]
+  · exact h
+  · omega
+
+lemma const_value (env : Environment (F p)) (n : ℕ) (h : n < 256) :
+    (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).value = n := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  simp only [U32.value]
+  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+  rw [ZMod.val_natCast_of_lt]
+  · omega
+  · cases p_large_enough; omega
+
 end U32
 
 namespace U32.AssertNormalized
