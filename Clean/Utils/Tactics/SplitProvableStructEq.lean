@@ -122,7 +122,7 @@ def splitProvableStructEq : TacticM Unit := do
       -- Apply all the lemmas we found
       for lemmaIdent in lemmasToApply do
         try
-          evalTactic (← `(tactic| simp only [$lemmaIdent :ident] at *))
+          evalTactic (← `(tactic| simp only [$lemmaIdent:ident] at *))
         catch e =>
           trace[Meta.Tactic] "Failed to apply lemma {lemmaIdent}: {e.toMessageData}"
           continue

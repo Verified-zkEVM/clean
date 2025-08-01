@@ -117,5 +117,5 @@ elab "simplify_provable_struct_eval" : tactic => do
 
     -- Apply simp to this hypothesis
     let hypIdent := mkIdent hypName
-    let tac ← `(tactic| simp only [$[$simpArgs],*] at $hypIdent :ident)
+    let tac ← `(tactic| simp only [$[$simpArgs],*] at $hypIdent:ident)
     evalTactic tac
