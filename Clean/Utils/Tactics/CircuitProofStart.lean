@@ -50,7 +50,7 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`
-  in all simplification steps.
+  to simplify the goal and the hypotheses.
 
   Example usage:
   ```lean
@@ -89,7 +89,7 @@ elab_rules : tactic
     | some terms => terms.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
     | none => #[]
   let lemmasArray ← extraLemmas.mapM id
-  
+
   try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
