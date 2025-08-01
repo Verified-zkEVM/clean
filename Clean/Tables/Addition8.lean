@@ -63,9 +63,9 @@ def formalAdd8Table : FormalTable (F p) RowType := {
         change _ ∧ _ ∧ (_ → _) at h_holds
 
         -- resolve assignment
-        have h_x_env : env.get 0 = row.x := by rfl
-        have h_y_env : env.get 1 = row.y := by rfl
-        have h_z_env : env.get 3 = row.z := by rfl
+        have h_x_env : env.get 0 = row.x := rfl
+        have h_y_env : env.get 1 = row.y := rfl
+        have h_z_env : env.get 3 = row.z := rfl
         simp only [h_x_env, h_y_env, h_z_env] at h_holds
 
         -- now we prove a local property about the current row, from the constraints
