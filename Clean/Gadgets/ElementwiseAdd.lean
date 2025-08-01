@@ -1,4 +1,5 @@
 import Clean.Circuit.StructuralLemmas
+import Clean.Circuit.Theorems
 import Clean.Utils.Tactics
 
 namespace ElementwiseAdd
@@ -77,15 +78,9 @@ lemma spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
   simp only [WeakerSpec, Spec] at *
   constructor
   · intro h_a_zero
-    simp only [ProvableType.ext_iff]
-    intro i hi
-    rw [h_spec]
-    simp only [Vector.getElem_ofFn, h_a_zero, allZero, ProvableType.elementwiseAdd, toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
+    simp only [h_spec, h_a_zero, circuit_norm]
   · intro h_b_zero
-    simp only [ProvableType.ext_iff]
-    intro i hi
-    rw [h_spec]
-    simp only [Vector.getElem_ofFn, h_b_zero, allZero, ProvableType.elementwiseAdd, toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
+    simp only [h_spec, h_b_zero, circuit_norm]
 
 /--
 When either input is zero, the output equals the non-zero input.

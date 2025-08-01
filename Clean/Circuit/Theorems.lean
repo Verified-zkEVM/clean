@@ -5,6 +5,7 @@ For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
 import Clean.Circuit.Basic
+import Clean.Circuit.Provable
 
 variable {F: Type} [Field F] {α β : Type}
 
@@ -630,3 +631,42 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
+
+-- Theorems about elementwiseAdd and allZero
+
+namespace ProvableType
+
+variable {M : TypeMap} [ProvableType M]
+
+@[circuit_norm]
+theorem allZero_elementwiseAdd (a : M F) : allZero .+ a = a := by
+  rw [ProvableType.ext_iff]
+  intro i hi
+  rw [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
+  rw [allZero, toElements_fromElements]
+  norm_num
+  simp only [Vector.getElem_fill]
+
+@[circuit_norm]
+theorem elementwiseAdd_allZero (a : M F) : a .+ allZero = a := by
+  rw [ProvableType.ext_iff]
+  intros
+  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn, allZero]
+  norm_num
+  simp only [Vector.getElem_fill]
+
+@[circuit_norm]
+theorem elementwiseAdd_comm (a b : M F) : a .+ b = b .+ a := by
+  rw [ProvableType.ext_iff]
+  intros
+  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
+  ring
+
+theorem elementwiseAdd_assoc (a b c : M F) : (a .+ b) .+ c = a .+ (b .+ c) := by
+  rw [ProvableType.ext_iff]
+  intros
+  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
+  norm_num
+  simp only [add_assoc]
+
+end ProvableType
