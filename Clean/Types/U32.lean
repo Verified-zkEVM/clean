@@ -184,7 +184,7 @@ lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
 
 section ValueInjectivity
 -- Helper lemma: injectivity of two-component base-256 representation
-lemma base256_two_injective (a0 a1 b0 b1 : ℕ) 
+lemma base256_two_injective (a0 a1 b0 b1 : ℕ)
     (ha0 : a0 < 256) (hb0 : b0 < 256)
     (h : a0 + 256 * a1 = b0 + 256 * b1) :
     a0 = b0 ∧ a1 = b1 := by
@@ -196,7 +196,7 @@ lemma base256_two_injective (a0 a1 b0 b1 : ℕ)
         _ = b0 % 256 := by simp [Nat.add_mul_mod_self_left]
     rw [Nat.mod_eq_of_lt ha0, Nat.mod_eq_of_lt hb0] at this
     exact this
-  
+
   -- Second component: divide by 256
   have h1 : a1 = b1 := by
     have : (a0 + 256 * a1) / 256 = (b0 + 256 * b1) / 256 := by
@@ -208,34 +208,34 @@ lemma base256_two_injective (a0 a1 b0 b1 : ℕ)
     rw [ha0_div, hb0_div] at this
     simp at this
     exact this
-  
+
   exact ⟨h0, h1⟩
 
 -- Injectivity of four-component base-256 representation
-lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ) 
+lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ)
     (ha0 : a0 < 256) (ha1 : a1 < 256) (ha2 : a2 < 256) (_ : a3 < 256)
     (hb0 : b0 < 256) (hb1 : b1 < 256) (hb2 : b2 < 256) (_ : b3 < 256)
     (h : a0 + 256 * (a1 + 256 * (a2 + 256 * a3)) = b0 + 256 * (b1 + 256 * (b2 + 256 * b3))) :
     a0 = b0 ∧ a1 = b1 ∧ a2 = b2 ∧ a3 = b3 := by
   -- Apply base256_two_injective repeatedly
   -- First, view as a0 + 256 * (rest)
-  have h_outer := base256_two_injective a0 (a1 + 256 * (a2 + 256 * a3)) 
+  have h_outer := base256_two_injective a0 (a1 + 256 * (a2 + 256 * a3))
                                         b0 (b1 + 256 * (b2 + 256 * b3))
                                         ha0 hb0 h
   obtain ⟨h0, h_rest⟩ := h_outer
-  
+
   -- Now apply to the remaining components
   have h_inner := base256_two_injective a1 (a2 + 256 * a3) b1 (b2 + 256 * b3)
                                         ha1 hb1 h_rest
   obtain ⟨h1, h_rest2⟩ := h_inner
-  
+
   -- Finally, the last two components
   have h_final := base256_two_injective a2 a3 b2 b3 ha2 hb2 h_rest2
   obtain ⟨h2, h3⟩ := h_final
-  
+
   exact ⟨h0, h1, h2, h3⟩
 
-lemma value_injective_on_normalized (x y : U32 (F p)) 
+lemma value_injective_on_normalized (x y : U32 (F p))
     (hx : x.Normalized) (hy : y.Normalized) :
     x.value = y.value → x = y := by
   intro h_eq
@@ -245,92 +245,93 @@ lemma value_injective_on_normalized (x y : U32 (F p))
   have hy_value : y.value = y.x0.val + 256 * (y.x1.val + 256 * (y.x2.val + 256 * y.x3.val)) := by
     exact U32.value_horner y
   rw [hx_value, hy_value] at h_eq
-  
+
   -- Extract bounds from normalization
   simp only [U32.Normalized] at hx hy
   have ⟨hx0, hx1, hx2, hx3⟩ := hx
   have ⟨hy0, hy1, hy2, hy3⟩ := hy
-  
+
   -- Apply base256_four_injective
   have ⟨h0, h1, h2, h3⟩ := base256_four_injective _ _ _ _ _ _ _ _ hx0 hx1 hx2 hx3 hy0 hy1 hy2 hy3 h_eq
-  
+
   -- Now show the U32s are equal using ZMod.val_injective
   have hp : 256 < p := by
     have : Fact (p > 512) := inferInstance
     have : p > 512 := this.out
     omega
-  
+
   -- Show equality component by component
   have : x.x0 = y.x0 := ZMod.val_injective (n := p) h0
   have : x.x1 = y.x1 := ZMod.val_injective (n := p) h1
   have : x.x2 = y.x2 := ZMod.val_injective (n := p) h2
   have : x.x3 = y.x3 := ZMod.val_injective (n := p) h3
-  
+
   -- Reconstruct equality
   cases x; cases y
   simp_all
 
 end ValueInjectivity
 
-omit p_large_enough in
+lemma constU32_is_Normalized (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
+    (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
+    (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
+                           x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).Normalized := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.Normalized]
+  cases p_large_enough
+  and_intros <;> rw [ZMod.val_natCast_of_lt] <;> omega
+
+lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
+    (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
+    (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
+                           x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).value =
+    n0 + n1 * 256 + n2 * 256^2 + n3 * 256^3 := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Expression.eval, fromElements, U32.value]
+  cases p_large_enough
+  norm_num
+  repeat rw [ZMod.val_natCast_of_lt] <;> try omega
+
+-- Specialized versions using the general lemmas
 lemma zero_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+  have : (0 : Expression (F p)) = Expression.const ↑0 := by rfl
+  repeat rw [this]
+  have h := constU32_is_Normalized env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  convert h <;> simp
 
-omit p_large_enough in
 lemma zero_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
-  simp only [U32.value]
-  simp only [Nat.reducePow, Nat.add_eq_zero, ZMod.val_eq_zero, mul_eq_zero, OfNat.ofNat_ne_zero,
-    or_false]
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
+  have : (0 : Expression (F p)) = Expression.const ↑0 := by rfl
+  repeat rw [this]
+  have h := constU32_value env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  convert h <;> simp
 
-omit p_large_enough in
 lemma one_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
-  omega
+  have h := constU32_is_Normalized env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  simp at h
+  exact h
 
-omit p_large_enough in
 lemma one_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [U32.value]
-  simp only [ZMod.val_zero, ZMod.val_one, Nat.ofNat_pos, and_self, and_true]
-  omega
+  have h := constU32_value env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  simp at h
+  exact h
 
 lemma const_is_Normalized (env : Environment (F p)) (n : ℕ) (h : n < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
-  cases p_large_enough
-  rw [ZMod.val_natCast_of_lt]
-  · exact h
-  · omega
+  have h' := constU32_is_Normalized env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)
+  simp at h'
+  exact h'
 
 lemma const_value (env : Environment (F p)) (n : ℕ) (h : n < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).value = n := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  simp only [U32.value]
-  simp only [ZMod.val_zero, Nat.ofNat_pos, and_self, and_true]
-  rw [ZMod.val_natCast_of_lt]
-  · omega
-  · cases p_large_enough; omega
+  have h' := constU32_value env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)
+  simp at h'
+  exact h'
 
 end U32
 
