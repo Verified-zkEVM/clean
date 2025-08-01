@@ -129,14 +129,14 @@ section Operations
 
 /--
 Element-wise addition for ProvableTypes.
-Adds corresponding elements from two ProvableType values.
+Adds corresponding elements from two ProvableType values. No carries. Each element wraps around.
 -/
 def elementwiseAdd [Field F] (a b : α F) : α F :=
   fromElements (Vector.ofFn fun i => (toElements a)[i] + (toElements b)[i])
 
 /--
 Element-wise scalar multiplication for ProvableTypes.
-Multiplies each element by a scalar field element.
+Multiplies each element by a scalar field element. No carries. Each element wraps around.
 -/
 def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
   fromElements ((toElements v).map (s * ·))
