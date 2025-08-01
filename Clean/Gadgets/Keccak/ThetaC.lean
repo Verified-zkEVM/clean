@@ -23,7 +23,7 @@ def Spec (state : KeccakState (F p)) (out: KeccakRow (F p)) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
--- #eval! theta_c (p:=p_babybear) default |>.localLength
+-- #eval! theta_c (p :=p_babybear) default |>.localLength
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
   localLength _ := 160

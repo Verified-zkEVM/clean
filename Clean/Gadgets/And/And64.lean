@@ -59,10 +59,10 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
 
   have z_norm : z.Normalized := by
     simp only [U64.Normalized, h_eq]
-    exact ⟨ Nat.and_lt_two_pow (n:=8) _ hy0, Nat.and_lt_two_pow (n:=8) _ hy1,
-      Nat.and_lt_two_pow (n:=8) _ hy2, Nat.and_lt_two_pow (n:=8) _ hy3,
-      Nat.and_lt_two_pow (n:=8) _ hy4, Nat.and_lt_two_pow (n:=8) _ hy5,
-      Nat.and_lt_two_pow (n:=8) _ hy6, Nat.and_lt_two_pow (n:=8) _ hy7 ⟩
+    exact ⟨ Nat.and_lt_two_pow (n := 8) _ hy0, Nat.and_lt_two_pow (n := 8) _ hy1,
+      Nat.and_lt_two_pow (n := 8) _ hy2, Nat.and_lt_two_pow (n := 8) _ hy3,
+      Nat.and_lt_two_pow (n := 8) _ hy4, Nat.and_lt_two_pow (n := 8) _ hy5,
+      Nat.and_lt_two_pow (n := 8) _ hy6, Nat.and_lt_two_pow (n := 8) _ hy7 ⟩
 
   suffices z.value = x.value &&& y.value from ⟨ this, z_norm ⟩
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq]

@@ -182,7 +182,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     have obv : (256 : F p).val = 256 % p := by apply ZMod.val_natCast
     have h : T / 256 * (ZMod.val (256 : F p)) + T % 256 = T := by
       rw [mul_comm, obv]
-      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.out).mpr
+      rw [(Nat.mod_eq_iff_lt (m :=256) p_neq_zero.out).mpr
         (Nat.lt_trans (by norm_num) p_large_enough.elim), Nat.div_add_mod]
 
     rw [h, T_not_wrap]

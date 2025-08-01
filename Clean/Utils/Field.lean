@@ -203,7 +203,7 @@ lemma two_val : (2 : F p).val = 2 :=
 
 omit p_prime in
 lemma two_pow_lt (n : ℕ) (hn : n ≤ 8) : 2^n < p := by
-  have h : 2^n ≤ 2^8 := Nat.pow_le_pow_of_le (a:=2) Nat.one_lt_ofNat hn
+  have h : 2^n ≤ 2^8 := Nat.pow_le_pow_of_le (a :=2) Nat.one_lt_ofNat hn
   linarith [‹Fact (p > 512)›.elim]
 
 lemma two_pow_val (n : ℕ) (hn : n ≤ 8) : (2^n : F p).val = 2^n := by
@@ -242,7 +242,7 @@ theorem mod_add_div256 [Fact (p > 512)] (x : F p) : x = mod256 x + 256 * (floorD
   let p := n + 1
   apply ext
   rw [ZMod.val_add, ZMod.val_mul]
-  have : ZMod.val 256 = 256 := val_lt_p (p:=p) 256 (by linarith [‹Fact (p > 512)›.elim])
+  have : ZMod.val 256 = 256 := val_lt_p (p :=p) 256 (by linarith [‹Fact (p > 512)›.elim])
   rw [this, Nat.add_mod_mod]
   show x.val = (x.val % 256 + 256 * (x.val / 256)) % p
   rw [Nat.mod_add_div, (Nat.mod_eq_of_lt x.is_lt : x.val % p = x.val)]
@@ -295,7 +295,7 @@ variable [p_large_enough: Fact (p > 512)]
 def fromByte (x: Fin 256) : F p :=
   FieldUtils.natToField x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-lemma fromByte_lt (x: Fin 256) : (fromByte (p:=p) x).val < 256 := by
+lemma fromByte_lt (x: Fin 256) : (fromByte (p :=p) x).val < 256 := by
   dsimp [fromByte]
   rw [FieldUtils.val_of_natToField_eq]
   exact x.is_lt

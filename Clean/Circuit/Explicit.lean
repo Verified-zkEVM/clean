@@ -105,7 +105,7 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
 
 -- basic operations are explicit circuits
 
-instance : ExplicitCircuits (F:=F) witnessVar where
+instance : ExplicitCircuits (F :=F) witnessVar where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1
   operations c n := [.witness 1 fun env => #v[c env]]
@@ -115,13 +115,13 @@ instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witness
   localLength _ := k
   operations n := [.witness k c]
 
-instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
+instance {α: TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F :=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
   operations c n := [.witness (size α) (toElements ∘ c)]
 
 instance {value var: TypeMap} [ProvableType value] [inst: Witnessable F value var] :
-    ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
+    ExplicitCircuits (witness (F :=F) (value :=value) (var :=var)) where
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
     rw [inst.witness_eq]
@@ -148,12 +148,12 @@ instance {value var: TypeMap} [ProvableType value] [inst: Witnessable F value va
     reduce
     trivial
 
-instance : ExplicitCircuits (F:=F) assertZero where
+instance : ExplicitCircuits (F :=F) assertZero where
   output _ _ := ()
   localLength _ _ := 0
   operations e n := [.assert e]
 
-instance {α: TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
+instance {α: TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F :=F) (lookup table) where
   output _ _ := ()
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
@@ -207,7 +207,7 @@ example :
   ExplicitCircuit add := by infer_explicit_circuit
 
 -- family
-example : ExplicitCircuits (witnessField (F:=F)) := by infer_explicit_circuits
+example : ExplicitCircuits (witnessField (F :=F)) := by infer_explicit_circuits
 
 example :
   let add (x : Expression F) := do

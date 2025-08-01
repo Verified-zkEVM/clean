@@ -51,8 +51,8 @@ def Spec (input : Inputs (F p)) (out: Outputs (F p)) :=
 /--
 Elaborated circuit data can be found as follows:
 ```
-#eval (main (p:=p_babybear) default).localLength
-#eval (main (p:=p_babybear) default).output
+#eval (main (p :=p_babybear) default).localLength
+#eval (main (p :=p_babybear) default).output
 ```
 -/
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
