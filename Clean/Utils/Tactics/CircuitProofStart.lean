@@ -48,18 +48,29 @@ partial def circuitProofStartCore : TacticM Unit := do
   **Limitation**: This tactic only works on direct `Soundness` or `Completeness` goals.
   It will fail with an error if the goal type is neither `Soundness` nor `Completeness`.
 
+  **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
+  `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`
+  in all simplification steps.
+
   Example usage:
   ```lean
   theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     circuit_proof_start
     -- The assumptions in Soundness are introduced. All provable structs are decomposed when their components are mentioned
 
+  theorem soundness_with_lemmas : Soundness (F p) elaborated Assumptions Spec := by
+    circuit_proof_start [my_custom_lemma, another_lemma]
+    -- Same as above but also uses my_custom_lemma and another_lemma in simplifications
+
   theorem completeness : Completeness (F p) elaborated Assumptions := by
     circuit_proof_start
     -- The assumptions in Completeness are introduced. All provable structs are decomposed when their components are mentioned
   ```
 -/
-elab "circuit_proof_start" : tactic => do
+syntax "circuit_proof_start" ("[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| circuit_proof_start) => do
   -- intro all hypotheses
   circuitProofStartCore
 
@@ -76,6 +87,27 @@ elab "circuit_proof_start" : tactic => do
   try (evalTactic (← `(tactic| simp only [circuit_norm] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident] at $(mkIdent `h_env):ident))) catch _ => pure ()
+  | `(tactic| circuit_proof_start [$terms:term,*]) => do
+  -- intro all hypotheses
+  circuitProofStartCore
+
+  -- try to unfold main, Assumptions and Spec as local definitions
+  try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
+  try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
+
+  -- simplify structs / eval first
+  try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
+
+  -- Additional simplification for common patterns in soundness/completeness proofs
+  -- Now including the extra terms provided by the user
+  -- We need to convert the terms to simpLemma syntax
+  let extraLemmas := terms.getElems.map fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+  let lemmasArray ← extraLemmas.mapM id
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
 
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do
