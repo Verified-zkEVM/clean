@@ -266,13 +266,13 @@ variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 /-- The local length of a subcircuit is derived from the original formal circuit -/
 lemma subcircuit_localLength_eq (circuit: FormalCircuit F β α) (input: Var β F) (offset: ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := by rfl
+  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 
 lemma assertion_localLength_eq (circuit: FormalAssertion F β) (input: Var β F) (offset: ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := by rfl
+  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 
 lemma subcircuitWithAssertion_localLength_eq (circuit: GeneralFormalCircuit F β α) (input: Var β F) (offset: ℕ) :
-  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := by rfl
+  (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 end Circuit
 
 -- subcircuit composability for `ComputableWitnesses`

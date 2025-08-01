@@ -102,7 +102,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- IsBool means s = 0 ∨ s = 1
     simp only [eval_vector]
     simp only [Vector.getElem_map]
-    simp only [] at h_assumptions
+    simp only at h_assumptions
 
     cases h_assumptions with
       | inl h0 =>
