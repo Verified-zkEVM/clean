@@ -54,30 +54,24 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   · intros h_one
     simp only [h_one] at h_holds
     rcases h_holds with ⟨ h_scale1, h_holds ⟩
-    specialize h_scale1 trivial
-    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec, FormalCircuit.weakenSpec] at h_scale1
-    norm_num at h_scale1
-    simp only [h_scale1] at h_holds
     rcases h_holds with ⟨ h_scale2, h_holds ⟩
+    specialize h_scale1 trivial
     specialize h_scale2 trivial
-    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec, FormalCircuit.weakenSpec] at h_scale2
-    norm_num at h_scale2
-    simp only [h_scale2] at h_holds
+    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec, FormalCircuit.weakenSpec] at h_scale1 h_scale2
+    norm_num at h_scale1 h_scale2
+    simp only [h_scale1, h_scale2] at h_holds
     specialize h_holds (by simp only [ElementwiseAdd.Assumptions])
     simp only [ElementwiseAdd.WeakerSpec] at h_holds
     simp_all
   · intros h_zero
     simp only [h_zero] at h_holds
     rcases h_holds with ⟨ h_scale1, h_holds ⟩
-    specialize h_scale1 trivial
-    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec, FormalCircuit.weakenSpec] at h_scale1
-    norm_num at h_scale1
-    simp only [h_scale1] at h_holds
     rcases h_holds with ⟨ h_scale2, h_holds ⟩
+    specialize h_scale1 trivial
     specialize h_scale2 trivial
-    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec, FormalCircuit.weakenSpec] at h_scale2
-    norm_num at h_scale2
-    simp only [h_scale2] at h_holds
+    simp only [Gadgets.ElementwiseScalarMul.binaryCircuit, circuit_norm, Gadgets.ElementwiseScalarMul.BinarySpec, FormalCircuit.weakenSpec] at h_scale1 h_scale2
+    norm_num at h_scale1 h_scale2
+    simp only [h_scale1, h_scale2] at h_holds
     specialize h_holds (by simp only [ElementwiseAdd.Assumptions])
     simp only [ElementwiseAdd.WeakerSpec] at h_holds
     simp_all
