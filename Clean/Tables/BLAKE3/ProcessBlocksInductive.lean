@@ -351,10 +351,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           simp [spec_previous])
         dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
         rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-        specialize h_vector_cond (by simp only [Conditional.circuit, Conditional.Assumptions])
+        specialize h_vector_cond (by simp only [Conditional.circuit, Conditional.Assumptions, circuit_norm])
         dsimp only [Conditional.circuit, Conditional.Spec] at h_vector_cond
         simp only [h_vector_cond] at h_addition ⊢
-        specialize h_u32_cond (by simp only [Conditional.circuit, Conditional.Assumptions])
+        specialize h_u32_cond (by simp only [Conditional.circuit, Conditional.Assumptions, circuit_norm])
         dsimp only [Conditional.circuit, Conditional.Spec] at h_u32_cond
         simp only [h_u32_cond] at h_addition ⊢
         dsimp only [BLAKE3StateFirstHalf.circuit] at h_addition ⊢
@@ -362,9 +362,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         dsimp only [Addition32.circuit]
         constructor
         · simp only [ProcessBlocksState.toChunkState]
+          simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+            Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
           simp only [h_addition, processBlockWords]
           clear h_addition
-          rw [← Vector.map_take]
           norm_num at ⊢ h_compress
           constructor
           · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
@@ -385,7 +386,9 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         · simp only [ProcessBlocksState.Normalized]
           constructor
           · aesop
-          · simp only [h_addition.2]
+          · simp only [↓reduceIte, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+            Nat.reduceAdd, id_eq, Pi.zero_apply] at ⊢ h_addition
+            simp only [h_addition.2]
             dsimp only [ProcessBlocksState.Normalized] at spec_previous
             simp only [spec_previous]
             trivial
@@ -525,7 +528,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
             ZMod.val_zero, Nat.ofNat_pos])
       simp only [h_compress]
-    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, Conditional.circuit, Conditional.Assumptions]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, Conditional.circuit, Conditional.Assumptions, IsBool]
 
 /--
 The InductiveTable for processBlocks.
