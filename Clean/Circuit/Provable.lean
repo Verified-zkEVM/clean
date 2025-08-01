@@ -98,24 +98,24 @@ def const (x: α F) : Var α F :=
   fromVars (values.map .const)
 
 /--
-Zero value for any ProvableType.
+All-zero value for any ProvableType.
 Creates an instance filled with field zero elements.
 -/
-def zero : α F :=
+def allZero : α F :=
   fromElements (Vector.fill (size α) 0)
 
 instance [Field F] : Inhabited (α F) where
-  default := zero
+  default := allZero
 
 /--
-Zero variable for any ProvableType.
-Creates a variable representing the zero value.
+All-zero variable for any ProvableType.
+Creates a variable representing the elementwise zero value.
 -/
-def zeroVar : Var α F :=
-  const zero
+def allZeroVar : Var α F :=
+  const allZero
 
 instance [Field F] : Inhabited (Var α F) where
-  default := zeroVar
+  default := allZeroVar
 
 @[explicit_provable_type]
 def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
@@ -124,9 +124,38 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
 
 -- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
 attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
+
+section Operations
+
+/--
+Element-wise addition for ProvableTypes.
+Adds corresponding elements from two ProvableType values.
+-/
+def add [Field F] (a b : α F) : α F :=
+  fromElements (Vector.ofFn fun i => (toElements a)[i] + (toElements b)[i])
+
+/--
+Element-wise scalar multiplication for ProvableTypes.
+Multiplies each element by a scalar field element.
+-/
+def scalarMul [Field F] (s : F) (v : α F) : α F :=
+  fromElements ((toElements v).map (s * ·))
+
+end Operations
+
 end ProvableType
 
-export ProvableType (eval const zero zeroVar varFromOffset)
+/--
+Notation for element-wise addition of ProvableTypes.
+-/
+infixl:65 " .+ " => ProvableType.add
+
+/--
+Notation for element-wise scalar multiplication of ProvableTypes.
+-/
+infixl:70 " .* " => ProvableType.scalarMul
+
+export ProvableType (eval const allZero allZeroVar varFromOffset add scalarMul)
 
 @[reducible]
 def unit (_: Type) := Unit

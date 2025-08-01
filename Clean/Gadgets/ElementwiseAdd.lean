@@ -34,7 +34,7 @@ def Assumptions (_ : Inputs M F) : Prop := True
 Specification: Each element of the output equals the sum of corresponding input elements.
 -/
 def Spec (input : Inputs M F) (output : M F) : Prop :=
-  toElements output = Vector.ofFn fun i => (toElements input.a)[i] + (toElements input.b)[i]
+  output = input.a .+ input.b
 
 instance elaborated : ElaboratedCircuit F (Inputs M) M where
   main
@@ -45,9 +45,12 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   rcases input
   rcases input_var
   simp only [Inputs.mk.injEq] at h_input
+  simp only [ProvableType.eval, ProvableType.add]
+  congr 1
   ext i h_i
   simp only [Vector.getElem_ofFn, eval_fromElements, toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn,
-    Expression.eval, getElem_eval_toElements, h_input.1, h_input.2]
+    Expression.eval, getElem_eval_toElements, h_input.1, h_input.2, toVars]
+  simp only [Fin.getElem_fin]
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
   circuit_proof_start
@@ -63,8 +66,8 @@ Weaker specification for ElementwiseAdd that handles zero inputs specially.
 When either input is zero, the output equals the non-zero input.
 -/
 def WeakerSpec (input : Inputs M F) (output : M F) : Prop :=
-  (input.a = zero → output = input.b) ∧
-  (input.b = zero → output = input.a)
+  (input.a = allZero → output = input.b) ∧
+  (input.b = allZero → output = input.a)
 
 lemma spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     Assumptions input →
@@ -77,14 +80,12 @@ lemma spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
-    simp only [Vector.getElem_ofFn, h_a_zero, zero]
-    simp only [toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
+    simp only [Vector.getElem_ofFn, h_a_zero, allZero, ProvableType.add, toElements_fromElements, Vector.getElem_fill, zero_add, Fin.getElem_fin, add_eq_right]
   · intro h_b_zero
     simp only [ProvableType.ext_iff]
     intro i hi
     rw [h_spec]
-    simp only [Vector.getElem_ofFn, h_b_zero, zero]
-    simp only [toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
+    simp only [Vector.getElem_ofFn, h_b_zero, allZero, ProvableType.add, toElements_fromElements, Vector.getElem_fill, add_zero, Fin.getElem_fin, add_eq_left]
 
 /--
 When either input is zero, the output equals the non-zero input.

@@ -3,6 +3,7 @@ import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.StructuralLemmas
 import Clean.Gadgets.Boolean
+import Clean.Utils.Tactics
 
 section
 variable {F : Type} [Field F]
@@ -39,26 +40,22 @@ def Assumptions (_ : Inputs M F) : Prop := True
 Specification: Each element of the output equals scalar times the corresponding input element.
 -/
 def Spec (input : Inputs M F) (output : M F) : Prop :=
-  toElements output = (toElements input.data).map (input.scalar * ·)
+  output = input.scalar .* input.data
 
 instance elaborated : ElaboratedCircuit F (Inputs M) M where
   main
   localLength _ := 0
 
 theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec := by
-  intro i0 env input_var input h_input h_as h_holds
-  simp only [Spec, elaborated, eval, explicit_provable_type]
-  simp only [ProvableType.toElements_fromElements]
+  circuit_proof_start
+  simp only [ProvableType.scalarMul]
   rcases input_var
   rcases input
   simp only [ProvableType.eval, toVars, toElements, toComponents, fromElements, fromComponents, components, ProvableStruct.componentsToElements] at h_input
-  simp only [Vector.cast_rfl, Vector.map_append, Vector.map_mk, List.map_toArray, List.map_cons,
-    List.map_nil, Nat.add_zero, id_eq] at h_input
-  simp only [ProvableStruct.componentsFromElements] at h_input
   simp only [Inputs.mk.injEq] at h_input
-  simp only [main, circuit_norm]
   simp only [h_input.1.symm, h_input.2.symm]
-  clear h_input
+  simp only [ProvableType.toElements_fromElements, ProvableType.eval]
+  congr 1
   ext i h_i
   simp only [Vector.getElem_map]
   simp only [main, circuit_norm]
@@ -66,8 +63,7 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   aesop
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
-  intro i0 env input_var h_env input h_input h_as
-  simp only [circuit_norm, main]
+  circuit_proof_start
 
 def circuit : FormalCircuit F (Inputs M) M := {
   elaborated := elaborated (F := F) (M := M)
@@ -82,7 +78,7 @@ Alternative specification for binary scalar multiplication.
 Guarantees that scalar 0 produces zero and scalar 1 preserves the data.
 -/
 def BinarySpec (input : Inputs M F) (output : M F) : Prop :=
-  (input.scalar = 0 → output = zero) ∧
+  (input.scalar = 0 → output = allZero) ∧
   (input.scalar = 1 → output = input.data)
 
 lemma binarySpec_holds {input : Inputs M F} {output : M F}
@@ -91,14 +87,18 @@ lemma binarySpec_holds {input : Inputs M F} {output : M F}
   simp only [BinarySpec, Spec] at *
   constructor
   · intro h_zero
-    simp only [zero_mul, zero] at h_spec ⊢
+    rw [h_zero, ProvableType.scalarMul] at h_spec
+    rw [h_spec]
     rw [ProvableType.ext_iff]
     intro i hi
-    simp only [ProvableType.toElements_fromElements, h_spec, Vector.getElem_fill]
-    aesop
+    simp only [ProvableType.toElements_fromElements, Vector.getElem_map, zero_mul, allZero]
+    simp only [ProvableType.toElements_fromElements, Vector.getElem_fill]
   · intro h_one
+    rw [h_one, ProvableType.scalarMul] at h_spec
+    rw [h_spec]
     rw [ProvableType.ext_iff]
-    aesop
+    intro i hi
+    simp only [ProvableType.toElements_fromElements, Vector.getElem_map, one_mul]
 
 /--
 Binary scalar multiplication circuit with weaker specification.
