@@ -23,7 +23,7 @@ def FormalCircuit.concat
     FormalCircuit F Input Output := {
   elaborated := {
     main := (circuit1 · >>= circuit2)
-    localLength := fun input => circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
+    localLength input := circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
     localLength_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
@@ -31,14 +31,14 @@ def FormalCircuit.concat
       -- This requires that circuit2.localLength is stable (doesn't depend on its input)
       congr 1
       apply h_localLength_stable
-    output := fun input offset =>
+    output input offset :=
       circuit2.output (circuit1.output input offset) (offset + circuit1.localLength input)
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
   }
   Assumptions := circuit1.Assumptions
-  Spec := fun input output => ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
+  Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
   soundness := by
     simp only [Soundness]
     intros
