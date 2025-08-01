@@ -31,7 +31,7 @@ def main (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
+def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where

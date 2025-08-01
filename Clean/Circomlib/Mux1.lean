@@ -34,7 +34,7 @@ template MultiMux1(n) {
     }
 }
 -/
-def main (n: ℕ) (input : Var (Inputs n) (F p)) := do
+def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
   let { c, s } := input
 
   -- Witness and constrain output vector

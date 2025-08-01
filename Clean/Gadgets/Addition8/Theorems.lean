@@ -8,7 +8,7 @@ variable [p_large_enough: Fact (p > 512)]
 /-
   First part of the soundness direction: case of zero carry
 -/
-theorem soundness_zero_carry (x y out carry_in: F p):
+theorem soundness_zero_carry (x y out carry_in : F p):
     x.val < 256 -> y.val < 256 -> out.val < 256  -> carry_in.val < 2 ->
     (carry_in + x + y - out = 0 -> (out.val = (carry_in.val + x.val + y.val) % 256
     ∧ (carry_in.val + x.val + y.val) / 256 = 0)) := by
@@ -26,7 +26,7 @@ theorem soundness_zero_carry (x y out carry_in: F p):
 /-
   Second part of the soundness direction: case of one carry
 -/
-theorem soundness_one_carry (x y out carry_in: F p):
+theorem soundness_one_carry (x y out carry_in : F p):
     x.val < 256 -> y.val < 256 -> out.val < 256 -> carry_in.val < 2 ->
     carry_in + x + y - out - 256 = 0 -> (out.val = (carry_in.val + x.val + y.val) % 256
     ∧ (carry_in.val + x.val + y.val) / 256 = 1) := by
@@ -81,7 +81,7 @@ theorem soundness_one_carry (x y out carry_in: F p):
   carry modulo 256. Additionally the output carry is exactly the integer division
   of the aforementioned sum by 256.
 -/
-theorem soundness (x y out carry_in carry_out: F p):
+theorem soundness (x y out carry_in carry_out : F p):
     x.val < 256 -> y.val < 256 ->
     out.val < 256 ->
     IsBool carry_in ->
@@ -139,7 +139,7 @@ theorem soundness (x y out carry_in carry_out: F p):
 /--
   Given the default witness generation, we show that the addition constraint is satisfied
 -/
-theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
+theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in : F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
@@ -182,7 +182,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
     have obv : (256 : F p).val = 256 % p := by apply ZMod.val_natCast
     have h : T / 256 * (ZMod.val (256 : F p)) + T % 256 = T := by
       rw [mul_comm, obv]
-      rw [(Nat.mod_eq_iff_lt (m:=256) p_neq_zero.out).mpr
+      rw [(Nat.mod_eq_iff_lt (m := 256) p_neq_zero.out).mpr
         (Nat.lt_trans (by norm_num) p_large_enough.elim), Nat.div_add_mod]
 
     rw [h, T_not_wrap]
@@ -192,7 +192,7 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
   Given the default witness generation, we show that the output carry
   is either 0 or 1
 -/
-theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
+theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in : F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->

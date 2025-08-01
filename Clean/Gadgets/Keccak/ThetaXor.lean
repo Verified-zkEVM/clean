@@ -30,7 +30,7 @@ def Assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   state.Normalized ∧ d.Normalized
 
-def Spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
+def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaXor state.value d.value

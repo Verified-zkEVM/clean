@@ -8,7 +8,7 @@ open Lean
 instance (p : ℕ) : ToJson (F p) where
   toJson x := toJson x.val
 
-variable {F: Type} [Field F] [ToJson F]
+variable {F : Type} [Field F] [ToJson F]
 
 def exprToJson [ToJson F]: Expression F → Json
   | .var v => Json.mkObj [

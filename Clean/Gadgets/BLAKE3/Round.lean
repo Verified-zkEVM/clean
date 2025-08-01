@@ -32,8 +32,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   let state ← G.circuit 3 4 9 14 ⟨state, message[14], message[15]⟩
   return state
 
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
+-- #eval! main (p := pBabybear) default |>.localLength
+-- #eval! main (p := pBabybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 768
@@ -44,7 +44,7 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, message } := input
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 

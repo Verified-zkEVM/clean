@@ -4,7 +4,7 @@ import Clean.Circuit.Json
 
 open Lean
 
-variable {F : Type} {S : Type → Type} [ProvableType S] {W: ℕ+} {α: Type} [Field F] [ToJson F]
+variable {F : Type} {S : Type → Type} [ProvableType S] {W : ℕ+} {α : Type} [Field F] [ToJson F]
 
 instance : ToJson (CellOffset W S) where
   toJson off := Json.mkObj [

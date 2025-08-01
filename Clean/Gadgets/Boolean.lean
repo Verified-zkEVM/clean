@@ -180,7 +180,7 @@ end IsBool
 section
 variable {p : ℕ} [Fact p.Prime]
 
-inductive Boolean (F: Type) where
+inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
@@ -189,7 +189,7 @@ def witness (compute : Environment (F p) → F p) := do
   assertZero (var x * (var x - 1))
   return Boolean.mk x
 
-def var (b: Boolean (F p)) := Expression.var b.1
+def var (b : Boolean (F p)) := Expression.var b.1
 
 instance : Coe (Boolean (F p)) (Expression (F p)) where
   coe x := x.var

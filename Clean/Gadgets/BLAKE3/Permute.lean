@@ -15,7 +15,7 @@ instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
-def Spec (state : BLAKE3State (F p)) (out: BLAKE3State (F p)) :=
+def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
   out.value = permute state.value ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by

@@ -19,15 +19,15 @@ each resulting (high, low) pair again.
 The ultimate goal is to prove that this is equivalent to `rotRight32`.
 -/
 def rotRight32_bytes (xs : Vector ℕ 4) (o : ℕ) : Vector ℕ 4 :=
-  .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 4] % 2^o) * 2^(8-o)
+  .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 4] % 2^o) * 2^(8 - o)
 
 -- unfold what rotRight32_bytes does on a U32
 def rotRight32_u32 : U32 ℕ → ℕ → U32 ℕ
   | ⟨ x0, x1, x2, x3 ⟩, o => ⟨
-    (x0 / 2^o) + (x1 % 2^o) * 2^(8-o),
-    (x1 / 2^o) + (x2 % 2^o) * 2^(8-o),
-    (x2 / 2^o) + (x3 % 2^o) * 2^(8-o),
-    (x3 / 2^o) + (x0 % 2^o) * 2^(8-o),
+    (x0 / 2^o) + (x1 % 2^o) * 2^(8 - o),
+    (x1 / 2^o) + (x2 % 2^o) * 2^(8 - o),
+    (x2 / 2^o) + (x3 % 2^o) * 2^(8 - o),
+    (x3 / 2^o) + (x0 % 2^o) * 2^(8 - o),
   ⟩
 
 -- these two are definitionally equal
@@ -41,7 +41,7 @@ lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
 
 lemma h_div32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3: ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) / 2^o
-    = x0 / 2^o + x1 * 2^(8-o) + x2 * 256 * 2^(8-o) + x3 * 256^2 * 2^(8-o) := by
+    = x0 / 2^o + x1 * 2^(8 - o) + x2 * 256 * 2^(8 - o) + x3 * 256^2 * 2^(8 - o) := by
   rw [←Nat.pow_one 256]
   repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power ho; linarith)]
 

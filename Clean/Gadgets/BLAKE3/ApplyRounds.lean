@@ -429,8 +429,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
 
--- #eval! main (p:=pBabybear) default |>.localLength
--- #eval! main (p:=pBabybear) default |>.output
+-- #eval! main (p := pBabybear) default |>.localLength
+-- #eval! main (p := pBabybear) default |>.output
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376
@@ -450,7 +450,7 @@ def Assumptions (input : Inputs (F p)) :=
   (∀ i : Fin 16, block_words[i].Normalized) ∧
   counter_high.Normalized ∧ counter_low.Normalized ∧ block_len.Normalized ∧ flags.Normalized
 
-def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   out.value = applyRounds
     (chaining_value.map U32.value)

@@ -33,7 +33,7 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-def main (n: ℕ) (inp : Expression (F p)) := do
+def main (n : ℕ) (inp : Expression (F p)) := do
   let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
@@ -48,10 +48,10 @@ def main (n: ℕ) (inp : Expression (F p)) := do
 omit [Fact (p > 2)] in
 lemma lc_eq {i0} {env} {n : ℕ} :
   (Expression.eval env <| Prod.fst <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F := F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
-  suffices (eval (α:=fieldPair) env <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+  suffices (eval (α := fieldPair) env <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F := F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
     = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map]
@@ -151,7 +151,7 @@ template Bits2Num(n) {
     lc1 ==> out;
 }
 -/
-def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
     let e2 := e2 + e2

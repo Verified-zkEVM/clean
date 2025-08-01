@@ -26,11 +26,11 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z: U32 (F p)) :=
+def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
 
--- def c := main (p:=p_babybear) default
+-- def c := main (p := p_babybear) default
 -- #eval c.localLength
 -- #eval c.output
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where

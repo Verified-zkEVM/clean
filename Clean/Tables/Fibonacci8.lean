@@ -66,13 +66,13 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
 
 -- TODO kinda pointless to use `assignCurrRow` if the easiest way to unfold it is by making the steps explicit
 omit p_large_enough in
-lemma boundaryFib_eq : boundaryFib (p:=p) = (do
+lemma boundaryFib_eq : boundaryFib (p := p) = (do
     assign (.curr 0) 0
     assign (.curr 1) 1)
   := rfl
 
 omit p_large_enough in
-lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
   Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`

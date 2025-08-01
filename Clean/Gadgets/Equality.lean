@@ -92,7 +92,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
 
 -- allow `circuit_norm` to elaborate properties of the `circuit` while keeping main/spec/assumptions opaque
 @[circuit_norm ↓]
-lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elaborated = elaborated α := rfl
+lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F := F)).elaborated = elaborated α := rfl
 
 -- rewrite soundness/completeness directly
 
