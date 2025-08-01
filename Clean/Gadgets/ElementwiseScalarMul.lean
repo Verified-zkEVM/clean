@@ -2,6 +2,7 @@ import Clean.Circuit.Provable
 import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.StructuralLemmas
+import Clean.Circuit.Theorems
 import Clean.Gadgets.Boolean
 import Clean.Utils.Tactics
 
@@ -87,18 +88,9 @@ lemma binarySpec_holds {input : Inputs M F} {output : M F}
   simp only [BinarySpec, Spec] at *
   constructor
   · intro h_zero
-    rw [h_zero, ProvableType.elementwiseScalarMul] at h_spec
-    rw [h_spec]
-    rw [ProvableType.ext_iff]
-    intro i hi
-    simp only [ProvableType.toElements_fromElements, Vector.getElem_map, zero_mul, allZero]
-    simp only [ProvableType.toElements_fromElements, Vector.getElem_fill]
+    simp only [h_spec, h_zero, circuit_norm]
   · intro h_one
-    rw [h_one, ProvableType.elementwiseScalarMul] at h_spec
-    rw [h_spec]
-    rw [ProvableType.ext_iff]
-    intro i hi
-    simp only [ProvableType.toElements_fromElements, Vector.getElem_map, one_mul]
+    simp only [h_spec, h_one, circuit_norm]
 
 /--
 Binary scalar multiplication circuit with weaker specification.
