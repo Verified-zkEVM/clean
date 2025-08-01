@@ -450,7 +450,7 @@ def Assumptions (input : Inputs (F p)) :=
   (∀ i : Fin 16, block_words[i].Normalized) ∧
   counter_high.Normalized ∧ counter_low.Normalized ∧ block_len.Normalized ∧ flags.Normalized
 
-def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   out.value = applyRounds
     (chaining_value.map U32.value)

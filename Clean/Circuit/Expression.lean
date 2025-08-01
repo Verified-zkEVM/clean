@@ -1,10 +1,10 @@
 import Mathlib.Algebra.Field.Basic
 import Clean.Circuit.SimpGadget
 
-variable {F: Type}
+variable {F : Type}
 
 structure Variable (F : Type) where
-  index: ℕ
+  index : ℕ
 
 instance : Repr (Variable F) where
   reprPrec v _ := "var ⟨" ++ repr v.index ++ "⟩"
@@ -17,8 +17,8 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-structure Environment (F: Type) where
-  get: ℕ → F
+structure Environment (F : Type) where
+  get : ℕ → F
 
 namespace Expression
 variable [Field F]
@@ -31,7 +31,7 @@ This is needed when we want to make statements about a circuit in the adversaria
 situation where the prover can assign anything to variables.
 -/
 @[circuit_norm]
-def eval (env: Environment F) : Expression F → F
+def eval (env : Environment F) : Expression F → F
   | var v => env.get v.index
   | const c => c
   | add x y => eval env x + eval env y
@@ -68,7 +68,7 @@ instance : Mul (Expression F) where
 instance : Coe F (Expression F) where
   coe f := const f
 
-instance {n: ℕ} [OfNat F n] : OfNat (Expression F) n where
+instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
   ofNat := const (OfNat.ofNat n)
 
 instance : HMul F (Expression F) (Expression F) where
@@ -81,7 +81,7 @@ instance : HDiv (Expression F) ℕ (Expression F) where
   hDiv e f := mul (f⁻¹ : F) e
 
 -- TODO probably should just make Variable F := ℕ
-instance {n: ℕ} : OfNat (Variable F) n where
+instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
 end Expression
 

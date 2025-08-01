@@ -36,7 +36,7 @@ def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F
 
 def Assumptions (x : F p) := x.val < 256
 
-def Spec (offset : Fin 8) (x : F p) (out: Outputs (F p)) :=
+def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8 - offset.val))
@@ -67,7 +67,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   have h_eq_mul : 2^n * x = 2^n * low + 2^n * 2^offset.val * high := by rw [h_eq, mul_add, mul_comm high, mul_assoc]
   replace h_eq_mul := congrArg ZMod.val h_eq_mul
 
-  have h_lt_mul {x n} (hn : n ≤ 8) (hx: x < 2^8) : 2^n * x < 2^16 := by
+  have h_lt_mul {x n} (hn : n ≤ 8) (hx : x < 2^8) : 2^n * x < 2^16 := by
     have : 2^(n + 8) ≤ 2^16 := Nat.pow_le_pow_of_le (by norm_num) (by omega)
     suffices 2^n * x < 2^(n + 8) by linarith
     rw [pow_add]

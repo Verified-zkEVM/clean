@@ -33,7 +33,7 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-def main (n: ℕ) (inp : Expression (F p)) := do
+def main (n : ℕ) (inp : Expression (F p)) := do
   let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
@@ -151,7 +151,7 @@ template Bits2Num(n) {
     lc1 ==> out;
 }
 -/
-def main (n: ℕ) (input : Vector (Expression (F p)) n) := do
+def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
     let e2 := e2 + e2

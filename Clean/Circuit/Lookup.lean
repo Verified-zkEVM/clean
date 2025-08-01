@@ -1,5 +1,5 @@
 import Clean.Circuit.Provable
-variable {F: Type} [Field F] {α : Type} {n : ℕ}
+variable {F : Type} [Field F] {α : Type} {n : ℕ}
 variable {Row : TypeMap} [ProvableType Row]
 
 /--
@@ -48,14 +48,14 @@ structure RawTable (F : Type) where
   implied_by_completeness : ∀ row, Completeness row → Contains row
 
 structure Lookup (F : Type) where
-  table: RawTable F
-  entry: Vector (Expression F) table.arity
+  table : RawTable F
+  entry : Vector (Expression F) table.arity
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
 @[circuit_norm]
-def Table.toRaw (table: Table F Row) : RawTable F where
+def Table.toRaw (table : Table F Row) : RawTable F where
   name := table.name
   arity := size Row
   Contains row := table.Contains (fromElements row)
@@ -67,22 +67,22 @@ def Table.toRaw (table: Table F Row) : RawTable F where
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 structure StaticTable (F : Type) (Row : TypeMap) [ProvableType Row] where
-  name: String
-  length: ℕ
-  row: Fin length → Row F
+  name : String
+  length : ℕ
+  row : Fin length → Row F
   -- TODO this would make sense if we had separate input and output types,
   -- and the lookup would automatically witness the output given the input.
   -- then we could weaken completeness to be `index input < length`!
-  index: Row F → ℕ
+  index : Row F → ℕ
   Spec : Row F → Prop
   contains_iff : ∀ t, (∃ i, t = row i) ↔ Spec t
 
 namespace StaticTable
-def Contains (table: StaticTable F Row) (row: Row F) :=
+def Contains (table : StaticTable F Row) (row : Row F) :=
   ∃ i : Fin table.length, row = table.row i
 
 @[circuit_norm]
-def toTable (table: StaticTable F Row) : Table F Row where
+def toTable (table : StaticTable F Row) : Table F Row where
   name := table.name
   Contains := table.Contains
   Soundness := table.Spec
@@ -92,5 +92,5 @@ def toTable (table: StaticTable F Row) : Table F Row where
 end StaticTable
 
 @[circuit_norm]
-def Table.fromStatic (table: StaticTable F Row) : Table F Row :=
+def Table.fromStatic (table : StaticTable F Row) : Table F Row :=
   StaticTable.toTable table

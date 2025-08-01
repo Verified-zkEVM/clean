@@ -32,7 +32,7 @@ def main (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
+def Spec (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 

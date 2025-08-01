@@ -6,7 +6,7 @@ such as `Circuit.Subcircuit` which focuses on establishing the foundation for su
 -/
 import Clean.Circuit.Basic
 
-variable {F: Type} [Field F] {α β : Type}
+variable {F : Type} [Field F] {α β : Type}
 
 -- basic simp lemmas
 
@@ -19,7 +19,7 @@ theorem append_localLength {a b: Operations F} :
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all +arith [localLength, ih]
 
-theorem localLength_cons {a : Operation F} {as: Operations F} :
+theorem localLength_cons {a : Operation F} {as : Operations F} :
     localLength (a :: as) = a.localLength + as.localLength := by
   cases a <;> simp_all [localLength, Operation.localLength]
 
@@ -31,16 +31,16 @@ theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : Envir
   rw [Vector.empty_append]; simp
 
 @[circuit_norm]
-theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
+theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
 
 @[circuit_norm]
-theorem forAll_cons {condition : Condition F} {offset: ℕ} {op: Operation F} {ops: Operations F} :
+theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} {ops : Operations F} :
   forAll offset condition (op :: ops) ↔
     condition.apply offset op ∧ forAll (op.localLength + offset) condition ops := by
   cases op <;> simp [forAll, Operation.localLength, Condition.apply]
 
 @[circuit_norm]
-theorem forAll_append {condition : Condition F} {offset: ℕ} {as bs: Operations F} :
+theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operations F} :
   forAll offset condition (as ++ bs) ↔
     forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
   induction as using induct generalizing offset with
@@ -161,9 +161,9 @@ lemma localLength_append {F} {a b: List (FlatOperation F)} :
   | case3 _ _ ih | case4 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
-theorem forAll_empty {condition : Condition F} {n: ℕ} : forAll n condition [] = True := rfl
+theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
 
-theorem forAll_cons {condition : Condition F} {offset: ℕ} {op: FlatOperation F} {ops: List (FlatOperation F)} :
+theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : FlatOperation F} {ops : List (FlatOperation F)} :
   forAll offset condition (op :: ops) ↔
     condition.applyFlat offset op ∧ forAll (op.singleLocalLength + offset) condition ops := by
   cases op <;> simp [forAll, Condition.applyFlat, singleLocalLength]
@@ -190,7 +190,7 @@ lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {env} :
 /--
 The witness length from flat and nested operations is the same
 -/
-lemma localLength_toFlat {ops: Operations F} :
+lemma localLength_toFlat {ops : Operations F} :
     localLength ops.toFlat = ops.localLength := by
   induction ops using Operations.induct with
   | empty => trivial
@@ -211,7 +211,7 @@ lemma localLength_toFlat {ops: Operations F} :
 /--
 The witnesses created from flat and nested operations are the same
 -/
-lemma localWitnesses_toFlat {ops: Operations F} {env} :
+lemma localWitnesses_toFlat {ops : Operations F} {env} :
   (localWitnesses env ops.toFlat).toArray = (ops.localWitnesses env).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
@@ -228,7 +228,7 @@ open FlatOperation (localLength localWitnesses)
 what follows are relationships between different versions of `Environment.UsesLocalWitnesses`
 -/
 
-lemma env_extends_witness {F} {n: ℕ} {ops: List (FlatOperation F)} {env: Environment F} {m c} :
+lemma env_extends_witness {F} {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {m c} :
     env.ExtendsVector (localWitnesses env (.witness m c :: ops)) n ↔
       (env.ExtendsVector (c env) n ∧ env.ExtendsVector (localWitnesses env ops) (m + n)) := by
   simp_all only [ExtendsVector, localLength, localWitnesses, Vector.getElem_append]
@@ -250,7 +250,7 @@ lemma env_extends_witness {F} {n: ℕ} {ops: List (FlatOperation F)} {env: Envir
       congr 1
       omega
 
-theorem usesLocalWitnessesFlat_iff_extends {env: Environment F} (n : ℕ) {ops : List (FlatOperation F)}  :
+theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops : List (FlatOperation F)}  :
     env.UsesLocalWitnessesFlat n ops ↔ env.ExtendsVector (localWitnesses env ops) n := by
   induction ops using FlatOperation.induct generalizing n with
   | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, ExtendsVector, localLength]
@@ -286,7 +286,7 @@ theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F
   | assert | lookup | witness | subcircuit =>
     simp_all +arith [UsesLocalWitnessesCompleteness, Operations.forAll]
 
-theorem usesLocalWitnesses_iff_forAll (n: ℕ) {env: Environment F} {ops: Operations F} :
+theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
   env.UsesLocalWitnesses n ops ↔ ops.forAll n {
     witness n _ c := env.ExtendsVector (c env) n,
     subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env) n} s.ops
@@ -347,7 +347,7 @@ end Circuit
 namespace Circuit
 -- more theorems about forAll
 
-variable {α β : Type} {n : ℕ} {prop : Condition F} {env: Environment F}
+variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F}
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
@@ -458,7 +458,7 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
 end Operations
 
 /-- An environment respects local witnesses iff it does so in the flattened variant. -/
-lemma Environment.usesLocalWitnesses_iff_flat {n: ℕ} {ops: Operations F} {env: Environment F} :
+lemma Environment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations F} {env : Environment F} :
     env.UsesLocalWitnesses n ops ↔
     env.UsesLocalWitnessesFlat n ops.toFlat := by
   simp only [UsesLocalWitnessesFlat, UsesLocalWitnesses]
@@ -478,11 +478,11 @@ lemma dynamicWitnesses_length {ops : List (FlatOperation F)} (init : List F) :
   | cons op ops ih =>
     simp_all +arith [dynamicWitnesses, localLength_cons, dynamicWitness_length]
 
-lemma dynamicWitnesses_cons {op : FlatOperation F} {ops: List (FlatOperation F)} {acc : List F} :
+lemma dynamicWitnesses_cons {op : FlatOperation F} {ops : List (FlatOperation F)} {acc : List F} :
     dynamicWitnesses (op :: ops) acc = dynamicWitnesses ops (acc ++ op.dynamicWitness acc) := by
   simp only [dynamicWitnesses, List.foldl_cons]
 
-lemma getElem?_dynamicWitnesses_of_lt {ops: List (FlatOperation F)} {acc : List F} {i : ℕ} (hi : i < acc.length) :
+lemma getElem?_dynamicWitnesses_of_lt {ops : List (FlatOperation F)} {acc : List F} {i : ℕ} (hi : i < acc.length) :
     (dynamicWitnesses ops acc)[i]?.getD 0 = acc[i] := by
   simp only [dynamicWitnesses]
   induction ops generalizing acc with
@@ -491,7 +491,7 @@ lemma getElem?_dynamicWitnesses_of_lt {ops: List (FlatOperation F)} {acc : List 
     have : i < (acc ++ op.dynamicWitness acc).length := by rw [List.length_append]; linarith
     rw [List.foldl_cons, ih this, List.getElem_append_left]
 
-lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F} {ops: List (FlatOperation F)} {init : List F} {i : ℕ} (hi : i < op.singleLocalLength) :
+lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F} {ops : List (FlatOperation F)} {init : List F} {i : ℕ} (hi : i < op.singleLocalLength) :
     (dynamicWitnesses (op :: ops) init)[init.length + i]?.getD 0 = (op.dynamicWitness init)[i]'(dynamicWitness_length (F := F) ▸ hi) := by
   rw [dynamicWitnesses_cons, getElem?_dynamicWitnesses_of_lt (by simp [hi, dynamicWitness_length]),
     List.getElem_append_right (by linarith)]
@@ -590,8 +590,8 @@ end FlatOperation
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
-def FormalCircuit.isGeneralFormalCircuit (F: Type) (Input Output: TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
-    (orig: FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
+def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
+    (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
   let Spec input output := orig.Assumptions input → orig.Spec input output
   exact {
     elaborated := orig.elaborated,

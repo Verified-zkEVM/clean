@@ -41,7 +41,7 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out: Outputs (F p)) :=
+def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
   z.value = (x.value + y.value + carryIn.val) % 2^32
@@ -134,7 +134,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- the add8 completeness proof, four times
   have add8_completeness {x y c_in z c_out : F p}
-    (hz: z = mod256 (x + y + c_in)) (hc_out: c_out = floorDiv256 (x + y + c_in)) :
+    (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv256 (x + y + c_in)) :
     x.val < 256 → y.val < 256 → IsBool c_in →
     z.val < 256 ∧ IsBool c_out ∧ x + y + c_in + -z + -(c_out * 256) = 0
   := by

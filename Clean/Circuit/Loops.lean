@@ -24,7 +24,7 @@ lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (bod
 namespace Circuit
 variable {prop : Condition F}
 
-lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_: ConstantLength circuit) [Inhabited α] (a : α) (n : ℕ) :
+lemma ConstantLength.length_eq_default {circuit : α → Circuit F β} (_ : ConstantLength circuit) [Inhabited α] (a : α) (n : ℕ) :
    (circuit a).localLength n = (circuit default).localLength 0 := by
   simp only [ConstantLength.localLength_eq]
 
@@ -177,7 +177,7 @@ def prod (circuit : β → α → Circuit F β) : β × α → Circuit F β := f
 variable {env : Environment F} {prop : Condition F} {xs : Vector α m}
   {circuit : β → α → Circuit F β} {init : β} {constant : ConstantLength (prod circuit)}
 
-lemma foldlM_cons (x: α) :
+lemma foldlM_cons (x : α) :
   (Vector.cons x xs).foldlM circuit init = (do
     let init' ← circuit init x
     xs.foldlM circuit init') := by
@@ -192,7 +192,7 @@ theorem localLength_eq :
     rw [foldlM_cons, bind_localLength_eq, ih, constant.localLength_eq (init, x)]
     ring
 
-lemma finFoldl_cons_succ (x: α) :
+lemma finFoldl_cons_succ (x : α) :
   Fin.foldl (m + 1) (fun acc i => (circuit acc (Vector.cons x xs)[i.val]).output (n + i * constant.localLength)) init
     = Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + constant.localLength + i * constant.localLength)) ((circuit init x).output n) := by
   set k := constant.localLength
