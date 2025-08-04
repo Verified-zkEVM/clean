@@ -32,10 +32,6 @@ def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let trueVars := toVars ifTrue
   let falseVars := toVars ifFalse
 
-  -- selector * ifTrue + (1 - selector) * ifFalse
-  let scaledTrueVars := trueVars.map (selector * ·)
-  let scaledFalseVars := falseVars.map ((1 - selector) * ·)
-
   -- Inline element-wise addition
   let resultVars := Vector.ofFn fun i => selector * (trueVars[i] - falseVars[i]) + falseVars[i]
 
