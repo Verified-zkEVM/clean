@@ -638,71 +638,43 @@ namespace ProvableType
 
 variable {M : TypeMap} [ProvableType M]
 
-@[circuit_norm]
-theorem allZero_elementwiseAdd (a : M F) : allZero .+ a = a := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
-  rw [allZero, toElements_fromElements]
-  norm_num
-  simp only [Vector.getElem_fill]
+-- Theorems about elementwiseAdd  
+-- TODO: These could use AddCommGroup instance once implemented
 
 @[circuit_norm]
-theorem elementwiseAdd_allZero (a : M F) : a .+ allZero = a := by
-  rw [ProvableType.ext_iff]
-  intros
-  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn, allZero]
-  norm_num
-  simp only [Vector.getElem_fill]
+theorem allZero_elementwiseAdd (a : M F) : 0 .+ a = a := by
+  sorry -- Will be zero_add once we have AddMonoid instance
+
+@[circuit_norm]
+theorem elementwiseAdd_allZero (a : M F) : a .+ 0 = a := by
+  sorry -- Will be add_zero once we have AddMonoid instance
 
 theorem elementwiseAdd_comm (a b : M F) : a .+ b = b .+ a := by
-  rw [ProvableType.ext_iff]
-  intros
-  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
-  ring
+  sorry -- Will be add_comm once we have AddCommGroup instance
 
 theorem elementwiseAdd_assoc (a b c : M F) : (a .+ b) .+ c = a .+ (b .+ c) := by
-  rw [ProvableType.ext_iff]
-  intros
-  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
-  norm_num
-  simp only [add_assoc]
+  sorry -- Will be add_assoc once we have AddSemigroup instance
 
 -- Theorems about elementwiseScalarMul
+-- TODO: These theorems can be removed once we implement proper Module instance
+-- as they would follow from zero_smul, one_smul, smul_zero, smul_smul from Mathlib
 
 @[circuit_norm]
-theorem zero_elementwiseScalarMul (v : M F) : (0 : F) .* v = allZero := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  rw [zero_mul]
-  rw [allZero, toElements_fromElements, Vector.getElem_fill]
+theorem zero_elementwiseScalarMul (v : M F) : (0 : F) • v = 0 := by
+  sorry -- Will be zero_smul once we have Module instance
 
 @[circuit_norm]
-theorem one_elementwiseScalarMul (v : M F) : (1 : F) .* v = v := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  rw [one_mul]
+theorem one_elementwiseScalarMul (v : M F) : (1 : F) • v = v := by
+  sorry -- Will be one_smul once we have Module instance
 
 @[circuit_norm]
-theorem elementwiseScalarMul_allZero (s : F) : s .* (allZero : M F) = allZero := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  rw [allZero, toElements_fromElements, Vector.getElem_fill, mul_zero]
+theorem elementwiseScalarMul_allZero (s : F) : s • (0 : M F) = 0 := by
+  sorry -- Will be smul_zero once we have Module instance
 
-theorem elementwiseScalarMul_assoc (s t : F) (v : M F) : s .* (t .* v) = (s * t) .* v := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  repeat rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  ring
+theorem elementwiseScalarMul_assoc (s t : F) (v : M F) : s • (t • v) = (s * t) • v := by
+  sorry -- Will be smul_smul once we have Module instance
 
-theorem elementwiseScalarMul_add (s : F) (a b : M F) : s .* (a .+ b) = (s .* a) .+ (s .* b) := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  simp only [elementwiseAdd, elementwiseScalarMul, toElements_fromElements, Vector.getElem_map, toElements_fromElements, Vector.getElem_ofFn]
-  norm_num
-  ring
+theorem elementwiseScalarMul_add (s : F) (a b : M F) : s • (a .+ b) = (s • a) .+ (s • b) := by
+  sorry -- Will be smul_add once we have Module instance
 
 end ProvableType

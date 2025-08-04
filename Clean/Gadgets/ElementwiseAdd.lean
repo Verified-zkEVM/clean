@@ -67,8 +67,8 @@ Weaker specification for ElementwiseAdd that handles zero inputs specially.
 When either input is zero, the output equals the non-zero input.
 -/
 def WeakerSpec (input : Inputs M F) (output : M F) : Prop :=
-  (input.a = allZero → output = input.b) ∧
-  (input.b = allZero → output = input.a)
+  (input.a = 0 → output = input.b) ∧
+  (input.b = 0 → output = input.a)
 
 lemma spec_implies_weakerSpec : ∀ (input : Inputs M F) (output : M F),
     Assumptions input →

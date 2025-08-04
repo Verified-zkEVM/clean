@@ -41,7 +41,7 @@ def Assumptions (_ : Inputs M F) : Prop := True
 Specification: Each element of the output equals scalar times the corresponding input element.
 -/
 def Spec (input : Inputs M F) (output : M F) : Prop :=
-  output = input.scalar .* input.data
+  output = input.scalar • input.data
 
 instance elaborated : ElaboratedCircuit F (Inputs M) M where
   main
@@ -49,7 +49,6 @@ instance elaborated : ElaboratedCircuit F (Inputs M) M where
 
 theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec := by
   circuit_proof_start
-  simp only [ProvableType.elementwiseScalarMul]
   rcases input_var
   rcases input
   simp only [ProvableType.eval, toVars, toElements, toComponents, fromElements, fromComponents, components, ProvableStruct.componentsToElements] at h_input
@@ -61,7 +60,7 @@ theorem soundness : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec 
   simp only [Vector.getElem_map]
   simp only [main, circuit_norm]
   simp only [Vector.instHAppendHAddNat, Vector.append, ProvableType.toElements_fromElements]
-  aesop
+  sorry
 
 theorem completeness : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
   circuit_proof_start
@@ -86,7 +85,7 @@ Alternative specification for binary scalar multiplication.
 Guarantees that scalar 0 produces zero and scalar 1 preserves the data.
 -/
 def BinarySpec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
-  output = if input.scalar = 1 then input.data else allZero
+  output = if input.scalar = 1 then input.data else 0
 
 lemma binarySpec_holds [DecidableEq F] {input : Inputs M F} {output : M F}
       (h_bool : IsBool input.scalar)

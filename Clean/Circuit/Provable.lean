@@ -1,4 +1,5 @@
 import Mathlib.Data.ZMod.Basic
+import Mathlib.Algebra.Module.Defs
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Circuit.SimpGadget
@@ -98,24 +99,17 @@ def const (x: α F) : Var α F :=
   fromVars (values.map .const)
 
 /--
-All-zero value for any ProvableType.
+Zero instance for ProvableType.
 Creates an instance filled with field zero elements.
 -/
-def allZero : α F :=
-  fromElements (Vector.fill (size α) 0)
+instance [Field F] : Zero (α F) where
+  zero := fromElements (Vector.fill (size α) 0)
 
 instance [Field F] : Inhabited (α F) where
-  default := allZero
-
-/--
-All-zero variable for any ProvableType.
-Creates a variable representing the elementwise zero value.
--/
-def allZeroVar : Var α F :=
-  const allZero
+  default := 0
 
 instance [Field F] : Inhabited (Var α F) where
-  default := allZeroVar
+  default := const 0
 
 @[explicit_provable_type]
 def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
@@ -123,7 +117,8 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
   fromVars vars
 
 -- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
-attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
+attribute [explicit_provable_type] Vector.mapRange_succ
+attribute [explicit_provable_type] Vector.mapRange_zero
 
 section Operations
 
@@ -143,19 +138,34 @@ def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
 
 end Operations
 
+/--
+SMul instance for scalar multiplication of ProvableTypes.
+-/
+instance [Field F] : SMul F (α F) where
+  smul := elementwiseScalarMul
+
 end ProvableType
 
 /--
 Notation for element-wise addition of ProvableTypes.
+Use this when you need to distinguish element-wise addition from other additions.
 -/
 infixl:65 " .+ " => ProvableType.elementwiseAdd
 
-/--
-Notation for element-wise scalar multiplication of ProvableTypes.
--/
-infixl:70 " .* " => ProvableType.elementwiseScalarMul
 
-export ProvableType (eval const allZero allZeroVar varFromOffset elementwiseAdd elementwiseScalarMul)
+
+/-
+Namespace for element-wise addition type class instance.
+Open this namespace to use standard + notation for element-wise addition.
+-/
+namespace ElementwiseAddition
+
+scoped instance [Field F] {α : TypeMap} [ProvableType α] : Add (α F) where
+  add := ProvableType.elementwiseAdd
+
+end ElementwiseAddition
+
+export ProvableType (eval const varFromOffset elementwiseAdd elementwiseScalarMul)
 
 @[reducible]
 def unit (_: Type) := Unit
