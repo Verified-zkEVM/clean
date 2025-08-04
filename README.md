@@ -21,3 +21,7 @@ lake build
 After that, we recommend open the repo in VSCode to get immediate inline feedback from the compiler while writing theorems.
 
 Make sure to install the `lean4` extension for VSCode!
+
+## Code Style
+
+We follow standard Lean/Mathlib conventions with some local variations. See [doc/conventions.md](doc/conventions.md) for details.
