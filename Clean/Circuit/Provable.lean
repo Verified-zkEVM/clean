@@ -698,3 +698,137 @@ instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
 
 instance [DecidableEq F] : DecidableEq (field F) :=
   inferInstanceAs (DecidableEq F)
+
+-- Algebraic instances for element-wise operations
+namespace ElementwiseAddition
+
+variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+
+instance : AddSemigroup (α F) where
+  add_assoc := by
+    intro a b c
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [instHAdd, Add.add]
+    simp only [instAddOfFieldOfProvableType]
+    simp only [elementwiseAdd, ProvableType.toElements_fromElements, Fin.getElem_fin, Vector.getElem_ofFn]
+    ring
+
+instance : AddMonoid (α F) where
+  zero_add := by
+    intro a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [instHAdd, Add.add, AddSemigroup.toAdd, instAddSemigroup_clean, HAdd.hAdd]
+    simp only [instAddOfFieldOfProvableType]
+    simp only [elementwiseAdd, ProvableType.toElements_fromElements, Fin.getElem_fin, Vector.getElem_ofFn]
+    simp only [add_eq_right]
+    simp only [ProvableType.instZeroOfField, OfNat.ofNat]
+    simp only [ProvableType.toElements_fromElements]
+    simp only [Vector.getElem_fill]
+
+  add_zero := by
+    intro a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [show a + 0 = ProvableType.elementwiseAdd a 0 from rfl]
+    simp only [ProvableType.elementwiseAdd, ProvableType.toElements_fromElements, Vector.getElem_ofFn]
+    rw [show (0 : α F) = ProvableType.fromElements (Vector.fill (ProvableType.size α) 0) from rfl]
+    simp only [ProvableType.toElements_fromElements, add_zero]
+    norm_num
+    simp only [Vector.getElem_fill]
+
+  nsmul := fun n a => ProvableType.fromElements ((ProvableType.toElements a).map (n • ·))
+  nsmul_zero := by
+    intro n
+    rw [show (0 : α F) = ProvableType.fromElements (Vector.fill (ProvableType.size α) 0) from rfl]
+    congr
+    ext i ih
+    simp only [zero_smul, Vector.getElem_map]
+    simp only [Vector.getElem_fill]
+
+  nsmul_succ := by
+    intro n a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    conv =>
+      rhs
+      simp only [HAdd.hAdd, Add.add, elementwiseAdd]
+    simp only [ProvableType.toElements_fromElements]
+    simp only [Vector.getElem_map, Vector.getElem_ofFn]
+    norm_num
+    ring_nf
+    simp only [HAdd.hAdd]
+
+instance : AddCommMonoid (α F) where
+  add_comm := by
+    intro a b
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [show a + b = ProvableType.elementwiseAdd a b from rfl]
+    rw [show b + a = ProvableType.elementwiseAdd b a from rfl]
+    simp only [ProvableType.elementwiseAdd, ProvableType.toElements_fromElements, Vector.getElem_ofFn]
+    ring
+
+instance : DistribMulAction F (α F) where
+  one_smul := by
+    intro a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    simp only [instHSMul, SMul.smul, elementwiseScalarMul, ProvableType.toElements_fromElements, Vector.getElem_map]
+    ring
+
+  mul_smul := by
+    intro r s a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    simp only [instHSMul, SMul.smul, elementwiseScalarMul]
+    simp only [SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.toElements_fromElements,
+               Vector.getElem_map, mul_assoc]
+
+  smul_zero := by
+    intro s
+    rw [ProvableType.ext_iff]
+    intro i hi
+    simp only [instHSMul, SMul.smul, elementwiseScalarMul]
+    simp only [SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.toElements_fromElements,
+               Vector.getElem_map, mul_assoc]
+    rw [show (0 : α F) = ProvableType.fromElements (Vector.fill (ProvableType.size α) 0) from rfl]
+    simp only [ProvableType.toElements_fromElements, Vector.getElem_fill, mul_zero]
+
+  smul_add := by
+    intro s a b
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [show a + b = ProvableType.elementwiseAdd a b from rfl]
+    simp only [instHSMul, SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.elementwiseAdd,
+               ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
+    conv =>
+      rhs
+      simp only [HAdd.hAdd, elementwiseAdd, Add.add]
+    simp only [ProvableType.toElements_fromElements, Vector.getElem_ofFn]
+    norm_num
+    ring_nf
+    simp only [HAdd.hAdd]
+
+instance : Module F (α F) where
+  zero_smul := by
+    intro a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    simp only [HSMul.hSMul, SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.toElements_fromElements,
+               Vector.getElem_map, zero_mul]
+    rw [show (0 : α F) = ProvableType.fromElements (Vector.fill (ProvableType.size α) 0) from rfl]
+    simp only [ProvableType.toElements_fromElements, Vector.getElem_fill]
+
+  add_smul := by
+    intro r s a
+    rw [ProvableType.ext_iff]
+    intro i hi
+    rw [show r • a + s • a = ProvableType.elementwiseAdd (r • a) (s • a) from rfl]
+    simp only [HSMul.hSMul, SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.elementwiseAdd,
+               ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
+    norm_num
+    ring
+
+end ElementwiseAddition
