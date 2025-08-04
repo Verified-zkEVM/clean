@@ -203,7 +203,7 @@ lemma two_val : (2 : F p).val = 2 :=
 
 omit p_prime in
 lemma two_pow_lt (n : ℕ) (hn : n ≤ 8) : 2^n < p := by
-  have h : 2^n ≤ 2^8 := Nat.pow_le_pow_of_le (a := 2) Nat.one_lt_ofNat hn
+  have h : 2^n ≤ 2^8 := Nat.pow_le_pow_of_le (a:=2) Nat.one_lt_ofNat hn
   linarith [‹Fact (p > 512)›.elim]
 
 lemma two_pow_val (n : ℕ) (hn : n ≤ 8) : (2^n : F p).val = 2^n := by

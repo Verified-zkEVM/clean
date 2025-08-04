@@ -48,7 +48,7 @@ theorem xor_eq_add {x : ℕ} (n : ℕ) (hx : x < 2^n) (y : ℕ) : x + 2^n * y = 
   · have : n ≤ i := by linarith
     replace hx : x < 2^i := by
       apply lt_of_lt_of_le hx
-      exact Nat.pow_le_pow_of_le (a := 2) (by norm_num) this
+      exact Nat.pow_le_pow_of_le (a:=2) (by norm_num) this
     rw [Nat.testBit_lt_two_pow hx]
     simp [this]
 
@@ -69,7 +69,7 @@ lemma and_mul_two_pow_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^
   · have : n ≤ i := by linarith
     replace hx : x < 2^i := by
       apply lt_of_lt_of_le hx
-      exact Nat.pow_le_pow_of_le (a := 2) (by norm_num) this
+      exact Nat.pow_le_pow_of_le (a:=2) (by norm_num) this
     rw [Nat.testBit_lt_two_pow hx]
     simp
 
