@@ -78,10 +78,10 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
 
   have z_norm : z.Normalized := by
     simp only [U64.Normalized, h_eq]
-    exact ⟨ Nat.xor_lt_two_pow (n := 8) hx0 hy0, Nat.xor_lt_two_pow (n := 8) hx1 hy1,
-      Nat.xor_lt_two_pow (n := 8) hx2 hy2, Nat.xor_lt_two_pow (n := 8) hx3 hy3,
-      Nat.xor_lt_two_pow (n := 8) hx4 hy4, Nat.xor_lt_two_pow (n := 8) hx5 hy5,
-      Nat.xor_lt_two_pow (n := 8) hx6 hy6, Nat.xor_lt_two_pow (n := 8) hx7 hy7 ⟩
+    exact ⟨ Nat.xor_lt_two_pow (n:=8) hx0 hy0, Nat.xor_lt_two_pow (n:=8) hx1 hy1,
+      Nat.xor_lt_two_pow (n:=8) hx2 hy2, Nat.xor_lt_two_pow (n:=8) hx3 hy3,
+      Nat.xor_lt_two_pow (n:=\8) hx4 hy4, Nat.xor_lt_two_pow (n:=8) hx5 hy5,
+      Nat.xor_lt_two_pow (n:=8) hx6 hy6, Nat.xor_lt_two_pow (n:=8) hx7 hy7 ⟩
 
   suffices z.value = x.value ^^^ y.value from ⟨ this, z_norm ⟩
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
@@ -110,7 +110,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
     (x.val ^^^ y.val : F p).val = x.val ^^^ y.val := by
   apply FieldUtils.val_lt_p
-  have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n := 8) hx hy
+  have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by

@@ -11,10 +11,10 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
   .mapFinRange 5 fun i => do
-    let c ← Xor64.circuit ⟨state[5 * i.val], state[5 * i.val + 1]⟩
-    let c ← Xor64.circuit ⟨c, state[5 * i.val + 2]⟩
-    let c ← Xor64.circuit ⟨c, state[5 * i.val + 3]⟩
-    let c ← Xor64.circuit ⟨c, state[5 * i.val + 4]⟩
+    let c ← Xor64.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
+    let c ← Xor64.circuit ⟨c, state[5*i.val + 2]⟩
+    let c ← Xor64.circuit ⟨c, state[5*i.val + 3]⟩
+    let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
@@ -33,7 +33,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :
     Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
-      state[5 * i.val] ^^^ state[5 * i.val + 1] ^^^ state[5 * i.val + 2] ^^^ state[5 * i.val + 3] ^^^ state[5 * i.val + 4] := by
+      state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
   rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 

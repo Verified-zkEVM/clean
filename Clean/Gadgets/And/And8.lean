@@ -52,8 +52,8 @@ theorem and_times_two_add_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) : 2 * (x
     simp only [x16, y16] at h_u16
     simpa using h_u16
 
-  have h_and_byte : x &&& y < 256 := Nat.and_lt_two_pow (n := 8) x hy
-  have h_xor_byte : x ^^^ y < 256 := Nat.xor_lt_two_pow (n := 8) hx hy
+  have h_and_byte : x &&& y < 256 := Nat.and_lt_two_pow (n:=8) x hy
+  have h_xor_byte : x ^^^ y < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   have h_lhs : 2 * (x &&& y) + (x ^^^ y) < 2^16 := by linarith
   have h_rhs : x + y < 2^16 := by linarith
   rw [Nat.mod_eq_of_lt h_lhs, Nat.mod_eq_of_lt h_rhs] at h_mod_2_to_16
@@ -119,7 +119,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   let z := x + y + -(2 * w)
 
   -- now it's pretty much the soundness proof in reverse
-  have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n := 8) x.val hy_byte
+  have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
   have p_large := p_large_enough.elim
   have and_lt : x.val &&& y.val < p := by linarith
   rw [natToField_eq_natCast and_lt] at hw

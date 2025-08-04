@@ -54,7 +54,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- reduce goal to characterizing absorb step
   set state_after_absorb : Var KeccakState (F p) :=
-    (Vector.mapFinRange 17 fun i => varFromOffset (F := F p) U64 (i0 + i.val * 8)) ++
+    (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
   suffices goal : (eval env state_after_absorb).Normalized
@@ -94,7 +94,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- reduce goal to characterizing absorb step
   set state_after_absorb : Var KeccakState (F p) :=
-    (Vector.mapFinRange 17 fun i => varFromOffset (F := F p) U64 (i0 + i.val * 8)) ++
+    (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
   suffices goal : (eval env state_after_absorb).Normalized

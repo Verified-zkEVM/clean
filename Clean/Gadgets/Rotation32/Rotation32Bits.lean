@@ -38,7 +38,7 @@ def Spec (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
 
 def output (offset : Fin 8) (i0 : ℕ) : U32 (Expression (F p)) :=
   U32.fromLimbs (.ofFn fun ⟨i,_⟩ =>
-    (var ⟨i0 + i * 2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
+    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
 -- #eval main (p:=p_babybear) 1 default |>.output
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
@@ -89,7 +89,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
     have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
     have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 4) (Nat.mod_lt _ (by norm_num))
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
-    have ⟨lt, eq⟩ := byteDecomposition_lt (8 - o) neg_offset_le high_lt next_low_lt'
+    have ⟨lt, eq⟩ := byteDecomposition_lt (8-o) neg_offset_le high_lt next_low_lt'
     use lt
     rw [eq, high_eq, next_low_eq]
 
