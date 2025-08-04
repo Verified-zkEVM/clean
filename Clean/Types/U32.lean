@@ -139,7 +139,7 @@ lemma value_of_decomposedNat_of_small (x : ℕ) :
   intro hx
   simp only [value, decomposeNat]
   -- Need to show that ZMod.val of each component equals the component itself
-  have h (y : ℕ) : y < 256 → ZMod.val (n := p) (y : ℕ) = y := by
+  have h (y : ℕ) : y < 256 → ZMod.val (n:=p) (y : ℕ) = y := by
     intro hy
     rw [ZMod.val_cast_of_lt]
     linarith [p_large_enough.elim]
@@ -157,7 +157,7 @@ lemma value_of_decomposedNat_of_small (x : ℕ) :
 
 lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt32, decomposeNat]
-  have h (x : ℕ) : ZMod.val (n := p) (x % 256 : ℕ) < 256 := by
+  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
     have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
     rw [FieldUtils.val_lt_p]
     assumption

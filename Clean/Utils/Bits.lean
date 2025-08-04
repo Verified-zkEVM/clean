@@ -206,13 +206,13 @@ theorem fieldToBits_injective (n : ℕ) {x y : F p} : x.val < 2^n → y.val < 2^
   by_cases hi : i < n
   · exact h_eq' i hi
   have : n ≤ i := by linarith
-  have : 2^n ≤ 2^i := Nat.pow_le_pow_of_le (a := 2) (by norm_num) this
+  have : 2^n ≤ 2^i := Nat.pow_le_pow_of_le (a:=2) (by norm_num) this
   replace hx : x.val < 2^i := by linarith
   replace hy : y.val < 2^i := by linarith
   rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
 lemma val_natCast_toBits {n} {x : ℕ} :
-    Vector.map (ZMod.val ∘ Nat.cast (R := F p)) (toBits n x) = toBits n x := by
+    Vector.map (ZMod.val ∘ Nat.cast (R:=F p)) (toBits n x) = toBits n x := by
   rw [Vector.ext_iff]
   intro i hi
   simp only [Vector.getElem_map, Function.comp_apply, id_eq]

@@ -80,7 +80,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
     simp only [U64.Normalized, h_eq]
     exact ⟨ Nat.xor_lt_two_pow (n:=8) hx0 hy0, Nat.xor_lt_two_pow (n:=8) hx1 hy1,
       Nat.xor_lt_two_pow (n:=8) hx2 hy2, Nat.xor_lt_two_pow (n:=8) hx3 hy3,
-      Nat.xor_lt_two_pow (n:=\8) hx4 hy4, Nat.xor_lt_two_pow (n:=8) hx5 hy5,
+      Nat.xor_lt_two_pow (n:=8) hx4 hy4, Nat.xor_lt_two_pow (n:=8) hx5 hy5,
       Nat.xor_lt_two_pow (n:=8) hx6 hy6, Nat.xor_lt_two_pow (n:=8) hx7 hy7 ⟩
 
   suffices z.value = x.value ^^^ y.value from ⟨ this, z_norm ⟩
