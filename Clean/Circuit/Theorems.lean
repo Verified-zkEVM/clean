@@ -5,7 +5,6 @@ For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
 import Clean.Circuit.Basic
-import Clean.Circuit.Provable
 
 variable {F: Type} [Field F] {α β : Type}
 
@@ -631,4 +630,3 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
-
