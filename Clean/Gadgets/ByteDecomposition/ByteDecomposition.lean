@@ -68,8 +68,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   replace h_eq_mul := congrArg ZMod.val h_eq_mul
 
   have h_lt_mul {x n} (hn : n ≤ 8) (hx : x < 2^8) : 2^n * x < 2^16 := by
-    have : 2^(n + 8) ≤ 2^16 := Nat.pow_le_pow_of_le (by norm_num) (by omega)
-    suffices 2^n * x < 2^(n + 8) by linarith
+    have : 2^(n+8) ≤ 2^16 := Nat.pow_le_pow_of_le (by norm_num) (by omega)
+    suffices 2^n * x < 2^(n+8) by linarith
     rw [pow_add]
     exact Nat.mul_lt_mul_of_pos_left hx (Nat.two_pow_pos n)
 

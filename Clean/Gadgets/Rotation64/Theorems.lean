@@ -17,19 +17,19 @@ each resulting (high, low) pair again.
 The ultimate goal is to prove that this is equivalent to `rotRight64`.
 -/
 def rotRight64_bytes (xs : Vector ℕ 8) (o : ℕ) : Vector ℕ 8 :=
-  .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 8] % 2^o) * 2^(8 - o)
+  .ofFn fun ⟨ i, hi ⟩ => xs[i] / 2^o + (xs[(i + 1) % 8] % 2^o) * 2^(8-o)
 
 -- unfold what rotRight64_bytes does on a U64
 def rotRight64_u64 : U64 ℕ → ℕ → U64 ℕ
   | ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, o => ⟨
-    (x0 / 2^o) + (x1 % 2^o) * 2^(8 - o),
-    (x1 / 2^o) + (x2 % 2^o) * 2^(8 - o),
-    (x2 / 2^o) + (x3 % 2^o) * 2^(8 - o),
-    (x3 / 2^o) + (x4 % 2^o) * 2^(8 - o),
-    (x4 / 2^o) + (x5 % 2^o) * 2^(8 - o),
-    (x5 / 2^o) + (x6 % 2^o) * 2^(8 - o),
-    (x6 / 2^o) + (x7 % 2^o) * 2^(8 - o),
-    (x7 / 2^o) + (x0 % 2^o) * 2^(8 - o),
+    (x0 / 2^o) + (x1 % 2^o) * 2^(8-o),
+    (x1 / 2^o) + (x2 % 2^o) * 2^(8-o),
+    (x2 / 2^o) + (x3 % 2^o) * 2^(8-o),
+    (x3 / 2^o) + (x4 % 2^o) * 2^(8-o),
+    (x4 / 2^o) + (x5 % 2^o) * 2^(8-o),
+    (x5 / 2^o) + (x6 % 2^o) * 2^(8-o),
+    (x6 / 2^o) + (x7 % 2^o) * 2^(8-o),
+    (x7 / 2^o) + (x0 % 2^o) * 2^(8-o),
   ⟩
 
 -- these two are definitionally equal

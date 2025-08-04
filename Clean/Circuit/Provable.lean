@@ -322,7 +322,7 @@ Alternative `varFromOffset` which creates each component separately.
 -/
 @[circuit_norm]
 def varFromOffset (α : TypeMap) [ProvableStruct α] (offset : ℕ) : Var α F :=
-  go (components α) offset |> fromComponents (F := Expression F)
+  go (components α) offset |> fromComponents (F:=Expression F)
 where
   @[circuit_norm]
   go : (cs : List WithProvableType) → ℕ → ProvableTypeList (Expression F) cs
@@ -335,7 +335,7 @@ omit [Field F] in
 -/
 @[circuit_norm ↓ high]
 theorem varFromOffset_eq_varFromOffset {α : TypeMap} [ProvableStruct α] (offset : ℕ) :
-    ProvableType.varFromOffset (F := F) α offset = ProvableStruct.varFromOffset α offset := by
+    ProvableType.varFromOffset (F:=F) α offset = ProvableStruct.varFromOffset α offset := by
   symm
   simp only [varFromOffset, ProvableType.varFromOffset, fromVars, size, fromElements]
   congr
@@ -344,7 +344,7 @@ theorem varFromOffset_eq_varFromOffset {α : TypeMap} [ProvableStruct α] (offse
 where
   varFromOffset_eq_varFromOffset_aux : (cs : List WithProvableType) → (offset : ℕ) →
     varFromOffset.go cs offset = (
-      Vector.mapRange (combinedSize' cs) (fun i => var (F := F) ⟨offset + i⟩) |> componentsFromElements cs)
+      Vector.mapRange (combinedSize' cs) (fun i => var (F:=F) ⟨offset + i⟩) |> componentsFromElements cs)
     | [], _ => rfl
     | c :: cs, offset => by
       simp only [varFromOffset.go, componentsFromElements, ProvableType.varFromOffset, fromVars]
@@ -368,7 +368,7 @@ theorem eval_field {F : Type} [Field F] (env : Environment F) (x : Var field F) 
 
 @[circuit_norm ↓]
 theorem varFromOffset_field {F} (offset : ℕ) :
-  varFromOffset (F := F) field offset = var ⟨offset⟩ := rfl
+  varFromOffset (F:=F) field offset = var ⟨offset⟩ := rfl
 
 @[circuit_norm ↓]
 theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields n) F) :
@@ -376,7 +376,7 @@ theorem eval_fields {F : Type} [Field F] (env : Environment F) (x : Var (fields 
 
 @[circuit_norm ↓]
 theorem varFromOffset_fields {F} (offset : ℕ) :
-  varFromOffset (F := F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
+  varFromOffset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
 @[circuit_norm ↓]
 theorem eval_fieldPair {F : Type} [Field F] (env : Environment F) (t : Var fieldPair F) :
@@ -438,7 +438,7 @@ theorem ext_iff {F : Type} {α : TypeMap} [ProvableType α] (x y : α F) :
 
 theorem eval_fromElements {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
-    eval env (fromElements (F := Expression F) xs) = fromElements (xs.map env) := by
+    eval env (fromElements (F:=Expression F) xs) = fromElements (xs.map env) := by
   simp only [eval, toVars, fromVars, toElements_fromElements]
 
 theorem eval_fromVars {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
@@ -539,21 +539,21 @@ instance {α β: TypeMap} [NonEmptyProvableType α] [ProvableType β] :
   NonEmptyProvableType (ProvablePair α β) where
   nonempty := by
     simp only [ProvablePair.instance, size]
-    have h1 := NonEmptyProvableType.nonempty (M := α)
+    have h1 := NonEmptyProvableType.nonempty (M:=α)
     omega
 
 instance {α β: TypeMap} [ProvableType α] [NonEmptyProvableType β] :
   NonEmptyProvableType (ProvablePair α β) where
   nonempty := by
     simp only [ProvablePair.instance, size]
-    have h2 := NonEmptyProvableType.nonempty (M := β)
+    have h2 := NonEmptyProvableType.nonempty (M:=β)
     omega
 
 def ProvablePair.fromElements {α β: TypeMap} [ProvableType α] [ProvableType β] (xs : Vector F (size α + size β)) : α F × β F :=
   (ProvableType.fromElements xs : ProvablePair α β F)
 
 def ProvablePair.toElements {α β: TypeMap} [ProvableType α] [ProvableType β] (pair : α F × β F) : Vector F (size α + size β) :=
-  ProvableType.toElements (M := ProvablePair α β) pair
+  ProvableType.toElements (M:=ProvablePair α β) pair
 
 @[circuit_norm ↓ high]
 theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : Environment F)

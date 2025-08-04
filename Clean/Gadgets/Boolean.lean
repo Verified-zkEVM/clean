@@ -75,7 +75,7 @@ theorem and_is_bool {α : Type*} [MulZeroOneClass α] {x y : α} (hx : IsBool x)
 
 /-- If x and y are boolean, then x OR y is boolean -/
 theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x - x * y + y) := by
+    IsBool (x - x*y + y) := by
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, sub_zero, hy]
   · rcases hy with hy0 | hy1
@@ -170,7 +170,7 @@ theorem nor_eq_val_nor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
 
 /-- For boolean field elements, NOT operation matches 1 - value -/
 theorem not_eq_val_not {a : F p} (ha : IsBool a) :
-    (1 - 2 * a + a).val = 1 - a.val := by
+    (1 - 2*a + a).val = 1 - a.val := by
   rcases ha with ha | ha <;> rw [ha] <;> ring_nf <;> simp [ZMod.val_one]
 
 end BinaryOps

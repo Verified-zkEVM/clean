@@ -45,7 +45,7 @@ lemma toBits_fromBits_aux {n : ℕ} (bits : Vector ℕ n)
 
     let xn : ℕ := Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2 ^ i)) 0
     have : bits[n] ≤ 1 := by rcases h_bits_n <;> simp only [zero_le, le_refl, *]
-    have h_lt : xn + bits[n] * 2^n < 2^(n + 1) := by
+    have h_lt : xn + bits[n] * 2^n < 2^(n+1) := by
       have : bits[n] * 2^n ≤ 1 * 2^n := Nat.mul_le_mul_right (2 ^ n) (by linarith)
       rw [Nat.pow_succ']
       linarith
