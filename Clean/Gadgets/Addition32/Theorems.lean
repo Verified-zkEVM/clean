@@ -96,19 +96,19 @@ theorem add32_soundness {x0 x1 x2 x3 y0 y1 y2 y3 carry_in c0 c1 c2 c3 z0 z1 z2 z
   -- now everything, assumptions and goal, is over Z
 
   -- add up all the equations
-  set z := z0 + z1 * 256 + z2 * 256^2 + z3 * 256^3
-  set x := x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3
-  set y := y0 + y1 * 256 + y2 * 256^2 + y3 * 256^3
-  let lhs := z + c3 * 2^32
+  set z := z0 + z1*256 + z2*256^2 + z3*256^3
+  set x := x0 + x1*256 + x2*256^2 + x3*256^3
+  set y := y0 + y1*256 + y2*256^2 + y3*256^3
+  let lhs := z + c3*2^32
   let rhs₀ := x0 + y0 + carry_in + -1 * z0 + -1 * (c0 * 256) -- h0 expression
   let rhs₁ := x1 + y1 + c0 + -1 * z1 + -1 * (c1 * 256) -- h1 expression
   let rhs₂ := x2 + y2 + c1 + -1 * z2 + -1 * (c2 * 256) -- h2 expression
   let rhs₃ := x3 + y3 + c2 + -1 * z3 + -1 * (c3 * 256) -- h3 expression
 
-  have h_add := calc z + c3 * 2^32
+  have h_add := calc z + c3*2^32
     -- substitute equations
-    _ = lhs + 0 + 256 * 0 + 256^2 * 0 + 256^3 * 0 := by ring
-    _ = lhs + rhs₀ + 256 * rhs₁ + 256^2 * rhs₂ + 256^3 * rhs₃ := by
+    _ = lhs + 0 + 256*0 + 256^2*0 + 256^3*0 := by ring
+    _ = lhs + rhs₀ + 256*rhs₁ + 256^2*rhs₂ + 256^3*rhs₃ := by
       simp only [rhs₀, rhs₁, rhs₂, rhs₃]
       simp only [h0, h1, h2, h3]
       ring

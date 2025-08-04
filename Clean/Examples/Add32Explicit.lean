@@ -7,10 +7,10 @@ import Clean.Gadgets.Boolean
 open Gadgets.Addition32Full (Inputs)
 
 -- `infer_explicit_circuit(s)` seem to work for all circuits
-instance explicit : ExplicitCircuits (Gadgets.Addition32Full.main (p := pBabybear)) := by
+instance explicit : ExplicitCircuits (Gadgets.Addition32Full.main (p:=pBabybear)) := by
   infer_explicit_circuits
 
-@[reducible] def circuit32 input := Gadgets.Addition32Full.main (p := pBabybear) input
+@[reducible] def circuit32 input := Gadgets.Addition32Full.main (p:=pBabybear) input
 
 example : ExplicitCircuit.localLength (circuit32 default) 0 = 8 := by
   -- rfl -- also works
