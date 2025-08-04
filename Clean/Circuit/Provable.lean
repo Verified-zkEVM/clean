@@ -157,6 +157,10 @@ infixl:65 " .+ " => ProvableType.elementwiseAdd
 /-
 Namespace for element-wise addition type class instance.
 Open this namespace to use standard + notation for element-wise addition.
+
+We scope the + notation to avoid confusion, as for many types that represent
+numbers (e.g., U32, U64), + often suggests addition with carries, while
+element-wise addition operates independently on each component.
 -/
 namespace ElementwiseAddition
 
@@ -702,7 +706,8 @@ instance [DecidableEq F] : DecidableEq (field F) :=
 -- Algebraic instances for element-wise operations
 variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
 
--- Open namespace to access the scoped Add instance for use in proofs
+-- We open ElementwiseAddition here to access the Add instance in our proofs,
+-- but these instances themselves are global and don't require the namespace
 open ElementwiseAddition
 
 instance : AddSemigroup (α F) where
