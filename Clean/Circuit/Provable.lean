@@ -389,11 +389,11 @@ theorem eval_fieldTriple {F : Type} [Field F] (env : Environment F) (t : Var fie
 
 @[circuit_norm ↓]
 theorem varFromOffset_fieldPair {F} (offset : ℕ) :
-  varFromOffset (F := F) fieldPair offset = (var ⟨offset⟩, var ⟨offset + 1⟩) := rfl
+  varFromOffset (F:=F) fieldPair offset = (var ⟨offset⟩, var ⟨offset + 1⟩) := rfl
 
 @[circuit_norm ↓]
 theorem varFromOffset_fieldTriple {F} (offset : ℕ) :
-  varFromOffset (F := F) fieldTriple offset = (var ⟨offset⟩, var ⟨offset + 1⟩, var ⟨offset + 2⟩) := rfl
+  varFromOffset (F:=F) fieldTriple offset = (var ⟨offset⟩, var ⟨offset + 1⟩, var ⟨offset + 2⟩) := rfl
 
 -- a few general lemmas about provable types
 
@@ -502,7 +502,7 @@ lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env :
   rw [Vector.getElem_map]
 
 theorem varFromOffset_vector {F : Type} [Field F] {α : TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
-    varFromOffset (F := F) (ProvableVector α n) offset
+    varFromOffset (F:=F) (ProvableVector α n) offset
     = .mapRange n fun i => varFromOffset α (offset + (size α) * i) := by
   induction n with
   | zero => rfl
@@ -603,7 +603,7 @@ theorem eval_pair_both_vector_expr {n m : ℕ} (env : Environment F)
 omit [Field F] in
 @[circuit_norm ↓ high]
 theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (offset : ℕ) :
-    varFromOffset (F := F) (ProvablePair α β) offset
+    varFromOffset (F:=F) (ProvablePair α β) offset
     = (varFromOffset α offset, varFromOffset β (offset + size α)) := by
   simp only [varFromOffset, fromVars, ProvablePair.instance]
   rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
