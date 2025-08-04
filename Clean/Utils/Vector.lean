@@ -92,7 +92,7 @@ def induct {motive : {n : ℕ} → Vector α n → Sort u}
   | ⟨ .mk (a :: as), h ⟩ => by
     have : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
     subst this
-    have ih := induct (n := as.length) nil cons ⟨ .mk as, rfl ⟩
+    have ih := induct (n:=as.length) nil cons ⟨ .mk as, rfl ⟩
     let h' : motive ⟨ .mk (a :: as), rfl ⟩ := cons a ⟨ as.toArray, rfl ⟩ ih
     congr
 

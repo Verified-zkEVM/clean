@@ -129,7 +129,7 @@ def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment
 @[circuit_norm]
 def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
     (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
-  ProvableType.witness (α := ProvableVector α m) compute
+  ProvableType.witness (α:=ProvableVector α m) compute
 
 namespace Circuit
 

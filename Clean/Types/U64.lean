@@ -152,7 +152,7 @@ def valueU64 (x : U64 (F p)) (h : x.Normalized) : UInt64 :=
 
 lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt64, decomposeNat]
-  have h (x : ℕ) : ZMod.val (n := p) (x % 256 : ℕ) < 256 := by
+  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) < 256 := by
     have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
     rw [FieldUtils.val_lt_p]
     assumption
@@ -162,7 +162,7 @@ lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := b
 theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
   simp only [valueU64, value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
   set x := x.toNat
-  have h (x : ℕ) : ZMod.val (n := p) (x % 256 : ℕ) = x % 256 := by
+  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
     rw [ZMod.val_cast_of_lt]
     have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
     linarith [p_large_enough.elim]
