@@ -5,7 +5,6 @@ For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
 import Clean.Circuit.Basic
-import Clean.Circuit.Provable
 
 variable {F: Type} [Field F] {α β : Type}
 
@@ -631,78 +630,3 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
-
--- Theorems about elementwiseAdd and allZero
-
-namespace ProvableType
-
-variable {M : TypeMap} [ProvableType M]
-
-@[circuit_norm]
-theorem allZero_elementwiseAdd (a : M F) : allZero .+ a = a := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
-  rw [allZero, toElements_fromElements]
-  norm_num
-  simp only [Vector.getElem_fill]
-
-@[circuit_norm]
-theorem elementwiseAdd_allZero (a : M F) : a .+ allZero = a := by
-  rw [ProvableType.ext_iff]
-  intros
-  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn, allZero]
-  norm_num
-  simp only [Vector.getElem_fill]
-
-theorem elementwiseAdd_comm (a b : M F) : a .+ b = b .+ a := by
-  rw [ProvableType.ext_iff]
-  intros
-  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
-  ring
-
-theorem elementwiseAdd_assoc (a b c : M F) : (a .+ b) .+ c = a .+ (b .+ c) := by
-  rw [ProvableType.ext_iff]
-  intros
-  simp only [elementwiseAdd, toElements_fromElements, Vector.getElem_ofFn]
-  norm_num
-  simp only [add_assoc]
-
--- Theorems about elementwiseScalarMul
-
-@[circuit_norm]
-theorem zero_elementwiseScalarMul (v : M F) : (0 : F) .* v = allZero := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  rw [zero_mul]
-  rw [allZero, toElements_fromElements, Vector.getElem_fill]
-
-@[circuit_norm]
-theorem one_elementwiseScalarMul (v : M F) : (1 : F) .* v = v := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  rw [one_mul]
-
-@[circuit_norm]
-theorem elementwiseScalarMul_allZero (s : F) : s .* (allZero : M F) = allZero := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  rw [allZero, toElements_fromElements, Vector.getElem_fill, mul_zero]
-
-theorem elementwiseScalarMul_assoc (s t : F) (v : M F) : s .* (t .* v) = (s * t) .* v := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  repeat rw [elementwiseScalarMul, toElements_fromElements, Vector.getElem_map]
-  ring
-
-theorem elementwiseScalarMul_add (s : F) (a b : M F) : s .* (a .+ b) = (s .* a) .+ (s .* b) := by
-  rw [ProvableType.ext_iff]
-  intro i hi
-  simp only [elementwiseAdd, elementwiseScalarMul, toElements_fromElements, Vector.getElem_map, toElements_fromElements, Vector.getElem_ofFn]
-  norm_num
-  ring
-
-end ProvableType

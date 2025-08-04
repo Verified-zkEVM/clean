@@ -97,25 +97,19 @@ def const (x: α F) : Var α F :=
   let values : Vector F _ := toElements x
   fromVars (values.map .const)
 
-/--
-All-zero value for any ProvableType.
-Creates an instance filled with field zero elements.
--/
-def allZero : α F :=
-  fromElements (Vector.fill (size α) 0)
+def synthesizeValue : α F :=
+  let zeros := Vector.fill (size α) 0
+  fromElements zeros
 
 instance [Field F] : Inhabited (α F) where
-  default := allZero
+  default := synthesizeValue
 
-/--
-All-zero variable for any ProvableType.
-Creates a variable representing the elementwise zero value.
--/
-def allZeroVar : Var α F :=
-  const allZero
+def synthesizeConstVar : Var α F :=
+  let zeros := Vector.fill (size α) 0
+  fromVars (zeros.map .const)
 
 instance [Field F] : Inhabited (Var α F) where
-  default := allZeroVar
+  default := synthesizeConstVar
 
 @[explicit_provable_type]
 def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
@@ -124,38 +118,9 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
 
 -- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
 attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
-
-section Operations
-
-/--
-Element-wise addition for ProvableTypes.
-Adds corresponding elements from two ProvableType values. No carries. Each element wraps around.
--/
-def elementwiseAdd [Field F] (a b : α F) : α F :=
-  fromElements (Vector.ofFn fun i => (toElements a)[i] + (toElements b)[i])
-
-/--
-Element-wise scalar multiplication for ProvableTypes.
-Multiplies each element by a scalar field element. No carries. Each element wraps around.
--/
-def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
-  fromElements ((toElements v).map (s * ·))
-
-end Operations
-
 end ProvableType
 
-/--
-Notation for element-wise addition of ProvableTypes.
--/
-infixl:65 " .+ " => ProvableType.elementwiseAdd
-
-/--
-Notation for element-wise scalar multiplication of ProvableTypes.
--/
-infixl:70 " .* " => ProvableType.elementwiseScalarMul
-
-export ProvableType (eval const allZero allZeroVar varFromOffset elementwiseAdd elementwiseScalarMul)
+export ProvableType (eval const varFromOffset)
 
 @[reducible]
 def unit (_: Type) := Unit
