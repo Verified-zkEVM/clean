@@ -87,7 +87,7 @@ theorem toBits_injective (n : ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
   by_cases hi : i < n
   · exact h_eq' i hi
   · have : n ≤ i := by linarith
-    have : 2^n ≤ 2^i := Nat.pow_le_pow_of_le (a := 2) (by norm_num) this
+    have : 2^n ≤ 2^i := Nat.pow_le_pow_of_le (a:=2) (by norm_num) this
     replace hx : x < 2^i := by linarith
     replace hy : y < 2^i := by linarith
     rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]

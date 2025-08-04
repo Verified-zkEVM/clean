@@ -44,8 +44,8 @@ lemma h_mod {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
 
 lemma h_div {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3 + x4 * 256^4 + x5 * 256^5 + x6 * 256^6 + x7 * 256^7) / 2 ^ o
-    = x0 / 2^o + x1 * 2^(8 - o) + x2 * 256 * 2^(8 - o) + x3 * 256^2 * 2^(8 - o) + x4 * 256^3 * 2^(8 - o) +
-    x5 * 256^4 * 2^(8 - o) + x6 * 256^5 * 2^(8 - o) + x7 * 256^6 * 2^(8 - o) := by
+    = x0 / 2^o + x1 * 2^(8-o) + x2 * 256 * 2^(8-o) + x3 * 256^2 * 2^(8-o) + x4 * 256^3 * 2^(8-o) +
+    x5 * 256^4 * 2^(8-o) + x6 * 256^5 * 2^(8-o) + x7 * 256^6 * 2^(8-o) := by
   rw [←Nat.pow_one 256]
   repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power ho; linarith)]
   rw [mul_div_256_off ho 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
@@ -59,7 +59,7 @@ lemma h_div {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     Nat.add_left_inj]
 
 lemma h_x0_const {o : ℕ} (ho : o < 8) :
-    2^(8 - o) * 256^7 = 2^(64 - o) := by
+    2^(8-o) * 256^7 = 2^(64-o) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, pow_right_inj₀ (by norm_num) (by norm_num)]
   omega
 
