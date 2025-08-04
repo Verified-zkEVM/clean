@@ -700,9 +700,10 @@ instance [DecidableEq F] : DecidableEq (field F) :=
   inferInstanceAs (DecidableEq F)
 
 -- Algebraic instances for element-wise operations
-namespace ElementwiseAddition
-
 variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+
+-- Open namespace to access the scoped Add instance for use in proofs
+open ElementwiseAddition
 
 instance : AddSemigroup (α F) where
   add_assoc := by
@@ -830,5 +831,3 @@ instance : Module F (α F) where
                ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
     norm_num
     ring
-
-end ElementwiseAddition
