@@ -31,14 +31,14 @@ def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   -- Inline element-wise scalar multiplication
   let trueVars := toVars ifTrue
   let falseVars := toVars ifFalse
-  
+
   -- selector * ifTrue + (1 - selector) * ifFalse
   let scaledTrueVars := trueVars.map (selector * ·)
   let scaledFalseVars := falseVars.map ((1 - selector) * ·)
-  
+
   -- Inline element-wise addition
-  let resultVars := Vector.ofFn fun i => scaledTrueVars[i] + scaledFalseVars[i]
-  
+  let resultVars := Vector.ofFn fun i => selector * (trueVars[i] - falseVars[i]) + falseVars[i]
+
   return fromVars resultVars
 
 def Assumptions (input : Inputs M F) : Prop :=
@@ -60,14 +60,14 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F := F) (M := M)) A
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
   simp only [Assumptions, Spec] at h_assumptions ⊢
-  
+
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.eval_fromElements]
   rw [ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
   simp only [Expression.eval, ProvableType.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
-  
+
   -- Case split on the selector value
   cases h_assumptions with
   | inl h_zero =>
