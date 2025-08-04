@@ -2,7 +2,7 @@ import Clean.Circuit.Provable
 import Clean.Gadgets.Boolean
 import Clean.Utils.Tactics
 
-namespace Conditional
+namespace Gadgets.Conditional
 
 section
 variable {F : Type} [Field F]
@@ -91,4 +91,4 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
 
 end
 
-end Conditional
+end Gadgets.Conditional
