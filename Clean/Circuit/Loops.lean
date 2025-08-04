@@ -193,8 +193,8 @@ theorem localLength_eq :
     ring
 
 lemma finFoldl_cons_succ (x : α) :
-  Fin.foldl (m + 1) (fun acc i => (circuit acc (Vector.cons x xs)[i.val]).output (n + i*constant.localLength)) init
-    = Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + constant.localLength + i*constant.localLength)) ((circuit init x).output n) := by
+  Fin.foldl (m + 1) (fun acc i => (circuit acc (Vector.cons x xs)[i.val]).output (n + i * constant.localLength)) init
+    = Fin.foldl m (fun acc i => (circuit acc xs[i.val]).output (n + constant.localLength + i * constant.localLength)) ((circuit init x).output n) := by
   set k := constant.localLength
   rw [Fin.foldl_succ]
   simp only [Fin.val_succ, Fin.val_zero, zero_mul, add_zero]
