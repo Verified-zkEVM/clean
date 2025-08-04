@@ -24,14 +24,12 @@ For more details, see:
 
 ## Local Conventions
 
-### 1. Very Short Named Parameters
+### 1. Named Parameters
 
-For single-letter named parameters, we omit spaces around `:=`:
+We omit spaces around `:=` in named parameters:
 
-- ✅ `(F:=F)`, `(α:=α)`, `(p:=p)`
-- ❌ `(F := F)`, `(α := α)`, `(p := p)`
-
-Note: This only applies to single-letter parameters. Longer parameter names follow the standard convention with spaces.
+- ✅ `(F:=F)`, `(α:=α)`, `(constant:=constant)`
+- ❌ `(F := F)`, `(α := α)`, `(constant := constant)`
 
 ### 2. Polynomial Multiplication
 
