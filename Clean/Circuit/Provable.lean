@@ -690,11 +690,10 @@ instance [CoeHead ℕ F] : CoeHead ℕ (field F) where
 instance [DecidableEq F] : DecidableEq (field F) :=
   inferInstanceAs (DecidableEq F)
 
--- Algebraic instances for element-wise operations
-variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
+variable {α : TypeMap} [ProvableType α]
 
 -- We open ElementwiseAddition here to access the Add instance in our proofs,
--- but these instances themselves are global and don't require the namespace
+-- but the following instances themselves are global and don't require the namespace
 open ElementwiseAddition
 
 instance : AddSemigroup (α F) where
