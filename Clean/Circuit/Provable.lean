@@ -119,8 +119,6 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
 -- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
 attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
 
-section Operations
-
 /--
 Element-wise addition for ProvableTypes.
 Adds corresponding elements from two ProvableType values. No carries. Each element wraps around.
@@ -134,8 +132,6 @@ Multiplies each element by a scalar field element. No carries. Each element wrap
 -/
 def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
   fromElements ((toElements v).map (s * ·))
-
-end Operations
 
 /--
 SMul instance for scalar multiplication of ProvableTypes.
