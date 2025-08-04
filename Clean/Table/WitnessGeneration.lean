@@ -5,7 +5,7 @@ variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [Field F]
 /--
   Build an index map for auxiliary cells from vars of `CellAssignment` to the cells in a trace row.
   The rule is that the auxiliary cells are appended to the end of the row in order.
-  For example: [input<0>, aux<0>, input<1>, input<2>, aux<1>] => {1 : 3, 4: 4}
+  For example: [input<0>, aux<0>, input<1>, input<2>, aux<1>] => {1: 3, 4: 4}
 -/
 def buildAuxMap (as : CellAssignment W S) : Std.HashMap ℕ ℕ := Id.run do
   let (_, _, map) :=
