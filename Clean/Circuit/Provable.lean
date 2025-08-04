@@ -127,17 +127,11 @@ def elementwiseAdd [Field F] (a b : α F) : α F :=
   fromElements (Vector.ofFn fun i => (toElements a)[i] + (toElements b)[i])
 
 /--
-Element-wise scalar multiplication for ProvableTypes.
+SMul instance for scalar multiplication of ProvableTypes.
 Multiplies each element by a scalar field element. No carries. Each element wraps around.
 -/
-def elementwiseScalarMul [Field F] (s : F) (v : α F) : α F :=
-  fromElements ((toElements v).map (s * ·))
-
-/--
-SMul instance for scalar multiplication of ProvableTypes.
--/
 instance [Field F] : SMul F (α F) where
-  smul := elementwiseScalarMul
+  smul s v := fromElements ((toElements v).map (s * ·))
 
 end ProvableType
 
@@ -146,8 +140,6 @@ Notation for element-wise addition of ProvableTypes.
 Use this when you need to distinguish element-wise addition from other additions.
 -/
 infixl:65 " .+ " => ProvableType.elementwiseAdd
-
-
 
 /-
 Namespace for element-wise addition type class instance.
@@ -164,7 +156,7 @@ scoped instance [Field F] {α : TypeMap} [ProvableType α] : Add (α F) where
 
 end ElementwiseAddition
 
-export ProvableType (eval const varFromOffset elementwiseAdd elementwiseScalarMul)
+export ProvableType (eval const varFromOffset elementwiseAdd)
 
 @[reducible]
 def unit (_: Type) := Unit
@@ -776,23 +768,21 @@ instance : DistribMulAction F (α F) where
     intro a
     rw [ProvableType.ext_iff]
     intro i hi
-    simp only [instHSMul, SMul.smul, elementwiseScalarMul, ProvableType.toElements_fromElements, Vector.getElem_map]
+    simp only [instHSMul, SMul.smul, ProvableType.toElements_fromElements, Vector.getElem_map]
     ring
 
   mul_smul := by
     intro r s a
     rw [ProvableType.ext_iff]
     intro i hi
-    simp only [instHSMul, SMul.smul, elementwiseScalarMul]
-    simp only [SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.toElements_fromElements,
+    simp only [instHSMul, SMul.smul, ProvableType.toElements_fromElements,
                Vector.getElem_map, mul_assoc]
 
   smul_zero := by
     intro s
     rw [ProvableType.ext_iff]
     intro i hi
-    simp only [instHSMul, SMul.smul, elementwiseScalarMul]
-    simp only [SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.toElements_fromElements,
+    simp only [instHSMul, SMul.smul, ProvableType.toElements_fromElements,
                Vector.getElem_map, mul_assoc]
     rw [show (0 : α F) = ProvableType.fromElements (Vector.fill (ProvableType.size α) 0) from rfl]
     simp only [ProvableType.toElements_fromElements, Vector.getElem_fill, mul_zero]
@@ -802,7 +792,7 @@ instance : DistribMulAction F (α F) where
     rw [ProvableType.ext_iff]
     intro i hi
     rw [show a + b = ProvableType.elementwiseAdd a b from rfl]
-    simp only [instHSMul, SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.elementwiseAdd,
+    simp only [instHSMul, SMul.smul, ProvableType.elementwiseAdd,
                ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
     conv =>
       rhs
@@ -817,7 +807,7 @@ instance : Module F (α F) where
     intro a
     rw [ProvableType.ext_iff]
     intro i hi
-    simp only [HSMul.hSMul, SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.toElements_fromElements,
+    simp only [HSMul.hSMul, SMul.smul, ProvableType.toElements_fromElements,
                Vector.getElem_map, zero_mul]
     rw [show (0 : α F) = ProvableType.fromElements (Vector.fill (ProvableType.size α) 0) from rfl]
     simp only [ProvableType.toElements_fromElements, Vector.getElem_fill]
@@ -827,7 +817,7 @@ instance : Module F (α F) where
     rw [ProvableType.ext_iff]
     intro i hi
     rw [show r • a + s • a = ProvableType.elementwiseAdd (r • a) (s • a) from rfl]
-    simp only [HSMul.hSMul, SMul.smul, ProvableType.elementwiseScalarMul, ProvableType.elementwiseAdd,
+    simp only [HSMul.hSMul, SMul.smul, ProvableType.elementwiseAdd,
                ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
     norm_num
     ring
