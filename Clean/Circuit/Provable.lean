@@ -117,8 +117,7 @@ def varFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) : Var α F :=
   fromVars vars
 
 -- under `explicit_provable_type`, it makes sense to fully resolve `mapRange` as well
-attribute [explicit_provable_type] Vector.mapRange_succ
-attribute [explicit_provable_type] Vector.mapRange_zero
+attribute [explicit_provable_type] Vector.mapRange_succ Vector.mapRange_zero
 
 section Operations
 
