@@ -9,7 +9,6 @@ variable {F : Type} [Field F]
 variable {M : TypeMap} [ProvableType M]
 
 open ProvableType
-open ElementwiseAddition
 
 /--
 Inputs for conditional selection between two ProvableTypes.
