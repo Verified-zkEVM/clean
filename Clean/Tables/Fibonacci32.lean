@@ -87,8 +87,8 @@ def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
 variable {α : Type}
 
 -- assignment copied from eval:
--- #eval! (recursive_relation (p := p_babybear)).finalAssignment.vars
-lemma fib_assignment : (recursiveRelation (p := p)).finalAssignment.vars =
+-- #eval! (recursive_relation (p:=p_babybear)).finalAssignment.vars
+lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
    #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
@@ -105,7 +105,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   := by
   intro env
   dsimp only [env, windowEnv]
-  have h_offset : (recursiveRelation (p := p)).finalAssignment.offset = 24 := rfl
+  have h_offset : (recursiveRelation (p:=p)).finalAssignment.offset = 24 := rfl
   simp only [h_offset]
   rw [fib_assignment]
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]

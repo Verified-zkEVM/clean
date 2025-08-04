@@ -150,7 +150,7 @@ def fromUInt64 (x : UInt64) : U64 (F p) :=
 def valueU64 (x : U64 (F p)) (h : x.Normalized) : UInt64 :=
   UInt64.ofNatLT x.value (value_lt_of_normalized h)
 
-lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p := p) x).Normalized := by
+lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt64, decomposeNat]
   have h (x : ℕ) : ZMod.val (n := p) (x % 256 : ℕ) < 256 := by
     have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
@@ -159,7 +159,7 @@ lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p := p) x).Normalized :=
     linarith [p_large_enough.elim]
   simp [h]
 
-theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p := p) x) = x.toNat := by
+theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
   simp only [valueU64, value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n := p) (x % 256 : ℕ) = x % 256 := by
@@ -227,12 +227,12 @@ namespace U64
 def fromByte (x : Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 
-lemma fromByte_value {x : Fin 256} : (fromByte x).value (p := p) = x := by
+lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
   simp [value, fromByte]
   apply FieldUtils.val_lt_p x
   linarith [x.is_lt, p_large_enough.elim]
 
-lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p := p) := by
+lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   simp [Normalized, fromByte]
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]

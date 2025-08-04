@@ -35,8 +35,8 @@ def Spec (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
 def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
   Rotation32Bits.output (offset % 8).val i0
 
--- #eval! (rot32 (p := p_babybear) 0) default |>.localLength
--- #eval! (rot32 (p := p_babybear) 0) default |>.output
+-- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
+-- #eval! (rot32 (p:=p_babybear) 0) default |>.output
 def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 8
