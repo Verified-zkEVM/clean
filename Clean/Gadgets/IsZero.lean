@@ -62,13 +62,24 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression (F p)) n} {va
     simp only [Expression.eval]
     let vars_pre := vars.take pre |>.cast (by simp : min pre (pre + 1) = pre)
     let vals_pre := vals.take pre |>.cast (by simp : min pre (pre + 1) = pre)
-    have h_eval_pre : Vector.map (Expression.eval env) vars_pre = vals_pre := by sorry
+    have h_eval_pre : Vector.map (Expression.eval env) vars_pre = vals_pre := by
+      simp only [vars_pre, vals_pre]
+      simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
+        Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl, Vector.map_pop,
+        vals_pre, vars_pre]
+      simp only [h_eval]
     specialize h_ih h_eval_pre (i₀:=i₀)
     simp only [vars_pre, vals_pre] at h_ih
     simp only [Nat.add_one_sub_one, Vector.drop_eq_cast_extract, Vector.cast_rfl, Fin.getElem_fin,
       Vector.getElem_cast, Vector.getElem_extract, forall_const, id_eq, vals_pre, vars_pre] at h_ih
     simp only [id_eq, Fin.getElem_fin, Fin.coe_castSucc, Fin.val_last, vals_pre, vars_pre]
-    specialize h_ih (by sorry)
+    specialize h_ih (by
+      intro i
+      specialize h_isZero i
+      norm_num at h_isZero ⊢
+      simp only [Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop',
+        vals_pre, vars_pre]
+      simp only [h_isZero])
     simp only [Vector.getElem_take] at h_ih
     rw [h_ih]
     specialize h_isZero pre trivial
