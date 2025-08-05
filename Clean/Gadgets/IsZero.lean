@@ -12,8 +12,8 @@ variable {F : Type} [Field F] [DecidableEq F]
 variable {M : TypeMap} [ProvableType M]
 
 /--
-Main circuit that checks if all components of a ProvableType are zero.
-Returns 1 if all components are 0, otherwise returns 0.
+Main circuit that checks if all elements of a ProvableType are zero.
+Returns 1 if all elementts are 0, otherwise returns 0.
 -/
 def main (input : Var M F) : Circuit F (Var field F) := do
   let elemVars := toVars input
@@ -95,12 +95,8 @@ theorem soundness : Soundness F (elaborated (M := M)) Assumptions Spec := by
   let s := size M
   let vars : Vector (Expression F) s := toElements (M:=M) input_var
   let vals : Vector F s := toElements (M:=M) input
-  -- need to change h_ionput into an element-wise condition
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval] at h_input
-  simp only [ProvableType.fromElements_eq_iff] at h_input
-  apply foldl_isZero_eq_one_iff
-  · assumption
-  · assumption
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, ProvableType.fromElements_eq_iff] at h_input
+  apply foldl_isZero_eq_one_iff <;> assumption
 
 theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
