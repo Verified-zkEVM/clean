@@ -16,10 +16,10 @@ Returns 1 if all components are 0, otherwise returns 0.
 -/
 def main (input : Var M (F p)) : Circuit (F p) (Var field (F p)) := do
   let elemVars := toVars input
-  -- Use foldl to multiply all IsZero results together
+  -- Use foldlRange to multiply all IsZero results together
   -- Start with 1, and for each element, multiply by its IsZero result
-  let result ← Circuit.foldl (_const_out := by sorry) elemVars (1 : Expression (F p)) fun acc elem => do
-    let isZeroElem ← IsZeroField.circuit elem
+  let result ← Circuit.foldlRange (size M) (1 : Expression (F p)) fun acc i => do
+    let isZeroElem ← IsZeroField.circuit elemVars[i]
     return acc * isZeroElem
   return result
 
@@ -30,7 +30,7 @@ instance elaborated : ElaboratedCircuit (F p) M field where
     simp only [main, circuit_norm]
     sorry
   subcircuitsConsistent := by
-    simp only [main, circuit_norm]
+    intros
     sorry
 
 def Assumptions (_ : M (F p)) : Prop := True
