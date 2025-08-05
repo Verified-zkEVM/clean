@@ -29,7 +29,7 @@ def main (x : Var field (F p)) : Circuit (F p) (Var field (F p)) := do
   return isZero
 
 instance elaborated : ElaboratedCircuit (F p) field field where
-  main := main
+  main
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
 
 def Assumptions (_ : F p) : Prop := True
@@ -45,9 +45,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     norm_num at *
     rcases h_holds with ⟨ _, h_one ⟩
     symm
+    ring_nf at h_one
     apply sub_eq_zero.mp
     simp only [h_one]
-    ring_nf
   · aesop
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
