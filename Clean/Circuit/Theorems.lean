@@ -5,8 +5,28 @@ For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
 import Clean.Circuit.Basic
+import Clean.Circuit.Provable
 
 variable {F : Type} [Field F] {α β : Type}
+
+-- ProvableType lemmas
+
+namespace ProvableType
+
+/--
+A useful lemma for proving equality via `fromElements`.
+States that `fromElements A = B` is equivalent to `A = toElements B`.
+This forms one direction of the Galois connection between `Vector F (size M)` and `M F`.
+-/
+theorem fromElements_eq_iff {M : TypeMap} [ProvableType M] {F : Type} {A : Vector F (size M)} {B : M F} :
+    fromElements A = B ↔ A = toElements B := by
+  constructor
+  · intro h
+    rw [← h, toElements_fromElements]
+  · intro h
+    rw [h, fromElements_toElements]
+
+end ProvableType
 
 -- basic simp lemmas
 
