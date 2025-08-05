@@ -25,12 +25,11 @@ def main (input : Var M (F p)) : Circuit (F p) (Var field (F p)) := do
 
 instance elaborated : ElaboratedCircuit (F p) M field where
   main := main
-  localLength _ := 2 * size M  -- Each IsZeroField uses 2 witnesses
+  localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
   subcircuitsConsistent := by
-    intros
-    sorry
+    simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
 
 def Assumptions (_ : M (F p)) : Prop := True
 
