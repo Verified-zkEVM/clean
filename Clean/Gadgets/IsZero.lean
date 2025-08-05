@@ -24,7 +24,7 @@ def main (input : Var M (F p)) : Circuit (F p) (Var field (F p)) := do
   return result
 
 instance elaborated : ElaboratedCircuit (F p) M field where
-  main := main
+  main
   localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
