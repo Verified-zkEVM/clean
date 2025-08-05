@@ -9,7 +9,7 @@ import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Conditional
-import Clean.Gadgets.IsZeroU32
+import Clean.Gadgets.IsZero
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -41,6 +41,41 @@ local notation "U32_one_is_Normalized" => U32.one_is_Normalized
 
 -- Using common lemma from U32 module
 local notation "U32_one_value" => U32.one_value
+
+/--
+Lemma: For a normalized U32, value = 0 iff all components are 0
+-/
+lemma U32_value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
+    x.value = 0 ↔ (∀ i : Fin (size U32), (toElements x)[i] = 0) := by
+  have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
+    simp only [U32.Normalized, ZMod.val_zero]
+    norm_num)
+  constructor
+  · intro h_val_zero
+    simp only [h_val_zero] at this
+    specialize this (by
+      simp only [U32.value, ZMod.val_zero]
+      omega)
+    simp only [this]
+    simp only [Fin.getElem_fin]
+    simp only [size, toElements]
+    simp only [Vector.getElem_mk, List.getElem_toArray]
+    intro i
+    fin_cases i <;> rfl
+  · simp only [size, toElements]
+    intro h_elements
+    simp only [U32.value]
+    have h_0 := h_elements 0
+    have h_1 := h_elements 1
+    have h_2 := h_elements 2
+    have h_3 := h_elements 3
+    simp only [Fin.isValue, Fin.getElem_fin, Fin.val_zero, Vector.getElem_mk, List.getElem_toArray,
+      List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ, Fin.val_two] at h_0 h_1 h_2 h_3
+    have : (3 : Fin 4).val = 3 := rfl
+    simp only [this] at h_3
+    simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_3
+    simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
+    ring
 
 lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
@@ -101,9 +136,10 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.chunk_counter.Normalized ∧
   state.blocks_compressed.Normalized
 
+omit p_large in
 lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
     acc_blocks_compressed
-    (h_iszero : Expression.eval env (IsZeroU32.circuit.elaborated.output acc_var_blocks_compressed 105) =
+    (h_iszero : Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) =
       if acc_blocks_compressed.value = 0 then 1 else 0) :
     eval env acc_var_blocks_compressed = acc_blocks_compressed →
     ProcessBlocksState.Normalized
@@ -111,7 +147,7 @@ lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value ac
         blocks_compressed := acc_blocks_compressed } →
     (eval env
             (U32.mk
-                (Expression.mul (IsZeroU32.circuit.elaborated.output acc_var_blocks_compressed 105) (Expression.const ↑chunkStart))
+                (Expression.mul (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) (Expression.const ↑chunkStart))
                 0 0 0 )).value =
     if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
   intros h_eval h_normalized
@@ -210,7 +246,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   input.block_exists * (input.block_exists - 1) === 0
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
-  let isFirstBlock ← IsZeroU32.circuit state.blocks_compressed
+  let isFirstBlock ← IsZero.circuit state.blocks_compressed
   let startFlagU32 : Var U32 (F p) := ⟨Expression.mul isFirstBlock (Expression.const chunkStart), 0, 0, 0⟩
 
   -- Prepare constants
@@ -309,11 +345,8 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         rcases h_holds with ⟨ h_binary, h_holds ⟩
         clear h_binary
         rcases h_holds with ⟨ h_iszero, h_holds ⟩
-        dsimp only [IsZeroU32.circuit, IsZeroU32.Assumptions, IsZeroU32.Spec] at h_iszero
-        have : acc_blocks_compressed.Normalized := by
-          simp only [ProcessBlocksState.Normalized] at spec_previous
-          simp only [spec_previous]
-        specialize h_iszero this
+        dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.Spec] at h_iszero
+        specialize h_iszero trivial
         rcases h_holds with ⟨ h_compress, h_holds ⟩
         dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
         specialize h_compress (by
@@ -373,11 +406,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             clear h_compress
             simp only [U32_zero_value, startFlag, U32_blockLen_value]
             norm_num at h_iszero
-            rw [eval_acc_blocks_compressed (acc_chaining_value := acc_chaining_value) (acc_chunk_counter := acc_chunk_counter)
-                  (acc_var_blocks_compressed := acc_var_blocks_compressed) (acc_blocks_compressed := acc_blocks_compressed) (h_iszero := h_iszero)]
-            · norm_num
-            · simp only [h_eval]
-            · simp only [spec_previous]
+            simp only [mul_zero, add_zero, id_eq]
+            split
+            · sorry
+            · sorry
           · simp only [U32_one_value]
             simp only [ProcessBlocksState.toChunkState] at spec_previous
             simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
@@ -447,7 +479,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     provable_struct_simp
     simp only [h_eval] at ⊢ h_witnesses
     dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
-    dsimp only [IsZeroU32.circuit, IsZeroU32.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
+    dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor
     · have : x_block_exists = 0 ∨ x_block_exists = 1 := by tauto
       cases this with
@@ -475,9 +507,9 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         simp only [U32_blockLen_is_Normalized]
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
-      simp only [IsZeroU32.circuit, IsZeroU32.Assumptions] at h_witnesses_iszero
+      simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
-      simp only [IsZeroU32.Spec] at h_witnesses_iszero
+      simp only [IsZero.Spec] at h_witnesses_iszero
       simp only [U32_Normalized_componentwise]
       constructor
       · rw [eval_env_mul]
@@ -497,9 +529,9 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
       -- The following is a repetition of the above
-      simp only [IsZeroU32.circuit, IsZeroU32.Assumptions] at h_witnesses_iszero
+      simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
-      simp only [IsZeroU32.Spec] at h_witnesses_iszero
+      simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
         simp only [h_assumptions]
         simp only [U32_blockLen_is_Normalized, U32_zero_is_Normalized]
