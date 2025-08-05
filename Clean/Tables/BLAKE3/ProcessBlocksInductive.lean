@@ -407,9 +407,21 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             simp only [U32_zero_value, startFlag, U32_blockLen_value]
             norm_num at h_iszero
             simp only [mul_zero, add_zero, id_eq]
-            split
-            · sorry
-            · sorry
+            rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
+            · split
+              · rename_i h_zero
+                rw [U32_value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_zero
+                · simp_all
+                · simp only [ProcessBlocksState.Normalized] at spec_previous
+                  simp only [spec_previous]
+              · rename_i h_nonzero
+                simp only [h_iszero]
+                rw [U32_value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_nonzero
+                · aesop
+                · simp only [ProcessBlocksState.Normalized] at spec_previous
+                  simp only [spec_previous]
+            · simp_all
+            · simp_all
           · simp only [U32_one_value]
             simp only [ProcessBlocksState.toChunkState] at spec_previous
             simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
