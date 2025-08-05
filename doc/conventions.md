@@ -14,10 +14,6 @@ We follow the standard Lean and Mathlib conventions for most formatting:
   - ✅ `let x := 5`
   - ❌ `let x:=5`
 
-- **General named parameters**: Use spaces around `:=`
-  - ✅ `(constant := constant)`
-  - ❌ `(constant:=constant)`
-
 For more details, see:
 - [Mathlib style guide](https://leanprover-community.github.io/contribute/style.html)
 - [Mathlib naming conventions](https://leanprover-community.github.io/contribute/naming.html)
