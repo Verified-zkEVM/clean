@@ -27,8 +27,7 @@ instance elaborated : ElaboratedCircuit (F p) M field where
   main := main
   localLength _ := 2 * size M  -- Each IsZeroField uses 2 witnesses
   localLength_eq := by
-    simp only [main, circuit_norm]
-    sorry
+    simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
   subcircuitsConsistent := by
     intros
     sorry
