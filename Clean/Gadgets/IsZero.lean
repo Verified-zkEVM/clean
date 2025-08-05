@@ -41,8 +41,7 @@ theorem soundness : Soundness (F p) (elaborated (M := M)) Assumptions Spec := by
   sorry
 
 theorem completeness : Completeness (F p) (elaborated (M := M)) Assumptions := by
-  circuit_proof_start
-  sorry
+  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
 def circuit : FormalCircuit (F p) M field := {
   elaborated with Assumptions, Spec, soundness, completeness
