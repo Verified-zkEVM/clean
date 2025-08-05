@@ -42,6 +42,7 @@ theorem soundness : Soundness (F p) (elaborated (M := M)) Assumptions Spec := by
   let vars : Vector (Expression (F p)) s := toElements (M:=M) input_var
   let vals : Vector (F p) s := toElements (M:=M) input
   -- need to change h_ionput into an element-wise condition
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval] at h_input
   suffices (
     Expression.eval env
     (Fin.foldl s
