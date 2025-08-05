@@ -38,6 +38,20 @@ def Spec (input : M (F p)) (output : F p) : Prop :=
 
 theorem soundness : Soundness (F p) (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start
+  let s := size M
+  let vars : Vector (Expression (F p)) s := toElements (M:=M) input_var
+  let vals : Vector (F p) s := toElements (M:=M) input
+  -- need to change h_ionput into an element-wise condition
+  suffices (
+    Expression.eval env
+    (Fin.foldl s
+      (fun acc i ↦
+        acc *
+          (IsZeroField.circuit.output (vars[↑i] : Expression (F p))
+            (i₀ + ↑i * IsZeroField.circuit.localLength (vars[↑i] : Expression (F p))) : Var field (F p)))
+      1) =
+  if ∀ (i : Fin (size M)), vals[↑i] = 0 then 1 else 0
+  ) by apply this
   sorry
 
 theorem completeness : Completeness (F p) (elaborated (M := M)) Assumptions := by
