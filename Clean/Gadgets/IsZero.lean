@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Circuit.Provable
+import Clean.Circuit.Theorems
 import Clean.Circuit.Loops
 import Clean.Gadgets.IsZeroField
 import Clean.Utils.Field
@@ -36,6 +37,55 @@ def Assumptions (_ : M (F p)) : Prop := True
 def Spec (input : M (F p)) (output : F p) : Prop :=
   output = if (∀ i : Fin (size M), (toElements input)[i] = 0) then 1 else 0
 
+/--
+Lemma for the soundness proof: folding multiplication of IsZero results gives 1 iff all elements are 0.
+-/
+lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression (F p)) n} {vals : Vector (F p) n}
+    {env : Environment (F p)} {i₀ : ℕ}
+    (h_eval : Vector.map (Expression.eval env) vars = vals)
+    (h_isZero : ∀ (i : Fin n),
+      IsZeroField.circuit.Assumptions (Expression.eval (F:=F p) env vars[i]) →
+        IsZeroField.circuit.Spec (Expression.eval (F:=F p) env vars[i])
+          (Expression.eval (F:=F p) env
+            (IsZeroField.circuit.output vars[i]
+              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+    Expression.eval env
+      (Fin.foldl n
+        (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field (F p)))
+        1) =
+    if ∀ (i : Fin n), vals[i] = 0 then 1 else 0 := by
+  simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
+  induction n generalizing i₀
+  · simp only [id_eq, Fin.getElem_fin, Fin.foldl_zero, IsEmpty.forall_iff, ↓reduceIte, Expression.eval]
+  · rename_i pre h_ih
+    simp only [Fin.foldl_succ_last]
+    simp only [Expression.eval]
+    let vars_pre := vars.take pre |>.cast (by simp : min pre (pre + 1) = pre)
+    let vals_pre := vals.take pre |>.cast (by simp : min pre (pre + 1) = pre)
+    have h_eval_pre : Vector.map (Expression.eval env) vars_pre = vals_pre := by sorry
+    specialize h_ih h_eval_pre (i₀:=i₀)
+    simp only [vars_pre, vals_pre] at h_ih
+    simp only [Nat.add_one_sub_one, Vector.drop_eq_cast_extract, Vector.cast_rfl, Fin.getElem_fin,
+      Vector.getElem_cast, Vector.getElem_extract, forall_const, id_eq, vals_pre, vars_pre] at h_ih
+    simp only [id_eq, Fin.getElem_fin, Fin.coe_castSucc, Fin.val_last, vals_pre, vars_pre]
+    specialize h_ih (by sorry)
+    simp only [Vector.getElem_take] at h_ih
+    rw [h_ih]
+    specialize h_isZero pre trivial
+    norm_num at h_isZero ⊢
+    simp only [h_isZero]
+    simp only [Fin.forall_fin_succ']
+    norm_num
+    split
+    · rename_i h
+      simp only [h]
+      simp only [implies_true, true_and, vals_pre, vars_pre]
+      simp only [← h_eval]
+      simp only [Vector.getElem_map]
+    · rename_i h
+      simp only [h]
+      simp only [false_and, ↓reduceIte, vals_pre, vars_pre]
+
 theorem soundness : Soundness (F p) (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start
   let s := size M
@@ -43,17 +93,10 @@ theorem soundness : Soundness (F p) (elaborated (M := M)) Assumptions Spec := by
   let vals : Vector (F p) s := toElements (M:=M) input
   -- need to change h_ionput into an element-wise condition
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval] at h_input
-  suffices (
-    Expression.eval env
-    (Fin.foldl s
-      (fun acc i ↦
-        acc *
-          (IsZeroField.circuit.output (vars[↑i] : Expression (F p))
-            (i₀ + ↑i * IsZeroField.circuit.localLength (vars[↑i] : Expression (F p))) : Var field (F p)))
-      1) =
-  if ∀ (i : Fin (size M)), vals[↑i] = 0 then 1 else 0
-  ) by apply this
-  sorry
+  simp only [ProvableType.fromElements_eq_iff] at h_input
+  apply foldl_isZero_eq_one_iff
+  · assumption
+  · assumption
 
 theorem completeness : Completeness (F p) (elaborated (M := M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
