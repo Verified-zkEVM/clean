@@ -5,7 +5,7 @@ namespace Gadgets.TwoPowerLookup
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 
-def fromByte_limb {two_exponent : Fin 9} (x: Fin (2 ^ two_exponent.val)) : F p :=
+def fromByte_limb {two_exponent : Fin 9} (x : Fin (2 ^ two_exponent.val)) : F p :=
   FieldUtils.natToField x.val (by
     have two_exponent_small : 2^two_exponent.val < 2 ^ 9 := by
       apply Nat.pow_lt_pow_of_lt

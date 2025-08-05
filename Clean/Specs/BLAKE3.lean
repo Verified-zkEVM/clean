@@ -72,7 +72,7 @@ def msgPermutation : Vector (Fin 16) 16 :=
 ------------
 
 -- The mixing function, G, which mixes either a column or a diagonal.
-def g (state: Vector ℕ 16) (a b c d : Fin 16) (mx my : ℕ) : Vector ℕ 16 :=
+def g (state : Vector ℕ 16) (a b c d : Fin 16) (mx my : ℕ) : Vector ℕ 16 :=
   let state_a := add32 (state[a]) (add32 state[b] mx)
   let state_d := rotRight32 (state[d] ^^^ state_a) 16
   let state_c := add32 (state[c]) state_d
@@ -107,7 +107,7 @@ def roundConstants : Vector (Fin 16 × Fin 16 × Fin 16 × Fin 16 × Fin 16 × F
 The round function, which applies the mixing function G
 to mix the state's columns and diagonals.
 -/
-def round (state: Vector ℕ 16) (m: Vector ℕ 16) : Vector ℕ 16 :=
+def round (state : Vector ℕ 16) (m : Vector ℕ 16) : Vector ℕ 16 :=
   roundConstants.foldl (fun state (a, b, c, d, i, j) =>
     g state a b c d m[i] m[j]
   ) state
@@ -116,7 +116,7 @@ def round (state: Vector ℕ 16) (m: Vector ℕ 16) : Vector ℕ 16 :=
 The permutation function, which permutes the message words after each
 round (except the last one where it would be useless).
 -/
-def permute (state: Vector ℕ 16) : Vector ℕ 16 :=
+def permute (state : Vector ℕ 16) : Vector ℕ 16 :=
   Vector.ofFn (fun i => state[msgPermutation[i]])
 
 /--
@@ -135,7 +135,7 @@ Apply 7 rounds of mixing to the initialized state with message permutation.
 Takes chaining value, block words, counter, block length, and flags,
 initializes the state, and applies the rounds using foldl.
 -/
-def applyRounds (chaining_value: Vector ℕ 8) (block_words: Vector ℕ 16) (counter: ℕ) (block_len: ℕ) (flags: ℕ) : Vector ℕ 16 :=
+def applyRounds (chaining_value : Vector ℕ 8) (block_words : Vector ℕ 16) (counter : ℕ) (block_len : ℕ) (flags : ℕ) : Vector ℕ 16 :=
   -- Split counter into low and high parts
   let counter_low := counter % 2^32
   let counter_high := counter / 2^32
@@ -168,7 +168,7 @@ def applyRounds (chaining_value: Vector ℕ 8) (block_words: Vector ℕ 16) (cou
 Final state update that XORs the first 8 words with the last 8 words,
 and the last 8 words with the original chaining value.
 -/
-def finalStateUpdate (state: Vector ℕ 16) (chaining_value: Vector ℕ 8) : Vector ℕ 16 :=
+def finalStateUpdate (state : Vector ℕ 16) (chaining_value : Vector ℕ 8) : Vector ℕ 16 :=
   #v[
     state[0] ^^^ state[8],
     state[1] ^^^ state[9],
@@ -193,7 +193,7 @@ The compression function, which takes a chaining value, block words, counter,
 block length, and flags as input and produces a new state vector.
 This is the core function of BLAKE3.
 -/
-def compress (chaining_value: Vector ℕ 8) (block_words: Vector ℕ 16) (counter: ℕ) (block_len: ℕ) (flags: ℕ) : Vector ℕ 16 :=
+def compress (chaining_value : Vector ℕ 8) (block_words : Vector ℕ 16) (counter : ℕ) (block_len : ℕ) (flags : ℕ) : Vector ℕ 16 :=
   let state := applyRounds chaining_value block_words counter block_len flags
   finalStateUpdate state chaining_value
 

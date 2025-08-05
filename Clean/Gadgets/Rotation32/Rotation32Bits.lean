@@ -26,19 +26,19 @@ def main (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 
   let highs := parts.map Outputs.high
 
   let rotated := highs.zip (lows.rotate 1) |>.map fun (high, low) =>
-    high + low * ((2^(8 - offset.val) : ℕ) : F p)
+    high + low * ((2^(8-offset.val) : ℕ) : F p)
 
   return U32.fromLimbs rotated
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U32 (F p)) (y: U32 (F p)) :=
+def Spec (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
 def output (offset : Fin 8) (i0 : ℕ) : U32 (Expression (F p)) :=
   U32.fromLimbs (.ofFn fun ⟨i,_⟩ =>
-    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
+    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
 -- #eval main (p:=p_babybear) 1 default |>.output
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
@@ -69,7 +69,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   simp only [U32.ByteVector.getElem_eval_toLimbs, h_input, x_normalized, true_implies,
     Fin.forall_iff] at h_holds
 
-  set base := ((2^(8 - offset.val) : ℕ) : F p)
+  set base := ((2^(8-offset.val) : ℕ) : F p)
   have neg_offset_le : 8 - offset.val ≤ 8 := by
     rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 

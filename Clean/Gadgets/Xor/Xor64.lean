@@ -47,11 +47,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   lookup ByteXorTable (x.x7, y.x7, z.x7)
   return z
 
-def Assumptions (input: Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input: Inputs (F p)) (z : U64 (F p)) :=
+def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 

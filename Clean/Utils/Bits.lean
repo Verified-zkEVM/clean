@@ -23,7 +23,7 @@ def fromBits {n : ℕ} (bits : Vector ℕ n) : ℕ :=
   Main lemma which establishes the behaviour of `fromBits`
   and `toBits` by induction
 -/
-lemma toBits_fromBits_aux {n: ℕ} (bits : Vector ℕ n)
+lemma toBits_fromBits_aux {n : ℕ} (bits : Vector ℕ n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (fromBits bits) < 2^n ∧ toBits n (fromBits bits) = bits := by
   rw [Vector.ext_iff]
@@ -45,7 +45,7 @@ lemma toBits_fromBits_aux {n: ℕ} (bits : Vector ℕ n)
 
     let xn : ℕ := Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2 ^ i)) 0
     have : bits[n] ≤ 1 := by rcases h_bits_n <;> simp only [zero_le, le_refl, *]
-    have h_lt : xn + bits[n] * 2^n < 2^(n + 1) := by
+    have h_lt : xn + bits[n] * 2^n < 2^(n+1) := by
       have : bits[n] * 2^n ≤ 1 * 2^n := Nat.mul_le_mul_right (2 ^ n) (by linarith)
       rw [Nat.pow_succ']
       linarith
@@ -61,17 +61,17 @@ lemma toBits_fromBits_aux {n: ℕ} (bits : Vector ℕ n)
         rcases h_bits_n <;> simp [*, ZMod.val_one]
 
 /-- `toBits` is a left-inverse of `fromBits` -/
-theorem toBits_fromBits {n: ℕ} (bits : Vector ℕ n)
+theorem toBits_fromBits {n : ℕ} (bits : Vector ℕ n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     toBits n (fromBits bits) = bits := (toBits_fromBits_aux bits h_bits).right
 
 /-- The result of `fromBits` is less than 2^n -/
-theorem fromBits_lt {n: ℕ} (bits : Vector ℕ n)
+theorem fromBits_lt {n : ℕ} (bits : Vector ℕ n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (fromBits bits) < 2^n := (toBits_fromBits_aux bits h_bits).left
 
 /-- On numbers less than `2^n`, `toBits n` is injective -/
-theorem toBits_injective (n: ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
+theorem toBits_injective (n : ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
     toBits n x = toBits n y → x = y := by
   intro hx hy h_eq
   rw [Vector.ext_iff] at h_eq
@@ -93,7 +93,7 @@ theorem toBits_injective (n: ℕ) {x y : ℕ} : x < 2^n → y < 2^n →
     rw [Nat.testBit_lt_two_pow hx, Nat.testBit_lt_two_pow hy]
 
 /-- On numbers less than `2^n`, `toBits` is a right-inverse of `fromBits` -/
-theorem fromBits_toBits {n: ℕ} {x : ℕ} (hx : x < 2^n) :
+theorem fromBits_toBits {n : ℕ} {x : ℕ} (hx : x < 2^n) :
     fromBits (toBits n x) = x := by
   have h_bits : ∀ i (hi : i < n), (toBits n x)[i] = 0 ∨ (toBits n x)[i] = 1 := by
     intro i hi; simp [toBits, Vector.getElem_mapRange]
@@ -115,11 +115,11 @@ Convert a vector of bits to a field element.
 def fieldFromBits {n : ℕ} (bits : Vector (F p) n) : F p :=
   fromBits <| bits.map ZMod.val
 
-def fieldFromBitsExpr {n: ℕ} (bits : Vector (Expression (F p)) n) : Expression (F p) :=
+def fieldFromBitsExpr {n : ℕ} (bits : Vector (Expression (F p)) n) : Expression (F p) :=
   Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2^i : F p)) 0
 
 /-- Evaluation commutes with bits accumulation -/
-theorem fieldFromBits_eval {n: ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
+theorem fieldFromBits_eval {n : ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
     eval (fieldFromBitsExpr bits) = fieldFromBits (bits.map eval) := by
   simp only [fieldFromBitsExpr, fieldFromBits, fromBits]
   induction n with
@@ -141,7 +141,7 @@ theorem fieldToBits_bits {n : ℕ} {x : F p} :
 Define the behaviour of `fieldFromBits` and `fieldToBits` by
 lifting `toBits_fromBits_aux`
 -/
-lemma fieldToBits_fieldFromBits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
+lemma fieldToBits_fieldFromBits_aux {n : ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (fieldFromBits bits).val < 2^n ∧ fieldToBits n (fieldFromBits bits) = bits := by
   rw [Vector.ext_iff]
@@ -172,7 +172,7 @@ lemma fieldToBits_fieldFromBits_aux {n: ℕ} (hn : 2^n < p) (bits : Vector (F p)
     rfl
 
 /-- The result of `fieldFromBits` is less than 2^n -/
-theorem fieldFromBits_lt {n: ℕ} (bits : Vector (F p) n)
+theorem fieldFromBits_lt {n : ℕ} (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (fieldFromBits bits).val < 2^n := by
   by_cases hn : 2^n < p
@@ -182,7 +182,7 @@ theorem fieldFromBits_lt {n: ℕ} (bits : Vector (F p) n)
   linarith
 
 /-- `fieldToBits` is a left-inverse of `fieldFromBits` -/
-theorem fieldToBits_fieldFromBits {n: ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
+theorem fieldToBits_fieldFromBits {n : ℕ} (hn : 2^n < p) (bits : Vector (F p) n)
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     fieldToBits n (fieldFromBits bits) = bits := (fieldToBits_fieldFromBits_aux hn bits h_bits).right
 
@@ -223,7 +223,7 @@ lemma val_natCast_toBits {n} {x : ℕ} :
   · exact prime.elim.pos
 
 /-- On field elements less than `2^n`, `fieldToBits` is a right-inverse of `fieldFromBits` -/
-theorem fieldFromBits_fieldToBits {n: ℕ} {x : F p} (hx : x.val < 2^n) :
+theorem fieldFromBits_fieldToBits {n : ℕ} {x : F p} (hx : x.val < 2^n) :
     fieldFromBits (fieldToBits n x) = x := by
   simp only [fieldToBits, fieldFromBits]
   rw [Vector.map_map, val_natCast_toBits, fromBits_toBits hx, ZMod.natCast_zmod_val]

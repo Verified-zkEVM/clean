@@ -7,9 +7,9 @@ variable {α β : Type} {n m : ℕ}
 open Vector (finRange)
 
 namespace Vector
-def fromList (l: List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
+def fromList (l : List α) : Vector α l.length := ⟨ .mk l, rfl ⟩
 
-def len (_: Vector α n) : ℕ := n
+def len (_ : Vector α n) : ℕ := n
 
 -- Helper lemma: A vector of length 1 has toList = [v[0]]
 theorem toList_length_one {α : Type} (v : Vector α 1) :
@@ -47,16 +47,16 @@ theorem toList_length_two {α : Type} (v : Vector α 2) :
         | [x, y] => rfl
         | _ :: _ :: _ :: _ => simp [List.length] at h
 
-def cons (a: α) (v: Vector α n) : Vector α (n + 1) :=
+def cons (a : α) (v : Vector α n) : Vector α (n + 1) :=
   ⟨ .mk (a :: v.toList), by simp ⟩
 
-theorem toList_cons {a: α} {v: Vector α n} : (cons a v).toList = a :: v.toList := by
+theorem toList_cons {a : α} {v : Vector α n} : (cons a v).toList = a :: v.toList := by
   simp [cons]
 
-def set? (v: Vector α n) (i: ℕ) (a: α) : Vector α n :=
+def set? (v : Vector α n) (i : ℕ) (a : α) : Vector α n :=
   ⟨ .mk <| v.toList.set i a, by rw [Array.size_eq_length_toList, List.length_set, ← Array.size_eq_length_toList, v.size_toArray] ⟩
 
-def update (v: Vector α n) (i: Fin n) (f: α → α) : Vector α n :=
+def update (v : Vector α n) (i : Fin n) (f : α → α) : Vector α n :=
   v.set i (f (v.get i))
 
 -- map over monad
@@ -80,16 +80,16 @@ theorem heq_cast {v : Vector α n} (h : n = m) : HEq v (v.cast h) := by
 /- induction principle for Vector.cons -/
 universe u
 
-def induct {motive : {n: ℕ} → Vector α n → Sort u}
-    (nil: motive #v[])
-    (cons: ∀ {n: ℕ} (a: α) (as: Vector α n), motive as → motive (cons a as))
-    {n: ℕ} (v: Vector α n) : motive v :=
+def induct {motive : {n : ℕ} → Vector α n → Sort u}
+    (nil : motive #v[])
+    (cons: ∀ {n : ℕ} (a : α) (as : Vector α n), motive as → motive (cons a as))
+    {n : ℕ} (v : Vector α n) : motive v :=
   match v with
   | ⟨ .mk [], h ⟩ => by
     have : n = 0 := by rw [←h, List.length_eq_zero_iff]
     subst this
     congr
-  | ⟨ .mk (a::as), h ⟩ => by
+  | ⟨ .mk (a :: as), h ⟩ => by
     have : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
     subst this
     have ih := induct (n:=as.length) nil cons ⟨ .mk as, rfl ⟩
@@ -101,14 +101,14 @@ def toPush (v : Vector α (n + 1)) :
   ⟨ v.pop, v.back, v.push_pop_back ⟩
 
 /- induction principle for Vector.push -/
-def inductPush {motive : {n: ℕ} → Vector α n → Sort u}
-  (nil: motive #v[])
-  (push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a))
-  {n: ℕ} (v: Vector α n) : motive v :=
+def inductPush {motive : {n : ℕ} → Vector α n → Sort u}
+  (nil : motive #v[])
+  (push: ∀ {n : ℕ} (as : Vector α n) (a : α), motive as → motive (as.push a))
+  {n : ℕ} (v : Vector α n) : motive v :=
   match v with
   | ⟨ .mk [], (h : 0 = n) ⟩ =>
     cast (by subst h; rfl) nil
-  | ⟨ .mk (a::as), h ⟩ =>
+  | ⟨ .mk (a :: as), h ⟩ =>
     have hlen : as.length + 1 = n := by rw [←h, List.size_toArray, List.length_cons]
     let ⟨ as', a', is_push ⟩ := toPush ⟨.mk (a :: as), rfl⟩
     cast (by subst hlen; rw [is_push]) (push as' a' (inductPush nil push as'))
@@ -117,15 +117,15 @@ theorem empty_push (x : α) : #v[].push x = #v[x] := by rfl
 
 theorem cons_push (x y : α) (xs : Vector α n) : (cons x xs).push y = cons x (xs.push y) := by rfl
 
-theorem inductPush_nil {motive : {n: ℕ} → Vector α n → Sort u}
-  {nil: motive #v[]}
-  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)} :
+theorem inductPush_nil {motive : {n : ℕ} → Vector α n → Sort u}
+  {nil : motive #v[]}
+  {push : ∀ {n : ℕ} (as : Vector α n) (a : α), motive as → motive (as.push a)} :
     inductPush nil push #v[] = nil := by simp only [inductPush]; rfl
 
-lemma inductPush_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
-  {nil: motive #v[]}
-  {push': ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
-  {n: ℕ} (xs: Vector α n) (x a: α) :
+lemma inductPush_cons_push {motive : {n : ℕ} → Vector α n → Sort u}
+  {nil : motive #v[]}
+  {push': ∀ {n : ℕ} (as : Vector α n) (a : α), motive as → motive (as.push a)}
+  {n : ℕ} (xs : Vector α n) (x a : α) :
     inductPush nil push' (cons x (xs.push a)) = push' (cons x xs) a (inductPush nil push' (cons x xs)) := by
   conv => lhs; simp only [cons, inductPush]
   rw [cast_eq_iff_heq]
@@ -139,10 +139,10 @@ lemma inductPush_cons_push {motive : {n: ℕ} → Vector α n → Sort u}
       simp [toPush]
     rw [this]
 
-theorem inductPush_push {motive : {n: ℕ} → Vector α n → Sort u}
-  {nil: motive #v[]}
-  {push: ∀ {n: ℕ} (as: Vector α n) (a: α), motive as → motive (as.push a)}
-  {n: ℕ} (as: Vector α n) (a: α) :
+theorem inductPush_push {motive : {n : ℕ} → Vector α n → Sort u}
+  {nil : motive #v[]}
+  {push : ∀ {n : ℕ} (as : Vector α n) (a : α), motive as → motive (as.push a)}
+  {n : ℕ} (as : Vector α n) (a : α) :
     inductPush nil push (as.push a) = push as a (inductPush nil push as) := by
   induction as using Vector.induct
   case nil =>
@@ -160,43 +160,43 @@ theorem inductPush_push {motive : {n: ℕ} → Vector α n → Sort u}
 theorem getElemFin_finRange {n} (i : Fin n) : (finRange n)[i] = i := by
   simp only [Fin.getElem_fin, getElem_finRange, Fin.eta]
 
-def mapFinRange (n: ℕ) (create: Fin n → α) : Vector α n := finRange n |>.map create
+def mapFinRange (n : ℕ) (create : Fin n → α) : Vector α n := finRange n |>.map create
 
-theorem mapFinRange_zero {create: Fin 0 → α} : mapFinRange 0 create = #v[] := rfl
+theorem mapFinRange_zero {create : Fin 0 → α} : mapFinRange 0 create = #v[] := rfl
 
-theorem mapFinRange_succ {n} {create: Fin (n + 1) → α} :
+theorem mapFinRange_succ {n} {create : Fin (n + 1) → α} :
     mapFinRange (n + 1) create = (mapFinRange n (fun i => create i)).push (create n) := by
   rw [mapFinRange, mapFinRange, finRange_succ_last]
   simp only [append_singleton, map_push, map_map, Fin.coe_eq_castSucc, Fin.natCast_eq_last]
   rfl
 
-theorem cast_mapFinRange {n} {create: Fin n → α} (h : n = m) :
+theorem cast_mapFinRange {n} {create : Fin n → α} (h : n = m) :
     mapFinRange n create = (mapFinRange m (fun i => create (i.cast h.symm))).cast h.symm := by
   subst h; simp
 
-theorem getElemFin_mapFinRange {n} {create: Fin n → α} :
+theorem getElemFin_mapFinRange {n} {create : Fin n → α} :
     ∀ i : Fin n, (mapFinRange n create)[i] = create i := by
   simp [mapFinRange, finRange]
 
-theorem getElem_mapFinRange {n} {create: Fin n → α} :
+theorem getElem_mapFinRange {n} {create : Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
   simp [mapFinRange, finRange]
 
-def mapRange (n: ℕ) (create: ℕ → α) : Vector α n :=
+def mapRange (n : ℕ) (create : ℕ → α) : Vector α n :=
   match n with
   | 0 => #v[]
   | k + 1 => mapRange k create |>.push (create k)
 
-theorem mapRange_zero {create: ℕ → α} : mapRange 0 create = #v[] := rfl
+theorem mapRange_zero {create : ℕ → α} : mapRange 0 create = #v[] := rfl
 
-theorem mapRange_succ {n} {create: ℕ → α} :
+theorem mapRange_succ {n} {create : ℕ → α} :
     mapRange (n + 1) create = (mapRange n create).push (create n) := rfl
 
-theorem cast_mapRange {n} {create: ℕ → α} (h : n = m) :
+theorem cast_mapRange {n} {create : ℕ → α} (h : n = m) :
     mapRange n create = (mapRange m create).cast h.symm := by
   subst h; simp
 
-theorem getElem_mapRange {n} {create: ℕ → α} :
+theorem getElem_mapRange {n} {create : ℕ → α} :
     ∀ (i : ℕ) (hi : i < n), (mapRange n create)[i] = create i := by
   intros i hi
   induction n
@@ -215,24 +215,24 @@ theorem map_mapRange {n} {create : ℕ → α} {f : α → β} :
   rw [Vector.ext_iff]
   simp [getElem_mapRange, getElem_map]
 
-theorem mapRange_add_eq_append {n m} (create: ℕ → α) :
+theorem mapRange_add_eq_append {n m} (create : ℕ → α) :
     mapRange (n + m) create = mapRange n create ++ mapRange m (fun i => create (n + i)) := by
   induction m with
   | zero => simp only [Nat.add_zero, mapRange, append_empty]
   | succ m ih => simp only [mapRange, Nat.add_eq, append_push, ih]
 
-def fill (n : ℕ) (a: α) : Vector α n :=
+def fill (n : ℕ) (a : α) : Vector α n :=
   match n with
   | 0 => #v[]
   | k + 1 => (fill k a).push a
 
-theorem getElem_fill {n} {a: α} {i : ℕ} {hi : i < n} :
+theorem getElem_fill {n} {a : α} {i : ℕ} {hi : i < n} :
     (fill n a)[i] = a := by
   induction n with
   | zero => nomatch hi
   | succ => simp_all [fill, getElem_push]
 
-instance [Inhabited α] {n: ℕ} : Inhabited (Vector α n) where
+instance [Inhabited α] {n : ℕ} : Inhabited (Vector α n) where
   default := fill n default
 
 -- two complementary theorems about `Vector.take` and `Vector.drop` on appended vectors
@@ -281,13 +281,13 @@ end Vector
 /--
 The composition `n * m = m + ... + m` (where `m > 0`)
 -/
-def Composition.ofProductLength (m: ℕ+) {α : Type} {l : List α} (hl : l.length = n * m.val) : Composition l.length := {
+def Composition.ofProductLength (m : ℕ+) {α : Type} {l : List α} (hl : l.length = n * m.val) : Composition l.length := {
   blocks := List.replicate n m.val
   blocks_pos hi := (List.mem_replicate.mp hi).right ▸ m.pos
   blocks_sum := hl ▸ List.sum_replicate_nat
 }
 
-theorem Composition.ofProductLength_mem_length {m: ℕ+} {α : Type} {l : List α} {hl : l.length = n * m.val}
+theorem Composition.ofProductLength_mem_length {m : ℕ+} {α : Type} {l : List α} {hl : l.length = n * m.val}
   (comp : Composition l.length) (hcomp : comp = Composition.ofProductLength m hl) :
   ∀ li ∈ l.splitWrtComposition comp, li.length = m := by
   intro li hli
@@ -301,7 +301,7 @@ theorem Composition.ofProductLength_mem_length {m: ℕ+} {α : Type} {l : List �
 
 namespace Vector
 /-- Split a vector into equally-sized chunks. -/
-def toChunks (m: ℕ+) {α : Type} (v : Vector α (n*m)) : Vector (Vector α m) n :=
+def toChunks (m : ℕ+) {α : Type} (v : Vector α (n*m)) : Vector (Vector α m) n :=
   let comp := Composition.ofProductLength m v.length_toList
   let list : List (Vector α m) := v.toList.splitWrtComposition comp
     |>.attachWith (List.length · = m) (comp.ofProductLength_mem_length rfl)
@@ -312,12 +312,12 @@ def toChunks (m: ℕ+) {α : Type} (v : Vector α (n*m)) : Vector (Vector α m) 
     rw [←Composition.blocks_length, List.length_replicate]
   )
 
-theorem toChunks_flatten {α : Type} (m: ℕ+) (v : Vector α (n*m)) :
+theorem toChunks_flatten {α : Type} (m : ℕ+) (v : Vector α (n*m)) :
     (v.toChunks m).flatten = v := by
   -- simp can reduce the statement to lists and use `List.flatten_splitWrtComposition`!
   simp [toChunks]
 
-theorem flatten_toChunks {α : Type} (m: ℕ+) (v : Vector (Vector α m) n) :
+theorem flatten_toChunks {α : Type} (m : ℕ+) (v : Vector (Vector α m) n) :
     v.flatten.toChunks m = v := by
   simp only [toChunks]
   rw [←Vector.toArray_inj,←Array.toList_inj]
@@ -345,7 +345,7 @@ theorem flatten_toChunks {α : Type} (m: ℕ+) (v : Vector (Vector α m) n) :
     List.map_id_fun', id_eq, v_list_list]
 
 -- using the above, it's quite easy to prove theorems about `toChunks` from similar theorems about `flatten`!
-theorem toChunks_push (m: ℕ+) {α : Type} (vs : Vector α (n*m)) (v : Vector α m) :
+theorem toChunks_push (m : ℕ+) {α : Type} (vs : Vector α (n*m)) (v : Vector α m) :
     have h : n * m + m = (n + 1) * m := by simp [add_mul];
     (vs.toChunks m).push v = ((vs ++ v).cast h).toChunks m := by
   simp only

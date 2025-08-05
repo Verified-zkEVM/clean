@@ -11,7 +11,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 /--
   A 64-bit unsigned integer is represented using eight limbs of 8 bits each.
 -/
-structure U64 (T: Type) where
+structure U64 (T : Type) where
   x0 : T
   x1 : T
   x2 : T
@@ -31,7 +31,7 @@ instance : ProvableType U64 where
 instance : NonEmptyProvableType U64 where
   nonempty := by simp only [size, Nat.reduceGT]
 
-instance (T: Type) [Repr T] : Repr (U64 T) where
+instance (T : Type) [Repr T] : Repr (U64 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ ", " ++ repr x.x4 ++ ", " ++ repr x.x5 ++ ", " ++ repr x.x6 ++ ", " ++ repr x.x7 ++ "⟩"
 
 namespace U64
@@ -66,19 +66,19 @@ lemma ext {x y : U64 (F p)}
 /--
   A 64-bit unsigned integer is normalized if all its limbs are less than 256.
 -/
-def Normalized (x: U64 (F p)) :=
+def Normalized (x : U64 (F p)) :=
   x.x0.val < 256 ∧ x.x1.val < 256 ∧ x.x2.val < 256 ∧ x.x3.val < 256 ∧
   x.x4.val < 256 ∧ x.x5.val < 256 ∧ x.x6.val < 256 ∧ x.x7.val < 256
 
 /--
   Return the value of a 64-bit unsigned integer over the natural numbers.
 -/
-def value (x: U64 (F p)) :=
+def value (x : U64 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3 +
   x.x4.val * 256^4 + x.x5.val * 256^5 + x.x6.val * 256^6 + x.x7.val * 256^7
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem value_lt_of_normalized {x : U64 (F p)} (hx: x.Normalized) : x.value < 2^64 := by
+theorem value_lt_of_normalized {x : U64 (F p)} (hx : x.Normalized) : x.value < 2^64 := by
   simp_all only [value, Normalized]
   linarith
 
@@ -90,7 +90,7 @@ theorem value_horner (x : U64 (F p)) : x.value =
   ring
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem value_xor_horner {x : U64 (F p)} (hx: x.Normalized) : x.value =
+theorem value_xor_horner {x : U64 (F p)} (hx : x.Normalized) : x.value =
     x.x0.val ^^^ 2^8 * (x.x1.val ^^^ 2^8 * (x.x2.val ^^^ 2^8 * (x.x3.val ^^^
       2^8 * (x.x4.val ^^^ 2^8 * (x.x5.val ^^^ 2^8 * (x.x6.val ^^^ 2^8 * x.x7.val)))))) := by
   let ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ := x
@@ -99,7 +99,7 @@ theorem value_xor_horner {x : U64 (F p)} (hx: x.Normalized) : x.value =
   repeat rw [xor_eq_add 8]
   repeat assumption
 
-def valueNat (x: U64 ℕ) :=
+def valueNat (x : U64 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3 +
   x.x4 * 256^4 + x.x5 * 256^5 + x.x6 * 256^6 + x.x7 * 256^7
 
@@ -110,7 +110,7 @@ lemma vals_valueNat (x : U64 (F p)) : x.vals.valueNat = x.value := rfl
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decomposeNat (x: ℕ) : U64 (F p) :=
+def decomposeNat (x : ℕ) : U64 (F p) :=
   let x0 := x % 256
   let x1 : ℕ := (x / 256) % 256
   let x2 : ℕ := (x / 256^2) % 256
@@ -125,7 +125,7 @@ def decomposeNat (x: ℕ) : U64 (F p) :=
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decomposeNatNat (x: ℕ) : U64 ℕ :=
+def decomposeNatNat (x : ℕ) : U64 ℕ :=
   let x0 := x % 256
   let x1 := (x / 256) % 256
   let x2 := (x / 256^2) % 256
@@ -140,7 +140,7 @@ def decomposeNatNat (x: ℕ) : U64 ℕ :=
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decomposeNatExpr (x: ℕ) : U64 (Expression (F p)) :=
+def decomposeNatExpr (x : ℕ) : U64 (Expression (F p)) :=
   let (⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ : U64 (F p)) := decomposeNat x
   ⟨ x0, x1, x2, x3 , x4, x5, x6, x7 ⟩
 
@@ -224,7 +224,7 @@ def U64.witness (compute : Environment (F p) → U64 (F p)) := do
   return x
 
 namespace U64
-def fromByte (x: Fin 256) : U64 (F p) :=
+def fromByte (x : Fin 256) : U64 (F p) :=
   ⟨ x.val, 0, 0, 0, 0, 0, 0, 0 ⟩
 
 lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
