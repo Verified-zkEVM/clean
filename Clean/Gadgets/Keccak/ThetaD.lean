@@ -32,7 +32,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
-def Spec (row : KeccakRow (F p)) (out: KeccakRow (F p)) : Prop :=
+def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaD row.value
 

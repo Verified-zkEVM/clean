@@ -72,7 +72,7 @@ lemma boundaryFib_eq : boundaryFib (p:=p) = (do
   := rfl
 
 omit p_large_enough in
-lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
   Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`

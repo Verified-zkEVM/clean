@@ -1,12 +1,12 @@
 /- This file contains experimental additions to the Circuit DSL -/
 import Clean.Circuit.Subcircuit
 
-variable {F : Type} [Field F] {α: TypeMap} [ProvableType α]
+variable {F : Type} [Field F] {α : TypeMap} [ProvableType α]
 
-instance {α: TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
+instance {α : TypeMap} [ProvableType α] : Inhabited (Circuit F (Var α F)) where
   default := witness default
 
-def copyToVar (x: Expression F) : Circuit F (Variable F) := do
+def copyToVar (x : Expression F) : Circuit F (Variable F) := do
   let x' ← witnessVar x.eval
   assertZero (x - (var x'))
   return x'
