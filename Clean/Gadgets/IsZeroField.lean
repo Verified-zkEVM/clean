@@ -6,19 +6,19 @@ import Clean.Utils.Tactics
 
 namespace Gadgets.IsZeroField
 
-variable {p : ℕ} [Fact p.Prime]
+variable {F : Type} [Field F] [DecidableEq F]
 
 /--
 Main circuit that checks if a field element is zero.
 Returns 1 if the input is 0, otherwise returns 0.
 -/
-def main (x : Var field (F p)) : Circuit (F p) (Var field (F p)) := do
-  let isZero ← witness fun env => if x.eval env = 0 then (1 : F p) else 0
+def main (x : Var field F) : Circuit F (Var field F) := do
+  let isZero ← witness fun env => if x.eval env = 0 then (1 : F) else 0
 
   -- When x ≠ 0, we need x_inv such that x * x_inv = 1
   -- When x = 0, x_inv can be anything (we use 0)
   let x_inv ← witness fun env =>
-    if x.eval env = 0 then 0 else (x.eval env : F p)⁻¹
+    if x.eval env = 0 then 0 else (x.eval env : F)⁻¹
 
   isZero * x === 0  -- If isZero = 1, then x must be 0
   isZero * (isZero - 1) === 0  -- isZero must be boolean (0 or 1)
@@ -28,16 +28,16 @@ def main (x : Var field (F p)) : Circuit (F p) (Var field (F p)) := do
 
   return isZero
 
-instance elaborated : ElaboratedCircuit (F p) field field where
+instance elaborated : ElaboratedCircuit F field field where
   main
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
 
-def Assumptions (_ : F p) : Prop := True
+def Assumptions (_ : F) : Prop := True
 
-def Spec (x : F p) (output : F p) : Prop :=
+def Spec (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness F elaborated Assumptions (Spec (F:=F)) := by
   circuit_proof_start
   split
   · rename_i h_input
@@ -50,12 +50,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [h_one]
   · aesop
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness F elaborated Assumptions := by
   circuit_proof_start
   aesop
 
-def circuit : FormalCircuit (F p) field field := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit : FormalCircuit F field field := {
+  elaborated with Assumptions, Spec := Spec (F:=F), soundness, completeness
 }
 
 end Gadgets.IsZeroField
