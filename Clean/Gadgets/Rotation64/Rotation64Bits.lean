@@ -36,7 +36,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
 
 def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
-    (var ⟨i0 + i * 2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
+    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := main off

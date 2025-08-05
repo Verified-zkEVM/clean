@@ -301,7 +301,7 @@ theorem Composition.ofProductLength_mem_length {m : ℕ+} {α : Type} {l : List 
 
 namespace Vector
 /-- Split a vector into equally-sized chunks. -/
-def toChunks (m : ℕ+) {α : Type} (v : Vector α (n * m)) : Vector (Vector α m) n :=
+def toChunks (m : ℕ+) {α : Type} (v : Vector α (n*m)) : Vector (Vector α m) n :=
   let comp := Composition.ofProductLength m v.length_toList
   let list : List (Vector α m) := v.toList.splitWrtComposition comp
     |>.attachWith (List.length · = m) (comp.ofProductLength_mem_length rfl)
@@ -312,7 +312,7 @@ def toChunks (m : ℕ+) {α : Type} (v : Vector α (n * m)) : Vector (Vector α 
     rw [←Composition.blocks_length, List.length_replicate]
   )
 
-theorem toChunks_flatten {α : Type} (m : ℕ+) (v : Vector α (n * m)) :
+theorem toChunks_flatten {α : Type} (m : ℕ+) (v : Vector α (n*m)) :
     (v.toChunks m).flatten = v := by
   -- simp can reduce the statement to lists and use `List.flatten_splitWrtComposition`!
   simp [toChunks]
@@ -345,7 +345,7 @@ theorem flatten_toChunks {α : Type} (m : ℕ+) (v : Vector (Vector α m) n) :
     List.map_id_fun', id_eq, v_list_list]
 
 -- using the above, it's quite easy to prove theorems about `toChunks` from similar theorems about `flatten`!
-theorem toChunks_push (m : ℕ+) {α : Type} (vs : Vector α (n * m)) (v : Vector α m) :
+theorem toChunks_push (m : ℕ+) {α : Type} (vs : Vector α (n*m)) (v : Vector α m) :
     have h : n * m + m = (n + 1) * m := by simp [add_mul];
     (vs.toChunks m).push v = ((vs ++ v).cast h).toChunks m := by
   simp only
