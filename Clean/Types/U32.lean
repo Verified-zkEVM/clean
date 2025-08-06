@@ -296,10 +296,7 @@ lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
     specialize this (by
       simp only [U32.value, ZMod.val_zero]
       omega)
-    simp only [this]
-    simp only [Fin.getElem_fin]
-    simp only [size, toElements]
-    simp only [Vector.getElem_mk, List.getElem_toArray]
+    simp only [this, Fin.getElem_fin, size, toElements, Vector.getElem_mk, List.getElem_toArray]
     intro i
     fin_cases i <;> rfl
   · simp only [size, toElements]

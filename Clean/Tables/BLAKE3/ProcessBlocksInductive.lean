@@ -128,7 +128,6 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   (input.block_exists = 0 ∨ input.block_exists = 1) ∧
   (∀ i : Fin 16, input.block_data[i].Normalized)
 
-
 namespace BLAKE3StateFirstHalf
 
 def main (x : Var Gadgets.BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
@@ -357,7 +356,7 @@ lemma step_process_block (env : Environment (F p))
 Lemma that handles the case when block_exists ≠ 1 in the step function.
 Shows that the step function returns the accumulator unchanged when skipping a block.
 -/
-lemma step_skip_block (env : Environment (F p)) 
+lemma step_skip_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
@@ -369,7 +368,7 @@ lemma step_skip_block (env : Environment (F p))
   rcases h_holds with ⟨ hh0, hh1 ⟩
   have x_block_exists_zero : x_block_exists = 0 := by
     simp only [h_eval] at hh0
-    rw [mul_eq_zero (M₀ := F p)] at hh0
+    rw [mul_eq_zero (M₀:=F p)] at hh0
     cases hh0 with
     | inl hh0 => assumption
     | inr hh0 =>
