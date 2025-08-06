@@ -404,6 +404,33 @@ lemma step_process_block (env : Environment (F p))
       dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
       simp [h_addition.2, acc_Normalized]
 
+/--
+Lemma that handles the case when block_exists ≠ 1 in the step function.
+Shows that the step function returns the accumulator unchanged when skipping a block.
+-/
+lemma step_skip_block (env : Environment (F p)) 
+    (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
+    (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
+    (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
+    (h_x : ¬(x.block_exists = 1))
+    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput))) :
+    eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput)) = acc := by
+  simp only [circuit_norm, step] at h_holds
+  provable_struct_simp
+  rcases h_holds with ⟨ hh0, hh1 ⟩
+  have x_block_exists_zero : x_block_exists = 0 := by
+    simp only [h_eval] at hh0
+    rw [mul_eq_zero (M₀ := F p)] at hh0
+    cases hh0 with
+    | inl hh0 => assumption
+    | inr hh0 =>
+        rw [add_neg_eq_zero] at hh0
+        contradiction
+  simp only [x_block_exists_zero] at *
+  simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at hh1 ⊢
+  norm_num at hh1 ⊢
+  simp only [step, circuit_norm, hh1, h_eval]
+
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized inputs_short
   specialize spec_previous (by assumption)
@@ -439,22 +466,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         omega
       simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
     · simp only [h_x, decide_false, cond_false, List.append_nil]
-      have no_op : (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))) = acc := by
-        simp only [circuit_norm, step] at h_holds
-        provable_struct_simp
-        rcases h_holds with ⟨ hh0, hh1 ⟩
-        have x_block_exists_zero : x_block_exists = 0 := by
-          simp only [h_eval] at hh0
-          rw [mul_eq_zero (M₀ := F p)] at hh0
-          cases hh0 with
-          | inl hh0 => assumption
-          | inr hh0 =>
-              rw [add_neg_eq_zero] at hh0
-              contradiction
-        simp only [x_block_exists_zero] at *
-        simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at hh1 ⊢
-        norm_num at hh1 ⊢
-        simp only [step, circuit_norm, hh1, h_eval]
+      have no_op := step_skip_block env acc_var x_var acc x h_eval h_x h_holds
       simp only [no_op]
       constructor
       · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
