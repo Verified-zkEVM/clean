@@ -34,14 +34,6 @@ lemma U32_blockLen_value (env : Environment (F p)) :
   simp only [blockLen]
   omega
 
-omit p_large in
-lemma eval_env_mul (env : Environment (F p)) (a b : Var field (F p)) :
-    (eval (α := field) env (Expression.mul a b : Var field (F p)) : F p) =
-    (Expression.eval env a) * (Expression.eval env b) := by
-  simp only [ProvableType.eval, fromElements, toVars, toElements]
-  simp only [id_eq, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp [Expression.eval]
-
 /--
 State maintained during block processing.
 Corresponds to a simplified version of ChunkState.
@@ -295,7 +287,7 @@ lemma step_process_block (env : Environment (F p))
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise]
     constructor
-    · rw [eval_env_mul]
+    · rw [ProvableType.eval_field, eval_mul]
       simp only [Expression.eval, chunkStart]
       split at h_iszero
       · norm_num at h_iszero ⊢
@@ -487,7 +479,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       simp only [U32.Normalized_componentwise]
       constructor
-      · rw [eval_env_mul]
+      · rw [ProvableType.eval_field, eval_mul]
         split at h_witnesses_iszero
         · simp only [h_witnesses_iszero, Expression.eval]
           norm_num
@@ -522,7 +514,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         · trivial
         simp only [U32.Normalized_componentwise, chunkStart]
         constructor
-        · rw [eval_env_mul]
+        · rw [ProvableType.eval_field, eval_mul]
           split at h_witnesses_iszero
           · simp only [h_witnesses_iszero, Expression.eval]
             norm_num
