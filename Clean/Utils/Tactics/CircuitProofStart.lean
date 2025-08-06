@@ -24,7 +24,6 @@ partial def circuitProofStartCore : TacticM Unit := do
                           headConst? == some ``GeneralFormalCircuit.Completeness
 
     if isSoundness then
-      -- Unfold the appropriate Soundness definition and introduce the correct parameters
       match headConst? with
       | some ``Soundness => 
         evalTactic (← `(tactic| unfold Soundness))
@@ -33,13 +32,11 @@ partial def circuitProofStartCore : TacticM Unit := do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Soundness => 
         evalTactic (← `(tactic| unfold FormalAssertion.Soundness))
-        -- FormalAssertion.Soundness has the same intro pattern as standard Soundness
         let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Soundness => 
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Soundness))
-        -- GeneralFormalCircuit.Soundness doesn't have h_assumptions (goes directly from h_input to h_holds)
         let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
@@ -55,13 +52,11 @@ partial def circuitProofStartCore : TacticM Unit := do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Completeness => 
         evalTactic (← `(tactic| unfold FormalAssertion.Completeness))
-        -- FormalAssertion.Completeness has an additional h_spec after h_assumptions
         let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Completeness => 
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Completeness))
-        -- GeneralFormalCircuit.Completeness has the same intro pattern as standard Completeness
         let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
