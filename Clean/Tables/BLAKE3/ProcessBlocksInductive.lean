@@ -154,6 +154,7 @@ lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value ac
 
 /--
 Input for each row: either a block to process or nothing.
+A chunk might contain less than 16 blocks, and `block_exists` indicates empty rows.
 -/
 structure BlockInput (F : Type) where
   block_exists : F                      -- 0 or 1 (boolean flag)
