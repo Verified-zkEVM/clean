@@ -30,18 +30,6 @@ lemma U32_Normalized_componentwise env (a b c d : Var field (F p)):
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements, Vector.map]
   simp only [List.map_toArray, List.map_cons, List.map_nil, U32.Normalized]
 
--- Using common lemma from U32 module
-local notation "U32_zero_is_Normalized" => U32.zero_is_Normalized
-
--- Using common lemma from U32 module
-local notation "U32_zero_value" => U32.zero_value
-
--- Using common lemma from U32 module
-local notation "U32_one_is_Normalized" => U32.one_is_Normalized
-
--- Using common lemma from U32 module
-local notation "U32_one_value" => U32.one_value
-
 /--
 Lemma: For a normalized U32, value = 0 iff all components are 0
 -/
@@ -356,7 +344,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
             apply List.mem_of_getElem
             omega)
           simp only [BlockInput.Normalized] at input_Normalized
-          simp only [spec_previous, input_Normalized, U32_zero_is_Normalized, U32_blockLen_is_Normalized]
+          simp only [spec_previous, input_Normalized, U32.zero_is_Normalized, U32_blockLen_is_Normalized]
           simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
             Nat.reduceAdd, and_self, true_and, U32_Normalized_componentwise]
           constructor
@@ -379,7 +367,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         rcases h_holds with ⟨ h_addition, h_holds ⟩
         specialize h_addition (by
           dsimp only [Addition32.circuit, Addition32.Assumptions]
-          simp only [U32_one_is_Normalized]
+          simp only [U32.one_is_Normalized]
           dsimp only [ProcessBlocksState.Normalized] at spec_previous
           simp [spec_previous])
         dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
@@ -404,7 +392,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
           · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
             simp only [h_compress.1]
             clear h_compress
-            simp only [U32_zero_value, startFlag, U32_blockLen_value]
+            simp only [U32.zero_value, startFlag, U32_blockLen_value]
             norm_num at h_iszero
             simp only [mul_zero, add_zero, id_eq]
             rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
@@ -422,7 +410,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
                   simp only [spec_previous]
             · simp_all
             · simp_all
-          · simp only [U32_one_value]
+          · simp only [U32.one_value]
             simp only [ProcessBlocksState.toChunkState] at spec_previous
             simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
               zero_add, Nat.reducePow] at inputs_short
@@ -511,7 +499,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         native_decide
       constructor
       · -- goal looks lemma-worthy
-        simp only [U32_zero_is_Normalized]
+        simp only [U32.zero_is_Normalized]
       constructor
       · simp_all
       constructor
@@ -546,7 +534,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
         simp only [h_assumptions]
-        simp only [U32_blockLen_is_Normalized, U32_zero_is_Normalized]
+        simp only [U32_blockLen_is_Normalized, U32.zero_is_Normalized]
         constructor
         · trivial
         constructor
@@ -572,7 +560,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
             ZMod.val_zero, Nat.ofNat_pos])
       simp only [h_compress]
-    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32_one_is_Normalized, Conditional.circuit, Conditional.Assumptions, IsBool]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32.one_is_Normalized, Conditional.circuit, Conditional.Assumptions, IsBool]
 
 /--
 The InductiveTable for processBlocks.
@@ -593,35 +581,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     dsimp only [step]
     simp only [circuit_norm]
     omega
-
-/--
-Create a trace for processBlocks with given input blocks.
-Pads with empty blocks to reach exactly 17 rows.
--/
-def createTrace (_initialCV : Vector (U32 (F p)) 8) (_chunkCounter : U32 (F p))
-    (blocks : List (List Nat)) : List (BlockInput (F p)) :=
-  -- Convert blocks to BlockInput format
-  let blockInputs := blocks.map (fun block =>
-    let words := (List.range 16).map (fun i =>
-      let bytes := block.drop (i * 4) |>.take 4
-      let value := bytes.zipIdx.foldl (fun acc (byte, idx) =>
-        acc + byte * 256^idx
-      ) 0
-      U32.fromByte ⟨value % 256, by omega⟩  -- Simplified: just use first byte
-    )
-    { block_exists := 1
-    , block_data := Vector.mk words.toArray (by
-      simp only [List.length_map, List.length_range, List.size_toArray]
-      rfl) }
-  )
-  -- Pad with empty blocks
-  let emptyBlock : BlockInput (F p) :=
-    { block_exists := 0
-    , block_data := Vector.mk (List.replicate 16 (U32.fromByte 0)).toArray (by simp) }
-  let paddedInputs := blockInputs ++ List.replicate (16 - blocks.length) emptyBlock
-  paddedInputs
-
--- TODO: Define extractFinalState once we have the proper trace type
--- This would extract the final state from row 16 of the table
 
 end Tables.BLAKE3.ProcessBlocksInductive
