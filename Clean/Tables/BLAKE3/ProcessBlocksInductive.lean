@@ -137,7 +137,7 @@ def main (x : Var Gadgets.BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (Provab
 A subcircuit that takes the first eight elements of BLAKE3State
 -/
 def circuit : FormalCircuit (F p) Gadgets.BLAKE3.BLAKE3State (ProvableVector U32 8) where
-  main := main
+  main
   localLength := 0
   Assumptions input := input.Normalized
   Spec input output := output = input.take 8 ∧ ∀ i : Fin 8, output[i].Normalized
