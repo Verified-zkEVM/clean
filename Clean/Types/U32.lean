@@ -272,6 +272,51 @@ lemma value_injective_on_normalized (x y : U32 (F p))
 
 end ValueInjectivity
 
+/--
+Lemma showing that U32 Normalized property is equivalent to all components being < 256
+-/
+lemma Normalized_componentwise (env : Environment (F p)) (a b c d : Var field (F p)):
+    (eval (α := U32) env
+    { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
+    ((eval env a).val < 256 ∧ (eval env b).val < 256 ∧ (eval env c).val < 256 ∧ (eval env d).val < 256) := by
+  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements, Vector.map]
+  simp only [List.map_toArray, List.map_cons, List.map_nil, U32.Normalized]
+
+/--
+Lemma: For a normalized U32, value = 0 iff all components are 0
+-/
+lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
+    x.value = 0 ↔ (∀ i : Fin (size U32), (toElements x)[i] = 0) := by
+  have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
+    simp only [U32.Normalized, ZMod.val_zero]
+    norm_num)
+  constructor
+  · intro h_val_zero
+    simp only [h_val_zero] at this
+    specialize this (by
+      simp only [U32.value, ZMod.val_zero]
+      omega)
+    simp only [this]
+    simp only [Fin.getElem_fin]
+    simp only [size, toElements]
+    simp only [Vector.getElem_mk, List.getElem_toArray]
+    intro i
+    fin_cases i <;> rfl
+  · simp only [size, toElements]
+    intro h_elements
+    simp only [U32.value]
+    have h_0 := h_elements 0
+    have h_1 := h_elements 1
+    have h_2 := h_elements 2
+    have h_3 := h_elements 3
+    simp only [Fin.isValue, Fin.getElem_fin, Fin.val_zero, Vector.getElem_mk, List.getElem_toArray,
+      List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ, Fin.val_two] at h_0 h_1 h_2 h_3
+    have : (3 : Fin 4).val = 3 := rfl
+    simp only [this] at h_3
+    simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_3
+    simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
+    norm_num
+
 lemma constU32_is_Normalized (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
     (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,

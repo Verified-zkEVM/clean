@@ -22,49 +22,6 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
-omit p_large in
-lemma U32_Normalized_componentwise env (a b c d : Var field (F p)):
-    (eval (α := U32) env
-    { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
-    ((eval env a).val < 256 ∧ (eval env b).val < 256 ∧ (eval env c).val < 256 ∧ (eval env d).val < 256) := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements, Vector.map]
-  simp only [List.map_toArray, List.map_cons, List.map_nil, U32.Normalized]
-
-/--
-Lemma: For a normalized U32, value = 0 iff all components are 0
--/
-lemma U32_value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
-    x.value = 0 ↔ (∀ i : Fin (size U32), (toElements x)[i] = 0) := by
-  have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
-    simp only [U32.Normalized, ZMod.val_zero]
-    norm_num)
-  constructor
-  · intro h_val_zero
-    simp only [h_val_zero] at this
-    specialize this (by
-      simp only [U32.value, ZMod.val_zero]
-      omega)
-    simp only [this]
-    simp only [Fin.getElem_fin]
-    simp only [size, toElements]
-    simp only [Vector.getElem_mk, List.getElem_toArray]
-    intro i
-    fin_cases i <;> rfl
-  · simp only [size, toElements]
-    intro h_elements
-    simp only [U32.value]
-    have h_0 := h_elements 0
-    have h_1 := h_elements 1
-    have h_2 := h_elements 2
-    have h_3 := h_elements 3
-    simp only [Fin.isValue, Fin.getElem_fin, Fin.val_zero, Vector.getElem_mk, List.getElem_toArray,
-      List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ, Fin.val_two] at h_0 h_1 h_2 h_3
-    have : (3 : Fin 4).val = 3 := rfl
-    simp only [this] at h_3
-    simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_3
-    simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
-    ring
-
 lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
   apply U32.const_is_Normalized
@@ -336,7 +293,7 @@ lemma step_process_block (env : Environment (F p))
     simp only [BlockInput.Normalized] at x_Normalized
     simp only [acc_Normalized, x_Normalized, U32.zero_is_Normalized, U32_blockLen_is_Normalized]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
-      Nat.reduceAdd, and_self, true_and, U32_Normalized_componentwise]
+      Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise]
     constructor
     · rw [eval_env_mul]
       simp only [Expression.eval, chunkStart]
@@ -384,12 +341,12 @@ lemma step_process_block (env : Environment (F p))
       simp only [ProcessBlocksState.Normalized] at acc_Normalized
       · split
         · rename_i h_zero
-          rw [U32_value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_zero
+          rw [U32.value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_zero
           · simp_all
           · simp only [acc_Normalized]
         · rename_i h_nonzero
           simp only [h_iszero]
-          rw [U32_value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_nonzero
+          rw [U32.value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_nonzero
           · aesop
           · simp only [acc_Normalized]
       · simp_all
@@ -528,7 +485,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
-      simp only [U32_Normalized_componentwise]
+      simp only [U32.Normalized_componentwise]
       constructor
       · rw [eval_env_mul]
         split at h_witnesses_iszero
@@ -563,7 +520,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         · trivial
         constructor
         · trivial
-        simp only [U32_Normalized_componentwise, chunkStart]
+        simp only [U32.Normalized_componentwise, chunkStart]
         constructor
         · rw [eval_env_mul]
           split at h_witnesses_iszero
