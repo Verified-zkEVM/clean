@@ -115,9 +115,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
-  circuit_proof_start
-
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
+  circuit_proof_start [Assumptions, BLAKE3State.Normalized]
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_env ⊢
   simp only [circuit_norm, and_imp,
