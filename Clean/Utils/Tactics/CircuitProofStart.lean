@@ -16,24 +16,60 @@ partial def circuitProofStartCore : TacticM Unit := do
     -- First check if this is a Soundness or Completeness type that needs unfolding
     -- We need to check the head constant of the expression
     let headConst? := goalType.getAppFn.constName?
-    let isSoundness := headConst? == some ``Soundness
-    let isCompleteness := headConst? == some ``Completeness
+    let isSoundness := headConst? == some ``Soundness || 
+                       headConst? == some ``FormalAssertion.Soundness ||
+                       headConst? == some ``GeneralFormalCircuit.Soundness
+    let isCompleteness := headConst? == some ``Completeness ||
+                          headConst? == some ``FormalAssertion.Completeness ||
+                          headConst? == some ``GeneralFormalCircuit.Completeness
 
     if isSoundness then
-      evalTactic (← `(tactic| unfold Soundness))
-      let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
-      for name in names do
-        evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      -- Unfold the appropriate Soundness definition and introduce the correct parameters
+      match headConst? with
+      | some ``Soundness => 
+        evalTactic (← `(tactic| unfold Soundness))
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``FormalAssertion.Soundness => 
+        evalTactic (← `(tactic| unfold FormalAssertion.Soundness))
+        -- FormalAssertion.Soundness has the same intro pattern as standard Soundness
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``GeneralFormalCircuit.Soundness => 
+        evalTactic (← `(tactic| unfold GeneralFormalCircuit.Soundness))
+        -- GeneralFormalCircuit.Soundness doesn't have h_assumptions (goes directly from h_input to h_holds)
+        let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | _ => pure ()
       return
     else if isCompleteness then
-      evalTactic (← `(tactic| unfold Completeness))
-      let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
-      for name in names do
-        evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      -- Unfold the appropriate Completeness definition and introduce the correct parameters
+      match headConst? with
+      | some ``Completeness => 
+        evalTactic (← `(tactic| unfold Completeness))
+        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``FormalAssertion.Completeness => 
+        evalTactic (← `(tactic| unfold FormalAssertion.Completeness))
+        -- FormalAssertion.Completeness has an additional h_spec after h_assumptions
+        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``GeneralFormalCircuit.Completeness => 
+        evalTactic (← `(tactic| unfold GeneralFormalCircuit.Completeness))
+        -- GeneralFormalCircuit.Completeness has the same intro pattern as standard Completeness
+        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | _ => pure ()
       return
     else
-      -- Goal is neither Soundness nor Completeness
-      throwError "circuitProofStartCore can only be used on direct Soundness or Completeness goals"
+      -- Goal is not a supported Soundness or Completeness type
+      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, or GeneralFormalCircuit.Completeness goals"
 
 /--
   Standard tactic for starting soundness and completeness proofs.
@@ -45,8 +81,9 @@ partial def circuitProofStartCore : TacticM Unit := do
   4. Applies provable_struct_simp to decompose structs and decompose eval that mention struct components
   5. Additionally simplifies h_holds henv and the goal with circuit_norm and h_input
 
-  **Limitation**: This tactic only works on direct `Soundness` or `Completeness` goals.
-  It will fail with an error if the goal type is neither `Soundness` nor `Completeness`.
+  **Supported goal types**: This tactic works on `Soundness`, `Completeness`, 
+  `FormalAssertion.Soundness`, `FormalAssertion.Completeness`, 
+  `GeneralFormalCircuit.Soundness`, or `GeneralFormalCircuit.Completeness` goals.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`
@@ -93,6 +130,7 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| simp only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident $(mkIdent `h_input):ident ⊢))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
 
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do
