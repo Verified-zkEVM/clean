@@ -11,14 +11,14 @@ import Clean.Types.U32
 import Clean.Gadgets.Or.ByteOrTable
 
 section
-variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
+variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
 
 namespace Gadgets.Or32
 open Gadgets.Or
 
 structure Inputs (F : Type) where
-  x: U32 F
-  y: U32 F
+  x : U32 F
+  y : U32 F
 
 instance : ProvableStruct Inputs where
   components := [U32, U32]
@@ -62,20 +62,20 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
     z.x2.val = x.x2.val ||| y.x2.val ∧
     z.x3.val = x.x3.val ||| y.x3.val) : Spec { x, y } z := by
   simp only [Spec]
-  have ⟨ hx0, hx1, hx2, hx3 ⟩ := x_norm
-  have ⟨ hy0, hy1, hy2, hy3 ⟩ := y_norm
+  have ⟨hx0, hx1, hx2, hx3⟩ := x_norm
+  have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
 
   have z_norm : z.Normalized := by
     simp only [U32.Normalized, h_eq]
-    exact ⟨ Nat.or_lt_two_pow (n:=8) hx0 hy0, Nat.or_lt_two_pow (n:=8) hx1 hy1,
-      Nat.or_lt_two_pow (n:=8) hx2 hy2, Nat.or_lt_two_pow (n:=8) hx3 hy3 ⟩
+    exact ⟨Nat.or_lt_two_pow (n:=8) hx0 hy0, Nat.or_lt_two_pow (n:=8) hx1 hy1,
+      Nat.or_lt_two_pow (n:=8) hx2 hy2, Nat.or_lt_two_pow (n:=8) hx3 hy3⟩
 
-  suffices z.value = x.value ||| y.value from ⟨ this, z_norm ⟩
+  suffices z.value = x.value ||| y.value from ⟨this, z_norm⟩
   -- Directly compute using the definition of value
   simp only [U32.value, h_eq]
-  have : ZMod.val x.x0 + ZMod.val x.x1 * 256 + ZMod.val x.x2 * 256 ^ 2 + ZMod.val x.x3 * 256 ^ 3 = ZMod.val x.x0 + 256 * (ZMod.val x.x1 + 256 * (ZMod.val x.x2 + 256 * ZMod.val x.x3)) := by omega
+  have : ZMod.val x.x0 + ZMod.val x.x1*256 + ZMod.val x.x2*256^2 + ZMod.val x.x3*256^3 = ZMod.val x.x0 + 256*(ZMod.val x.x1 + 256*(ZMod.val x.x2 + 256*ZMod.val x.x3)) := by omega
   simp only [this]
-  have : ZMod.val y.x0 + ZMod.val y.x1 * 256 + ZMod.val y.x2 * 256 ^ 2 + ZMod.val y.x3 * 256 ^ 3 = ZMod.val y.x0 + 256 * (ZMod.val y.x1 + 256 * (ZMod.val y.x2 + 256 * ZMod.val y.x3)) := by omega
+  have : ZMod.val y.x0 + ZMod.val y.x1*256 + ZMod.val y.x2*256^2 + ZMod.val y.x3*256^3 = ZMod.val y.x0 + 256*(ZMod.val y.x1 + 256*(ZMod.val y.x2 + 256*ZMod.val y.x3)) := by omega
   simp only [this]
   have := or_sum
   norm_num at this
@@ -85,15 +85,15 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env input_var input h_input h_as h_holds
 
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
-  let ⟨⟨ x0, x1, x2, x3 ⟩,
-       ⟨ y0, y1, y2, y3 ⟩⟩ := input
+  let ⟨⟨x0_var, x1_var, x2_var, x3_var⟩,
+       ⟨y0_var, y1_var, y2_var, y3_var⟩⟩ := input_var
+  let ⟨⟨x0, x1, x2, x3⟩,
+       ⟨y0, y1, y2, y3⟩⟩ := input
 
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
   simp only [circuit_norm, Assumptions] at h_as
-  obtain ⟨ x_norm, y_norm ⟩ := h_as
+  obtain ⟨x_norm, y_norm⟩ := h_as
 
   simp only [h_input, circuit_norm, main, ByteOrTable,
     varFromOffset, Vector.mapRange] at h_holds
@@ -110,16 +110,16 @@ lemma or_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env input_var h_env input h_input as
-  let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
-       ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
-  let ⟨⟨ x0, x1, x2, x3 ⟩,
-       ⟨ y0, y1, y2, y3 ⟩⟩ := input
+  let ⟨⟨x0_var, x1_var, x2_var, x3_var⟩,
+       ⟨y0_var, y1_var, y2_var, y3_var⟩⟩ := input_var
+  let ⟨⟨x0, x1, x2, x3⟩,
+       ⟨y0, y1, y2, y3⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
   simp only [Assumptions, circuit_norm, U32.Normalized] at as
-  obtain ⟨ x_bytes, y_bytes ⟩ := as
-  obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
-  obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
+  obtain ⟨x_bytes, y_bytes⟩ := as
+  obtain ⟨x0_byte, x1_byte, x2_byte, x3_byte⟩ := x_bytes
+  obtain ⟨y0_byte, y1_byte, y2_byte, y3_byte⟩ := y_bytes
 
   simp only [h_input, circuit_norm, main, ByteOrTable,
     explicit_provable_type, Fin.forall_iff] at h_env ⊢

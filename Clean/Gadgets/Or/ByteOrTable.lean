@@ -13,7 +13,7 @@ def ByteOrTable : Table (F p) fieldTriple := .fromStatic {
     let (x, y) := splitTwoBytes i
     (fromByte x, fromByte y, fromByte (x ||| y))
 
-  index := fun (x, y, _) => x.val * 256 + y.val
+  index := fun (x, y, _) => x.val*256 + y.val
 
   Spec := fun (x, y, z) =>
     x.val < 256 ∧ y.val < 256 ∧ z.val = x.val ||| y.val
