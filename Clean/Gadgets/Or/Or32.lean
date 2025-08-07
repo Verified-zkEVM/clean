@@ -61,7 +61,8 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
     z.x0.val = x.x0.val ||| y.x0.val ∧
     z.x1.val = x.x1.val ||| y.x1.val ∧
     z.x2.val = x.x2.val ||| y.x2.val ∧
-    z.x3.val = x.x3.val ||| y.x3.val) : Spec { x, y } z := by
+    z.x3.val = x.x3.val ||| y.x3.val) :
+    Spec { x, y } z := by
   simp only [Spec]
   have ⟨hx0, hx1, hx2, hx3⟩ := x_norm
   have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
@@ -99,7 +100,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp [h_holds]
 
 lemma or_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
-  (x.val ||| y.val : F p).val = x.val ||| y.val := by
+    (x.val ||| y.val : F p).val = x.val ||| y.val := by
   apply FieldUtils.val_lt_p
   have h_byte : x.val ||| y.val < 256 := Nat.or_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
