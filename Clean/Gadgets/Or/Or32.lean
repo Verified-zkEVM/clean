@@ -73,28 +73,6 @@ lemma U32.or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y
   rw [U32.bitwise_componentwise or x_norm y_norm]
   rfl
 
-theorem soundness_to_u32 {x y z : U32 (F p)}
-  (x_norm : x.Normalized) (y_norm : y.Normalized)
-  (h_eq :
-    z.x0.val = x.x0.val ||| y.x0.val ∧
-    z.x1.val = x.x1.val ||| y.x1.val ∧
-    z.x2.val = x.x2.val ||| y.x2.val ∧
-    z.x3.val = x.x3.val ||| y.x3.val) :
-    Spec { x, y } z := by
-  simp only [Spec]
-  have ⟨hx0, hx1, hx2, hx3⟩ := x_norm
-  have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
-
-  have z_norm : z.Normalized := by
-    simp only [U32.Normalized, h_eq]
-    exact ⟨Nat.or_lt_two_pow (n:=8) hx0 hy0, Nat.or_lt_two_pow (n:=8) hx1 hy1,
-      Nat.or_lt_two_pow (n:=8) hx2 hy2, Nat.or_lt_two_pow (n:=8) hx3 hy3⟩
-
-  suffices z.value = x.value ||| y.value from ⟨this, z_norm⟩
-  rw [U32.or_componentwise x_norm y_norm]
-  simp only [U32.value]
-  omega
-
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
@@ -128,21 +106,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · apply Nat.or_lt_two_pow (n:=8) (x:=ZMod.val x3) (y:=ZMod.val y3) <;> omega
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro _ env _ h_env _ h_input h_assumptions
-  -- Unfold main manually
-  simp only [circuit_norm, main]
-  simp only [elaborated, varFromOffset, Inputs.mk.injEq, U32.mk.injEq] at h_input h_env ⊢
-  obtain ⟨ rfl, rfl ⟩ := h_input
+  circuit_proof_start
+  rcases input_x
+  rcases input_y
+  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
+  simp only [Or8.circuit, Or8.Assumptions, h_input]
   simp only [Assumptions, U32.Normalized] at h_assumptions
   obtain ⟨ ⟨ hx0, hx1, hx2, hx3 ⟩, ⟨ hy0, hy1, hy2, hy3 ⟩ ⟩ := h_assumptions
-
-  -- Apply Or8 completeness to each byte
-  have c0 := Or8.completeness _ env _ h_env _ rfl ⟨hx0, hy0⟩
-  have c1 := Or8.completeness _ env _ h_env _ rfl ⟨hx1, hy1⟩
-  have c2 := Or8.completeness _ env _ h_env _ rfl ⟨hx2, hy2⟩
-  have c3 := Or8.completeness _ env _ h_env _ rfl ⟨hx3, hy3⟩
-
-  exact ⟨c0, c1, c2, c3⟩
+  omega
 
 def circuit : FormalCircuit (F p) Inputs U32 :=
   { Assumptions, Spec, soundness, completeness }
