@@ -101,32 +101,41 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   output _ i := var ⟨i⟩
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
-  set z := 2*w - x - y
+  -- The constraint from lookup is about xor = 2*or - x - y
+  -- which in field arithmetic is 2*w + -x + -y
+  set xor := 2*w + -x + -y
+  have h_xor : xor.val = x.val ^^^ y.val := h_constraint
   show w.val = x.val ||| y.val
 
-  -- it's easier to prove something about 2*w since it features in the constraint
-  have two_or_field : 2*w = x + y + z := by ring
+  -- Rearrange to get 2*w = x + y + xor
+  have two_or_field : 2*w = x + y + xor := by ring
 
   have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
-  have z_xor : z.val = x.val ^^^ y.val := h_xor
-
-  have x_y_z_val : (x + y + z).val = x.val + y.val + (x.val ^^^ y.val) := by
-    have h1 : (x + y + z).val = ((x + y).val + z.val) % p := by
-      rw [ZMod.val_add]
-    rw [h1, x_y_val, z_xor]
-    have sum_lt : x.val + y.val + (x.val ^^^ y.val) < p := by
-      have xor_bound := Nat.xor_lt_two_pow (n:=8) hx_byte hy_byte
-      linarith [p_large_enough.elim]
-    rw [Nat.mod_eq_of_lt sum_lt]
+  
+  have x_y_xor_val : (x + y + xor).val = x.val + y.val + (x.val ^^^ y.val) := by
+    -- The key insight: from 2*(x ||| y) = x + y + (x ^^^ y), we get
+    -- x + y + (x ^^^ y) = 2*(x ||| y) ≤ 2*255 = 510 < 512 < p
+    have sum_bound : (x + y).val + xor.val < p := by
+      rw [x_y_val, h_xor]
+      have : x.val + y.val + (x.val ^^^ y.val) ≤ 2 * 255 := by
+        have h := or_times_two_sub_xor hx_byte hy_byte
+        have or_le : x.val ||| y.val ≤ 255 := by
+          have : x.val ||| y.val < 256 := Nat.or_lt_two_pow (n:=8) hx_byte hy_byte
+          omega
+        linarith
+      have : 2 * 255 = 510 := by norm_num
+      have : 510 < 512 := by norm_num
+      have p_gt : 512 < p := p_large_enough.elim
+      omega
+    
+    rw [ZMod.val_add_of_lt sum_bound, x_y_val, h_xor]
 
   have two_or : (2*w).val = 2*(x.val ||| y.val) := by
-    rw [two_or_field, x_y_z_val, or_times_two_sub_xor hx_byte hy_byte]
-
-  clear two_or_field x_y_val x_y_z_val h_xor z_xor
+    rw [two_or_field, x_y_xor_val, or_times_two_sub_xor hx_byte hy_byte]
 
   -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
   have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
