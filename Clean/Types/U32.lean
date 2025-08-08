@@ -260,4 +260,86 @@ lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression
     eval env (U32.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [U32.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector
+
+-- Bitwise operations on U32
+section Bitwise
+
+-- General lemma: operations defined with bitwise can be computed componentwise on U32
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma bitwise_componentwise (f : Bool → Bool → Bool)
+    {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
+    f false false = false →
+    Nat.bitwise f x.value y.value =
+    Nat.bitwise f x.x0.val y.x0.val +
+    256 * (Nat.bitwise f x.x1.val y.x1.val +
+    256 * (Nat.bitwise f x.x2.val y.x2.val +
+    256 * Nat.bitwise f x.x3.val y.x3.val)) := by
+  intro f_f_f
+  -- Use the fact that bitwise operations respect base-256 representation
+  -- Since 256 = 2^8, bits 0-7 come from x0/y0, bits 8-15 from x1/y1, etc.
+  simp only [value]
+  -- The key is that for any bitwise operation f and naturals a, b < 256:
+  -- bitwise f (a + 256*rest_a) (b + 256*rest_b) = bitwise f a b + 256*(bitwise f rest_a rest_b)
+  -- This is because bits don't interfere across byte boundaries
+  have h256 : 256 = 2^8 := by norm_num
+
+  -- We'll use the fact that bitwise operations on disjoint bit ranges combine additively
+  -- when the ranges are aligned to powers of 2
+  have ⟨hx0, hx1, hx2, hx3⟩ := x_norm
+  have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
+  apply Nat.eq_of_testBit_eq
+  intro i
+  have : ZMod.val x.x0 + ZMod.val x.x1 * 256 + ZMod.val x.x2 * 256 ^ 2 + ZMod.val x.x3 * 256 ^ 3 =
+         2^8 * (2^8 * (2^8 * ZMod.val x.x3 + ZMod.val x.x2) + ZMod.val x.x1) + ZMod.val x.x0 := by omega
+  simp only [this]
+  have : ZMod.val y.x0 + ZMod.val y.x1 * 256 + ZMod.val y.x2 * 256 ^ 2 + ZMod.val y.x3 * 256 ^ 3 =
+         2^8 * (2^8 * (2^8 * ZMod.val y.x3 + ZMod.val y.x2) + ZMod.val y.x1) + ZMod.val y.x0 := by omega
+  simp only [this]
+  have : Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0) +
+        256 *
+          (Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1) +
+            256 *
+              (Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2) +
+                256 * Nat.bitwise f (ZMod.val x.x3) (ZMod.val y.x3))) =
+        2^8 *
+          (2^8 *
+              (2^8 * Nat.bitwise f (ZMod.val x.x3) (ZMod.val y.x3) + Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2)) +
+            Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1)) +
+        Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0)
+                := by omega
+  simp only [this]
+  rw [Nat.testBit_bitwise] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x0)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x0)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  split
+  · aesop
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x1)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x1)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  split
+  · aesop
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x2)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x2)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  aesop
+
+-- Specific lemma for OR on U32
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
+    x.value ||| y.value =
+    (x.x0.val ||| y.x0.val) +
+    256 * ((x.x1.val ||| y.x1.val) +
+    256 * ((x.x2.val ||| y.x2.val) +
+    256 * (x.x3.val ||| y.x3.val))) := by
+  -- Use the fact that ||| is Nat.lor which is defined as bitwise or
+  show Nat.lor x.value y.value = _
+  -- Nat.lor is definitionally equal to bitwise or
+  show Nat.bitwise or x.value y.value = _
+  rw [bitwise_componentwise or x_norm y_norm]
+  · rfl
+  rfl
+
+end Bitwise
+
 end U32
