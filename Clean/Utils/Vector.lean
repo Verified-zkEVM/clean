@@ -384,4 +384,5 @@ theorem getElem_rotate {α : Type} {n : ℕ} {v : Vector α n} {off : ℕ} {i : 
     (v.rotate off)[i] = v[(i + off) % n]'(Nat.mod_lt _ (Nat.pos_iff_ne_zero.mpr (Nat.ne_zero_of_lt hi))) := by
   rcases v with ⟨ ⟨ xs ⟩ , h ⟩
   simp [rotate, List.getElem_rotate, h]
+
 end Vector
