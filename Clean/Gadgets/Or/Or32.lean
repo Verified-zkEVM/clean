@@ -84,12 +84,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢ l_components
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
   rcases h_holds with ⟨h_holds1, h_holds⟩
-  specialize h_holds1 (by sorry)
+  specialize h_holds1 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
   rcases h_holds with ⟨h_holds2, h_holds⟩
-  specialize h_holds2 (by sorry)
+  specialize h_holds2 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
   rcases h_holds with ⟨h_holds3, h_holds4⟩
-  specialize h_holds3 (by sorry)
-  specialize h_holds4 (by sorry)
+  specialize h_holds3 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
+  specialize h_holds4 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
   simp only [Or8.circuit, Or8.Spec] at h_holds1 h_holds2 h_holds3 h_holds4
   simp only [U32.value] at ⊢ l_components
   simp only [h_holds1, h_holds2, h_holds3, h_holds4]
