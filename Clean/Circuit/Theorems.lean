@@ -5,10 +5,9 @@ For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
 import Clean.Circuit.Basic
+import Clean.Circuit.Provable
 
 variable {F : Type} [Field F] {α β : Type}
-
--- basic simp lemmas
 
 namespace Operations
 @[circuit_norm]

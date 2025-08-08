@@ -1,7 +1,7 @@
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
-import Clean.Utils.Tactics.CircuitProofStart
+import Clean.Utils.Tactics
 
 namespace Gadgets.ToBits
 open Utils.Bits
