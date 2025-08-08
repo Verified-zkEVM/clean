@@ -29,7 +29,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
   let and ← witness fun eval => (eval x).val &&& (eval y).val
   -- we prove AND correct using an XOR lookup and the following identity:
-  let xor := x + y - 2 * and
+  let xor := x + y - 2*and
   lookup ByteXorTable (x, y, xor)
   return and
 
@@ -85,11 +85,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
-  set z := x + y + -(2 * w)
+  set z := x + y + -(2*w)
   show w.val = x.val &&& y.val
 
-  -- it's easier to prove something about 2 * w since it features in the constraint
-  have two_and_field : 2 * w = x + y - z := by ring
+  -- it's easier to prove something about 2*w since it features in the constraint
+  have two_and_field : 2*w = x + y - z := by ring
 
   have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
   have z_lt : z.val ≤ (x + y).val := by
@@ -98,13 +98,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   have x_y_z_val : (x + y - z).val = x.val + y.val - z.val := by
     rw [ZMod.val_sub z_lt, x_y_val]
 
-  have two_and : (2 * w).val = 2 * (x.val &&& y.val) := by
+  have two_and : (2*w).val = 2*(x.val &&& y.val) := by
     rw [two_and_field, x_y_z_val, h_xor, ←and_times_two_add_xor hx_byte hy_byte, Nat.add_sub_cancel]
 
   clear two_and_field x_y_val x_y_z_val h_xor z_lt
 
-  -- crucial step: since 2 divides (2 * w).val, we can actually pull in .val
-  have two_mul_val : (2 * w).val = 2 * w.val := FieldUtils.mul_nat_val_of_dvd 2
+  -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
+  have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
     (by linarith [p_large_enough.elim]) two_and
 
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
@@ -116,7 +116,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
-  let z := x + y + -(2 * w)
+  let z := x + y + -(2*w)
 
   -- now it's pretty much the soundness proof in reverse
   have and_byte : x.val &&& y.val < 256 := Nat.and_lt_two_pow (n:=8) x.val hy_byte
@@ -125,13 +125,13 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rw [natToField_eq_natCast and_lt] at hw
   have h_and : w.val = x.val &&& y.val := natToField_eq w hw
 
-  have two_and_val : (2 * w).val = 2 * (x.val &&& y.val) := by
+  have two_and_val : (2*w).val = 2*(x.val &&& y.val) := by
     rw [ZMod.val_mul_of_lt, val_two, h_and]
     rw [val_two]
     linarith
 
   have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
-  have two_and_lt : (2 * w).val ≤ (x + y).val := by
+  have two_and_lt : (2*w).val ≤ (x + y).val := by
     rw [two_and_val, x_y_val]
     exact two_and_le_add hx_byte hy_byte
 
