@@ -84,7 +84,7 @@ theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBoo
 
 /-- If x is boolean, then NOT x is boolean -/
 theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
-    IsBool (1 + x - 2 * x) := by
+    IsBool (1 + x - 2*x) := by
   rcases hx with hx0 | hx1
   · simp [hx0, add_zero, zero_mul, sub_zero, one]
   · simp only [hx1]
@@ -93,7 +93,7 @@ theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
 
 /-- If x and y are boolean, then x XOR y is boolean -/
 theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x + y - 2 * x * y) := by
+    IsBool (x + y - 2*x*y) := by
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, mul_zero, sub_zero, hy]
   · rcases hy with hy0 | hy1
@@ -145,7 +145,7 @@ variable {p : ℕ} [Fact p.Prime]
 
 /-- For boolean field elements, XOR operation matches bitwise XOR of values -/
 theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
-    (a + b - 2 * a * b).val = a.val ^^^ b.val := by
+    (a + b - 2*a*b).val = a.val ^^^ b.val := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]; norm_num
 
 /-- For boolean field elements, AND operation matches bitwise AND of values -/
