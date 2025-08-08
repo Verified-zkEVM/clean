@@ -278,10 +278,6 @@ lemma bitwise_componentwise (f : Bool → Bool → Bool)
   -- Use the fact that bitwise operations respect base-256 representation
   -- Since 256 = 2^8, bits 0-7 come from x0/y0, bits 8-15 from x1/y1, etc.
   simp only [value]
-  -- The key is that for any bitwise operation f and naturals a, b < 256:
-  -- bitwise f (a + 256*rest_a) (b + 256*rest_b) = bitwise f a b + 256*(bitwise f rest_a rest_b)
-  -- This is because bits don't interfere across byte boundaries
-  have h256 : 256 = 2^8 := by norm_num
 
   -- We'll use the fact that bitwise operations on disjoint bit ranges combine additively
   -- when the ranges are aligned to powers of 2
