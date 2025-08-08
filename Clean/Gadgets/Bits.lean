@@ -1,7 +1,7 @@
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
-import Clean.Utils.Tactics.CircuitProofStart
+import Clean.Utils.Tactics
 
 namespace Gadgets.ToBits
 open Utils.Bits
@@ -35,7 +35,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     x.val < 2^n ∧ bits = fieldToBits n x
 
   soundness := by
-    circuit_proof_start [main]
+    circuit_proof_start
     simp only [main, circuit_norm] at *
     simp only [h_input, circuit_norm] at h_holds
 
@@ -53,7 +53,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     use fieldFromBits_lt _ h_bits
 
   completeness := by
-    circuit_proof_start [main]
+    circuit_proof_start
     simp only [h_input, circuit_norm] at h_env ⊢
 
     constructor
