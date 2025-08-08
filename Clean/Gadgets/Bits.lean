@@ -35,10 +35,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     x.val < 2^n ∧ bits = fieldToBits n x
 
   soundness := by
-    circuit_proof_start [main]
-    simp only [main, circuit_norm] at *
-    simp only [h_input, circuit_norm] at h_holds
-
+    circuit_proof_start
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨i₀ + ·⟩)
@@ -53,8 +50,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
     use fieldFromBits_lt _ h_bits
 
   completeness := by
-    circuit_proof_start [main]
-    simp only [h_input, circuit_norm] at h_env ⊢
+    circuit_proof_start
 
     constructor
     · intro i
