@@ -54,7 +54,6 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
   completeness := by
     circuit_proof_start
-    simp only [h_input, circuit_norm] at h_env ⊢
 
     constructor
     · intro i
