@@ -49,30 +49,6 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
 
--- General lemma: operations defined with bitwise can be computed componentwise on U32
-lemma U32.bitwise_componentwise (f : Bool → Bool → Bool)
-    {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
-    Nat.bitwise f x.value y.value =
-    Nat.bitwise f x.x0.val y.x0.val +
-    256 * (Nat.bitwise f x.x1.val y.x1.val +
-    256 * (Nat.bitwise f x.x2.val y.x2.val +
-    256 * Nat.bitwise f x.x3.val y.x3.val)) := by
-  sorry -- This follows from the fact that bitwise operations respect base-256 representation
-
--- Specific lemma for OR on U32
-lemma U32.or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
-    x.value ||| y.value =
-    (x.x0.val ||| y.x0.val) +
-    256 * ((x.x1.val ||| y.x1.val) +
-    256 * ((x.x2.val ||| y.x2.val) +
-    256 * (x.x3.val ||| y.x3.val))) := by
-  -- Use the fact that ||| is Nat.lor which is defined as bitwise or
-  show Nat.lor x.value y.value = _
-  -- Nat.lor is definitionally equal to bitwise or
-  show Nat.bitwise or x.value y.value = _
-  rw [U32.bitwise_componentwise or x_norm y_norm]
-  rfl
-
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
