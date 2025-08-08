@@ -13,18 +13,13 @@ Main circuit that checks if a field element is zero.
 Returns 1 if the input is 0, otherwise returns 0.
 -/
 def main (x : Var field F) : Circuit F (Var field F) := do
-  let isZero ← witness fun env => if x.eval env = 0 then (1 : F) else 0
-
   -- When x ≠ 0, we need x_inv such that x * x_inv = 1
   -- When x = 0, x_inv can be anything (we use 0)
-  let x_inv ← witness fun env =>
+  let xInv ← witness fun env =>
     if x.eval env = 0 then 0 else (x.eval env : F)⁻¹
 
-  isZero * x === 0  -- If isZero = 1, then x must be 0
-  isZero * (isZero - 1) === 0  -- isZero must be boolean (0 or 1)
-
-  -- If isZero = 0 (i.e., x ≠ 0), then x * x_inv = 1, so x is non-zero
-  (1 - isZero) * x * x_inv === (1 - isZero)
+  let isZero <== 1 - x*xInv -- If x is zero, isZero is one
+  isZero * x === 0  -- If x is not zero, isZero is zero
 
   return isZero
 
@@ -43,11 +38,7 @@ theorem soundness : Soundness F elaborated Assumptions (Spec (F:=F)) := by
   · rename_i h_input
     simp only [h_input] at *
     norm_num at *
-    rcases h_holds with ⟨ _, h_one ⟩
-    symm
-    ring_nf at h_one
-    apply sub_eq_zero.mp
-    simp only [h_one]
+    assumption
   · aesop
 
 theorem completeness : Completeness F elaborated Assumptions := by

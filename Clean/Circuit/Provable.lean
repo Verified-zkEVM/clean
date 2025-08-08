@@ -407,6 +407,17 @@ lemma fromElements_comp_toElements {F} :
   funext x
   simp [fromElements_toElements]
 
+lemma fromElements_eq_iff {M : TypeMap} [ProvableType M] {F : Type} {A : Vector F (size M)} {B : M F} :
+    fromElements A = B ↔ A = toElements B := by
+  constructor
+  · intro h
+    rw [← h, toElements_fromElements]
+  · intro h
+    rw [h, fromElements_toElements]
+
+-- basic simp lemmas
+
+
 @[circuit_norm]
 theorem eval_const {F : Type} [Field F] {α : TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
     eval env (const x) = x := by

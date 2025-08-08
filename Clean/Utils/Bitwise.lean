@@ -8,24 +8,24 @@ def add32 (a b : ℕ) : ℕ := (a + b) % 2^32
 def rotRight8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
   let low := x % (2^offset.val)
   let high := x / (2^offset.val)
-  low * (2^(8 - offset.val)) + high
+  low * (2^(8-offset.val)) + high
 
 def rotLeft8 (x : Fin 256) (offset : Fin 8) : Fin 256 :=
-  let low := x % (2^(8 - offset.val))
-  let high := x / (2^(8 - offset.val))
+  let low := x % (2^(8-offset.val))
+  let high := x / (2^(8-offset.val))
   low * (2^offset.val) + high
 
 def rotRight64 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 64
   let low := x % (2^offset)
   let high := x / (2^offset)
-  low * (2^(64 - offset)) + high
+  low * (2^(64-offset)) + high
 
 def rotRight32 (x : ℕ) (offset : ℕ) : ℕ :=
   let offset := offset % 32
   let low := x % (2^offset)
   let high := x / (2^offset)
-  low * (2^(32 - offset)) + high
+  low * (2^(32-offset)) + high
 
 def rotLeft64 (value : ℕ) (left : Fin 64) : ℕ:=
   let right := (64 - left) % 64
