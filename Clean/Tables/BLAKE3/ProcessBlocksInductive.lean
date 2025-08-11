@@ -71,7 +71,7 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.blocks_compressed.Normalized
 
 omit p_large in
-lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
+private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
     acc_blocks_compressed
     (h_iszero : Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) =
       if acc_blocks_compressed.value = 0 then 1 else 0) :
@@ -88,9 +88,7 @@ lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value ac
   simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, h_eval]
   simp only [ProcessBlocksState.Normalized] at h_normalized
-  simp only [Expression.eval]
-  simp only [chunkStart]
-  simp only [h_iszero]
+  simp only [Expression.eval, chunkStart, h_iszero]
   split
   · simp only [U32.value]
     norm_num
@@ -253,7 +251,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
 -/
-lemma step_process_block (env : Environment (F p))
+private lemma step_process_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
@@ -355,7 +353,7 @@ lemma step_process_block (env : Environment (F p))
 Lemma that handles the case when block_exists ≠ 1 in the step function.
 Shows that the step function returns the accumulator unchanged when skipping a block.
 -/
-lemma step_skip_block (env : Environment (F p))
+private lemma step_skip_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
