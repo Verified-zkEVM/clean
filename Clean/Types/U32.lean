@@ -264,6 +264,15 @@ end ByteVector
 -- Bitwise operations on U32
 section Bitwise
 
+-- helper lemma to prepare the goal for testBit_two_pow_mul_add
+private lemma reorganize_value (a b c d : ℕ) :
+  a + 256 * (b + 256 * (c + 256 * d)) =
+  2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
+
+private lemma reorganize_value' (a b c d : ℕ) :
+  a + b * 256 + c * 256 ^ 2 + d * 256 ^ 3 =
+  2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
+
 -- General lemma: operations defined with bitwise can be computed componentwise on U32
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma bitwise_componentwise (f : Bool → Bool → Bool)
@@ -281,25 +290,7 @@ lemma bitwise_componentwise (f : Bool → Bool → Bool)
   have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
   apply Nat.eq_of_testBit_eq
   intro i
-  have : ZMod.val x.x0 + ZMod.val x.x1 * 256 + ZMod.val x.x2 * 256 ^ 2 + ZMod.val x.x3 * 256 ^ 3 =
-         2^8 * (2^8 * (2^8 * ZMod.val x.x3 + ZMod.val x.x2) + ZMod.val x.x1) + ZMod.val x.x0 := by omega
-  simp only [this]
-  have : ZMod.val y.x0 + ZMod.val y.x1 * 256 + ZMod.val y.x2 * 256 ^ 2 + ZMod.val y.x3 * 256 ^ 3 =
-         2^8 * (2^8 * (2^8 * ZMod.val y.x3 + ZMod.val y.x2) + ZMod.val y.x1) + ZMod.val y.x0 := by omega
-  simp only [this]
-  have : Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0) +
-        256 *
-          (Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1) +
-            256 *
-              (Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2) +
-                256 * Nat.bitwise f (ZMod.val x.x3) (ZMod.val y.x3))) =
-        2^8 *
-          (2^8 *
-              (2^8 * Nat.bitwise f (ZMod.val x.x3) (ZMod.val y.x3) + Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2)) +
-            Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1)) +
-        Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0)
-                := by omega
-  simp only [this]
+  simp only [reorganize_value, reorganize_value']
   rw [Nat.testBit_bitwise] <;> try assumption
   rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x0)] <;> try assumption
   rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x0)] <;> try assumption
@@ -323,13 +314,8 @@ lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Nor
     256 * ((x.x1.val ||| y.x1.val) +
     256 * ((x.x2.val ||| y.x2.val) +
     256 * (x.x3.val ||| y.x3.val))) := by
-  -- Use the fact that ||| is Nat.lor which is defined as bitwise or
-  show Nat.lor x.value y.value = _
-  -- Nat.lor is definitionally equal to bitwise or
-  show Nat.bitwise or x.value y.value = _
-  rw [bitwise_componentwise or x_norm y_norm]
-  · rfl
-  rfl
+  show Nat.bitwise _ _ _ = _
+  rw [bitwise_componentwise or x_norm y_norm] <;> rfl
 
 end Bitwise
 
