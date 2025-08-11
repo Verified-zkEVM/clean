@@ -345,12 +345,6 @@ lemma zero_value (env : Environment (F p)) :
   have h := constU32_value env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
   convert h <;> simp
 
-lemma one_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  have h := constU32_is_Normalized env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  simp at h
-  exact h
-
 lemma one_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
   have h := constU32_value env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
