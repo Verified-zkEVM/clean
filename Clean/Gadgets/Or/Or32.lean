@@ -67,18 +67,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_holds4 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
   simp only [Or8.circuit, Or8.Spec] at h_holds1 h_holds2 h_holds3 h_holds4
   simp only [U32.value] at ⊢ l_components
-  simp only [h_holds1, h_holds2, h_holds3, h_holds4]
+  simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2]
+  simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1]
   simp only [h_input]
-  apply And.intro
-  · simp only [l_components]
-    ring
-  · constructor
-    · apply Nat.or_lt_two_pow (n:=8) (x:=ZMod.val x0) (y:=ZMod.val y0) <;> omega
-    constructor
-    · apply Nat.or_lt_two_pow (n:=8) (x:=ZMod.val x1) (y:=ZMod.val y1) <;> omega
-    constructor
-    · apply Nat.or_lt_two_pow (n:=8) (x:=ZMod.val x2) (y:=ZMod.val y2) <;> omega
-    · apply Nat.or_lt_two_pow (n:=8) (x:=ZMod.val x3) (y:=ZMod.val y3) <;> omega
+  simp only [l_components]
+  ring_nf
+  simp
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
