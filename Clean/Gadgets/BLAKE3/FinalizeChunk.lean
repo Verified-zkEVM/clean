@@ -52,34 +52,33 @@ omit p_large_enough in
 lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
     (h_bytes : ∀ i : Fin 64, (eval env bytes_var)[i].val < 256) :
     ∀ i : Fin 16, (eval env (bytesToWords bytes_var))[i].Normalized := by
-  intro i
+  rintro ⟨i, h_i⟩
   simp only [bytesToWords]
   simp only [id_eq, Fin.getElem_fin]
-  have h0 := h_bytes (↑i * 4)
-  have h1 := h_bytes (↑i * 4 + 1)
-  have h2 := h_bytes (↑i * 4 + 2)
-  have h3 := h_bytes (↑i * 4 + 3)
+  have h0 := h_bytes (i * 4)
+  have h1 := h_bytes (i * 4 + 1)
+  have h2 := h_bytes (i * 4 + 2)
+  have h3 := h_bytes (i * 4 + 3)
   simp only [circuit_norm, eval_vector] at h0 h1 h2 h3 ⊢
-  simp only [Vector.getElem_ofFn]
-  simp only [U32.Normalized]
-  simp only [explicit_provable_type, toVars]
+  simp only [Vector.getElem_ofFn, U32.Normalized, explicit_provable_type, toVars]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt] at h0 h1 h2 h3
+  simp only [id_eq, Fin.isValue, Nat.mod_mul_mod, Fin.val_one, Nat.mod_add_mod, Fin.val_two] at h0 h1 h2 h3
   constructor
-  · convert h0
-    simp only [Fin.val_mul, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
-    omega
+  · calc
+      _ = _ := by congr; omega
+      _ < 256 := h0
   constructor
-  · convert h1
-    simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
-    omega
+  · calc
+      _ = _ := by congr; omega
+      _ < 256 := h1
   constructor
-  · convert h2
-    simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
-    omega
-  · convert h3
-    simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
-    omega
-
+  · calc
+      _ = _ := by congr; omega
+      _ < 256 := h2
+  · calc
+      _ = _ := by congr; omega
+      _ < 256 := h3
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
