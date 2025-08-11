@@ -309,10 +309,9 @@ lemma bitwise_componentwise (f : Bool → Bool → Bool)
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
     x.value ||| y.value =
-    (x.x0.val ||| y.x0.val) +
-    256 * ((x.x1.val ||| y.x1.val) +
-    256 * ((x.x2.val ||| y.x2.val) +
-    256 * (x.x3.val ||| y.x3.val))) := by
+    (x.x0.val ||| y.x0.val) + 256 *
+      ((x.x1.val ||| y.x1.val) + 256 *
+        ((x.x2.val ||| y.x2.val) + 256 * (x.x3.val ||| y.x3.val))) := by
   show Nat.bitwise _ _ _ = _
   rw [bitwise_componentwise or x_norm y_norm] <;> rfl
 
