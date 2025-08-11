@@ -278,11 +278,11 @@ private lemma step_process_block (env : Environment (F p))
     clear h_holds
     simp only [ProcessBlocksState.Normalized] at acc_Normalized
     simp only [BlockInput.Normalized] at x_Normalized
-    simp only [acc_Normalized, x_Normalized, U32.zero_is_Normalized]
-    simp only [U32.Normalized]
+    simp only [circuit_norm] at acc_Normalized x_Normalized
+    simp only [acc_Normalized, x_Normalized, circuit_norm]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise, circuit_norm, explicit_provable_type]
-    simp only [ZMod.val_zero, Nat.ofNat_pos, and_true]
+    simp only [ZMod.val_zero, Nat.ofNat_pos, and_true, true_and]
     constructor
     · rw [ZMod.val_ofNat_of_lt]
       · omega
@@ -461,8 +461,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       · simp only [h_assumptions]
         native_decide
       constructor
-      · -- goal looks lemma-worthy
-        simp only [U32.zero_is_Normalized]
+      · simp only [circuit_norm, ZMod.val_zero]
+        omega
       constructor
       · simp_all
       constructor
@@ -497,13 +497,13 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
         simp only [h_assumptions]
-        simp only [U32.zero_is_Normalized]
         constructor
         · trivial
         constructor
         · trivial
         constructor
-        · trivial
+        · simp only [circuit_norm, ZMod.val_zero]
+          omega
         constructor
         · trivial
         constructor

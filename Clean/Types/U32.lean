@@ -276,6 +276,7 @@ omit p_large_enough in
 /--
 Lemma showing that U32 Normalized property is equivalent to all components being < 256
 -/
+@[circuit_norm]
 lemma Normalized_componentwise (env : Environment (F p)) (a b c d : Var field (F p)):
     (eval (α := U32) env
     { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
@@ -336,14 +337,6 @@ lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
   cases p_large_enough
   norm_num
   repeat rw [ZMod.val_natCast_of_lt] <;> try omega
-
--- Specialized versions using the general lemmas
-lemma zero_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  have : (0 : Expression (F p)) = Expression.const ↑0 := by rfl
-  repeat rw [this]
-  have h := constU32_is_Normalized env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  convert h <;> simp
 
 lemma zero_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
