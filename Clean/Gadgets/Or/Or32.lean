@@ -1,15 +1,7 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
 import Clean.Circuit.Provable
-import Clean.Circuit.Basic
-import Clean.Utils.Field
-import Clean.Utils.Bitwise
 import Clean.Utils.Tactics
 import Clean.Types.U32
-import Clean.Gadgets.Or.ByteOrTable
+import Clean.Gadgets.Or.Or8
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
@@ -28,18 +20,13 @@ instance : ProvableStruct Inputs where
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
-  let z ← witness fun env =>
-    let z0 := (env x.x0).val ||| (env y.x0).val
-    let z1 := (env x.x1).val ||| (env y.x1).val
-    let z2 := (env x.x2).val ||| (env y.x2).val
-    let z3 := (env x.x3).val ||| (env y.x3).val
-    U32.mk z0 z1 z2 z3
 
-  lookup ByteOrTable (x.x0, y.x0, z.x0)
-  lookup ByteOrTable (x.x1, y.x1, z.x1)
-  lookup ByteOrTable (x.x2, y.x2, z.x2)
-  lookup ByteOrTable (x.x3, y.x3, z.x3)
-  return z
+  let z0 ← Or8.circuit ⟨x.x0, y.x0⟩
+  let z1 ← Or8.circuit ⟨x.x1, y.x1⟩
+  let z2 ← Or8.circuit ⟨x.x2, y.x2⟩
+  let z3 ← Or8.circuit ⟨x.x3, y.x3⟩
+
+  return ⟨z0, z1, z2, z3⟩
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
@@ -52,80 +39,43 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
-  output _ i0 := varFromOffset U32 i0
-
-omit [Fact (Nat.Prime p)] p_large_enough in
-theorem soundness_to_u32 {x y z : U32 (F p)}
-  (x_norm : x.Normalized) (y_norm : y.Normalized)
-  (h_eq :
-    z.x0.val = x.x0.val ||| y.x0.val ∧
-    z.x1.val = x.x1.val ||| y.x1.val ∧
-    z.x2.val = x.x2.val ||| y.x2.val ∧
-    z.x3.val = x.x3.val ||| y.x3.val) :
-    Spec { x, y } z := by
-  simp only [Spec]
-  have ⟨hx0, hx1, hx2, hx3⟩ := x_norm
-  have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
-
-  have z_norm : z.Normalized := by
-    simp only [U32.Normalized, h_eq]
-    exact ⟨Nat.or_lt_two_pow (n:=8) hx0 hy0, Nat.or_lt_two_pow (n:=8) hx1 hy1,
-      Nat.or_lt_two_pow (n:=8) hx2 hy2, Nat.or_lt_two_pow (n:=8) hx3 hy3⟩
-
-  suffices z.value = x.value ||| y.value from ⟨this, z_norm⟩
-  -- Directly compute using the definition of value
-  simp only [U32.value, h_eq]
-  have : ZMod.val x.x0 + ZMod.val x.x1*256 + ZMod.val x.x2*256^2 + ZMod.val x.x3*256^3 = ZMod.val x.x0 + 256*(ZMod.val x.x1 + 256*(ZMod.val x.x2 + 256*ZMod.val x.x3)) := by omega
-  simp only [this]
-  have : ZMod.val y.x0 + ZMod.val y.x1*256 + ZMod.val y.x2*256^2 + ZMod.val y.x3*256^3 = ZMod.val y.x0 + 256*(ZMod.val y.x1 + 256*(ZMod.val y.x2 + 256*ZMod.val y.x3)) := by omega
-  simp only [this]
-  have := or_sum
-  norm_num at this
-  repeat rw [this] <;> try assumption
-  ring
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  let ⟨x0_var, x1_var, x2_var, x3_var⟩ := input_var_x
-  let ⟨y0_var, y1_var, y2_var, y3_var⟩ := input_var_y
-  let ⟨x0, x1, x2, x3⟩ := input_x
-  let ⟨y0, y1, y2, y3⟩ := input_y
-
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
-  obtain ⟨x_norm, y_norm⟩ := h_assumptions
-  simp only [h_input, circuit_norm, main, ByteOrTable,
-    varFromOffset, Vector.mapRange] at h_holds
-  apply soundness_to_u32 x_norm y_norm
-  simp only [circuit_norm, explicit_provable_type]
-  simp [h_holds]
-
-lemma or_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
-    (x.val ||| y.val : F p).val = x.val ||| y.val := by
-  apply FieldUtils.val_lt_p
-  have h_byte : x.val ||| y.val < 256 := Nat.or_lt_two_pow (n:=8) hx hy
-  linarith [p_large_enough.elim]
+  have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
+  rcases input_x
+  rcases input_y
+  rcases input_var_x
+  rcases input_var_y
+  simp only [U32.Normalized] at *
+  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢ l_components
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
+  simp only [Or8.circuit, Or8.Assumptions, Or8.Spec, h_input] at h_holds
+  rcases h_holds with ⟨h_holds1, h_holds⟩
+  specialize h_holds1 (by omega)
+  rcases h_holds with ⟨h_holds2, h_holds⟩
+  specialize h_holds2 (by omega)
+  rcases h_holds with ⟨h_holds3, h_holds4⟩
+  specialize h_holds3 (by omega)
+  specialize h_holds4 (by omega)
+  simp only [U32.value] at ⊢ l_components
+  simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2] -- use the Normalized conditions
+  simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1, l_components]
+  ring_nf
+  simp
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-  let ⟨x0_var, x1_var, x2_var, x3_var⟩ := input_var_x
-  let ⟨y0_var, y1_var, y2_var, y3_var⟩ := input_var_y
-  let ⟨x0, x1, x2, x3⟩ := input_x
-  let ⟨y0, y1, y2, y3⟩ := input_y
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
+  rcases input_x
+  rcases input_y
+  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
+  simp only [Or8.circuit, Or8.Assumptions, h_input]
+  simp only [Assumptions, U32.Normalized] at h_assumptions
+  omega
 
-  simp only [Assumptions, circuit_norm, U32.Normalized] at h_assumptions
-  obtain ⟨x_bytes, y_bytes⟩ := h_assumptions
-  obtain ⟨x0_byte, x1_byte, x2_byte, x3_byte⟩ := x_bytes
-  obtain ⟨y0_byte, y1_byte, y2_byte, y3_byte⟩ := y_bytes
+def circuit : FormalCircuit (F p) Inputs U32 :=
+  { Assumptions, Spec, soundness, completeness }
 
-  simp only [h_input, circuit_norm, main, ByteOrTable,
-    explicit_provable_type, Fin.forall_iff] at h_env ⊢
-  have h_env0 : env.get i₀ = ↑(ZMod.val x0 ||| ZMod.val y0) := by simpa using h_env 0
-  simp_all [or_val]
-
-def circuit : FormalCircuit (F p) Inputs U32 where
-  Assumptions
-  Spec
-  soundness
-  completeness
 end Gadgets.Or32
+end
