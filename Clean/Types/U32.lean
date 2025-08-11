@@ -320,7 +320,7 @@ lemma constU32_is_Normalized (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
     (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
                            x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [explicit_provable_type, toVars, toElements]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
   simp only [Expression.eval, fromElements, U32.Normalized]
   cases p_large_enough
@@ -331,7 +331,7 @@ lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
                            x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).value =
     n0 + n1 * 256 + n2 * 256^2 + n3 * 256^3 := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [explicit_provable_type, toVars, toElements]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
   simp only [Expression.eval, fromElements, U32.value]
   cases p_large_enough
