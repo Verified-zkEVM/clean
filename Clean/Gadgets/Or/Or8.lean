@@ -100,12 +100,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   set xor := 2*w + -x + -y
   have h_xor : xor.val = x.val ^^^ y.val := h_constraint
   have value_goal : w.val = x.val ||| y.val := by
-
-    -- Rearrange to get 2*w = x + y + xor
     have two_or_field : 2*w = x + y + xor := by ring
-
     have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
-
     have x_y_xor_val : (x + y + xor).val = x.val + y.val + (x.val ^^^ y.val) := by
       -- The key insight: from 2*(x ||| y) = x + y + (x ^^^ y), we get
       -- x + y + (x ^^^ y) = 2*(x ||| y) ≤ 2*255 = 510 < 512 < p
@@ -117,22 +113,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
             have : x.val ||| y.val < 256 := Nat.or_lt_two_pow (n:=8) hx_byte hy_byte
             omega
           linarith
-        have : 2 * 255 = 510 := by norm_num
-        have : 510 < 512 := by norm_num
-        have p_gt : 512 < p := p_large_enough.elim
+        have := p_large_enough.elim
         omega
 
       rw [ZMod.val_add_of_lt sum_bound, x_y_val, h_xor]
 
     have two_or : (2*w).val = 2*(x.val ||| y.val) := by
       rw [two_or_field, x_y_xor_val, or_times_two_sub_xor hx_byte hy_byte]
-
-    -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
     have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
       (by linarith [p_large_enough.elim]) two_or
-
-    rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_or
-    exact two_or
+    rw [two_mul_val] at two_or
+    omega
   constructor
   · assumption
   simp only [value_goal]
