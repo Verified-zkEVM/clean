@@ -317,7 +317,7 @@ lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
     norm_num
 
 lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
-    (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
+    (h0 : n0 < p) (h1 : n1 < p) (h2 : n2 < p) (h3 : n3 < p) :
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
                            x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).value =
     n0 + n1 * 256 + n2 * 256^2 + n3 * 256^3 := by
@@ -330,20 +330,23 @@ lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
 
 lemma zero_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
+  have := p_large_enough.elim
   have : (0 : Expression (F p)) = Expression.const ↑0 := by rfl
   repeat rw [this]
-  have h := constU32_value env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have h := constU32_value env 0 0 0 0 (by omega) (by omega) (by omega) (by omega)
   convert h <;> simp
 
 lemma one_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
-  have h := constU32_value env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have := p_large_enough.elim
+  have h := constU32_value env 1 0 0 0 (by omega) (by omega) (by omega) (by omega)
   simp at h
   exact h
 
 lemma const_value (env : Environment (F p)) (n : ℕ) (h : n < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).value = n := by
-  have h' := constU32_value env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)
+  have := p_large_enough.elim
+  have h' := constU32_value env n 0 0 0 (by omega) (by omega) (by omega) (by omega)
   simp at h'
   exact h'
 
