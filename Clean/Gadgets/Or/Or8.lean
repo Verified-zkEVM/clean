@@ -47,6 +47,8 @@ theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
 
   have hx16 : x.toUInt16.toNat = x := UInt16.toNat_ofNat_of_lt (by linarith)
   have hy16 : y.toUInt16.toNat = y := UInt16.toNat_ofNat_of_lt (by linarith)
+  have h_or_byte : x ||| y < 256 := Nat.or_lt_two_pow (n:=8) hx hy
+  have h_xor_byte : x ^^^ y < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
 
   have h_mod_2_to_16 : (2 * (x ||| y)) % 2^16 = (x + y + (x ^^^ y)) % 2^16 := by
     conv_lhs => rw [←hx16, ←hy16]
@@ -54,12 +56,6 @@ theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
     simp only [x16, y16] at h_u16
     simp only [← UInt16.toNat_or]
     norm_num at h_u16 ⊢
-    have : x ^^^ y < 256 := by
-      simp only [instHXorOfXor, Xor.xor, Nat.xor]
-      apply Nat.bitwise_lt_two_pow (f:=bne) (x:=x) (y:=y) (n:=8) <;> omega
-    have : x ||| y < 256 := by
-      simp only [instHOrOfOrOp, OrOp.or, Nat.lor]
-      apply Nat.bitwise_lt_two_pow (f:=or) (x:=x) (y:=y) (n:=8) <;> omega
     repeat rw [Nat.mod_eq_of_lt] <;> try omega
     · repeat rw [Nat.mod_eq_of_lt] at h_u16 <;> try omega
       · simpa
@@ -68,8 +64,6 @@ theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
         omega
     · repeat rw [Nat.mod_eq_of_lt] <;> try omega
 
-  have h_or_byte : x ||| y < 256 := Nat.or_lt_two_pow (n:=8) hx hy
-  have h_xor_byte : x ^^^ y < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   have h_lhs : 2 * (x ||| y) < 2^16 := by linarith
   have h_rhs : x + y + (x ^^^ y) < 2^16 := by linarith
   rw [Nat.mod_eq_of_lt h_lhs, Nat.mod_eq_of_lt h_rhs] at h_mod_2_to_16
