@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
+import Clean.Utils.Tactics.CircuitProofStart
 import Mathlib.Data.Nat.Bitwise
 
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
@@ -203,8 +204,8 @@ def assertBool : FormalAssertion (F p) field where
   Assumptions _ := True
   Spec (x : F p) := IsBool x
 
-  soundness := by simp_all only [circuit_norm, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-  completeness := by simp_all only [circuit_norm, IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
 end Boolean
 
 export Boolean (assertBool)
