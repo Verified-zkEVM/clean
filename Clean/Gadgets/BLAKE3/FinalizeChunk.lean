@@ -210,9 +210,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [ProcessBlocksState.Normalized] at h_assumptions
   simp only [h_assumptions]
   simp only [U32.zero_is_Normalized]
-
-
-
+  simp only [implies_true, Fin.getElem_fin, and_true, true_and]
+  constructor
+  · apply bytesToWords_normalized
+    simp only [h_input]
+    aesop
   sorry
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
