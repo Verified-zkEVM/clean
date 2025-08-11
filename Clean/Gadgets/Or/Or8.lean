@@ -28,8 +28,7 @@ def Spec (input : Inputs (F p)) (z : F p) :=
 def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
   let or ← witness fun eval => (eval x).val ||| (eval y).val
-  -- we prove OR correct using an XOR lookup and the following identity:
-  -- xor = 2*or - x - y
+  -- we prove OR correct using an XOR lookup
   let xor := 2*or - x - y
   lookup ByteXorTable (x, y, xor)
   return or

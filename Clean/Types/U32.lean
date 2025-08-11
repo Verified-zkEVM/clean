@@ -275,12 +275,8 @@ lemma bitwise_componentwise (f : Bool → Bool → Bool)
     256 * (Nat.bitwise f x.x2.val y.x2.val +
     256 * Nat.bitwise f x.x3.val y.x3.val)) := by
   intro f_f_f
-  -- Use the fact that bitwise operations respect base-256 representation
-  -- Since 256 = 2^8, bits 0-7 come from x0/y0, bits 8-15 from x1/y1, etc.
   simp only [value]
 
-  -- We'll use the fact that bitwise operations on disjoint bit ranges combine additively
-  -- when the ranges are aligned to powers of 2
   have ⟨hx0, hx1, hx2, hx3⟩ := x_norm
   have ⟨hy0, hy1, hy2, hy3⟩ := y_norm
   apply Nat.eq_of_testBit_eq
@@ -320,7 +316,6 @@ lemma bitwise_componentwise (f : Bool → Bool → Bool)
   rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
   aesop
 
--- Specific lemma for OR on U32
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
     x.value ||| y.value =

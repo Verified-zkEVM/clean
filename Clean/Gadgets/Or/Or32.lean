@@ -29,7 +29,6 @@ instance : ProvableStruct Inputs where
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let ⟨x, y⟩ := input
 
-  -- Apply Or8.circuit to each byte pair
   let z0 ← Or8.circuit ⟨x.x0, y.x0⟩
   let z1 ← Or8.circuit ⟨x.x1, y.x1⟩
   let z2 ← Or8.circuit ⟨x.x2, y.x2⟩
