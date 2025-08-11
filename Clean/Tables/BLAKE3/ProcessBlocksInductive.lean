@@ -15,6 +15,7 @@ namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
 open Specs.BLAKE3
 
+section
 variable {p : ℕ} [Fact p.Prime] [p_large: Fact (p > 2^32)]
 -- Add the additional constraint needed by Compress
 instance : Fact (p > 2^16 + 2^8) := .mk (by
@@ -22,16 +23,12 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
-lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  apply U32.const_is_Normalized
-  simp only [blockLen]
-  omega
+attribute [circuit_norm] blockLen
 
 lemma U32_blockLen_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).value = blockLen := by
+    (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = blockLen := by
   apply U32.const_value
-  simp only [blockLen]
+  simp only [circuit_norm]
   omega
 
 /--
@@ -268,6 +265,7 @@ lemma step_process_block (env : Environment (F p))
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+  have := p_large.elim
   simp only [step, circuit_norm] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
@@ -282,12 +280,16 @@ lemma step_process_block (env : Environment (F p))
     clear h_holds
     simp only [ProcessBlocksState.Normalized] at acc_Normalized
     simp only [BlockInput.Normalized] at x_Normalized
-    simp only [acc_Normalized, x_Normalized, U32.zero_is_Normalized, U32_blockLen_is_Normalized]
+    simp only [acc_Normalized, x_Normalized, U32.zero_is_Normalized]
+    simp only [U32.Normalized]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
-      Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise]
+      Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise, circuit_norm, explicit_provable_type]
+    simp only [ZMod.val_zero, Nat.ofNat_pos, and_true]
     constructor
-    · rw [ProvableType.eval_field, eval_mul]
-      simp only [Expression.eval, chunkStart]
+    · rw [ZMod.val_ofNat_of_lt]
+      · omega
+      linarith
+    · simp only [Expression.eval, chunkStart]
       split at h_iszero
       · norm_num at h_iszero ⊢
         simp only [h_iszero, ZMod.val_one]
@@ -295,10 +297,7 @@ lemma step_process_block (env : Environment (F p))
       · norm_num at h_iszero ⊢
         simp only [h_iszero]
         norm_num
-    · simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
-        List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
-        ZMod.val_zero, Nat.ofNat_pos]
-  )
+    )
   rcases h_holds with ⟨ h_first_half, h_holds ⟩
   specialize h_first_half (by simp only [BLAKE3StateFirstHalf.circuit, h_compress])
   dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
@@ -469,8 +468,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       constructor
       · simp_all
       constructor
-      · -- goal looks lemma-worthy
-        simp only [U32_blockLen_is_Normalized]
+      · apply U32.const_is_Normalized
+        linarith
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
@@ -500,7 +499,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
         simp only [h_assumptions]
-        simp only [U32_blockLen_is_Normalized, U32.zero_is_Normalized]
+        simp only [U32.zero_is_Normalized]
         constructor
         · trivial
         constructor
@@ -510,7 +509,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         constructor
         · trivial
         constructor
-        · trivial
+        · apply U32.const_is_Normalized
+          linarith
         simp only [U32.Normalized_componentwise, chunkStart]
         constructor
         · rw [ProvableType.eval_field, eval_mul]
@@ -548,4 +548,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     simp only [circuit_norm]
     omega
 
+end
 end Tables.BLAKE3.ProcessBlocksInductive
