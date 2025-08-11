@@ -60,7 +60,7 @@ lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (Provab
   have h4 : base + 3 < 64 := by omega
   simp only [fromElements]
   simp only [id_eq, Fin.getElem_fin, Vector.getElem_map]
-  simp only [Vector.getElem_toChunks]
+  -- simp only [Vector.getElem_toChunks] <-- TODO: add this lemma
   sorry
 
 omit [Fact (Nat.Prime p)] p_large_enough in
@@ -135,7 +135,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   apply And.intro
   · trivial
-  simp only [h_input]
   rcases h_env with ⟨h_iszero, h_env⟩
   specialize h_iszero trivial
   simp only [IsZero.circuit, IsZero.Spec] at h_iszero
