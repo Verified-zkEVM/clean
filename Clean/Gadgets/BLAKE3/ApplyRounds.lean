@@ -562,7 +562,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized env
-  · simp only [circuit_norm]
+  · simp only [h_input, circuit_norm]
     rfl
   · simp only [Assumptions]
     aesop

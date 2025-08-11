@@ -92,7 +92,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
 
 theorem soundness : Soundness F (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, ProvableType.fromElements_eq_iff] at h_input
+  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   apply foldl_isZero_eq_one_iff <;> assumption
 
 theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by

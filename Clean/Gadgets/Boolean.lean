@@ -1,5 +1,6 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
+import Clean.Utils.Tactics.CircuitProofStart
 import Mathlib.Data.Nat.Bitwise
 
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
@@ -84,7 +85,7 @@ theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBoo
 
 /-- If x is boolean, then NOT x is boolean -/
 theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
-    IsBool (1 + x - 2 * x) := by
+    IsBool (1 + x - 2*x) := by
   rcases hx with hx0 | hx1
   · simp [hx0, add_zero, zero_mul, sub_zero, one]
   · simp only [hx1]
@@ -93,7 +94,7 @@ theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
 
 /-- If x and y are boolean, then x XOR y is boolean -/
 theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x + y - 2 * x * y) := by
+    IsBool (x + y - 2*x*y) := by
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, mul_zero, sub_zero, hy]
   · rcases hy with hy0 | hy1
@@ -145,7 +146,7 @@ variable {p : ℕ} [Fact p.Prime]
 
 /-- For boolean field elements, XOR operation matches bitwise XOR of values -/
 theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
-    (a + b - 2 * a * b).val = a.val ^^^ b.val := by
+    (a + b - 2*a*b).val = a.val ^^^ b.val := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]; norm_num
 
 /-- For boolean field elements, AND operation matches bitwise AND of values -/
@@ -203,8 +204,8 @@ def assertBool : FormalAssertion (F p) field where
   Assumptions _ := True
   Spec (x : F p) := IsBool x
 
-  soundness := by simp_all only [circuit_norm, IsBool.iff_mul_sub_one, sub_eq_add_neg]
-  completeness := by simp_all only [circuit_norm, IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
 end Boolean
 
 export Boolean (assertBool)

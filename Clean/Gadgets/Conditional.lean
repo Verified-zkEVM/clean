@@ -49,7 +49,7 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   main
   localLength _ := 0
 
-theorem soundness [DecidableEq F] : Soundness F (elaborated (F := F) (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
   circuit_proof_start
   rcases input
   simp only [Inputs.mk.injEq] at h_input
@@ -76,7 +76,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F := F) (M := M)) A
     simp only [this, if_true]
     ring_nf
 
-theorem completeness [DecidableEq F] : Completeness F (elaborated (F := F) (M := M)) Assumptions := by
+theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
   circuit_proof_start
 
 /--
