@@ -316,16 +316,6 @@ lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
     simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
     norm_num
 
-lemma constU32_is_Normalized (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
-    (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
-    (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
-                           x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).Normalized := by
-  simp only [explicit_provable_type, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  cases p_large_enough
-  and_intros <;> rw [ZMod.val_natCast_of_lt] <;> omega
-
 lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
     (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
