@@ -33,8 +33,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   return or
 
 -- OR / XOR identity that justifies the circuit
-
-theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
+private theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
     2 * (x ||| y) = x + y + (x ^^^ y) := by
   -- proof strategy: prove a UInt16 version of the identity using `bv_decide`,
   -- and show that the UInt16 identity is the same as the Nat version since everything is small enough
@@ -68,14 +67,14 @@ theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
   rw [Nat.mod_eq_of_lt h_lhs, Nat.mod_eq_of_lt h_rhs] at h_mod_2_to_16
   exact h_mod_2_to_16
 
-theorem or_times_two_sub_xor' {x y : ℕ} (hx : x < 256) (hy : y < 256) :
+private theorem or_times_two_sub_xor' {x y : ℕ} (hx : x < 256) (hy : y < 256) :
     2 * (x ||| y) - x - y = (x ^^^ y) := by
   have := or_times_two_sub_xor hx hy
   omega
 
 -- corollaries that we also need
 
-theorem two_or_ge_add {x y : ℕ} (hx : x < 256) (hy : y < 256) : 2 * (x ||| y) ≥ x + y := by
+private theorem two_or_ge_add {x y : ℕ} (hx : x < 256) (hy : y < 256) : 2 * (x ||| y) ≥ x + y := by
   have h := or_times_two_sub_xor hx hy
   linarith
 
@@ -90,7 +89,6 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
 instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   localLength _ := 1
-  output _ i := var ⟨i⟩
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
