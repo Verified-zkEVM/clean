@@ -1,6 +1,5 @@
 import Clean.Circuit.Basic
 import Clean.Gadgets.Xor.ByteXorTable
-import Clean.Utils.Primes
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
