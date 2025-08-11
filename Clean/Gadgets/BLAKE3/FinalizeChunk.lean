@@ -143,9 +143,14 @@ def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   output.map U32.value = Specs.BLAKE3.finalizeChunk chunk_state input.base_flags.value ∧
   (∀ i : Fin 8, output[i].Normalized)
 
+private lemma ZMod_val_chunkEnd :
+    ZMod.val (n:=p) ↑chunkEnd = 2 := by
+  have := p_large_enough.elim
+  simp only [ZMod.val_natCast, chunkEnd, pow_one]
+  rw [Nat.mod_eq_of_lt]; omega
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-
   sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
@@ -192,8 +197,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     simp only [h_or]
     constructor
     · trivial
-    apply U32.const_is_Normalized
-    native_decide
+    simp only [circuit_norm, ZMod.val_zero]
+    rw [ZMod_val_chunkEnd]
+    omega
   simp only [Compress.circuit, Compress.Assumptions, ApplyRounds.Assumptions]
   rcases h_env with ⟨h_or2, h_env⟩
   specialize h_or2 (by
@@ -201,20 +207,22 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     simp only [h_or]
     constructor
     · trivial
-    apply U32.const_is_Normalized
-    native_decide
+    simp only [circuit_norm, ZMod.val_zero]
+    rw [ZMod_val_chunkEnd]
+    omega
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
   simp only [h_or2]
   simp only [ProcessBlocksState.Normalized] at h_assumptions
   simp only [h_assumptions]
-  simp only [U32.zero_is_Normalized]
-  simp only [implies_true, Fin.getElem_fin, and_true, true_and]
+  simp only [circuit_norm, ZMod.val_zero]
+  simp only [Nat.ofNat_pos, and_self, and_true, true_and]
   constructor
   · apply bytesToWords_normalized
     simp only [h_input]
     aesop
-  sorry
+  simp only [h_input]
+  omega
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   elaborated with Assumptions, Spec, soundness, completeness
