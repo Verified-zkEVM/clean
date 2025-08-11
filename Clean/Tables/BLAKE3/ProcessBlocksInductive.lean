@@ -15,6 +15,7 @@ namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
 open Specs.BLAKE3
 
+section
 variable {p : ℕ} [Fact p.Prime] [p_large: Fact (p > 2^32)]
 -- Add the additional constraint needed by Compress
 instance : Fact (p > 2^16 + 2^8) := .mk (by
@@ -22,16 +23,18 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
-lemma U32_blockLen_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  apply U32.const_is_Normalized
-  simp only [blockLen]
-  omega
+private lemma ZMod_val_64 :
+    ZMod.val (n:=p) 64 = 64 := by
+  rw [ZMod.val_ofNat_of_lt]
+  have := p_large.elim
+  linarith
 
-lemma U32_blockLen_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := Expression.const ↑blockLen, x1 := 0, x2 := 0, x3 := 0 }).value = blockLen := by
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 -- only in the current section
+
+private lemma U32_blockLen_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
   apply U32.const_value
-  simp only [blockLen]
+  simp only [circuit_norm]
   omega
 
 /--
@@ -74,7 +77,7 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.blocks_compressed.Normalized
 
 omit p_large in
-lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
+private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
     acc_blocks_compressed
     (h_iszero : Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) =
       if acc_blocks_compressed.value = 0 then 1 else 0) :
@@ -88,16 +91,13 @@ lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value ac
                 0 0 0 )).value =
     if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
   intros h_eval h_normalized
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, h_eval]
+  simp only [explicit_provable_type, circuit_norm, fromElements, toVars, toElements]
   simp only [ProcessBlocksState.Normalized] at h_normalized
-  simp only [Expression.eval]
-  simp only [chunkStart]
-  simp only [h_iszero]
+  simp only [Expression.eval, chunkStart, h_iszero]
   split
   · simp only [U32.value]
     norm_num
-    simp only [ZMod.val_one]
+    simp only [circuit_norm]
   · simp only [U32.value]
     norm_num
 
@@ -256,7 +256,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
 -/
-lemma step_process_block (env : Environment (F p))
+private lemma step_process_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
@@ -268,6 +268,7 @@ lemma step_process_block (env : Environment (F p))
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+  have := p_large.elim
   simp only [step, circuit_norm] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
@@ -282,12 +283,14 @@ lemma step_process_block (env : Environment (F p))
     clear h_holds
     simp only [ProcessBlocksState.Normalized] at acc_Normalized
     simp only [BlockInput.Normalized] at x_Normalized
-    simp only [acc_Normalized, x_Normalized, U32.zero_is_Normalized, U32_blockLen_is_Normalized]
+    simp only [circuit_norm] at acc_Normalized x_Normalized
+    simp only [acc_Normalized, x_Normalized, circuit_norm]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
-      Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise]
+      Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise, circuit_norm, explicit_provable_type]
+    simp only [Nat.ofNat_pos, and_true, true_and]
     constructor
-    · rw [ProvableType.eval_field, eval_mul]
-      simp only [Expression.eval, chunkStart]
+    · linarith
+    · simp only [Expression.eval, chunkStart]
       split at h_iszero
       · norm_num at h_iszero ⊢
         simp only [h_iszero, ZMod.val_one]
@@ -295,16 +298,13 @@ lemma step_process_block (env : Environment (F p))
       · norm_num at h_iszero ⊢
         simp only [h_iszero]
         norm_num
-    · simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
-        List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
-        ZMod.val_zero, Nat.ofNat_pos]
-  )
+    )
   rcases h_holds with ⟨ h_first_half, h_holds ⟩
   specialize h_first_half (by simp only [BLAKE3StateFirstHalf.circuit, h_compress])
   dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
-    simp only [Addition32.circuit, Addition32.Assumptions, U32.one_is_Normalized]
+    simp only [Addition32.circuit, Addition32.Assumptions, circuit_norm, ZMod.val_one]
     dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
     simp [acc_Normalized])
   dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
@@ -325,7 +325,7 @@ lemma step_process_block (env : Environment (F p))
     · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
       simp only [h_compress.1]
       clear h_compress
-      simp only [U32.zero_value, startFlag, U32_blockLen_value]
+      simp only [U32.zero_value, startFlag, U32_blockLen_value, circuit_norm]
       norm_num at h_iszero
       simp only [mul_zero, add_zero, id_eq]
       rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
@@ -356,7 +356,7 @@ lemma step_process_block (env : Environment (F p))
 Lemma that handles the case when block_exists ≠ 1 in the step function.
 Shows that the step function returns the accumulator unchanged when skipping a block.
 -/
-lemma step_skip_block (env : Environment (F p))
+private lemma step_skip_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
@@ -428,6 +428,7 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initial
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
     input.Normalized ∧ i < 2^32
 
+set_option maxHeartbeats 300000 in
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions] at *
@@ -439,6 +440,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       rw [← get_input]
       specialize h_inputs i (by omega)
       simp only [h_inputs])
+    have := p_large.elim
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
@@ -462,15 +464,15 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       · simp_all
       constructor
       · simp only [h_assumptions]
-        native_decide
+        trivial
       constructor
-      · -- goal looks lemma-worthy
-        simp only [U32.zero_is_Normalized]
+      · simp only [circuit_norm]
+        omega
       constructor
       · simp_all
       constructor
-      · -- goal looks lemma-worthy
-        simp only [U32_blockLen_is_Normalized]
+      · simp only [circuit_norm]
+        omega
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
@@ -487,9 +489,9 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         · simp only [h_witnesses_iszero, Expression.eval]
           norm_num
       · norm_num
-        simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
+        simp only [explicit_provable_type, circuit_norm, toVars, Vector.map,
           List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
-          ZMod.val_zero, Nat.ofNat_pos]
+          Nat.ofNat_pos]
     constructor
     · dsimp only [BLAKE3StateFirstHalf.circuit]
       dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
@@ -500,33 +502,34 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
         simp only [h_assumptions]
-        simp only [U32_blockLen_is_Normalized, U32.zero_is_Normalized]
         constructor
         · trivial
         constructor
         · trivial
         constructor
-        · trivial
+        · simp only [circuit_norm]
+          omega
         constructor
         · trivial
         constructor
-        · trivial
+        · simp only [circuit_norm]
+          omega
         simp only [U32.Normalized_componentwise, chunkStart]
         constructor
         · rw [ProvableType.eval_field, eval_mul]
           split at h_witnesses_iszero
           · simp only [h_witnesses_iszero, Expression.eval]
             norm_num
-            simp only [ZMod.val_one]
+            simp only [circuit_norm]
             omega
           · simp only [h_witnesses_iszero, Expression.eval]
             norm_num
         · norm_num
-          simp only [ProvableType.eval, explicit_provable_type, toVars, Vector.map,
+          simp only [circuit_norm, explicit_provable_type, toVars, Vector.map,
             List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
-            ZMod.val_zero, Nat.ofNat_pos])
+            Nat.ofNat_pos])
       simp only [h_compress]
-    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, U32.one_is_Normalized, Conditional.circuit, Conditional.Assumptions, IsBool]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions, IsBool]
 
 /--
 The InductiveTable for processBlocks.
@@ -548,4 +551,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
     simp only [circuit_norm]
     omega
 
+end
 end Tables.BLAKE3.ProcessBlocksInductive

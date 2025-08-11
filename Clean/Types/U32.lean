@@ -272,9 +272,11 @@ lemma value_injective_on_normalized (x y : U32 (F p))
 
 end ValueInjectivity
 
+omit p_large_enough in
 /--
 Lemma showing that U32 Normalized property is equivalent to all components being < 256
 -/
+@[circuit_norm]
 lemma Normalized_componentwise (env : Environment (F p)) (a b c d : Var field (F p)):
     (eval (α := U32) env
     { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
@@ -314,64 +316,37 @@ lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
     simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
     norm_num
 
-lemma constU32_is_Normalized (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
-    (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
-    (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
-                           x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).Normalized := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Expression.eval, fromElements, U32.Normalized]
-  cases p_large_enough
-  and_intros <;> rw [ZMod.val_natCast_of_lt] <;> omega
-
 lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
-    (h0 : n0 < 256) (h1 : n1 < 256) (h2 : n2 < 256) (h3 : n3 < 256) :
+    (h0 : n0 < p) (h1 : n1 < p) (h2 : n2 < p) (h3 : n3 < p) :
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
                            x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).value =
     n0 + n1 * 256 + n2 * 256^2 + n3 * 256^3 := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, toVars, toElements]
+  simp only [explicit_provable_type, toVars, toElements]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
   simp only [Expression.eval, fromElements, U32.value]
   cases p_large_enough
   norm_num
   repeat rw [ZMod.val_natCast_of_lt] <;> try omega
 
--- Specialized versions using the general lemmas
-lemma zero_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  have : (0 : Expression (F p)) = Expression.const ↑0 := by rfl
-  repeat rw [this]
-  have h := constU32_is_Normalized env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  convert h <;> simp
-
 lemma zero_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 0, x1 := 0, x2 := 0, x3 := 0 }).value = 0 := by
+  have := p_large_enough.elim
   have : (0 : Expression (F p)) = Expression.const ↑0 := by rfl
   repeat rw [this]
-  have h := constU32_value env 0 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have h := constU32_value env 0 0 0 0 (by omega) (by omega) (by omega) (by omega)
   convert h <;> simp
-
-lemma one_is_Normalized (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  have h := constU32_is_Normalized env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  simp at h
-  exact h
 
 lemma one_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
-  have h := constU32_value env 1 0 0 0 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have := p_large_enough.elim
+  have h := constU32_value env 1 0 0 0 (by omega) (by omega) (by omega) (by omega)
   simp at h
   exact h
 
-lemma const_is_Normalized (env : Environment (F p)) (n : ℕ) (h : n < 256) :
-    (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  have h' := constU32_is_Normalized env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)
-  simp at h'
-  exact h'
-
 lemma const_value (env : Environment (F p)) (n : ℕ) (h : n < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).value = n := by
-  have h' := constU32_value env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)
+  have := p_large_enough.elim
+  have h' := constU32_value env n 0 0 0 (by omega) (by omega) (by omega) (by omega)
   simp at h'
   exact h'
 
