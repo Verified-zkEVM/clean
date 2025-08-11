@@ -272,6 +272,7 @@ lemma value_injective_on_normalized (x y : U32 (F p))
 
 end ValueInjectivity
 
+omit p_large_enough in
 /--
 Lemma showing that U32 Normalized property is equivalent to all components being < 256
 -/
