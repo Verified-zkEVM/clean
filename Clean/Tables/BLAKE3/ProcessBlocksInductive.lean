@@ -23,10 +23,10 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
-attribute [circuit_norm] blockLen
+attribute [local circuit_norm] blockLen -- only in the current section
 
-lemma U32_blockLen_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = blockLen := by
+private lemma U32_blockLen_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
   apply U32.const_value
   simp only [circuit_norm]
   omega
@@ -324,7 +324,7 @@ lemma step_process_block (env : Environment (F p))
     · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
       simp only [h_compress.1]
       clear h_compress
-      simp only [U32.zero_value, startFlag, U32_blockLen_value]
+      simp only [U32.zero_value, startFlag, U32_blockLen_value, circuit_norm]
       norm_num at h_iszero
       simp only [mul_zero, add_zero, id_eq]
       rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
