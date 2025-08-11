@@ -43,26 +43,24 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
-  rcases input_x with ⟨x0, x1, x2, x3⟩
-  rcases input_y with ⟨y0, y1, y2, y3⟩
-  rcases input_var_x with ⟨x0_var, x1_var, x2_var, x3_var⟩
-  rcases input_var_y with ⟨y0_var, y1_var, y2_var, y3_var⟩
+  rcases input_x
+  rcases input_y
+  rcases input_var_x
+  rcases input_var_y
   simp only [U32.Normalized] at *
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢ l_components
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
+  simp only [Or8.circuit, Or8.Assumptions, Or8.Spec, h_input] at h_holds
   rcases h_holds with ⟨h_holds1, h_holds⟩
-  specialize h_holds1 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
+  specialize h_holds1 (by omega)
   rcases h_holds with ⟨h_holds2, h_holds⟩
-  specialize h_holds2 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
+  specialize h_holds2 (by omega)
   rcases h_holds with ⟨h_holds3, h_holds4⟩
-  specialize h_holds3 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
-  specialize h_holds4 (by simp only [Or8.circuit, Or8.Assumptions, h_input]; omega)
-  simp only [Or8.circuit, Or8.Spec] at h_holds1 h_holds2 h_holds3 h_holds4
+  specialize h_holds3 (by omega)
+  specialize h_holds4 (by omega)
   simp only [U32.value] at ⊢ l_components
-  simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2]
-  simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1]
-  simp only [h_input]
-  simp only [l_components]
+  simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2] -- use the Normalized conditions
+  simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1, l_components]
   ring_nf
   simp
 
@@ -74,7 +72,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
   simp only [Or8.circuit, Or8.Assumptions, h_input]
   simp only [Assumptions, U32.Normalized] at h_assumptions
-  obtain ⟨ ⟨ hx0, hx1, hx2, hx3 ⟩, ⟨ hy0, hy1, hy2, hy3 ⟩ ⟩ := h_assumptions
   omega
 
 def circuit : FormalCircuit (F p) Inputs U32 :=
