@@ -351,12 +351,6 @@ lemma one_value (env : Environment (F p)) :
   simp at h
   exact h
 
-lemma const_is_Normalized (env : Environment (F p)) (n : ℕ) (h : n < 256) :
-    (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).Normalized := by
-  have h' := constU32_is_Normalized env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)
-  simp at h'
-  exact h'
-
 lemma const_value (env : Environment (F p)) (n : ℕ) (h : n < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).value = n := by
   have h' := constU32_value env n 0 0 0 h (by norm_num) (by norm_num) (by norm_num)

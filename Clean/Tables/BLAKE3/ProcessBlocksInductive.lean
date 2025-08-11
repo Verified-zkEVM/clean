@@ -23,7 +23,13 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
-attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one -- only in the current section
+private lemma ZMod_val_64 :
+    ZMod.val (n:=p) 64 = 64 := by
+  rw [ZMod.val_ofNat_of_lt]
+  have := p_large.elim
+  linarith
+
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 -- only in the current section
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
@@ -283,9 +289,7 @@ private lemma step_process_block (env : Environment (F p))
       Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise, circuit_norm, explicit_provable_type]
     simp only [Nat.ofNat_pos, and_true, true_and]
     constructor
-    · rw [ZMod.val_ofNat_of_lt]
-      · omega
-      linarith
+    · linarith
     · simp only [Expression.eval, chunkStart]
       split at h_iszero
       · norm_num at h_iszero ⊢
@@ -424,6 +428,7 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initial
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
     input.Normalized ∧ i < 2^32
 
+set_option maxHeartbeats 300000 in
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions] at *
@@ -435,6 +440,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       rw [← get_input]
       specialize h_inputs i (by omega)
       simp only [h_inputs])
+    have := p_large.elim
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
@@ -461,12 +467,12 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         native_decide
       constructor
       · simp only [circuit_norm]
-        omega
+        native_decide
       constructor
       · simp_all
       constructor
-      · apply U32.const_is_Normalized
-        linarith
+      · simp only [circuit_norm]
+        native_decide
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
@@ -506,8 +512,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         constructor
         · trivial
         constructor
-        · apply U32.const_is_Normalized
-          linarith
+        · simp only [circuit_norm]
+          omega
         simp only [U32.Normalized_componentwise, chunkStart]
         constructor
         · rw [ProvableType.eval_field, eval_mul]
