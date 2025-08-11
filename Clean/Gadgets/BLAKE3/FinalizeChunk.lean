@@ -48,20 +48,38 @@ def bytesToWords (bytes : Var (ProvableVector field 64) (F p)) : Var (ProvableVe
       bytes[base + 2]
       bytes[base + 3]
 
+omit p_large_enough in
 lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
     (h_bytes : ∀ i : Fin 64, (eval env bytes_var)[i].val < 256) :
     ∀ i : Fin 16, (eval env (bytesToWords bytes_var))[i].Normalized := by
   intro i
-  simp only [bytesToWords, U32.Normalized, eval]
-  let base := i.val * 4
-  have h1 : base < 64 := by omega
-  have h2 : base + 1 < 64 := by omega
-  have h3 : base + 2 < 64 := by omega
-  have h4 : base + 3 < 64 := by omega
-  simp only [fromElements]
-  simp only [id_eq, Fin.getElem_fin, Vector.getElem_map]
-  -- simp only [Vector.getElem_toChunks] <-- TODO: add this lemma
-  sorry
+  simp only [bytesToWords]
+  simp only [id_eq, Fin.getElem_fin]
+  have h0 := h_bytes (↑i * 4)
+  have h1 := h_bytes (↑i * 4 + 1)
+  have h2 := h_bytes (↑i * 4 + 2)
+  have h3 := h_bytes (↑i * 4 + 3)
+  simp only [circuit_norm, eval_vector] at h0 h1 h2 h3 ⊢
+  simp only [Vector.getElem_ofFn]
+  simp only [U32.Normalized]
+  simp only [explicit_provable_type, toVars]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+  constructor
+  · convert h0
+    simp only [Fin.val_mul, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
+    omega
+  constructor
+  · convert h1
+    simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
+    omega
+  constructor
+  · convert h2
+    simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
+    omega
+  · convert h3
+    simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt]
+    omega
+
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
