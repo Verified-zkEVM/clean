@@ -464,15 +464,15 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       · simp_all
       constructor
       · simp only [h_assumptions]
-        native_decide
+        trivial
       constructor
       · simp only [circuit_norm]
-        native_decide
+        omega
       constructor
       · simp_all
       constructor
       · simp only [circuit_norm]
-        native_decide
+        omega
       simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
