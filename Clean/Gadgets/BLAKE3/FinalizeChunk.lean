@@ -153,6 +153,7 @@ private lemma compress_arg2_eq (env : Environment (F p))
     (input_var_buffer_data : Vector (Expression (F p)) 64)
     (input_buffer_data : Vector (F p) 64)
     (input_buffer_len : F p)
+    (h_small : ZMod.val input_buffer_len ≤ 64)
     (h_data : eval (α:=ProvableVector field 64) env input_var_buffer_data = input_buffer_data)
     (h_rest : ∀ (i : Fin 64), ↑i ≥ ZMod.val input_buffer_len → input_buffer_data[↑i] = 0) :
     Vector.map U32.value (Vector.map (eval env) (bytesToWords input_var_buffer_data)) =
@@ -165,8 +166,32 @@ private lemma compress_arg2_eq (env : Environment (F p))
   rw [Function.comp_apply]
   simp only [List.drop_zero, List.map_take, List.length_take, List.length_map, Array.length_toList,
     Vector.size_toArray, Nat.reducePow]
-  -- need somethinge like, beyond input_buffer_len it's all zero
-  sorry
+  simp only [explicit_provable_type, toVars]
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value]
+  norm_num
+  congr
+  · rw [List.getElem_append]
+    simp only [List.length_take]
+    simp only [List.length_map]
+    split
+    · simp only [List.getElem_take]
+      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
+      simp only [← ProvableType.eval_field]
+      have := eval_vector (α:=field) (env:=env) (n:=64)
+      rw [this] at h_data
+      simp only [← h_data]
+      simp
+    · simp only [List.getElem_replicate]
+      simp only [← ProvableType.eval_field]
+      have := eval_vector (α:=field) (env:=env) (n:=64)
+      rw [this] at h_data
+      simp only [← h_data] at h_rest
+      specialize h_rest (i * 4)
+      -- input_buffer_len <= 64 is needed
+      sorry
+  · sorry
+  · sorry
+  · sorry
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
 omit p_large_enough in
@@ -300,6 +325,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
           ring
       · simp only [h_input]
       · simp only [h_assumptions]
+    · simp only [h_assumptions]
     · simp only [h_input]
     · simp_all
   · rintro ⟨i, h_i⟩
