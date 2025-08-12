@@ -183,7 +183,10 @@ private lemma compress_chunkEnd_eq (env : Environment (F p)) :
     (eval (α:=U32) env { x0 := Expression.const ↑chunkEnd, x1 := 0, x2 := 0, x3 := 0 }).value = chunkEnd := by
   simp only [eval, U32.value]
   simp only [toVars, toElements, fromElements]
-  sorry
+  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow, Expression.eval]
+  rw [ZMod_val_chunkEnd]
+  simp only [chunkEnd, ZMod.val_zero]
+  rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
