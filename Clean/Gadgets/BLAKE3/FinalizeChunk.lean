@@ -235,7 +235,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       simp only [Expression.eval]
       norm_num
       rw [ZMod_val_chunkEnd]
-      sorry
+      rfl
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
     rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
