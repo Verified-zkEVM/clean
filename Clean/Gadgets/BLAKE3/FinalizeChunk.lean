@@ -203,7 +203,39 @@ private lemma compress_arg2_eq (env : Environment (F p))
       simp only [← h_rest]
       congr
       omega
-  · sorry
+  · rw [List.getElem_append]
+    simp only [List.length_take]
+    simp only [List.length_map]
+    split
+    · simp only [List.getElem_take]
+      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
+      simp only [← ProvableType.eval_field]
+      have := eval_vector (α:=field) (env:=env) (n:=64)
+      rw [this] at h_data
+      simp only [← h_data]
+      simp
+    · rename_i h_large
+      simp only [List.getElem_replicate]
+      simp only [← ProvableType.eval_field]
+      have := eval_vector (α:=field) (env:=env) (n:=64)
+      rw [this] at h_data
+      simp only [← h_data] at h_rest
+      rw [min_eq_left] at h_large
+      rotate_left
+      · convert h_small
+        simp
+      specialize h_rest (i * 4 + 1) (by
+        simp only [Fin.val_add, Fin.val_mul]
+        simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
+        omega)
+      simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
+        Vector.getElem_map] at h_rest
+      simp only [ZMod.val_eq_zero]
+      simp only [Fin.val_add, Fin.val_mul] at h_rest
+      simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod] at h_rest
+      simp only [← h_rest]
+      congr
+      omega
   · sorry
   · sorry
 
