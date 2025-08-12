@@ -169,6 +169,7 @@ private lemma compress_arg3_eq (env : Environment (F p))
   sorry
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
+omit p_large_enough in
 private lemma compress_arg4_eq (env : Environment (F p))
     (input_var_buffer_len : Expression (F p))
     (input_buffer_len : F p)
@@ -180,8 +181,12 @@ private lemma compress_arg4_eq (env : Environment (F p))
   simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
     List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
     List.length_map, Array.length_toList, Vector.size_toArray]
-  -- a condition is missing. ZMod.val input_buffer_len is at most 64
-  sorry
+  rw [Nat.min_eq_left]
+  · simp only [explicit_provable_type, toVars]
+    simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value, h_len]
+    simp only [Expression.eval, ZMod.val_zero]
+    ring
+  assumption
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
 private lemma compress_chunkEnd_eq (env : Environment (F p)) :
