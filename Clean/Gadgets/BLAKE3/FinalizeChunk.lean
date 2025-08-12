@@ -149,6 +149,42 @@ private lemma ZMod_val_chunkEnd :
   simp only [ZMod.val_natCast, chunkEnd, pow_one]
   rw [Nat.mod_eq_of_lt]; omega
 
+-- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
+private lemma compress_arg2_eq (env : Environment (F p))
+    (input_var_buffer_data : Vector (Expression (F p)) 64)
+    (input_buffer_data : Vector (F p) 64)
+    (input_buffer_len : F p)
+    (h_data : eval (α:=ProvableVector field 64) env input_var_buffer_data = input_buffer_data) :
+    Vector.map U32.value (Vector.map (eval env) (bytesToWords input_var_buffer_data)) =
+    Specs.BLAKE3.bytesToWords (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList) := by
+  sorry
+
+-- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
+private lemma compress_arg3_eq (env : Environment (F p))
+    (input_state_chunk_counter : U32 (F p)) :
+    input_state_chunk_counter.value + 2 ^ 32 * (eval env ({ x0 := 0, x1 := 0, x2 := 0, x3 := 0 } : U32 (Expression (F p)))).value =
+    input_state_chunk_counter.value := by
+  simp only [eval, U32.value]
+  simp only [toVars, toElements, fromElements]
+  sorry
+
+-- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
+private lemma compress_arg4_eq (env : Environment (F p))
+    (input_var_buffer_len : Expression (F p))
+    (input_buffer_len : F p)
+    (input_buffer_data : Vector (F p) 64)
+    (h_len : Expression.eval env input_var_buffer_len = input_buffer_len) :
+    (eval env ({ x0 := input_var_buffer_len, x1 := 0, x2 := 0, x3 := 0 } : U32 (Expression (F p)))).value =
+    (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList).length := by
+  sorry
+
+-- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
+private lemma compress_chunkEnd_eq (env : Environment (F p)) :
+    (eval (α:=U32) env { x0 := Expression.const ↑chunkEnd, x1 := 0, x2 := 0, x3 := 0 }).value = chunkEnd := by
+  simp only [eval, U32.value]
+  simp only [toVars, toElements, fromElements]
+  sorry
+
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   rcases h_holds with ⟨h_IsZero, h_holds⟩
@@ -173,7 +209,31 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       rw [ZMod_val_chunkEnd]
       decide)
   simp only [Compress.circuit, Compress.Assumptions, Compress.Spec] at h_Compress
-  specialize h_Compress (by sorry)
+  specialize h_Compress (by
+    simp only [ApplyRounds.Assumptions]
+    simp only [h_Or32_2.2]
+    simp only [ProcessBlocksState.Normalized] at h_assumptions
+    constructor
+    · simp only [h_assumptions]
+      trivial
+    constructor
+    · apply bytesToWords_normalized
+      aesop
+    constructor
+    · simp only [U32.Normalized_componentwise]
+      simp only [eval]
+      simp only [and_self, toVars, toElements, fromElements]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Expression.eval, ZMod.val_zero]
+      decide
+    constructor
+    · simp only [h_assumptions]
+    · simp only [U32.Normalized_componentwise]
+      simp only [eval]
+      simp only [and_self, toVars, toElements, fromElements]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Expression.eval, ZMod.val_zero]
+      simp only [h_input]
+      simp only [Nat.ofNat_pos, and_true]
+      omega)
   constructor
   · simp only [finalizeChunk]
     simp only [eval_vector]
@@ -186,56 +246,35 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     clear h_Compress_value
     simp only [h_Or32_2]
     simp only [h_Or32_1]
-    rw [show Vector.map U32.value (Vector.map (eval env) (bytesToWords input_var_buffer_data)) =
-           Specs.BLAKE3.bytesToWords
-            (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList) from by
-      simp only [Specs.BLAKE3.bytesToWords]
-      simp only [Vector.map_map, Vector.take_eq_extract, Vector.toArray_extract,
-        Array.toList_extract, List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take,
-        List.length_take, List.length_map, Array.length_toList, Vector.size_toArray, Nat.reducePow]
-      simp only [bytesToWords]
-      simp only [id_eq]
-      ext i i_h
-      simp only [Vector.getElem_map, Vector.getElem_ofFn, Function.comp_apply]
-      simp only [explicit_provable_type, toVars, U32.value]
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow]
-      congr
-      · -- input_buffer_data has 64 elements, so the padding is never usedß
-        sorry
-      · sorry
-      · sorry
-      · sorry]
-    simp only [U32.zero_value]
-    norm_num
-    rw [show (eval (α:=U32) env { x0 := input_var_buffer_len, x1 := 0, x2 := 0, x3 := 0 }).value = ZMod.val input_buffer_len from by sorry]
-    rw [show (min (ZMod.val input_buffer_len) 64) = ZMod.val input_buffer_len from by sorry]
-    congr
-    · conv =>
-        lhs
-        simp only [startFlag, chunkStart, circuit_norm, explicit_provable_type, U32.value]
-      norm_num
-      simp only [h_IsZero]
-      simp only [startFlag]
-      split_ifs
-      · simp only [ZMod.val_one, chunkStart]
-        rfl
-      · rename_i h_if0 h_if1
-        rw [U32.value_zero_iff_components_zero] at h_if1
-        · contradiction
-        · simp only [ProcessBlocksState.Normalized] at h_assumptions
-          simp_all
-      · rename_i h_if0 h_if1
-        rw [U32.value_zero_iff_components_zero] at h_if1
-        · contradiction
-        · simp only [ProcessBlocksState.Normalized] at h_assumptions
-          simp_all
-      · simp only [ZMod.val_zero]
-    · simp only [explicit_provable_type, toVars]
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value]
-      simp only [Expression.eval]
-      norm_num
-      rw [ZMod_val_chunkEnd]
-      rfl
+    rw [compress_arg2_eq] <;> try assumption
+    · rw [compress_arg3_eq]
+      rw [compress_arg4_eq] <;> try assumption
+      · rw [compress_chunkEnd_eq]
+        simp only [explicit_provable_type, toVars]
+        simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
+          List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
+          List.length_map, Array.length_toList, Vector.size_toArray, id_eq, Vector.map_mk,
+          List.map_toArray, List.map_cons, List.map_nil, startFlag]
+        simp only [Expression.eval]
+        simp only [h_IsZero]
+        simp only [ProcessBlocksState.Normalized] at h_assumptions
+        have flag_eq : (if ∀ (i : Fin (size U32)), (toElements input_state_blocks_compressed)[i] = 0 then (1 : F p) else 0) = if input_state_blocks_compressed.value = 0 then 1 else 0 := by
+          conv =>
+            rhs
+            arg 1
+            rw [U32.value_zero_iff_components_zero (hx:=by simp only [h_assumptions])]
+        rw [flag_eq]
+        congr
+        split
+        · simp only [U32.value]
+          simp only [chunkStart]
+          norm_num
+          simp only [ZMod.val_one]
+        · norm_num
+          simp only [U32.value, ZMod.val_zero]
+          ring
+      · simp only [h_input]
+    · simp only [h_input]
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
     rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
