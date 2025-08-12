@@ -392,39 +392,39 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
           List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
           List.length_map, Array.length_toList, Vector.size_toArray]
         rw [Nat.min_eq_left (h:=by simp_all)]
-      · conv_lhs =>
+      conv_lhs =>
+        arg 1
+        arg 5
+        arg 2
+        simp only [eval, U32.value]
+        simp only [toVars, toElements, fromElements]
+        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow, Expression.eval]
+        rw [ZMod_val_chunkEnd]
+        simp only [chunkEnd, ZMod.val_zero]
+        norm_num
+      simp only [explicit_provable_type, toVars]
+      simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
+        List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
+        List.length_map, Array.length_toList, Vector.size_toArray, id_eq, Vector.map_mk,
+        List.map_toArray, List.map_cons, List.map_nil, startFlag]
+      simp only [Expression.eval]
+      simp only [h_IsZero]
+      simp only [ProcessBlocksState.Normalized] at h_assumptions
+      have flag_eq : (if ∀ (i : Fin (size U32)), (toElements input_state_blocks_compressed)[i] = 0 then (1 : F p) else 0) = if input_state_blocks_compressed.value = 0 then 1 else 0 := by
+        conv =>
+          rhs
           arg 1
-          arg 5
-          arg 2
-          simp only [eval, U32.value]
-          simp only [toVars, toElements, fromElements]
-          simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow, Expression.eval]
-          rw [ZMod_val_chunkEnd]
-          simp only [chunkEnd, ZMod.val_zero]
-          norm_num
-        simp only [explicit_provable_type, toVars]
-        simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
-          List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
-          List.length_map, Array.length_toList, Vector.size_toArray, id_eq, Vector.map_mk,
-          List.map_toArray, List.map_cons, List.map_nil, startFlag]
-        simp only [Expression.eval]
-        simp only [h_IsZero]
-        simp only [ProcessBlocksState.Normalized] at h_assumptions
-        have flag_eq : (if ∀ (i : Fin (size U32)), (toElements input_state_blocks_compressed)[i] = 0 then (1 : F p) else 0) = if input_state_blocks_compressed.value = 0 then 1 else 0 := by
-          conv =>
-            rhs
-            arg 1
-            rw [U32.value_zero_iff_components_zero (hx:=by simp only [h_assumptions])]
-        rw [flag_eq]
-        congr
-        split
-        · simp only [U32.value]
-          simp only [chunkStart]
-          norm_num
-          simp only [ZMod.val_one]
-        · norm_num
-          simp only [U32.value, ZMod.val_zero]
-          ring
+          rw [U32.value_zero_iff_components_zero (hx:=by simp only [h_assumptions])]
+      rw [flag_eq]
+      congr
+      split
+      · simp only [U32.value]
+        simp only [chunkStart]
+        norm_num
+        simp only [ZMod.val_one]
+      · norm_num
+        simp only [U32.value, ZMod.val_zero]
+        ring
     · simp only [h_assumptions]
     · simp only [h_input]
     · simp_all
