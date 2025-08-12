@@ -160,13 +160,16 @@ private lemma compress_arg2_eq (env : Environment (F p))
   sorry
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
+omit p_large_enough in
 private lemma compress_arg3_eq (env : Environment (F p))
     (input_state_chunk_counter : U32 (F p)) :
     input_state_chunk_counter.value + 2 ^ 32 * (eval env ({ x0 := 0, x1 := 0, x2 := 0, x3 := 0 } : U32 (Expression (F p)))).value =
     input_state_chunk_counter.value := by
   simp only [eval, U32.value]
   simp only [toVars, toElements, fromElements]
-  sorry
+  simp only [Nat.reducePow, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    Nat.add_eq_left, mul_eq_zero, OfNat.ofNat_ne_zero, Nat.add_eq_zero, ZMod.val_eq_zero, or_false,
+    and_self, false_or, Expression.eval]
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
 omit p_large_enough in
