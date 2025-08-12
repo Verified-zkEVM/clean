@@ -151,7 +151,50 @@ private lemma ZMod_val_chunkEnd :
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  sorry
+  rcases h_holds with ⟨h_IsZero, h_holds⟩
+  specialize h_IsZero trivial
+  simp only [IsZero.circuit, IsZero.Spec] at h_IsZero
+  rcases h_holds with ⟨h_Or32_1, h_holds⟩
+  simp only [Or32.circuit, Or32.Assumptions, Or32.Spec] at h_Or32_1
+  specialize h_Or32_1 (by
+    constructor
+    · simp_all
+    · simp only [circuit_norm, h_IsZero]
+      split
+      · simp only [one_mul, ZMod.val_zero, Nat.ofNat_pos, and_self, and_true, chunkStart, pow_zero, Nat.cast_one, ZMod.val_one]
+        linarith
+      · simp only [zero_mul, ZMod.val_zero, Nat.ofNat_pos, and_self])
+  rcases h_holds with ⟨h_Or32_2, h_Compress⟩
+  simp only [Or32.circuit, Or32.Assumptions, Or32.Spec] at h_Or32_2
+  specialize h_Or32_2 (by
+    constructor
+    · simp only [h_Or32_1]
+    · simp only [circuit_norm, ZMod.val_zero]
+      rw [ZMod_val_chunkEnd]
+      decide)
+  simp only [Compress.circuit, Compress.Assumptions, Compress.Spec] at h_Compress
+  specialize h_Compress (by sorry)
+  constructor
+  · sorry
+  · rintro ⟨i, h_i⟩
+    simp only [eval_vector]
+    rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
+
+    conv =>
+      arg 1
+      arg 2
+      change (Vector.take _ 8)[i]
+      rw [Vector.getElem_take]
+
+    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
+    simp only [BLAKE3State.Normalized] at h_Compress_Normalized
+    specialize h_Compress_Normalized i
+    clear h_Compress_value
+
+    simp only [Fin.val_natCast] at h_Compress_Normalized
+    have : i % 16 = i := by omega
+    simp only [this] at h_Compress_Normalized
+    simp only [getElem_eval_vector, h_Compress_Normalized]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
