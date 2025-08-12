@@ -175,7 +175,67 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [Compress.circuit, Compress.Assumptions, Compress.Spec] at h_Compress
   specialize h_Compress (by sorry)
   constructor
-  · sorry
+  · simp only [finalizeChunk]
+    simp only [eval_vector]
+    simp only [← Vector.map_take]
+    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
+    clear h_Compress_Normalized
+    simp only [BLAKE3State.value] at h_Compress_value
+    simp only [eval_vector] at h_Compress_value
+    simp only [h_Compress_value]
+    clear h_Compress_value
+    simp only [h_Or32_2]
+    simp only [h_Or32_1]
+    rw [show Vector.map U32.value (Vector.map (eval env) (bytesToWords input_var_buffer_data)) =
+           Specs.BLAKE3.bytesToWords
+            (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList) from by
+      simp only [Specs.BLAKE3.bytesToWords]
+      simp only [Vector.map_map, Vector.take_eq_extract, Vector.toArray_extract,
+        Array.toList_extract, List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take,
+        List.length_take, List.length_map, Array.length_toList, Vector.size_toArray, Nat.reducePow]
+      simp only [bytesToWords]
+      simp only [id_eq]
+      ext i i_h
+      simp only [Vector.getElem_map, Vector.getElem_ofFn, Function.comp_apply]
+      simp only [explicit_provable_type, toVars, U32.value]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow]
+      congr
+      · -- input_buffer_data has 64 elements, so the padding is never usedß
+        sorry
+      · sorry
+      · sorry
+      · sorry]
+    simp only [U32.zero_value]
+    norm_num
+    rw [show (eval (α:=U32) env { x0 := input_var_buffer_len, x1 := 0, x2 := 0, x3 := 0 }).value = ZMod.val input_buffer_len from by sorry]
+    rw [show (min (ZMod.val input_buffer_len) 64) = ZMod.val input_buffer_len from by sorry]
+    congr
+    · conv =>
+        lhs
+        simp only [startFlag, chunkStart, circuit_norm, explicit_provable_type, U32.value]
+      norm_num
+      simp only [h_IsZero]
+      simp only [startFlag]
+      split_ifs
+      · simp only [ZMod.val_one, chunkStart]
+        rfl
+      · rename_i h_if0 h_if1
+        rw [U32.value_zero_iff_components_zero] at h_if1
+        · contradiction
+        · simp only [ProcessBlocksState.Normalized] at h_assumptions
+          simp_all
+      · rename_i h_if0 h_if1
+        rw [U32.value_zero_iff_components_zero] at h_if1
+        · contradiction
+        · simp only [ProcessBlocksState.Normalized] at h_assumptions
+          simp_all
+      · simp only [ZMod.val_zero]
+    · simp only [explicit_provable_type, toVars]
+      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value]
+      simp only [Expression.eval]
+      norm_num
+      rw [ZMod_val_chunkEnd]
+      sorry
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
     rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
