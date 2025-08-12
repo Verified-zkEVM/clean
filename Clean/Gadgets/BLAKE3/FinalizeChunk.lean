@@ -304,26 +304,6 @@ private lemma bytesToWords_value (env : Environment (F p))
       congr
       omega
 
--- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
-omit p_large_enough in
-private lemma compress_arg4_eq (env : Environment (F p))
-    (input_var_buffer_len : Expression (F p))
-    (input_buffer_len : F p)
-    (input_buffer_data : Vector (F p) 64)
-    (h_len : Expression.eval env input_var_buffer_len = input_buffer_len)
-    (h_len_small : ZMod.val input_buffer_len ≤ 64) :
-    (eval env ({ x0 := input_var_buffer_len, x1 := 0, x2 := 0, x3 := 0 } : U32 (Expression (F p)))).value =
-    (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList).length := by
-  simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
-    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
-    List.length_map, Array.length_toList, Vector.size_toArray]
-  rw [Nat.min_eq_left]
-  · simp only [explicit_provable_type, toVars]
-    simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value, h_len]
-    simp only [Expression.eval, ZMod.val_zero]
-    ring
-  assumption
-
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   rcases h_holds with ⟨h_IsZero, h_holds⟩
@@ -398,7 +378,20 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
           and_self, false_or, Expression.eval]
         norm_num
       simp only [add_zero]
-      rw [compress_arg4_eq] <;> try assumption
+      conv_lhs =>
+        arg 1
+        arg 4
+        simp only [explicit_provable_type, toVars]
+        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value, h_input]
+        simp only [Expression.eval, ZMod.val_zero]
+        ring_nf
+      conv_rhs =>
+        arg 1
+        arg 4
+        simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
+          List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
+          List.length_map, Array.length_toList, Vector.size_toArray]
+        rw [Nat.min_eq_left (h:=by simp_all)]
       · conv_lhs =>
           arg 1
           arg 5
@@ -432,8 +425,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         · norm_num
           simp only [U32.value, ZMod.val_zero]
           ring
-      · simp only [h_input]
-      · simp only [h_assumptions]
     · simp only [h_assumptions]
     · simp only [h_input]
     · simp_all
