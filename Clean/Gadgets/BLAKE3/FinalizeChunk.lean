@@ -127,7 +127,6 @@ def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧
   input.buffer_len.val ≤ 64 ∧
   (∀ i : Fin 64, input.buffer_data[i].val < 256) ∧
-  -- STRENGTHENED: Unused bytes must be zero
   (∀ i : Fin 64, i.val ≥ input.buffer_len.val → input.buffer_data[i] = 0) ∧
   input.base_flags.Normalized
 
@@ -154,9 +153,19 @@ private lemma compress_arg2_eq (env : Environment (F p))
     (input_var_buffer_data : Vector (Expression (F p)) 64)
     (input_buffer_data : Vector (F p) 64)
     (input_buffer_len : F p)
-    (h_data : eval (α:=ProvableVector field 64) env input_var_buffer_data = input_buffer_data) :
+    (h_data : eval (α:=ProvableVector field 64) env input_var_buffer_data = input_buffer_data)
+    (h_rest : ∀ (i : Fin 64), ↑i ≥ ZMod.val input_buffer_len → input_buffer_data[↑i] = 0) :
     Vector.map U32.value (Vector.map (eval env) (bytesToWords input_var_buffer_data)) =
     Specs.BLAKE3.bytesToWords (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList) := by
+  simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
+  ext i h_i
+  simp only [id_eq, Vector.map_map, Vector.getElem_map, Vector.getElem_ofFn]
+  simp only [Vector.take_eq_extract, Vector.toArray_extract]
+  simp only [Array.toList_extract, List.extract_eq_drop_take, tsub_zero]
+  rw [Function.comp_apply]
+  simp only [List.drop_zero, List.map_take, List.length_take, List.length_map, Array.length_toList,
+    Vector.size_toArray, Nat.reducePow]
+  -- need somethinge like, beyond input_buffer_len it's all zero
   sorry
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
@@ -292,6 +301,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       · simp only [h_input]
       · simp only [h_assumptions]
     · simp only [h_input]
+    · simp_all
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
     rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
