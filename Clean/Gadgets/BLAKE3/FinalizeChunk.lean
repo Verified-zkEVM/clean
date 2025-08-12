@@ -324,16 +324,6 @@ private lemma compress_arg4_eq (env : Environment (F p))
     ring
   assumption
 
--- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
-private lemma compress_chunkEnd_eq (env : Environment (F p)) :
-    (eval (α:=U32) env { x0 := Expression.const ↑chunkEnd, x1 := 0, x2 := 0, x3 := 0 }).value = chunkEnd := by
-  simp only [eval, U32.value]
-  simp only [toVars, toElements, fromElements]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow, Expression.eval]
-  rw [ZMod_val_chunkEnd]
-  simp only [chunkEnd, ZMod.val_zero]
-  rfl
-
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   rcases h_holds with ⟨h_IsZero, h_holds⟩
@@ -409,7 +399,16 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         norm_num
       simp only [add_zero]
       rw [compress_arg4_eq] <;> try assumption
-      · rw [compress_chunkEnd_eq]
+      · conv_lhs =>
+          arg 1
+          arg 5
+          arg 2
+          simp only [eval, U32.value]
+          simp only [toVars, toElements, fromElements]
+          simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow, Expression.eval]
+          rw [ZMod_val_chunkEnd]
+          simp only [chunkEnd, ZMod.val_zero]
+          norm_num
         simp only [explicit_provable_type, toVars]
         simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
           List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
