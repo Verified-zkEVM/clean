@@ -181,14 +181,28 @@ private lemma compress_arg2_eq (env : Environment (F p))
       rw [this] at h_data
       simp only [← h_data]
       simp
-    · simp only [List.getElem_replicate]
+    · rename_i h_large
+      simp only [List.getElem_replicate]
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
       simp only [← h_data] at h_rest
-      specialize h_rest (i * 4)
-      -- input_buffer_len <= 64 is needed
-      sorry
+      rw [min_eq_left] at h_large
+      rotate_left
+      · convert h_small
+        simp
+      specialize h_rest (i * 4) (by
+        simp only [Fin.val_mul]
+        simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
+        omega)
+      simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
+        Vector.getElem_map] at h_rest
+      simp only [ZMod.val_eq_zero]
+      simp only [Fin.val_mul] at h_rest
+      simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod] at h_rest
+      simp only [← h_rest]
+      congr
+      omega
   · sorry
   · sorry
   · sorry
