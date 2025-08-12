@@ -150,7 +150,7 @@ private lemma ZMod_val_chunkEnd :
 
 -- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
 omit p_large_enough in
-private lemma compress_arg2_eq (env : Environment (F p))
+private lemma bytesToWords_value (env : Environment (F p))
     (input_var_buffer_data : Vector (Expression (F p)) 64)
     (input_buffer_data : Vector (F p) 64)
     (input_buffer_len : F p)
@@ -385,7 +385,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     clear h_Compress_value
     simp only [h_Or32_2]
     simp only [h_Or32_1]
-    rw [compress_arg2_eq] <;> try assumption
+    rw [bytesToWords_value] <;> try assumption
     · conv =>
         lhs
         arg 1
