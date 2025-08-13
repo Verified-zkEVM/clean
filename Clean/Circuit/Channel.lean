@@ -33,6 +33,10 @@ instance {F : Type} (self : ChannelEntry F) (reg : ChannelRegistry F) :
   | none => exact isFalse (by simp [h])
   | some channel => infer_instance
 
+structure ChannelState (F : Type) where
+  registry : ChannelRegistry F
+  entries : List (ChannelEntry F)
+
 /-
 In spirit, the balancing condition is:
 
@@ -43,12 +47,12 @@ def balanced {F : Type} [DecidableEq F] (entries : List (ChannelEntry F)) :=
 but, we define something stronger that is computable.
  -/
 
-def balanced {F : Type} [DecidableEq F] (entries : List (ChannelEntry F)) (reg : ChannelRegistry F) :=
-  reg.keys.all (fun name =>
-    let subLists := (entries.filter (fun (e : ChannelEntry F) => e.channelName = name)).splitBy (·.entry = ·.entry)
+def balanced {F : Type} [DecidableEq F] (state : ChannelState F) :=
+  state.registry.keys.all (fun name =>
+    let subLists := (state.entries.filter (fun (e : ChannelEntry F) => e.channelName = name)).splitBy (·.entry = ·.entry)
     subLists.all (fun lst => (lst.map (fun e => e.multiplicity) |>.sum) = 0)
   )
 
-def globalCheck {F : Type} [DecidableEq F] (entries : List (ChannelEntry F)) (reg : ChannelRegistry F) :=
-  List.all entries (ChannelEntry.wellFormed · reg) ∧
-  balanced entries reg
+def globalCheck {F : Type} [DecidableEq F] (state : ChannelState F) :=
+  List.all state.entries (ChannelEntry.wellFormed · state.registry) ∧
+  balanced state
