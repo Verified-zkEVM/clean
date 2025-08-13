@@ -37,6 +37,10 @@ structure ChannelState (F : Type) where
   registry : ChannelRegistry F
   entries : List (ChannelEntry F)
 
+def emptyChannelState {F : Type} : ChannelState F where
+  registry := {}
+  entries := []
+
 /-
 In spirit, the balancing condition is:
 
