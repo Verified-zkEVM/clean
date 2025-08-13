@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Circuit.Channel
 import Clean.Circomlib.AliasCheck
 import Clean.Circomlib.BinSum
 import Clean.Circomlib.BinSub
