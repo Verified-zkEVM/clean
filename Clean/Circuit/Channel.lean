@@ -9,15 +9,15 @@ abbrev ChannelRegistry (F : Type) := Std.HashMap String (Channel F)
 
 structure ChannelEntry (F : Type) where
   channelName : String
-  entry : List F
+  entry : List (Expression F)
   multiplicity : Int -- positive for yield, negative for use
 
-def ChannelEntry.valid {F : Type} (self : ChannelEntry F) (reg : ChannelRegistry F) :=
+def ChannelEntry.valid {F : Type} [Field F] (self : ChannelEntry F) (reg : ChannelRegistry F) (env : Environment F) :=
   match reg[self.channelName]? with
   | none => False
   | some channel =>
     if h : self.entry.length = channel.inst.size then
-      channel.predicate (channel.inst.fromElements (h ▸ Vector.fromList self.entry))
+      channel.predicate (channel.inst.fromElements (h ▸ eval (α:=ProvableVector field self.entry.length) env (Vector.fromList self.entry)))
     else
       False
 
@@ -41,22 +41,13 @@ def emptyChannelState {F : Type} : ChannelState F where
   registry := {}
   entries := []
 
-/-
-In spirit, the balancing condition is:
-
-def balanced {F : Type} [DecidableEq F] (entries : List (ChannelEntry F)) :=
-  ∀ (channelName : String) (entry : List F),
-    (((entries.filter (fun e => e.channelName = channelName ∧ e.entry = entry)).map (·.multiplicity) |>.sum) = 0)
-
-but, we define something stronger that is computable.
- -/
-
-def balanced {F : Type} [DecidableEq F] (state : ChannelState F) :=
+def balanced {F : Type} [Field F] [DecidableEq F] (state : ChannelState F) (env : Environment F) :=
   state.registry.keys.all (fun name =>
-    let subLists := (state.entries.filter (fun (e : ChannelEntry F) => e.channelName = name)).splitBy (·.entry = ·.entry)
+    let subLists := (state.entries.filter (fun (e : ChannelEntry F) => e.channelName = name)).splitBy
+      (fun a b => a.entry.map (eval env ·) = b.entry.map (eval (α:=field) env ·))
     subLists.all (fun lst => (lst.map (fun e => e.multiplicity) |>.sum) = 0)
   )
 
-def globalCheck {F : Type} [DecidableEq F] (state : ChannelState F) :=
+def globalCheck {F : Type} [Field F] [DecidableEq F] (state : ChannelState F) (env : Environment F) :=
   List.all state.entries (ChannelEntry.wellFormed · state.registry) ∧
-  balanced state
+  balanced state env
