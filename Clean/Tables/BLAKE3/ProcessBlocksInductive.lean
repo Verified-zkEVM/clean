@@ -114,11 +114,8 @@ instance : ProvableStruct BlockInput where
     intros
     rfl
 
-/--
-Predicate that all components of BlockInput are well-formed.
--/
 def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
-  (input.block_exists = 0 ∨ input.block_exists = 1) ∧
+  IsBool input.block_exists ∧
   (∀ i : Fin 16, input.block_data[i].Normalized)
 
 namespace BLAKE3StateFirstHalf
@@ -439,7 +436,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor
-    · have : x_block_exists = 0 ∨ x_block_exists = 1 := by tauto
+    · have : IsBool x_block_exists := by simp [h_assumptions]
       cases this with
       | inl h =>
           simp only [h]
