@@ -169,8 +169,12 @@ The step function that processes one block or passes through the state.
 def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     Circuit (F p) (Var ProcessBlocksState (F p)) := do
 
+  -- TODO: check input.Normalized
+
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
   let isFirstBlock ← IsZero.circuit state.blocks_compressed
+
+  -- TODO: check state.Normalized if it's the first block -- maybe check always, because the circuit size would be similar?
   let startFlagU32 : Var U32 (F p) :=  ⟨isFirstBlock * (Expression.const (F:=F p) chunkStart), 0, 0, 0⟩
 
   -- Prepare constants
@@ -217,8 +221,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   }
 
 def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
-    initialState.Normalized →
-    (∀ input ∈ inputs, input.Normalized) →
+    initialState.Normalized → -- TODO: drop, assert in the circuit
+    (∀ input ∈ inputs, input.Normalized) → -- TODO: drop, assert in the circuit
     inputs.length < 2^32 →
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
