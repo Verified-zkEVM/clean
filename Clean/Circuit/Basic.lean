@@ -67,11 +67,11 @@ theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.
 -- the results of a circuit: operations, output value and local length (which determines the next offset)
 
 @[reducible, circuit_norm]
-def operations (circuit : Circuit F α) (offset := 0) : Operations F :=
+def operations (circuit : Circuit F α) (offset : ℕ) : Operations F :=
   (circuit offset).2
 
 @[reducible, circuit_norm]
-def output (circuit : Circuit F α) (offset := 0) : α :=
+def output (circuit : Circuit F α) (offset : ℕ) : α :=
   (circuit offset).1
 
 @[reducible, circuit_norm]
