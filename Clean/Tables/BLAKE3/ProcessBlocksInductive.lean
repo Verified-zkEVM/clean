@@ -171,7 +171,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
   let isFirstBlock ← IsZero.circuit state.blocks_compressed
-  let startFlagU32 : Var U32 (F p) := ⟨Expression.mul isFirstBlock (Expression.const chunkStart), 0, 0, 0⟩
+  let startFlagU32 : Var U32 (F p) :=  ⟨isFirstBlock * (Expression.const (F:=F p) chunkStart), 0, 0, 0⟩
 
   -- Prepare constants
   let zeroU32 : Var U32 (F p) := ⟨0, 0, 0, 0⟩
