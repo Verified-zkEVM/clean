@@ -235,7 +235,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     inputs.length < 2^32 →
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
-    let validBlocks := inputs.take i |>.filter (·.block_exists = 1)
+    let validBlocks := inputs |>.filter (·.block_exists = 1)
     let blockWords := validBlocks.map (fun b => b.block_data.map (·.value))
     let finalState := processBlocksWords initialState.toChunkState blockWords
     -- Current state matches the result of processing all valid blocks so far
@@ -382,40 +382,36 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       zero_add, Nat.reducePow] at inputs_short
     omega)
   -- I think it's better to discharge conditions of spec_previous here
-  rw [List.take_succ_eq_append_getElem]
-  · rw [List.filter_append]
-    have : (List.take row_index (xs.concat x)) = xs := by simp_all
-    simp only [this]
-    have : (xs.concat x)[row_index]'(by simp_all) = x := by simp_all
-    simp only [this]
-    have : (List.take row_index xs) = xs := by simp_all
-    simp only [this] at spec_previous
-    simp only [List.filter_singleton]
-    by_cases h_x : x.block_exists = 1
-    · simp only [h_x, decide_true, cond_true]
-      have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
-        spec_previous.2.2 (by
-          specialize input_Normalized x (by apply List.mem_of_getElem; omega)
-          exact input_Normalized)
-          (by
-            simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-              zero_add, Nat.reducePow] at inputs_short
-            omega)
-      simp only [one_op]
-      constructor
-      · simp only [processBlockWords, List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-          zero_add, add_lt_add_iff_right]
-        omega
-      simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
-    · simp only [h_x, decide_false, cond_false, List.append_nil]
-      have no_op := step_skip_block env acc_var x_var acc x h_eval h_x h_holds
-      simp only [no_op]
-      constructor
-      · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-        zero_add]
-        omega
-      · simp [spec_previous]
-  · aesop
+  rw [List.concat_eq_append, List.filter_append]
+  have : (xs.concat x)[row_index]'(by simp_all) = x := by simp_all
+  simp only [this]
+  have : (List.take row_index xs) = xs := by simp_all
+  simp only [this] at spec_previous
+  simp only [List.filter_singleton]
+  by_cases h_x : x.block_exists = 1
+  · simp only [h_x, decide_true, cond_true]
+    have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
+      spec_previous.2.2 (by
+        specialize input_Normalized x (by apply List.mem_of_getElem; omega)
+        exact input_Normalized)
+        (by
+          simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+            zero_add, Nat.reducePow] at inputs_short
+          omega)
+    simp only [one_op]
+    constructor
+    · simp only [processBlockWords, List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+        zero_add, add_lt_add_iff_right]
+      omega
+    simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
+  · simp only [h_x, decide_false, cond_false, List.append_nil]
+    have no_op := step_skip_block env acc_var x_var acc x h_eval h_x h_holds
+    simp only [no_op]
+    constructor
+    · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+      zero_add]
+      omega
+    · simp [spec_previous]
 
 def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
 
