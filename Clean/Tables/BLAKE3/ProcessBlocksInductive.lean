@@ -33,7 +33,8 @@ attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 -
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
-  apply U32.const_value
+  simp only [circuit_norm]
+  rw [U32.value_of_literal] -- why is this needed though value_of_literal is in circuit_norm?
   simp only [circuit_norm]
   omega
 
