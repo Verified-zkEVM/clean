@@ -236,9 +236,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
     let validBlocks := inputs.take i |>.filter (·.block_exists = 1)
-    -- Extract the word data directly - no conversion needed!
     let blockWords := validBlocks.map (fun b => b.block_data.map (·.value))
-    -- Use the initial state passed as parameter
     let finalState := processBlocksWords initialState.toChunkState blockWords
     -- Current state matches the result of processing all valid blocks so far
     state.toChunkState.blocks_compressed < inputs.length ∧
