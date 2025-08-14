@@ -127,13 +127,13 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
 
 namespace BLAKE3StateFirstHalf
 
-def main (x : Var Gadgets.BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
+def main (x : Var BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
   return x.take 8
 
 /--
 A subcircuit that takes the first eight elements of BLAKE3State
 -/
-def circuit : FormalCircuit (F p) Gadgets.BLAKE3.BLAKE3State (ProvableVector U32 8) where
+def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) where
   main
   localLength := 0
   Assumptions input := input.Normalized
@@ -188,7 +188,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   let blockLenU32 : Var U32 (F p) := ⟨(blockLen : F p), 0, 0, 0⟩
 
   -- Prepare inputs for compress
-  let compressInput : Var Gadgets.BLAKE3.ApplyRounds.Inputs (F p) := {
+  let compressInput : Var BLAKE3.ApplyRounds.Inputs (F p) := {
     chaining_value := state.chaining_value
     block_words := input.block_data
     counter_high := zeroU32
@@ -198,7 +198,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   }
 
   -- Apply compress to get new chaining value
-  let newCV16 ← Gadgets.BLAKE3.Compress.circuit compressInput
+  let newCV16 ← BLAKE3.Compress.circuit compressInput
   -- Take first 8 elements for the chaining value
   let newCV8 ← BLAKE3StateFirstHalf.circuit newCV16
 
@@ -221,7 +221,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     ifFalse := state.chaining_value
   }
 
-  let muxedBlocksCompressed ← Conditional.circuit (M := U32) {
+  let muxedBlocksCompressed ← Conditional.circuit {
     selector := input.block_exists
     ifTrue := newBlocksCompressed
     ifFalse := state.blocks_compressed
