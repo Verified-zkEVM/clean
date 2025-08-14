@@ -429,4 +429,61 @@ lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression
     eval env (U32.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [U32.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector
+
+-- Bitwise operations on U32
+section Bitwise
+
+-- helper lemma to prepare the goal for testBit_two_pow_mul_add
+private lemma reorganize_value (a b c d : ℕ) :
+  a + 256 * (b + 256 * (c + 256 * d)) =
+  2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
+
+private lemma reorganize_value' (a b c d : ℕ) :
+  a + b * 256 + c * 256 ^ 2 + d * 256 ^ 3 =
+  2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
+
+-- General lemma: operations defined with bitwise can be computed componentwise on U32
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma bitwise_componentwise (f : Bool → Bool → Bool)
+    {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
+    f false false = false →
+    Nat.bitwise f x.value y.value =
+      Nat.bitwise f x.x0.val y.x0.val + 256 *
+        (Nat.bitwise f x.x1.val y.x1.val + 256 *
+          (Nat.bitwise f x.x2.val y.x2.val + 256 * Nat.bitwise f x.x3.val y.x3.val)) := by
+  intro _
+  simp only [value]
+
+  have ⟨_, _, _, _⟩ := x_norm
+  have ⟨_, _, _, _⟩ := y_norm
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp only [reorganize_value, reorganize_value']
+  rw [Nat.testBit_bitwise] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x0)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x0)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  split
+  · simp_all only [Nat.testBit_bitwise]
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x1)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x1)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  split
+  · simp_all only [not_lt, Nat.testBit_bitwise]
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x2)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x2)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  aesop
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
+    x.value ||| y.value =
+    (x.x0.val ||| y.x0.val) + 256 *
+      ((x.x1.val ||| y.x1.val) + 256 *
+        ((x.x2.val ||| y.x2.val) + 256 * (x.x3.val ||| y.x3.val))) := by
+  show Nat.bitwise _ _ _ = _
+  rw [bitwise_componentwise or x_norm y_norm] <;> rfl
+
+end Bitwise
+
 end U32
