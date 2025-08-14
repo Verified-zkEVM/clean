@@ -310,7 +310,7 @@ private lemma step_process_block (env : Environment (F p))
   constructor
   · simp only [ProcessBlocksState.toChunkState, ↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
-    simp only [h_addition, processBlockWords, U32.one_value]
+    simp only [h_addition, processBlockWords]
     clear h_addition
     norm_num at ⊢ h_compress
     constructor

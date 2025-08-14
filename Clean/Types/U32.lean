@@ -343,13 +343,6 @@ lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
   norm_num
   repeat rw [ZMod.val_natCast_of_lt] <;> try omega
 
-lemma one_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := 1, x1 := 0, x2 := 0, x3 := 0 }).value = 1 := by
-  have := p_large_enough.elim
-  have h := constU32_value env 1 0 0 0 (by omega) (by omega) (by omega) (by omega)
-  simp at h
-  exact h
-
 lemma const_value (env : Environment (F p)) (n : ℕ) (h : n < 256) :
     (eval (α := U32) env { x0 := Expression.const ↑n, x1 := 0, x2 := 0, x3 := 0 }).value = n := by
   have := p_large_enough.elim
