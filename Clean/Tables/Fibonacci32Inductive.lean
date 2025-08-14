@@ -30,8 +30,6 @@ def table : InductiveTable (F p) Row unit where
     row.y.value = fib32 (i + 1) ∧
     row.x.Normalized ∧ row.y.Normalized
 
-  InitialStateAssumptions _ := True
-
   soundness := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous
     simp_all only [fib32, circuit_norm,
