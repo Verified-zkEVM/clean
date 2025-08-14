@@ -196,18 +196,11 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   let one32 : Var U32 (F p) := ⟨1, 0, 0, 0⟩
   let newBlocksCompressed ← Addition32.circuit { x := state.blocks_compressed, y := one32 }
 
-  -- Create the new state (if block exists)
-  let newState : Var ProcessBlocksState (F p) := {
-    chaining_value := newCV8
-    chunk_counter := state.chunk_counter
-    blocks_compressed := newBlocksCompressed
-  }
-
   -- Conditionally select between new state and old state based on block_exists
   -- If block_exists = 1, use newState; if block_exists = 0, use state
   let muxedCV ← Conditional.circuit (M := ProvableVector U32 8) {
     selector := input.block_exists
-    ifTrue := newState.chaining_value
+    ifTrue := newCV8
     ifFalse := state.chaining_value
   }
 
