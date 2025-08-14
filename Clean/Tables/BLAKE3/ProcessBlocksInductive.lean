@@ -317,7 +317,7 @@ private lemma step_process_block (env : Environment (F p))
     · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
       simp only [h_compress.1]
       clear h_compress
-      simp only [U32.zero_value, startFlag, U32_blockLen_value, circuit_norm]
+      simp only [startFlag, U32_blockLen_value, circuit_norm]
       norm_num at h_iszero
       simp only [mul_zero, add_zero, id_eq]
       simp only [circuit_norm]
