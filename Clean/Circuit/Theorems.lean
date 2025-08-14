@@ -53,8 +53,8 @@ namespace Circuit
 theorem pure_operations_eq (a : α) (n : ℕ) :
   (pure a : Circuit F α).operations n = [] := rfl
 
-theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
+theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) (ch : ChannelState F) :
+  (f >>= g).operations n ch = f.operations n ch ++ (g (f.output n ch)).operations (n + f.localLength n ch) (f.channels n ch) := rfl
 
 theorem map_operations_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
   (g <$> f).operations n = f.operations n := rfl

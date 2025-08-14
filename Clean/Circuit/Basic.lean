@@ -1,3 +1,4 @@
+import Clean.Circuit.Channel
 import Clean.Circuit.Operations
 import Mathlib.Control.Monad.Writer
 
@@ -7,12 +8,13 @@ variable {F : Type} [Field F] {α β : Type} {n : ℕ}
 The monad to write circuits. Lets you use `do` notation while in the background
 it builds up a list of `Operation`s that represent the circuit at a low level.
 
-Concretely, a `Circuit` is a function `(offset : ℕ) → α × List (Operation F)` for some
+Concretely, a `Circuit` is a function `((offset : ℕ) × ChannelRegistry F) → α × List (Operation F) × ChannelRegistry F` for some
 return type `α`. The monad is a mix of
 - a writer monad that accumulates the list of operations
 - a state monad that keeps track of the offset,
-  where the next offset is computed from the operations added in the previous step.
-
+  where the next offset is computed from the operations added in the previous step
+- a state monad that keeps track of names of Channels
+- TODO: a state monad that keeps track of Channel entries
 ```
 def circuit : Circuit F Unit := do
   -- witness a new variable
@@ -25,21 +27,21 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
+def Circuit (F : Type) [Field F] (α : Type) := ℕ → ChannelState F → α × List (Operation F) × ChannelState F
 
 namespace Circuit
 -- definition of the circuit monad
 
-def bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
+def bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) (ch : ChannelState F) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
-  let (b, ops') := g (f n).1 (n + Operations.localLength (f n).2)
-  (b, (f n).2 ++ ops')
+  let (b, ops', ch') := g (f n ch).1 (n + Operations.localLength (f n ch).2.1) (f n ch).2.2
+  (b, (f n ch).2.1 ++ ops', ch')
 
 instance : Monad (Circuit F) where
-  map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
-    let (a, ops) := circuit n
-    (f a, ops)
-  pure {α} (a : α) := fun _ => (a, [])
+  map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) (ch : ChannelState F) =>
+    let (a, ops, ch) := circuit n ch
+    (f a, ops, ch)
+  pure {α} (a : α) := fun _ ch => (a, [], ch)
   bind := bind
 
 /--
@@ -48,17 +50,17 @@ reason about (because it avoids the duplicated `f n` term).
  -/
 @[circuit_norm]
 theorem bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
-  f >>= g = fun n =>
-    let (a, ops) := f n
-    let (b, ops') := g a (n + Operations.localLength ops)
-    (b, ops ++ ops') := rfl
+  f >>= g = fun n ch =>
+    let (a, ops, ch') := f n ch
+    let (b, ops', ch'') := g a (n + Operations.localLength ops) ch'
+    (b, ops ++ ops', ch'') := rfl
 
 @[circuit_norm]
-theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := rfl
+theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ ch => (a, [], ch) := rfl
 
 @[circuit_norm]
 theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
-  f <$> circuit = fun n => let (a, ops) := circuit n; (f a, ops) := rfl
+  f <$> circuit = fun n ch => let (a, ops, ch') := circuit n ch; (f a, ops, ch') := rfl
 
 -- normalize `bind` to `>>=`
 @[circuit_norm]
@@ -67,25 +69,29 @@ theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.
 -- the results of a circuit: operations, output value and local length (which determines the next offset)
 
 @[reducible, circuit_norm]
-def operations (circuit : Circuit F α) (offset := 0) : Operations F :=
-  (circuit offset).2
+def operations (circuit : Circuit F α) (offset := 0) (channelState := emptyChannelState (F:=F)) : Operations F :=
+  (circuit offset channelState).2.1
 
 @[reducible, circuit_norm]
-def output (circuit : Circuit F α) (offset := 0) : α :=
-  (circuit offset).1
+def output (circuit : Circuit F α) (offset := 0) (channelState := emptyChannelState (F:=F)) : α :=
+  (circuit offset channelState).1
 
 @[reducible, circuit_norm]
-def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
-  Operations.localLength (circuit offset).2
+def localLength (circuit : Circuit F α) (offset := 0) (channelState := emptyChannelState (F:=F)) : ℕ :=
+  Operations.localLength (circuit offset channelState).2.1
+
+@[reducible, circuit_norm]
+def channels (circuit : Circuit F α) (offset := 0) (channelState := emptyChannelState (F:=F)) : ChannelState F :=
+  (circuit offset channelState).2.2
 
 -- core operations we can do in a circuit
 
 /-- Create a new variable. -/
 @[circuit_norm]
 def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
-  fun (offset : ℕ) =>
+  fun (offset : ℕ) (channelState : ChannelState F) =>
     let var : Variable F := ⟨ offset ⟩
-    (var, [.witness 1 fun env => #v[compute env]])
+    (var, [.witness 1 fun env => #v[compute env]], channelState)
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
@@ -96,35 +102,35 @@ def witnessField (compute : Environment F → F) := do
 /-- Create a vector of variables. -/
 @[circuit_norm]
 def witnessVars (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
-  fun (offset : ℕ) =>
+  fun (offset : ℕ) (channelState : ChannelState F) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, [.witness m compute])
+    (vars, [.witness m compute], channelState)
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
 def witnessVector (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
-  fun (offset : ℕ) =>
+  fun (offset : ℕ) (channelState : ChannelState F) =>
     let vars := varFromOffset (fields m) offset
-    (vars, [.witness m compute])
+    (vars, [.witness m compute], channelState)
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
-  ((), [.assert e])
+def assertZero (e : Expression F) : Circuit F Unit := fun _ ch =>
+  ((), [.assert e], ch)
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
-  ((), [.lookup { table := table.toRaw, entry := toElements entry }])
+def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ ch =>
+  ((), [.lookup { table := table.toRaw, entry := toElements entry }], ch)
 
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
 def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
-  fun (offset : ℕ) =>
+  fun (offset : ℕ) (channelState : ChannelState F) =>
     let var := varFromOffset α offset
-    (var, [.witness (size α) (fun env => compute env |> toElements)])
+    (var, [.witness (size α) (fun env => compute env |> toElements)], channelState)
 
 @[circuit_norm]
 def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
