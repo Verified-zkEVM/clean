@@ -286,7 +286,7 @@ private lemma step_process_block (env : Environment (F p))
     simp only [circuit_norm] at acc_Normalized x_Normalized
     simp only [acc_Normalized, x_Normalized, circuit_norm]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
-      Nat.reduceAdd, and_self, true_and, U32.Normalized_componentwise, circuit_norm, explicit_provable_type]
+      Nat.reduceAdd, and_self, true_and, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
     simp only [Nat.ofNat_pos, and_true, true_and]
     constructor
     · linarith
@@ -478,7 +478,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
-      simp only [U32.Normalized_componentwise]
+      simp only [U32.normalized_componentwise]
       constructor
       · rw [ProvableType.eval_field, eval_mul]
         split at h_witnesses_iszero
@@ -514,7 +514,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         constructor
         · simp only [circuit_norm]
           omega
-        simp only [U32.Normalized_componentwise, chunkStart]
+        simp only [U32.normalized_componentwise, chunkStart]
         constructor
         · rw [ProvableType.eval_field, eval_mul]
           split at h_witnesses_iszero

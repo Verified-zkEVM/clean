@@ -277,7 +277,7 @@ omit p_large_enough in
 Lemma showing that U32 Normalized property is equivalent to all components being < 256
 -/
 @[circuit_norm]
-lemma Normalized_componentwise (env : Environment (F p)) (a b c d : Var field (F p)):
+lemma normalized_componentwise (env : Environment (F p)) (a b c d : Var field (F p)):
     (eval (α := U32) env
     { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
     ((eval env a).val < 256 ∧ (eval env b).val < 256 ∧ (eval env c).val < 256 ∧ (eval env d).val < 256) := by
