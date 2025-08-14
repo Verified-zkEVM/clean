@@ -371,21 +371,21 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
 -- definition of `forAll` for circuits which uses the same offset in two places
 
 @[reducible, circuit_norm]
-def forAll (circuit : Circuit F α) (n : ℕ) (prop : Condition F) :=
-  (circuit.operations n).forAll n prop
+def forAll (circuit : Circuit F α) (n : ℕ) (ch : ChannelState F) (prop : Condition F) :=
+  (circuit.operations n ch).forAll n prop
 
-lemma forAll_def {circuit : Circuit F α} {n : ℕ} :
-  circuit.forAll n prop ↔ (circuit.operations n).forAll n prop := by rfl
+lemma forAll_def {circuit : Circuit F α} {n : ℕ} {ch : ChannelState F} :
+  circuit.forAll n ch prop ↔ (circuit.operations n ch).forAll n prop := by rfl
 
 theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
-  (f >>= g).forAll n prop ↔
-    f.forAll n prop ∧ ((g (f.output n)).forAll (n + f.localLength n) prop) := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
+  (f >>= g).forAll n channelState prop ↔
+    f.forAll n channelState prop ∧ ((g (f.output n channelState)).forAll (n + f.localLength n channelState) (f.channels n channelState) prop) := by
+  have h_ops : (f >>= g).operations n channelState = f.operations n channelState ++ (g (f.output n channelState)).operations (n + f.localLength n channelState) (f.channels n channelState) := rfl
   simp only [forAll]
   rw [bind_forAll]
 
 theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
-  ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
+  ConstraintsHold.Soundness env (circuit.operations n channelState) ↔ circuit.forAll n channelState {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
     subcircuit _ _ s := s.Soundness env
@@ -393,7 +393,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
 theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
-  ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
+  ConstraintsHold.Completeness env (circuit.operations n channelState) ↔ circuit.forAll n channelState {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
     subcircuit _ _ s := s.Completeness env
@@ -409,11 +409,11 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
     ←ConstraintsHold.soundness_iff_forAll 0, ←ConstraintsHold.soundness_iff_forAll (as.localLength + 0)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  ConstraintsHold.Soundness env ((f >>= g).operations n)
-  ↔ ConstraintsHold.Soundness env (f.operations n) ∧
-    ConstraintsHold.Soundness env ((g (f.output n)).operations (n + f.localLength n)) := by
+  ConstraintsHold.Soundness env ((f >>= g).operations n channelState)
+  ↔ ConstraintsHold.Soundness env (f.operations n channelState) ∧
+    ConstraintsHold.Soundness env ((g (f.output n channelState)).operations (n + f.localLength n channelState) (f.channels n channelState)) := by
   rw [ConstraintsHold.soundness_iff_forAll n, ConstraintsHold.soundness_iff_forAll n,
-    ConstraintsHold.soundness_iff_forAll (n + f.localLength n), bind_forAll]
+    ConstraintsHold.soundness_iff_forAll (n + f.localLength n channelState), bind_forAll]
 
 @[circuit_norm] theorem ConstraintsHold.append_completeness {as bs : Operations F} :
   ConstraintsHold.Completeness env (as ++ bs)
@@ -422,11 +422,11 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
     ←ConstraintsHold.completeness_iff_forAll 0, ←ConstraintsHold.completeness_iff_forAll (as.localLength + 0)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_completeness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  ConstraintsHold.Completeness env ((f >>= g).operations n)
-  ↔ ConstraintsHold.Completeness env (f.operations n) ∧
-    ConstraintsHold.Completeness env ((g (f.output n)).operations (n + f.localLength n)) := by
+  ConstraintsHold.Completeness env ((f >>= g).operations n channelState)
+  ↔ ConstraintsHold.Completeness env (f.operations n channelState) ∧
+    ConstraintsHold.Completeness env ((g (f.output n channelState)).operations (n + f.localLength n channelState) (f.channels n channelState)) := by
   rw [ConstraintsHold.completeness_iff_forAll n, ConstraintsHold.completeness_iff_forAll n,
-    ConstraintsHold.completeness_iff_forAll (n + f.localLength n), bind_forAll]
+    ConstraintsHold.completeness_iff_forAll (n + f.localLength n channelState), bind_forAll]
 
 @[circuit_norm] theorem ConstraintsHold.append_localWitnesses {as bs : Operations F} (n : ℕ) :
   env.UsesLocalWitnessesCompleteness n (as ++ bs)
@@ -435,9 +435,9 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
     ←env.usesLocalWitnessesCompleteness_iff_forAll n, ←env.usesLocalWitnessesCompleteness_iff_forAll (as.localLength + n)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_usesLocalWitnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  env.UsesLocalWitnessesCompleteness n ((f >>= g).operations n)
-  ↔ env.UsesLocalWitnessesCompleteness n (f.operations n) ∧
-    env.UsesLocalWitnessesCompleteness (n + f.localLength n) ((g (f.output n)).operations (n + f.localLength n)) := by
+  env.UsesLocalWitnessesCompleteness n ((f >>= g).operations n channelState)
+  ↔ env.UsesLocalWitnessesCompleteness n (f.operations n channelState) ∧
+    env.UsesLocalWitnessesCompleteness (n + f.localLength n channelState) ((g (f.output n channelState)).operations (n + f.localLength n channelState) (f.channels n channelState)) := by
   rw [env.usesLocalWitnessesCompleteness_iff_forAll, env.usesLocalWitnessesCompleteness_iff_forAll,
     env.usesLocalWitnessesCompleteness_iff_forAll, bind_forAll]
 end Circuit
@@ -549,9 +549,9 @@ end FlatOperation
 If a circuit satisfies `computableWitnesses`, then the `proverEnvironment` agrees with the
 circuit's witness generators.
 -/
-theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (init : List F) :
-  circuit.ComputableWitnesses init.length →
-    (circuit.proverEnvironment init).UsesLocalWitnesses init.length (circuit.operations init.length) := by
+theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (init : List F) (initCh : ChannelState F) :
+  circuit.ComputableWitnesses init.length initCh →
+    (circuit.proverEnvironment init initCh).UsesLocalWitnesses init.length (circuit.operations init.length initCh) := by
   intro h_computable
   simp_all only [proverEnvironment, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
     ←Operations.forAll_toFlat_iff, Environment.UsesLocalWitnesses]
@@ -639,6 +639,6 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
     ,
     completeness := by
       simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
-      rintro _ _ _ _ ⟨ _, _ ⟩
+      rintro _ _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
