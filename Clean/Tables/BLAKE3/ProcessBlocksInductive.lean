@@ -169,9 +169,6 @@ The step function that processes one block or passes through the state.
 def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     Circuit (F p) (Var ProcessBlocksState (F p)) := do
 
-  -- Add constraint that block_exists is boolean
-  input.block_exists * (input.block_exists - 1) === 0
-
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
   let isFirstBlock ← IsZero.circuit state.blocks_compressed
   let startFlagU32 : Var U32 (F p) := ⟨Expression.mul isFirstBlock (Expression.const chunkStart), 0, 0, 0⟩
@@ -260,8 +257,6 @@ private lemma step_process_block (env : Environment (F p))
   simp only [step, circuit_norm] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
-  rcases h_holds with ⟨ h_binary, h_holds ⟩
-  clear h_binary
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.Spec] at h_iszero
   specialize h_iszero trivial
@@ -350,25 +345,22 @@ Shows that the step function returns the accumulator unchanged when skipping a b
 private lemma step_skip_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
+    (h_normalized : x.Normalized)
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : ¬(x.block_exists = 1))
     (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput))) :
     eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput)) = acc := by
   simp only [circuit_norm, step] at h_holds
   provable_struct_simp
-  rcases h_holds with ⟨ hh0, hh1 ⟩
   have x_block_exists_zero : x_block_exists = 0 := by
-    simp only [h_eval] at hh0
-    rw [mul_eq_zero (M₀:=F p)] at hh0
-    cases hh0 with
-    | inl hh0 => assumption
-    | inr hh0 =>
-        rw [add_neg_eq_zero] at hh0
-        contradiction
+    simp only [BlockInput.Normalized] at h_normalized
+    cases h_normalized.1 with
+    | inl _ => assumption
+    | inr _ => contradiction
   simp only [x_block_exists_zero] at *
-  simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at hh1 ⊢
-  norm_num at hh1 ⊢
-  simp only [step, circuit_norm, hh1, h_eval]
+  simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
+  norm_num at h_holds ⊢
+  simp only [step, circuit_norm, h_holds, h_eval]
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized inputs_short
@@ -402,7 +394,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       omega
     simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
   · simp only [h_x, decide_false, cond_false, List.append_nil]
-    have no_op := step_skip_block env acc_var x_var acc x h_eval h_x h_holds
+    have no_op := step_skip_block env acc_var x_var acc x (by aesop) h_eval h_x h_holds
     simp only [no_op]
     constructor
     · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
@@ -435,15 +427,6 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     simp only [h_eval] at ⊢ h_witnesses
     dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
-    constructor
-    · have : IsBool x_block_exists := by simp [h_assumptions]
-      cases this with
-      | inl h =>
-          simp only [h]
-          ring_nf
-      | inr h =>
-          simp only [h]
-          ring_nf
     constructor
     · simp_all
     constructor
