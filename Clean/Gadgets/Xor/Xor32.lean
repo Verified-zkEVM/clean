@@ -89,7 +89,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [h_input, circuit_norm, main, ByteXorTable,
     varFromOffset, Vector.mapRange] at h_holds
 
-  apply soundness_to_u32 x_norm y_norm
+  apply soundness_to_u32 (by simp [circuit_norm, x_norm]) (by simp [circuit_norm, y_norm])
   simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 

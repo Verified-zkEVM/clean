@@ -82,10 +82,7 @@ private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_
     ProcessBlocksState.Normalized
       { chaining_value := acc_chaining_value, chunk_counter := acc_chunk_counter,
         blocks_compressed := acc_blocks_compressed } →
-    (eval env
-            (U32.mk
-                (Expression.mul (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) (Expression.const ↑chunkStart))
-                0 0 0 )).value =
+    ZMod.val (Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) * (↑chunkStart : F p)) =
     if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
   intros h_eval h_normalized
   simp only [explicit_provable_type, circuit_norm, fromElements, toVars, toElements]
@@ -301,7 +298,7 @@ private lemma step_process_block (env : Environment (F p))
   specialize h_addition (by
     simp only [Addition32.circuit, Addition32.Assumptions, circuit_norm, ZMod.val_one]
     dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
-    simp [acc_Normalized])
+    simp [acc_Normalized, circuit_norm])
   dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
   dsimp only [Conditional.circuit, Conditional.Spec] at h_vector_cond h_u32_cond
@@ -323,6 +320,8 @@ private lemma step_process_block (env : Environment (F p))
       simp only [U32.zero_value, startFlag, U32_blockLen_value, circuit_norm]
       norm_num at h_iszero
       simp only [mul_zero, add_zero, id_eq]
+      simp only [circuit_norm]
+      norm_num
       rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
       simp only [ProcessBlocksState.Normalized] at acc_Normalized
       · split
@@ -338,6 +337,7 @@ private lemma step_process_block (env : Environment (F p))
       · simp_all
       · simp_all
     · simp only [ProcessBlocksState.toChunkState] at blocks_compressed_not_many
+      simp only [circuit_norm]
       omega
   · simp only [ProcessBlocksState.Normalized]
     constructor
@@ -473,10 +473,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
-      simp only [U32.normalized_componentwise]
       constructor
-      · rw [ProvableType.eval_field, eval_mul]
-        split at h_witnesses_iszero
+      · split at h_witnesses_iszero
         · simp only [h_witnesses_iszero, Expression.eval]
           norm_num
           simp only [ZMod.val_one]
@@ -484,9 +482,6 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         · simp only [h_witnesses_iszero, Expression.eval]
           norm_num
       · norm_num
-        simp only [explicit_provable_type, circuit_norm, toVars, Vector.map,
-          List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
-          Nat.ofNat_pos]
     constructor
     · dsimp only [BLAKE3StateFirstHalf.circuit]
       dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
@@ -511,18 +506,14 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           omega
         simp only [U32.normalized_componentwise, chunkStart]
         constructor
-        · rw [ProvableType.eval_field, eval_mul]
-          split at h_witnesses_iszero
+        · split at h_witnesses_iszero
           · simp only [h_witnesses_iszero, Expression.eval]
             norm_num
             simp only [circuit_norm]
             omega
           · simp only [h_witnesses_iszero, Expression.eval]
             norm_num
-        · norm_num
-          simp only [circuit_norm, explicit_provable_type, toVars, Vector.map,
-            List.map_toArray, List.map_cons, List.map_nil, Expression.eval,
-            Nat.ofNat_pos])
+        · norm_num)
       simp only [h_compress]
     simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions, IsBool]
 
