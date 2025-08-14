@@ -272,6 +272,12 @@ lemma value_injective_on_normalized (x y : U32 (F p))
 
 end ValueInjectivity
 
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[circuit_norm]
+lemma value_of_literal (a b c d : (F p)) :
+  (U32.mk a b c d).value =
+    a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
+
 omit p_large_enough in
 /--
 Lemma showing that U32 Normalized property is equivalent to all components being < 256
@@ -296,7 +302,7 @@ lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
   · intro h_val_zero
     simp only [h_val_zero] at this
     specialize this (by
-      simp only [U32.value, ZMod.val_zero]
+      simp only [circuit_norm, ZMod.val_zero]
       omega)
     simp only [this, Fin.getElem_fin, size, toElements, Vector.getElem_mk, List.getElem_toArray]
     intro i
@@ -321,7 +327,7 @@ lemma constU32_value (env : Environment (F p)) (n0 n1 n2 n3 : ℕ)
     (eval (α := U32) env { x0 := Expression.const ↑n0, x1 := Expression.const ↑n1,
                            x2 := Expression.const ↑n2, x3 := Expression.const ↑n3 }).value =
     n0 + n1 * 256 + n2 * 256^2 + n3 * 256^3 := by
-  simp only [explicit_provable_type, circuit_norm, U32.value]
+  simp only [explicit_provable_type, circuit_norm]
   cases p_large_enough
   norm_num
   repeat rw [ZMod.val_natCast_of_lt] <;> try omega
