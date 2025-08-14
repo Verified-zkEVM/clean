@@ -54,9 +54,6 @@ instance : ProvableStruct ProcessBlocksState where
     match xss with
     | .cons cv (.cons cc (.cons bc .nil)) =>
       { chaining_value := cv, chunk_counter := cc, blocks_compressed := bc }
-  fromComponents_toComponents := by
-    intros
-    rfl
 
 /--
 Convert ProcessBlocksState to ChunkState for integration with the spec.
