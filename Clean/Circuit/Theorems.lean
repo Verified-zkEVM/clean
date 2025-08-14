@@ -50,8 +50,8 @@ end Operations
 
 namespace Circuit
 
-theorem pure_operations_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).operations n = [] := rfl
+theorem pure_operations_eq (a : α) (n : ℕ) (ch : ChannelState F) :
+  (pure a : Circuit F α).operations n ch = [] := rfl
 
 theorem bind_operations_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) (ch : ChannelState F) :
   (f >>= g).operations n ch = f.operations n ch ++ (g (f.output n ch)).operations (n + f.localLength n ch) (f.channels n ch) := rfl
@@ -62,40 +62,52 @@ theorem map_operations_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
 theorem pure_localLength_eq (a : α) (n : ℕ) :
   (pure a : Circuit F α).localLength n = 0 := rfl
 
-theorem bind_localLength_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-    (f >>= g).localLength n = f.localLength n + (g (f.output n)).localLength (n + f.localLength n) := by
-  show (f.operations n ++ (g _).operations _).localLength = _
+theorem bind_localLength_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) (ch : ChannelState F) :
+    (f >>= g).localLength n ch = f.localLength n ch + (g (f.output n ch)).localLength (n + f.localLength n ch) (f.channels n ch) := by
+  show (f.operations n ch ++ (g _).operations _ _).localLength = _
   rw [Operations.append_localLength]
 
-theorem map_localLength_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).localLength n = f.localLength n := rfl
+theorem map_localLength_eq (f : Circuit F α) (g : α → β) (n : ℕ) (ch : ChannelState F) :
+  (g <$> f).localLength n ch = f.localLength n ch := rfl
 
-theorem pure_output_eq (a : α) (n : ℕ) :
-  (pure a : Circuit F α).output n = a := rfl
+theorem pure_output_eq (a : α) (n : ℕ) (ch : ChannelState F) :
+  (pure a : Circuit F α).output n ch = a := rfl
 
-theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
-  (f >>= g).output n = (g (f.output n)).output (n + f.localLength n) := rfl
+theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) (ch : ChannelState F) :
+  (f >>= g).output n ch = (g (f.output n ch)).output (n + f.localLength n ch) (f.channels n ch) := rfl
 
-theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
-  (g <$> f).output n = g (f.output n) := rfl
+theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) (ch : ChannelState F) :
+  (g <$> f).output n ch = g (f.output n ch) := rfl
+
+theorem pure_channels_eq (a : α) (n : ℕ) (ch : ChannelState F) :
+  (pure a : Circuit F α).channels n ch = ch := rfl
+
+theorem bind_channels_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) (ch : ChannelState F) :
+  (f >>= g).channels n ch = (g (f.output n ch)).channels (n + f.localLength n ch) (f.channels n ch) := rfl
+
+theorem map_channels_eq (f : Circuit F α) (g : α → β) (n : ℕ) (ch : ChannelState F) :
+  (g <$> f).channels n ch = f.channels n ch := rfl
 
 /-- Extensionality theorem -/
 theorem ext_iff {f g : Circuit F α} :
-  (f = g) ↔ (∀ n, (f.output n = g.output n) ∧ (f.operations n = g.operations n)) := by
+  (f = g) ↔ (∀ n ch, (f.output n ch = g.output n ch) ∧ (f.operations n ch = g.operations n ch) ∧ (f.channels n ch = g.channels n ch)) := by
   constructor
   · intro h; subst h; intros; trivial
   intro h
-  funext n
+  funext n ch
   ext1
-  · exact (h n).left
-  · exact (h n).right
+  · exact (h n ch).left
+  · apply Prod.ext
+    · exact (h n ch).right.left
+    · exact (h n ch).right.right
 
 @[ext]
 theorem ext {f g : Circuit F α}
-  (h_output : ∀ n, f.output n = g.output n)
-  (h_operations : ∀ n, f.operations n = g.operations n) :
+  (h_output : ∀ n ch, f.output n ch = g.output n ch)
+  (h_operations : ∀ n ch, f.operations n ch = g.operations n ch)
+  (h_channels : ∀ n ch, f.channels n ch = g.channels n ch) :
     f = g :=
-  ext_iff.mpr fun n => ⟨ h_output n, h_operations n ⟩
+  ext_iff.mpr fun n ch => ⟨ h_output n ch, h_operations n ch, h_channels n ch ⟩
 
 -- lawful monad
 
@@ -106,14 +118,15 @@ instance : LawfulMonad (Circuit F) where
   pure_bind {α β} (x : α) (f : α → Circuit F β) := by
     simp only [bind_def, pure, List.nil_append]; rfl
   bind_assoc {α β γ} (x : Circuit F α) (f : α → Circuit F β) (g : β → Circuit F γ) := by
-    ext1 n
-    · simp only [bind_output_eq, bind_localLength_eq, add_assoc]
-    · simp only [bind_operations_eq, bind_localLength_eq, bind_output_eq,
+    ext1 n ch
+    · simp only [bind_output_eq, bind_localLength_eq, bind_channels_eq, add_assoc]
+    · simp only [bind_operations_eq, bind_localLength_eq, bind_output_eq, bind_channels_eq,
         List.append_assoc, add_assoc]
+    · simp only [bind_channels_eq, bind_localLength_eq, bind_output_eq, add_assoc]
   map_const := rfl
   id_map {α} (f : Circuit F α) := rfl
   seqLeft_eq {α β} (f : Circuit F α) (g : Circuit F β) := by
-    funext n
+    funext n ch
     simp only [SeqLeft.seqLeft, bind, List.append_nil, Seq.seq]
     rfl
   seqRight_eq {α β} (f : Circuit F α) (g : Circuit F β) := by
@@ -346,13 +359,13 @@ end Circuit
 namespace Circuit
 -- more theorems about forAll
 
-variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F}
+variable {α β : Type} {n : ℕ} {channelState : ChannelState F} {prop : Condition F} {env : Environment F}
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
-  ((f >>= g).operations n).forAll n prop ↔
-    (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
-  have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
+  ((f >>= g).operations n channelState).forAll n prop ↔
+    (f.operations n channelState).forAll n prop ∧ (((g (f.output n channelState)).operations (n + f.localLength n channelState) (f.channels n channelState)).forAll (n + f.localLength n channelState)) prop := by
+  have h_ops : (f >>= g).operations n channelState = f.operations n channelState ++ (g (f.output n channelState)).operations (n + f.localLength n channelState) (f.channels n channelState) := rfl
   rw [h_ops, Operations.forAll_append, add_comm n]
 
 -- definition of `forAll` for circuits which uses the same offset in two places
