@@ -60,10 +60,6 @@ theorem xor_mul_two_pow {x y n : ℕ} : 2 ^ n * (x ^^^ y) =  2 ^ n * x ^^^  2 ^ 
   simp only [mul_comm]
   exact Nat.bitwise_mul_two_pow
 
-theorem or_mul_two_pow {x y n : ℕ} : 2 ^ n * (x ||| y) =  2 ^ n * x |||  2 ^ n * y := by
-  simp only [mul_comm]
-  exact Nat.bitwise_mul_two_pow
-
 lemma and_mul_two_pow_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x &&& 2^n * y = 0 := by
   apply Nat.eq_of_testBit_eq
   intro i
@@ -85,42 +81,6 @@ lemma and_xor_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
   rw [zero0, zero1, Nat.xor_zero, Nat.zero_xor]
   congr; symm
   exact and_mul_two_pow
-
-lemma or_mul_two_pow_lt {n : ℕ} {x : ℕ} (hx : x < 2^n) (y : ℕ) : x ||| 2^n * y = x + 2^n * y := by
-  -- When x < 2^n and y is multiplied by 2^n, they have no overlapping bits
-  -- So OR is the same as addition
-  apply Nat.eq_of_testBit_eq
-  intro i
-  rw [Nat.testBit_or]
-  by_cases h : i < n
-  · simp only [Nat.testBit_two_pow_mul]
-    have l := Nat.testBit_two_pow_mul_add (a:=y) (i:=n) (b:=x) (by assumption) i
-    ring_nf at l ⊢
-    aesop
-  · simp only [Nat.testBit_two_pow_mul]
-    have l := Nat.testBit_two_pow_mul_add (a:=y) (i:=n) (b:=x) (by assumption) i
-    ring_nf at l ⊢
-    simp only [l]
-    split
-    · contradiction
-    rw [decide_eq_true]
-    · simp only [Bool.true_and, Bool.or_eq_right_iff_imp]
-      rw [Nat.testBit_lt_two_pow]
-      · tauto
-      calc
-        x < 2 ^ n := by assumption
-        _ ≤ 2 ^ i := by apply Nat.pow_le_pow_right <;> omega
-    omega
-
-lemma or_sum (x0 x1 y0 y1 : ℕ) (hx0 : x0 < 2^8) (hy0 : y0 < 2^8) :
-    (x0 + 2^8 * x1) ||| (y0 + 2^8 * y1) = (x0 ||| y0) + 2^8 * (x1 ||| y1) := by
-  have h1 := (or_mul_two_pow_lt (x:=x0) (y:=x1) (n:=8) (by omega)).symm
-  have h2 := (or_mul_two_pow_lt (x:=y0) (y:=y1) (n:=8) (by omega)).symm
-  have h3 := (or_mul_two_pow_lt (x:=x0 ||| y0) (y:=x1 ||| y1) (n:=8) (by exact Nat.or_lt_two_pow hx0 hy0)).symm
-  simp only [h1, h2, h3]
-  have : 2 ^ 8 * (x1 ||| y1) = (x1 ||| y1) <<< 8 := by simp only [Nat.shiftLeft_eq]; omega
-  rw [this, Nat.shiftLeft_or_distrib, Nat.shiftLeft_eq, Nat.shiftLeft_eq]
-  ac_nf
 
 theorem not64_eq_sub {x : ℕ} (x_lt : x < 2^64) :
     not64 x = 2^64 - 1 - x := by
