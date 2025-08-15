@@ -423,9 +423,7 @@ lemma fromElements_eq_iff' {M : TypeMap} [ProvableType M] {F : Type} {B : Vector
   · intro h
     rw [← h, fromElements_toElements]
 
-
 -- basic simp lemmas
-
 
 @[circuit_norm]
 theorem eval_const {F : Type} [Field F] {α : TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
