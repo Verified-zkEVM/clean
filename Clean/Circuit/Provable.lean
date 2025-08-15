@@ -415,6 +415,15 @@ lemma fromElements_eq_iff {M : TypeMap} [ProvableType M] {F : Type} {A : Vector 
   · intro h
     rw [h, fromElements_toElements]
 
+lemma fromElements_eq_iff' {M : TypeMap} [ProvableType M] {F : Type} {B : Vector F (size M)} {A : M F} :
+    A = fromElements B ↔ toElements A = B := by
+  constructor
+  · intro h
+    rw [h, toElements_fromElements]
+  · intro h
+    rw [← h, fromElements_toElements]
+
+
 -- basic simp lemmas
 
 
