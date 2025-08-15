@@ -620,6 +620,9 @@ theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] 
   rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
   ac_rfl
 
+instance {α : TypeMap} [ProvableType α] : Zero (α F) where
+  zero := fromElements (Vector.replicate _ 0)
+
 -- be able to use `field (Expression F)` in expressions
 
 instance : HAdd (field (Expression F)) (Expression F) (Expression F) where
