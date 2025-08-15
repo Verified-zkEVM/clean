@@ -70,55 +70,5 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.chunk_counter.Normalized ∧
   state.blocks_compressed.Normalized
 
-omit p_large in
-private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
-    acc_blocks_compressed
-    (h_iszero : Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) =
-      if acc_blocks_compressed.value = 0 then 1 else 0) :
-    eval env acc_var_blocks_compressed = acc_blocks_compressed →
-    ProcessBlocksState.Normalized
-      { chaining_value := acc_chaining_value, chunk_counter := acc_chunk_counter,
-        blocks_compressed := acc_blocks_compressed } →
-    (eval env
-            (U32.mk
-                (Expression.mul (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) (Expression.const ↑chunkStart))
-                0 0 0 )).value =
-    if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
-  intros h_eval h_normalized
-  simp only [explicit_provable_type, circuit_norm, fromElements, toVars, toElements]
-  simp only [ProcessBlocksState.Normalized] at h_normalized
-  simp only [Expression.eval, chunkStart, h_iszero]
-  split
-  · norm_num
-    simp only [circuit_norm]
-  · norm_num
-
-/--
-Input for each row: either a block to process or nothing.
-A chunk might contain less than 16 blocks, and `block_exists` indicates empty rows.
--/
-structure BlockInput (F : Type) where
-  block_exists : F                      -- 0 or 1 (boolean flag)
-  block_data : Vector (U32 F) 16        -- 16 words = 64 bytes when exists
-
-instance : ProvableStruct BlockInput where
-  components := [field, ProvableVector U32 16]
-  toComponents := fun { block_exists, block_data } =>
-    .cons block_exists (.cons block_data .nil)
-  fromComponents := fun xss =>
-    match xss with
-    | .cons block_exists (.cons data .nil) =>
-      { block_exists := block_exists, block_data := data }
-  fromComponents_toComponents := by
-    intros
-    rfl
-
-/--
-Predicate that all components of BlockInput are well-formed.
--/
-def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
-  (input.block_exists = 0 ∨ input.block_exists = 1) ∧
-  (∀ i : Fin 16, input.block_data[i].Normalized)
-
 end
 end Tables.BLAKE3.ProcessBlocksInductive
