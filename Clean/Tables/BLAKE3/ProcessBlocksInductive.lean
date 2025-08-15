@@ -1,0 +1,513 @@
+/-
+InductiveTable implementation for BLAKE3's processBlocks function.
+This table has exactly 17 rows:
+- Rows 0-15: Process up to 16 blocks (64 bytes each)
+- Row 16: Final output containing the result of processBlocks
+-/
+import Clean.Table.Inductive
+import Clean.Gadgets.BLAKE3.Compress
+import Clean.Specs.BLAKE3
+import Clean.Gadgets.Addition32.Addition32
+import Clean.Gadgets.Conditional
+import Clean.Gadgets.IsZero
+
+namespace Tables.BLAKE3.ProcessBlocksInductive
+open Gadgets
+open Specs.BLAKE3
+
+section
+variable {p : ℕ} [Fact p.Prime] [p_large: Fact (p > 2^32)]
+-- Add the additional constraint needed by Compress
+instance : Fact (p > 2^16 + 2^8) := .mk (by
+  cases p_large
+  linarith
+)
+
+private lemma ZMod_val_64 :
+    ZMod.val (n:=p) 64 = 64 := by
+  rw [ZMod.val_ofNat_of_lt]
+  have := p_large.elim
+  linarith
+
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 -- only in the current section
+
+private lemma U32_blockLen_value (env : Environment (F p)) :
+    (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
+  simp only [circuit_norm]
+  rw [U32.value_of_literal] -- why is this needed though value_of_literal is in circuit_norm?
+  simp only [circuit_norm]
+  omega
+
+/--
+State maintained during block processing.
+Corresponds to a simplified version of ChunkState.
+-/
+structure ProcessBlocksState (F : Type) where
+  chaining_value : Vector (U32 F) 8    -- Current chaining value (8 × 32-bit words)
+  chunk_counter : U32 F                 -- Which chunk number this is
+  blocks_compressed : U32 F             -- Number of blocks compressed so far
+
+instance : ProvableStruct ProcessBlocksState where
+  components := [ProvableVector U32 8, U32, U32]
+  toComponents := fun { chaining_value, chunk_counter, blocks_compressed } =>
+    .cons chaining_value (.cons chunk_counter (.cons blocks_compressed .nil))
+  fromComponents := fun xss =>
+    match xss with
+    | .cons cv (.cons cc (.cons bc .nil)) =>
+      { chaining_value := cv, chunk_counter := cc, blocks_compressed := bc }
+
+/--
+Convert ProcessBlocksState to ChunkState for integration with the spec.
+-/
+def ProcessBlocksState.toChunkState (state : ProcessBlocksState (F p)) : ChunkState :=
+  { chaining_value := state.chaining_value.map (·.value)
+  , chunk_counter := state.chunk_counter.value
+  , blocks_compressed := state.blocks_compressed.value
+  , block_buffer := []  -- ProcessBlocksState doesn't track partial blocks
+  }
+
+/--
+Predicate that all components of ProcessBlocksState are normalized (valid U32 values).
+-/
+def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
+  (∀ i : Fin 8, state.chaining_value[i].Normalized) ∧
+  state.chunk_counter.Normalized ∧
+  state.blocks_compressed.Normalized
+
+omit p_large in
+private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
+    acc_blocks_compressed
+    (h_iszero : Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) =
+      if acc_blocks_compressed.value = 0 then 1 else 0) :
+    eval env acc_var_blocks_compressed = acc_blocks_compressed →
+    ProcessBlocksState.Normalized
+      { chaining_value := acc_chaining_value, chunk_counter := acc_chunk_counter,
+        blocks_compressed := acc_blocks_compressed } →
+    ZMod.val (Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) * (↑chunkStart : F p)) =
+    if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
+  intros h_eval h_normalized
+  simp only [explicit_provable_type, circuit_norm, fromElements, toVars, toElements]
+  simp only [ProcessBlocksState.Normalized] at h_normalized
+  simp only [Expression.eval, chunkStart, h_iszero]
+  split
+  · norm_num
+    simp only [circuit_norm]
+  · norm_num
+
+/--
+Input for each row: either a block to process or nothing.
+A chunk might contain less than 16 blocks, and `block_exists` indicates empty rows.
+-/
+structure BlockInput (F : Type) where
+  block_exists : F                      -- 0 or 1 (boolean flag)
+  block_data : Vector (U32 F) 16        -- 16 words = 64 bytes when exists
+
+instance : ProvableStruct BlockInput where
+  components := [field, ProvableVector U32 16]
+  toComponents := fun { block_exists, block_data } =>
+    .cons block_exists (.cons block_data .nil)
+  fromComponents := fun xss =>
+    match xss with
+    | .cons block_exists (.cons data .nil) =>
+      { block_exists := block_exists, block_data := data }
+  fromComponents_toComponents := by
+    intros
+    rfl
+
+def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
+  IsBool input.block_exists ∧
+  (∀ i : Fin 16, input.block_data[i].Normalized)
+
+namespace BLAKE3StateFirstHalf
+
+def main (x : Var BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
+  return x.take 8
+
+/--
+A subcircuit that takes the first eight elements of BLAKE3State
+-/
+def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) where
+  main
+  localLength := 0
+  Assumptions input := input.Normalized
+  Spec input output := output = input.take 8 ∧ ∀ i : Fin 8, output[i].Normalized
+  soundness := by
+    circuit_proof_start
+    have : (eval env (Vector.take input_var 8) : ProvableVector U32 8 (F p)) = (Vector.take input 8 : ProvableVector U32 8 (F p)) := by
+      simp only [eval_vector, Vector.map_take]
+      ext1
+      rename_i i h_i
+      -- the following is for adding [i] to h_input equations, automate
+      simp only [eval_vector] at h_input
+      simp only [Vector.ext_iff] at h_input
+      specialize h_input i (by omega)
+      simp only [Vector.getElem_map] at ⊢ h_input
+      simp only [Vector.getElem_take]
+      simp only [h_input]
+    simp only [this]
+    simp only [BLAKE3.BLAKE3State.Normalized] at h_assumptions
+    constructor
+    · trivial
+    rintro ⟨ i, h_i ⟩
+    specialize h_assumptions i
+    simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
+    have getElem_take := Vector.getElem_take (xs := input) (i := i) (j := 8) (by omega)
+    conv =>
+      arg 1
+      change (input.take 8)[i]
+      rw [getElem_take]
+    convert h_assumptions
+    norm_num
+    omega
+  completeness := by circuit_proof_start
+
+end BLAKE3StateFirstHalf
+
+/--
+The step function that processes one block or passes through the state.
+-/
+def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
+    Circuit (F p) (Var ProcessBlocksState (F p)) := do
+
+  -- TODO: check input.Normalized
+
+  -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
+  let isFirstBlock ← IsZero.circuit state.blocks_compressed
+
+  -- TODO: check state.Normalized if it's the first block -- maybe check always, because the circuit size would be similar?
+  let startFlagU32 : Var U32 (F p) :=  ⟨isFirstBlock * (Expression.const (F:=F p) chunkStart), 0, 0, 0⟩
+
+  -- Prepare constants
+  let zeroU32 : Var U32 (F p) := ⟨0, 0, 0, 0⟩
+  let blockLenU32 : Var U32 (F p) := ⟨(blockLen : F p), 0, 0, 0⟩
+
+  -- Prepare inputs for compress
+  let compressInput : Var BLAKE3.ApplyRounds.Inputs (F p) := {
+    chaining_value := state.chaining_value
+    block_words := input.block_data
+    counter_high := zeroU32
+    counter_low := state.chunk_counter
+    block_len := blockLenU32
+    flags := startFlagU32
+  }
+
+  -- Apply compress to get new chaining value
+  let newCV16 ← BLAKE3.Compress.circuit compressInput
+  -- Take first 8 elements for the chaining value
+  let newCV8 ← BLAKE3StateFirstHalf.circuit newCV16
+
+  -- Increment blocks_compressed
+  let one32 : Var U32 (F p) := ⟨1, 0, 0, 0⟩
+  let newBlocksCompressed ← Addition32.circuit { x := state.blocks_compressed, y := one32 }
+
+  -- Conditionally select between new state and old state based on block_exists
+  -- If block_exists = 1, use newState; if block_exists = 0, use state
+  let muxedCV ← Conditional.circuit (M := ProvableVector U32 8) {
+    selector := input.block_exists
+    ifTrue := newCV8
+    ifFalse := state.chaining_value
+  }
+
+  let muxedBlocksCompressed ← Conditional.circuit {
+    selector := input.block_exists
+    ifTrue := newBlocksCompressed
+    ifFalse := state.blocks_compressed
+  }
+
+  return {
+    chaining_value := muxedCV
+    chunk_counter := state.chunk_counter  -- Never changes
+    blocks_compressed := muxedBlocksCompressed
+  }
+
+def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
+    initialState.Normalized →
+    (∀ input ∈ inputs, input.Normalized) →
+    inputs.length < 2^32 →
+    -- The spec relates the current state to the mathematical processBlocksWords function
+    -- applied to the first i blocks from inputs (where block_exists = 1)
+    let validBlocks := inputs |>.filter (·.block_exists = 1)
+    let blockWords := validBlocks.map (fun b => b.block_data.map (·.value))
+    let finalState := processBlocksWords initialState.toChunkState blockWords
+    -- Current state matches the result of processing all valid blocks so far
+    state.toChunkState.blocks_compressed < inputs.length ∧
+    state.toChunkState = finalState ∧
+    state.Normalized
+
+/--
+Lemma that handles the case when block_exists = 1 in the step function.
+Shows that the step correctly processes a block using processBlockWords.
+-/
+private lemma step_process_block (env : Environment (F p))
+    (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
+    (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
+    (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
+    (h_x : x.block_exists = 1)
+    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
+    (acc_Normalized : acc.Normalized)
+    (x_Normalized : x.Normalized)
+    (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
+    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
+      processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
+    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+  have := p_large.elim
+  simp only [step, circuit_norm] at ⊢ h_holds
+  provable_struct_simp
+  simp only [h_eval, h_x] at ⊢ h_holds
+  rcases h_holds with ⟨ h_iszero, h_holds ⟩
+  dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.Spec] at h_iszero
+  specialize h_iszero trivial
+  rcases h_holds with ⟨ h_compress, h_holds ⟩
+  dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
+  specialize h_compress (by
+    clear h_holds
+    simp only [ProcessBlocksState.Normalized] at acc_Normalized
+    simp only [BlockInput.Normalized] at x_Normalized
+    simp only [circuit_norm] at acc_Normalized x_Normalized
+    simp only [acc_Normalized, x_Normalized, circuit_norm]
+    simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+      Nat.reduceAdd, and_self, true_and, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
+    simp only [Nat.ofNat_pos, and_true, true_and]
+    constructor
+    · linarith
+    · simp only [Expression.eval, chunkStart]
+      split at h_iszero
+      · norm_num at h_iszero ⊢
+        simp only [h_iszero, ZMod.val_one]
+        omega
+      · norm_num at h_iszero ⊢
+        simp only [h_iszero]
+        norm_num
+    )
+  rcases h_holds with ⟨ h_first_half, h_holds ⟩
+  specialize h_first_half (by simp only [BLAKE3StateFirstHalf.circuit, h_compress])
+  dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
+  rcases h_holds with ⟨ h_addition, h_holds ⟩
+  specialize h_addition (by
+    simp only [Addition32.circuit, Addition32.Assumptions, circuit_norm, ZMod.val_one]
+    dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
+    simp [acc_Normalized, circuit_norm])
+  dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
+  rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
+  dsimp only [Conditional.circuit, Conditional.Spec] at h_vector_cond h_u32_cond
+  specialize h_vector_cond (by simp only [Conditional.circuit, Conditional.Assumptions, circuit_norm])
+  specialize h_u32_cond (by simp only [Conditional.circuit, Conditional.Assumptions, circuit_norm])
+  simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
+  dsimp only [BLAKE3StateFirstHalf.circuit] at h_addition ⊢
+  simp only [h_first_half, Addition32.circuit]
+  constructor
+  · simp only [ProcessBlocksState.toChunkState, ↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+      Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
+    simp only [h_addition, processBlockWords]
+    clear h_addition
+    norm_num at ⊢ h_compress
+    constructor
+    · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
+      simp only [h_compress.1]
+      clear h_compress
+      simp only [startFlag, U32_blockLen_value, circuit_norm]
+      norm_num at h_iszero
+      simp only [mul_zero, add_zero, id_eq]
+      simp only [circuit_norm]
+      norm_num
+      rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
+      simp only [ProcessBlocksState.Normalized] at acc_Normalized
+      · split
+        · rename_i h_zero
+          rw [U32.value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_zero
+          · simp_all
+          · simp only [acc_Normalized]
+        · rename_i h_nonzero
+          simp only [h_iszero]
+          rw [U32.value_zero_iff_components_zero (x:=acc_blocks_compressed)] at h_nonzero
+          · aesop
+          · simp only [acc_Normalized]
+      · simp_all
+      · simp_all
+    · simp only [ProcessBlocksState.toChunkState] at blocks_compressed_not_many
+      simp only [circuit_norm]
+      omega
+  · simp only [ProcessBlocksState.Normalized]
+    constructor
+    · aesop
+    · simp only [↓reduceIte, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+        Nat.reduceAdd, id_eq, Pi.zero_apply] at ⊢ h_addition
+      dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
+      simp [h_addition.2, acc_Normalized]
+
+/--
+Lemma that handles the case when block_exists ≠ 1 in the step function.
+Shows that the step function returns the accumulator unchanged when skipping a block.
+-/
+private lemma step_skip_block (env : Environment (F p))
+    (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
+    (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
+    (h_normalized : x.Normalized)
+    (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
+    (h_x : ¬(x.block_exists = 1))
+    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput))) :
+    eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput)) = acc := by
+  simp only [circuit_norm, step] at h_holds
+  provable_struct_simp
+  have x_block_exists_zero : x_block_exists = 0 := by
+    simp only [BlockInput.Normalized] at h_normalized
+    cases h_normalized.1 with
+    | inl _ => assumption
+    | inr _ => contradiction
+  simp only [x_block_exists_zero] at *
+  simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
+  norm_num at h_holds ⊢
+  simp only [step, circuit_norm, h_holds, h_eval]
+
+lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
+  intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized input_Normalized inputs_short
+  specialize spec_previous (by assumption)
+  specialize spec_previous (by simp_all)
+  specialize spec_previous (by
+    simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+      zero_add, Nat.reducePow] at inputs_short
+    omega)
+  -- I think it's better to discharge conditions of spec_previous here
+  rw [List.concat_eq_append, List.filter_append]
+  have : (xs.concat x)[row_index]'(by simp_all) = x := by simp_all
+  simp only [this]
+  have : (List.take row_index xs) = xs := by simp_all
+  simp only [this] at spec_previous
+  simp only [List.filter_singleton]
+  by_cases h_x : x.block_exists = 1
+  · simp only [h_x, decide_true, cond_true]
+    have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
+      spec_previous.2.2 (by
+        specialize input_Normalized x (by apply List.mem_of_getElem; omega)
+        exact input_Normalized)
+        (by
+          simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+            zero_add, Nat.reducePow] at inputs_short
+          omega)
+    simp only [one_op]
+    constructor
+    · simp only [processBlockWords, List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+        zero_add, add_lt_add_iff_right]
+      omega
+    simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
+  · simp only [h_x, decide_false, cond_false, List.append_nil]
+    have no_op := step_skip_block env acc_var x_var acc x (by aesop) h_eval h_x h_holds
+    simp only [no_op]
+    constructor
+    · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+      zero_add]
+      omega
+    · simp [spec_previous]
+
+def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
+
+def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
+    input.Normalized ∧ i < 2^32
+
+set_option maxHeartbeats 300000 in
+lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
+    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
+    dsimp only [InitialStateAssumptions, InputAssumptions] at *
+    rcases h_assumptions with ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩ ⟩
+    specialize h_assumptions (by assumption)
+    specialize h_assumptions (by
+      intro input input_mem
+      obtain ⟨ i, h_i, get_input ⟩ := List.getElem_of_mem input_mem
+      rw [← get_input]
+      specialize h_inputs i (by omega)
+      simp only [h_inputs])
+    have := p_large.elim
+    specialize h_assumptions (by omega)
+    have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_inputs, ⟨ h_assumptions, h_input ⟩⟩⟩
+    simp only [circuit_norm, step] at ⊢ h_witnesses
+    provable_struct_simp
+    simp only [h_eval] at ⊢ h_witnesses
+    dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
+    dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
+    constructor
+    · simp_all
+    constructor
+    · constructor
+      · simp_all
+      constructor
+      · simp only [h_assumptions]
+        trivial
+      constructor
+      · simp only [circuit_norm]
+        omega
+      constructor
+      · simp_all
+      constructor
+      · simp only [circuit_norm]
+        omega
+      simp only [chunkStart]
+      rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
+      simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
+      specialize h_witnesses_iszero (by simp_all)
+      simp only [IsZero.Spec] at h_witnesses_iszero
+      constructor
+      · split at h_witnesses_iszero
+        · simp only [h_witnesses_iszero, Expression.eval]
+          norm_num
+          simp only [ZMod.val_one]
+          omega
+        · simp only [h_witnesses_iszero, Expression.eval]
+          norm_num
+      · norm_num
+    constructor
+    · dsimp only [BLAKE3StateFirstHalf.circuit]
+      dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
+      rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
+      -- The following is a repetition of the above
+      simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
+      specialize h_witnesses_iszero (by simp_all)
+      simp only [IsZero.Spec] at h_witnesses_iszero
+      specialize h_compress (by
+        simp only [h_assumptions]
+        constructor
+        · trivial
+        constructor
+        · trivial
+        constructor
+        · simp only [circuit_norm]
+          omega
+        constructor
+        · trivial
+        constructor
+        · simp only [circuit_norm]
+          omega
+        simp only [U32.normalized_componentwise, chunkStart]
+        constructor
+        · split at h_witnesses_iszero
+          · simp only [h_witnesses_iszero, Expression.eval]
+            norm_num
+            simp only [circuit_norm]
+            omega
+          · simp only [h_witnesses_iszero, Expression.eval]
+            norm_num
+        · norm_num)
+      simp only [h_compress]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions, IsBool]
+
+/--
+The InductiveTable for processBlocks.
+-/
+def table : InductiveTable (F p) ProcessBlocksState BlockInput where
+  step
+
+  Spec
+
+  InitialStateAssumptions initialState := initialState.Normalized
+  InputAssumptions i input :=
+    input.Normalized ∧ i < 2^32
+
+  soundness
+  completeness
+  subcircuitsConsistent := by
+    intros
+    dsimp only [step]
+    simp only [circuit_norm]
+    omega
+
+end
+end Tables.BLAKE3.ProcessBlocksInductive
