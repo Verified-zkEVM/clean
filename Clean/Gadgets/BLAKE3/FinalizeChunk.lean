@@ -86,7 +86,7 @@ lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
   simp [U32.Normalized, ZMod.val_zero]
   omega
 
-attribute [local circuit_norm] ZMod.val_zero ZMod.val_one
+attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart
 
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
@@ -318,15 +318,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · simp_all
     · simp only [circuit_norm, h_IsZero]
       split
-      · simp only [one_mul, ZMod.val_zero, Nat.ofNat_pos, and_self, and_true, chunkStart, pow_zero, Nat.cast_one, ZMod.val_one]
+      · simp only [one_mul, circuit_norm, Nat.ofNat_pos, and_self, and_true, chunkStart, pow_zero, Nat.cast_one, ZMod.val_one]
         linarith
-      · simp only [zero_mul, ZMod.val_zero, Nat.ofNat_pos, and_self])
+      · simp only [zero_mul, circuit_norm, Nat.ofNat_pos, and_self])
   rcases h_holds with ⟨h_Or32_2, h_Compress⟩
   simp only [Or32.circuit, Or32.Assumptions, Or32.Spec] at h_Or32_2
   specialize h_Or32_2 (by
     constructor
     · simp only [h_Or32_1]
-    · simp only [circuit_norm, ZMod.val_zero]
+    · simp only [circuit_norm]
       rw [ZMod_val_chunkEnd]
       decide)
   simp only [Compress.circuit, Compress.Assumptions, Compress.Spec] at h_Compress
@@ -408,15 +408,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       split
       · simp only [startFlag]
         simp_all only [circuit_norm]
-        simp only [chunkStart]
         norm_num
         simp only [U32.value]
-        simp only [ZMod.val_one, circuit_norm]
+        simp only [circuit_norm]
         ring
       · simp only [startFlag]
         simp_all only [circuit_norm]
         norm_num
-        simp only [U32.value, ZMod.val_zero]
+        simp only [U32.value, circuit_norm]
         ring
     · simp only [h_assumptions]
     · simp only [h_input]
