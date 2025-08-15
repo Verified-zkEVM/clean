@@ -131,6 +131,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
   simp only [table_norm, circuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
+  simp only [circuit_norm] at hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
