@@ -86,6 +86,8 @@ lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
   simp [U32.Normalized, ZMod.val_zero]
   omega
 
+attribute [local circuit_norm] ZMod.val_zero ZMod.val_one
+
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
 -/
@@ -339,19 +341,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · apply bytesToWords_normalized
       aesop
     constructor
-    · simp only [U32.Normalized_componentwise]
-      simp only [eval]
-      simp only [and_self, toVars, toElements, fromElements]
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Expression.eval, ZMod.val_zero]
+    · simp only [circuit_norm]
       decide
     constructor
     · simp only [h_assumptions]
-    · simp only [U32.Normalized_componentwise]
-      simp only [eval]
-      simp only [and_self, toVars, toElements, fromElements]
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Expression.eval, ZMod.val_zero]
-      simp only [h_input]
-      simp only [Nat.ofNat_pos, and_true]
+    · simp only [circuit_norm]
       omega)
   constructor
   · simp only [finalizeChunk]
@@ -402,12 +396,6 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         rw [ZMod_val_chunkEnd]
         simp only [chunkEnd, ZMod.val_zero]
         norm_num
-      simp only [explicit_provable_type, toVars]
-      simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
-        List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
-        List.length_map, Array.length_toList, Vector.size_toArray, id_eq, Vector.map_mk,
-        List.map_toArray, List.map_cons, List.map_nil, startFlag]
-      simp only [Expression.eval]
       simp only [h_IsZero]
       simp only [ProcessBlocksState.Normalized] at h_assumptions
       have flag_eq : (if ∀ (i : Fin (size U32)), (toElements input_state_blocks_compressed)[i] = 0 then (1 : F p) else 0) = if input_state_blocks_compressed.value = 0 then 1 else 0 := by
@@ -418,11 +406,16 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       rw [flag_eq]
       congr
       split
-      · simp only [U32.value]
+      · simp only [startFlag]
+        simp_all only [circuit_norm]
         simp only [chunkStart]
         norm_num
-        simp only [ZMod.val_one]
-      · norm_num
+        simp only [U32.value]
+        simp only [ZMod.val_one, circuit_norm]
+        ring
+      · simp only [startFlag]
+        simp_all only [circuit_norm]
+        norm_num
         simp only [U32.value, ZMod.val_zero]
         ring
     · simp only [h_assumptions]
@@ -459,11 +452,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · simp only [Or32.circuit, Or32.Assumptions]
     apply And.intro
     · aesop
-    · simp only [ProvableType.eval]
-      simp only [id_eq]
-      simp only [fromElements, toVars, toElements]
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-      simp only [U32.Normalized, Expression.eval, ZMod.val_zero, chunkStart]
+    · simp only [U32.Normalized, Expression.eval, ZMod.val_zero, chunkStart]
       simp only [h_iszero]
       split
       · norm_num
@@ -475,17 +464,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     simp only [Or32.circuit, Or32.Assumptions]
     apply And.intro
     · aesop
-    · simp only [ProvableType.eval]
-      simp only [id_eq]
-      simp only [fromElements, toVars, toElements]
-      simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-      simp only [U32.Normalized, Expression.eval, ZMod.val_zero, chunkStart]
-      simp only [h_iszero]
+    · simp only [h_iszero]
       split
-      · norm_num
+      · simp only [chunkStart, circuit_norm]
+        norm_num
         simp only [ZMod.val_one]
         omega
-      · norm_num)
+      · simp only [circuit_norm]
+        norm_num)
   simp only [Or32.circuit, Or32.Spec] at h_or
   apply And.intro
   · simp only [Or32.circuit, Or32.Assumptions]
@@ -516,7 +502,6 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · apply bytesToWords_normalized
     simp only [h_input]
     aesop
-  simp only [h_input]
   omega
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {

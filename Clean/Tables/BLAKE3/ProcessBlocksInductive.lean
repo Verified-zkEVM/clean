@@ -89,11 +89,9 @@ private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_
   simp only [ProcessBlocksState.Normalized] at h_normalized
   simp only [Expression.eval, chunkStart, h_iszero]
   split
-  · simp only [U32.value]
-    norm_num
+  · norm_num
     simp only [circuit_norm]
-  · simp only [U32.value]
-    norm_num
+  · norm_num
 
 /--
 Input for each row: either a block to process or nothing.

@@ -272,17 +272,34 @@ lemma value_injective_on_normalized (x y : U32 (F p))
 
 end ValueInjectivity
 
-omit p_large_enough in
-/--
-Lemma showing that U32 Normalized property is equivalent to all components being < 256
--/
+omit [Fact (Nat.Prime p)] p_large_enough in
 @[circuit_norm]
-lemma Normalized_componentwise (env : Environment (F p)) (a b c d : Var field (F p)):
-    (eval (α := U32) env
-    { x0 := a, x1 := b, x2 := c, x3 := d }).Normalized ↔
-    ((eval env a).val < 256 ∧ (eval env b).val < 256 ∧ (eval env c).val < 256 ∧ (eval env d).val < 256) := by
-  simp only [Parser.Attr.explicit_provable_type, ProvableType.eval, fromElements, toVars, toElements, Vector.map]
-  simp only [List.map_toArray, List.map_cons, List.map_nil, U32.Normalized]
+lemma value_of_literal (a b c d : F p) :
+  (U32.mk a b c d).value =
+    a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
+
+omit p_large_enough in
+@[circuit_norm]
+lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
+    eval env (U32.mk a b c d) =
+    U32.mk (eval env a) (eval env b) (eval env c) (eval env d) := by
+  simp only [explicit_provable_type, circuit_norm]
+
+omit p_large_enough in
+omit [Fact (Nat.Prime p)] in
+@[circuit_norm]
+lemma normalized_componentwise (a b c d : F p):
+    (U32.mk a b c d).Normalized ↔
+    (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
+  simp only [explicit_provable_type, circuit_norm, U32.Normalized]
+
+omit p_large_enough in
+omit [Fact (Nat.Prime p)] in
+@[circuit_norm]
+lemma normalized_componentwise' (a b c d : field (F p)):
+    (U32.mk a b c d).Normalized ↔
+    (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
+  simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
 /--
 Lemma: For a normalized U32, value = 0 iff all components are 0
