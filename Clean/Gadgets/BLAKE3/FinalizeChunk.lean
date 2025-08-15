@@ -86,7 +86,7 @@ lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
   simp [U32.Normalized, ZMod.val_zero]
   omega
 
-attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart
+attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero startFlag
 
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
@@ -371,28 +371,26 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
           Nat.add_eq_left, mul_eq_zero, OfNat.ofNat_ne_zero, Nat.add_eq_zero, ZMod.val_eq_zero, or_false,
           and_self, false_or, Expression.eval]
         norm_num
-      simp only [add_zero]
+      simp only [circuit_norm]
       conv_lhs =>
         arg 1
         arg 4
-        simp only [explicit_provable_type, toVars]
-        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value, h_input]
-        simp only [Expression.eval, ZMod.val_zero]
+        simp only [explicit_provable_type, circuit_norm, h_input]
+        rw [U32.value_of_literal] -- why doesn't this fire in circuit_norm?
+        simp only [circuit_norm]
         ring_nf
       conv_rhs =>
         arg 1
         arg 4
-        simp only [Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
-          List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.map_take, List.length_take,
-          List.length_map, Array.length_toList, Vector.size_toArray]
+        simp only [circuit_norm, explicit_provable_type, Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
+          List.extract_eq_drop_take, tsub_zero, List.map_take, List.length_take]
         rw [Nat.min_eq_left (h:=by simp_all)]
       conv_lhs =>
         arg 1
         arg 5
         arg 2
+        simp only [circuit_norm]
         simp only [eval, U32.value]
-        simp only [toVars, toElements, fromElements]
-        simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Nat.reducePow, Expression.eval]
         rw [ZMod_val_chunkEnd]
         simp only [chunkEnd, ZMod.val_zero]
         norm_num
@@ -406,14 +404,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       rw [flag_eq]
       congr
       split
-      · simp only [startFlag]
-        simp_all only [circuit_norm]
+      · simp_all only [circuit_norm]
         norm_num
         simp only [U32.value]
         simp only [circuit_norm]
         ring
-      · simp only [startFlag]
-        simp_all only [circuit_norm]
+      · simp_all only [circuit_norm]
         norm_num
         simp only [U32.value, circuit_norm]
         ring
@@ -451,7 +447,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · simp only [Or32.circuit, Or32.Assumptions]
     apply And.intro
     · aesop
-    · simp only [U32.Normalized, Expression.eval, ZMod.val_zero, chunkStart]
+    · simp only [circuit_norm]
       simp only [h_iszero]
       split
       · norm_num
@@ -465,9 +461,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     · aesop
     · simp only [h_iszero]
       split
-      · simp only [chunkStart, circuit_norm]
+      · simp only [circuit_norm]
         norm_num
-        simp only [ZMod.val_one]
+        simp only [circuit_norm]
         omega
       · simp only [circuit_norm]
         norm_num)
@@ -477,7 +473,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     simp only [h_or]
     constructor
     · trivial
-    simp only [circuit_norm, ZMod.val_zero]
+    simp only [circuit_norm]
     rw [ZMod_val_chunkEnd]
     omega
   simp only [Compress.circuit, Compress.Assumptions, ApplyRounds.Assumptions]
@@ -487,7 +483,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     simp only [h_or]
     constructor
     · trivial
-    simp only [circuit_norm, ZMod.val_zero]
+    simp only [circuit_norm]
     rw [ZMod_val_chunkEnd]
     omega
   )
@@ -495,7 +491,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [h_or2]
   simp only [ProcessBlocksState.Normalized] at h_assumptions
   simp only [h_assumptions]
-  simp only [circuit_norm, ZMod.val_zero]
+  simp only [circuit_norm]
   simp only [Nat.ofNat_pos, and_self, and_true, true_and]
   constructor
   · apply bytesToWords_normalized
