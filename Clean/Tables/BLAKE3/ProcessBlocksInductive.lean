@@ -221,8 +221,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   }
 
 def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
-    initialState.Normalized → -- TODO: drop, assert in the circuit
-    (∀ input ∈ inputs, input.Normalized) → -- TODO: drop, assert in the circuit
+    initialState.Normalized →
+    (∀ input ∈ inputs, input.Normalized) →
     inputs.length < 2^32 →
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
