@@ -30,7 +30,8 @@ private lemma ZMod_val_64 :
   have := p_large.elim
   linarith
 
-attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart -- only in the current section
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
+  List.concat_eq_append -- only in the current section
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
@@ -351,12 +352,10 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized inputs_short
   specialize spec_previous (by assumption)
   specialize spec_previous (by
-    simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-      Nat.reducePow] at inputs_short
+    simp only [circuit_norm] at inputs_short
     omega)
-  rw [List.concat_eq_append, List.filter_append]
-  have : (xs.concat x)[row_index]'(by simp_all) = x := by simp_all
-  simp only [this]
+  simp only [circuit_norm]
+  rw [List.filter_append]
   have : (List.take row_index xs) = xs := by simp_all
   simp only [this] at spec_previous
   have input_normalized : x.Normalized := by
@@ -376,21 +375,22 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
       spec_previous.2.2.2 input_normalized
         (by
-          simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+          simp only [List.concat_eq_append, circuit_norm,
             Nat.reducePow] at inputs_short
           omega)
+    simp only [circuit_norm] at one_op
     simp only [one_op]
     constructor
-    · simp only [processBlockWords, List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
+    · simp only [processBlockWords, List.concat_eq_append, circuit_norm,
         add_lt_add_iff_right]
       omega
     simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
   · simp only [h_x, decide_false, cond_false, List.append_nil]
     have no_op := step_skip_block env acc_var x_var acc x (by aesop) h_eval h_x h_holds
+    simp only [circuit_norm] at no_op
     simp only [no_op]
     constructor
-    · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil]
-      omega
+    · omega
     · simp [spec_previous]
 
 def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
@@ -400,7 +400,7 @@ def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
-    dsimp only [InitialStateAssumptions, InputAssumptions] at *
+    dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by assumption)
     have := p_large.elim
@@ -461,10 +461,9 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           omega
         constructor
         · trivial
-        constructor
-        · simp only [circuit_norm]
-          omega
         simp only [circuit_norm]
+        constructor
+        · omega
         constructor
         · split at h_witnesses_iszero
           · simp only [h_witnesses_iszero]
@@ -475,7 +474,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             norm_num
         · norm_num)
       simp only [h_compress]
-    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions, IsBool]
+    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions]
 
 /--
 The InductiveTable for processBlocks.
