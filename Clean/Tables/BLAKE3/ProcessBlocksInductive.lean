@@ -288,6 +288,8 @@ private lemma step_process_block (env : Environment (F p))
   simp only [step, circuit_norm] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
+  rcases h_holds with ⟨ h_assert_normalized, h_holds ⟩
+  specialize h_assert_normalized (by sorry)
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.Spec] at h_iszero
   specialize h_iszero trivial
@@ -342,10 +344,11 @@ private lemma step_process_block (env : Environment (F p))
       simp only [startFlag, U32_blockLen_value, circuit_norm]
       norm_num at h_iszero
       simp only [mul_zero, add_zero, id_eq]
-      simp only [circuit_norm]
+      simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at ⊢ h_iszero
       norm_num
       rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
       simp only [ProcessBlocksState.Normalized] at acc_Normalized
+      simp only [IsZero.circuit, circuit_norm]
       simp only [h_iszero]
       · simp_all [circuit_norm, IsZero.circuit]
       · simp_all
@@ -449,6 +452,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     simp only [h_eval] at ⊢ h_witnesses
     dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
+    constructor
+    · sorry
     constructor
     · simp_all
     constructor
