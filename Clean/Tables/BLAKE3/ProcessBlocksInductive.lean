@@ -31,14 +31,7 @@ private lemma ZMod_val_64 :
   linarith
 
 attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
-  -- only in the current section
-
-private lemma U32_blockLen_value (env : Environment (F p)) :
-    (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
-  simp only [circuit_norm]
-  rw [U32.value_of_literal] -- why is this needed though value_of_literal is in circuit_norm?
-  simp only [circuit_norm]
-  omega
+  id_eq -- only in the current section
 
 /--
 State maintained during block processing.
@@ -311,7 +304,7 @@ private lemma step_process_block (env : Environment (F p))
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
   norm_num at ⊢ h_compress h_iszero
-  simp only [h_compress.1, startFlag, U32_blockLen_value, mul_zero, id_eq, circuit_norm]
+  simp only [h_compress.1, startFlag, circuit_norm]
   constructor
   · norm_num
     constructor
