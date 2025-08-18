@@ -142,7 +142,14 @@ def circuit : FormalAssertion (F p) BlockInput where
     · simp_all
     simp only [←h_input, eval_vector] -- provable_vector_simp wanted
     simp_all
-  completeness := by sorry
+
+  completeness := by
+    circuit_proof_start [U32.AssertNormalized.circuit]
+    simp only [BlockInput.Normalized] at h_spec
+    constructor
+    · simp_all
+    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
+    simp_all
 
 end BLAKE3BlockInputNormalized
 
