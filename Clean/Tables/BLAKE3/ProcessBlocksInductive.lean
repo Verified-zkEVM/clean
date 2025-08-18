@@ -140,22 +140,8 @@ def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) wher
   Assumptions input := input.Normalized
   Spec input output := output = input.take 8 ∧ ∀ i : Fin 8, output[i].Normalized
   soundness := by
-    circuit_proof_start
-    have : (eval env (Vector.take input_var 8) : ProvableVector U32 8 (F p)) = (Vector.take input 8 : ProvableVector U32 8 (F p)) := by
-      simp only [eval_vector, Vector.map_take]
-      ext1
-      rename_i i h_i
-      -- the following is for adding [i] to h_input equations, automate
-      simp only [eval_vector] at h_input
-      simp only [Vector.ext_iff] at h_input
-      specialize h_input i (by omega)
-      simp only [Vector.getElem_map] at ⊢ h_input
-      simp only [Vector.getElem_take]
-      simp only [h_input]
-    simp only [this]
+    circuit_proof_start [eval_vector_take]
     simp only [BLAKE3.BLAKE3State.Normalized] at h_assumptions
-    constructor
-    · trivial
     rintro ⟨ i, h_i ⟩
     specialize h_assumptions i
     simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
