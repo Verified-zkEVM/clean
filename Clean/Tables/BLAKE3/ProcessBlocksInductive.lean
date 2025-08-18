@@ -31,7 +31,7 @@ private lemma ZMod_val_64 :
   linarith
 
 attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
-  List.concat_eq_append -- only in the current section
+  -- only in the current section
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
@@ -375,13 +375,13 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
       spec_previous.2.2.2 input_normalized
         (by
-          simp only [List.concat_eq_append, circuit_norm,
+          simp only [circuit_norm,
             Nat.reducePow] at inputs_short
           omega)
     simp only [circuit_norm] at one_op
     simp only [one_op]
     constructor
-    · simp only [processBlockWords, List.concat_eq_append, circuit_norm,
+    · simp only [processBlockWords, circuit_norm,
         add_lt_add_iff_right]
       omega
     simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
