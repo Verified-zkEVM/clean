@@ -306,7 +306,7 @@ private lemma step_process_block (env : Environment (F p))
     simp only [Nat.ofNat_pos, and_true, true_and]
     constructor
     · linarith
-    · simp only [Expression.eval, chunkStart]
+    · simp only [circuit_norm, chunkStart]
       split at h_iszero
       · norm_num at h_iszero ⊢
         simp only [h_iszero, ZMod.val_one]
@@ -331,37 +331,31 @@ private lemma step_process_block (env : Environment (F p))
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
   dsimp only [BLAKE3StateFirstHalf.circuit] at h_addition ⊢
   simp only [h_first_half, Addition32.circuit]
+  simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
+  simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
+  dsimp only [BLAKE3.BLAKE3State.value] at h_compress
   constructor
-  · simp only [ProcessBlocksState.toChunkState, ↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+  · simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
     simp only [h_addition, processBlockWords]
     clear h_addition
     norm_num at ⊢ h_compress
+    simp only [h_compress.1]
+    simp only [startFlag, U32_blockLen_value, circuit_norm]
+    norm_num at h_iszero
+    simp only [mul_zero, add_zero, id_eq]
+    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at ⊢ h_iszero
+    norm_num
     constructor
-    · dsimp only [BLAKE3.BLAKE3State.value] at h_compress
-      simp only [h_compress.1]
-      clear h_compress
-      simp only [startFlag, U32_blockLen_value, circuit_norm]
-      norm_num at h_iszero
-      simp only [mul_zero, add_zero, id_eq]
-      simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at ⊢ h_iszero
-      norm_num
-      rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
-      simp only [ProcessBlocksState.Normalized] at acc_Normalized
-      simp only [IsZero.circuit, circuit_norm]
-      simp only [h_iszero]
+    · rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
+      · simp_all only [IsZero.circuit, circuit_norm]
       · simp_all [circuit_norm, IsZero.circuit]
-      · simp_all
-      · simp_all
-    · simp only [ProcessBlocksState.toChunkState] at blocks_compressed_not_many
-      simp only [circuit_norm]
-      omega
-  · simp only [ProcessBlocksState.Normalized]
-    constructor
+      · simp_all [ProcessBlocksState.Normalized]
+    · omega
+  · constructor
     · aesop
     · simp only [↓reduceIte, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
         Nat.reduceAdd, id_eq, Pi.zero_apply] at ⊢ h_addition
-      dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
       simp [h_addition.2, acc_Normalized]
 
 /--
