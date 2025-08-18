@@ -396,17 +396,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
         norm_num
       simp only [h_IsZero]
       simp only [ProcessBlocksState.Normalized] at h_assumptions
-      have flag_eq : (if ∀ (i : Fin (size U32)), (toElements input_state_blocks_compressed)[i] = 0 then (1 : F p) else 0) = if input_state_blocks_compressed.value = 0 then 1 else 0 := by
-        conv =>
-          rhs
-          arg 1
-          rw [U32.value_zero_iff_components_zero (hx:=by simp only [h_assumptions])]
-      rw [flag_eq]
       congr
       split
-      · simp_all only [circuit_norm]
+      · simp only [circuit_norm]
+        simp_all only [circuit_norm]
         norm_num
-        simp only [U32.value]
         simp only [circuit_norm]
         ring
       · simp_all only [circuit_norm]
