@@ -31,7 +31,7 @@ private lemma ZMod_val_64 :
   linarith
 
 attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
-  id_eq List.sum_cons List.sum_nil List.mem_append -- only in the current section
+  id_eq List.sum_cons List.sum_nil List.mem_append List.mem_cons or_false -- only in the current section
 
 /--
 State maintained during block processing.
@@ -272,9 +272,7 @@ private lemma step_process_block (env : Environment (F p))
   simp only [circuit_norm] at acc_Normalized x_Normalized
   specialize h_compress (by
     simp only [acc_Normalized, x_Normalized, circuit_norm]
-    simp only [implies_true, Nat.reduceMul,
-      Nat.reduceAdd, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
-    simp only [Nat.ofNat_pos, circuit_norm]
+    simp only [Nat.ofNat_pos, Nat.reduceMul, Nat.reduceAdd, circuit_norm, explicit_provable_type]
     constructor
     · linarith
     · split at h_iszero
@@ -360,7 +358,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp_all
   constructor
   · intro input
-    simp only [List.mem_cons, List.not_mem_nil, or_false]
     rintro (_ | _) <;> simp_all
   simp only [List.filter_singleton]
   by_cases h_x : x.block_exists = 1
