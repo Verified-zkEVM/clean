@@ -182,7 +182,6 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
   let isFirstBlock ← IsZero.circuit state.blocks_compressed
 
-  -- TODO: check state.Normalized if it's the first block -- maybe check always, because the circuit size would be similar?
   let startFlagU32 : Var U32 (F p) :=  ⟨isFirstBlock * (Expression.const (F:=F p) chunkStart), 0, 0, 0⟩
 
   -- Prepare constants
