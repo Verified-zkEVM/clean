@@ -31,7 +31,7 @@ private lemma ZMod_val_64 :
   linarith
 
 attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
-  id_eq List.sum_cons List.sum_nil List.mem_append List.mem_cons or_false -- only in the current section
+  id_eq List.sum_cons List.sum_nil List.mem_append List.mem_cons or_false List.filter_append List.filter_singleton -- only in the current section
 
 /--
 State maintained during block processing.
@@ -271,13 +271,12 @@ private lemma step_process_block (env : Environment (F p))
   simp only [BlockInput.Normalized] at x_Normalized
   simp only [circuit_norm] at acc_Normalized x_Normalized
   specialize h_compress (by
-    simp only [acc_Normalized, x_Normalized, circuit_norm]
-    simp only [Nat.ofNat_pos, Nat.reduceMul, Nat.reduceAdd, circuit_norm, explicit_provable_type]
+    simp only [acc_Normalized, x_Normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]
     constructor
     · linarith
     · split at h_iszero
       · norm_num at h_iszero ⊢
-        simp only [h_iszero, ZMod.val_one]
+        simp only [h_iszero, circuit_norm]
         omega
       · norm_num at h_iszero ⊢
         simp only [h_iszero]
@@ -346,9 +345,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp only [circuit_norm] at inputs_short
     omega)
   simp only [circuit_norm]
-  rw [List.filter_append]
-  have : (List.take row_index xs) = xs := by simp_all
-  simp only [this] at spec_previous
   have input_normalized : x.Normalized := by
     simp only [circuit_norm, step] at h_holds ⊢
     rcases h_holds with ⟨ h_normalized, h_holds ⟩
@@ -359,7 +355,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   constructor
   · intro input
     rintro (_ | _) <;> simp_all
-  simp only [List.filter_singleton]
   by_cases h_x : x.block_exists = 1
   · simp only [h_x, decide_true, cond_true]
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
