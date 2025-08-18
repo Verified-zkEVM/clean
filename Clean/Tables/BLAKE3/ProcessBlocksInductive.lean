@@ -454,7 +454,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor
-    · sorry
+    · simp_all [BLAKE3BlockInputNormalized.circuit]
     constructor
     · simp_all
     constructor
