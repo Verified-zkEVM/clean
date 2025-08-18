@@ -125,7 +125,6 @@ namespace BLAKE3BlockInputNormalized
 def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
   assertBool x.block_exists
   Circuit.forEach x.block_data U32.AssertNormalized.circuit
-  return ()
 
 def circuit : FormalAssertion (F p) BlockInput where
   main
