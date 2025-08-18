@@ -34,8 +34,8 @@ instance elaborated : ElaboratedCircuit F M field where
 
 def Assumptions (_ : M F) : Prop := True
 
-def Spec (input : M F) (output : F) : Prop :=
-  output = if (∀ i : Fin (size M), (toElements input)[i] = 0) then 1 else 0
+def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
+  output = if input = 0 then 1 else 0
 
 /--
 lemma for soundness. Separate because the statement is optimized for induction.
@@ -53,10 +53,11 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       (Fin.foldl n
         (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
         1) =
-    if ∀ (i : Fin n), vals[i] = 0 then 1 else 0 := by
+    if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
   induction n generalizing i₀
   · simp only [id_eq, Fin.getElem_fin, Fin.foldl_zero, IsEmpty.forall_iff, ↓reduceIte, Expression.eval]
+    simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
   · rename_i pre h_ih
     simp only [Fin.foldl_succ_last, Expression.eval]
     let vars_pre := vars.take pre |>.cast (by simp : min pre (pre + 1) = pre)
@@ -81,24 +82,39 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     specialize h_isZero pre trivial
     norm_num at h_isZero ⊢
     simp only [h_isZero, Fin.forall_fin_succ']
-    norm_num
-    split
-    · rename_i h
-      simp only [h]
-      simp only [implies_true, true_and, ← h_eval, Vector.getElem_map]
-    · rename_i h
-      simp only [h]
-      simp only [false_and, ↓reduceIte]
+    split_ifs <;> try rfl
+    · rename_i h_smaller h_last h_all
+      apply False.elim
+      apply h_all
+      intro i
+      by_cases h : i < pre
+      · intro _
+        aesop
+      intro _
+      have : i = pre := by omega
+      aesop
+    · rename_i h_smaller h_last h_all
+      apply False.elim
+      apply h_last
+      aesop
+    · aesop
 
-theorem soundness : Soundness F (elaborated (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
   circuit_proof_start
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
+  conv_rhs =>
+    arg 1
+    rw [Zero.toOfNat0, OfNat.ofNat]
+    simp only [Zero.zero]
+    rw [ProvableType.fromElements_eq_iff']
+    rw [Vector.ext_iff]
+    simp only [Vector.getElem_replicate]
   apply foldl_isZero_eq_one_iff <;> assumption
 
 theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
-def circuit : FormalCircuit F M field := {
+def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 
