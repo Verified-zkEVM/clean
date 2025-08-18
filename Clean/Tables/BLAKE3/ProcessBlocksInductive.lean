@@ -289,7 +289,7 @@ private lemma step_process_block (env : Environment (F p))
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
   rcases h_holds with ⟨ h_assert_normalized, h_holds ⟩
-  specialize h_assert_normalized (by sorry)
+  specialize h_assert_normalized trivial
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.Spec] at h_iszero
   specialize h_iszero trivial
