@@ -16,6 +16,7 @@ import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
 import Clean.Tables.Fibonacci32Inductive
 import Clean.Tables.KeccakInductive
+import Clean.Tables.BLAKE3.ProcessBlocksInductive
 import Clean.Gadgets.Bits
 import Clean.Gadgets.Conditional
 import Clean.Gadgets.IsZeroField
@@ -26,5 +27,6 @@ import Clean.Gadgets.BLAKE3.Compress
 import Clean.Gadgets.BLAKE3.Permute
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
+import Clean.Gadgets.BLAKE3.FinalizeChunk
 import Clean.Test
 import Clean.Specs.BLAKE3.ChunkProcessingTests
