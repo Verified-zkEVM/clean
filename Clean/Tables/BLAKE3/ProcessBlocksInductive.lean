@@ -127,6 +127,23 @@ def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
   Circuit.forEach x.block_data U32.AssertNormalized.circuit
   return ()
 
+def circuit : FormalAssertion (F p) BlockInput where
+  main
+  localLength_eq := by
+    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
+  subcircuitsConsistent := by
+    intros input offset
+    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
+    simp only [Circuit.forEach.forAll]
+
+    simp?
+    sorry
+  Assumptions _ := True
+  Spec x := x.Normalized
+
+  soundness := by sorry
+  completeness := by sorry
+
 end BLAKE3BlockInputNormalized
 
 namespace BLAKE3StateFirstHalf
