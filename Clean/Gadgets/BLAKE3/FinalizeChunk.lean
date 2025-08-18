@@ -398,10 +398,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       simp only [ProcessBlocksState.Normalized] at h_assumptions
       congr
       split
-      · simp only [circuit_norm]
-        simp_all only [circuit_norm]
+      · simp_all only [circuit_norm]
         norm_num
-        simp only [circuit_norm]
+        simp only [U32.value, circuit_norm]
         ring
       · simp_all only [circuit_norm]
         norm_num
