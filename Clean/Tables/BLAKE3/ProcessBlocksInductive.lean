@@ -5,6 +5,7 @@ This table has exactly 17 rows:
 - Row 16: Final output containing the result of processBlocks
 -/
 import Clean.Table.Inductive
+import Clean.Circuit.Loops
 import Clean.Gadgets.BLAKE3.Compress
 import Clean.Specs.BLAKE3
 import Clean.Gadgets.Addition32.Addition32
@@ -117,6 +118,16 @@ instance : ProvableStruct BlockInput where
 def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   IsBool input.block_exists ∧
   (∀ i : Fin 16, input.block_data[i].Normalized)
+
+-- A circuit that asserts `BlockInput.Normalized`
+namespace BLAKE3BlockInputNormalized
+
+def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
+  assertBool x.block_exists
+  Circuit.forEach x.block_data U32.AssertNormalized.circuit
+  return ()
+
+end BLAKE3BlockInputNormalized
 
 namespace BLAKE3StateFirstHalf
 
