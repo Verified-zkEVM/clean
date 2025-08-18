@@ -275,19 +275,17 @@ private lemma step_process_block (env : Environment (F p))
   specialize h_iszero trivial
   rcases h_holds with ⟨ h_compress, h_holds ⟩
   dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
+  simp only [ProcessBlocksState.Normalized] at acc_Normalized
+  simp only [BlockInput.Normalized] at x_Normalized
+  simp only [circuit_norm] at acc_Normalized x_Normalized
   specialize h_compress (by
-    clear h_holds
-    simp only [ProcessBlocksState.Normalized] at acc_Normalized
-    simp only [BlockInput.Normalized] at x_Normalized
-    simp only [circuit_norm] at acc_Normalized x_Normalized
     simp only [acc_Normalized, x_Normalized, circuit_norm]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, and_self, true_and, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
-    simp only [Nat.ofNat_pos, and_true, true_and]
+    simp only [Nat.ofNat_pos, and_true, true_and, circuit_norm, chunkStart]
     constructor
     · linarith
-    · simp only [circuit_norm, chunkStart]
-      split at h_iszero
+    · split at h_iszero
       · norm_num at h_iszero ⊢
         simp only [h_iszero, ZMod.val_one]
         omega
@@ -301,7 +299,6 @@ private lemma step_process_block (env : Environment (F p))
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
     simp only [Addition32.circuit, Addition32.Assumptions, circuit_norm, ZMod.val_one]
-    dsimp only [ProcessBlocksState.Normalized] at acc_Normalized
     simp [acc_Normalized, circuit_norm])
   dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
