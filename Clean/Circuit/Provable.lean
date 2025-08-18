@@ -519,6 +519,11 @@ lemma eval_vector_eq_get {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env :
   rw [eval_vector]
   rw [Vector.getElem_map]
 
+lemma eval_vector_take {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment F)
+    (vars : Var (ProvableVector M n) F) (i : ℕ) :
+    (eval env (vars.take i) : ProvableVector _ _ _) = (eval env vars).take i := by
+  simp only [eval_vector, Vector.take_eq_extract, Vector.map_extract]
+
 theorem varFromOffset_vector {F : Type} [Field F] {α : TypeMap} [NonEmptyProvableType α] (offset : ℕ) :
     varFromOffset (F:=F) (ProvableVector α n) offset
     = .mapRange n fun i => varFromOffset α (offset + (size α)*i) := by
