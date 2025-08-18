@@ -396,7 +396,6 @@ def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initial
 def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
     input.Normalized ∧ i < 2^32
 
-set_option maxHeartbeats 300000 in
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions] at *
