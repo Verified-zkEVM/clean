@@ -31,7 +31,7 @@ private lemma ZMod_val_64 :
   linarith
 
 attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
-  id_eq -- only in the current section
+  id_eq List.sum_cons List.sum_nil List.mem_append -- only in the current section
 
 /--
 State maintained during block processing.
@@ -272,9 +272,9 @@ private lemma step_process_block (env : Environment (F p))
   simp only [circuit_norm] at acc_Normalized x_Normalized
   specialize h_compress (by
     simp only [acc_Normalized, x_Normalized, circuit_norm]
-    simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil,
-      Nat.reduceAdd, and_self, true_and, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
-    simp only [Nat.ofNat_pos, and_true, true_and, circuit_norm]
+    simp only [implies_true, Nat.reduceMul,
+      Nat.reduceAdd, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
+    simp only [Nat.ofNat_pos, circuit_norm]
     constructor
     · linarith
     · split at h_iszero
@@ -300,7 +300,7 @@ private lemma step_process_block (env : Environment (F p))
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
-  simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil,
+  simp only [↓reduceIte, Nat.reduceMul,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
   norm_num at ⊢ h_compress h_iszero
@@ -360,7 +360,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp_all
   constructor
   · intro input
-    simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
     rintro (_ | _) <;> simp_all
   simp only [List.filter_singleton]
   by_cases h_x : x.block_exists = 1
@@ -368,17 +368,15 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
       spec_previous.2.2.2 input_normalized
         (by
-          simp only [circuit_norm,
-            Nat.reducePow] at inputs_short
+          simp only [circuit_norm, Nat.reducePow] at inputs_short
           omega)
     simp only [circuit_norm] at one_op
     simp only [one_op]
     constructor
-    · simp only [processBlockWords, circuit_norm,
-        add_lt_add_iff_right]
+    · simp only [processBlockWords, circuit_norm]
       omega
-    simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
-  · simp only [h_x, decide_false, cond_false, List.append_nil]
+    simp [spec_previous, processBlocksWords]
+  · simp only [h_x, decide_false, cond_false]
     have no_op := step_skip_block env acc_var x_var acc x (by aesop) h_eval h_x h_holds
     simp only [circuit_norm] at no_op
     simp only [no_op]
@@ -402,7 +400,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     simp only [circuit_norm, step] at ⊢ h_witnesses
     provable_struct_simp
     simp only [h_eval] at ⊢ h_witnesses
-    dsimp only [BlockInput.Normalized, ProcessBlocksState.Normalized] at h_assumptions
+    dsimp only [ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor
     · simp_all [BLAKE3BlockInputNormalized.circuit]
