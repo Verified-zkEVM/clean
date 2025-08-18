@@ -203,7 +203,7 @@ The step function that processes one block or passes through the state.
 def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     Circuit (F p) (Var ProcessBlocksState (F p)) := do
 
-  -- TODO: check input.Normalized
+  BLAKE3BlockInputNormalized.circuit input
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
   let isFirstBlock ← IsZero.circuit state.blocks_compressed
