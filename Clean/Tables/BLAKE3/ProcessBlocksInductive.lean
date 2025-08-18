@@ -302,22 +302,17 @@ private lemma step_process_block (env : Environment (F p))
   dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
   specialize h_vector_cond (by simp only [circuit_norm])
   specialize h_u32_cond (by simp only [circuit_norm])
-  simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
-  simp only [h_first_half]
+  simp only [h_vector_cond, h_u32_cond, h_first_half] at h_addition ⊢
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
   simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
-  norm_num at ⊢ h_compress
+  norm_num at ⊢ h_compress h_iszero
+  simp only [h_compress.1, startFlag, U32_blockLen_value, mul_zero, add_zero, id_eq, circuit_norm]
   constructor
-  · simp only [h_compress.1]
-    simp only [startFlag, U32_blockLen_value, circuit_norm]
-    norm_num at h_iszero
-    simp only [mul_zero, add_zero, id_eq]
-    simp only [circuit_norm,] at ⊢ h_iszero
-    norm_num
+  · norm_num
     constructor
     · congr
       simp only [IsZero.circuit, circuit_norm, h_iszero]
