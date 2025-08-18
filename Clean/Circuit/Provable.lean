@@ -415,8 +415,15 @@ lemma fromElements_eq_iff {M : TypeMap} [ProvableType M] {F : Type} {A : Vector 
   · intro h
     rw [h, fromElements_toElements]
 
--- basic simp lemmas
+lemma fromElements_eq_iff' {M : TypeMap} [ProvableType M] {F : Type} {B : Vector F (size M)} {A : M F} :
+    A = fromElements B ↔ toElements A = B := by
+  constructor
+  · intro h
+    rw [h, toElements_fromElements]
+  · intro h
+    rw [← h, fromElements_toElements]
 
+-- basic simp lemmas
 
 @[circuit_norm]
 theorem eval_const {F : Type} [Field F] {α : TypeMap} [ProvableType α] {env : Environment F} {x : α F} :
@@ -619,6 +626,9 @@ theorem varFromOffset_pair {α β: TypeMap} [ProvableType α] [ProvableType β] 
   simp only [varFromOffset, fromVars, ProvablePair.instance]
   rw [Vector.mapRange_add_eq_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
   ac_rfl
+
+instance {α : TypeMap} [ProvableType α] : Zero (α F) where
+  zero := fromElements (Vector.replicate _ 0)
 
 -- be able to use `field (Expression F)` in expressions
 
