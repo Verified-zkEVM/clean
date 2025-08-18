@@ -308,6 +308,7 @@ lemma value_zero :
     (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
   aesop
 
+@[circuit_norm]
 lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
     x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
   have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by

@@ -312,16 +312,8 @@ private lemma step_process_block (env : Environment (F p))
       norm_num
       rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
       simp only [ProcessBlocksState.Normalized] at acc_Normalized
-      · split
-        · rename_i h_zero
-          rw [U32.value_zero_iff_zero] at h_zero
-          · simp_all [circuit_norm, IsZero.circuit]
-          simp_all [circuit_norm]
-        · rename_i h_nonzero
-          simp only [h_iszero]
-          rw [U32.value_zero_iff_zero] at h_nonzero
-          · simp_all [circuit_norm]
-          simp_all
+      simp only [h_iszero]
+      · simp_all [circuit_norm, IsZero.circuit]
       · simp_all
       · simp_all
     · simp only [ProcessBlocksState.toChunkState] at blocks_compressed_not_many
