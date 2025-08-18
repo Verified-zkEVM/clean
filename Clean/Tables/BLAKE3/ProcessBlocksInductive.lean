@@ -30,7 +30,7 @@ private lemma ZMod_val_64 :
   have := p_large.elim
   linarith
 
-attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 -- only in the current section
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero -- only in the current section
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
@@ -278,7 +278,7 @@ private lemma step_process_block (env : Environment (F p))
   simp only [circuit_norm] at acc_Normalized x_Normalized
   specialize h_compress (by
     simp only [acc_Normalized, x_Normalized, circuit_norm]
-    simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+    simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil,
       Nat.reduceAdd, and_self, true_and, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
     simp only [Nat.ofNat_pos, and_true, true_and, circuit_norm, chunkStart]
     constructor
@@ -306,11 +306,11 @@ private lemma step_process_block (env : Environment (F p))
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
-  simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+  simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
   norm_num at ⊢ h_compress h_iszero
-  simp only [h_compress.1, startFlag, U32_blockLen_value, mul_zero, add_zero, id_eq, circuit_norm]
+  simp only [h_compress.1, startFlag, U32_blockLen_value, mul_zero, id_eq, circuit_norm]
   constructor
   · norm_num
     constructor
