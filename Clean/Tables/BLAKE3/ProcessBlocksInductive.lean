@@ -438,11 +438,11 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       constructor
       · split at h_witnesses_iszero
-        · simp only [h_witnesses_iszero, Expression.eval]
+        · simp only [h_witnesses_iszero]
           norm_num
-          simp only [ZMod.val_one]
+          simp only [circuit_norm]
           omega
-        · simp only [h_witnesses_iszero, Expression.eval]
+        · simp only [h_witnesses_iszero]
           norm_num
       · norm_num
     constructor
@@ -467,14 +467,14 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         constructor
         · simp only [circuit_norm]
           omega
-        simp only [U32.normalized_componentwise, chunkStart]
+        simp only [circuit_norm, chunkStart]
         constructor
         · split at h_witnesses_iszero
-          · simp only [h_witnesses_iszero, Expression.eval]
+          · simp only [h_witnesses_iszero]
             norm_num
             simp only [circuit_norm]
             omega
-          · simp only [h_witnesses_iszero, Expression.eval]
+          · simp only [h_witnesses_iszero]
             norm_num
         · norm_num)
       simp only [h_compress]
