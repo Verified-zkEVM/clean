@@ -314,30 +314,6 @@ private lemma step_process_block (env : Environment (F p))
     · omega
   · aesop
 
-/--
-Lemma that handles the case when block_exists ≠ 1 in the step function.
-Shows that the step function returns the accumulator unchanged when skipping a block.
--/
-private lemma step_skip_block (env : Environment (F p))
-    (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
-    (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
-    (h_normalized : x.Normalized)
-    (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
-    (h_x : ¬(x.block_exists = 1))
-    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput))) :
-    eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput)) = acc := by
-  simp only [circuit_norm, step] at h_holds
-  provable_struct_simp
-  have x_block_exists_zero : x_block_exists = 0 := by
-    simp only [BlockInput.Normalized] at h_normalized
-    cases h_normalized.1 with
-    | inl _ => assumption
-    | inr _ => contradiction
-  simp only [x_block_exists_zero] at *
-  simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
-  norm_num at h_holds ⊢
-  simp only [step, circuit_norm, h_holds, h_eval]
-
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized inputs_short
   specialize spec_previous (by assumption)
@@ -369,12 +345,19 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       omega
     simp [spec_previous, processBlocksWords]
   · simp only [h_x, decide_false, cond_false]
-    have no_op := step_skip_block env acc_var x_var acc x (by aesop) h_eval h_x h_holds
-    simp only [circuit_norm] at no_op
-    simp only [no_op]
-    constructor
-    · omega
-    · simp [spec_previous]
+    simp only [circuit_norm, step] at h_holds
+    provable_struct_simp
+    have x_block_exists_zero : x_block_exists = 0 := by
+      simp only [BlockInput.Normalized] at input_normalized
+      cases input_normalized.1 with
+      | inl _ => assumption
+      | inr _ => contradiction
+    simp only [x_block_exists_zero] at *
+    simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
+    norm_num at h_holds ⊢ spec_previous
+    simp only [step, circuit_norm, h_holds, h_eval, ProcessBlocksState.toChunkState] at h_holds ⊢ spec_previous
+    simp_all only [circuit_norm]
+    omega
 
 def InitialStateAssumptions (initialState : ProcessBlocksState (F p)) := initialState.Normalized
 
