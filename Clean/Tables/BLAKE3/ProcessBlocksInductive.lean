@@ -132,16 +132,16 @@ def circuit : FormalAssertion (F p) BlockInput where
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
-    intros input offset
-    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-    simp only [Circuit.forEach.forAll]
-
-    simp?
-    sorry
+    simp only [circuit_norm, main, U32.AssertNormalized.circuit, zero_add]
   Assumptions _ := True
   Spec x := x.Normalized
 
-  soundness := by sorry
+  soundness := by
+    circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
+    constructor
+    · simp_all
+    simp only [←h_input, eval_vector] -- provable_vector_simp wanted
+    simp_all
   completeness := by sorry
 
 end BLAKE3BlockInputNormalized
