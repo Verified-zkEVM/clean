@@ -265,13 +265,12 @@ private lemma step_process_block (env : Environment (F p))
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
-  simp only [step, circuit_norm, BLAKE3StateFirstHalf.circuit, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit] at ⊢ h_holds
+  simp only [step, circuit_norm, BLAKE3StateFirstHalf.circuit, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
+    BLAKE3StateFirstHalf.circuit, Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
   rcases h_holds with ⟨ h_assert_normalized, h_holds ⟩
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
-  dsimp only [IsZero.Assumptions, IsZero.Spec] at h_iszero
-  specialize h_iszero trivial
   rcases h_holds with ⟨ h_compress, h_holds ⟩
   dsimp only [BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
   simp only [ProcessBlocksState.Normalized] at acc_Normalized
@@ -294,7 +293,6 @@ private lemma step_process_block (env : Environment (F p))
     )
   rcases h_holds with ⟨ h_first_half, h_holds ⟩
   specialize h_first_half (by simp only [h_compress])
-  dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
@@ -302,8 +300,8 @@ private lemma step_process_block (env : Environment (F p))
   dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
   dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
-  specialize h_vector_cond (by simp only [Conditional.Assumptions, circuit_norm])
-  specialize h_u32_cond (by simp only [Conditional.Assumptions, circuit_norm])
+  specialize h_vector_cond (by simp only [circuit_norm])
+  specialize h_u32_cond (by simp only [circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
   simp only [h_first_half]
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
