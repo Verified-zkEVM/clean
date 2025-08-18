@@ -30,7 +30,7 @@ private lemma ZMod_val_64 :
   have := p_large.elim
   linarith
 
-attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero -- only in the current section
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add -- only in the current section
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
@@ -111,7 +111,7 @@ def circuit : FormalAssertion (F p) BlockInput where
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
-    simp only [circuit_norm, main, U32.AssertNormalized.circuit, zero_add]
+    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   Assumptions _ := True
   Spec x := x.Normalized
 
@@ -356,7 +356,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   specialize spec_previous (by assumption)
   specialize spec_previous (by
     simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-      zero_add, Nat.reducePow] at inputs_short
+      Nat.reducePow] at inputs_short
     omega)
   rw [List.concat_eq_append, List.filter_append]
   have : (xs.concat x)[row_index]'(by simp_all) = x := by simp_all
@@ -381,20 +381,19 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       spec_previous.2.2.2 input_normalized
         (by
           simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-            zero_add, Nat.reducePow] at inputs_short
+            Nat.reducePow] at inputs_short
           omega)
     simp only [one_op]
     constructor
     · simp only [processBlockWords, List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-        zero_add, add_lt_add_iff_right]
+        add_lt_add_iff_right]
       omega
     simp [spec_previous, List.map_append, List.map_cons, List.map_nil, processBlocksWords, List.foldl_append, List.foldl_cons, List.foldl_nil]
   · simp only [h_x, decide_false, cond_false, List.append_nil]
     have no_op := step_skip_block env acc_var x_var acc x (by aesop) h_eval h_x h_holds
     simp only [no_op]
     constructor
-    · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil,
-      zero_add]
+    · simp only [List.concat_eq_append, List.length_append, List.length_cons, List.length_nil]
       omega
     · simp [spec_previous]
 
