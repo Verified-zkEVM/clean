@@ -30,17 +30,11 @@ def table : InductiveTable (F p) Row unit where
     row.y.value = fib32 (i + 1) ∧
     row.x.Normalized ∧ row.y.Normalized
 
-  soundness := by
-    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous
-    simp_all only [fib32, circuit_norm,
+  soundness := by simp_all [InductiveTable.Soundness, fib32, circuit_norm,
       Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
-    aesop
 
-  completeness := by
-    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
-    simp_all only [fib32, circuit_norm,
-      Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
-    aesop
+  completeness := by simp_all [InductiveTable.Completeness, fib32, circuit_norm,
+    Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output
