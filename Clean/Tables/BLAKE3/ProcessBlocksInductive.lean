@@ -145,11 +145,8 @@ def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) wher
     rintro ⟨ i, h_i ⟩
     specialize h_assumptions i
     simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
-    have getElem_take := Vector.getElem_take (xs := input) (i := i) (j := 8) (by omega)
-    conv =>
-      arg 1
-      change (input.take 8)[i]
-      rw [getElem_take]
+    change (input.take 8)[i].Normalized -- What is changed here?
+    rw [Vector.getElem_take]
     convert h_assumptions
     norm_num
     omega
