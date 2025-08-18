@@ -334,12 +334,11 @@ private lemma step_process_block (env : Environment (F p))
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
-  constructor
-  · simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
+  simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
-    simp only [h_addition, processBlockWords]
-    clear h_addition
-    norm_num at ⊢ h_compress
+  simp only [h_addition, processBlockWords]
+  constructor
+  · norm_num at ⊢ h_compress
     simp only [h_compress.1]
     simp only [startFlag, U32_blockLen_value, circuit_norm]
     norm_num at h_iszero
@@ -352,11 +351,7 @@ private lemma step_process_block (env : Environment (F p))
       · simp_all [circuit_norm, IsZero.circuit]
       · simp_all [ProcessBlocksState.Normalized]
     · omega
-  · constructor
-    · aesop
-    · simp only [↓reduceIte, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
-        Nat.reduceAdd, id_eq, Pi.zero_apply] at ⊢ h_addition
-      simp [h_addition.2, acc_Normalized]
+  · aesop
 
 /--
 Lemma that handles the case when block_exists ≠ 1 in the step function.
