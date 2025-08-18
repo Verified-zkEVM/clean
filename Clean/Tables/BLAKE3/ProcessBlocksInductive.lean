@@ -75,26 +75,6 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.chunk_counter.Normalized ∧
   state.blocks_compressed.Normalized
 
-omit p_large in
-private lemma eval_acc_blocks_compressed (env : Environment (F p)) acc_chaining_value acc_chunk_counter acc_var_blocks_compressed
-    acc_blocks_compressed
-    (h_iszero : Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) =
-      if acc_blocks_compressed.value = 0 then 1 else 0) :
-    eval env acc_var_blocks_compressed = acc_blocks_compressed →
-    ProcessBlocksState.Normalized
-      { chaining_value := acc_chaining_value, chunk_counter := acc_chunk_counter,
-        blocks_compressed := acc_blocks_compressed } →
-    ZMod.val (Expression.eval env (IsZero.circuit.elaborated.output acc_var_blocks_compressed 105) * (↑chunkStart : F p)) =
-    if acc_blocks_compressed.value = 0 then chunkStart else 0 := by
-  intros h_eval h_normalized
-  simp only [explicit_provable_type, circuit_norm, fromElements, toVars, toElements]
-  simp only [ProcessBlocksState.Normalized] at h_normalized
-  simp only [Expression.eval, chunkStart, h_iszero]
-  split
-  · norm_num
-    simp only [circuit_norm]
-  · norm_num
-
 /--
 Input for each row: either a block to process or nothing.
 A chunk might contain less than 16 blocks, and `block_exists` indicates empty rows.
@@ -337,19 +317,25 @@ private lemma step_process_block (env : Environment (F p))
   simp only [↓reduceIte, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil, add_zero,
       Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
+  norm_num at ⊢ h_compress
   constructor
-  · norm_num at ⊢ h_compress
-    simp only [h_compress.1]
+  · simp only [h_compress.1]
     simp only [startFlag, U32_blockLen_value, circuit_norm]
     norm_num at h_iszero
     simp only [mul_zero, add_zero, id_eq]
     simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at ⊢ h_iszero
     norm_num
     constructor
-    · rw [eval_acc_blocks_compressed env (acc_chaining_value:=acc_chaining_value) (acc_chunk_counter:=acc_chunk_counter)]
-      · simp_all only [IsZero.circuit, circuit_norm]
-      · simp_all [circuit_norm, IsZero.circuit]
-      · simp_all [ProcessBlocksState.Normalized]
+    · congr
+      simp only [IsZero.circuit, circuit_norm, h_iszero]
+      conv_rhs =>
+        arg 1
+        rw [U32.value_zero_iff_zero (by simp_all)]
+      simp only [chunkStart]
+      norm_num
+      split
+      · simp only [ZMod.val_one]
+      · simp only [ZMod.val_zero]
     · omega
   · aesop
 
