@@ -20,6 +20,7 @@ structure U64 (T : Type) where
   x5 : T
   x6 : T
   x7 : T
+deriving DecidableEq
 
 instance : ProvableType U64 where
   size := 8
