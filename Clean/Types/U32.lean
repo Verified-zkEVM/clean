@@ -302,37 +302,25 @@ lemma normalized_componentwise' (a b c d : field (F p)):
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
-/--
-Lemma: For a normalized U32, value = 0 iff all components are 0
--/
-lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
-    x.value = 0 ↔ (∀ i : Fin (size U32), (toElements x)[i] = 0) := by
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero :
+    (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
+  aesop
+
+lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
+    x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
   have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
     simp only [U32.Normalized, ZMod.val_zero]
     norm_num)
   constructor
   · intro h_val_zero
-    simp only [h_val_zero] at this
-    specialize this (by
-      simp only [circuit_norm, ZMod.val_zero]
-      omega)
-    simp only [this, Fin.getElem_fin, size, toElements, Vector.getElem_mk, List.getElem_toArray]
-    intro i
-    fin_cases i <;> rfl
-  · simp only [size, toElements]
-    intro h_elements
-    simp only [U32.value]
-    have h_0 := h_elements 0
-    have h_1 := h_elements 1
-    have h_2 := h_elements 2
-    have h_3 := h_elements 3
-    simp only [Fin.isValue, Fin.getElem_fin, Fin.val_zero, Vector.getElem_mk, List.getElem_toArray,
-      List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ, Fin.val_two] at h_0 h_1 h_2 h_3
-    have : (3 : Fin 4).val = 3 := rfl
-    simp only [this] at h_3
-    simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_3
-    simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
-    norm_num
+    simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
+    specialize this (by trivial)
+    assumption
+  · intro h_zero
+    simp only [h_zero, circuit_norm, ZMod.val_zero]
+    ring
 
 end U32
 
