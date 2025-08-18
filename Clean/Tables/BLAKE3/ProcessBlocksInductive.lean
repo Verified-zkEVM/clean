@@ -265,16 +265,15 @@ private lemma step_process_block (env : Environment (F p))
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
-  simp only [step, circuit_norm] at ⊢ h_holds
+  simp only [step, circuit_norm, BLAKE3StateFirstHalf.circuit, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
   rcases h_holds with ⟨ h_assert_normalized, h_holds ⟩
-  specialize h_assert_normalized trivial
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
-  dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.Spec] at h_iszero
+  dsimp only [IsZero.Assumptions, IsZero.Spec] at h_iszero
   specialize h_iszero trivial
   rcases h_holds with ⟨ h_compress, h_holds ⟩
-  dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
+  dsimp only [BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
   simp only [ProcessBlocksState.Normalized] at acc_Normalized
   simp only [BlockInput.Normalized] at x_Normalized
   simp only [circuit_norm] at acc_Normalized x_Normalized
@@ -294,20 +293,19 @@ private lemma step_process_block (env : Environment (F p))
         norm_num
     )
   rcases h_holds with ⟨ h_first_half, h_holds ⟩
-  specialize h_first_half (by simp only [BLAKE3StateFirstHalf.circuit, h_compress])
+  specialize h_first_half (by simp only [h_compress])
   dsimp only [BLAKE3StateFirstHalf.circuit] at h_first_half
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
-    simp only [Addition32.circuit, Addition32.Assumptions, circuit_norm, ZMod.val_one]
+    simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
     simp [acc_Normalized, circuit_norm])
-  dsimp only [Addition32.circuit, Addition32.Spec] at h_addition ⊢
+  dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
-  dsimp only [Conditional.circuit, Conditional.Spec] at h_vector_cond h_u32_cond
-  specialize h_vector_cond (by simp only [Conditional.circuit, Conditional.Assumptions, circuit_norm])
-  specialize h_u32_cond (by simp only [Conditional.circuit, Conditional.Assumptions, circuit_norm])
+  dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
+  specialize h_vector_cond (by simp only [Conditional.Assumptions, circuit_norm])
+  specialize h_u32_cond (by simp only [Conditional.Assumptions, circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
-  dsimp only [BLAKE3StateFirstHalf.circuit] at h_addition ⊢
-  simp only [h_first_half, Addition32.circuit]
+  simp only [h_first_half]
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
@@ -320,7 +318,7 @@ private lemma step_process_block (env : Environment (F p))
     simp only [startFlag, U32_blockLen_value, circuit_norm]
     norm_num at h_iszero
     simp only [mul_zero, add_zero, id_eq]
-    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at ⊢ h_iszero
+    simp only [circuit_norm,] at ⊢ h_iszero
     norm_num
     constructor
     · congr
