@@ -30,7 +30,7 @@ private lemma ZMod_val_64 :
   have := p_large.elim
   linarith
 
-attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add -- only in the current section
+attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart -- only in the current section
 
 private lemma U32_blockLen_value (env : Environment (F p)) :
     (eval (α := U32) env { x0 := Expression.const 64, x1 := 0, x2 := 0, x3 := 0 }).value = 64 := by
@@ -280,7 +280,7 @@ private lemma step_process_block (env : Environment (F p))
     simp only [acc_Normalized, x_Normalized, circuit_norm]
     simp only [implies_true, id_eq, Nat.reduceMul, List.sum_cons, List.sum_nil,
       Nat.reduceAdd, and_self, true_and, U32.normalized_componentwise, circuit_norm, explicit_provable_type]
-    simp only [Nat.ofNat_pos, and_true, true_and, circuit_norm, chunkStart]
+    simp only [Nat.ofNat_pos, and_true, true_and, circuit_norm]
     constructor
     · linarith
     · split at h_iszero
@@ -319,11 +319,7 @@ private lemma step_process_block (env : Environment (F p))
       conv_rhs =>
         arg 1
         rw [U32.value_zero_iff_zero (by simp_all)]
-      simp only [chunkStart]
-      norm_num
-      split
-      · simp only [ZMod.val_one]
-      · simp only [ZMod.val_zero]
+      split <;> simp only [circuit_norm]
     · omega
   · aesop
 
@@ -433,7 +429,6 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       constructor
       · simp only [circuit_norm]
         omega
-      simp only [chunkStart]
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
@@ -469,7 +464,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         constructor
         · simp only [circuit_norm]
           omega
-        simp only [circuit_norm, chunkStart]
+        simp only [circuit_norm]
         constructor
         · split at h_witnesses_iszero
           · simp only [h_witnesses_iszero]
