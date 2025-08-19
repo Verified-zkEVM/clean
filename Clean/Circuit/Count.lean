@@ -8,16 +8,14 @@ This module defines an operation for counting occurrences.
 import Clean.Circuit.Provable
 
 /--
-An instance of `Accouunt` associates a label to a `ProvableType` that's counted.
-There can be multiple labels associated with the same `ProvableType`.
+An instance of `Accouunt` associates a label to a size of the tuple to be counted.
 The multiplicity counting occurs separately on each label.
-Don't use the same label in multiple accounts.
 -/
-class Account (label : String) (M : outParam TypeMap) (F : Type) extends ProvableType M, Repr (Var M F)
+class Account (label : String) (arity : outParam ℕ) (F : Type)
 
-structure Count (label : String) {M : TypeMap} (F : Type) [Account label M F] where
-  entry : Var M F
-  multiplicity : Expression F
+structure Count (label : String) {arity : ℕ} (F : Type) [Account label arity F] where
+  entry : Vector (Expression F) arity
+  multiplicity : Expression F -- summed up on each different value of entry
 
-instance {label : String} {M : TypeMap} {F : Type} [Account label M F] : Repr (Count label (M:=M) F) where
+instance {label : String} {arity : ℕ} {F : Type} [Repr F] [Account label arity F] : Repr (Count label F) where
   reprPrec c _ := "(Count " ++ label ++ " " ++ reprStr c.entry ++ ")"
