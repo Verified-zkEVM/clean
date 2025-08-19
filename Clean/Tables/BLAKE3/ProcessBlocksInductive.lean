@@ -172,11 +172,6 @@ def circuit : FormalAssertion (F p) BlockInput where
 
 end BLAKE3BlockInputNormalized
 
-namespace BLAKE3StateFirstHalf
-
-def main (x : Var BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
-  return x.takeShort 8 (by omega)
-
 omit p_large in
 lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment (F p))
     (vars : Var (ProvableVector M n) (F p)) (i : ℕ) (h_i : i < n) :
@@ -186,28 +181,7 @@ lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (en
   ext j h_j
   simp only [Vector.getElem_map, Vector.getElem_cast, Vector.map_take, Vector.getElem_map]
 
-/--
-A subcircuit that takes the first eight elements of BLAKE3State
-If this circuit gets inlined, the casting business `Vector _ 8` vs `Vector _ (min 8 16)` can be troublesome in the bigger goal state (I haven't tried).
--/
-def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) where
-  main
-  localLength := 0
-  Assumptions input := input.Normalized
-  Spec input output := output = input.takeShort 8 (by omega) ∧ ∀ i : Fin 8, output[i].Normalized
-  soundness := by
-    circuit_proof_start [eval_vector_takeShort]
-    simp only [BLAKE3.BLAKE3State.Normalized] at h_assumptions
-    rintro ⟨ i, h_i ⟩
-    specialize h_assumptions i
-    simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
-    rw [Vector.getElem_takeShort]
-    convert h_assumptions
-    norm_num
-    omega
-  completeness := by circuit_proof_start
-
-end BLAKE3StateFirstHalf
+attribute [local circuit_norm] eval_vector_takeShort
 
 /--
 The step function that processes one block or passes through the state.
@@ -239,8 +213,6 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
 
   -- Apply compress to get new chaining value
   let newCV16 ← BLAKE3.Compress.circuit compressInput
-  -- Take first 8 elements for the chaining value
-  let newCV8 ← BLAKE3StateFirstHalf.circuit newCV16
 
   -- Increment blocks_compressed
   let one32 : Var U32 (F p) := ⟨1, 0, 0, 0⟩
@@ -250,7 +222,7 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   -- If block_exists = 1, use newState; if block_exists = 0, use state
   let muxedCV ← Conditional.circuit (M := ProvableVector U32 8) {
     selector := input.block_exists
-    ifTrue := newCV8
+    ifTrue := newCV16.takeShort 8 (by omega)
     ifFalse := state.chaining_value
   }
 
@@ -297,8 +269,8 @@ private lemma step_process_block (env : Environment (F p))
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
-  simp only [step, circuit_norm, BLAKE3StateFirstHalf.circuit, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
-    BLAKE3StateFirstHalf.circuit, Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec] at ⊢ h_holds
+  simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
+    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
   rcases h_holds with ⟨ h_assert_state, h_holds ⟩
@@ -321,8 +293,6 @@ private lemma step_process_block (env : Environment (F p))
         simp only [h_iszero]
         norm_num
     )
-  rcases h_holds with ⟨ h_first_half, h_holds ⟩
-  specialize h_first_half (by simp only [h_compress])
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
@@ -332,7 +302,7 @@ private lemma step_process_block (env : Environment (F p))
   dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
   specialize h_vector_cond (by simp only [circuit_norm])
   specialize h_u32_cond (by simp only [circuit_norm])
-  simp only [h_vector_cond, h_u32_cond, h_first_half] at h_addition ⊢
+  simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
@@ -351,7 +321,16 @@ private lemma step_process_block (env : Environment (F p))
         rw [U32.value_zero_iff_zero (by simp_all)]
       split <;> simp only [circuit_norm]
     · omega
-  · aesop
+  · simp only [Vector.getElem_takeShort]
+    constructor
+    · rcases h_compress with ⟨ h_compress_value, h_compress_normalized ⟩
+      simp only [BLAKE3.BLAKE3State.Normalized] at h_compress_normalized
+      rintro ⟨ i, h_i ⟩
+      specialize h_compress_normalized i
+      norm_num at ⊢ h_compress_normalized
+      convert h_compress_normalized
+      omega
+    · simp_all
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous inputs_short
@@ -448,8 +427,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           norm_num
       · norm_num
     constructor
-    · dsimp only [BLAKE3StateFirstHalf.circuit]
-      dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
+    · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
       -- The following is a repetition of the above
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
@@ -478,7 +456,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           · simp only [h_witnesses_iszero]
             norm_num
         · norm_num)
-      simp only [h_compress]
+      simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions]
     simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions]
 
 /--
