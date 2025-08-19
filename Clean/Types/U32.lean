@@ -182,6 +182,77 @@ lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   simp [Normalized, fromByte]
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
+
+omit p_large_enough in
+lemma value_injective_on_normalized (x y : U32 (F p))
+    (hx : x.Normalized) (hy : y.Normalized) :
+    x.value = y.value → x = y := by
+  intro h_eq
+  -- Use horner form of value
+  have hx_value := U32.value_horner x
+  have hy_value := U32.value_horner y
+
+  simp only [U32.Normalized] at hx hy
+
+  have : x.x0 = y.x0 := by apply ZMod.val_injective; omega
+  have : x.x1 = y.x1 := by apply ZMod.val_injective; omega
+  have : x.x2 = y.x2 := by apply ZMod.val_injective; omega
+  have : x.x3 = y.x3 := by apply ZMod.val_injective; omega
+
+  cases x; cases y
+  simp_all
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[circuit_norm]
+lemma value_of_literal (a b c d : F p) :
+  (U32.mk a b c d).value =
+    a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
+
+omit p_large_enough in
+@[circuit_norm]
+lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
+    eval env (U32.mk a b c d) =
+    U32.mk (eval env a) (eval env b) (eval env c) (eval env d) := by
+  simp only [explicit_provable_type, circuit_norm]
+
+omit p_large_enough in
+omit [Fact (Nat.Prime p)] in
+@[circuit_norm]
+lemma normalized_componentwise (a b c d : F p):
+    (U32.mk a b c d).Normalized ↔
+    (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
+  simp only [explicit_provable_type, circuit_norm, U32.Normalized]
+
+omit p_large_enough in
+omit [Fact (Nat.Prime p)] in
+@[circuit_norm]
+lemma normalized_componentwise' (a b c d : field (F p)):
+    (U32.mk a b c d).Normalized ↔
+    (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
+  simp only [explicit_provable_type, circuit_norm, U32.Normalized]
+
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero :
+    (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
+  aesop
+
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
+    x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
+  have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
+    simp only [U32.Normalized, ZMod.val_zero]
+    norm_num)
+  constructor
+  · intro h_val_zero
+    simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
+    specialize this (by trivial)
+    assumption
+  · intro h_zero
+    simp only [h_zero, circuit_norm, ZMod.val_zero]
+    ring
+
 end U32
 
 namespace U32.AssertNormalized

@@ -100,9 +100,11 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
       Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
     · rw [c11.left]
-    · rw [c12.left]
+    · simp only [circuit_norm]
+      rw [c12.left]
     · rw [c14.left]
-    · rw [c9.left]
+    · simp only [circuit_norm]
+      rw [c9.left]
     · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
 
   · intro i
