@@ -280,8 +280,7 @@ private lemma step_process_block (env : Environment (F p))
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
-  simp only [↓reduceIte, Nat.reduceMul,
-      Nat.reduceAdd, Vector.take_eq_extract, Vector.map_extract, Pi.zero_apply] at ⊢ h_addition
+  simp only [↓reduceIte] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
   norm_num at ⊢ h_compress h_iszero
   simp only [h_compress.1, startFlag, circuit_norm]
@@ -316,11 +315,9 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     rintro (_ | _) <;> simp_all
   by_cases h_x : x.block_exists = 1
   · simp only [h_x, decide_true, cond_true]
+    simp only [circuit_norm] at inputs_short
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
-      spec_previous.2.2.2 input_normalized
-        (by
-          simp only [circuit_norm, Nat.reducePow] at inputs_short
-          omega)
+      spec_previous.2.2.2 input_normalized (by omega)
     simp only [circuit_norm] at one_op
     simp only [one_op]
     constructor
@@ -337,8 +334,8 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
     simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
+    simp only [step, circuit_norm, h_holds, h_eval, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢ spec_previous
-    simp only [step, circuit_norm, h_holds, h_eval, ProcessBlocksState.toChunkState] at h_holds ⊢ spec_previous
     simp_all only [circuit_norm]
     omega
 
