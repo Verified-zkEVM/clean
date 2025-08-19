@@ -1,4 +1,5 @@
 import Clean.Circuit.Expression
+import Clean.Circuit.Count
 import Clean.Circuit.Lookup
 import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
