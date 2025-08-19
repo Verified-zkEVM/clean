@@ -317,16 +317,12 @@ private lemma step_process_block (env : Environment (F p))
     · simp_all
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
-  intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous inputs_short
-  specialize spec_previous (by
-    simp only [circuit_norm] at inputs_short
-    omega)
+  intro _ _ env acc_var x_var acc x _ _ h_eval h_holds spec_previous inputs_short
+  simp only [circuit_norm] at inputs_short
+  specialize spec_previous (by omega)
   simp only [circuit_norm]
   have input_normalized : x.Normalized := by
-    simp only [circuit_norm, step] at h_holds ⊢
-    rcases h_holds with ⟨ h_state, ⟨ h_normalized, h_holds ⟩⟩
-    specialize h_normalized trivial
-    simp only [BLAKE3BlockInputNormalized.circuit] at h_normalized
+    simp only [circuit_norm, step, BLAKE3BlockInputNormalized.circuit] at h_holds
     provable_struct_simp
     simp_all
   constructor
@@ -336,7 +332,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     rintro (_ | _) <;> simp_all
   by_cases h_x : x.block_exists = 1
   · simp only [h_x, decide_true, cond_true]
-    simp only [circuit_norm] at inputs_short
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
       spec_previous.2.2.2.2 input_normalized (by omega)
     simp only [circuit_norm] at one_op
@@ -367,7 +362,7 @@ def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
-    intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
+    intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
