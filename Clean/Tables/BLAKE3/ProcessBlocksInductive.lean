@@ -172,15 +172,6 @@ def circuit : FormalAssertion (F p) BlockInput where
 
 end BLAKE3BlockInputNormalized
 
-omit p_large in
-lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment (F p))
-    (vars : Var (ProvableVector M n) (F p)) (i : ℕ) (h_i : i < n) :
-    (eval env (vars.takeShort i h_i) : ProvableVector _ _ _) = (eval env vars).takeShort i h_i := by
-  simp only [Vector.takeShort]
-  simp only [eval_vector]
-  ext j h_j
-  simp only [Vector.getElem_map, Vector.getElem_cast, Vector.map_take, Vector.getElem_map]
-
 attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
 
 /--
@@ -371,7 +362,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     simp only [x_block_exists_zero] at *
     simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
     simp only [step, circuit_norm, h_holds, h_eval, ProcessBlocksState.toChunkState] at ⊢ spec_previous
-    norm_num at h_holds ⊢ spec_previous
+    norm_num at h_holds ⊢
     simp_all only [circuit_norm]
     omega
 
@@ -404,25 +395,24 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       constructor
       · simp only [h_assumptions]
         trivial
+      simp_all only [circuit_norm]
       constructor
-      · simp only [circuit_norm]
-        omega
+      · omega
       constructor
-      · simp_all
-      constructor
-      · simp only [circuit_norm]
-        omega
+      · omega
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
       simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       constructor
       · split at h_witnesses_iszero
-        · simp only [h_witnesses_iszero]
+        · simp only [circuit_norm] at h_witnesses_iszero
+          simp only [h_witnesses_iszero]
           norm_num
           simp only [circuit_norm]
           omega
-        · simp only [h_witnesses_iszero]
+        · simp only [circuit_norm] at h_witnesses_iszero
+          simp only [h_witnesses_iszero]
           norm_num
       · norm_num
     simp_all only [Addition32.circuit, Addition32.Assumptions, Conditional.circuit, Conditional.Assumptions]
@@ -456,20 +446,13 @@ The InductiveTable for processBlocks.
 -/
 def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   step
-
   Spec
-
   InitialStateAssumptions initialState := initialState.Normalized
-  InputAssumptions i input :=
-    input.Normalized ∧ i < 2^32
-
+  InputAssumptions i input := input.Normalized ∧ i < 2^32
   soundness
   completeness
   subcircuitsConsistent := by
-    intros
-    dsimp only [step]
-    simp only [circuit_norm]
+    simp only [step, circuit_norm]
     omega
-
 end
 end Tables.BLAKE3.ProcessBlocksInductive
