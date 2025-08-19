@@ -250,27 +250,26 @@ private lemma step_process_block (env : Environment (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : x.block_exists = 1)
     (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
-    (acc_Normalized : acc.Normalized)
-    (x_Normalized : x.Normalized)
+    (acc_normalized : acc.Normalized)
+    (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
     (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
   simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
-    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec] at ⊢ h_holds
+    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds
+  simp only [ProcessBlocksState.Normalized] at acc_normalized
+  simp only [BlockInput.Normalized] at x_normalized
+  simp only [circuit_norm] at acc_normalized x_normalized
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
-  rcases h_holds with ⟨ h_assert_state, h_holds ⟩
-  rcases h_holds with ⟨ h_assert_normalized, h_holds ⟩
+  rcases h_holds with ⟨ _, h_holds ⟩
+  rcases h_holds with ⟨ _, h_holds ⟩
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   rcases h_holds with ⟨ h_compress, h_holds ⟩
-  dsimp only [BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_compress
-  simp only [ProcessBlocksState.Normalized] at acc_Normalized
-  simp only [BlockInput.Normalized] at x_Normalized
-  simp only [circuit_norm] at acc_Normalized x_Normalized
   specialize h_compress (by
-    simp only [acc_Normalized, x_Normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]
+    simp only [acc_normalized, x_normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]
     constructor
     · linarith
     · split at h_iszero
@@ -284,25 +283,23 @@ private lemma step_process_block (env : Environment (F p))
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
-    simp [acc_Normalized, circuit_norm])
+    simp [acc_normalized, circuit_norm])
   dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
   dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
   specialize h_vector_cond (by simp only [circuit_norm])
   specialize h_u32_cond (by simp only [circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
-  simp only [ProcessBlocksState.Normalized] at ⊢ acc_Normalized
+  simp only [ProcessBlocksState.Normalized] at ⊢ acc_normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
   dsimp only [BLAKE3.BLAKE3State.value] at h_compress
   simp only [↓reduceIte] at ⊢ h_addition
-  simp only [h_addition, processBlockWords]
+  simp only [h_addition, processBlockWords, h_compress.1, startFlag, circuit_norm]
   norm_num at ⊢ h_compress h_iszero
-  simp only [h_compress.1, startFlag, circuit_norm]
   constructor
-  · norm_num
-    constructor
-    · congr
-      simp only [IsZero.circuit, circuit_norm, h_iszero]
+  · constructor
+    · simp only [IsZero.circuit, circuit_norm, h_iszero]
+      congr
       conv_rhs =>
         arg 1
         rw [U32.value_zero_iff_zero (by simp_all)]
@@ -310,9 +307,9 @@ private lemma step_process_block (env : Environment (F p))
     · omega
   · simp only [Vector.getElem_takeShort]
     constructor
-    · rcases h_compress with ⟨ h_compress_value, h_compress_normalized ⟩
+    · rcases h_compress with ⟨ _, h_compress_normalized ⟩
       simp only [BLAKE3.BLAKE3State.Normalized] at h_compress_normalized
-      rintro ⟨ i, h_i ⟩
+      rintro ⟨ i, _ ⟩
       specialize h_compress_normalized i
       norm_num at ⊢ h_compress_normalized
       convert h_compress_normalized
