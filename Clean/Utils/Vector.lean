@@ -393,4 +393,10 @@ lemma getElem_takeShort {α : Type} {n : ℕ} (v : Vector α n) (j : ℕ) (h_j :
     (v.takeShort j h_j)[i] = v[i] := by
   simp only [takeShort, getElem_cast, getElem_take]
 
+lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n) (h_j : j < n) :
+    Vector.map f (v.takeShort j h_j) = (v.map f).takeShort j h_j := by
+  simp only [Vector.takeShort]
+  ext k h_k
+  simp only [Vector.getElem_map, Vector.getElem_take, Vector.getElem_cast]
+
 end Vector

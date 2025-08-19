@@ -280,12 +280,6 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     state.toChunkState = finalState ∧
     state.Normalized
 
-lemma Vector.map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n) (h_j : j < n) :
-    Vector.map f (v.takeShort j h_j) = (v.map f).takeShort j h_j := by
-  simp only [Vector.takeShort]
-  ext k h_k
-  simp only [Vector.getElem_map, Vector.getElem_take, Vector.getElem_cast]
-
 /--
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
