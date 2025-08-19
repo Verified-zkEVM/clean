@@ -259,8 +259,8 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   }
 
 def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F p))) i (_ : inputs.length = i) (state : ProcessBlocksState (F p)) :=
-    initialState.Normalized →
     inputs.length < 2^32 →
+    initialState.Normalized ∧
     (∀ input ∈ inputs, input.Normalized) ∧
     -- The spec relates the current state to the mathematical processBlocksWords function
     -- applied to the first i blocks from inputs (where block_exists = 1)
@@ -345,8 +345,7 @@ private lemma step_process_block (env : Environment (F p))
   · aesop
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
-  intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous initial_Normalized inputs_short
-  specialize spec_previous (by assumption)
+  intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_holds spec_previous inputs_short
   specialize spec_previous (by
     simp only [circuit_norm] at inputs_short
     omega)
@@ -359,13 +358,15 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     provable_struct_simp
     simp_all
   constructor
+  · simp_all
+  constructor
   · intro input
     rintro (_ | _) <;> simp_all
   by_cases h_x : x.block_exists = 1
   · simp only [h_x, decide_true, cond_true]
     simp only [circuit_norm] at inputs_short
     have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
-      spec_previous.2.2.2 input_normalized (by omega)
+      spec_previous.2.2.2.2 input_normalized (by omega)
     simp only [circuit_norm] at one_op
     simp only [one_op]
     constructor
@@ -396,7 +397,6 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
-    specialize h_assumptions (by assumption)
     have := p_large.elim
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
