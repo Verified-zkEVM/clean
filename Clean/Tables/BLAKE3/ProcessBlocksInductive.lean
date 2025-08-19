@@ -69,6 +69,52 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
   state.chunk_counter.Normalized ∧
   state.blocks_compressed.Normalized
 
+namespace BLAKE3ProcessBlocksStateNormalized
+
+def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit := do
+  Circuit.forEach x.chaining_value U32.AssertNormalized.circuit
+  U32.AssertNormalized.circuit x.chunk_counter
+  U32.AssertNormalized.circuit x.blocks_compressed
+
+def circuit : FormalAssertion (F p) ProcessBlocksState where
+  main
+  localLength_eq := by
+    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
+  subcircuitsConsistent := by
+    simp only [circuit_norm, main, U32.AssertNormalized.circuit]
+    omega
+  Assumptions _ := True
+  Spec x := x.Normalized
+
+  soundness := by
+    circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
+    constructor
+    · intro i
+      simp only [← h_input, eval_vector]
+      simp_all
+    simp only [←h_input, eval_vector] -- provable_vector_simp wanted
+    simp_all
+
+  completeness := by
+    circuit_proof_start [U32.AssertNormalized.circuit]
+    simp only [ProcessBlocksState.Normalized] at h_spec
+    constructor
+    · rintro ⟨i, h_i⟩
+      have : (eval env input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
+      simp only [eval_vector] at this
+      simp only [Vector.getElem_map] at this
+      simp only [this]
+      rcases h_spec with ⟨h_spec, _⟩
+      specialize h_spec i
+      convert h_spec
+      simp only [Fin.getElem_fin, Fin.val_natCast]
+      congr
+      omega
+    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
+    simp_all
+
+end BLAKE3ProcessBlocksStateNormalized
+
 /--
 Input for each row: either a block to process or nothing.
 A chunk might contain less than 16 blocks, and `block_exists` indicates empty rows.
@@ -161,6 +207,7 @@ The step function that processes one block or passes through the state.
 def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
     Circuit (F p) (Var ProcessBlocksState (F p)) := do
 
+  BLAKE3ProcessBlocksStateNormalized.circuit state -- redundant except in the first step
   BLAKE3BlockInputNormalized.circuit input
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
@@ -246,6 +293,7 @@ private lemma step_process_block (env : Environment (F p))
     BLAKE3StateFirstHalf.circuit, Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec] at ⊢ h_holds
   provable_struct_simp
   simp only [h_eval, h_x] at ⊢ h_holds
+  rcases h_holds with ⟨ h_assert_state, h_holds ⟩
   rcases h_holds with ⟨ h_assert_normalized, h_holds ⟩
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   rcases h_holds with ⟨ h_compress, h_holds ⟩
@@ -305,7 +353,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   simp only [circuit_norm]
   have input_normalized : x.Normalized := by
     simp only [circuit_norm, step] at h_holds ⊢
-    rcases h_holds with ⟨ h_normalized, h_holds ⟩
+    rcases h_holds with ⟨ h_state, ⟨ h_normalized, h_holds ⟩⟩
     specialize h_normalized trivial
     simp only [BLAKE3BlockInputNormalized.circuit] at h_normalized
     provable_struct_simp
@@ -357,6 +405,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     simp only [h_eval] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
+    constructor
+    · simp_all [BLAKE3ProcessBlocksStateNormalized.circuit]
     constructor
     · simp_all [BLAKE3BlockInputNormalized.circuit]
     constructor
