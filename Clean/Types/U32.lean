@@ -189,11 +189,8 @@ lemma value_injective_on_normalized (x y : U32 (F p))
     x.value = y.value → x = y := by
   intro h_eq
   -- Use horner form of value
-  have hx_value : x.value = x.x0.val + 256 * (x.x1.val + 256 * (x.x2.val + 256 * x.x3.val)) := by
-    exact U32.value_horner x
-  have hy_value : y.value = y.x0.val + 256 * (y.x1.val + 256 * (y.x2.val + 256 * y.x3.val)) := by
-    exact U32.value_horner y
-  rw [hx_value, hy_value] at h_eq
+  have hx_value := U32.value_horner x
+  have hy_value := U32.value_horner y
 
   simp only [U32.Normalized] at hx hy
 
