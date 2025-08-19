@@ -188,29 +188,7 @@ section ValueInjectivity
 lemma base256_two_injective (a0 a1 b0 b1 : ℕ)
     (ha0 : a0 < 256) (hb0 : b0 < 256)
     (h : a0 + 256 * a1 = b0 + 256 * b1) :
-    a0 = b0 ∧ a1 = b1 := by
-  -- First component: use mod 256
-  have h0 : a0 = b0 := by
-    have : a0 % 256 = b0 % 256 := by
-      calc a0 % 256 = (a0 + 256 * a1) % 256 := by simp [Nat.add_mul_mod_self_left]
-        _ = (b0 + 256 * b1) % 256 := by rw [h]
-        _ = b0 % 256 := by simp [Nat.add_mul_mod_self_left]
-    rw [Nat.mod_eq_of_lt ha0, Nat.mod_eq_of_lt hb0] at this
-    exact this
-
-  -- Second component: divide by 256
-  have h1 : a1 = b1 := by
-    have : (a0 + 256 * a1) / 256 = (b0 + 256 * b1) / 256 := by
-      rw [h]
-    rw [Nat.add_mul_div_left _ _ (by norm_num : 0 < 256)] at this
-    rw [Nat.add_mul_div_left _ _ (by norm_num : 0 < 256)] at this
-    have ha0_div : a0 / 256 = 0 := Nat.div_eq_zero_iff.mpr (Or.inr ha0)
-    have hb0_div : b0 / 256 = 0 := Nat.div_eq_zero_iff.mpr (Or.inr hb0)
-    rw [ha0_div, hb0_div] at this
-    simp at this
-    exact this
-
-  exact ⟨h0, h1⟩
+    a0 = b0 ∧ a1 = b1 := by omega
 
 -- Injectivity of four-component base-256 representation
 lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ)
