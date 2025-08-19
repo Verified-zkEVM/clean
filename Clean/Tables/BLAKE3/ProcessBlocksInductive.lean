@@ -133,6 +133,7 @@ def main (x : Var BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector
 
 /--
 A subcircuit that takes the first eight elements of BLAKE3State
+If this circuit gets inlined, the casting business `Vector _ 8` vs `Vector _ (min 8 16)` can be troublesome in the bigger goal state (I haven't tried).
 -/
 def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) where
   main
@@ -145,7 +146,7 @@ def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) wher
     rintro ⟨ i, h_i ⟩
     specialize h_assumptions i
     simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
-    change (input.take 8)[i].Normalized -- What is changed here?
+    change (input.take 8)[i].Normalized -- `output = input.take 8` was `Vector _ 8`. After this line it's about `Vector _ (min 8 16)`.
     rw [Vector.getElem_take]
     convert h_assumptions
     norm_num
