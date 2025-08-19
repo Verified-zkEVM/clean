@@ -183,15 +183,7 @@ lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
 
-section ValueInjectivity
-
--- Injectivity of four-component base-256 representation
-lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ)
-    (ha0 : a0 < 256) (ha1 : a1 < 256) (ha2 : a2 < 256) (_ : a3 < 256)
-    (hb0 : b0 < 256) (hb1 : b1 < 256) (hb2 : b2 < 256) (_ : b3 < 256)
-    (h : a0 + 256 * (a1 + 256 * (a2 + 256 * a3)) = b0 + 256 * (b1 + 256 * (b2 + 256 * b3))) :
-    a0 = b0 ∧ a1 = b1 ∧ a2 = b2 ∧ a3 = b3 := by omega
-
+omit p_large_enough in
 lemma value_injective_on_normalized (x y : U32 (F p))
     (hx : x.Normalized) (hy : y.Normalized) :
     x.value = y.value → x = y := by
@@ -203,31 +195,15 @@ lemma value_injective_on_normalized (x y : U32 (F p))
     exact U32.value_horner y
   rw [hx_value, hy_value] at h_eq
 
-  -- Extract bounds from normalization
   simp only [U32.Normalized] at hx hy
-  have ⟨hx0, hx1, hx2, hx3⟩ := hx
-  have ⟨hy0, hy1, hy2, hy3⟩ := hy
 
-  -- Apply base256_four_injective
-  have ⟨h0, h1, h2, h3⟩ := base256_four_injective _ _ _ _ _ _ _ _ hx0 hx1 hx2 hx3 hy0 hy1 hy2 hy3 h_eq
+  have : x.x0 = y.x0 := by apply ZMod.val_injective; omega
+  have : x.x1 = y.x1 := by apply ZMod.val_injective; omega
+  have : x.x2 = y.x2 := by apply ZMod.val_injective; omega
+  have : x.x3 = y.x3 := by apply ZMod.val_injective; omega
 
-  -- Now show the U32s are equal using ZMod.val_injective
-  have hp : 256 < p := by
-    have : Fact (p > 512) := inferInstance
-    have : p > 512 := this.out
-    omega
-
-  -- Show equality component by component
-  have : x.x0 = y.x0 := ZMod.val_injective (n := p) h0
-  have : x.x1 = y.x1 := ZMod.val_injective (n := p) h1
-  have : x.x2 = y.x2 := ZMod.val_injective (n := p) h2
-  have : x.x3 = y.x3 := ZMod.val_injective (n := p) h3
-
-  -- Reconstruct equality
   cases x; cases y
   simp_all
-
-end ValueInjectivity
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 @[circuit_norm]
@@ -264,6 +240,7 @@ lemma value_zero :
     (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
   aesop
 
+omit p_large_enough in
 @[circuit_norm]
 lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
     x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
