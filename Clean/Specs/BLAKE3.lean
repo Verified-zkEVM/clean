@@ -1,4 +1,5 @@
 import Clean.Utils.Bitwise
+import Clean.Utils.Vector
 
 namespace Specs.BLAKE3
 
@@ -260,7 +261,7 @@ def processBlockWords (state : ChunkState) (block_words : Vector ℕ 16) : Chunk
   let flags := startFlag state
   let new_cv := compress state.chaining_value block_words state.chunk_counter blockLen flags
   { state with
-    chaining_value := new_cv.take 8
+    chaining_value := new_cv.takeShort 8 (by omega)
     blocks_compressed := state.blocks_compressed + 1
     block_buffer := []
   }

@@ -175,7 +175,16 @@ end BLAKE3BlockInputNormalized
 namespace BLAKE3StateFirstHalf
 
 def main (x : Var BLAKE3.BLAKE3State (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
-  return x.take 8
+  return x.takeShort 8 (by omega)
+
+omit p_large in
+lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (env : Environment (F p))
+    (vars : Var (ProvableVector M n) (F p)) (i : ℕ) (h_i : i < n) :
+    (eval env (vars.takeShort i h_i) : ProvableVector _ _ _) = (eval env vars).takeShort i h_i := by
+  simp only [Vector.takeShort]
+  simp only [eval_vector]
+  ext j h_j
+  simp only [Vector.getElem_map, Vector.getElem_cast, Vector.map_take, Vector.getElem_map]
 
 /--
 A subcircuit that takes the first eight elements of BLAKE3State
@@ -185,15 +194,14 @@ def circuit : FormalCircuit (F p) BLAKE3.BLAKE3State (ProvableVector U32 8) wher
   main
   localLength := 0
   Assumptions input := input.Normalized
-  Spec input output := output = input.take 8 ∧ ∀ i : Fin 8, output[i].Normalized
+  Spec input output := output = input.takeShort 8 (by omega) ∧ ∀ i : Fin 8, output[i].Normalized
   soundness := by
-    circuit_proof_start [eval_vector_take]
+    circuit_proof_start [eval_vector_takeShort]
     simp only [BLAKE3.BLAKE3State.Normalized] at h_assumptions
     rintro ⟨ i, h_i ⟩
     specialize h_assumptions i
     simp only [BLAKE3.BLAKE3State, ProvableVector] at ⊢ input
-    change (input.take 8)[i].Normalized -- `output = input.take 8` was `Vector _ 8`. After this line it's about `Vector _ (min 8 16)`.
-    rw [Vector.getElem_take]
+    rw [Vector.getElem_takeShort]
     convert h_assumptions
     norm_num
     omega
@@ -272,6 +280,12 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     state.toChunkState = finalState ∧
     state.Normalized
 
+lemma Vector.map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n) (h_j : j < n) :
+    Vector.map f (v.takeShort j h_j) = (v.map f).takeShort j h_j := by
+  simp only [Vector.takeShort]
+  ext k h_k
+  simp only [Vector.getElem_map, Vector.getElem_take, Vector.getElem_cast]
+
 /--
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
@@ -331,6 +345,7 @@ private lemma step_process_block (env : Environment (F p))
   simp only [↓reduceIte] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
   norm_num at ⊢ h_compress h_iszero
+  simp only [Vector.map_takeShort]
   simp only [h_compress.1, startFlag, circuit_norm]
   constructor
   · norm_num
