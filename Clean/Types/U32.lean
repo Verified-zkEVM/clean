@@ -195,24 +195,7 @@ lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ)
     (ha0 : a0 < 256) (ha1 : a1 < 256) (ha2 : a2 < 256) (_ : a3 < 256)
     (hb0 : b0 < 256) (hb1 : b1 < 256) (hb2 : b2 < 256) (_ : b3 < 256)
     (h : a0 + 256 * (a1 + 256 * (a2 + 256 * a3)) = b0 + 256 * (b1 + 256 * (b2 + 256 * b3))) :
-    a0 = b0 ∧ a1 = b1 ∧ a2 = b2 ∧ a3 = b3 := by
-  -- Apply base256_two_injective repeatedly
-  -- First, view as a0 + 256 * (rest)
-  have h_outer := base256_two_injective a0 (a1 + 256 * (a2 + 256 * a3))
-                                        b0 (b1 + 256 * (b2 + 256 * b3))
-                                        ha0 hb0 h
-  obtain ⟨h0, h_rest⟩ := h_outer
-
-  -- Now apply to the remaining components
-  have h_inner := base256_two_injective a1 (a2 + 256 * a3) b1 (b2 + 256 * b3)
-                                        ha1 hb1 h_rest
-  obtain ⟨h1, h_rest2⟩ := h_inner
-
-  -- Finally, the last two components
-  have h_final := base256_two_injective a2 a3 b2 b3 ha2 hb2 h_rest2
-  obtain ⟨h2, h3⟩ := h_final
-
-  exact ⟨h0, h1, h2, h3⟩
+    a0 = b0 ∧ a1 = b1 ∧ a2 = b2 ∧ a3 = b3 := by omega
 
 lemma value_injective_on_normalized (x y : U32 (F p))
     (hx : x.Normalized) (hy : y.Normalized) :
