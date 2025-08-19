@@ -31,7 +31,7 @@ private lemma ZMod_val_64 :
   linarith
 
 attribute [local circuit_norm] blockLen ZMod.val_zero ZMod.val_one ZMod_val_64 add_zero zero_add chunkStart List.concat_eq_append List.length_append List.length_cons List.length_nil
-  id_eq List.sum_cons List.sum_nil List.mem_append List.mem_cons or_false List.filter_append List.filter_singleton -- only in the current section
+  id_eq List.sum_cons List.sum_nil List.mem_append List.mem_cons or_false List.filter_append List.filter_singleton pow_zero -- only in the current section
 
 /--
 State maintained during block processing.
@@ -181,7 +181,7 @@ lemma eval_vector_takeShort {M : TypeMap} [NonEmptyProvableType M] {n : ℕ} (en
   ext j h_j
   simp only [Vector.getElem_map, Vector.getElem_cast, Vector.map_take, Vector.getElem_map]
 
-attribute [local circuit_norm] eval_vector_takeShort
+attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
 
 /--
 The step function that processes one block or passes through the state.
@@ -309,7 +309,6 @@ private lemma step_process_block (env : Environment (F p))
   simp only [↓reduceIte] at ⊢ h_addition
   simp only [h_addition, processBlockWords]
   norm_num at ⊢ h_compress h_iszero
-  simp only [Vector.map_takeShort]
   simp only [h_compress.1, startFlag, circuit_norm]
   constructor
   · norm_num
@@ -382,10 +381,10 @@ def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
     input.Normalized ∧ i < 2^32
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
+    have := p_large.elim
     intro initialState row_index env acc_var x_var acc x xs xs_len h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
-    have := p_large.elim
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
     simp only [circuit_norm, step] at ⊢ h_witnesses
@@ -426,6 +425,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
         · simp only [h_witnesses_iszero]
           norm_num
       · norm_num
+    simp_all only [Addition32.circuit, Addition32.Assumptions, Conditional.circuit, Conditional.Assumptions]
     constructor
     · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
@@ -435,29 +435,21 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
         simp only [h_assumptions]
-        constructor
-        · trivial
-        constructor
-        · trivial
-        constructor
-        · simp only [circuit_norm]
-          omega
-        constructor
-        · trivial
         simp only [circuit_norm]
+        constructor
+        · omega
         constructor
         · omega
         constructor
         · split at h_witnesses_iszero
           · simp only [h_witnesses_iszero]
-            norm_num
             simp only [circuit_norm]
             omega
           · simp only [h_witnesses_iszero]
             norm_num
         · norm_num)
-      simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions]
-    simp_all [Addition32.circuit, Addition32.Assumptions, h_assumptions, circuit_norm, Conditional.circuit, Conditional.Assumptions]
+      simp_all [circuit_norm]
+    trivial
 
 /--
 The InductiveTable for processBlocks.
