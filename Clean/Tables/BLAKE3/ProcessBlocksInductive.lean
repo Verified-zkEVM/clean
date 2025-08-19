@@ -131,9 +131,6 @@ instance : ProvableStruct BlockInput where
     match xss with
     | .cons block_exists (.cons data .nil) =>
       { block_exists := block_exists, block_data := data }
-  fromComponents_toComponents := by
-    intros
-    rfl
 
 def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
   IsBool input.block_exists ∧
