@@ -13,12 +13,11 @@ There can be multiple labels associated with the same `ProvableType`.
 The multiplicity counting occurs separately on each label.
 Don't use the same label in multiple accounts.
 -/
-class Account (label : String) where
-  M : TypeMap
-  [inst : ProvableType M]
+class Account (label : String) (M : outParam TypeMap) (F : Type) extends ProvableType M, Repr (Var M F)
 
-structure Count (F : Type) where
-  label : String
-  [account : Account label]
-  entry : Var account.M F
+structure Count (label : String) {M : TypeMap} (F : Type) [Account label M F] where
+  entry : Var M F
   multiplicity : Expression F
+
+instance {label : String} {M : TypeMap} {F : Type} [Account label M F] : Repr (Count label (M:=M) F) where
+  reprPrec c _ := "(Count " ++ label ++ " " ++ reprStr c.entry ++ ")"
