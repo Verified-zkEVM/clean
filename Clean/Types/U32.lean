@@ -184,11 +184,6 @@ lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   repeat linarith [x.is_lt, p_large_enough.elim]
 
 section ValueInjectivity
--- Helper lemma: injectivity of two-component base-256 representation
-lemma base256_two_injective (a0 a1 b0 b1 : ℕ)
-    (ha0 : a0 < 256) (hb0 : b0 < 256)
-    (h : a0 + 256 * a1 = b0 + 256 * b1) :
-    a0 = b0 ∧ a1 = b1 := by omega
 
 -- Injectivity of four-component base-256 representation
 lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ)
