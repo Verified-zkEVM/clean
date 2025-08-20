@@ -27,5 +27,5 @@ structure Yield (F : Type) where
 instance [Repr F] : Repr (Use F) where
   reprPrec u _ := "(Use " ++ u.property.name ++ " " ++ repr u.entry ++ ")"
 
-instance [Repr F] : Repr (Use F) where
+instance [Repr F] : Repr (Yield F) where
   reprPrec y _ := "(Yield " ++ y.property.name ++ " " ++ repr y.entry ++ ")"
