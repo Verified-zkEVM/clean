@@ -12,9 +12,7 @@ variable {F : Type} [Field F] {n : ℕ}
 structure Property (F : Type) where
   name : String
   arity : ℕ
-  Soundness : Vector F arity → Prop -- every use operation brings in Soundness from external circuits & tables
-  Completeness : Vector F arity → Prop -- every yield operation provides Completeness to external circuits & tables
-  imply_soundness : ∀ row, Completeness row → Soundness row
+  Pred : Vector F arity → Prop -- every use operation brings in Pred from external circuits & tables, every yield operation provides Pred externally
 
 structure Use (F : Type) where
   property : Property F
