@@ -316,6 +316,7 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
+    use _ tp := Yielded tp env,
     subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
@@ -389,6 +390,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
+    use _ tp := Yielded tp env,
     subcircuit _ _ s := s.Completeness env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]

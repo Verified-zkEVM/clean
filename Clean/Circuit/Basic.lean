@@ -117,6 +117,11 @@ def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
 def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
+/-- Add a use of a table. -/
+@[circuit_norm]
+def useTable {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.use { property := table.toRaw.Property, entry := toElements entry }])
+
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
@@ -182,7 +187,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .lookup { table, entry } :: ops =>
     table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
   | .yield _ :: ops => ConstraintsHold.Completeness eval ops
-  | .use _ :: ops => ConstraintsHold.Completeness eval ops -- additional global check needed that there's a correponding yield
+  | .use tp :: ops => Yielded tp eval ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
@@ -404,7 +409,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup useTable)
 
 -- general `witness` method
 

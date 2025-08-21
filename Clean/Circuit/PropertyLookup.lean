@@ -14,6 +14,7 @@ structure Property (F : Type) where
   arity : ℕ
   Pred : Vector F arity → Prop -- every use operation brings in Pred from external circuits & tables, every yield operation provides Pred externally
 
+@[circuit_norm]
 def Property.eval (property : Property F) (env : Environment F) (entry : Vector (Expression F) property.arity) :=
   property.Pred (entry.map env)
 
@@ -24,6 +25,7 @@ structure TupleProperty (F : Type) where
 instance [Repr F] : Repr (TupleProperty F) where
   reprPrec tp _ := "(TupleProperty" ++ repr tp.property.name ++ " " ++ repr tp.entry ++ ")" -- no parentheses because used within Use or Yield
 
+@[circuit_norm]
 def TupleProperty.valid (tp : TupleProperty F) (env : Environment F) :=
   tp.property.eval env tp.entry
 
@@ -61,9 +63,6 @@ def TupleProperty.valid (tp : TupleProperty F) (env : Environment F) :=
   ### Completeness
 
   The constraint system requires about each `Use` is yielded at least once somewhere.
-
-  This is a global property that involves all circuits and tables involved.
-  We can consider this in the whole list of operations in all circuits.
 
   ## Alternative
 

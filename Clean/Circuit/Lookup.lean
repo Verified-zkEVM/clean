@@ -53,6 +53,11 @@ def RawTable.Property (table : RawTable F) : Property F where
   arity := table.arity
   Pred := table.Soundness
 
+ omit [Field F] in
+@[circuit_norm]
+lemma RawTable.Property_Pred (table : RawTable F) :
+  table.Property.Pred = table.Soundness := rfl
+
 def RawTable.TupleProperty (table : RawTable F) (entry : Vector (Expression F) table.arity) : TupleProperty F where
   property := table.Property
   entry := entry
@@ -68,6 +73,7 @@ structure Lookup (F : Type) where
   table : RawTable F
   entry : Vector (Expression F) table.arity
 
+-- ever used?
 def Lookup.toTupleProperty (l : Lookup F) : TupleProperty F where
   property := l.table.Property
   entry := l.entry

@@ -22,6 +22,7 @@ def Assumptions (input : Inputs (F p)) :=
 
 def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
+  Yielded (ByteXorTable.toRaw.TupleProperty (x, y, 2 * z - x - y)) → -- !!!
   z.val = x.val ||| y.val ∧ z.val < 256
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
@@ -29,7 +30,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
   let or ← witness fun eval => (eval x).val ||| (eval y).val
   -- we prove OR correct using an XOR lookup
   let xor := 2*or - x - y
-  lookup ByteXorTable (x, y, xor)
+  useTable ByteXorTable (x, y, xor)
   return or
 
 -- OR / XOR identity that justifies the circuit
@@ -98,6 +99,11 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- The constraint from lookup is about xor = 2*or - x - y
   -- which in field arithmetic is 2*w + -x + -y
   set xor := 2*w + -x + -y
+  specialize h_constraint (by
+    apply RawTable.yields
+    simp
+    sorry)
+
   have h_xor : xor.val = x.val ^^^ y.val := h_constraint
   have value_goal : w.val = x.val ||| y.val := by
     have two_or_field : 2*w = x + y + xor := by ring
@@ -133,6 +139,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
+
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x ||| ZMod.val y
   have hw : w = ZMod.val x ||| ZMod.val y := rfl
