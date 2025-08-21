@@ -17,22 +17,27 @@ structure Property (F : Type) where
 def Property.eval (property : Property F) (env : Environment F) (entry : Vector (Expression F) property.arity) :=
   property.Pred (entry.map env)
 
-structure Use (F : Type) where
+structure TupleProperty (F : Type) where
   property : Property F
   entry : Vector (Expression F) property.arity
+
+instance [Repr F] : Repr (TupleProperty F) where
+  reprPrec tp _ := repr tp.property.name ++ " " ++ repr tp.entry -- no parentheses because used within Use or Yield
+
+def TupleProperty.valid (tp : TupleProperty F) (env : Environment F) :=
+  tp.property.eval env tp.entry
+
+structure Use (F : Type) where
+  content : TupleProperty F
 
 structure Yield (F : Type) where
-  property : Property F
-  entry : Vector (Expression F) property.arity
-
-def Yield.valid (y : Yield F) (env : Environment F) :=
-  y.property.eval env y.entry
+  content : TupleProperty F
 
 instance [Repr F] : Repr (Use F) where
-  reprPrec u _ := "(Use " ++ u.property.name ++ " " ++ repr u.entry ++ ")"
+  reprPrec u _ := "(Use " ++ repr u.content ++ ")"
 
 instance [Repr F] : Repr (Yield F) where
-  reprPrec y _ := "(Yield " ++ y.property.name ++ " " ++ repr y.entry ++ ")"
+  reprPrec y _ := "(Yield " ++ repr y.content ++ ")"
 
 /- Avoiding circular reasoning.
 
@@ -53,12 +58,11 @@ instance [Repr F] : Repr (Yield F) where
 
   ### Soundness
 
-  `Yield y` gives `y.valid env → Yielded y env`. Which is actually a tautology, but this is a hint
-  to prove `y.valid` at this point.
+  `Yield y` gives `y.content.valid env → Yielded y.content env`. Which is actually a tautology, but this is a hint
+  to prove `y.content.valid` at this point.
 
-  `Use u` gives `Yielded u.origin → u.valid env`. If the required `Yielded` token is not around,
-  either it has to be assumed to come from external circuits or tables, or an operation later has to
-  produce it.
+  `Use u` gives `Yielded u.content  → u.content.valid env`. If the required `Yielded` token is not around,
+  either it has to be assumed from external circuits or tables, or an operation later has to produce it.
 
   The soundness proof can also generate `Yield y` token from a proof of `y.valid env` anywhere.
   This means the verifier doesn't need to rely on the lookup argument. This doesn't affect the soundness
@@ -76,9 +80,8 @@ instance [Repr F] : Repr (Yield F) where
   ## Alternative
 
   A well-founded relation on properties' would work, all specs will be relative to a
-  downward-closed set of properties. But Lean is already equipped with ways to avoid
-  circular reasoning, so it's enough to pass around properties packaged in the `Yielded`
-  token.
+  downward-closed set of `TupleProperty`s. But it's enough to pass around tuples with
+  properties packaged in the `Yielded` token.
 -/
 
-def Yielded (y : Yield F) (env : Environment F) := y.valid env
+def Yielded (tp : TupleProperty F) (env : Environment F) := tp.valid env
