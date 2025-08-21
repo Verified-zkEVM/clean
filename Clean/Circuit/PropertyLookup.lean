@@ -22,22 +22,10 @@ structure TupleProperty (F : Type) where
   entry : Vector (Expression F) property.arity
 
 instance [Repr F] : Repr (TupleProperty F) where
-  reprPrec tp _ := repr tp.property.name ++ " " ++ repr tp.entry -- no parentheses because used within Use or Yield
+  reprPrec tp _ := "(TupleProperty" ++ repr tp.property.name ++ " " ++ repr tp.entry ++ ")" -- no parentheses because used within Use or Yield
 
 def TupleProperty.valid (tp : TupleProperty F) (env : Environment F) :=
   tp.property.eval env tp.entry
-
-structure Use (F : Type) where
-  content : TupleProperty F
-
-structure Yield (F : Type) where
-  content : TupleProperty F
-
-instance [Repr F] : Repr (Use F) where
-  reprPrec u _ := "(Use " ++ repr u.content ++ ")"
-
-instance [Repr F] : Repr (Yield F) where
-  reprPrec y _ := "(Yield " ++ repr y.content ++ ")"
 
 /- Avoiding circular reasoning.
 
