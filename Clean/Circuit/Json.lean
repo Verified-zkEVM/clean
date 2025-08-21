@@ -39,17 +39,27 @@ instance : ToJson (Lookup F) where
     ("entry", toJson l.entry.toArray),
   ]
 
+instance : ToJson (TupleProperty F) where
+  toJson tp := Json.mkObj [
+    ("property", toJson tp.property.name),
+    ("entry", toJson tp.entry.toArray),
+  ]
+
 instance : ToJson (FlatOperation F) where
   toJson
     | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
     | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
+    | FlatOperation.yield tp => Json.mkObj [("yield", toJson tp)]
+    | FlatOperation.use tp => Json.mkObj [("use", toJson tp)]
 
 instance : ToJson (Operation F) where
   toJson
     | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
     | Operation.assert e => Json.mkObj [("assert", toJson e)]
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
+    | Operation.yield tp => Json.mkObj [("yield", toJson tp)]
+    | Operation.use tp => Json.mkObj [("use", toJson tp)]
     | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
 
 instance : ToJson (Operations F) where

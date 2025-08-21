@@ -46,10 +46,10 @@ def TupleProperty.valid (tp : TupleProperty F) (env : Environment F) :=
 
   ### Soundness
 
-  `Yield y` gives `y.content.valid env → Yielded y.content env`. Which is actually a tautology, but this is a hint
+  `Yield y` gives `y.valid env → Yielded y env`. Which is actually a tautology, but this is a hint
   to prove `y.content.valid` at this point.
 
-  `Use u` gives `Yielded u.content  → u.content.valid env`. If the required `Yielded` token is not around,
+  `Use u` gives `Yielded u env → u.valid env`. If the required `Yielded` token is not around,
   either it has to be assumed from external circuits or tables, or an operation later has to produce it.
 
   The soundness proof can also generate `Yield y` token from a proof of `y.valid env` anywhere.
