@@ -1,4 +1,5 @@
 import Clean.Circuit.Provable
+import Clean.Circuit.PropertyLookup
 variable {F : Type} [Field F] {α : Type} {n : ℕ}
 variable {Row : TypeMap} [ProvableType Row]
 
@@ -47,9 +48,29 @@ structure RawTable (F : Type) where
   imply_soundness : ∀ row, Contains row → Soundness row
   implied_by_completeness : ∀ row, Completeness row → Contains row
 
+def RawTable.Property (table : RawTable F) : Property F where
+  name := "table_" ++ table.name
+  arity := table.arity
+  Pred := table.Soundness
+
+def RawTable.TupleProperty (table : RawTable F) (entry : Vector (Expression F) table.arity) : TupleProperty F where
+  property := table.Property
+  entry := entry
+
+lemma RawTable.yields (table : RawTable F) (env : Environment F) (entry : Vector (Expression F) table.arity):
+    table.Contains (entry.map env) → Yielded (table.TupleProperty entry) env := by
+  intros
+  simp only [Yielded, TupleProperty.valid, RawTable.TupleProperty, RawTable.Property, Property.eval]
+  apply imply_soundness
+  assumption
+
 structure Lookup (F : Type) where
   table : RawTable F
   entry : Vector (Expression F) table.arity
+
+def Lookup.toTupleProperty (l : Lookup F) : TupleProperty F where
+  property := l.table.Property
+  entry := l.entry
 
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
