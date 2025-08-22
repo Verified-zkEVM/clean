@@ -260,7 +260,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops 
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
 
-theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {sentences : PropertySet F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
+theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {sentences : SentenceOrder F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
   env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness sentences n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
@@ -275,7 +275,7 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {senten
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 
-theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {sentences : PropertySet F} {ops : Operations F} :
+theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {sentences : SentenceOrder F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness sentences n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
     subcircuit _ _ s := s.UsesLocalWitnesses env sentences
@@ -346,7 +346,7 @@ end Circuit
 namespace Circuit
 -- more theorems about forAll
 
-variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F} {sentences : PropertySet F}
+variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F} {sentences : SentenceOrder F}
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
