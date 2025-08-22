@@ -1,5 +1,5 @@
 import Clean.Circuit.Provable
-variable {F : Type} [Field F]
+variable {F : Type}
 
 structure Property (F : Type) where
   name : String
@@ -47,7 +47,8 @@ The soundness proof uses mathematical induciton on the growing set of sentences.
 -- The current focus is to encode the above rules.
 -- Another TODO is to run the mathemtcial induction so that we get the final theorem about soundness of a circuit.
 
-
+structure InductionState {F : Type} (sentences : PropertySet F) where
+  yieldsChecked : Set (Sentence sentences)
 
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.
