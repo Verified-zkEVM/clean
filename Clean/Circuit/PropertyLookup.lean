@@ -37,8 +37,7 @@ the soundness proof from seeing `use s`, gets convinced of `s` and uses that to 
 The soundness proof uses mathematical induciton on the growing set of sentences.
 - If the current set contains `s`, `use s` guarantees `s` is valid.
 - If the current set doesn't contain `s`, `use s` doesn't do anything.
-- If the current set contains `s`, `yield s` doesn't do anything.
-- If the current set doesn't contain `s` but contains all the precedents of `s`,
+- If the current set contains all the precedents of `s`,
   `yield s` requires proof that `s` is valid.
 - If the current set doesn't contain some elements of the precendents of `s`,
   `yield s` doesn't do anything.
