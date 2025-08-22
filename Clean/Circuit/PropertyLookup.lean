@@ -54,3 +54,14 @@ The completeness proof will need to keep track of the set of the yielded sentenc
 -/
 
 -- The current focus is to get the soundness proof working.
+
+/- TODO:
+
+ * (current) Add CheckedYields argument to Spec's used during the soundness proof
+ * Add `use` operation
+   + `use` is similar to `lookup`
+   + `use` guarantees properties if it's in the current `CheckedYield`
+ * Add `yield` operation
+ * Change soundness statement so that `yield` validity becomes a goal according to the above rule
+
+-/
