@@ -92,10 +92,10 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
       rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
       exact h_env
-    have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness (sentences:=sentences) h_consistent h_env
+    have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
-    have h_holds := circuit.completeness n env sentences input_var h_env_completeness input rfl as
+    have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as
 
     -- so we just need to go from constraints to flattened constraints
     apply constraintsHold_toFlat_iff.mpr
@@ -106,8 +106,8 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     Soundness env setences checked := circuit.Assumptions (eval env input_var) →
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env := circuit.Assumptions (eval env input_var),
-    UsesLocalWitnesses env sentences := circuit.Assumptions (eval env input_var) →
-      circuit.Spec (sentences:=sentences) Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
+    UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
+      circuit.SpecComplete (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
     imply_soundness
