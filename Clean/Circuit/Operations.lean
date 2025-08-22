@@ -85,8 +85,6 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   Soundness (_ : Environment F) {sentences : SentenceOrder F} (checkedYields : CheckedYields sentences) : Prop -- usually useful after `checkYields` covers all `use`es in the subcircuit.
-  SpecComplete : Environment F → Prop -- what Soundness should approximate, given big enough SentenceOrder
-  -- TODO: add a propoerty soundness_aproximates_specComplete
   Completeness : Environment F → Prop
   UsesLocalWitnesses : Environment F → Prop -- SentenceOrder is useful for setting up `Set.univ` to be used as the `checkedYields`
 
@@ -97,10 +95,6 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env (sentences : SentenceOrder F) (checkedYields : CheckedYields sentences),
     ConstraintsHoldFlat env ops → Soundness env checkedYields
-
-  -- `SpecComplete` needs to follow from the constraints for any witness
-  imply_specComplete : ∀ env,
-    ConstraintsHoldFlat env ops → SpecComplete env
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ (env : Environment F), env.ExtendsVector (localWitnesses env ops) offset →
