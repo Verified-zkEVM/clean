@@ -130,8 +130,8 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies assumin
 `ConstraintsHold.Soundness` when defining soundness for formal circuits,
 because it is implied by the flat version.
 -/
-theorem can_replace_soundness {ops : Operations F} {env} :
-  ConstraintsHold env ops → ConstraintsHold.Soundness env ops := by
+theorem can_replace_soundness {ops : Operations F} {env} {sentences} {checked : CheckedYields sentences} :
+  ConstraintsHold env ops → ConstraintsHold.Soundness env checked ops := by
   intro h
   induction ops using Operations.induct with
   | empty => trivial
@@ -140,7 +140,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    exact ⟨ circuit.imply_soundness env _ _ h.left, ih h.right ⟩
 
 end Circuit
 
@@ -295,11 +295,11 @@ end Environment
 
 namespace Circuit
 
-theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) :
-  ConstraintsHold.Soundness env ops ↔ ops.forAll n {
+theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (ops : Operations F) sentences (checked : CheckedYields sentences) :
+  ConstraintsHold.Soundness env checked ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := s.Soundness env checked
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -371,11 +371,11 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
   simp only [forAll]
   rw [bind_forAll]
 
-theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} :
-  ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
+theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : Circuit F α} {n : ℕ} sentences checked :
+  ConstraintsHold.Soundness env checked (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := s.Soundness env (sentences:=sentences) checked
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
@@ -389,16 +389,16 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
 
 -- specializations
 
-@[circuit_norm] theorem ConstraintsHold.append_soundness {as bs : Operations F} :
-  ConstraintsHold.Soundness env (as ++ bs)
-  ↔ ConstraintsHold.Soundness env as ∧ ConstraintsHold.Soundness env bs := by
+@[circuit_norm] theorem ConstraintsHold.append_soundness {as bs : Operations F} sentences checked :
+  ConstraintsHold.Soundness env checked (as ++ bs)
+  ↔ ConstraintsHold.Soundness env checked as ∧ ConstraintsHold.Soundness env (sentences:=sentences) checked bs := by
   rw [ConstraintsHold.soundness_iff_forAll 0, Operations.forAll_append,
     ←ConstraintsHold.soundness_iff_forAll 0, ←ConstraintsHold.soundness_iff_forAll (as.localLength + 0)]
 
-@[circuit_norm] theorem ConstraintsHold.bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  ConstraintsHold.Soundness env ((f >>= g).operations n)
-  ↔ ConstraintsHold.Soundness env (f.operations n) ∧
-    ConstraintsHold.Soundness env ((g (f.output n)).operations (n + f.localLength n)) := by
+@[circuit_norm] theorem ConstraintsHold.bind_soundness {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) {sentences} {checked} :
+  ConstraintsHold.Soundness env checked ((f >>= g).operations n)
+  ↔ ConstraintsHold.Soundness env checked (f.operations n) ∧
+    ConstraintsHold.Soundness env (sentences:=sentences) checked ((g (f.output n)).operations (n + f.localLength n)) := by
   rw [ConstraintsHold.soundness_iff_forAll n, ConstraintsHold.soundness_iff_forAll n,
     ConstraintsHold.soundness_iff_forAll (n + f.localLength n), bind_forAll]
 

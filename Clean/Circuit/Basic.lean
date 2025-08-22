@@ -162,7 +162,7 @@ def ConstraintsHold.Soundness (eval : Environment F) {sentences : PropertySet F}
   | .lookup { table, entry } :: ops =>
     table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval checked ops
   | .subcircuit s :: ops =>
-    s.Soundness eval sentences checked ∧ ConstraintsHold.Soundness eval checked ops
+    s.Soundness eval checked ∧ ConstraintsHold.Soundness eval checked ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
