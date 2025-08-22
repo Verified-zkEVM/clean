@@ -319,10 +319,10 @@ def FormalAssertion.Soundness (F : Type) [Field F] (sentences : SentenceOrder F)
   Spec checked input
 
 @[circuit_norm]
-def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
+def FormalAssertion.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset, ∀ env, ∀ sentences, ∀ input_var : Var Input F,
+  ∀ offset, ∀ env, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness sentences offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
@@ -349,7 +349,7 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   Assumptions : Input F → Prop
   Spec {sentences} : CheckedYields sentences → Input F → Prop
   soundness {sentences} checked : FormalAssertion.Soundness F sentences checked elaborated Assumptions Spec
-  completeness {sentences} : FormalAssertion.Completeness F elaborated Assumptions (Spec (sentences:=sentences) Set.univ)
+  completeness {sentences} : FormalAssertion.Completeness F sentences.s elaborated Assumptions (Spec (sentences:=sentences) Set.univ)
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0
