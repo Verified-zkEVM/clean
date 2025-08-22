@@ -106,18 +106,23 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     Soundness env setences checked := circuit.Assumptions (eval env input_var) →
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env := circuit.Assumptions (eval env input_var),
+    SpecComplete env := circuit.Assumptions (eval env input_var) →
+      circuit.SpecComplete (eval env input_var) (eval env (circuit.output input_var n)),
     UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
       circuit.SpecComplete (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
     imply_soundness
+    imply_specComplete := by
+      -- use spec_approximates_specComplete
+      sorry
     implied_by_completeness
     imply_usesLocalWitnesses := by
       intro env h_env as
       -- by completeness, the constraints hold
       have h_holds := implied_by_completeness env h_env as
       -- by soundness, this implies the spec
-      exact imply_soundness env h_holds as
+      exact imply_specComplete env h_holds as
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]

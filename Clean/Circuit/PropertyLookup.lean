@@ -63,15 +63,19 @@ The completeness proof will need to keep track of the set of the yielded sentenc
 
 /- TODO:
 
+ * Turn Environment into a structure with fields member (current Enviornment)
+ * Add yielded element to Environment
+   * Important for completeness
  * (current) Add CheckedYields argument to Spec's used during the soundness proof
-   + Remove SpecMax, instead GeneraliFormalCircuit completetness should take `sentences` parameter
    + In Soundness, Spec needs to take sentances and checked
+   + UseLocalWitnesses for a subcircuit: Assumption implies Spec, that's fine.
+     - this works because Assumption and Spec talks about the yielded element
+     - Use of the soundnes will involve `Set.univ` as the checked set
  * Add `use` operation
    + `use` is similar to `lookup`
    + `use` guarantees properties if it's in the current `CheckedYield`
  * Add `yield` operation
+   + `yield` is similar to `witness`
  * Change Soundness statement so that `yield` validity becomes a goal according to the above rule
- * Define FormalAssertion.RelevantSentences
- * Add a member SubCircuit.soundness_aproximates_specComplete
 
 -/

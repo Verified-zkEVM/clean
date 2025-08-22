@@ -289,11 +289,6 @@ structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableT
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions (_ : Input F) : Prop := True
   Spec {sentences : SentenceOrder F} : CheckedYields sentences → Input F → Output F → Prop
-  SpecComplete : Input F → Output F → Prop -- `Spec` when all `use`s are covered by the `checked : CheckedYields`.
-  RelevantSentences : SentenceOrder F → Prop -- All `use`ed sentences are in `SentenceOrder F`. TODO: define this once and for all
-  spec_approximates_specComplete :
-    ∀ sentences, RelevantSentences sentences →
-      ∀ i o, Spec (sentences:=sentences) Set.univ i o ↔ SpecComplete i o
   soundness sentences checked : Soundness F sentences checked elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
 
