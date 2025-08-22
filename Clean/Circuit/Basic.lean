@@ -246,7 +246,7 @@ with respect to the growing `checked` set.
 @[circuit_norm]
 def Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s)
     (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
+    (Assumptions : Input F → Prop) (Spec : ∀ {sentences : PropertySet F}, CheckedYields sentences →  Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs that satisfy the assumptions
@@ -258,7 +258,7 @@ def Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : Chec
   let output := eval env (circuit.output input_var offset)
   -- TODO: pass sentences.s to `Spec`
   -- TODO: prove `yield`ed properties hold, when their dependencies are already checked
-  Spec input output
+  Spec checked input output
 
 @[circuit_norm]
 def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
@@ -288,7 +288,7 @@ preconditions, and the spec acts as the postcondition.
 structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions (_ : Input F) : Prop := True
-  Spec : Input F → Output F → Prop
+  Spec {sentences : PropertySet F} : CheckedYields sentences → Input F → Output F → Prop
   soundness sentences checked : Soundness F sentences checked elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
 
@@ -298,10 +298,11 @@ This ensures that for any input satisfying the assumptions, the specification un
 Use this class when you want to formally guarantee that constraints uniquely determine the output,
 preventing ambiguity in deterministic circuits.
 -/
-structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+structure DeterministicFormalCircuit (F : Type) [Field F] {sentences : PropertySet F} (checked : CheckedYields sentences)
+    (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends circuit : FormalCircuit F Input Output where
   uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
-    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+    circuit.Assumptions input → circuit.Spec checked input out1 → circuit.Spec checked input out2 → out1 = out2
 
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s)
