@@ -63,7 +63,6 @@ The completeness proof will need to keep track of the set of the yielded sentenc
 
 /- TODO:
 
- * Turn Environment into a structure with fields member (current Enviornment)
  * Add yielded element to Environment
    * Important for completeness
  * (current) Add CheckedYields argument to Spec's used during the soundness proof
