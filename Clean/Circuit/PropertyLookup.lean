@@ -46,7 +46,7 @@ The soundness proof uses mathematical induciton on the growing set of sentences.
 -- The current focus is to encode the above rules.
 -- Another TODO is to run the mathemtcial induction so that we get the final theorem about soundness of a circuit.
 
-def InductionState {F : Type} (sentences : PropertySet F) := Set (Sentence sentences)
+def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences)
 
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.
