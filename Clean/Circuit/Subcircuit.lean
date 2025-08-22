@@ -63,17 +63,17 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   let ops := circuit.main input_var |>.operations n
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
-  have imply_soundness : ∀ env : Environment F,
+  have imply_soundness : ∀ (env : Environment F) (sentences : SentenceOrder F) (checked : CheckedYields sentences.s),
     let input := eval env input_var
     let output := eval env (circuit.output input_var n)
-    ConstraintsHoldFlat env ops.toFlat → circuit.Assumptions input → circuit.Spec input output := by
+    ConstraintsHoldFlat env ops.toFlat → circuit.Assumptions input → circuit.Spec checked input output := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env input output h_holds (as : circuit.Assumptions input)
-    show circuit.Spec input output
+    intro env sentences checked input output h_holds (as : circuit.Assumptions input)
+    show circuit.Spec checked input output
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
-    suffices h: ConstraintsHold.Soundness env ops by
-      exact circuit.soundness n env input_var input rfl as h
+    suffices h: ConstraintsHold.Soundness env checked ops by
+      exact circuit.soundness sentences checked n env input_var input rfl as h
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env ops.toFlat
@@ -103,11 +103,11 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
   {
     ops := ops.toFlat,
-    Soundness env := circuit.Assumptions (eval env input_var) →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+    Soundness env setences checked := circuit.Assumptions (eval env input_var) →
+      circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env := circuit.Assumptions (eval env input_var),
-    UsesLocalWitnesses env := circuit.Assumptions (eval env input_var) →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+    UsesLocalWitnesses env sentences := circuit.Assumptions (eval env input_var) →
+      circuit.Spec (sentences:=sentences) Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
     imply_soundness

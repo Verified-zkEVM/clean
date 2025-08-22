@@ -84,16 +84,16 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness (_ : Environment F) {sentences : PropertySet F} (checkedYields : CheckedYields sentences) : Prop -- usually useful after `checkYields` covers all `use`es in the subcircuit.
+  Soundness (_ : Environment F) {sentences : SentenceOrder F} (checkedYields : CheckedYields sentences) : Prop -- usually useful after `checkYields` covers all `use`es in the subcircuit.
   Completeness : Environment F → Prop
-  UsesLocalWitnesses : Environment F → Prop
+  UsesLocalWitnesses : Environment F → PropertySet F → Prop -- PropertySet is useful for setting up `Set.univ` to be used as the `checkedYields`
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
   localLength : ℕ
 
   -- `Soundness` needs to follow from the constraints for any witness
-  imply_soundness : ∀ env sentences (checkedYields : CheckedYields sentences),
+  imply_soundness : ∀ env (sentences : SentenceOrder F) (checkedYields : CheckedYields sentences),
     ConstraintsHoldFlat env ops → Soundness env checkedYields
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
@@ -101,8 +101,8 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
     Completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
-    UsesLocalWitnesses env
+  imply_usesLocalWitnesses : ∀ env sentences, env.ExtendsVector (localWitnesses env ops) offset →
+    UsesLocalWitnesses env sentences
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops

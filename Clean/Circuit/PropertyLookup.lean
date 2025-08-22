@@ -52,7 +52,7 @@ A type for keeping track of "all `yield`s of this form have been checked."
 When a sentence `s` is in `CheckedYields`, if there is `yield s` anywhere, `s` is known to hold.
 If nobody ever does `yield s`, `s` can be false even when `s` is in `CheckedYield`.
 -/
-def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences)
+def CheckedYields {F : Type} (sentences : SentenceOrder F) := Set (Sentence sentences.s)
 
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.
@@ -64,6 +64,7 @@ The completeness proof will need to keep track of the set of the yielded sentenc
 /- TODO:
 
  * (current) Add CheckedYields argument to Spec's used during the soundness proof
+   + Remove SpecMax, instead GeneraliFormalCircuit completetness should take `sentences` parameter
    + In Soundness, Spec needs to take sentances and checked
  * Add `use` operation
    + `use` is similar to `lookup`
