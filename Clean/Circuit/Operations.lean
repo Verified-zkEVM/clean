@@ -85,8 +85,8 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   Soundness (_ : Environment F) {sentences : SentenceOrder F} (checkedYields : CheckedYields sentences) : Prop -- usually useful after `checkYields` covers all `use`es in the subcircuit.
-  Completeness (sentences : SentenceOrder F) : Environment F → Prop
-  UsesLocalWitnesses : Environment F → SentenceOrder F → Prop -- SentenceOrder is useful for setting up `Set.univ` to be used as the `checkedYields`
+  Completeness : Environment F → Prop
+  UsesLocalWitnesses : Environment F → Prop -- SentenceOrder is useful for setting up `Set.univ` to be used as the `checkedYields`
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations
@@ -97,12 +97,12 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
     ConstraintsHoldFlat env ops → Soundness env checkedYields
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
+  implied_by_completeness : ∀ (env : Environment F), env.ExtendsVector (localWitnesses env ops) offset →
     Completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env sentences, env.ExtendsVector (localWitnesses env ops) offset →
-    UsesLocalWitnesses env sentences
+  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
+    UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops

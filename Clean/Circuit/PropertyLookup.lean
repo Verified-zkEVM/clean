@@ -71,5 +71,6 @@ The completeness proof will need to keep track of the set of the yielded sentenc
    + `use` guarantees properties if it's in the current `CheckedYield`
  * Add `yield` operation
  * Change Soundness statement so that `yield` validity becomes a goal according to the above rule
+ * Define FormalAssertion.RelevantSentences
 
 -/
