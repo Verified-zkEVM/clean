@@ -155,7 +155,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
 -/
 @[circuit_norm]
-def ConstraintsHold.Soundness (eval : Environment F) {sentences : SentenceOrder F} (checked : CheckedYields sentences) : List (Operation F) → Prop
+def ConstraintsHold.Soundness (eval : Environment F) (checked : CheckedYields eval.sentences) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval checked ops
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval checked ops
@@ -244,11 +244,11 @@ attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength El
 with respect to the growing `checked` set.
 -/
 @[circuit_norm]
-def Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences)
-    (circuit : ElaboratedCircuit F Input Output)
+def Soundness (F : Type) [Field F]
+    (circuit : ElaboratedCircuit F Input Output) (env : Environment F) (checked : CheckedYields env.sentences)
     (Assumptions : Input F → Prop) (Spec : ∀ {sentences : SentenceOrder F}, CheckedYields sentences →  Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ,
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →

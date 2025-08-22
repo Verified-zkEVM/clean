@@ -18,10 +18,9 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-structure Environment (F : Type) where
+structure Environment (F : Type) (sentences : PropertySet F) where
   get : ℕ → F
-  sentences : SentenceOrder F -- the well-founded order is a part of reasoning, so we could leave it out
-  yielded : Set (Sentence sentences.s)
+  yielded : Set (Sentence sentences)
 
 namespace Expression
 variable [Field F]
@@ -34,7 +33,7 @@ This is needed when we want to make statements about a circuit in the adversaria
 situation where the prover can assign anything to variables.
 -/
 @[circuit_norm]
-def eval (env : Environment F) : Expression F → F
+def eval {sentences : PropertySet F} (env : Environment F sentences) : Expression F → F
   | var v => env.get v.index
   | const c => c
   | add x y => eval env x + eval env y
@@ -88,7 +87,7 @@ instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
 end Expression
 
-instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
+instance [Field F] {sentences : PropertySet F} : CoeFun (Environment F sentences) (fun _ => (Expression F) → F) where
   coe env x := x.eval env
 
 instance [Field F] : Inhabited F where
@@ -103,7 +102,7 @@ section EvalLemmas
 variable [Field F]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
-lemma eval_foldl (env : Environment F) (n : ℕ)
+lemma eval_foldl {sentences : PropertySet F} (env : Environment F sentences) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)
     (hf : ∀ (e : Expression F) (i : Fin n),
       Expression.eval env (f e i) = Expression.eval env (f (Expression.const (Expression.eval env e)) i)) :
