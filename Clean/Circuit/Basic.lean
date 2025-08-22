@@ -357,7 +357,8 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s) (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s) (circuit : ElaboratedCircuit F Input Output)
+    (Spec : ∀ {sentences : PropertySet F}, CheckedYields sentences → Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs
@@ -366,7 +367,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : SentenceOrd
   ConstraintsHold.Soundness env checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  Spec checked input output
 
 @[circuit_norm]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
@@ -397,7 +398,7 @@ add the range assumption to the soundness statement, thus making the circuit har
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
+  Spec {sentences : PropertySet F} : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness sentences checked : GeneralFormalCircuit.Soundness F sentences checked elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end

@@ -591,7 +591,7 @@ by assuming it within `GeneralFormalCircuit.Spec`.
 -/
 def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
     (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
+  let Spec checked input output := orig.Assumptions input → orig.Spec checked input output
   exact {
     elaborated := orig.elaborated,
     Assumptions := orig.Assumptions,
