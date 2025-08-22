@@ -469,9 +469,9 @@ Simplifies Completeness for GeneralFormalCircuit.toSubcircuit to avoid unfolding
 @[circuit_norm]
 theorem GeneralFormalCircuit.toSubcircuit_completeness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
+    (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (sentences : SentenceOrder F) :
     (circuit.toSubcircuit n input_var).Completeness env =
-    circuit.Assumptions (eval env input_var) := by
+    circuit.Assumptions sentences (eval env input_var) := by
   rfl
 
 /--
