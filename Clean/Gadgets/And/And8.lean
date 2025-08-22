@@ -21,7 +21,7 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def Spec {sentences : PropertySet (F p)} (_ : CheckedYields sentences) (input : Inputs (F p)) (z : F p) :=
+def Spec {sentences : SentenceOrder (F p)} (_ : CheckedYields sentences) (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
@@ -111,7 +111,7 @@ theorem soundness sentences checked  : Soundness (F p) sentences checked elabora
   exact two_and
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+  intro i env _ ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
