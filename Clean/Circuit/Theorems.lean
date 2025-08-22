@@ -260,8 +260,8 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops 
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
 
-theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
-  env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness n ops := by
+theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {sentences : PropertySet F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
+  env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness sentences n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
   | witness | assert | lookup =>
@@ -275,10 +275,10 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
     rw [← usesLocalWitnessesFlat_iff_extends]
     exact h.left
 
-theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
-  env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
+theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {sentences : PropertySet F} {ops : Operations F} :
+  env.UsesLocalWitnessesCompleteness sentences n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
-    subcircuit _ _ s := s.UsesLocalWitnesses env
+    subcircuit _ _ s := s.UsesLocalWitnesses env sentences
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -346,7 +346,7 @@ end Circuit
 namespace Circuit
 -- more theorems about forAll
 
-variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F}
+variable {α β : Type} {n : ℕ} {prop : Condition F} {env : Environment F} {sentences : PropertySet F}
 
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} :
@@ -416,15 +416,15 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
     ConstraintsHold.completeness_iff_forAll (n + f.localLength n), bind_forAll]
 
 @[circuit_norm] theorem ConstraintsHold.append_localWitnesses {as bs : Operations F} (n : ℕ) :
-  env.UsesLocalWitnessesCompleteness n (as ++ bs)
-  ↔ env.UsesLocalWitnessesCompleteness n as ∧ env.UsesLocalWitnessesCompleteness (as.localLength + n) bs := by
+  env.UsesLocalWitnessesCompleteness sentences n (as ++ bs)
+  ↔ env.UsesLocalWitnessesCompleteness sentences n as ∧ env.UsesLocalWitnessesCompleteness sentences (as.localLength + n) bs := by
   rw [env.usesLocalWitnessesCompleteness_iff_forAll, Operations.forAll_append,
     ←env.usesLocalWitnessesCompleteness_iff_forAll n, ←env.usesLocalWitnessesCompleteness_iff_forAll (as.localLength + n)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_usesLocalWitnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
-  env.UsesLocalWitnessesCompleteness n ((f >>= g).operations n)
-  ↔ env.UsesLocalWitnessesCompleteness n (f.operations n) ∧
-    env.UsesLocalWitnessesCompleteness (n + f.localLength n) ((g (f.output n)).operations (n + f.localLength n)) := by
+  env.UsesLocalWitnessesCompleteness sentences n ((f >>= g).operations n)
+  ↔ env.UsesLocalWitnessesCompleteness sentences n (f.operations n) ∧
+    env.UsesLocalWitnessesCompleteness sentences (n + f.localLength n) ((g (f.output n)).operations (n + f.localLength n)) := by
   rw [env.usesLocalWitnessesCompleteness_iff_forAll, env.usesLocalWitnessesCompleteness_iff_forAll,
     env.usesLocalWitnessesCompleteness_iff_forAll, bind_forAll]
 end Circuit
@@ -594,7 +594,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
   let Spec {sentences} (checked : CheckedYields sentences) input output := orig.Assumptions input → orig.Spec checked input output
   exact {
     elaborated := orig.elaborated,
-    Assumptions := orig.Assumptions,
+    Assumptions _ := orig.Assumptions,
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
@@ -614,10 +614,10 @@ by putting it within `GeneralFormalCircuit.Assumption`.
 -/
 def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit := by
-  let Spec {sentences : PropertySet F} (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec checked input
+  let Spec {sentences : SentenceOrder F} (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec checked input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input := orig.Assumptions input ∧ orig.SpecMax input,
+    Assumptions {sentences : SentenceOrder F} input := orig.Assumptions input ∧ orig.Spec (sentences:=sentences) Set.univ input,
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]

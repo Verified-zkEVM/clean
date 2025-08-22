@@ -397,10 +397,10 @@ add the range assumption to the soundness statement, thus making the circuit har
 -/
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop -- the statement to be assumed for completeness
+  Assumptions (sentences : SentenceOrder F) : Input F → Prop -- the statement to be assumed for completeness
   Spec {sentences : SentenceOrder F} : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness sentences checked : GeneralFormalCircuit.Soundness F sentences checked elaborated Spec
-  completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+  completeness sentences : GeneralFormalCircuit.Completeness F elaborated (Assumptions sentences)
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
