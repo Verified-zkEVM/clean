@@ -617,7 +617,7 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
   let Spec {sentences : SentenceOrder F} (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec checked input
   exact {
     elaborated := orig.elaborated,
-    Assumptions {sentences : SentenceOrder F} input := orig.Assumptions input ∧ orig.Spec (sentences:=sentences) Set.univ input,
+    Assumptions (sentences : SentenceOrder F) input := orig.Assumptions input ∧ orig.Spec (sentences:=sentences) Set.univ input,
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
@@ -626,6 +626,6 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
     ,
     completeness := by
       simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
-      rintro _ _ _ _ ⟨ _, _ ⟩
+      rintro _ _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }

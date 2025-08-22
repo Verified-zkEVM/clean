@@ -370,10 +370,10 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : SentenceOrd
   Spec checked input output
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
+def GeneralFormalCircuit.Completeness (F : Type) [Field F] (sentences : SentenceOrder F) (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ sentences, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness sentences offset (circuit.main input_var |>.operations offset) →
+  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesCompleteness sentences.s offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
@@ -400,7 +400,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   Assumptions (sentences : SentenceOrder F) : Input F → Prop -- the statement to be assumed for completeness
   Spec {sentences : SentenceOrder F} : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness sentences checked : GeneralFormalCircuit.Soundness F sentences checked elaborated Spec
-  completeness sentences : GeneralFormalCircuit.Completeness F elaborated (Assumptions sentences)
+  completeness sentences : GeneralFormalCircuit.Completeness F sentences elaborated (Assumptions sentences)
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
