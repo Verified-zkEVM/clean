@@ -307,7 +307,7 @@ structure DeterministicFormalCircuit (F : Type) [Field F] {sentences : PropertyS
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s)
     (circuit : ElaboratedCircuit F Input unit)
-    (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
+    (Assumptions : Input F → Prop) (Spec : ∀ {sentences : PropertySet F}, CheckedYields sentences → Input F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs that satisfy the assumptions
@@ -316,7 +316,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (sentences : SentenceOrder F)
   -- if the constraints hold
   ConstraintsHold.Soundness env checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input
-  Spec input
+  Spec checked input
 
 @[circuit_norm]
 def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
@@ -347,9 +347,9 @@ strictly weaker than the constraints.)
 structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     extends elaborated : ElaboratedCircuit F Input unit where
   Assumptions : Input F → Prop
-  Spec : Input F → Prop
-  soundness sentences checked : FormalAssertion.Soundness F sentences checked elaborated Assumptions Spec
-  completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
+  Spec {sentences} : CheckedYields sentences → Input F → Prop
+  soundness {sentences} checked : FormalAssertion.Soundness F sentences checked elaborated Assumptions Spec
+  completeness {sentences} : FormalAssertion.Completeness F elaborated Assumptions (Spec (sentences:=sentences) Set.univ)
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0
