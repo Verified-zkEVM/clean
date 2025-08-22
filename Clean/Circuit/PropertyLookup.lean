@@ -1,4 +1,4 @@
-import Clean.Circuit.Provable
+import Mathlib.Algebra.Field.Basic
 variable {F : Type}
 
 structure Property (F : Type) where

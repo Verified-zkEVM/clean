@@ -1,5 +1,6 @@
 import Mathlib.Algebra.Field.Basic
 import Clean.Circuit.SimpGadget
+import Clean.Circuit.PropertyLookup
 
 variable {F : Type}
 
@@ -19,6 +20,8 @@ export Expression (var)
 
 structure Environment (F : Type) where
   get : ℕ → F
+  sentences : SentenceOrder F -- the well-founded order is a part of reasoning, so we could leave it out
+  yielded : Set (Sentence sentences.s)
 
 namespace Expression
 variable [Field F]
