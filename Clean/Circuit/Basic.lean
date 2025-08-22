@@ -155,14 +155,14 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
 -/
 @[circuit_norm]
-def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
+def ConstraintsHold.Soundness (eval : Environment F) {sentences : PropertySet F} (checked : CheckedYields sentences) : List (Operation F) → Prop
   | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
+  | .witness _ _ :: ops => ConstraintsHold.Soundness eval checked ops
+  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval checked ops
   | .lookup { table, entry } :: ops =>
-    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval checked ops
   | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+    s.Soundness eval sentences checked ∧ ConstraintsHold.Soundness eval checked ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -239,8 +239,13 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
+/-
+`checked` is an argument because there will be an induction involving all circuits and all tables
+with respect to the growing `checked` set.
+-/
 @[circuit_norm]
-def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+def Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s)
+    (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
@@ -248,9 +253,11 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
+  -- TODO: pass sentences.s to `Spec`
+  -- TODO: prove `yield`ed properties hold, when their dependencies are already checked
   Spec input output
 
 @[circuit_norm]
@@ -282,7 +289,7 @@ structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableT
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions (_ : Input F) : Prop := True
   Spec : Input F → Output F → Prop
-  soundness : Soundness F elaborated Assumptions Spec
+  soundness sentences checked : Soundness F sentences checked elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
 
 /--
@@ -297,7 +304,8 @@ structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMa
     circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
 
 @[circuit_norm]
-def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
+def FormalAssertion.Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s)
+    (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
@@ -305,7 +313,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input
   Spec input
 
@@ -339,7 +347,7 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
     extends elaborated : ElaboratedCircuit F Input unit where
   Assumptions : Input F → Prop
   Spec : Input F → Prop
-  soundness : FormalAssertion.Soundness F elaborated Assumptions Spec
+  soundness sentences checked : FormalAssertion.Soundness F sentences checked elaborated Assumptions Spec
   completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
@@ -348,13 +356,13 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : CheckedYields sentences.s) (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env,
   -- for all inputs
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
   Spec input output
@@ -389,7 +397,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → Prop -- the statement to be assumed for completeness
   Spec : Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
-  soundness : GeneralFormalCircuit.Soundness F elaborated Spec
+  soundness sentences checked : GeneralFormalCircuit.Soundness F sentences checked elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
