@@ -261,10 +261,10 @@ def Soundness (F : Type) [Field F] (sentences : SentenceOrder F) (checked : Chec
   Spec checked input output
 
 @[circuit_norm]
-def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+def Completeness (F : Type) [Field F] (sentences : SentenceOrder F) (circuit : ElaboratedCircuit F Input Output)
     (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ sentences, ∀ input_var : Var Input F,
+  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness sentences offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ input : Input F, eval env input_var = input →
@@ -290,7 +290,7 @@ structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableT
   Assumptions (_ : Input F) : Prop := True
   Spec {sentences : SentenceOrder F} : CheckedYields sentences → Input F → Output F → Prop
   soundness sentences checked : Soundness F sentences checked elaborated Assumptions Spec
-  completeness : Completeness F elaborated Assumptions
+  completeness (sentences : SentenceOrder F) : Completeness F sentences elaborated Assumptions
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
