@@ -348,8 +348,13 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
     extends elaborated : ElaboratedCircuit F Input unit where
   Assumptions : Input F → Prop
   Spec {sentences} : CheckedYields sentences → Input F → Prop
+  -- `SpecMax` prevents PropertySet from sneaking into the completeness arguments
+  -- Especially, `SpecMax` is used in `FormalAssertion.isGeneralFormalCircuit` to set up an `Assumption` which does not take `PropertySet F`.
+  SpecMax : Input F → Prop
+  specMax_characterization {sentences} :
+    ∀ i : Input F, SpecMax i ↔ Spec (sentences:=sentences) Set.univ i
   soundness {sentences} checked : FormalAssertion.Soundness F sentences checked elaborated Assumptions Spec
-  completeness {sentences} : FormalAssertion.Completeness F elaborated Assumptions (Spec (sentences:=sentences) Set.univ)
+  completeness : FormalAssertion.Completeness F elaborated Assumptions SpecMax
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0

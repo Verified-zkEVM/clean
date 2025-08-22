@@ -614,10 +614,10 @@ by putting it within `GeneralFormalCircuit.Assumption`.
 -/
 def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit := by
-  let Spec {sentences : PropertySet F} (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec input
+  let Spec {sentences : PropertySet F} (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec checked input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input := orig.Assumptions input ∧ orig.Spec input,
+    Assumptions input := orig.Assumptions input ∧ orig.SpecMax input,
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
