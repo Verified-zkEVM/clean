@@ -86,7 +86,7 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
   Soundness (_ : Environment F) {sentences : SentenceOrder F} (checkedYields : CheckedYields sentences) : Prop -- usually useful after `checkYields` covers all `use`es in the subcircuit.
   Completeness : Environment F → Prop
-  UsesLocalWitnesses : Environment F → PropertySet F → Prop -- PropertySet is useful for setting up `Set.univ` to be used as the `checkedYields`
+  UsesLocalWitnesses : Environment F → SentenceOrder F → Prop -- SentenceOrder is useful for setting up `Set.univ` to be used as the `checkedYields`
 
   -- for faster simplification, the subcircuit records its local witness length separately
   -- even though it could be derived from the operations

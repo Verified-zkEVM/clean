@@ -63,7 +63,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   let ops := circuit.main input_var |>.operations n
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
-  have imply_soundness : ∀ (env : Environment F) (sentences : SentenceOrder F) (checked : CheckedYields sentences.s),
+  have imply_soundness : ∀ (env : Environment F) (sentences : SentenceOrder F) (checked : CheckedYields sentences),
     let input := eval env input_var
     let output := eval env (circuit.output input_var n)
     ConstraintsHoldFlat env ops.toFlat → circuit.Assumptions input → circuit.Spec checked input output := by
