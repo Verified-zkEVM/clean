@@ -192,7 +192,7 @@ def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : O
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (sentences : PropertySet F) (offset : ℕ) : List (Operation F) → Prop
+def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (sentences : SentenceOrder F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness sentences (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness sentences offset ops
@@ -319,7 +319,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (sentences : SentenceOrder F)
   Spec checked input
 
 @[circuit_norm]
-def FormalAssertion.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F Input unit)
+def FormalAssertion.Completeness (F : Type) [Field F] (sentences : SentenceOrder F) (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset, ∀ env, ∀ input_var : Var Input F,
@@ -349,7 +349,7 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   Assumptions : Input F → Prop
   Spec {sentences} : CheckedYields sentences → Input F → Prop
   soundness {sentences} checked : FormalAssertion.Soundness F sentences checked elaborated Assumptions Spec
-  completeness {sentences} : FormalAssertion.Completeness F sentences.s elaborated Assumptions (Spec (sentences:=sentences) Set.univ)
+  completeness {sentences} : FormalAssertion.Completeness F sentences elaborated Assumptions (Spec (sentences:=sentences) Set.univ)
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0
@@ -373,7 +373,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : SentenceOrd
 def GeneralFormalCircuit.Completeness (F : Type) [Field F] (sentences : SentenceOrder F) (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness sentences.s offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesCompleteness sentences offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
