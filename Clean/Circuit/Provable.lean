@@ -83,14 +83,14 @@ Note: this is not tagged with `circuit_norm`, to enable higher-level `ProvableSt
 decompositions. Sometimes you will need to add `explicit_provable_type` to the simp set.
 -/
 @[explicit_provable_type]
-def eval (env : Environment F) (x : Var α F) : α F :=
+def eval {sentences : PropertySet F} (env : Environment F sentences) (x : Var α F) : α F :=
   let vars := toVars x
   let values := vars.map (Expression.eval env)
   fromElements values
 
 /-- `ProvableType.eval` is the normal form. This is needed to simplify lookup constraints. -/
 @[circuit_norm]
-theorem fromElements_eval_toElements {env : Environment F} (x : α (Expression F)) :
+theorem fromElements_eval_toElements {sentences : PropertySet F} {env : Environment F sentences} (x : α (Expression F)) :
   fromElements (Vector.map (Expression.eval env) (toElements x)) = eval env x := rfl
 
 def const (x : α F) : Var α F :=
@@ -283,7 +283,7 @@ variable {α : TypeMap} [ProvableStruct α] {F : Type} [Field F]
 Alternative `eval` which evaluates each component separately.
 -/
 @[circuit_norm]
-def eval (env : Environment F) (var : α (Expression F)) : α F :=
+def eval {sentences : PropertySet F} (env : Environment F sentences) (var : α (Expression F)) : α F :=
   toComponents var |> go (components α) |> fromComponents
 where
   @[circuit_norm]
