@@ -18,6 +18,8 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
+-- `sentences` is an argument and not a member because it will be instantiated
+-- with `sentenceOrder.sentences` for a `sentenceOrder : SentenceOrder F` during reasoning.
 structure Environment (F : Type) (sentences : PropertySet F) where
   get : ℕ → F
   yielded : Set (Sentence sentences)
