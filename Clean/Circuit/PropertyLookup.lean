@@ -18,10 +18,10 @@ structure Sentence (s : PropertySet F) where
 
 /-
 Ordering of sentecnes: `s ≺ t` means, for yielding `t` (and especially for proving that `t` is valid),
-the knowledge gained by using `s` is available.
+the knowledge gained by using `s` is available. `SentenceOrder` is just relevant during soundness proofs.
 -/
 
-structure SentenceOrder (F : Type) extends s : PropertySet F where
+structure SentenceOrder (s : PropertySet F) where
   CanDepend : Sentence s → Sentence s → Prop
   well_founded : WellFounded CanDepend
 
@@ -52,7 +52,7 @@ A type for keeping track of "all `yield`s of this form have been checked."
 When a sentence `s` is in `CheckedYields`, if there is `yield s` anywhere, `s` is known to hold.
 If nobody ever does `yield s`, `s` can be false even when `s` is in `CheckedYield`.
 -/
-def CheckedYields {F : Type} (sentences : SentenceOrder F) := Set (Sentence sentences.s)
+def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences)
 
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.
