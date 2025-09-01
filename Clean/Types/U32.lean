@@ -256,26 +256,6 @@ lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
     simp only [h_zero, circuit_norm, ZMod.val_zero]
     ring
 
-  omit p_large_enough in
-  @[circuit_norm]
-  lemma value_zero :
-      (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
-    aesop
-
-  @[circuit_norm]
-  lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
-      x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
-    have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
-      simp only [U32.Normalized, ZMod.val_zero]
-      norm_num)
-    constructor
-    · intro h_val_zero
-      simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
-      specialize this (by trivial)
-      assumption
-    · intro h_zero
-      simp only [h_zero, circuit_norm, ZMod.val_zero]
-      ring
 end U32
 
 namespace U32.AssertNormalized
