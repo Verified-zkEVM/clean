@@ -85,7 +85,7 @@ lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
   simp [U32.Normalized, ZMod.val_zero]
   omega
 
-attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero startFlag
+attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero startFlag pow_zero
 
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
@@ -173,11 +173,9 @@ private lemma bytesToWords_value (env : Environment (F p))
   norm_num
   congr
   · rw [List.getElem_append]
-    simp only [List.length_take]
-    simp only [List.length_map]
+    simp only [List.length_take, List.length_map]
     split
-    · simp only [List.getElem_take]
-      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
+    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
@@ -194,23 +192,19 @@ private lemma bytesToWords_value (env : Environment (F p))
       · convert h_small
         simp
       specialize h_rest (i * 4) (by
-        simp only [Fin.val_mul]
-        simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
+        simp only [Fin.val_mul, Fin.val_natCast, Nat.mod_mul_mod, ge_iff_le]
         omega)
-      simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
+      simp only [id_eq, Nat.cast_mul, Fin.isValue, Fin.getElem_fin,
         Vector.getElem_map] at h_rest
       simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_mul] at h_rest
-      simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod] at h_rest
+      simp only [Fin.val_mul, Fin.val_natCast] at h_rest
       simp only [← h_rest]
       congr
       omega
   · rw [List.getElem_append]
-    simp only [List.length_take]
-    simp only [List.length_map]
+    simp only [List.length_take, List.length_map]
     split
-    · simp only [List.getElem_take]
-      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
+    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
@@ -239,11 +233,9 @@ private lemma bytesToWords_value (env : Environment (F p))
       congr
       omega
   · rw [List.getElem_append]
-    simp only [List.length_take]
-    simp only [List.length_map]
+    simp only [List.length_take, List.length_map]
     split
-    · simp only [List.getElem_take]
-      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
+    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
@@ -272,11 +264,9 @@ private lemma bytesToWords_value (env : Environment (F p))
       congr
       omega
   · rw [List.getElem_append]
-    simp only [List.length_take]
-    simp only [List.length_map]
+    simp only [List.length_take, List.length_map]
     split
-    · simp only [List.getElem_take]
-      simp only [List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
+    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
@@ -316,7 +306,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · simp_all
     · simp only [circuit_norm, h_IsZero]
       split
-      · simp only [one_mul, circuit_norm, Nat.ofNat_pos, and_self, and_true, chunkStart, pow_zero, Nat.cast_one, ZMod.val_one]
+      · simp only [circuit_norm, Nat.ofNat_pos, and_self, and_true, chunkStart, Nat.cast_one, ZMod.val_one]
         linarith
       · simp only [zero_mul, circuit_norm, Nat.ofNat_pos, and_self])
   rcases h_holds with ⟨h_Or32_2, h_Compress⟩
@@ -438,7 +428,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [h_or2]
   simp only [ProcessBlocksState.Normalized] at h_assumptions
   simp only [h_assumptions]
-  simp only [circuit_norm, Nat.ofNat_pos, and_self, and_true, true_and]
+  simp only [circuit_norm]
   constructor
   · apply bytesToWords_normalized
     simp only [h_input]
