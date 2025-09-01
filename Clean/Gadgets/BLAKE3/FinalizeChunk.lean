@@ -54,10 +54,10 @@ lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (Provab
   rintro ⟨i, h_i⟩
   simp only [bytesToWords]
   simp only [id_eq, Fin.getElem_fin]
-  have h0 := h_bytes (i * 4)
-  have h1 := h_bytes (i * 4 + 1)
-  have h2 := h_bytes (i * 4 + 2)
-  have h3 := h_bytes (i * 4 + 3)
+  have h0 := h_bytes (i*4)
+  have h1 := h_bytes (i*4 + 1)
+  have h2 := h_bytes (i*4 + 2)
+  have h3 := h_bytes (i*4 + 3)
   simp only [circuit_norm, eval_vector] at h0 h1 h2 h3 ⊢
   simp only [Vector.getElem_ofFn, U32.Normalized, explicit_provable_type, toVars]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
@@ -122,7 +122,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
   main
-  localLength input := 2 * 4 + (4 + (4 + (5376 + 64)))
+  localLength input := 2*4 + (4 + (4 + (5376 + 64)))
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧
@@ -191,7 +191,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       rotate_left
       · convert h_small
         simp
-      specialize h_rest (i * 4) (by
+      specialize h_rest (i*4) (by
         simp only [Fin.val_mul, Fin.val_natCast, Nat.mod_mul_mod, ge_iff_le]
         omega)
       simp only [id_eq, Nat.cast_mul, Fin.isValue, Fin.getElem_fin,
@@ -220,7 +220,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       rotate_left
       · convert h_small
         simp
-      specialize h_rest (i * 4 + 1) (by
+      specialize h_rest (i*4 + 1) (by
         simp only [Fin.val_add, Fin.val_mul]
         simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
         omega)
@@ -251,7 +251,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       rotate_left
       · convert h_small
         simp
-      specialize h_rest (i * 4 + 2) (by
+      specialize h_rest (i*4 + 2) (by
         simp only [Fin.val_add, Fin.val_mul]
         simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
         omega)
@@ -282,7 +282,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       rotate_left
       · convert h_small
         simp
-      specialize h_rest (i * 4 + 3) (by
+      specialize h_rest (i*4 + 3) (by
         simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
         omega)
       simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
