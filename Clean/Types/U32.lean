@@ -209,9 +209,6 @@ lemma value_of_literal (a b c d : F p) :
     a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
 
 omit p_large_enough in
-/--
-Lemma showing that U32 Normalized property is equivalent to all components being < 256
--/
 @[circuit_norm]
 lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
     eval env (U32.mk a b c d) =
@@ -221,16 +218,16 @@ lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
 omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
 @[circuit_norm]
-lemma Normalized_componentwise' (a b c d : field (F p)):
-    (U32.mk (T:=field (F p)) a b c d).Normalized ↔
+lemma Normalized_componentwise (a b c d : F p):
+    (U32.mk (T:=F p) a b c d).Normalized ↔
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
 omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
 @[circuit_norm]
-lemma Normalized_componentwise'' (a b c d : F p):
-    (U32.mk (T:=F p) a b c d).Normalized ↔
+lemma Normalized_componentwise' (a b c d : field (F p)):
+    (U32.mk (T:=field (F p)) a b c d).Normalized ↔
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
