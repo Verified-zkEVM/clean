@@ -273,10 +273,8 @@ private lemma step_process_block (env : Environment (F p))
     constructor
     · linarith
     · split at h_iszero
-      · norm_num at h_iszero
-        simp only [h_iszero, chunkStart]
-        norm_num
-        simp only [circuit_norm]
+      · norm_num at h_iszero ⊢
+        simp only [h_iszero, circuit_norm]
         omega
       · norm_num at h_iszero ⊢
         simp only [h_iszero]
