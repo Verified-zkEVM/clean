@@ -361,18 +361,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     rw [bytesToWords_value] <;> try assumption
     · simp only [circuit_norm]
       norm_num
-      conv_rhs =>
-        arg 1
-        arg 4
-        simp only [circuit_norm, explicit_provable_type, Vector.take_eq_extract, Vector.toArray_extract, Array.toList_extract,
-          List.extract_eq_drop_take, tsub_zero, List.map_take, List.length_take]
-        rw [Nat.min_eq_left (h:=by simp_all)]
-      conv_lhs =>
-        arg 1
-        arg 5
-        simp only [circuit_norm]
-        rw [ZMod_val_chunkEnd]
-        norm_num
+      rw [Nat.min_eq_left (h:=by simp_all)]
+      rw [ZMod_val_chunkEnd]
       simp only [h_IsZero]
       simp only [ProcessBlocksState.Normalized] at h_assumptions
       congr
