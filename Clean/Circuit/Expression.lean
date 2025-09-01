@@ -102,6 +102,12 @@ instance [Field F] : Inhabited (Expression F) where
 section EvalLemmas
 variable [Field F]
 
+/-- Expression.eval distributes over multiplication -/
+@[circuit_norm]
+lemma eval_mul (env : Environment F) (a b : Expression F) :
+    Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
+  simp only [Expression.eval]
+
 /-- Expression.eval distributes over Fin.foldl with addition -/
 lemma eval_foldl (env : Environment F) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)

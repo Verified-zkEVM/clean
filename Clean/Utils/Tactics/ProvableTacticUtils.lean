@@ -42,7 +42,6 @@ def hasProvableStructInstance (type : Expr) : MetaM Bool := do
     catch _ => return false
   | _ => return false
 
-
 /-- Check if expression contains eval pattern (ProvableType.eval, Expression.eval, or ProvableStruct.eval) -/
 def hasEvalPattern (e : Expr) : Bool :=
   e.isAppOf ``ProvableType.eval || e.isAppOf ``Expression.eval || e.isAppOf ``ProvableStruct.eval

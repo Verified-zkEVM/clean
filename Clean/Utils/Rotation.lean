@@ -541,7 +541,6 @@ lemma mul_div_256_off {offset : ℕ} (ho : offset < 8) {x : ℕ} (i : ℕ) (h : 
   apply Nat.pow_dvd_pow
   linarith
 
-
 lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
     (2 ^ (8-offset.val) % 256) = 2 ^ (8-offset.val) := by
   apply Nat.mod_eq_of_lt
@@ -570,7 +569,6 @@ lemma shifted_decomposition_eq'' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ
   rw [shifted_decomposition_eq' ho hi]
   ring_nf
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
-
 
 lemma soundness_simp {offset : ℕ} {x y : ℕ} :
     x % 2 ^ offset * 2 ^ (8-offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8-offset) * y =
