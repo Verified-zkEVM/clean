@@ -400,12 +400,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       split
       · simp_all only [circuit_norm]
         norm_num
+        rw [U32.value_of_literal]
         simp only [circuit_norm]
+        ring
+      · simp_all only [circuit_norm]
         norm_num
-        rw [if_neg]
-        rw [U32.value_zero_iff_zero]
-        · assumption
-        aesop
+        rw [U32.value_of_literal]
+        simp only [circuit_norm]
+        ring
     · simp only [h_assumptions]
     · simp only [h_input]
     · simp_all
