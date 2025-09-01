@@ -19,7 +19,7 @@ open Tables.BLAKE3.ProcessBlocksInductive
 Input structure for finalizeChunk circuit.
 -/
 structure Inputs (F : Type) where
-  state : ProcessBlocksState F           -- Current state (cv, counter, blocks_compressed)
+  state : ProcessBlocksState F          -- Current state (cv, counter, blocks_compressed)
   buffer_len : F                        -- Number of valid bytes (0-64)
   buffer_data : Vector F 64             -- Buffer bytes (only first buffer_len are valid, rest are zeros)
   base_flags : U32 F                    -- Additional flags (KEYED_HASH, etc.)
@@ -32,7 +32,6 @@ instance : ProvableStruct Inputs where
     match xss with
     | .cons state (.cons buffer_len (.cons buffer_data (.cons base_flags .nil))) =>
       { state, buffer_len, buffer_data, base_flags }
-  fromComponents_toComponents := by intros; rfl
 
 /--
 Convert 64 bytes to 16 U32 words (little-endian).
@@ -360,23 +359,18 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [h_Or32_2]
     simp only [h_Or32_1]
     rw [bytesToWords_value] <;> try assumption
-    · conv =>
+    · simp only [circuit_norm]
+      set_option pp.explicit true in
+      conv =>
         lhs
         arg 1
         arg 3
-        arg 2
-        simp only [eval, U32.value]
-        simp only [toVars, toElements, fromElements]
-        simp only [Nat.reducePow, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-          Nat.add_eq_left, mul_eq_zero, OfNat.ofNat_ne_zero, Nat.add_eq_zero, ZMod.val_eq_zero, or_false,
-          and_self, false_or, Expression.eval]
+        simp only [circuit_norm]
         norm_num
-      simp only [circuit_norm]
       conv_lhs =>
         arg 1
         arg 4
         simp only [explicit_provable_type, circuit_norm, h_input]
-        rw [U32.value_of_literal] -- why doesn't this fire in circuit_norm?
         simp only [circuit_norm]
         ring_nf
       conv_rhs =>
@@ -388,11 +382,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       conv_lhs =>
         arg 1
         arg 5
-        arg 2
         simp only [circuit_norm]
-        simp only [eval, U32.value]
         rw [ZMod_val_chunkEnd]
-        simp only [chunkEnd, ZMod.val_zero]
         norm_num
       simp only [h_IsZero]
       simp only [ProcessBlocksState.Normalized] at h_assumptions
@@ -400,32 +391,22 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       split
       · simp_all only [circuit_norm]
         norm_num
-        rw [U32.value_of_literal]
-        simp only [circuit_norm]
-        ring
       · simp_all only [circuit_norm]
         norm_num
-        rw [U32.value_of_literal]
-        simp only [circuit_norm]
-        ring
     · simp only [h_assumptions]
     · simp only [h_input]
     · simp_all
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
     rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
-
     conv =>
       arg 1
       arg 2
       change (Vector.take _ 8)[i]
       rw [Vector.getElem_take]
-
     rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
     specialize h_Compress_Normalized i
-    clear h_Compress_value
-
     simp only [Fin.val_natCast] at h_Compress_Normalized
     have : i % 16 = i := by omega
     simp only [this] at h_Compress_Normalized
@@ -455,10 +436,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     apply And.intro
     · aesop
     · simp only [h_iszero]
+      norm_num
       split
       · simp only [circuit_norm]
-        norm_num
-        simp only [circuit_norm]
         omega
       · simp only [circuit_norm]
         norm_num)

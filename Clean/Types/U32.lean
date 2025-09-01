@@ -208,6 +208,12 @@ lemma value_of_literal (a b c d : F p) :
   (U32.mk a b c d).value =
     a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
 
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[circuit_norm]
+lemma value_of_literal' (a b c d : field (F p)) :
+  @U32.value p (@U32.mk (field (F p)) a b c d)  =
+    a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
+
 omit p_large_enough in
 @[circuit_norm]
 lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
