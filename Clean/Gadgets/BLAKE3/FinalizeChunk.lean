@@ -104,7 +104,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
   let flags_with_start ← Or32.circuit { x := input.base_flags, y := start_flag }
   let final_flags ← Or32.circuit { x := flags_with_start, y := chunk_end_flag }
 
-  -- Prepare compress input
+  -- Use compress
   let compress_input : Var ApplyRounds.Inputs (F p) := {
     chaining_value := input.state.chaining_value
     block_words := block_words
@@ -113,11 +113,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
     block_len := ⟨input.buffer_len, 0, 0, 0⟩  -- Convert length to U32
     flags := final_flags
   }
-
-  -- Apply compress
   let final_state ← Compress.circuit compress_input
-
-  -- Return first 8 words
   return final_state.take 8
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
@@ -132,14 +128,12 @@ def Assumptions (input : Inputs (F p)) : Prop :=
   input.base_flags.Normalized
 
 def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
-  -- Convert input to spec types
   let chunk_state : ChunkState := {
     chaining_value := input.state.chaining_value.map U32.value
     chunk_counter := input.state.chunk_counter.value
     blocks_compressed := input.state.blocks_compressed.value
     block_buffer := (input.buffer_data.take input.buffer_len.val).toList.map (·.val)
   }
-  -- Output matches spec function
   output.map U32.value = Specs.BLAKE3.finalizeChunk chunk_state input.base_flags.value ∧
   (∀ i : Fin 8, output[i].Normalized)
 
