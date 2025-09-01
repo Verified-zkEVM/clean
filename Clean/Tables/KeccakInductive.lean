@@ -14,14 +14,14 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     KeccakBlock.normalized block
     AbsorbBlock.circuit { state, block }
 
-  Spec i state blocks _ : Prop :=
+  Spec _ blocks i _ state : Prop :=
     state.Normalized
     ∧ state.value = absorbBlocks (blocks.map KeccakBlock.value)
 
   InputAssumptions i block := block.Normalized
 
   soundness := by
-    intro i env state_var block_var state block blocks _ h_input h_holds spec_previous
+    intro initialState i env state_var block_var state block blocks _ h_input h_holds spec_previous
     simp_all only [circuit_norm,
       AbsorbBlock.circuit, AbsorbBlock.Assumptions, AbsorbBlock.Spec,
       KeccakBlock.normalized, absorbBlocks]
