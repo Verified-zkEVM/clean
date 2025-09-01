@@ -225,7 +225,7 @@ omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
 @[circuit_norm]
 lemma Normalized_componentwise (a b c d : F p):
-    (U32.mk (T:=F p) a b c d).Normalized ↔
+    (U32.mk a b c d).Normalized ↔
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
@@ -233,7 +233,7 @@ omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
 @[circuit_norm]
 lemma Normalized_componentwise' (a b c d : field (F p)):
-    (U32.mk (T:=field (F p)) a b c d).Normalized ↔
+    (U32.mk a b c d).Normalized ↔
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
