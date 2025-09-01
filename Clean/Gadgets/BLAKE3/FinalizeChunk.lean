@@ -254,8 +254,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
-      simp only [← h_data]
-      simp
+      simp [← h_data]
     · rename_i h_large
       simp only [List.getElem_replicate]
       simp only [← ProvableType.eval_field]
@@ -408,9 +407,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     omega
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
-  simp only [h_or2]
   simp only [ProcessBlocksState.Normalized] at h_assumptions
-  simp only [h_assumptions]
+  simp only [h_or2, h_assumptions]
   simp only [circuit_norm]
   constructor
   · apply bytesToWords_normalized
