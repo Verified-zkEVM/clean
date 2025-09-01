@@ -293,8 +293,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       · convert h_small
         simp
       specialize h_rest (i * 4 + 3) (by
-        simp only [Fin.val_add, Fin.val_mul]
-        simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
+        simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
         omega)
       simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
         Vector.getElem_map] at h_rest
@@ -347,17 +346,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · simp only [circuit_norm]
       omega)
   constructor
-  · simp only [finalizeChunk]
-    simp only [eval_vector]
-    simp only [← Vector.map_take]
+  · simp only [finalizeChunk, eval_vector, ← Vector.map_take]
     rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
-    clear h_Compress_Normalized
-    simp only [BLAKE3State.value] at h_Compress_value
-    simp only [eval_vector] at h_Compress_value
+    simp only [BLAKE3State.value, eval_vector] at h_Compress_value
     simp only [h_Compress_value]
     clear h_Compress_value
-    simp only [h_Or32_2]
-    simp only [h_Or32_1]
+    simp only [h_Or32_2, h_Or32_1]
     rw [bytesToWords_value] <;> try assumption
     · simp only [circuit_norm]
       norm_num
@@ -405,7 +399,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       simp only [h_iszero]
       split
       · norm_num
-        simp only [ZMod.val_one]
+        simp only [circuit_norm]
         omega
       · norm_num
   rcases h_env with ⟨h_or, h_env⟩
@@ -444,8 +438,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [h_or2]
   simp only [ProcessBlocksState.Normalized] at h_assumptions
   simp only [h_assumptions]
-  simp only [circuit_norm]
-  simp only [Nat.ofNat_pos, and_self, and_true, true_and]
+  simp only [circuit_norm, Nat.ofNat_pos, and_self, and_true, true_and]
   constructor
   · apply bytesToWords_normalized
     simp only [h_input]
