@@ -162,14 +162,7 @@ private lemma bytesToWords_value (env : Environment (F p))
     Specs.BLAKE3.bytesToWords (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList) := by
   simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
   ext i h_i
-  simp only [id_eq, Vector.map_map, Vector.getElem_map, Vector.getElem_ofFn]
-  simp only [Vector.take_eq_extract, Vector.toArray_extract]
-  simp only [Array.toList_extract, List.extract_eq_drop_take, tsub_zero]
-  rw [Function.comp_apply]
-  simp only [List.drop_zero, List.map_take, List.length_take, List.length_map, Array.length_toList,
-    Vector.size_toArray, Nat.reducePow]
-  simp only [explicit_provable_type, toVars]
-  simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.value]
+  simp only [explicit_provable_type, circuit_norm]
   norm_num
   congr
   · rw [List.getElem_append]
