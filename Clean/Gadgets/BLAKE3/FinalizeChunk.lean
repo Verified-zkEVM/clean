@@ -85,7 +85,7 @@ lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
   simp [U32.Normalized, ZMod.val_zero]
   omega
 
-attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero startFlag pow_zero
+attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero startFlag pow_zero zero_mul
 
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
@@ -201,8 +201,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
-      simp only [← h_data]
-      simp
+      simp [← h_data]
     · rename_i h_large
       simp only [List.getElem_replicate]
       simp only [← ProvableType.eval_field]
@@ -232,8 +231,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       simp only [← ProvableType.eval_field]
       have := eval_vector (α:=field) (env:=env) (n:=64)
       rw [this] at h_data
-      simp only [← h_data]
-      simp
+      simp [← h_data]
     · rename_i h_large
       simp only [List.getElem_replicate]
       simp only [← ProvableType.eval_field]
@@ -248,11 +246,10 @@ private lemma bytesToWords_value (env : Environment (F p))
         simp only [Fin.val_add, Fin.val_mul]
         simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
         omega)
-      simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
+      simp only [Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
         Vector.getElem_map] at h_rest
       simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_add, Fin.val_mul] at h_rest
-      simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod] at h_rest
+      simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue] at h_rest
       simp only [← h_rest]
       congr
       omega
@@ -276,13 +273,12 @@ private lemma bytesToWords_value (env : Environment (F p))
       · convert h_small
         simp
       specialize h_rest (i*4 + 3) (by
-        simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
+        simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue]
         omega)
       simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
         Vector.getElem_map] at h_rest
       simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_add, Fin.val_mul] at h_rest
-      simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod] at h_rest
+      simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue] at h_rest
       simp only [← h_rest]
       congr
       omega
@@ -299,9 +295,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     · simp_all
     · simp only [circuit_norm, h_IsZero]
       split
-      · simp only [circuit_norm, Nat.ofNat_pos, and_self, and_true, chunkStart, Nat.cast_one, ZMod.val_one]
+      · simp only [circuit_norm, Nat.ofNat_pos]
         linarith
-      · simp only [zero_mul, circuit_norm, Nat.ofNat_pos, and_self])
+      · simp only [circuit_norm, Nat.ofNat_pos])
   rcases h_holds with ⟨h_Or32_2, h_Compress⟩
   simp only [Or32.circuit, Or32.Assumptions, Or32.Spec] at h_Or32_2
   specialize h_Or32_2 (by
