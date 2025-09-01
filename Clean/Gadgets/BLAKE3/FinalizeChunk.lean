@@ -360,19 +360,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [h_Or32_1]
     rw [bytesToWords_value] <;> try assumption
     · simp only [circuit_norm]
-      set_option pp.explicit true in
-      conv =>
-        lhs
-        arg 1
-        arg 3
-        simp only [circuit_norm]
-        norm_num
-      conv_lhs =>
-        arg 1
-        arg 4
-        simp only [explicit_provable_type, circuit_norm, h_input]
-        simp only [circuit_norm]
-        ring_nf
+      norm_num
       conv_rhs =>
         arg 1
         arg 4
