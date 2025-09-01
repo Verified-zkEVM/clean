@@ -28,7 +28,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
     rw [List.concat_eq_append, List.map_append, List.map_cons, List.map_nil, List.foldl_concat]
 
   completeness := by
-    simp_all only [circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
+    simp_all only [InductiveTable.Completeness, circuit_norm, AbsorbBlock.circuit, KeccakBlock.normalized,
       AbsorbBlock.Assumptions, AbsorbBlock.Spec]
 
 -- the input is hard-coded to the initial keccak state of all zeros

@@ -384,4 +384,19 @@ theorem getElem_rotate {α : Type} {n : ℕ} {v : Vector α n} {off : ℕ} {i : 
     (v.rotate off)[i] = v[(i + off) % n]'(Nat.mod_lt _ (Nat.pos_iff_ne_zero.mpr (Nat.ne_zero_of_lt hi))) := by
   rcases v with ⟨ ⟨ xs ⟩ , h ⟩
   simp [rotate, List.getElem_rotate, h]
+
+/-- A variant of `take` that doesn't introduce `min j n` in type -/
+def takeShort {α : Type} {n : ℕ} (v : Vector α n) (j : ℕ) (h_j : j < n) : Vector α j :=
+  (v.take j).cast (by omega)
+
+lemma getElem_takeShort {α : Type} {n : ℕ} (v : Vector α n) (j : ℕ) (h_j : j < n) (i : ℕ) (h_i : i < j) :
+    (v.takeShort j h_j)[i] = v[i] := by
+  simp only [takeShort, getElem_cast, getElem_take]
+
+lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n) (h_j : j < n) :
+    Vector.map f (v.takeShort j h_j) = (v.map f).takeShort j h_j := by
+  simp only [Vector.takeShort]
+  ext k h_k
+  simp only [Vector.getElem_map, Vector.getElem_take, Vector.getElem_cast]
+
 end Vector

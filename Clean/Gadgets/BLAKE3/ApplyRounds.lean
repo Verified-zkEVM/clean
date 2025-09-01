@@ -138,7 +138,6 @@ def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : P
   output.state.Normalized ∧
   (∀ i : Fin 16, output.message[i].Normalized)
 
-
 /--
 Two rounds with permute, but with a spec matching the applyRounds pattern.
 -/

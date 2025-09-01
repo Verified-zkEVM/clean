@@ -183,95 +183,24 @@ lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
 
-section ValueInjectivity
--- Helper lemma: injectivity of two-component base-256 representation
-lemma base256_two_injective (a0 a1 b0 b1 : ℕ)
-    (ha0 : a0 < 256) (hb0 : b0 < 256)
-    (h : a0 + 256 * a1 = b0 + 256 * b1) :
-    a0 = b0 ∧ a1 = b1 := by
-  -- First component: use mod 256
-  have h0 : a0 = b0 := by
-    have : a0 % 256 = b0 % 256 := by
-      calc a0 % 256 = (a0 + 256 * a1) % 256 := by simp [Nat.add_mul_mod_self_left]
-        _ = (b0 + 256 * b1) % 256 := by rw [h]
-        _ = b0 % 256 := by simp [Nat.add_mul_mod_self_left]
-    rw [Nat.mod_eq_of_lt ha0, Nat.mod_eq_of_lt hb0] at this
-    exact this
-
-  -- Second component: divide by 256
-  have h1 : a1 = b1 := by
-    have : (a0 + 256 * a1) / 256 = (b0 + 256 * b1) / 256 := by
-      rw [h]
-    rw [Nat.add_mul_div_left _ _ (by norm_num : 0 < 256)] at this
-    rw [Nat.add_mul_div_left _ _ (by norm_num : 0 < 256)] at this
-    have ha0_div : a0 / 256 = 0 := Nat.div_eq_zero_iff.mpr (Or.inr ha0)
-    have hb0_div : b0 / 256 = 0 := Nat.div_eq_zero_iff.mpr (Or.inr hb0)
-    rw [ha0_div, hb0_div] at this
-    simp at this
-    exact this
-
-  exact ⟨h0, h1⟩
-
--- Injectivity of four-component base-256 representation
-lemma base256_four_injective (a0 a1 a2 a3 b0 b1 b2 b3 : ℕ)
-    (ha0 : a0 < 256) (ha1 : a1 < 256) (ha2 : a2 < 256) (_ : a3 < 256)
-    (hb0 : b0 < 256) (hb1 : b1 < 256) (hb2 : b2 < 256) (_ : b3 < 256)
-    (h : a0 + 256 * (a1 + 256 * (a2 + 256 * a3)) = b0 + 256 * (b1 + 256 * (b2 + 256 * b3))) :
-    a0 = b0 ∧ a1 = b1 ∧ a2 = b2 ∧ a3 = b3 := by
-  -- Apply base256_two_injective repeatedly
-  -- First, view as a0 + 256 * (rest)
-  have h_outer := base256_two_injective a0 (a1 + 256 * (a2 + 256 * a3))
-                                        b0 (b1 + 256 * (b2 + 256 * b3))
-                                        ha0 hb0 h
-  obtain ⟨h0, h_rest⟩ := h_outer
-
-  -- Now apply to the remaining components
-  have h_inner := base256_two_injective a1 (a2 + 256 * a3) b1 (b2 + 256 * b3)
-                                        ha1 hb1 h_rest
-  obtain ⟨h1, h_rest2⟩ := h_inner
-
-  -- Finally, the last two components
-  have h_final := base256_two_injective a2 a3 b2 b3 ha2 hb2 h_rest2
-  obtain ⟨h2, h3⟩ := h_final
-
-  exact ⟨h0, h1, h2, h3⟩
-
+omit p_large_enough in
 lemma value_injective_on_normalized (x y : U32 (F p))
     (hx : x.Normalized) (hy : y.Normalized) :
     x.value = y.value → x = y := by
   intro h_eq
   -- Use horner form of value
-  have hx_value : x.value = x.x0.val + 256 * (x.x1.val + 256 * (x.x2.val + 256 * x.x3.val)) := by
-    exact U32.value_horner x
-  have hy_value : y.value = y.x0.val + 256 * (y.x1.val + 256 * (y.x2.val + 256 * y.x3.val)) := by
-    exact U32.value_horner y
-  rw [hx_value, hy_value] at h_eq
+  have hx_value := U32.value_horner x
+  have hy_value := U32.value_horner y
 
-  -- Extract bounds from normalization
   simp only [U32.Normalized] at hx hy
-  have ⟨hx0, hx1, hx2, hx3⟩ := hx
-  have ⟨hy0, hy1, hy2, hy3⟩ := hy
 
-  -- Apply base256_four_injective
-  have ⟨h0, h1, h2, h3⟩ := base256_four_injective _ _ _ _ _ _ _ _ hx0 hx1 hx2 hx3 hy0 hy1 hy2 hy3 h_eq
+  have : x.x0 = y.x0 := by apply ZMod.val_injective; omega
+  have : x.x1 = y.x1 := by apply ZMod.val_injective; omega
+  have : x.x2 = y.x2 := by apply ZMod.val_injective; omega
+  have : x.x3 = y.x3 := by apply ZMod.val_injective; omega
 
-  -- Now show the U32s are equal using ZMod.val_injective
-  have hp : 256 < p := by
-    have : Fact (p > 512) := inferInstance
-    have : p > 512 := this.out
-    omega
-
-  -- Show equality component by component
-  have : x.x0 = y.x0 := ZMod.val_injective (n := p) h0
-  have : x.x1 = y.x1 := ZMod.val_injective (n := p) h1
-  have : x.x2 = y.x2 := ZMod.val_injective (n := p) h2
-  have : x.x3 = y.x3 := ZMod.val_injective (n := p) h3
-
-  -- Reconstruct equality
   cases x; cases y
   simp_all
-
-end ValueInjectivity
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 @[circuit_norm]
@@ -280,6 +209,9 @@ lemma value_of_literal (a b c d : F p) :
     a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
 
 omit p_large_enough in
+/--
+Lemma showing that U32 Normalized property is equivalent to all components being < 256
+-/
 @[circuit_norm]
 lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
     eval env (U32.mk a b c d) =
@@ -289,50 +221,40 @@ lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
 omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
 @[circuit_norm]
-lemma normalized_componentwise (a b c d : F p):
-    (U32.mk a b c d).Normalized ↔
+lemma Normalized_componentwise' (a b c d : field (F p)):
+    (U32.mk (T:=field (F p)) a b c d).Normalized ↔
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
 omit p_large_enough in
 omit [Fact (Nat.Prime p)] in
 @[circuit_norm]
-lemma normalized_componentwise' (a b c d : field (F p)):
-    (U32.mk a b c d).Normalized ↔
+lemma Normalized_componentwise'' (a b c d : F p):
+    (U32.mk (T:=F p) a b c d).Normalized ↔
     (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
   simp only [explicit_provable_type, circuit_norm, U32.Normalized]
 
-/--
-Lemma: For a normalized U32, value = 0 iff all components are 0
--/
-lemma value_zero_iff_components_zero {x : U32 (F p)} (hx : x.Normalized) :
-    x.value = 0 ↔ (∀ i : Fin (size U32), (toElements x)[i] = 0) := by
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero :
+    (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
+  aesop
+
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
+    x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
   have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
     simp only [U32.Normalized, ZMod.val_zero]
     norm_num)
   constructor
   · intro h_val_zero
-    simp only [h_val_zero] at this
-    specialize this (by
-      simp only [U32.value, ZMod.val_zero]
-      omega)
-    simp only [this, Fin.getElem_fin, size, toElements, Vector.getElem_mk, List.getElem_toArray]
-    intro i
-    fin_cases i <;> rfl
-  · simp only [size, toElements]
-    intro h_elements
-    simp only [U32.value]
-    have h_0 := h_elements 0
-    have h_1 := h_elements 1
-    have h_2 := h_elements 2
-    have h_3 := h_elements 3
-    simp only [Fin.isValue, Fin.getElem_fin, Fin.val_zero, Vector.getElem_mk, List.getElem_toArray,
-      List.getElem_cons_zero, Fin.val_one, List.getElem_cons_succ, Fin.val_two] at h_0 h_1 h_2 h_3
-    have : (3 : Fin 4).val = 3 := rfl
-    simp only [this] at h_3
-    simp only [List.getElem_cons_succ, List.getElem_cons_zero] at h_3
-    simp only [h_0, h_1, h_2, h_3, ZMod.val_zero]
-    norm_num
+    simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
+    specialize this (by trivial)
+    assumption
+  · intro h_zero
+    simp only [h_zero, circuit_norm, ZMod.val_zero]
+    ring
 
   omit p_large_enough in
   @[circuit_norm]
