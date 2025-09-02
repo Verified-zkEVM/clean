@@ -39,18 +39,18 @@ instance : ToJson (Lookup F) where
     ("entry", toJson l.entry.toArray),
   ]
 
-instance : ToJson (FlatOperation F) where
+instance {sentences : PropertySet F} : ToJson (FlatOperation sentences) where
   toJson
     | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
     | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
 
-instance : ToJson (Operation F) where
+instance {sentences : PropertySet F} : ToJson (Operation sentences) where
   toJson
     | Operation.witness m _ => Json.mkObj [("witness", toJson m)]
     | Operation.assert e => Json.mkObj [("assert", toJson e)]
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
     | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
 
-instance : ToJson (Operations F) where
+instance {sentences : PropertySet F} : ToJson (Operations sentences) where
   toJson ops := toJson ops.toList

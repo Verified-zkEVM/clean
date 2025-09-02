@@ -185,7 +185,7 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (compute : Environment (F p) → F p) := do
+def witness {sentences : PropertySet (F p)} (compute : Environment (F p) → F p) : @Circuit (F p) _ sentences (Boolean (F p)) := do
   let x ← witnessVar compute
   assertZero (var x * (var x - 1))
   return Boolean.mk x
@@ -199,13 +199,13 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
 Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
 @[circuit_norm]
-def assertBool : FormalAssertion (F p) field where
+def assertBool {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
   Assumptions _ := True
-  Spec {sentences} (_ : CheckedYields sentences) (x : F p) := IsBool x
+  Spec (_ : CheckedYields sentences) (x : F p) := IsBool x
 
-  soundness {sentences} checked := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
-  completeness {sentences} := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
 
 end Boolean
 

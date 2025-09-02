@@ -21,11 +21,11 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def Spec {sentences : SentenceOrder (F p)} (_ : CheckedYields sentences) (input : Inputs (F p)) (z : F p) :=
+def Spec {sentences : PropertySet (F p)} (_ : CheckedYields sentences) (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
+def main {sentences : PropertySet (F p)} (input : Var Inputs (F p)) : Circuit sentences (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
   let and ← witness fun eval => (eval x).val &&& (eval y).val
   -- we prove AND correct using an XOR lookup and the following identity:
@@ -75,13 +75,13 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs field where
+instance elaborated {sentences : PropertySet (F p)} : ElaboratedCircuit (F p) sentences Inputs field where
   main
   localLength _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness sentences checked  : Soundness (F p) sentences checked elaborated Assumptions Spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) elaborated order Assumptions Spec := by
+  intro i env yields checked ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
@@ -110,8 +110,8 @@ theorem soundness sentences checked  : Soundness (F p) sentences checked elabora
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
   exact two_and
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) sentences elaborated Assumptions := by
+  intro i env yields ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
@@ -138,7 +138,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-def circuit : FormalCircuit (F p) Inputs field :=
-  { Assumptions, Spec, soundness, completeness }
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs field :=
+  { elaborated with Assumptions, Spec, soundness := soundness order, completeness }
 
 end Gadgets.And.And8

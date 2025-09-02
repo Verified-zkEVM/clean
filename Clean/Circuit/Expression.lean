@@ -20,7 +20,9 @@ export Expression (var)
 
 structure Environment (F : Type) where
   get : ℕ → F
-  sentences : PropertySet F
+
+/-- Context for tracking yielded sentences during circuit execution -/
+structure YieldContext (sentences : PropertySet F) where
   yielded : Set (Sentence sentences)
 
 namespace Expression
