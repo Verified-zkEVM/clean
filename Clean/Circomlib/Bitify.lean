@@ -203,8 +203,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
       rw [← h_input]
       ext i hi
-      rw [Vector.getElem_map, Vector.getElem_mapFinRange]
-      simp only [Fin.getElem_fin]
+      rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]
 
     rw [h1] at h_holds
     simp only [h_holds, true_and]
