@@ -157,22 +157,64 @@ def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let out <== lc1
   return out
 
+omit [Fact (p > 2)] in
+lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
+  (Expression.eval env <| Prod.fst <|
+    Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
+      (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
+  suffices (eval (α:=fieldPair) env <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
+    simp_all [circuit_norm]
+  simp only [fieldFromBits, fromBits, Vector.getElem_map, Vector.getElem_mapFinRange]
+  induction n with
+  | zero => simp [circuit_norm]
+  | succ n ih =>
+    specialize ih (v := v.pop)
+    simp only [Fin.getElem_fin, Vector.getElem_pop', Fin.eta] at ih
+    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ', two_mul,
+      Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
+      Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
+    rw [ZMod.cast_id]
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
-  localLength _ := 1
+  localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions input :=
+    ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
+
+  Spec input output :=
+    output = fieldFromBits input
+    ∧ output.val < 2^n
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
 
-  completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    set output : (F p) := (env.get i₀)
+
+    change output = Expression.eval env (Fin.foldl n
+      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2))
+      (0, 1)).1 at h_holds
+    rw [lc_eq] at h_holds
+
+    have h1 : input = Vector.mapFinRange n fun i ↦ Expression.eval env input_var[i] := by
+      rw [← h_input]
+      ext i hi
+      rw [Vector.getElem_map, Vector.getElem_mapFinRange]
+      simp only [Fin.getElem_fin]
+
+    constructor
+    . convert h_holds
+    . rw [h_holds]
+      apply fieldFromBits_lt
+      simp only [←h1]
+      exact h_assumptions
+
+  completeness := by circuit_proof_all
 end Bits2Num
 
 end Circomlib
