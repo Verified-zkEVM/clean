@@ -73,8 +73,6 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     -- simplify constraints, assumptions and goal
     simp_all only [circuit_norm, h_inputs, Spec, Assumptions, main, ByteTable]
 
-    -- circuit_proof_start [ByteTable]
-
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
@@ -98,8 +96,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, h_inputs, Assumptions, main,
-      ByteTable] at *
+    simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
 
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
