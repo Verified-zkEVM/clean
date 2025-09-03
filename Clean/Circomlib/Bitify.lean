@@ -193,26 +193,22 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
 
   soundness := by
     circuit_proof_start
-
     set output : (F p) := (env.get i₀)
 
     change output = Expression.eval env (Fin.foldl n
-      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2))
-      (0, 1)).1 at h_holds
+      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1
+    at h_holds
     rw [lc_eq] at h_holds
 
-    have h1 : input = Vector.mapFinRange n fun i ↦ Expression.eval env input_var[i] := by
+    have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
       rw [← h_input]
       ext i hi
       rw [Vector.getElem_map, Vector.getElem_mapFinRange]
       simp only [Fin.getElem_fin]
 
-    constructor
-    . convert h_holds
-    . rw [h_holds]
-      apply fieldFromBits_lt
-      simp only [←h1]
-      exact h_assumptions
+    rw [h1] at h_holds
+    simp only [h_holds, true_and]
+    apply fieldFromBits_lt _ h_assumptions
 
   completeness := by circuit_proof_all
 end Bits2Num
