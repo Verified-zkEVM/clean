@@ -21,7 +21,7 @@ def main {sentences : PropertySet F} (order : SentenceOrder sentences)
   -- Use foldlRange to multiply all IsZero results together
   -- Start with 1, and for each element, multiply by its IsZero result
   let result ← Circuit.foldlRange (sentences:=sentences) (size M) (1 : Expression F) (fun acc i => do
-    let isZeroElem ← IsZeroField.circuit (sentences:=sentences) order (elemVars[i])
+    let isZeroElem ← IsZeroField.circuit order (elemVars[i])
     return acc * isZeroElem
   )
   return result
@@ -31,9 +31,9 @@ instance elaborated {sentences : PropertySet F} (order : SentenceOrder sentences
   main := fun input => main (sentences:=sentences) order input
   localLength _ := 2 * size M
   localLength_eq := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
+    simp +arith [circuit_norm, main, (IsZeroField.circuit order).localLength_eq, IsZeroField.circuit]
   subcircuitsConsistent := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
+    simp +arith [circuit_norm, main, (IsZeroField.circuit order).localLength_eq, IsZeroField.circuit]
 
 def Assumptions (_ : M F) : Prop := True
 
@@ -43,18 +43,20 @@ def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
 /--
 lemma for soundness. Separate because the statement is optimized for induction.
 -/
-lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
+lemma foldl_isZero_eq_one_iff {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (checked : CheckedYields sentences)
+    {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
     {env : Environment F} {i₀ : ℕ}
     (h_eval : Vector.map (Expression.eval env) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
-        IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
+      (IsZeroField.circuit order).Assumptions (Expression.eval (F:=F) env vars[i]) →
+        (IsZeroField.circuit order).Spec checked (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
-            (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+            ((IsZeroField.circuit order).output vars[i]
+              (i₀ + i * (IsZeroField.circuit order).localLength vars[i])))) :
     Expression.eval env
       (Fin.foldl n
-        (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
+        (fun acc i => acc * ((IsZeroField.circuit order).output vars[i] (i₀ + i * (IsZeroField.circuit order).localLength vars[i]) : Var field F))
         1) =
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
@@ -114,7 +116,7 @@ theorem soundness [DecidableEq (M F)] {sentences : PropertySet F} (order : Sente
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff <;> assumption
+  apply foldl_isZero_eq_one_iff order <;> assumption
 
 theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentences) :
     Completeness F sentences (elaborated (sentences:=sentences) (M := M) order) Assumptions := by
@@ -123,7 +125,7 @@ theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentence
 def circuit [DecidableEq (M F)] {sentences : PropertySet F} (order : SentenceOrder sentences) :
     FormalCircuit F sentences order M field := {
   (elaborated (sentences:=sentences) (M := M) order) with
-  Assumptions, Spec := (fun _ _ x => Spec x),
+  Assumptions, Spec := (fun _ input output => Spec input output),
   soundness := by
     -- coerce Spec to include `checked` parameter
     simpa using (soundness (sentences:=sentences) (M:=M) order)
