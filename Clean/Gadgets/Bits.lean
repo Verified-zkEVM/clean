@@ -7,21 +7,23 @@ namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
-def main (n : ℕ) (x : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (n : ℕ) (x : Expression (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n fun env => fieldToBits n (x.eval env)
+  let bits ← witnessVector (sentences:=sentences) n (fun env => fieldToBits n (x.eval env))
 
   -- add boolean constraints on all bits
-  Circuit.forEach bits assertBool
+  Circuit.forEach bits (body := Boolean.assertBool (sentences:=sentences) order)
 
   -- check that the bits correctly sum to `x`
-  x === fieldFromBitsExpr bits
+  Gadgets.Equality.circuit (sentences:=sentences) order field (x, fieldFromBitsExpr bits)
   return bits
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
-def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) sentences order field (fields n) where
+  main := main (sentences:=sentences) order n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
@@ -31,7 +33,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
   Assumptions (x : F p) := x.val < 2^n
 
-  Spec (x : F p) (bits : Vector (F p) n) :=
+  Spec (_checked : CheckedYields sentences) (x : F p) (bits : Vector (F p) n) :=
     x.val < 2^n ∧ bits = fieldToBits n x
 
   soundness := by
@@ -70,15 +72,17 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
-def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
+def rangeCheck {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) sentences order field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
-    let _ ← toBits n hn x
+    let _ ← toBits (sentences:=sentences) order n hn x
 
   localLength _ := n
 
   Assumptions _ := True
-  Spec (x : F p) := x.val < 2^n
+  Spec (_ : CheckedYields sentences) (x : F p) := x.val < 2^n
+  spec_monotonic := by intros; assumption
 
   soundness := by simp_all only [circuit_norm, toBits]
   completeness := by simp_all only [circuit_norm, toBits]

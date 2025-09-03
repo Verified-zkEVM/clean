@@ -21,7 +21,7 @@ open Circuit (ConstraintsHold)
 theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) :
     ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
-    ConstraintsHold env yields (circuit.main b_var |>.operations offset) →
+    ConstraintsHold env yields checked (circuit.main b_var |>.operations offset) →
     -- the spec holds
     let a := eval env (circuit.output b_var offset)
     circuit.Spec checked b a := by
@@ -39,7 +39,7 @@ theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order :
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses yields offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
-    ConstraintsHold env yields (circuit.main b_var |>.operations offset) := by
+    ConstraintsHold env yields Set.univ (circuit.main b_var |>.operations offset) := by
 
   intro offset env yields b_var b h_input h_assumptions h_env
   apply Circuit.can_replace_completeness yields (circuit.subcircuitsConsistent ..) h_env
@@ -53,7 +53,7 @@ theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order :
 theorem FormalAssertion.original_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion F sentences order β) :
     ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
-    ConstraintsHold env yields (circuit.main b_var |>.operations offset) →
+    ConstraintsHold env yields checked (circuit.main b_var |>.operations offset) →
     -- the spec holds
     circuit.Spec checked b := by
 
@@ -70,7 +70,7 @@ theorem FormalAssertion.original_completeness {sentences : PropertySet F} {order
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses yields offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)
-    circuit.Spec Set.univ b → ConstraintsHold env yields (circuit.main b_var |>.operations offset) := by
+    circuit.Spec Set.univ b → ConstraintsHold env yields Set.univ (circuit.main b_var |>.operations offset) := by
 
   intro offset env yields b_var b h_input h_assumptions h_env h_spec
   apply Circuit.can_replace_completeness yields (circuit.subcircuitsConsistent ..) h_env

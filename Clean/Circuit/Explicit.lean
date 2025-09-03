@@ -6,13 +6,13 @@ This could be useful to simplify circuit statements with less user intervention.
 -/
 import Clean.Utils.Misc
 import Clean.Circuit.Subcircuit
-variable {n : ℕ} {F : Type} [Field F] {α β : Type}
+variable {n : ℕ} {F : Type} [Field F] {sentences : PropertySet F} {α β : Type}
 
-class ExplicitCircuit (circuit : Circuit F α) where
+class ExplicitCircuit (circuit : Circuit sentences α) where
   /-- an "explicit" circuit is encapsulated by three functions of the input offset -/
   output : ℕ → α
   localLength : ℕ → ℕ
-  operations : ℕ → Operations F
+  operations : ℕ → Operations sentences
 
   /-- the functions have to match the circuit -/
   output_eq : ∀ n : ℕ, circuit.output n = output n := by intro _; rfl
@@ -24,10 +24,10 @@ class ExplicitCircuit (circuit : Circuit F α) where
     intro _; and_intros <;> try first | ac_rfl | trivial
 
 /-- family of explicit circuits -/
-class ExplicitCircuits (circuit : α → Circuit F β) where
+class ExplicitCircuits (circuit : α → Circuit sentences β) where
   output : α → ℕ → β
   localLength : α → ℕ → ℕ
-  operations : α → ℕ → Operations F
+  operations : α → ℕ → Operations sentences
   output_eq : ∀ (a : α) (n : ℕ), (circuit a).output n = output a n := by intro _ _; rfl
   localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength a n := by intro _ _; rfl
   operations_eq : ∀ (a : α) (n : ℕ), (circuit a).operations n = operations a n := by intro _ _; rfl
@@ -36,7 +36,7 @@ class ExplicitCircuits (circuit : α → Circuit F β) where
 
 -- move between family and single explicit circuit
 
-instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
+instance ExplicitCircuits.from_single {circuit : α → Circuit sentences β}
     (explicit : ∀ a, ExplicitCircuit (circuit a)) : ExplicitCircuits circuit where
   output a n := (explicit a).output n
   localLength a n := (explicit a).localLength n
@@ -46,7 +46,7 @@ instance ExplicitCircuits.from_single {circuit : α → Circuit F β}
   operations_eq a n := (explicit a).operations_eq n
   subcircuitsConsistent a n := (explicit a).subcircuitsConsistent n
 
-instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
+instance ExplicitCircuits.to_single (circuit : α → Circuit sentences β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
   output n := output circuit a n
   localLength n := explicit.localLength a n
@@ -57,18 +57,18 @@ instance ExplicitCircuits.to_single (circuit : α → Circuit F β) (a : α)
   subcircuitsConsistent n := subcircuitsConsistent a n
 
 -- `pure` is an explicit circuit
-instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit F α) where
+instance ExplicitCircuit.from_pure {a : α} : ExplicitCircuit (pure a : Circuit sentences α) where
   output _ := a
   localLength _ := 0
   operations _ := []
 
-instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a => pure (f a) : α → Circuit F β) where
+instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a => pure (f a) : α → Circuit sentences β) where
   output a _ := f a
   localLength _ _ := 0
   operations _ _ := []
 
 -- `bind` of two explicit circuits yields an explicit circuit
-instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
+instance ExplicitCircuit.from_bind {f : Circuit sentences α} {g : α → Circuit sentences β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
@@ -90,7 +90,7 @@ instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     exact ⟨ f_explicit.subcircuitsConsistent .., (g_explicit _).subcircuitsConsistent .. ⟩
 
 -- `map` of an explicit circuit yields an explicit circuit
-instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
+instance ExplicitCircuit.from_map {f : α → β} {g : Circuit sentences α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
   localLength n := localLength g n
@@ -105,27 +105,27 @@ instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
 
 -- basic operations are explicit circuits
 
-instance : ExplicitCircuits (F:=F) witnessVar where
+instance : ExplicitCircuits (F:=F) (sentences:=sentences) witnessVar where
   output _ n := ⟨ n ⟩
   localLength _ _ := 1
   operations c n := [.witness 1 fun env => #v[c env]]
 
-instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (witnessVars k c) where
+instance {k : ℕ} {c : Environment F → Vector F k} : ExplicitCircuit (sentences:=sentences) (witnessVars k c) where
   output n := .mapRange k fun i => ⟨n + i⟩
   localLength _ := k
   operations n := [.witness k c]
 
-instance {α : TypeMap} [ProvableType α] : ExplicitCircuits (ProvableType.witness (α:=α) (F:=F)) where
+instance {α : TypeMap} [ProvableType α] : ExplicitCircuits (sentences:=sentences) (ProvableType.witness (α:=α) (F:=F)) where
   output _ n := varFromOffset α n
   localLength _ _ := size α
   operations c n := [.witness (size α) (toElements ∘ c)]
 
-instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
-    ExplicitCircuits (witness (F:=F) (value:=value) (var:=var)) where
+instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F sentences value var] :
+    ExplicitCircuits (witness (F:=F) (sentences:=sentences) (value:=value) (var:=var)) where
   output _ n := inst.var_eq ▸ varFromOffset value n
   output_eq c n := by
     rw [inst.witness_eq]
-    show _ = inst.var_eq ▸ (ProvableType.witness c).output n
+    show _ = inst.var_eq ▸ (ProvableType.witness (sentences:=sentences) c).output n
     rw [Circuit.output, Circuit.output, eqRec_eq_cast, eqRec_eq_cast,
       cast_fst, cast_apply (by rw [inst.var_eq])]
 
@@ -148,23 +148,23 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
     reduce
     trivial
 
-instance : ExplicitCircuits (F:=F) assertZero where
+instance : ExplicitCircuits (F:=F) (sentences:=sentences) assertZero where
   output _ _ := ()
   localLength _ _ := 0
   operations e n := [.assert e]
 
-instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (lookup table) where
+instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuits (F:=F) (sentences:=sentences) (lookup table) where
   output _ _ := ()
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
 
-instance {β α: TypeMap} [ProvableType α] [ProvableType β] {circuit : FormalCircuit F β α} {input} :
+instance {β α: TypeMap} [ProvableType α] [ProvableType β] {sentences : PropertySet F} {order : SentenceOrder sentences} {circuit : FormalCircuit F sentences order β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
 
-instance {β : TypeMap} [ProvableType β] {circuit : FormalAssertion F β} {input} :
+instance {β : TypeMap} [ProvableType β] {sentences : PropertySet F} {order : SentenceOrder sentences} {circuit : FormalAssertion F sentences order β} {input} :
     ExplicitCircuit (assertion circuit input) where
   output n := ()
   localLength _ := circuit.localLength input
@@ -194,10 +194,10 @@ macro_rules
 section
 
 -- single
-example : ExplicitCircuit (witness fun _ => (0 : F) : Circuit F (Expression F)) := by infer_explicit_circuit
+example {sentences : PropertySet F} : ExplicitCircuit (witness fun _ => (0 : F) : Circuit sentences (Expression F)) := by infer_explicit_circuit
 
-example :
-  let add := do
+example {sentences : PropertySet F} :
+  let add : Circuit sentences (Expression F) := do
     let x : Expression F ← witness fun _ => 0
     let y ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
@@ -207,10 +207,10 @@ example :
   ExplicitCircuit add := by infer_explicit_circuit
 
 -- family
-example : ExplicitCircuits (witnessField (F:=F)) := by infer_explicit_circuits
+example {sentences : PropertySet F} : ExplicitCircuits (sentences:=sentences) (witnessField (F:=F)) := by infer_explicit_circuits
 
-example :
-  let add (x : Expression F) := do
+example {sentences : PropertySet F} :
+  let add (x : Expression F) : Circuit sentences (Expression F) := do
     let y : Expression F ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
     assertZero (x + y - z)

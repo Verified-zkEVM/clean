@@ -206,6 +206,7 @@ def assertBool {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   soundness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
   completeness := by circuit_proof_all [IsBool.iff_mul_sub_one, sub_eq_add_neg]
+  spec_monotonic := by intros; assumption
 
 end Boolean
 

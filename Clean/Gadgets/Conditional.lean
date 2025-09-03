@@ -88,6 +88,7 @@ def circuit [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder s
   Spec
   soundness := soundness order
   completeness
+  spec_monotonic := by intros; assumption
 
 end
 

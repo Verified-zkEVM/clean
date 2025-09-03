@@ -8,9 +8,10 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
-def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
+def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    : FormalCircuit (F p) sentences order Addition8FullCarry.Inputs field where
   main := fun inputs => do
-    let { z, .. } ← Addition8FullCarry.circuit inputs
+    let { z, .. } ← Addition8FullCarry.circuit order inputs
     return z
 
   localLength _ := 2
@@ -19,7 +20,7 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
   Assumptions := fun { x, y, carryIn } =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-  Spec := fun { x, y, carryIn } z =>
+  Spec _ := fun { x, y, carryIn } z =>
     z.val = (x.val + y.val + carryIn.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
@@ -28,6 +29,9 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
 
   completeness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 
 namespace Addition8
 structure Inputs (F : Type) where
@@ -43,22 +47,26 @@ instance : ProvableStruct Inputs where
 Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    : FormalCircuit (F p) sentences order Inputs field where
   main := fun { x, y } =>
-    Addition8Full.circuit { x, y, carryIn := 0 }
+    Addition8Full.circuit order { x, y, carryIn := 0 }
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
 
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
-  Spec | { x, y }, z => z.val = (x.val + y.val) % 256
+  Spec _ | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by 
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by 
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 
 end Addition8
 end Gadgets

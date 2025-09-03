@@ -291,6 +291,8 @@ structure FormalCircuit (F : Type) [Field F] (sentences : PropertySet F) (order 
   Spec : CheckedYields sentences → Input F → Output F → Prop
   soundness : Soundness F elaborated order Assumptions Spec
   completeness : Completeness F sentences elaborated Assumptions
+  spec_monotonic : ∀ (checked₁ checked₂ : CheckedYields sentences) (input : Input F) (output : Output F),
+    checked₁ ⊆ checked₂ → Spec checked₂ input output → Spec checked₁ input output
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
@@ -352,6 +354,8 @@ structure FormalAssertion (F : Type) (sentences : PropertySet F) (order : Senten
   Spec : CheckedYields sentences → Input F → Prop
   soundness : FormalAssertion.Soundness F sentences order elaborated Assumptions Spec
   completeness : FormalAssertion.Completeness F sentences elaborated Assumptions (Spec Set.univ)
+  spec_monotonic : ∀ (checked₁ checked₂ : CheckedYields sentences) (input : Input F),
+    checked₁ ⊆ checked₂ → Spec checked₂ input → Spec checked₁ input
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0

@@ -139,6 +139,14 @@ theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) senten
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs field :=
-  { elaborated with Assumptions, Spec, soundness := soundness order, completeness }
+  { elaborated with
+      Assumptions,
+      Spec,
+      soundness := soundness order,
+      completeness,
+      spec_monotonic := by
+        -- The spec doesn't depend on checked, so it's trivially monotonic
+        intros checked₁ checked₂ input output h_sub h_spec
+        exact h_spec }
 
 end Gadgets.And.And8

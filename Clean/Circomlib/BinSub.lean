@@ -63,7 +63,7 @@ template BinSub(n) {
 }
 -/
 -- n: number of bits per operand
-def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) : Circuit sentences (Vector (Expression (F p)) n) := do
   -- Calculate input linear sum: lin = 2^n + in[0] - in[1]
   let lin := Fin.foldl n (fun lin i =>
       let e2 : Expression (F p) := (2^i.val : F p)
@@ -83,25 +83,25 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   -- Calculate output linear sum and constrain bits
   let (lout, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
     -- Ensure out[i] is binary
-    out[i] * (out[i] - (1 : Expression (F p))) === (0 : Expression (F p))
+    out[i] * (out[i] - (1 : Expression (F p))) ===[order] (0 : Expression (F p))
     let lout := lout + out[i] * e2
     return (lout, e2 + e2)
 
   -- Ensure aux is binary
-  aux * (aux - (1 : Expression (F p))) === (0 : Expression (F p))
+  aux * (aux - (1 : Expression (F p))) ===[order] (0 : Expression (F p))
 
   -- Add aux contribution to lout
   let lout := lout + aux * ((2^n : F p) : Expression (F p))
 
   -- Ensure the equation holds
-  lin === lout
+  lin ===[order] lout
 
   return out
 
 -- n: number of bits per operand
-def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) :
-    FormalCircuit (F p) (BinSubInput n) (fields n) where
-  main input := main n input
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) :
+    FormalCircuit (F p) sentences order (BinSubInput n) (fields n) where
+  main input := main order n input
 
   localLength _ := n
   localLength_eq := by sorry
@@ -116,7 +116,7 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
 
-  Spec input output :=
+  Spec _ input output :=
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     -- All output bits are binary
@@ -132,6 +132,9 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
 
   completeness := by
     sorry
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 
 end BinSub
 

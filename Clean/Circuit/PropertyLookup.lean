@@ -54,6 +54,12 @@ If nobody ever does `yield s`, `s` can be false even when `s` is in `CheckedYiel
 -/
 def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences)
 
+instance {F : Type} {sentences : PropertySet F} : EmptyCollection (CheckedYields sentences) where
+  emptyCollection := by unfold CheckedYields; exact ∅
+
+instance {F : Type} {sentences : PropertySet F} : HasSubset (CheckedYields sentences) where
+  Subset := by unfold CheckedYields; exact Set.Subset
+
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.
 The completeness proof will need to keep track of the set of the yielded sentences.
