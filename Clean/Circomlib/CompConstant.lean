@@ -64,8 +64,8 @@ template CompConstant(ct) {
     out <== num2bits.out[127];
 }
 -/
-def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
-  let parts : fields 127 (Expression (F p)) <== Vector.ofFn fun i =>
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (ct : ℕ) (input : Vector (Expression (F p)) 254) : Circuit sentences (Expression (F p)) := do
+  let parts : fields 127 (Expression (F p)) <==[order] Vector.ofFn fun i =>
     let clsb := (ct >>> (i.val * 2)) &&& 1
     let cmsb := (ct >>> (i.val * 2 + 1)) &&& 1
     let slsb := input[i.val * 2]
@@ -85,17 +85,17 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
       -(a_val : F p) * smsb * slsb + (a_val : F p)
 
   -- Compute sum
-  let sout <== parts.sum
+  let sout <==[order] parts.sum
 
   -- Convert sum to bits
   have hp : p > 2^135 := by linarith [‹Fact (p > 2^253)›.elim]
-  let bits ← Num2Bits.circuit 135 hp sout
+  let bits ← Num2Bits.circuit order 135 hp sout
 
-  let out <== bits[127]
+  let out <==[order] bits[127]
   return out
 
-def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
-  main := main c
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c : ℕ) : FormalCircuit (F p) sentences order (fields 254) field where
+  main := main order c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
   subcircuitsConsistent input n := by
@@ -105,7 +105,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec bits output :=
+  Spec _ bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by
@@ -115,6 +115,9 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   completeness := by
     simp only [circuit_norm, main, Num2Bits.circuit]
     sorry
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end CompConstant
 
 end Circomlib
