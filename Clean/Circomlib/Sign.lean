@@ -32,19 +32,19 @@ template Sign() {
 }
 -/
 
-def main (input : Vector (Expression (F p)) 254) :=
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Vector (Expression (F p)) 254) : Circuit sentences (Expression (F p)) :=
   -- Use (p-1)/2 as the constant for comparison
-  CompConstant.circuit ((p - 1) / 2) input
+  CompConstant.circuit order ((p - 1) / 2) input
 
-def circuit : FormalCircuit (F p) (fields 254) field where
-  main
-  localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order (fields 254) field where
+  main := main order
+  localLength input := (CompConstant.circuit order ((p - 1) / 2)).localLength input
 
   Assumptions input := 
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
 
-  Spec input output :=
+  Spec _ input output :=
     -- The output is 1 if the input (as a number) is greater than (p-1)/2
     -- This effectively checks if the field element is in the "upper half" of the field
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
@@ -54,6 +54,9 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   
   completeness := by
     sorry -- TODO: prove completeness
+    
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 
 end Sign
 end Circomlib
