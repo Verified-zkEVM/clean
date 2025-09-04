@@ -33,15 +33,15 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-def main (n : ℕ) (inp : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (inp : Expression (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
-    out[i] * (out[i] - 1) === 0
+    out[i] * (out[i] - 1) ===[order] 0
     let lc1 := lc1 + out[i] * e2
     return (lc1, e2 + e2)
 
-  lc1 === inp
+  lc1 ===[order] inp
   return out
 
 -- helper for proofs below: the linear combination is equivalent to `fieldFromBits`
@@ -64,8 +64,8 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : GeneralFormalCircuit (F p) sentences order field (fields n) where
+  main := main order n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
   output _ i := varFromOffset (fields n) i
@@ -76,15 +76,13 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
-  Spec input bits :=
+  Spec _ input bits :=
     input.val < 2^n
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
 
   soundness := by
-    intro i0 env input_var input h_input h_holds
-    simp only
-    simp_all only [circuit_norm, main]
+    circuit_proof_start
     simp only [lc_eq] at h_holds
     rw [← h_holds.right]
     and_intros
@@ -99,10 +97,9 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
       simp [circuit_norm]
 
   completeness := by
-    intro i0 env input_var h_env input h_input h_holds
-    simp only [circuit_norm, main] at *
-    simp only [lc_eq, h_input, id_eq, mul_eq_zero, add_neg_eq_zero, Fin.forall_iff] at h_env ⊢
-    let bits := Vector.mapRange n fun i => env.get (i0 + i)
+    circuit_proof_start
+    simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+    let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
     · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
     show fieldFromBits bits = input
@@ -110,23 +107,23 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
       rw [Vector.ext_iff]
       intro i hi
       simp only [← h_env i hi, bits, Vector.getElem_mapRange]
-    rw [this, fieldFromBits_fieldToBits h_holds]
+    rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main input := arbitraryBitLengthCircuit n input
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) sentences order field (fields n) where
+  main input := arbitraryBitLengthCircuit order n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
   Assumptions input := input.val < 2^n
 
-  Spec input output :=
+  Spec _ input output :=
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
-    simp_all only [circuit_norm,
-      arbitraryBitLengthCircuit, Vector.map_mapRange]
-    intro i0 env input_var input h_input ⟨ _, h_bits, h_holds ⟩
+    circuit_proof_start [arbitraryBitLengthCircuit]
+    simp_all only [true_and]
+    rcases h_holds with ⟨ _, h_bits, h_holds ⟩
     rw [← h_holds, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits
 
@@ -151,23 +148,23 @@ template Bits2Num(n) {
     lc1 ==> out;
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (input : Vector (Expression (F p)) n) : Circuit sentences (Expression (F p)) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
     let e2 := e2 + e2
     (lc1, e2)) (0, 1)
 
-  let out <== lc1
+  let out <==[order] lc1
   return out
 
-def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
-  main := main n
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit (F p) sentences order (fields n) field where
+  main := main order n
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := sorry
-  Spec input output := sorry
+  Spec _ input output := sorry
 
   soundness := by
     simp only [circuit_norm, main]
@@ -176,6 +173,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   completeness := by
     simp only [circuit_norm, main]
     sorry
+
+  spec_monotonic := sorry
 end Bits2Num
 
 end Circomlib
