@@ -187,7 +187,7 @@ open Gadgets (ByteTable)
   Assert that a 64-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-def main (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
+def main {sentences : PropertySet (F p)} (_order : SentenceOrder sentences) (inputs : Var U64 (F p)) : Circuit sentences Unit  := do
   let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
   lookup ByteTable x0
   lookup ByteTable x1
@@ -198,30 +198,33 @@ def main (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
   lookup ByteTable x6
   lookup ByteTable x7
 
-def circuit : FormalAssertion (F p) U64 where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order U64 where
+  main := main order
 
   Assumptions _ := True
-  Spec inputs := inputs.Normalized
+  Spec _ inputs := inputs.Normalized
 
   soundness := by
-    rintro i0 env x_var
-    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    rintro i0 env yields checked x_var
+    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as _
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env x_var
-    rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    rintro i0 env yields x_var _
+    rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input _ h; exact h
 
 end U64.AssertNormalized
 
 /--
   Witness a 64-bit unsigned integer.
 -/
-def U64.witness (compute : Environment (F p) → U64 (F p)) := do
+def U64.witness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (compute : Environment (F p) → U64 (F p)) := do
   let x ← ProvableType.witness compute
-  U64.AssertNormalized.circuit x
+  U64.AssertNormalized.circuit order x
   return x
 
 namespace U64
