@@ -25,18 +25,18 @@ template AliasCheck() {
     compConstant.out === 0;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Vector (Expression (F p)) 254) : Circuit sentences Unit := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
-  let comp_out ← CompConstant.circuit (p - 1) input
-  comp_out === 0
+  let comp_out ← CompConstant.circuit order (p - 1) input
+  comp_out ===[order] 0
 
-def circuit : FormalAssertion (F p) (fields 254) where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order (fields 254) where
+  main := main order
   localLength _ := 127 + 1 + 135 + 1
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec bits := fromBits (bits.map ZMod.val) < p
+  Spec _ bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
@@ -48,6 +48,9 @@ def circuit : FormalAssertion (F p) (fields 254) where
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
     simp_all
     omega
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input _ h; exact h
 end AliasCheck
 
 end Circomlib
