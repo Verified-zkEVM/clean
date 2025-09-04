@@ -1,4 +1,6 @@
-# clean
+<p align="center"> <img src="clean-logo-turnstilehex-greenwhite.svg" width="96" alt="Clean logo"> </p>
+
+<h1 align="center" id="clean">Clean</h1>
 
 `clean` is an embedded Lean DSL for writing zk circuits, targeting popular arithmetizations like AIR, PLONK and R1CS.
 
