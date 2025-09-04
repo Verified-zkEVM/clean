@@ -382,9 +382,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
   let env := windowEnv table window aux_env
-  -- use empty yields and Set.univ checked for table constraints
-  let yields : YieldContext (emptyPropertySet F) := { yielded := ∅ }
-  Circuit.ConstraintsHold.Soundness env yields Set.univ table.operations
+  Circuit.ConstraintsHold.Soundness env (emptyYields F) (emptyChecked F) table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=

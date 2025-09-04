@@ -80,6 +80,9 @@ def emptyOrder (F : Type) : SentenceOrder (emptyPropertySet F) where
     intro t h
     exact False.elim h
 
+/-- Empty CheckedYields for use in contexts that don't need the use/yield framework -/
+def emptyChecked (F : Type) : CheckedYields (emptyPropertySet F) := ∅
+
 /- TODO:
 
  * Add yielded element to Environment

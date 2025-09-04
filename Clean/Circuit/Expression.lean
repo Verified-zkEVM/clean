@@ -25,6 +25,10 @@ structure Environment (F : Type) where
 structure YieldContext (sentences : PropertySet F) where
   yielded : Set (Sentence sentences)
 
+/-- Empty YieldContext for use in contexts that don't need the use/yield framework -/
+def emptyYields (F : Type) : YieldContext (emptyPropertySet F) where
+  yielded := ∅
+
 namespace Expression
 variable [Field F]
 
