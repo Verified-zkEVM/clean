@@ -23,7 +23,7 @@ template Num2Bits(n) {
     var lc1=0;
 
     var e2=1;
-    for (var i = 0; i<n; i++) {
+    for (var i = 0; i < n; i++) {
         out[i] <-- (in >> i) & 1;
         out[i] * (out[i] -1 ) === 0;
         lc1 += out[i] * e2;
@@ -82,9 +82,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     ∧ fieldFromBits bits = input
 
   soundness := by
-    intro i0 env input_var input h_input h_holds
-    simp only
-    simp_all only [circuit_norm, main]
+    circuit_proof_start
     simp only [lc_eq] at h_holds
     rw [← h_holds.right]
     and_intros
@@ -99,10 +97,9 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
       simp [circuit_norm]
 
   completeness := by
-    intro i0 env input_var h_env input h_input h_holds
-    simp only [circuit_norm, main] at *
-    simp only [lc_eq, h_input, id_eq, mul_eq_zero, add_neg_eq_zero, Fin.forall_iff] at h_env ⊢
-    let bits := Vector.mapRange n fun i => env.get (i0 + i)
+    circuit_proof_start
+    simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
+    let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
     · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
     show fieldFromBits bits = input
@@ -110,7 +107,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
       rw [Vector.ext_iff]
       intro i hi
       simp only [← h_env i hi, bits, Vector.getElem_mapRange]
-    rw [this, fieldFromBits_fieldToBits h_holds]
+    rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
@@ -124,14 +121,14 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
-    simp_all only [circuit_norm,
-      arbitraryBitLengthCircuit, Vector.map_mapRange]
-    intro i0 env input_var input h_input ⟨ _, h_bits, h_holds ⟩
+    circuit_proof_start [arbitraryBitLengthCircuit]
+    simp_all only [true_and]
+    rcases h_holds with ⟨ _, h_bits, h_holds ⟩
     rw [← h_holds, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits
 
   completeness := by
-    simp_all only [circuit_norm, arbitraryBitLengthCircuit]
+    circuit_proof_all [arbitraryBitLengthCircuit]
 
 end Num2Bits
 
@@ -143,7 +140,7 @@ template Bits2Num(n) {
     var lc1=0;
 
     var e2 = 1;
-    for (var i = 0; i<n; i++) {
+    for (var i = 0; i < n; i++) {
         lc1 += in[i] * e2;
         e2 = e2 + e2;
     }
@@ -160,22 +157,59 @@ def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let out <== lc1
   return out
 
+omit [Fact (p > 2)] in
+lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
+  (Expression.eval env <| Prod.fst <|
+    Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
+      (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
+  suffices (eval (α:=fieldPair) env <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
+    simp_all [circuit_norm]
+  simp only [fieldFromBits, fromBits, Vector.getElem_map, Vector.getElem_mapFinRange]
+  induction n with
+  | zero => simp [circuit_norm]
+  | succ n ih =>
+    specialize ih (v := v.pop)
+    simp only [Fin.getElem_fin, Vector.getElem_pop', Fin.eta] at ih
+    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ', two_mul,
+      Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
+      Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
+    rw [ZMod.cast_id]
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
-  localLength _ := 1
+  localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := sorry
-  Spec input output := sorry
+  Assumptions input :=
+    ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
+
+  Spec input output :=
+    output = fieldFromBits input
+    ∧ output.val < 2^n
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    set output : (F p) := (env.get i₀)
 
-  completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    change output = Expression.eval env (Fin.foldl n
+      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1
+    at h_holds
+    rw [lc_eq] at h_holds
+
+    have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
+      rw [← h_input]
+      ext i hi
+      rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]
+
+    rw [h1] at h_holds
+    simp only [h_holds, true_and]
+    apply fieldFromBits_lt _ h_assumptions
+
+  completeness := by circuit_proof_all
 end Bits2Num
 
 end Circomlib
