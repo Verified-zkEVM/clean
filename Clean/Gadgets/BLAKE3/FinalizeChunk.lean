@@ -63,15 +63,13 @@ lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (Provab
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
   simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt] at h0 h1 h2 h3
   simp only [id_eq, Fin.isValue, Nat.mod_mul_mod, Fin.val_one, Nat.mod_add_mod, Fin.val_two] at h0 h1 h2 h3
-  constructor
+  and_intros
   · calc
       _ = _ := by congr; omega
       _ < 256 := h0
-  constructor
   · calc
       _ = _ := by congr; omega
       _ < 256 := h1
-  constructor
   · calc
       _ = _ := by congr; omega
       _ < 256 := h2
