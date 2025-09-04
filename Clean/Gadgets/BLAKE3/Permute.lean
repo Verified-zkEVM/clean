@@ -15,11 +15,11 @@ instance elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sente
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
-def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
   out.value = permute state.value ∧ out.Normalized
 
-theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) Assumptions Spec := by
-  intro i0 env state_var state h_input h_normalized h_holds
+theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro i0 env state_var checked state_input state h_input h_assumptions h_holds
   simp only [Spec, BLAKE3State.value, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
     eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
     ↓Vector.getElem_toArray, Vector.mk_eq]
@@ -31,15 +31,25 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   · simp [BLAKE3State.Normalized]
     intro i
     rw [getElem_eval_vector, h_input]
-    simp only [Assumptions, BLAKE3State.Normalized] at h_normalized
-    fin_cases i <;> simp only [msgPermutation, h_normalized]
+    simp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
+    fin_cases i <;> simp only [msgPermutation, h_assumptions]
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
   rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
     Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
+  intro _
+  trivial
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order BLAKE3State BLAKE3State :=
-  { elaborated order with Assumptions, Spec, soundness, completeness }
+  { elaborated order with 
+    Assumptions
+    Spec
+    soundness
+    completeness
+    spec_monotonic := by
+      intros checked₁ checked₂ input output h_subset h_spec
+      simp only [Spec] at h_spec ⊢
+      exact h_spec }
 
 end Gadgets.BLAKE3.Permute
