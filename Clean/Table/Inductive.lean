@@ -10,36 +10,38 @@ import Clean.Table.Theorems
 import Clean.Gadgets.Equality
 
 def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+    {sentences : PropertySet F} (order : SentenceOrder sentences)
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → Prop)
-    (step : Var State F → Var Input F → Circuit F (Var State F)) :=
+    (step : Var State F → Var Input F → Circuit sentences (Var State F)) :=
   ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
       (eval env acc_var = acc) ∧ (eval env x_var = x) →
     -- if the constraints hold
-    Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
+    ∀ yields checked, Circuit.ConstraintsHold.Soundness env yields checked (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- and assuming the spec on the current row and previous inputs
     Spec initialState xs row_index xs_len acc →
     -- we can conclude the spec on the next row and inputs including the current input
     Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat) (eval env (step acc_var x_var |>.output ((size State) + (size Input))))
 
 def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+    {sentences : PropertySet F} (order : SentenceOrder sentences)
     (InputAssumptions : ℕ → Input F → Prop) (InitialStateAssumptions : State F → Prop)
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → Prop)
-    (step : Var State F → Var Input F → Circuit F (Var State F)) :=
+    (step : Var State F → Var Input F → Circuit sentences (Var State F)) :=
   ∀ (initialState : State F) (row_index : ℕ) (env : Environment F),
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
     (eval env acc_var = acc) ∧ (eval env x_var = x) →
   -- when using honest-prover witnesses
-  env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
+  ∀ yields, env.UsesLocalWitnessesCompleteness yields ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
   -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
   InitialStateAssumptions initialState ∧
   Spec initialState xs row_index xs_len acc ∧ InputAssumptions row_index x →
   -- the constraints hold
-  Circuit.ConstraintsHold.Completeness env (step acc_var x_var |>.operations ((size State) + (size Input)))
+  Circuit.ConstraintsHold.Completeness env yields (step acc_var x_var |>.operations ((size State) + (size Input)))
 
 /--
 In the case of two-row windows, an `InductiveTable` is basically a `FormalCircuit` but
@@ -48,9 +50,10 @@ In the case of two-row windows, an `InductiveTable` is basically a `FormalCircui
 - with assumptions replaced by the spec on the previous row, plus extra assumptions on honest prover inputs for completeness
 - with input offset hard-coded to `size Row + size Input`
 -/
-structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input] where
+structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
+    {sentences : PropertySet F} (order : SentenceOrder sentences) where
   /-- the `step` circuit encodes the transition logic from one state to the next -/
-  step : Var State F → Var Input F → Circuit F (Var State F)
+  step : Var State F → Var Input F → Circuit sentences (Var State F)
 
   /-- the `Spec` characterizes the `i`th state, possibly in relation to the initial state and the full list of inputs up to that point -/
   Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → Prop
@@ -65,9 +68,9 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
   InputAssumptions : ℕ → Input F → Prop := fun _ _ => True
   InitialStateAssumptions : State F → Prop := fun _ => True
 
-  soundness : InductiveTable.Soundness F State Input Spec step
+  soundness : InductiveTable.Soundness F State Input order Spec step
 
-  completeness : InductiveTable.Completeness F State Input InputAssumptions InitialStateAssumptions Spec step
+  completeness : InductiveTable.Completeness F State Input order InputAssumptions InitialStateAssumptions Spec step
 
   subcircuitsConsistent : ∀ acc x, ((step acc x).operations ((size State) + (size Input))).SubcircuitsConsistent ((size State) + (size Input))
     := by intros; and_intros <;> (
@@ -87,27 +90,26 @@ that encodes the following statement:
 for any given public `input` and `ouput`.
 -/
 
-def inductiveConstraint (table : InductiveTable F State Input) : TableConstraint 2 (ProvablePair State Input) F Unit := do
+def inductiveConstraint {sentences : PropertySet F} {order : SentenceOrder sentences} (table : InductiveTable F State Input order) : TableConstraint 2 (ProvablePair State Input) F Unit := do
   let (acc, x) ← getCurrRow
   let output ← table.step acc x
   let (output', _) ← getNextRow
   -- TODO make this more efficient by assigning variables as long as they don't come from the input
-  output' === output
+  output' ===[emptyOrder F] output
 
 def equalityConstraint (Input : TypeMap) [ProvableType Input] (target : State F) : SingleRowConstraint (ProvablePair State Input) F := do
   let (actual, _) ← getCurrRow
-  actual === (const target)
+  actual ===[emptyOrder F] (const target)
 
-def tableConstraints (table : InductiveTable F State Input) (input_state output_state : State F) :
+def tableConstraints {sentences : PropertySet F} {order : SentenceOrder sentences} (table : InductiveTable F State Input order) (input_state output_state : State F) :
   List (TableOperation (ProvablePair State Input) F) := [
-    .everyRowExceptLast table.inductiveConstraint,
+    .everyRowExceptLast (inductiveConstraint table),
     .boundary (.fromStart 0) (equalityConstraint Input input_state),
     .boundary (.fromEnd 0) (equalityConstraint Input output_state),
   ]
 
-theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} :
-  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env)
-    (equalityConstraint Input input_state .empty).2.circuit
+theorem equalityConstraint.soundness {row : State F × Input F} {input_state : State F} {env : Environment F} {yields : YieldContext (emptyPropertySet F)} {checked : CheckedYields (emptyPropertySet F)} :
+  Circuit.ConstraintsHold.Soundness (windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env) yields checked (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
   simp only [equalityConstraint, circuit_norm, table_norm]
@@ -134,7 +136,7 @@ lemma traceInputs_length {N : ℕ} (trace : TraceOfLength F (ProvablePair State 
     (traceInputs trace).length = N := by
   rw [traceInputs, List.length_map, trace.val.toList_length, trace.prop]
 
-lemma table_soundness_aux (table : InductiveTable F State Input) (input output : State F)
+lemma table_soundness_aux {sentences : PropertySet F} {order : SentenceOrder sentences} (table : InductiveTable F State Input order) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : ℕ → ℕ → Environment F) :
   table.Spec input [] 0 rfl input →
   TableConstraintsHold (table.tableConstraints input output) trace env →
@@ -180,9 +182,16 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
   case more curr next rest ih1 ih2 =>
     intro constraints
-    simp only [table_norm, tableConstraints, List.size_toArray, List.length_nil, List.push_toArray,
+    simp only [table_norm, tableConstraints] at constraints ih1 ih2 ⊢
+    simp only [List.size_toArray, List.length_nil, List.push_toArray,
       List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
-      and_false, reduceIte, PNat.mk_coe, Nat.add_one_sub_one, tsub_zero, Nat.add_left_inj,
+      and_false, reduceIte, PNat.mk_coe] at constraints ih1 ih2 ⊢
+    simp only [TableConstraintsHold.foldl.eq_1] at constraints
+    simp only [TableConstraint.ConstraintsHoldOnWindow] at constraints
+    simp only [
+      TableConstraint.operations, TableContext.empty, TableConstraintsHold.foldl.eq_2, Trace.len,
+      TableConstraintsHold.foldl.eq_3, TableConstraintsHold.foldl.eq_6] at constraints
+    simp only [table_norm, tableConstraints, Nat.add_one_sub_one, tsub_zero, Nat.add_left_inj,
       Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious] at constraints ih1 ih2 ⊢
     rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
     specialize ih2 h_rest
@@ -200,7 +209,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
     set x := size Input
-    set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
+    set main_ops : Operations sentences := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
     set t := main_ops.localLength
 
     have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
@@ -260,7 +269,8 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
     simp only [t, x] at main_constraints
     have constraints : Circuit.ConstraintsHold.Soundness
-        env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
+        env' yields checked ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
+      intros yields checked
       simp only [curr_var, varFromOffset_pair]
       exact main_constraints
 
@@ -284,7 +294,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     simp only [add_tsub_cancel_right, Nat.add_left_inj, reduceIte] at output_eq
     exact output_eq
 
-theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
+theorem table_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (table : InductiveTable F State Input order) (input output : State F)
   (N : ℕ+) (trace : TraceOfLength F (ProvablePair State Input) N) (env : ℕ → ℕ → Environment F) :
   table.Spec input [] 0 rfl input → TableConstraintsHold (table.tableConstraints input output) trace env →
     table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output := by
@@ -293,7 +303,7 @@ theorem table_soundness (table : InductiveTable F State Input) (input output : S
   rw [←h_output]
   exact TraceOfLength.lastRow_of_forAllWithPrevious trace h_spec
 
-def toFormal (table : InductiveTable F State Input) (input output : State F) : FormalTable F (ProvablePair State Input) where
+def toFormal {sentences : PropertySet F} {order : SentenceOrder sentences} (table : InductiveTable F State Input order) (input output : State F) : FormalTable F (ProvablePair State Input) where
   constraints := table.tableConstraints input output
   Assumption N := N > 0 ∧ table.Spec input [] 0 rfl input
   Spec {N} trace := table.Spec input (traceInputs trace.tail) (N-1) (traceInputs_length trace.tail) output

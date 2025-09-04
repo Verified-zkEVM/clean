@@ -67,6 +67,19 @@ The completeness proof will need to keep track of the set of the yielded sentenc
 
 -- The current focus is to get the soundness proof working.
 
+/-- Empty PropertySet for use in contexts that don't need the use/yield framework (e.g., tables) -/
+def emptyPropertySet (F : Type) : PropertySet F where
+  properties := {}
+  NameConsistency := fun _ _ h => by simp at h
+
+/-- Trivial SentenceOrder for the empty PropertySet -/
+def emptyOrder (F : Type) : SentenceOrder (emptyPropertySet F) where
+  CanDepend := fun _ _ => False
+  well_founded := WellFounded.intro fun s => by
+    constructor
+    intro t h
+    exact False.elim h
+
 /- TODO:
 
  * Add yielded element to Environment

@@ -121,7 +121,7 @@ theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) �
 
 end TraceOfLength
 
-variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+} {sentences : PropertySet F}
+variable {F : Type} [Field F] {S : Type → Type} [ProvableType S] {W : ℕ+}
 
 namespace CellAssignment
 
@@ -132,14 +132,14 @@ def pushVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S)
 lemma pushRow_offset (assignment : CellAssignment W S) (row : Fin W) :
   (assignment.pushRow row).offset = assignment.offset + size S := rfl
 
-theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations sentences) :
+theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations (emptyPropertySet F)) :
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit =>
     simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Operations.localLength]
 
-theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations sentences) :
+theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations (emptyPropertySet F)) :
     (assignmentFromCircuit as ops).vars = (as.vars ++ (.mapRange ops.localLength fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
       ).cast (assignmentFromCircuit_offset ..).symm := by
   induction ops using Operations.induct generalizing as with
