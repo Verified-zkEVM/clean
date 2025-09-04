@@ -34,11 +34,11 @@ template MultiMux1(n) {
     }
 }
 -/
-def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (input : Var (Inputs n) (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
-  let out <== c.map fun (c0, c1) =>
+  let out <==[order] c.map fun (c0, c1) =>
     (c1 - c0) * s + c0
   return out
 
@@ -61,8 +61,8 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
-def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
-  main := main n
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit (F p) sentences order (Inputs n) (fields n) where
+  main := main order n
 
   localLength _ := n
 
@@ -70,14 +70,14 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     let ⟨c, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
   soundness := by
     simp only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_output
+    intro offset env yields checked input_var input h_input h_assumptions h_output
     -- We need to show the spec holds for all i < n
     intro i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
@@ -131,6 +131,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [Fin.val_mk, mul_one] at h_env_i
     rw [h_env_i]
     norm_num
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 
 end MultiMux1
 
@@ -162,15 +165,15 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Expression (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux1 with n=1
-  let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
+  let mux_out ← MultiMux1.circuit order 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) Inputs field where
-  main := main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs field where
+  main := main order
 
   localLength _ := 1
   localLength_eq := by
@@ -187,13 +190,13 @@ def circuit : FormalCircuit (F p) Inputs field where
     let ⟨_, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
+    intro offset env yields checked input_var input h_input h_assumptions h_subcircuit_sound
     rw[← h_input] at *
     clear input
     clear h_input
@@ -207,10 +210,13 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
+    intros offset env yields input_var h_env input h_input h_s
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
     rw [← h_input] at h_s
     simp_all
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 
 end Mux1
 
