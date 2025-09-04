@@ -25,21 +25,21 @@ template IsZero() {
     in*out === 0;
 }
 -/
-def main (input : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Expression (F p)) : Circuit sentences (Expression (F p)) := do
   let inv ← witness fun env =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
 
-  let out <== -input * inv + 1
-  input * out === 0
+  let out <==[order] -input * inv + 1
+  input * out ===[order] 0
   return out
 
-def circuit : FormalCircuit (F p) field field where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order field field where
+  main := main order
   localLength _ := 2
 
   Assumptions _ := True
-  Spec input output :=
+  Spec _ input output :=
     output = (if input = 0 then 1 else 0)
 
   soundness := by
@@ -49,6 +49,9 @@ def circuit : FormalCircuit (F p) field field where
   completeness := by
     simp_all only [circuit_norm, main]
     sorry
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end IsZero
 
 namespace IsEqual
@@ -64,17 +67,17 @@ template IsEqual() {
     isz.out ==> out;
 }
 -/
-def main (input : Expression (F p) × Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Expression (F p) × Expression (F p)) : Circuit sentences (Expression (F p)) := do
   let diff := input.1 - input.2
-  let out ← IsZero.circuit diff
+  let out ← IsZero.circuit order diff
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order fieldPair field where
+  main := main order
   localLength _ := 2
 
   Assumptions _ := True
-  Spec := fun (x, y) output =>
+  Spec := fun _ (x, y) output =>
     output = (if x = y then 1 else 0)
 
   soundness := by
@@ -84,6 +87,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
   completeness := by
     simp only [circuit_norm, main]
     sorry
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end IsEqual
 
 namespace ForceEqualIfEnabled
@@ -108,19 +114,19 @@ instance : ProvableStruct Inputs where
   toComponents := fun { enabled, inp } => .cons enabled (.cons inp .nil)
   fromComponents := fun (.cons enabled (.cons inp .nil)) => { enabled, inp }
 
-def main (inputs : Var Inputs (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inputs : Var Inputs (F p)) : Circuit sentences Unit := do
   let { enabled, inp } := inputs
-  let isz ← IsZero.circuit (inp.2 - inp.1)
-  enabled * (1 - isz) === 0
+  let isz ← IsZero.circuit order (inp.2 - inp.1)
+  enabled * (1 - isz) ===[order] 0
 
-def circuit : FormalAssertion (F p) Inputs where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order Inputs where
+  main := main order
   localLength _ := 2
 
   Assumptions := fun { enabled, inp } =>
     enabled = 0 ∨ enabled = 1
 
-  Spec := fun { enabled, inp } =>
+  Spec := fun _ { enabled, inp } =>
     enabled = 1 → inp.1 = inp.2
 
   soundness := by
@@ -130,6 +136,9 @@ def circuit : FormalAssertion (F p) Inputs where
   completeness := by
     simp only [circuit_norm, main]
     sorry
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input _ h; exact h
 end ForceEqualIfEnabled
 
 namespace LessThan
@@ -146,14 +155,14 @@ template LessThan(n) {
     out <== 1-n2b.out[n];
 }
 -/
-def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) : Circuit sentences (Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits ← Num2Bits.circuit (n + 1) hn diff
-  let out <== 1 - bits[n]
+  let bits ← Num2Bits.circuit order (n + 1) hn diff
+  let out <==[order] 1 - bits[n]
   return out
 
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
-  main := main n hn
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
+  main := main order n hn
   localLength _ := n + 2
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
   output _ i := var ⟨ i + n + 1 ⟩
@@ -161,7 +170,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
-  Spec := fun (x, y) output =>
+  Spec := fun _ (x, y) output =>
     output = (if x.val < y.val then 1 else 0)
 
   soundness := by
@@ -171,6 +180,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   completeness := by
     simp only [circuit_norm, main]
     sorry
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end LessThan
 
 namespace LessEqThan
@@ -186,18 +198,18 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
   main := fun (x, y) =>
-    LessThan.circuit n hn (x, y + 1)
+    LessThan.circuit order n hn (x, y + 1)
 
   localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
-  Spec := fun (x, y) output =>
+  Spec := fun _ (x, y) output =>
     output = (if x.val <= y.val then 1 else 0)
 
   soundness := by
-    intro i env input (x, y) h_input assumptions h_holds
+    intro i env yields checked input (x, y) h_input assumptions h_holds
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
     have : 2^n < 2^(n+1) := by gcongr; repeat linarith
     have hy : y.val + (1 : F p).val < p := by
@@ -211,10 +223,13 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     sorry
 
   completeness := by
-    intro i env input h_env (x, y) h_input assumptions
+    intro i env yields input h_env (x, y) h_input assumptions
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
     -- TODO impossible to prove
     sorry
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end LessEqThan
 
 namespace GreaterThan
@@ -230,15 +245,15 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
   main := fun (x, y) =>
-    LessThan.circuit n hn (y, x)
+    LessThan.circuit order n hn (y, x)
 
   localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
-  Spec := fun (x, y) output =>
+  Spec := fun _ (x, y) output =>
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
@@ -246,6 +261,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     simp_all [circuit_norm, LessThan.circuit]
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end GreaterThan
 
 namespace GreaterEqThan
@@ -261,14 +279,14 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
   main := fun (x, y) =>
-    LessThan.circuit n hn (y, x + 1)
+    LessThan.circuit order n hn (y, x + 1)
 
   localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
-  Spec := fun (x, y) output =>
+  Spec := fun _ (x, y) output =>
     output = (if x.val >= y.val then 1 else 0)
 
   soundness := by
@@ -278,6 +296,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   completeness := by
     simp only [circuit_norm]
     sorry
+  
+  spec_monotonic := by
+    intros checked₁ checked₂ input output _ h; exact h
 end GreaterEqThan
 
 end Circomlib
