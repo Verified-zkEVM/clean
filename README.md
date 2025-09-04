@@ -1,12 +1,20 @@
 # clean
 
-`clean` is an embedded Lean DSL for writing zk circuits, targeting AIR arithmetization.
+`clean` is an embedded Lean DSL for writing zk circuits, targeting popular arithmetizations like AIR, PLONK and R1CS.
 
 **Check out our blog post for an introduction: https://blog.zksecurity.xyz/posts/clean**
 
 `clean` is developed by [zkSecurity](https://zksecurity.xyz/), currently as part of a Verified-zkEVM grant.
 
-We intend to build out `clean` into a universal zk framework that targets all arithmetizations and produces formally verified, bug-free circuits for the entire ecosystem.
+We intend to build out `clean` into a universal zk framework that produces **formally verified, bug-free circuits** for the entire ecosystem.
+
+## Community
+
+Public Telegram group to discuss `clean`: [t.me/clean_zk](https://t.me/clean_zk)
+
+Please join if you want to use `clean`, or contribute, or if you have any questions!
+
+We always welcome contributors! Check out our [good first issues](https://github.com/Verified-zkEVM/clean/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22).
 
 ## Using the repo
 

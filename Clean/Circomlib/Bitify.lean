@@ -23,7 +23,7 @@ template Num2Bits(n) {
     var lc1=0;
 
     var e2=1;
-    for (var i = 0; i<n; i++) {
+    for (var i = 0; i < n; i++) {
         out[i] <-- (in >> i) & 1;
         out[i] * (out[i] -1 ) === 0;
         lc1 += out[i] * e2;
@@ -128,7 +128,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     simpa [circuit_norm] using h_bits
 
   completeness := by
-    simp_all only [circuit_norm, arbitraryBitLengthCircuit]
+    circuit_proof_all [arbitraryBitLengthCircuit]
 
 end Num2Bits
 
@@ -140,7 +140,7 @@ template Bits2Num(n) {
     var lc1=0;
 
     var e2 = 1;
-    for (var i = 0; i<n; i++) {
+    for (var i = 0; i < n; i++) {
         lc1 += in[i] * e2;
         e2 = e2 + e2;
     }
@@ -157,22 +157,59 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : 
   let out <==[order] lc1
   return out
 
+omit [Fact (p > 2)] in
+lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
+  (Expression.eval env <| Prod.fst <|
+    Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
+      (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
+  suffices (eval (α:=fieldPair) env <|
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
+    simp_all [circuit_norm]
+  simp only [fieldFromBits, fromBits, Vector.getElem_map, Vector.getElem_mapFinRange]
+  induction n with
+  | zero => simp [circuit_norm]
+  | succ n ih =>
+    specialize ih (v := v.pop)
+    simp only [Fin.getElem_fin, Vector.getElem_pop', Fin.eta] at ih
+    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ', two_mul,
+      Fin.coe_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
+      Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
+    rw [ZMod.cast_id]
+
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit (F p) sentences order (fields n) field where
   main := main order n
-  localLength _ := 1
+  localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := sorry
-  Spec _ input output := sorry
+  Assumptions input :=
+    ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
+
+  Spec _ input output :=
+    output = fieldFromBits input
+    ∧ output.val < 2^n
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    set output : (F p) := (env.get i₀)
 
-  completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    change output = Expression.eval env (Fin.foldl n
+      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1
+    at h_holds
+    rw [lc_eq] at h_holds
+
+    have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
+      rw [← h_input]
+      ext i hi
+      rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]
+
+    rw [h1] at h_holds
+    simp only [h_holds, true_and]
+    apply fieldFromBits_lt _ h_assumptions
+
+  completeness := by circuit_proof_all
 
   spec_monotonic := sorry
 end Bits2Num
