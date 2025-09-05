@@ -80,11 +80,11 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
     apply can_replace_soundness
     exact constraintsHold_toFlat_iff.mp h_holds
 
-  have implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences),
+  have implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
       env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
-      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env yields Set.univ ops.toFlat := by
+      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env yields checked ops.toFlat := by
     -- we are given that the assumptions are true
-    intro env yields h_env
+    intro env yields checked h_env
     let input := eval env input_var
     intro (as : circuit.Assumptions input)
 
@@ -99,7 +99,7 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
 
     -- so we just need to go from constraints to flattened constraints
     apply constraintsHold_toFlat_iff.mpr
-    exact can_replace_completeness yields h_consistent h_env h_holds
+    exact can_replace_completeness yields checked h_consistent h_env h_holds
 
   {
     ops := ops.toFlat,
@@ -115,7 +115,7 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
     imply_usesLocalWitnessesAndYields := by
       intro env yields h_env as
       -- by completeness, the constraints hold
-      have h_holds := implied_by_completeness env yields h_env as
+      have h_holds := implied_by_completeness env yields Set.univ h_env as
       -- by soundness, this implies the spec
       exact imply_soundness env yields Set.univ h_holds as
 
@@ -156,7 +156,7 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
 
     implied_by_completeness := by
       -- we are given that the assumptions and the spec are true
-      intro env yields h_env h_completeness
+      intro env yields checked h_env h_completeness
 
       let input := eval env input_var
       have as : circuit.Assumptions input ∧ circuit.Spec Set.univ input := h_completeness
@@ -172,7 +172,7 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
 
       -- so we just need to go from constraints to flattened constraints
       apply constraintsHold_toFlat_iff.mpr
-      exact can_replace_completeness yields h_consistent h_env h_holds
+      exact can_replace_completeness yields checked h_consistent h_env h_holds
 
     imply_usesLocalWitnessesAndYields := by intros; exact trivial
 
@@ -197,14 +197,14 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
     apply can_replace_soundness yields checked
     exact constraintsHold_toFlat_iff.mp h_holds
 
-  have implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences),
+  have implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
       env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
-      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env yields Set.univ ops.toFlat := by
-    intro env yields h_env assumptions
+      circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env yields checked ops.toFlat := by
+    intro env yields checked h_env assumptions
     set input := eval env input_var
     rw [←env.usesLocalWitnessesFlat_iff_extends yields, ←env.usesLocalWitnesses_iff_flat yields] at h_env
     rw [constraintsHold_toFlat_iff]
-    apply can_replace_completeness yields h_consistent h_env
+    apply can_replace_completeness yields checked h_consistent h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
     apply circuit.completeness n env yields input_var h_env_completeness input rfl assumptions
 
@@ -220,7 +220,7 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
     implied_by_completeness
     imply_usesLocalWitnessesAndYields env yields h_env assumptions :=
       -- constraints hold by completeness, which implies the spec by soundness
-      implied_by_completeness env yields h_env assumptions |> imply_soundness env yields Set.univ
+      implied_by_completeness env yields Set.univ h_env assumptions |> imply_soundness env yields Set.univ
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]

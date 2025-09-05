@@ -133,7 +133,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a
   Spec := Spec (a:=a) (b:=b) (c:=c) (d:=d)
   soundness := soundness order a b c d
   completeness := completeness order a b c d
-  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.BLAKE3.G

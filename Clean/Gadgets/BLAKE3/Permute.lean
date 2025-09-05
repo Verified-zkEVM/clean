@@ -42,14 +42,11 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
   trivial
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order BLAKE3State BLAKE3State :=
-  { elaborated order with 
+  { elaborated order with
     Assumptions
     Spec
     soundness
     completeness
-    spec_monotonic := by
-      intros checked₁ checked₂ input output h_subset h_spec
-      simp only [Spec] at h_spec ⊢
-      exact h_spec }
+  }
 
 end Gadgets.BLAKE3.Permute

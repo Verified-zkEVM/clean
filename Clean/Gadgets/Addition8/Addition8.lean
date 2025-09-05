@@ -30,9 +30,6 @@ def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder
   completeness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
-
 namespace Addition8
 structure Inputs (F : Type) where
   x: F
@@ -60,13 +57,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   Spec _ | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
-  soundness := by 
+  soundness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
-  completeness := by 
+  completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 
 end Addition8
 end Gadgets

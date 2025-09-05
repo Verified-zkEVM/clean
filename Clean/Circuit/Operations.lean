@@ -96,8 +96,8 @@ structure Subcircuit (sentences : PropertySet F) (offset : ℕ) where
     ConstraintsHoldFlat env yields checkedYields ops → Soundness env yields checkedYields
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences), env.ExtendsVector (localWitnesses env ops) offset →
-    Completeness env yields → ConstraintsHoldFlat env yields Set.univ ops
+  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences), env.ExtendsVector (localWitnesses env ops) offset →
+    Completeness env yields → ConstraintsHoldFlat env yields checked ops
 
   -- `UsesLocalWitnessesAndYields` needs to follow from the local witness generator condition
   -- TODO: Add condition for yields once yield operations are implemented

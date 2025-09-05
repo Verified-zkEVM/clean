@@ -115,9 +115,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c
   completeness := by
     simp only [circuit_norm, main, Num2Bits.circuit]
     sorry
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end CompConstant
 
 end Circomlib

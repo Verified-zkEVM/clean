@@ -48,10 +48,6 @@ def FormalCircuit.concat
   completeness := by
     simp only [circuit_norm]
     aesop
-  spec_monotonic := by
-    rintro checked₁ checked₂ input output h_sub ⟨mid, h1, h2⟩
-    use mid
-    exact ⟨circuit1.spec_monotonic _ _ _ _ h_sub h1, circuit2.spec_monotonic _ _ _ _ h_sub h2⟩
 }
 
 @[circuit_norm]
@@ -82,9 +78,7 @@ def FormalCircuit.weakenSpec
     (h_spec_implication : ∀ checked input output,
       circuit.Assumptions input →
       circuit.Spec checked input output →
-      WeakerSpec checked input output)
-    (h_weaker_spec_monotonic : ∀ (checked₁ checked₂ : CheckedYields sentences) (input : Input F) (output : Output F),
-      checked₁ ⊆ checked₂ → WeakerSpec checked₂ input output → WeakerSpec checked₁ input output) :
+      WeakerSpec checked input output) :
     FormalCircuit F sentences order Input Output := {
   elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
@@ -100,14 +94,11 @@ def FormalCircuit.weakenSpec
     -- and the same assumptions
     intro offset env yields input_var h_env_completeness input h_eval h_assumptions
     exact circuit.completeness offset env yields input_var h_env_completeness input h_eval h_assumptions
-  spec_monotonic := by
-    intros checked₁ checked₂ input output h_sub h_orig
-    exact h_weaker_spec_monotonic checked₁ checked₂ input output h_sub h_orig
 }
 
 @[circuit_norm]
 lemma FormalCircuit.weakenSpec_assumptions {F : Type} [Field F] {sentences : PropertySet F} {order : SentenceOrder sentences}
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (c : FormalCircuit F sentences order Input Output) (WeakerSpec : CheckedYields sentences → Input F → Output F → Prop) h_spec_implication h_weaker_spec_monotonic :
-    (c.weakenSpec WeakerSpec h_spec_implication h_weaker_spec_monotonic).Assumptions = c.Assumptions := by
+    (c : FormalCircuit F sentences order Input Output) (WeakerSpec : CheckedYields sentences → Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]

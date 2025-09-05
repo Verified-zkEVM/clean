@@ -132,12 +132,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
     exact ⟨completeness1, completeness2, completeness3⟩
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input output hsub hspec; exact hspec
-
-def lookupCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : LookupCircuit (F p) order Inputs Outputs := {
-  circuit := circuit order,
+def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
+  circuit := circuit (emptyOrder (F p)),
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by

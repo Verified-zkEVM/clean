@@ -49,9 +49,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   completeness := by
     simp_all only [circuit_norm, main]
     sorry
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end IsZero
 
 namespace IsEqual
@@ -87,9 +84,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   completeness := by
     simp only [circuit_norm, main]
     sorry
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end IsEqual
 
 namespace ForceEqualIfEnabled
@@ -136,7 +130,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   completeness := by
     simp only [circuit_norm, main]
     sorry
-  
+
   spec_monotonic := by
     intros checked₁ checked₂ input _ h; exact h
 end ForceEqualIfEnabled
@@ -180,9 +174,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   completeness := by
     simp only [circuit_norm, main]
     sorry
-  
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end LessThan
 
 namespace LessEqThan
@@ -227,9 +218,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
     -- TODO impossible to prove
     sorry
-  
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end LessEqThan
 
 namespace GreaterThan
@@ -261,9 +249,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
   completeness := by
     simp_all [circuit_norm, LessThan.circuit]
-  
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end GreaterThan
 
 namespace GreaterEqThan
@@ -296,9 +281,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   completeness := by
     simp only [circuit_norm]
     sorry
-  
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end GreaterEqThan
 
 end Circomlib

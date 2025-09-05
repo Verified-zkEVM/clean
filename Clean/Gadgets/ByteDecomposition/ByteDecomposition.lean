@@ -129,8 +129,4 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (o
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-  spec_monotonic := by
-    intros checked₁ checked₂ input output h_subset h_spec
-    simp only [Spec] at h_spec ⊢
-    exact h_spec
 end Gadgets.ByteDecomposition

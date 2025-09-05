@@ -209,9 +209,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     convert sum_bound_of_binary_inputs hnout inputs h_inputs_binary
     exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
-
 end BinSum
 
 end Circomlib

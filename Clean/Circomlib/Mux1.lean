@@ -131,11 +131,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     simp only [Fin.val_mk, mul_one] at h_env_i
     rw [h_env_i]
     norm_num
-  
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 
-end MultiMux1
+ end MultiMux1
 
 namespace Mux1
 
@@ -214,9 +211,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
     rw [← h_input] at h_s
     simp_all
-  
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 
 end Mux1
 

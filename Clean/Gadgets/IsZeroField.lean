@@ -57,7 +57,6 @@ def circuit {sentences : PropertySet F} (order : SentenceOrder sentences) :
     Assumptions
     Spec := Spec (sentences:=sentences)
     soundness := soundness (sentences:=sentences) order
-    completeness := completeness (sentences:=sentences) order
-    spec_monotonic := by intros; assumption }
+    completeness := completeness (sentences:=sentences) order }
 
 end Gadgets.IsZeroField

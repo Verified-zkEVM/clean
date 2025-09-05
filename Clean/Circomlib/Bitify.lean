@@ -210,8 +210,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     apply fieldFromBits_lt _ h_assumptions
 
   completeness := by circuit_proof_all
-
-  spec_monotonic := sorry
 end Bits2Num
 
 end Circomlib

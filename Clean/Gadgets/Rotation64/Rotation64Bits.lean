@@ -123,7 +123,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (o
   Spec := Spec (offset := offset)
   soundness := soundness order offset
   completeness := completeness order offset
-  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.Rotation64Bits

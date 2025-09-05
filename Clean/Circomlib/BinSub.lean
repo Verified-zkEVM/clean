@@ -133,9 +133,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   completeness := by
     sorry
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
-
 end BinSub
 
 end Circomlib

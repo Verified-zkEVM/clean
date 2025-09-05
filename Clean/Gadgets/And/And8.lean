@@ -144,9 +144,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
       Spec,
       soundness := soundness order,
       completeness,
-      spec_monotonic := by
-        -- The spec doesn't depend on checked, so it's trivially monotonic
-        intros checked₁ checked₂ input output h_sub h_spec
-        exact h_spec }
+  }
 
 end Gadgets.And.And8

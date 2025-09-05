@@ -35,14 +35,14 @@ theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : Se
   and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) :
-    ∀ (offset : ℕ) env (yields : YieldContext sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses yields offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
-    ConstraintsHold env yields Set.univ (circuit.main b_var |>.operations offset) := by
+    ConstraintsHold env yields checked (circuit.main b_var |>.operations offset) := by
 
-  intro offset env yields b_var b h_input h_assumptions h_env
-  apply Circuit.can_replace_completeness yields (circuit.subcircuitsConsistent ..) h_env
+  intro offset env yields checked b_var b h_input h_assumptions h_env
+  apply Circuit.can_replace_completeness yields checked (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
   exact circuit.completeness offset env yields b_var h_env' b h_input h_assumptions
 
@@ -73,6 +73,6 @@ theorem FormalAssertion.original_completeness {sentences : PropertySet F} {order
     circuit.Spec Set.univ b → ConstraintsHold env yields Set.univ (circuit.main b_var |>.operations offset) := by
 
   intro offset env yields b_var b h_input h_assumptions h_env h_spec
-  apply Circuit.can_replace_completeness yields (circuit.subcircuitsConsistent ..) h_env
+  apply Circuit.can_replace_completeness yields Set.univ (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
   exact circuit.completeness offset env yields b_var h_env' b h_input h_assumptions h_spec

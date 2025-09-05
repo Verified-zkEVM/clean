@@ -105,6 +105,5 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (r
   Assumptions
   soundness := soundness order rc
   completeness := completeness order rc
-  spec_monotonic := fun _ _ _ _ _ h => h
 }
 end Gadgets.Keccak256.KeccakRound

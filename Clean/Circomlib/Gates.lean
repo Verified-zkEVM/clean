@@ -64,8 +64,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end XOR
 
 namespace AND
@@ -108,8 +106,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end AND
 
 namespace OR
@@ -154,8 +150,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end OR
 
 namespace NOT
@@ -198,8 +192,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end NOT
 
 namespace NAND
@@ -244,8 +236,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, NAND.main]
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end NAND
 
 namespace NOR
@@ -290,8 +280,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 end NOR
 
 namespace MultiAND
@@ -391,7 +379,7 @@ theorem localLength_eq {sentences : PropertySet (F p)} (order : SentenceOrder se
       omega
 
 -- Helper lemma: SubcircuitsConsistent preserved by bind
-theorem Circuit.subcircuitsConsistent_bind {sentences : PropertySet (F p)} {α β : Type} 
+theorem Circuit.subcircuitsConsistent_bind {sentences : PropertySet (F p)} {α β : Type}
     (f : Circuit sentences α) (g : α → Circuit sentences β) (offset : ℕ)
     (hf : Operations.SubcircuitsConsistent offset (f.operations offset))
     (hg : Operations.SubcircuitsConsistent (offset + f.localLength offset)
@@ -1070,8 +1058,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   completeness := by
     intro offset env yields input_var h_local_witnesses input h_env h_assumptions
     exact completeness order n offset env yields input_var input h_local_witnesses h_env.symm h_assumptions
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 
 end MultiAND
 

@@ -69,8 +69,5 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     -- there are no constraints to satisfy!
     intros
     exact trivial
-    
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 
 end Gadgets.Not

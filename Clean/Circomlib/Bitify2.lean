@@ -97,10 +97,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
       fieldToBits, Vector.map_map, val_natCast_toBits,
       fromBits_toBits input_lt, ZMod.val_lt]
     use trivial, h_bits
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output h_subset h_spec
-    exact h_spec
 end Num2Bits_strict
 
 namespace Bits2Num_strict
@@ -147,10 +143,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   completeness := by
     simp only [circuit_norm, main, Bits2Num.main]
     sorry
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output h_subset h_spec
-    exact h_spec
 end Bits2Num_strict
 
 namespace Num2BitsNeg
@@ -212,10 +204,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   completeness := by
     simp only [circuit_norm, main]
     sorry
-
-  spec_monotonic := by
-    intros checked₁ checked₂ input output h_subset h_spec
-    exact h_spec
 end Num2BitsNeg
 
 end Circomlib

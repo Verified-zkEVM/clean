@@ -92,9 +92,5 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   Spec := Spec
   soundness := soundness
   completeness := completeness
-  spec_monotonic := by
-    intros checked₁ checked₂ input output h_subset h_spec
-    simp only [Spec] at h_spec ⊢
-    exact h_spec
 
 end Gadgets.And.And64

@@ -329,8 +329,8 @@ Together with `Circuit.Subcircuit.can_replace_subcircuits`, it justifies only pr
 `ConstraintsHold.Completeness` when defining formal circuits,
 because it already implies the flat version.
 -/
-theorem can_replace_completeness {env} {sentences : PropertySet F} {ops : Operations sentences} {n : ℕ} (yields : YieldContext sentences) (h : ops.SubcircuitsConsistent n) : env.UsesLocalWitnesses yields n ops →
-    ConstraintsHold.Completeness env yields ops → ConstraintsHold env yields Set.univ ops := by
+theorem can_replace_completeness {env} {sentences : PropertySet F} {ops : Operations sentences} {n : ℕ} (yields : YieldContext sentences) (checked : CheckedYields sentences) (h : ops.SubcircuitsConsistent n) : env.UsesLocalWitnesses yields n ops →
+    ConstraintsHold.Completeness env yields ops → ConstraintsHold env yields checked ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
   | witness | assert | lookup =>
@@ -338,7 +338,7 @@ theorem can_replace_completeness {env} {sentences : PropertySet F} {ops : Operat
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env yields ?_ h_compl.left
+    apply circuit.implied_by_completeness env yields checked ?_ h_compl.left
     rw [←Environment.usesLocalWitnessesFlat_iff_extends (yields:=yields)]
     exact h_env.left
 end Circuit

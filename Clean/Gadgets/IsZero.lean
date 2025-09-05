@@ -130,7 +130,6 @@ def circuit [DecidableEq (M F)] {sentences : PropertySet F} (order : SentenceOrd
     -- coerce Spec to include `checked` parameter
     simpa using (soundness (sentences:=sentences) (M:=M) order)
   completeness := completeness (sentences:=sentences) (M:=M) order,
-  spec_monotonic := by intros; assumption
 }
 
 end Gadgets.IsZero

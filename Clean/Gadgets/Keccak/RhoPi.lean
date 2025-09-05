@@ -72,6 +72,5 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     Assumptions
     Spec
     soundness := soundness order
-    completeness := completeness order
-    spec_monotonic := fun _ _ _ _ _ h => h }
+    completeness := completeness order }
 end Gadgets.Keccak256.RhoPi
