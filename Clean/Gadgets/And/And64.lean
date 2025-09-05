@@ -16,33 +16,33 @@ instance : ProvableStruct Inputs where
   toComponents := fun { x, y } => .cons x (.cons y .nil)
   fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var U64 (F p))  := do
   let ⟨x, y⟩ := input
-  let z0 ← And8.circuit ⟨ x.x0, y.x0 ⟩
-  let z1 ← And8.circuit ⟨ x.x1, y.x1 ⟩
-  let z2 ← And8.circuit ⟨ x.x2, y.x2 ⟩
-  let z3 ← And8.circuit ⟨ x.x3, y.x3 ⟩
-  let z4 ← And8.circuit ⟨ x.x4, y.x4 ⟩
-  let z5 ← And8.circuit ⟨ x.x5, y.x5 ⟩
-  let z6 ← And8.circuit ⟨ x.x6, y.x6 ⟩
-  let z7 ← And8.circuit ⟨ x.x7, y.x7 ⟩
+  let z0 ← And8.circuit order ⟨ x.x0, y.x0 ⟩
+  let z1 ← And8.circuit order ⟨ x.x1, y.x1 ⟩
+  let z2 ← And8.circuit order ⟨ x.x2, y.x2 ⟩
+  let z3 ← And8.circuit order ⟨ x.x3, y.x3 ⟩
+  let z4 ← And8.circuit order ⟨ x.x4, y.x4 ⟩
+  let z5 ← And8.circuit order ⟨ x.x5, y.x5 ⟩
+  let z6 ← And8.circuit order ⟨ x.x6, y.x6 ⟩
+  let z7 ← And8.circuit order ⟨ x.x7, y.x7 ⟩
   return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.Normalized
 
-instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs U64 where
+  main := main order
   localLength _ := 8
   output _ i := varFromOffset U64 i
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem soundness_to_u64 {x y z : U64 (F p)}
+theorem soundness_to_u64 {sentences : PropertySet (F p)} {x y z : U64 (F p)}
   (x_norm : x.Normalized) (y_norm : y.Normalized)
   (h_eq :
     z.x0.val = x.x0.val &&& y.x0.val ∧
@@ -52,7 +52,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
     z.x4.val = x.x4.val &&& y.x4.val ∧
     z.x5.val = x.x5.val &&& y.x5.val ∧
     z.x6.val = x.x6.val &&& y.x6.val ∧
-    z.x7.val = x.x7.val &&& y.x7.val) : Spec { x, y } z := by
+    z.x7.val = x.x7.val &&& y.x7.val) : Spec (sentences := sentences) ∅ { x, y } z := by
   simp only [Spec]
   have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm
@@ -69,27 +69,32 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat rw [and_xor_sum]
   repeat assumption
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
+theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro i env state_var checked input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
   cases x; cases y
-  apply soundness_to_u64 h_assumptions.left h_assumptions.right
+  apply soundness_to_u64 (sentences:=sentences) h_assumptions.left h_assumptions.right
   simp only [circuit_norm, explicit_provable_type, Vector.mapRange,
-    main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
+    elaborated, main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
+  intro i env yielded input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, explicit_provable_type,
-    main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
+    elaborated, main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
-def circuit : FormalCircuit (F p) Inputs U64 where
-  Assumptions
-  Spec
-  soundness
-  completeness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs U64 where
+  elaborated := elaborated order
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    simp only [Spec] at h_spec ⊢
+    exact h_spec
 
 end Gadgets.And.And64
