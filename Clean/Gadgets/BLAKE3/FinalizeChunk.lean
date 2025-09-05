@@ -88,19 +88,19 @@ attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero st
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var (ProvableVector U32 8) (F p)) := do
 
   -- Convert bytes to words (just reorganization, no circuit needed)
   let block_words := bytesToWords input.buffer_data
 
   -- Compute start flag (CHUNK_START if blocks_compressed = 0)
-  let isFirstBlock ← IsZero.circuit input.state.blocks_compressed
+  let isFirstBlock ← IsZero.circuit order input.state.blocks_compressed
   let start_flag : Var U32 (F p) := ⟨isFirstBlock*(chunkStart : F p), 0, 0, 0⟩
 
   -- Compute final flags: base_flags | start_flag | CHUNK_END
   let chunk_end_flag : Var U32 (F p) := ⟨(chunkEnd : F p), 0, 0, 0⟩
-  let flags_with_start ← Or32.circuit { x := input.base_flags, y := start_flag }
-  let final_flags ← Or32.circuit { x := flags_with_start, y := chunk_end_flag }
+  let flags_with_start ← Or32.circuit order { x := input.base_flags, y := start_flag }
+  let final_flags ← Or32.circuit order { x := flags_with_start, y := chunk_end_flag }
 
   -- Use compress
   let compress_input : Var ApplyRounds.Inputs (F p) := {
@@ -111,11 +111,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
     block_len := ⟨input.buffer_len, 0, 0, 0⟩  -- Convert length to U32
     flags := final_flags
   }
-  let final_state ← Compress.circuit compress_input
+  let final_state ← Compress.circuit order compress_input
   return final_state.take 8
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs (ProvableVector U32 8) where
+  main := main order
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
 
 def Assumptions (input : Inputs (F p)) : Prop :=
@@ -125,7 +125,7 @@ def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 64, i.val ≥ input.buffer_len.val → input.buffer_data[i] = 0) ∧
   input.base_flags.Normalized
 
-def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   let chunk_state : ChunkState := {
     chaining_value := input.state.chaining_value.map U32.value
     chunk_counter := input.state.chunk_counter.value
@@ -274,7 +274,7 @@ private lemma bytesToWords_value (env : Environment (F p))
       congr
       omega
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start
   rcases h_holds with ⟨h_IsZero, h_holds⟩
   specialize h_IsZero trivial
@@ -354,7 +354,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [this] at h_Compress_Normalized
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
   circuit_proof_start
   apply And.intro
   · trivial
@@ -414,8 +414,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     aesop
   omega
 
-def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs (ProvableVector U32 8) := {
+  elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order
 }
 
 end Gadgets.BLAKE3.FinalizeChunk
