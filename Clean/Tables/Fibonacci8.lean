@@ -29,13 +29,12 @@ instance : ProvableType RowType where
     ⟨ x, y ⟩
 
 /--
-  inductive constraints that are applied every two rows of the trace.
+  inductive contraints that are applied every two rows of the trace.
 -/
-def fibRelation {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : TwoRowsConstraint RowType (F p) sentences := do
+def fibRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
-  let next_x ← (copyToVar curr.y : Circuit sentences (Variable (F p)))
-  let next_y ← Gadgets.Addition8.circuit order { x := curr.x, y := curr.y }
+  let next_x ← copyToVar (sentences:=emptyPropertySet (F p)) curr.y
+  let next_y ← Gadgets.Addition8.circuit (emptyOrder (F p)) { x := curr.x, y := curr.y }
   assignVar (.next 0) next_x
   assign (.next 1) next_y
 
@@ -43,13 +42,12 @@ def fibRelation {sentences : PropertySet (F p)} (order : SentenceOrder sentences
   boundary constraints that are applied at the beginning of the trace.
   This is our "base case" for the Fibonacci sequence.
 -/
-def boundaryFib {sentences : PropertySet (F p)} : SingleRowConstraint RowType (F p) sentences :=
+def boundaryFib : SingleRowConstraint RowType (F p) :=
   assignCurrRow { x := 0, y := 1 }
 
-def fibTable {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : List (TableOperation RowType (F p) sentences) := [
+def fibTable : List (TableOperation RowType (F p)) := [
   boundary (.fromStart 0) boundaryFib,
-  everyRowExceptLast (fibRelation order),
+  everyRowExceptLast fibRelation,
 ]
 
 def fib8 : ℕ -> ℕ
@@ -68,19 +66,18 @@ lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
 
 -- TODO kinda pointless to use `assignCurrRow` if the easiest way to unfold it is by making the steps explicit
 omit p_large_enough in
-lemma boundaryFib_eq {sentences : PropertySet (F p)} :
-    (boundaryFib (p:=p) (sentences:=sentences)) =
-    (do
-      (assign (sentences:=sentences) (.curr 0) 0)
-      (assign (sentences:=sentences) (.curr 1) 1)
-      : SingleRowConstraint RowType (F p) sentences) := rfl
+lemma boundaryFib_eq : boundaryFib (p:=p) = (do
+    assign (.curr 0) 0
+    assign (.curr 1) 1)
+  := rfl
 
 omit p_large_enough in
-lemma boundary_step {sentences : PropertySet (F p)} (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness ((boundaryFib (sentences:=sentences)).windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) { yielded := ∅ } Set.univ ((boundaryFib (sentences:=sentences)).operations)
+lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
+  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) (emptyYields (F p)) (emptyChecked (F p))
+  boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
-  set env := (boundaryFib (sentences:=sentences)).windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
+  set env := boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
 
   -- simplify constraints
   simp only [boundaryFib]
@@ -96,11 +93,8 @@ lemma boundary_step {sentences : PropertySet (F p)} (first_row : Row (F p) RowTy
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
 
-set_option maxHeartbeats 400000
-
-def formalFibTable {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalTable (F p) RowType sentences := {
-  constraints := fibTable order
+def formalFibTable : FormalTable (F p) RowType := {
+  constraints := fibTable
   Spec := Spec
 
   soundness := by
@@ -132,14 +126,14 @@ def formalFibTable {sentences : PropertySet (F p)} (order : SentenceOrder senten
       replace ConstraintsHold := ConstraintsHold.left
       simp [table_norm] at ConstraintsHold
 
-      set env := (fibRelation order).windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
+      set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
 
       simp only [fibTable, fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at ConstraintsHold
       simp only [circuit_norm, eval, varFromOffset, Vector.mapRange] at ConstraintsHold
 
       have hx_curr : env.get 0 = curr.x := by rfl
-      have hy_curr : env.get 1 = curr.y := by rfl
+      have hy_curr : env.get (0 + 1) = curr.y := by rfl
       have hx_next : env.get 2 = next.x := by rfl
       have hy_next : env.get (2 + 1) = next.y := by rfl
       rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
