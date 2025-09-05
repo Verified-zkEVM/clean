@@ -45,18 +45,18 @@ def recursiveRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
   let next ← TableConstraint.getNextRow
 
-  let z ← Gadgets.Addition32.circuit { x := curr.x, y := curr.y }
+  let z ← Gadgets.Addition32.circuit (emptyOrder (F p)) { x := curr.x, y := curr.y }
 
   assignU32 nextRowOff.y z
-  curr.y === next.x
+  curr.y ===[emptyOrder (F p)] next.x
 
 /--
   Boundary constraints that are applied at the beginning of the trace.
 -/
 def boundary : SingleRowConstraint RowType (F p) := do
   let row ← TableConstraint.getCurrRow
-  row.x === (const (U32.fromByte 0))
-  row.y === (const (U32.fromByte 1))
+  row.x ===[emptyOrder (F p)] (const (U32.fromByte 0))
+  row.y ===[emptyOrder (F p)] (const (U32.fromByte 1))
 
 /--
   The fib32 table is composed of the boundary and recursive relation constraints.
@@ -144,7 +144,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   exact ⟨h_add_mod, h_norm_next_y⟩
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) (emptyYields (F p)) (emptyChecked (F p)) boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
