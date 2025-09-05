@@ -9,7 +9,7 @@ variable {p : ℕ} [Fact p.Prime]
   Rotate the 64-bit integer by increments of 8 positions
   This gadget does not introduce constraints
 -/
-def main (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
+def main {sentences : PropertySet (F p)} (_order : SentenceOrder sentences) (offset : Fin 8) (input : Var U64 (F p)) : Circuit sentences (Var U64 (F p)) := do
   let ⟨x0, x1, x2, x3 , x4, x5, x6, x7⟩ := input
 
   if offset = 0 then
@@ -31,11 +31,11 @@ def main (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
-instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
-  main := main off
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8): ElaboratedCircuit (F p) sentences U64 U64 where
+  main := main order off
   localLength _ := 0
   output input i0 :=
     let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
@@ -61,8 +61,8 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
+theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (off : Fin 8) : Soundness (F p) (elaborated order off) order Assumptions (Spec (offset := off)) := by
+  rintro i0 env state_var checked ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
   have h_x1 : x1_var.eval env = x1 := by injections h_inputs
@@ -83,16 +83,18 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (off : Fin 8) : Completeness (F p) sentences (elaborated order off) Assumptions := by
+  rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [elaborated, main, circuit_norm]
 
-def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
-  elaborated off with
-  main := main off
-  Assumptions
-  Spec := Spec off
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8) : FormalCircuit (F p) sentences order U64 U64 where
+  elaborated := elaborated order off
+  Assumptions := Assumptions
+  Spec := Spec (offset := off)
   soundness := soundness off
   completeness := completeness off
-}
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    simp only [Spec] at h_spec ⊢
+    exact h_spec
 end Gadgets.Rotation64Bytes
