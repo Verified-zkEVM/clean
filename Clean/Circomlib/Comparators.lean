@@ -39,16 +39,39 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 2
 
   Assumptions _ := True
+
   Spec input output :=
     output = (if input = 0 then 1 else 0)
 
   soundness := by
-    simp_all only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp only [id_eq, h_holds]
+    split_ifs with h_ifs
+    . simp only [h_ifs, zero_mul, neg_zero, zero_add]
+    . rw [@neg_add_eq_zero]
+      have h1 := h_holds.left
+      have h2 := h_holds.right
+      rw [h1] at h2
+      simp only [id_eq, mul_eq_zero] at h2
+      cases h2
+      case neg.inl hl => contradiction
+      case neg.inr hr =>
+        rw [@neg_add_eq_zero] at hr
+        exact hr
 
   completeness := by
-    simp_all only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    cases h_env with
+    | intro left right =>
+      simp only [left, ne_eq, id_eq, ite_not, mul_ite, mul_zero] at right
+      simp only [id_eq, right, left, ne_eq, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
+      split_ifs with input
+      case pos h_pos => left ; exact input
+      case neg h_neg =>
+        right
+        rw [@neg_add_eq_zero]
+        rw [propext (mul_inv_eq_one₀ input)]
+
 end IsZero
 
 namespace IsEqual
@@ -78,34 +101,12 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output = (if x = y then 1 else 0)
 
   soundness := by
-    circuit_proof_start
-    simp [h_holds]
-    split_ifs with h_ifs
-    . simp [h_ifs]
-    . rw [@neg_add_eq_zero]
-      have h1 := h_holds.left
-      have h2 := h_holds.right
-      rw [h1] at h2
-      simp [Nat.mul_eq_zero] at h2
-      cases h2
-      case neg.inl hl => contradiction
-      case neg.inr hr =>
-        rw [@neg_add_eq_zero] at hr
-        exact hr
+    simp only [circuit_norm, main]
+    sorry
 
   completeness := by
-    circuit_proof_start
-    cases h_env with
-    | intro left right =>
-      simp [left] at right
-      simp [right, left]
-      split_ifs with input
-      case pos h_pos => left ; exact input
-      case neg h_neg =>
-        right
-        rw [@neg_add_eq_zero]
-        rw [propext (mul_inv_eq_one₀ input)]
-
+    simp only [circuit_norm, main]
+    sorry
 end IsEqual
 
 namespace ForceEqualIfEnabled
