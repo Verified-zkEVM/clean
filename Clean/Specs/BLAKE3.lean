@@ -211,7 +211,7 @@ structure ChunkState where
   chaining_value : Vector ℕ 8      -- Current chaining value (8 × 32-bit words)
   chunk_counter : ℕ                -- Which chunk number this is
   blocks_compressed : ℕ            -- Number of blocks compressed so far
-  block_buffer : List ℕ            -- Current block bytes (0-63 bytes)
+  block_buffer : List ℕ            -- Current block bytes (0-64 bytes)
 
 /--
 Initial chunk state with given chaining value and chunk counter.
