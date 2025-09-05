@@ -18,17 +18,17 @@ open Utils.Rotation (rotRight32_composition)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
-def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) (x : Var U32 (F p)) : Circuit sentences (Var U32 (F p)) := do
   let byte_offset : ℕ := offset.val / 8
   let bit_offset : ℕ := (offset % 8).val
 
   -- rotation is performed by combining a bit and a byte rotation
-  let byte_rotated ← Rotation32Bytes.circuit byte_offset x
-  Rotation32Bits.circuit bit_offset byte_rotated
+  let byte_rotated ← Rotation32Bytes.circuit order byte_offset x
+  Rotation32Bits.circuit order bit_offset byte_rotated
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
@@ -37,13 +37,13 @@ def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
 
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
-def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
-  main := main off
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 32) : ElaboratedCircuit (F p) sentences U32 U32 where
+  main := main order off
   localLength _ := 8
   output _inputs i0 := output off i0
 
-theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : Soundness (F p) (elaborated order offset) order Assumptions (Spec (offset := offset)) := by
+  intro i0 env yields checked x_var x h_input x_normalized h_holds
 
   simp [circuit_norm, main, elaborated,
     Rotation32Bits.circuit, Rotation32Bits.elaborated] at h_holds
@@ -51,7 +51,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U32
   let byte_offset : ℕ := offset.val / 8
   let bit_offset : ℕ := (offset % 8).val
-  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation32Bytes.elaborated byte_offset) (x_var : Var U32 _) i0)
+  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation32Bytes.elaborated byte_offset) sentences x_var i0)
 
   simp [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Spec, Rotation32Bytes.Assumptions,
     Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Spec, Rotation32Bits.Assumptions,
@@ -80,8 +80,8 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
     exact offset.is_lt]
   rw [Nat.div_add_mod']
 
-theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var h_env x h_eval x_normalized
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
+  intro i0 env yields x_var h_env x h_eval x_normalized
 
   simp [circuit_norm, main, elaborated,
     Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Assumptions,
@@ -98,12 +98,13 @@ theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) 
   rw [h_eval]
   simp only [x_normalized, true_and, h_norm]
 
-def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 := {
-  elaborated offset with
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : FormalCircuit (F p) sentences order U32 U32 := {
+  elaborated := elaborated order offset
   Assumptions
-  Spec := Spec offset
-  soundness := soundness offset
-  completeness := completeness offset
+  Spec := Spec (offset := offset)
+  soundness := soundness order offset
+  completeness := completeness order offset
+  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.Rotation32
