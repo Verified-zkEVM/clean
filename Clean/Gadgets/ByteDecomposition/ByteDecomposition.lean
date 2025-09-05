@@ -23,31 +23,31 @@ instance : ProvableStruct Outputs where
   The low part is the least significant `offset` bits,
   and the high part is the most significant `8 - offset` bits.
 -/
-def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) (x : Expression (F p)) : Circuit sentences (Var Outputs (F p)) := do
   let low ← witness fun env => mod (env x) (2^offset.val) (by simp [two_pow_lt])
   let high ← witness fun env => floorDiv (env x) (2^offset.val)
 
-  lookup ByteTable ((2^(8-offset.val) : F p) * low)
-  lookup ByteTable high
+  lookup (sentences := sentences) ByteTable ((2^(8-offset.val) : F p) * low)
+  lookup (sentences := sentences) ByteTable high
 
-  x === low + high * (2^offset.val : F p)
+  x ===[order] low + high * (2^offset.val : F p)
 
   return { low, high }
 
 def Assumptions (x : F p) := x.val < 256
 
-def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
+def Spec {sentences : PropertySet (F p)} (offset : Fin 8) (_checked : CheckedYields sentences) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))
 
-def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
-  main := main offset
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : ElaboratedCircuit (F p) sentences field Outputs where
+  main := main order offset
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
+theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Soundness (F p) (elaborated order offset) order Assumptions (Spec offset) := by
+  intro i0 env state_var checked x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
@@ -98,8 +98,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   use ⟨ low_eq, high_eq ⟩, h_lt_low
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
+  rintro i0 env yielded x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]
@@ -123,12 +123,14 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
-  elaborated offset with
-  main := main offset
-  Assumptions
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit (F p) sentences order field Outputs where
+  elaborated := elaborated order offset
+  Assumptions := Assumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-}
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    simp only [Spec] at h_spec ⊢
+    exact h_spec
 end Gadgets.ByteDecomposition
