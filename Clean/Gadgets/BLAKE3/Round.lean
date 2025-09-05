@@ -19,23 +19,23 @@ instance : ProvableStruct Inputs where
   toComponents := fun { state, message } => .cons state (.cons message .nil)
   fromComponents := fun (.cons state (.cons message .nil)) => { state, message }
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var BLAKE3State (F p)) := do
   let { state, message } := input
   -- TODO: refactor using a for loop
-  let state ← G.circuit 0 4 8 12 ⟨state, message[0], message[1]⟩
-  let state ← G.circuit 1 5 9 13 ⟨state, message[2], message[3]⟩
-  let state ← G.circuit 2 6 10 14 ⟨state, message[4], message[5]⟩
-  let state ← G.circuit 3 7 11 15 ⟨state, message[6], message[7]⟩
-  let state ← G.circuit 0 5 10 15 ⟨state, message[8], message[9]⟩
-  let state ← G.circuit 1 6 11 12 ⟨state, message[10], message[11]⟩
-  let state ← G.circuit 2 7 8 13 ⟨state, message[12], message[13]⟩
-  let state ← G.circuit 3 4 9 14 ⟨state, message[14], message[15]⟩
+  let state ← G.circuit order 0 4 8 12 ⟨state, message[0], message[1]⟩
+  let state ← G.circuit order 1 5 9 13 ⟨state, message[2], message[3]⟩
+  let state ← G.circuit order 2 6 10 14 ⟨state, message[4], message[5]⟩
+  let state ← G.circuit order 3 7 11 15 ⟨state, message[6], message[7]⟩
+  let state ← G.circuit order 0 5 10 15 ⟨state, message[8], message[9]⟩
+  let state ← G.circuit order 1 6 11 12 ⟨state, message[10], message[11]⟩
+  let state ← G.circuit order 2 7 8 13 ⟨state, message[12], message[13]⟩
+  let state ← G.circuit order 3 4 9 14 ⟨state, message[14], message[15]⟩
   return state
 
 -- #eval! main (p:=pBabybear) default |>.localLength
 -- #eval! main (p:=pBabybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs BLAKE3State where
+  main := main order
   localLength _ := 768
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, G.elaborated]
@@ -44,12 +44,12 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, message } := input
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  circuit_proof_start [elaborated]
 
   obtain ⟨h_state, h_message⟩ := h_assumptions
 
@@ -100,8 +100,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · rw [←c8.left]; rfl
   · exact c8.right
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start [G.circuit, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+  circuit_proof_start [elaborated, G.circuit, G.elaborated, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env
@@ -124,8 +124,13 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   simp only [h_assumptions, getElem_eval_vector, and_self]
 
-def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs BLAKE3State := {
+  elaborated := elaborated order
+  Assumptions
+  Spec
+  soundness := soundness order
+  completeness := completeness order
+  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.BLAKE3.Round
