@@ -8,32 +8,33 @@ namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
-def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let state ← Theta.circuit state
-  let state ← RhoPi.circuit state
-  let state ← Chi.circuit state
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) (state : Var KeccakState (F p)) : Circuit sentences (Var KeccakState (F p)) := do
+  let state ← Theta.circuit order state
+  let state ← RhoPi.circuit order state
+  let state ← Chi.circuit order state
 
   -- add the round constant
-  let s0 ← Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
+  let s0 ← Xor64.circuit order ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
-instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main := main rc
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
+  main := main order rc
   localLength _ := 1288
   output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
 
-  localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]
+  localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated]
   output_eq state i0 := by
-    simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
+    simp only [main, circuit_norm, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated]
+    simp only [circuit_norm, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated, Vector.mapRange]
 
-theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (Spec rc) := by
-  intro i0 env state_var state h_input state_norm h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : Soundness (F p) (elaborated order rc) order Assumptions (Spec (rc := rc)) := by
+  intro i0 env yields checked state_var state h_input state_norm h_holds
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -41,8 +42,8 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
 
   -- simplify constraints
   simp only [Assumptions] at state_norm
-  simp only [main, h_input, state_norm, circuit_norm,
-    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+  simp only [elaborated, main, h_input, state_norm, circuit_norm,
+    Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
   ] at h_holds
@@ -78,17 +79,17 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : Completeness (F p) sentences (elaborated order rc) Assumptions := by
+  intro i0 env yields state_var h_env state h_input state_norm
 
   -- simplify goal and witness hypotheses
   simp only [Assumptions] at state_norm
-  dsimp only [main, circuit_norm,
-    Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+  dsimp only [elaborated, main, circuit_norm,
+    Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
   ] at h_env ⊢
-  simp_all only [main, h_input, state_norm, circuit_norm,
+  simp_all only [elaborated, main, h_input, state_norm, circuit_norm,
     U64.fromUInt64_normalized]
 
   -- `simp_all` left one goal to pull out of hypotheses
@@ -98,11 +99,12 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumpti
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
-def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated rc with
-  Spec := Spec rc
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : FormalCircuit (F p) sentences order KeccakState KeccakState := {
+  elaborated := elaborated order rc
+  Spec := Spec (rc := rc)
   Assumptions
-  soundness := soundness rc,
-  completeness := completeness rc,
+  soundness := soundness order rc
+  completeness := completeness order rc
+  spec_monotonic := fun _ _ _ _ _ h => h
 }
 end Gadgets.Keccak256.KeccakRound
