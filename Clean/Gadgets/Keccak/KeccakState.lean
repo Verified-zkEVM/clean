@@ -70,10 +70,10 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 -- circuits
 
-def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
-  main block := .forEach block (assertion U64.AssertNormalized.circuit)
+def KeccakBlock.normalized {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order KeccakBlock where
+  main block := .forEach block (assertion (U64.AssertNormalized.circuit order))
   Assumptions _ := True
-  Spec block := block.Normalized
+  Spec _ block := block.Normalized
   localLength_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
   soundness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
@@ -81,5 +81,8 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   completeness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]
+  spec_monotonic := by
+    intros checked₁ checked₂ input h_subset h_spec
+    exact h_spec
 
 end Gadgets.Keccak256
