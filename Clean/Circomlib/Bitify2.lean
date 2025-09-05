@@ -32,30 +32,32 @@ template Num2Bits_strict() {
     }
 }
 -/
-def main (input : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Expression (F p)) : Circuit sentences (Vector (Expression (F p)) 254) := do
   -- Convert input to 254 bits
-  let bits ← Num2Bits.main 254 input
+  let bits ← Num2Bits.main order 254 input
 
   -- Check that the bits represent a value less than p
-  AliasCheck.circuit bits
+  AliasCheck.circuit order bits
 
   return bits
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : FormalCircuit (F p) field (fields 254) where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order field (fields 254) where
+  main := main order
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
-  localLength_eq := by simp +arith [circuit_norm, main,
+  localLength_eq _ _ := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main,
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
-  Spec input bits :=
+  Assumptions _ := True
+
+  Spec _ input bits :=
     bits = fieldToBits 254 input
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
+    intro i0 env yields checked input_var input h_input assumptions h_holds
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
       Vector.map_mapRange, Vector.map_map, Function.comp_apply]
@@ -75,7 +77,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       <;> simp [h_bits, ZMod.val_one]
 
   completeness := by
-    intro i0 env input_var h_env input h_input assumptions
+    intro i0 env yields input_var h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
@@ -95,6 +97,10 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       fieldToBits, Vector.map_map, val_natCast_toBits,
       fromBits_toBits input_lt, ZMod.val_lt]
     use trivial, h_bits
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    exact h_spec
 end Num2Bits_strict
 
 namespace Bits2Num_strict
@@ -114,24 +120,24 @@ template Bits2Num_strict() {
     b2n.out ==> out;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Vector (Expression (F p)) 254) : Circuit sentences (Expression (F p)) := do
   -- Check that the bits represent a value less than p
-  AliasCheck.circuit input
+  AliasCheck.circuit order input
 
   -- Convert bits to number
-  Bits2Num.main 254 input
+  Bits2Num.main order 254 input
 
-def circuit : FormalCircuit (F p) (fields 254) field where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order (fields 254) field where
+  main := main order
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
-  localLength_eq := by simp +arith [circuit_norm, main,
+  localLength_eq _ _ := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
-  subcircuitsConsistent := by simp +arith [circuit_norm, main,
+  subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
+  Spec _ input output :=
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
@@ -141,6 +147,10 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   completeness := by
     simp only [circuit_norm, main, Bits2Num.main]
     sorry
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    exact h_spec
 end Bits2Num_strict
 
 namespace Num2BitsNeg
@@ -167,32 +177,32 @@ template Num2BitsNeg(n) {
     lc1 + isZero.out * 2**n === 2**n - in;
 }
 -/
-def main (n : ℕ) (input : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (input : Expression (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   -- Witness the bits of 2^n - input (when n > 0)
   let out ← witnessVector n fun env =>
     fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
   let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do
-    assertBool out[i]
+    assertBool order out[i]
     return lc1 + out[i] * (2^i.val : F p)
 
   -- Check if input is zero
-  let isZero_out ← IsZero.circuit input
+  let isZero_out ← IsZero.circuit order input
 
   -- Main constraint: lc1 + isZero.out * 2^n === 2^n - in
-  lc1 + isZero_out * (2^n : F p) === (2^n : F p) - input
+  lc1 + isZero_out * (2^n : F p) ===[order] (2^n : F p) - input
 
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
-  main := main n
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) sentences order field (fields n) where
+  main := main order n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Spec input output :=
+  Spec _ input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by
@@ -202,6 +212,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   completeness := by
     simp only [circuit_norm, main]
     sorry
+
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    exact h_spec
 end Num2BitsNeg
 
 end Circomlib
