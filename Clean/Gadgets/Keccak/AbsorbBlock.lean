@@ -15,41 +15,41 @@ instance : ProvableStruct Input where
   toComponents := fun { state, block } => .cons state (.cons block .nil)
   fromComponents := fun (.cons state (.cons block .nil)) => { state, block }
 
-def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Input (F p)) : Circuit sentences (Var KeccakState (F p)) := do
   let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
-  let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit ⟨state[i.val], block[i.val]⟩
+  let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit order ⟨state[i.val], block[i.val]⟩
 
   -- the remaining elements of the state are unchanged
   let state_capacity := Vector.mapFinRange (25 - RATE) fun i => state[RATE + i.val]
   let state' : Vector _ 25 := state_rate ++ state_capacity
 
   -- apply the permutation
-  Permutation.circuit state'
+  Permutation.circuit order state'
 
-instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Input KeccakState where
+  main := main order
   localLength _ := 31048
   output _ i0 := Permutation.stateVar (i0 + 136) 23
 
-  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+  localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Permutation.circuit, Permutation.elaborated, RATE]
+  output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Permutation.circuit, Permutation.elaborated, RATE]
+  subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Permutation.circuit, Permutation.elaborated, RATE]
 
 @[reducible] def Assumptions (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized
 
-@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) :=
+@[reducible] def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Input (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro i0 env yields checked ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
-  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
-    Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
-    Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
+  simp only [circuit_norm, elaborated, RATE, main, Spec, Assumptions, absorbBlock,
+    Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec,
+    Permutation.circuit, Permutation.elaborated, Permutation.Assumptions, Permutation.Spec,
     Input.mk.injEq] at *
 
   -- reduce goal to characterizing absorb step
@@ -78,13 +78,13 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+  intro i0 env yields ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
-  simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
-    Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
-    Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
+  simp only [circuit_norm, elaborated, RATE, main, Spec, Assumptions, absorbBlock,
+    Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec,
+    Permutation.circuit, Permutation.elaborated, Permutation.Assumptions, Permutation.Spec,
     Input.mk.injEq] at *
   simp only [getElem_eval_vector, h_input] at h_env ⊢
 
@@ -115,6 +115,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-def circuit : FormalCircuit (F p) Input KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Input KeccakState :=
+  { elaborated := elaborated order
+    Assumptions
+    Spec
+    soundness := soundness order
+    completeness := completeness order
+    spec_monotonic := fun _ _ _ _ _ h => h }
 end Gadgets.Keccak256.AbsorbBlock
