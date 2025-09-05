@@ -15,18 +15,18 @@ def rhoPiShifts : Vector (Fin 64) 25 := #v[
 ]
 def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (state : Var KeccakState (F p)) : Circuit sentences (Var KeccakState (F p)) :=
   .map rhoPiConstants fun (i, s) =>
-    Rotation64.circuit (-s) state[i.val]
+    Rotation64.circuit order (-s) state[i.val]
 
 def Assumptions := KeccakState.Normalized (p:=p)
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
+  main := main order
   localLength _ := 400
   localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
@@ -40,8 +40,8 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   rw [List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro i0 env yields checked state_var state h_input state_norm h_holds
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -51,22 +51,27 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [Assumptions, KeccakState.Normalized] at state_norm
-  simp only [h_input, state_norm, main, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated,
+  simp only [h_input, state_norm, elaborated, main, circuit_norm,
+    Rotation64.circuit, Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec,
     Vector.getElem_zip] at h_holds ⊢
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+  intro i0 env yields state_var h_env state h_input state_norm
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [main, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
+  simp_all [elaborated, main, circuit_norm,
+    Rotation64.circuit, Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec]
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakState :=
+  { elaborated := elaborated order
+    Assumptions
+    Spec
+    soundness := soundness order
+    completeness := completeness order
+    spec_monotonic := fun _ _ _ _ _ h => h }
 end Gadgets.Keccak256.RhoPi
