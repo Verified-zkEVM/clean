@@ -18,35 +18,35 @@ instance : ProvableStruct Inputs where
   toComponents := fun { state, chaining_value } => .cons state (.cons chaining_value .nil)
   fromComponents := fun (.cons state (.cons chaining_value .nil)) => { state, chaining_value }
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var BLAKE3State (F p)) := do
   let { state, chaining_value } := input
 
   -- XOR first 8 words with last 8 words
-  let s0 ← Xor32.circuit ⟨state[0], state[8]⟩
-  let s1 ← Xor32.circuit ⟨state[1], state[9]⟩
-  let s2 ← Xor32.circuit ⟨state[2], state[10]⟩
-  let s3 ← Xor32.circuit ⟨state[3], state[11]⟩
-  let s4 ← Xor32.circuit ⟨state[4], state[12]⟩
-  let s5 ← Xor32.circuit ⟨state[5], state[13]⟩
-  let s6 ← Xor32.circuit ⟨state[6], state[14]⟩
-  let s7 ← Xor32.circuit ⟨state[7], state[15]⟩
+  let s0 ← Xor32.circuit order ⟨state[0], state[8]⟩
+  let s1 ← Xor32.circuit order ⟨state[1], state[9]⟩
+  let s2 ← Xor32.circuit order ⟨state[2], state[10]⟩
+  let s3 ← Xor32.circuit order ⟨state[3], state[11]⟩
+  let s4 ← Xor32.circuit order ⟨state[4], state[12]⟩
+  let s5 ← Xor32.circuit order ⟨state[5], state[13]⟩
+  let s6 ← Xor32.circuit order ⟨state[6], state[14]⟩
+  let s7 ← Xor32.circuit order ⟨state[7], state[15]⟩
 
   -- XOR last 8 words with chaining value
-  let s8 ← Xor32.circuit ⟨chaining_value[0], state[8]⟩
-  let s9 ← Xor32.circuit ⟨chaining_value[1], state[9]⟩
-  let s10 ← Xor32.circuit ⟨chaining_value[2], state[10]⟩
-  let s11 ← Xor32.circuit ⟨chaining_value[3], state[11]⟩
-  let s12 ← Xor32.circuit ⟨chaining_value[4], state[12]⟩
-  let s13 ← Xor32.circuit ⟨chaining_value[5], state[13]⟩
-  let s14 ← Xor32.circuit ⟨chaining_value[6], state[14]⟩
-  let s15 ← Xor32.circuit ⟨chaining_value[7], state[15]⟩
+  let s8 ← Xor32.circuit order ⟨chaining_value[0], state[8]⟩
+  let s9 ← Xor32.circuit order ⟨chaining_value[1], state[9]⟩
+  let s10 ← Xor32.circuit order ⟨chaining_value[2], state[10]⟩
+  let s11 ← Xor32.circuit order ⟨chaining_value[3], state[11]⟩
+  let s12 ← Xor32.circuit order ⟨chaining_value[4], state[12]⟩
+  let s13 ← Xor32.circuit order ⟨chaining_value[5], state[13]⟩
+  let s14 ← Xor32.circuit order ⟨chaining_value[6], state[14]⟩
+  let s15 ← Xor32.circuit order ⟨chaining_value[7], state[15]⟩
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
 -- #eval main (p:=p_babybear) default |>.local_length
 -- #eval main (p:=p_babybear) default |>.output
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
-  main := main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs BLAKE3State where
+  main := main order
   localLength _ := 64
   output inputs i0 := #v[
     varFromOffset U32 (i0 + 0),
@@ -74,15 +74,15 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro i0 env yields checked ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
+  dsimp only [elaborated, main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
   simp only [FormalCircuit.toSubcircuit, Circuit.operations, ElaboratedCircuit.main,
     ElaboratedCircuit.localLength, Xor32.Assumptions,
     ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
@@ -112,7 +112,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  simp [Spec, circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
+  simp [Spec, circuit_norm, elaborated, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
   simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
     true_and]
@@ -121,8 +121,8 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     Fin.val_succ, List.getElem_cons_succ, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_normalized
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+  rintro i0 env yields ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_normalized
   simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
   dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
@@ -130,13 +130,18 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
     Fin.getElem_fin] at state_norm chaining_value_norm
-  dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
+  dsimp only [elaborated, main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
   simp only [h_input, circuit_norm, and_imp,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
   simp_all only [gt_iff_lt, forall_const, and_self]
 
-def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs BLAKE3State := {
+  elaborated := elaborated order
+  Assumptions
+  Spec
+  soundness := soundness order
+  completeness := completeness order
+  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.BLAKE3.FinalStateUpdate
