@@ -78,12 +78,34 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output = (if x = y then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp [h_holds]
+    split_ifs with h_ifs
+    . simp [h_ifs]
+    . rw [@neg_add_eq_zero]
+      have h1 := h_holds.left
+      have h2 := h_holds.right
+      rw [h1] at h2
+      simp [Nat.mul_eq_zero] at h2
+      cases h2
+      case neg.inl hl => contradiction
+      case neg.inr hr =>
+        rw [@neg_add_eq_zero] at hr
+        exact hr
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    cases h_env with
+    | intro left right =>
+      simp [left] at right
+      simp [right, left]
+      split_ifs with input
+      case pos h_pos => left ; exact input
+      case neg h_neg =>
+        right
+        rw [@neg_add_eq_zero]
+        rw [propext (mul_inv_eq_one₀ input)]
+
 end IsEqual
 
 namespace ForceEqualIfEnabled
