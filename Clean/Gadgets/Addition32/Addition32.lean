@@ -17,41 +17,43 @@ instance : ProvableStruct Inputs where
   toComponents := fun {x, y} => .cons x ( .cons y .nil)
   fromComponents := fun (.cons x ( .cons y .nil)) => ⟨ x, y ⟩
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var U32 (F p)) := do
   let ⟨x, y⟩ := input
-  let ⟨z, _⟩ ← Addition32Full.circuit {x, y, carryIn := 0}
+  let ⟨z, _⟩ ← Addition32Full.circuit order {x, y, carryIn := 0}
   return z
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
 
 -- def c := main (p:=p_babybear) default
 -- #eval c.localLength
 -- #eval c.output
-instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
-  main := main
+instance elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs U32 where
+  main := main order
   localLength _ := 8
   output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
-  rw [←elaborated.output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  rintro i0 env yields checked ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
+  rw [←(elaborated order).output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
   simp_all [circuit_norm, Spec, main, Addition32Full.circuit,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
-  simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
-  Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+    circuit_proof_start
+    simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
+    Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 
-def circuit : FormalCircuit (F p) Inputs U32 where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs U32 where
+  elaborated := elaborated order
   Assumptions
   Spec
-  soundness
-  completeness
+  soundness := soundness order
+  completeness := completeness order
+  spec_monotonic := fun _ _ _ _ _ hSpec => hSpec
 end Gadgets.Addition32
