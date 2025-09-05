@@ -54,9 +54,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   
   completeness := by
     sorry -- TODO: prove completeness
-    
-  spec_monotonic := by
-    intros checked₁ checked₂ input output _ h; exact h
 
 end Sign
 end Circomlib
