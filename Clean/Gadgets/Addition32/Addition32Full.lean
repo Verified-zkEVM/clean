@@ -30,19 +30,19 @@ instance : ProvableStruct Outputs where
   toComponents := fun {z, carryOut} => .cons z ( .cons carryOut .nil)
   fromComponents := fun (.cons z ( .cons carryOut .nil)) => ⟨ z, carryOut ⟩
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
-  let { z := z0, carryOut := c0 } ← Addition8FullCarry.main ⟨ x.x0, y.x0, carryIn ⟩
-  let { z := z1, carryOut := c1 } ← Addition8FullCarry.main ⟨ x.x1, y.x1, c0 ⟩
-  let { z := z2, carryOut := c2 } ← Addition8FullCarry.main ⟨ x.x2, y.x2, c1 ⟩
-  let { z := z3, carryOut := c3 } ← Addition8FullCarry.main ⟨ x.x3, y.x3, c2 ⟩
+  let { z := z0, carryOut := c0 } ← Addition8FullCarry.main order ⟨ x.x0, y.x0, carryIn ⟩
+  let { z := z1, carryOut := c1 } ← Addition8FullCarry.main order ⟨ x.x1, y.x1, c0 ⟩
+  let { z := z2, carryOut := c2 } ← Addition8FullCarry.main order ⟨ x.x2, y.x2, c1 ⟩
+  let { z := z3, carryOut := c3 } ← Addition8FullCarry.main order ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carryOut := c3 }
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
   z.value = (x.value + y.value + carryIn.val) % 2^32
@@ -56,15 +56,15 @@ Elaborated circuit data can be found as follows:
 #eval (main (p:=p_babybear) default).output
 ```
 -/
-instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs Outputs where
+  main := main order
   localLength _ := 8
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
+theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  circuit_proof_start [elaborated, Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
   -- simplify circuit further
   -- TODO handle simplification of general provable types in `circuit_proof_start`
@@ -103,7 +103,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -151,9 +151,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
-  Assumptions
-  Spec
-  soundness
-  completeness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs Outputs where
+  elaborated := elaborated order
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := soundness
+  completeness := completeness
+  spec_monotonic := by
+    intros checked₁ checked₂ input output h_subset h_spec
+    simp only [Spec] at h_spec ⊢
+    exact h_spec
 end Gadgets.Addition32Full
