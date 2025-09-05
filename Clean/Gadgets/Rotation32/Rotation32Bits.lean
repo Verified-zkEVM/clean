@@ -20,8 +20,8 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
-def main (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 (F p)) := do
-  let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit sentences (Var U32 (F p)) := do
+  let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit order offset)
   let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
 
@@ -32,7 +32,7 @@ def main (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 
 
 def Assumptions (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
@@ -41,8 +41,8 @@ def output (offset : Fin 8) (i0 : ℕ) : U32 (Expression (F p)) :=
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 4 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
 -- #eval main (p:=p_babybear) 1 default |>.output
-def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
-  main := main off
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8) : ElaboratedCircuit (F p) sentences U32 U32 where
+  main := main order off
   localLength _ := 8
   output _inputs i0 := output off i0
   localLength_eq _ i0 := by
@@ -55,8 +55,8 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Soundness (F p) (elaborated order offset) order Assumptions (Spec (offset := offset)) := by
+  intro i0 env yields checked x_var x h_input x_normalized h_holds
 
   -- simplify statements
   dsimp only [circuit_norm, elaborated, main,
@@ -109,8 +109,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']
   exact ⟨ rotation32_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var _ x h_input x_normalized
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
+  intro i0 env yields x_var _ x h_input x_normalized
 
   -- simplify goal
   simp only [main, elaborated, circuit_norm,
@@ -120,12 +120,13 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized
   simp_all only [size, U32.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 := {
-  elaborated offset with
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit (F p) sentences order U32 U32 := {
+  elaborated := elaborated order offset
   Assumptions
-  Spec := Spec offset
-  soundness := soundness offset
-  completeness := completeness offset
+  Spec := Spec (offset := offset)
+  soundness := soundness order offset
+  completeness := completeness order offset
+  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.Rotation32Bits
