@@ -22,7 +22,7 @@ instance : ProvableStruct Row where
 
 def table : InductiveTable (F p) Row unit where
   step row _ := do
-    let z ← Addition32.circuit { x := row.x, y := row.y }
+    let z ← Addition32.circuit (emptyOrder (F p)) { x := row.x, y := row.y }
     return { x := row.y, y := z }
 
   Spec _ _ i _ row : Prop :=
@@ -37,7 +37,8 @@ def table : InductiveTable (F p) Row unit where
     Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
 -- the input is hard-coded to (0, 1)
-def formalTable (output : Row (F p)) := table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output
+def formalTable (output : Row (F p)) := 
+  table.toFormal { x := U32.fromByte 0, y := U32.fromByte 1 } output
 
 -- The table's statement implies that the output row contains the nth Fibonacci number
 theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace,
