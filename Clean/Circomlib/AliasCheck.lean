@@ -49,8 +49,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     simp_all
     omega
   
-  spec_monotonic := by
-    intros checked₁ checked₂ input _ h; exact h
 end AliasCheck
 
 end Circomlib

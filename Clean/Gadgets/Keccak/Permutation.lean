@@ -119,7 +119,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
-  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.Keccak256.Permutation

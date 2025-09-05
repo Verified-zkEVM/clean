@@ -81,8 +81,5 @@ def KeccakBlock.normalized {sentences : PropertySet (F p)} (order : SentenceOrde
   completeness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]
-  spec_monotonic := by
-    intros checked₁ checked₂ input h_subset h_spec
-    exact h_spec
 
 end Gadgets.Keccak256

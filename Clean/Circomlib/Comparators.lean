@@ -131,8 +131,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     simp only [circuit_norm, main]
     sorry
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input _ h; exact h
 end ForceEqualIfEnabled
 
 namespace LessThan

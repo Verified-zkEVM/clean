@@ -214,8 +214,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input _ h; exact h
 
 end U64.AssertNormalized
 

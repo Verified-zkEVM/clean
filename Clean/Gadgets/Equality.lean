@@ -54,7 +54,6 @@ def circuit {sentences : PropertySet F} (order : SentenceOrder sentences)
 
   Spec : CheckedYields sentences → α F × α F → Prop
   | _, (x, y) => x = y
-  spec_monotonic := by intros; assumption
 
   soundness := by
     intro offset env yields checked input_var input h_input _ h_holds

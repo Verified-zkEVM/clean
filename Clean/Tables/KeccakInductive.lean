@@ -11,8 +11,8 @@ open Gadgets.Keccak256
 
 def table : InductiveTable (F p) KeccakState KeccakBlock where
   step state block := do
-    KeccakBlock.normalized block
-    AbsorbBlock.circuit { state, block }
+    KeccakBlock.normalized (emptyOrder (F p)) block
+    AbsorbBlock.circuit (emptyOrder (F p)) { state, block }
 
   Spec _ blocks i _ state : Prop :=
     state.Normalized

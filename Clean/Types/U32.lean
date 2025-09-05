@@ -282,8 +282,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     rintro i0 env yields x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
-  spec_monotonic := by
-    intros checked₁ checked₂ input _ h; exact h
 
 end U32.AssertNormalized
 

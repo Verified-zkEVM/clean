@@ -71,20 +71,20 @@ def ProcessBlocksState.Normalized (state : ProcessBlocksState (F p)) : Prop :=
 
 namespace BLAKE3ProcessBlocksStateNormalized
 
-def main (x : Var ProcessBlocksState (F p)) : Circuit (F p) Unit := do
-  Circuit.forEach x.chaining_value U32.AssertNormalized.circuit
-  U32.AssertNormalized.circuit x.chunk_counter
-  U32.AssertNormalized.circuit x.blocks_compressed
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (x : Var ProcessBlocksState (F p)) : Circuit sentences Unit := do
+  Circuit.forEach x.chaining_value (U32.AssertNormalized.circuit order)
+  U32.AssertNormalized.circuit order x.chunk_counter
+  U32.AssertNormalized.circuit order x.blocks_compressed
 
-def circuit : FormalAssertion (F p) ProcessBlocksState where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order ProcessBlocksState where
+  main := main order
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
     omega
   Assumptions _ := True
-  Spec x := x.Normalized
+  Spec _checked x := x.Normalized
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
@@ -139,18 +139,18 @@ def BlockInput.Normalized (input : BlockInput (F p)) : Prop :=
 -- A circuit that asserts `BlockInput.Normalized`
 namespace BLAKE3BlockInputNormalized
 
-def main (x : Var BlockInput (F p)) : Circuit (F p) Unit := do
-  assertBool x.block_exists
-  Circuit.forEach x.block_data U32.AssertNormalized.circuit
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (x : Var BlockInput (F p)) : Circuit sentences Unit := do
+  assertBool order x.block_exists
+  Circuit.forEach x.block_data (U32.AssertNormalized.circuit order)
 
-def circuit : FormalAssertion (F p) BlockInput where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order BlockInput where
+  main := main order
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   Assumptions _ := True
-  Spec x := x.Normalized
+  Spec _checked x := x.Normalized
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
@@ -175,13 +175,13 @@ attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
 The step function that processes one block or passes through the state.
 -/
 def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
-    Circuit (F p) (Var ProcessBlocksState (F p)) := do
+    Circuit (emptyPropertySet (F p)) (Var ProcessBlocksState (F p)) := do
 
-  BLAKE3ProcessBlocksStateNormalized.circuit state -- redundant except in the first step
-  BLAKE3BlockInputNormalized.circuit input
+  BLAKE3ProcessBlocksStateNormalized.circuit (emptyOrder (F p)) state -- redundant except in the first step
+  BLAKE3BlockInputNormalized.circuit (emptyOrder (F p)) input
 
   -- Compute CHUNK_START flag (1 if blocks_compressed = 0, else 0)
-  let isFirstBlock ← IsZero.circuit state.blocks_compressed
+  let isFirstBlock ← IsZero.circuit (emptyOrder (F p)) state.blocks_compressed
 
   let startFlagU32 : Var U32 (F p) :=  ⟨isFirstBlock * (Expression.const (F:=F p) chunkStart), 0, 0, 0⟩
 
@@ -200,21 +200,21 @@ def step (state : Var ProcessBlocksState (F p)) (input : Var BlockInput (F p)) :
   }
 
   -- Apply compress to get new chaining value
-  let newCV16 ← BLAKE3.Compress.circuit compressInput
+  let newCV16 ← BLAKE3.Compress.circuit (emptyOrder (F p)) compressInput
 
   -- Increment blocks_compressed
   let one32 : Var U32 (F p) := ⟨1, 0, 0, 0⟩
-  let newBlocksCompressed ← Addition32.circuit { x := state.blocks_compressed, y := one32 }
+  let newBlocksCompressed ← Addition32.circuit (emptyOrder (F p)) { x := state.blocks_compressed, y := one32 }
 
   -- Conditionally select between new state and old state based on block_exists
   -- If block_exists = 1, use newState; if block_exists = 0, use state
-  let muxedCV ← Conditional.circuit (M := ProvableVector U32 8) {
+  let muxedCV ← Conditional.circuit (emptyOrder (F p)) (M := ProvableVector U32 8) {
     selector := input.block_exists
     ifTrue := newCV16.takeShort 8 (by omega)
     ifFalse := state.chaining_value
   }
 
-  let muxedBlocksCompressed ← Conditional.circuit {
+  let muxedBlocksCompressed ← Conditional.circuit (emptyOrder (F p)) {
     selector := input.block_exists
     ifTrue := newBlocksCompressed
     ifFalse := state.blocks_compressed
@@ -249,7 +249,7 @@ private lemma step_process_block (env : Environment (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : x.block_exists = 1)
-    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
+    (h_holds : Circuit.ConstraintsHold.Soundness env (emptyYields (F p)) (emptyChecked (F p)) ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :

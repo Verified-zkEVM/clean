@@ -352,8 +352,6 @@ structure FormalAssertion (F : Type) (sentences : PropertySet F) (order : Senten
   Spec : CheckedYields sentences → Input F → Prop
   soundness : FormalAssertion.Soundness F sentences order elaborated Assumptions Spec
   completeness : FormalAssertion.Completeness F sentences elaborated Assumptions (Spec Set.univ)
-  spec_monotonic : ∀ (checked₁ checked₂ : CheckedYields sentences) (input : Input F),
-    checked₁ ⊆ checked₂ → Spec checked₂ input → Spec checked₁ input
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0

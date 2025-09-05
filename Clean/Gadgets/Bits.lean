@@ -82,7 +82,6 @@ def rangeCheck {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   Assumptions _ := True
   Spec (_ : CheckedYields sentences) (x : F p) := x.val < 2^n
-  spec_monotonic := by intros; assumption
 
   soundness := by simp_all only [circuit_norm, toBits]
   completeness := by simp_all only [circuit_norm, toBits]
