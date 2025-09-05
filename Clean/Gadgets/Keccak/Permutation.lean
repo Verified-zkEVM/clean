@@ -5,13 +5,13 @@ namespace Gadgets.Keccak256.Permutation
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (state : Var KeccakState (F p)) : Circuit sentences (Var KeccakState (F p)) :=
   .foldl roundConstants state
-    fun state rc => KeccakRound.circuit rc state
+    fun state rc => KeccakRound.circuit order rc state
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccakPermutation state.value
 
@@ -23,25 +23,25 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
 -- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
+  main := main order
   localLength _ := 30912
   output _ i0 := stateVar i0 23
 
-  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
+  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
+  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
 
 -- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
 example (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
   = roundConstants.foldl keccakRound state := rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro n env initial_state_var initial_state h_input h_assumptions h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro n env yields checked initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
-  simp only [main, circuit_norm, Spec,
+  simp only [elaborated, main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
   simp only [zero_add, h_input] at h_holds
@@ -74,12 +74,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       simp
   exact h_inductive 23 (by norm_num)
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro n env initial_state_var h_env initial_state h_input h_assumptions
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+  intro n env yields initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, Spec,
+  simp only [elaborated, main, h_input, h_assumptions, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
 
@@ -111,12 +111,15 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated with
-  Assumptions, Spec, soundness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakState := {
+  elaborated := elaborated order
+  Assumptions
+  Spec
+  soundness := soundness order
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
+  spec_monotonic := fun _ _ _ _ _ h => h
 }
 
 end Gadgets.Keccak256.Permutation
