@@ -5,7 +5,6 @@ import Clean.Circuit.Json
 open Lean
 
 variable {F : Type} {S : Type → Type} [ProvableType S] {W : ℕ+} {α : Type} [Field F] [ToJson F]
-variable {sentences : PropertySet F}
 
 instance : ToJson (CellOffset W S) where
   toJson off := Json.mkObj [
@@ -37,16 +36,16 @@ instance : ToJson (CellAssignment W S) where
       ("vars", toJson vars.toArray),
     ]
 
-instance : ToJson (TableContext W S F sentences) where
+instance : ToJson (TableContext W S F) where
   toJson ctx := Json.mkObj [
     ("circuit", toJson ctx.circuit),
     ("assignment", toJson ctx.assignment)
   ]
 
-instance : ToJson (TableConstraint W S F sentences α) where
+instance : ToJson (TableConstraint W S F α) where
   toJson table := toJson (table .empty).2
 
-instance : ToJson (TableOperation S F sentences) where
+instance : ToJson (TableOperation S F) where
   toJson
     | .boundary i c => Json.mkObj [
       ("type", Json.str "Boundary"),
