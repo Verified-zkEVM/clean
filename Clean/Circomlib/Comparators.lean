@@ -48,7 +48,7 @@ def circuit : FormalCircuit (F p) field field where
     simp only [id_eq, h_holds]
     split_ifs with h_ifs
     . simp only [h_ifs, zero_mul, neg_zero, zero_add]
-    . rw [@neg_add_eq_zero]
+    . rw [neg_add_eq_zero]
       have h1 := h_holds.left
       have h2 := h_holds.right
       rw [h1] at h2
@@ -56,7 +56,7 @@ def circuit : FormalCircuit (F p) field field where
       cases h2
       case neg.inl hl => contradiction
       case neg.inr hr =>
-        rw [@neg_add_eq_zero] at hr
+        rw [neg_add_eq_zero] at hr
         exact hr
 
   completeness := by
@@ -69,8 +69,8 @@ def circuit : FormalCircuit (F p) field field where
       case pos h_pos => left ; exact input
       case neg h_neg =>
         right
-        rw [@neg_add_eq_zero]
-        rw [propext (mul_inv_eq_one₀ input)]
+        rw [neg_add_eq_zero]
+        rw [mul_inv_eq_one₀ input]
 
 end IsZero
 
