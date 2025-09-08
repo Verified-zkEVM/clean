@@ -85,18 +85,14 @@ def emptyChecked (F : Type) : CheckedYields (emptyPropertySet F) := ∅
 
 /- TODO:
 
- * Add yielded element to Environment
-   * Important for completeness
- * (current) Add CheckedYields argument to Spec's used during the soundness proof
+ * (done) Add yielded argument next to Environment
+ * (done) Add CheckedYields argument to Spec's used during the soundness proof
    + In Soundness, Spec needs to take sentances and checked
-   + UseLocalWitnesses for a subcircuit: Assumption implies Spec, that's fine.
-     - this works because Assumption and Spec talks about the yielded element
-     - Use of the soundnes will involve `Set.univ` as the checked set
+ * Add `yield` operation
+   + `yield` is similar to `witness` (for completeness, `yield` makes sure that the yielded tuple is in `YieldContext`.)
+ * Change Soundness statement so that `yield` validity becomes a goal according to the above rule
  * Add `use` operation
    + `use` is similar to `lookup`
-   + `use` guarantees properties if it's in the current `CheckedYield`
- * Add `yield` operation
-   + `yield` is similar to `witness`
- * Change Soundness statement so that `yield` validity becomes a goal according to the above rule
+   + `use` constraint guarantees properties if it's in the current `CheckedYield`
 
 -/
