@@ -35,3 +35,40 @@ Make sure to install the `lean4` extension for VSCode!
 ## Code Style
 
 We follow standard Lean/Mathlib conventions with some local variations. See [doc/conventions.md](doc/conventions.md) for details.
+
+## Roadmap
+
+The following is a rough, longer-term roadmap for clean. Note that some of the bullets below could be multi-month projects!
+
+Reach out [on TG](https://t.me/clean_zk) if you are looking for long-term contribution opportunities and you are interested in any of these!
+
+- More general lookups + VM-like table ensembles
+  - currently worked on by [zkSecurity](https://zksecurity.xyz/) https://github.com/Verified-zkEVM/clean/issues/252
+  - subproject: support in plonky3 backend
+- Polish plonky3 backend, generate constraint evaluation Rust code
+  - currently worked on by [zkSecurity](https://zksecurity.xyz/) https://github.com/Verified-zkEVM/clean/pull/192
+- clean documentation
+  - will be worked on by [zkSecurity](https://zksecurity.xyz/)
+- Witness generation: compile (subset of) Lean to IR, to generate fast WG code in backends
+- Create clean circuits from LLZK
+  - this gives us frontends like Circom
+  - subproject: demonstrate actual e2e extraction from Circom
+- Verifier challenges https://github.com/Verified-zkEVM/clean/issues/162
+  - prove lookup protocols end to end
+  - should be optional, should be able to abstract
+- Explore if we can compose with ArkLib to get e2e verification
+- More backends
+  - stwo?
+  - some R1CS
+- Support PLONK circuits with custom gates
+- Good AGENTS.md / CLAUDE.md
+- AIR table foundation, more low-level, no monad
+  - different entry points for different kinds of tables
+- Support Binius
+- Proof automation:
+  - `circuit_proof_start` should handle vectors and general ProvableTypes
+  - `circuit_proof_start` could detect subcircuits to unfold (in the right places)
+  - better automation for `localLength_eq`, `subcircuitsConsistent` etc
+- Advanced: Mixed proof systems like Longfellow-ZK
+- MORE GADGETS
+- MORE INTEGRATIONS
