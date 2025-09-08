@@ -148,6 +148,7 @@ def ConstraintsHold {sentences : PropertySet F} (eval : Environment F) (yields :
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval yields checked ops
   | .lookup { table, entry, .. } :: ops =>
     table.Contains (entry.map eval) ∧ ConstraintsHold eval yields checked ops
+  | .yield _ :: ops => ConstraintsHold eval yields checked ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval yields checked s.ops ∧ ConstraintsHold eval yields checked ops
 
@@ -161,6 +162,7 @@ def ConstraintsHold.Soundness {sentences : PropertySet F} (eval : Environment F)
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval yields checked ops
   | .lookup { table, entry } :: ops =>
     table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval yields checked ops
+  | .yield _ :: ops => ConstraintsHold.Soundness eval yields checked ops
   | .subcircuit s :: ops =>
     s.Soundness eval yields checked ∧ ConstraintsHold.Soundness eval yields checked ops
 
@@ -174,6 +176,7 @@ def ConstraintsHold.Completeness {sentences : PropertySet F} (eval : Environment
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval yields ops
   | .lookup { table, entry } :: ops =>
     table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval yields ops
+  | .yield _ :: ops => ConstraintsHold.Completeness eval yields ops
   | .subcircuit s :: ops =>
     s.Completeness eval yields ∧ ConstraintsHold.Completeness eval yields ops
 end Circuit
@@ -197,6 +200,7 @@ def Environment.UsesLocalWitnessesCompleteness {sentences : PropertySet F} (env 
   | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness yields (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness yields offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness yields offset ops
+  | .yield s :: ops => s.eval env ∈ yields.yielded ∧ env.UsesLocalWitnessesCompleteness yields offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnessesAndYields env yields ∧ env.UsesLocalWitnessesCompleteness yields (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
@@ -442,6 +446,7 @@ def FlatOperation.dynamicWitness {sentences : PropertySet F} (op : FlatOperation
   | .witness _ compute => (compute (Environment.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .yield _ => []
 
 def FlatOperation.dynamicWitnesses {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation sentences) =>
@@ -482,12 +487,14 @@ def FlatOperation.witnessGenerators {sentences : PropertySet F} : (l : List (Fla
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators {sentences : PropertySet F} : (ops : Operations sentences) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
 
 -- statements about constant length or output

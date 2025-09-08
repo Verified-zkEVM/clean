@@ -103,6 +103,15 @@ instance [Field F] : Inhabited F where
 instance [Field F] : Inhabited (Expression F) where
   default := .const 0
 
+namespace Sentence
+variable [Field F]
+
+/-- Evaluate a sentence with Expression entries to get a sentence with concrete F values -/
+def eval {s : PropertySet F} (env : Environment F) (sentence : Sentence s (Expression F)) : Sentence s F :=
+  { sentence with entry := sentence.entry.map (Expression.eval env) }
+
+end Sentence
+
 /-! ## Lemmas about Expression evaluation -/
 
 section EvalLemmas
