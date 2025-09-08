@@ -75,7 +75,7 @@ theorem completeness {sentences : PropertySet (F p)} (off : Fin 4) : Completenes
     intro Assumptions
     simp [elaborated, main, circuit_norm]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 4) : FormalCircuit (F p) sentences order U32 U32 := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 4) : FormalCircuit order U32 U32 := {
   elaborated := elaborated off
   Assumptions
   Spec := Spec (offset := off)

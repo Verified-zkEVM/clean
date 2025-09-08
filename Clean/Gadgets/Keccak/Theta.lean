@@ -35,7 +35,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakState :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
  { elaborated := elaborated order
    Assumptions
    Spec

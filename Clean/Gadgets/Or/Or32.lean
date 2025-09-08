@@ -74,7 +74,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp only [Assumptions, U32.Normalized] at h_assumptions
   omega
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs U32 :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U32 :=
   { elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order }
 
 end Gadgets.Or32

@@ -61,7 +61,7 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit (F p) sentences order (Inputs n) (fields n) where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit order (Inputs n) (fields n) where
   main := main order n
 
   localLength _ := n
@@ -169,7 +169,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   let mux_out ← MultiMux1.circuit order 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field where
   main := main order
 
   localLength _ := 1

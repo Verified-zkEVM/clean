@@ -43,7 +43,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 
 set_option linter.constructorNameAsVariable false
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order field (fields 254) where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order field (fields 254) where
   main := main order
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
   localLength_eq _ _ := by simp +arith [circuit_norm, main,
@@ -123,7 +123,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   -- Convert bits to number
   Bits2Num.main order 254 input
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order (fields 254) field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order (fields 254) field where
   main := main order
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq _ _ := by simp +arith [circuit_norm, main,
@@ -187,7 +187,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : 
 
   return out
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) sentences order field (fields n) where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : FormalCircuit order field (fields n) where
   main := main order n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]

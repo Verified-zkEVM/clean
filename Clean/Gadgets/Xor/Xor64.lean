@@ -123,7 +123,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
   have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs U64 where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U64 where
   elaborated := elaborated order
   Assumptions := Assumptions
   Spec := Spec

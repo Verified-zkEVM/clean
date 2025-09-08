@@ -30,7 +30,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   let comp_out ← CompConstant.circuit order (p - 1) input
   comp_out ===[order] 0
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order (fields 254) where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order (fields 254) where
   main := main order
   localLength _ := 127 + 1 + 135 + 1
 

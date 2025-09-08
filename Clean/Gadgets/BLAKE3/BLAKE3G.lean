@@ -127,7 +127,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const, and_true]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : FormalCircuit (F p) sentences order Inputs BLAKE3State := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order a b c d
   Assumptions
   Spec := Spec (a:=a) (b:=b) (c:=c) (d:=d)

@@ -34,7 +34,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   input * out ===[order] 0
   return out
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order field field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order field field where
   main := main order
   localLength _ := 2
 
@@ -69,7 +69,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   let out ← IsZero.circuit order diff
   return out
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order fieldPair field where
   main := main order
   localLength _ := 2
 
@@ -113,7 +113,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   let isz ← IsZero.circuit order (inp.2 - inp.1)
   enabled * (1 - isz) ===[order] 0
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order Inputs where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order Inputs where
   main := main order
   localLength _ := 2
 
@@ -153,7 +153,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : 
   let out <==[order] 1 - bits[n]
   return out
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit order fieldPair field where
   main := main order n hn
   localLength _ := n + 2
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
@@ -187,7 +187,7 @@ template LessEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit order fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit order n hn (x, y + 1)
 
@@ -231,7 +231,7 @@ template GreaterThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit order fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit order n hn (y, x)
 
@@ -262,7 +262,7 @@ template GreaterEqThan(n) {
     lt.out ==> out;
 }
 -/
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) sentences order fieldPair field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit order fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit order n hn (y, x + 1)
 

@@ -94,7 +94,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (ct :
   let out <==[order] bits[127]
   return out
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c : ℕ) : FormalCircuit (F p) sentences order (fields 254) field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c : ℕ) : FormalCircuit order (fields 254) field where
   main := main order c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]

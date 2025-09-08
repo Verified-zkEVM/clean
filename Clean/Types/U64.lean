@@ -198,7 +198,7 @@ def main {sentences : PropertySet (F p)} (_order : SentenceOrder sentences) (inp
   lookup ByteTable x6
   lookup ByteTable x7
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order U64 where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order U64 where
   main := main order
 
   Assumptions _ := True

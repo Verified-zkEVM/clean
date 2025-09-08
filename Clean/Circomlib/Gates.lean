@@ -40,7 +40,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   return out
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order fieldPair field where
+    : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -84,7 +84,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   return out
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order fieldPair field where
+    : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -126,7 +126,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   return out
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order fieldPair field where
+    : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -168,7 +168,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   return out
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order field field where
+    : FormalCircuit order field field where
   main := fun input => main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
@@ -212,7 +212,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   return out
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order fieldPair field where
+    : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, NAND.main]
@@ -256,7 +256,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   return out
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order fieldPair field where
+    : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, NOR.main]
@@ -1043,7 +1043,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (o
               convert main_output_binary_from_completeness order n2 (offset + (main order input_var1).localLength offset) env yields input_var2 input2 h_eval2 h_assumptions2 h_rest.1 h_comp2 using 1
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    (n : ℕ) : FormalCircuit (F p) sentences order (fields n) field where
+    (n : ℕ) : FormalCircuit order (fields n) field where
   main := main order
   localLength _ := n - 1
   localLength_eq := localLength_eq order n

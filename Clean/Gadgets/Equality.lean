@@ -49,7 +49,7 @@ instance elaborated {sentences : PropertySet F} (α : TypeMap) [ProvableType α]
 
 @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit {sentences : PropertySet F} (order : SentenceOrder sentences)
-    (α : TypeMap) [ProvableType α] : FormalAssertion F sentences order (ProvablePair α α) where
+    (α : TypeMap) [ProvableType α] : FormalAssertion order (ProvablePair α α) where
   Assumptions _ := True
 
   Spec : CheckedYields sentences → α F × α F → Prop

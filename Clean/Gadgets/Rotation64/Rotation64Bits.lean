@@ -117,7 +117,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   rw [Assumptions, U64.ByteVector.normalized_iff] at x_normalized
   simp_all only [size, U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit (F p) sentences order U64 U64 := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit order U64 U64 := {
   elaborated := elaborated order offset
   Assumptions
   Spec := Spec (offset := offset)

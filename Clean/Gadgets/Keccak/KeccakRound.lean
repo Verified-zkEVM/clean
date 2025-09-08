@@ -99,7 +99,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : FormalCircuit (F p) sentences order KeccakState KeccakState := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : FormalCircuit order KeccakState KeccakState := {
   elaborated := elaborated order rc
   Spec := Spec (rc := rc)
   Assumptions

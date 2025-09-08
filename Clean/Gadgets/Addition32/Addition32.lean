@@ -49,7 +49,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
     Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs U32 where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U32 where
   elaborated := elaborated order
   Assumptions
   Spec

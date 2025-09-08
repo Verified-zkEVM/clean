@@ -135,7 +135,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
   simp_all only [gt_iff_lt, forall_const, and_self]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs BLAKE3State := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
   Spec

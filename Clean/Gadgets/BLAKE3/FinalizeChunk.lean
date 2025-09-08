@@ -414,7 +414,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     aesop
   omega
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs (ProvableVector U32 8) := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs (ProvableVector U32 8) := {
   elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order
 }
 

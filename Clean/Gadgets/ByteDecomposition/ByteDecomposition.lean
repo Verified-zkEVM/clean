@@ -123,7 +123,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit (F p) sentences order field Outputs where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit order field Outputs where
   elaborated := elaborated order offset
   Assumptions := Assumptions
   Spec := Spec offset

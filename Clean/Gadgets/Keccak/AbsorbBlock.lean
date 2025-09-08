@@ -115,7 +115,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Input KeccakState :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Input KeccakState :=
   { elaborated := elaborated order
     Assumptions
     Spec

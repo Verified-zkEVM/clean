@@ -67,7 +67,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp_all [elaborated, main, circuit_norm,
     Rotation64.circuit, Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakState :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
   { elaborated := elaborated order
     Assumptions
     Spec

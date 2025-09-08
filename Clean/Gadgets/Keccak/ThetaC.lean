@@ -65,7 +65,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakRow :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakRow :=
  { elaborated := elaborated order
    Assumptions
    Spec

@@ -124,7 +124,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
   simp only [h_assumptions, getElem_eval_vector, and_self]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs BLAKE3State := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
   Spec

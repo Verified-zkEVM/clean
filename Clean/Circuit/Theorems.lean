@@ -589,8 +589,8 @@ end FlatOperation
 `FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
-def FormalCircuit.isGeneralFormalCircuit (F : Type) {sentences : PropertySet F} (order : SentenceOrder sentences) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
-    (orig : FormalCircuit F sentences order Input Output): GeneralFormalCircuit F sentences order Input Output := by
+def FormalCircuit.isGeneralFormalCircuit {F : Type} {sentences : PropertySet F} (order : SentenceOrder sentences) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
+    (orig : FormalCircuit order Input Output): GeneralFormalCircuit order Input Output := by
   let Spec (checked : CheckedYields sentences) input output := orig.Assumptions input → orig.Spec checked input output
   exact {
     elaborated := orig.elaborated,
@@ -612,8 +612,8 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) {sentences : PropertySet F} 
 `FormalAssertion`.  The idea is to make `FormalAssertion.Spec` available in the completeness
 by putting it within `GeneralFormalCircuit.Assumption`.
 -/
-def FormalAssertion.isGeneralFormalCircuit (F : Type) {sentences : PropertySet F} (order : SentenceOrder sentences) (Input : TypeMap) [Field F] [ProvableType Input]
-    (orig : FormalAssertion F sentences order Input) : GeneralFormalCircuit F sentences order Input unit := by
+def FormalAssertion.isGeneralFormalCircuit {F : Type} {sentences : PropertySet F} (order : SentenceOrder sentences) (Input : TypeMap) [Field F] [ProvableType Input]
+    (orig : FormalAssertion order Input) : GeneralFormalCircuit order Input unit := by
   let Spec (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec checked input
   exact {
     elaborated := orig.elaborated,

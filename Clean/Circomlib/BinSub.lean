@@ -100,7 +100,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : 
 
 -- n: number of bits per operand
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) :
-    FormalCircuit (F p) sentences order (BinSubInput n) (fields n) where
+    FormalCircuit order (BinSubInput n) (fields n) where
   main input := main order n input
 
   localLength _ := n

@@ -69,7 +69,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp_all [state_norm, h_input, main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakState :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
   { elaborated := elaborated order
     Assumptions
     Spec

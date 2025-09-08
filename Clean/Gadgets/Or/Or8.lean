@@ -183,7 +183,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   · omega
   · omega
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs field :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field :=
   { elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order }
 
 end Gadgets.Or.Or8

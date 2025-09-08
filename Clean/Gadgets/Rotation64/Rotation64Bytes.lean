@@ -87,7 +87,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
   rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [elaborated, main, circuit_norm]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8) : FormalCircuit (F p) sentences order U64 U64 where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8) : FormalCircuit order U64 U64 where
   elaborated := elaborated order off
   Assumptions := Assumptions
   Spec := Spec (offset := off)

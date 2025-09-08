@@ -158,13 +158,13 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} : ExplicitCircuit
   localLength _ _ := 0
   operations entry n := [.lookup { table := table.toRaw, entry := toElements entry }]
 
-instance {β α: TypeMap} [ProvableType α] [ProvableType β] {sentences : PropertySet F} {order : SentenceOrder sentences} {circuit : FormalCircuit F sentences order β α} {input} :
+instance {β α: TypeMap} [ProvableType α] [ProvableType β] {sentences : PropertySet F} {order : SentenceOrder sentences} {circuit : FormalCircuit order β α} {input} :
     ExplicitCircuit (subcircuit circuit input) where
   output n := circuit.output input n
   localLength _ := circuit.localLength input
   operations n := [.subcircuit (circuit.toSubcircuit n input)]
 
-instance {β : TypeMap} [ProvableType β] {sentences : PropertySet F} {order : SentenceOrder sentences} {circuit : FormalAssertion F sentences order β} {input} :
+instance {β : TypeMap} [ProvableType β] {sentences : PropertySet F} {order : SentenceOrder sentences} {circuit : FormalAssertion order β} {input} :
     ExplicitCircuit (assertion circuit input) where
   output n := ()
   localLength _ := circuit.localLength input

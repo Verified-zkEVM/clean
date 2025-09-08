@@ -64,7 +64,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs KeccakState :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs KeccakState :=
   { elaborated := elaborated order
     Assumptions
     Spec

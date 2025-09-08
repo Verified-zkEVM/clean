@@ -27,7 +27,7 @@ The spec follows the pattern from the applyRounds function:
 - Apply round to get new state
 - Permute the message
 -/
-def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs where
+def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs where
   main := fun input => do
     let state ← subcircuit (Round.circuit order) input
     let permuted_message ← subcircuit (Permute.circuit order) input.message
@@ -105,7 +105,7 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
 Combines two roundWithPermute operations using the concat combinator.
 This performs two rounds with message permutation between them.
 -/
-def twoRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs :=
+def twoRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs :=
   (roundWithPermute order).concat (roundWithPermute order) (by
     -- Prove compatibility: for all inputs, if circuit1 assumptions and spec hold,
     -- then circuit2 assumptions hold
@@ -141,7 +141,7 @@ def TwoRoundsSpec {sentences : PropertySet (F p)} (_checked : CheckedYields sent
 /--
 Two rounds with permute, but with a spec matching the applyRounds pattern.
 -/
-def twoRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs :=
+def twoRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs :=
   (twoRoundsWithPermute order).weakenSpec TwoRoundsSpec (by
     -- Prove that twoRoundsWithPermute's spec implies our TwoRoundsSpec
     intro _checked input output h_assumptions h_spec
@@ -159,7 +159,7 @@ def twoRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder s
 Combines four rounds with permutation using two twoRoundsWithPermute operations.
 This performs four rounds with message permutation between them.
 -/
-def fourRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs :=
+def fourRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs :=
   (twoRoundsWithPermute order).concat (twoRoundsWithPermute order) (by
     -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
     -- then second twoRoundsWithPermute assumptions hold
@@ -205,7 +205,7 @@ def FourRoundsSpec {sentences : PropertySet (F p)} (_checked : CheckedYields sen
 /--
 Four rounds with permute, but with a spec matching the applyRounds pattern.
 -/
-def fourRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs :=
+def fourRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs :=
   (fourRoundsWithPermute order).weakenSpec FourRoundsSpec (by
     -- Prove that fourRoundsWithPermute's spec implies our FourRoundsSpec
     intro checked input output h_assumptions h_spec
@@ -228,7 +228,7 @@ def fourRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder 
 Combines six rounds with permutation using fourRoundsWithPermute and twoRoundsWithPermute.
 This performs six rounds with message permutation between them.
 -/
-def sixRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs :=
+def sixRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs :=
   (fourRoundsWithPermute order).concat (twoRoundsWithPermute order) (by
     -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
     -- then twoRoundsWithPermute assumptions hold
@@ -277,7 +277,7 @@ def SixRoundsSpec {sentences : PropertySet (F p)} (_checked : CheckedYields sent
 /--
 Six rounds with permute, but with a spec matching the applyRounds pattern.
 -/
-def sixRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs Round.Inputs :=
+def sixRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs Round.Inputs :=
   (sixRoundsWithPermute order).weakenSpec SixRoundsSpec (by
     -- Prove that sixRoundsWithPermute's spec implies our SixRoundsSpec
     intro _checked input output h_assumptions h_spec
@@ -299,7 +299,7 @@ def sixRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder s
 Seven rounds with permutation: combines sixRoundsApplyStyle with a final round.
 This represents the complete 7-round BLAKE3 compression function.
 -/
-def sevenRoundsFinal {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs BLAKE3State :=
+def sevenRoundsFinal {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs BLAKE3State :=
   (sixRoundsApplyStyle order).concat (Round.circuit order) (by
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
     intro _checked input mid h_assumptions h_spec
@@ -341,7 +341,7 @@ def SevenRoundsSpec {sentences : PropertySet (F p)} (_checked : CheckedYields se
 /--
 Seven rounds with spec matching the applyRounds pattern.
 -/
-def sevenRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Round.Inputs BLAKE3State :=
+def sevenRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Round.Inputs BLAKE3State :=
   (sevenRoundsFinal order).weakenSpec SevenRoundsSpec (by
     -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
     rintro _checked input output h_assumptions ⟨mid, h_spec1, h_spec2⟩
@@ -570,7 +570,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs BLAKE3State := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
   Spec

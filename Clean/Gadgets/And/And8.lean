@@ -138,7 +138,7 @@ theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) senten
   rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs field :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field :=
   { elaborated with
       Assumptions,
       Spec,

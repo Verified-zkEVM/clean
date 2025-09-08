@@ -111,7 +111,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order KeccakState KeccakState := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState := {
   elaborated := elaborated order
   Assumptions
   Spec

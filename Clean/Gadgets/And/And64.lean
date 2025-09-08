@@ -86,7 +86,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs U64 where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U64 where
   elaborated := elaborated order
   Assumptions := Assumptions
   Spec := Spec

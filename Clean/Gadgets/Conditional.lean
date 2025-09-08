@@ -82,7 +82,7 @@ theorem completeness [DecidableEq F] {sentences : PropertySet F} : Completeness 
 /--
 Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 -/
-def circuit [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder sentences) : FormalCircuit F sentences order (Inputs M) M where
+def circuit [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder sentences) : FormalCircuit order (Inputs M) M where
   elaborated := elaborated
   Assumptions
   Spec

@@ -64,7 +64,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : GeneralFormalCircuit (F p) sentences order field (fields n) where
+def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : GeneralFormalCircuit order field (fields n) where
   main := main order n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
@@ -110,7 +110,7 @@ def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceO
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) sentences order field (fields n) where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit order field (fields n) where
   main input := arbitraryBitLengthCircuit order n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -178,7 +178,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit (F p) sentences order (fields n) field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit order (fields n) field where
   main := main order n
   localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]

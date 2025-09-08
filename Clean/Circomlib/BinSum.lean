@@ -156,7 +156,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n op
 -- n: number of bits per operand
 -- ops: number of operands to sum
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) < p) :
-    FormalCircuit (F p) sentences order (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
+    FormalCircuit order (BinSumInput n ops) (fields (nbits ((2^n - 1) * ops))) where
   main input := main order n ops input
 
   localLength _ := nbits ((2^n - 1) * ops)

@@ -41,7 +41,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
   intro _
   trivial
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order BLAKE3State BLAKE3State :=
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order BLAKE3State BLAKE3State :=
   { elaborated order with
     Assumptions
     Spec

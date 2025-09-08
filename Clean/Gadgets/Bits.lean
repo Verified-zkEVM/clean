@@ -22,7 +22,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
 def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) sentences order field (fields n) where
+    (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit order field (fields n) where
   main := main (sentences:=sentences) order n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
@@ -73,7 +73,7 @@ def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
 def rangeCheck {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) sentences order field where
+    (n : ℕ) (hn : 2^n < p) : FormalAssertion order field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits (sentences:=sentences) order n hn x

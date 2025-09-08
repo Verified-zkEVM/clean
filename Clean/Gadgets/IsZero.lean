@@ -123,7 +123,7 @@ theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentence
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
 def circuit [DecidableEq (M F)] {sentences : PropertySet F} (order : SentenceOrder sentences) :
-    FormalCircuit F sentences order M field := {
+    FormalCircuit order M field := {
   (elaborated (sentences:=sentences) (M := M) order) with
   Assumptions, Spec := (fun _ input output => Spec input output),
   soundness := by

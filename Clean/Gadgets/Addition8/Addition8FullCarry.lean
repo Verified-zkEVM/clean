@@ -58,7 +58,7 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Returns the sum and the output carry bit.
 -/
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order Inputs Outputs where
+    : FormalCircuit order Inputs Outputs where
   main := main order
   Assumptions := Assumptions
   Spec _ := Spec

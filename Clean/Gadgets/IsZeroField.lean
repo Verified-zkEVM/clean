@@ -52,7 +52,7 @@ theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentence
   aesop
 
 def circuit {sentences : PropertySet F} (order : SentenceOrder sentences) :
-    FormalCircuit F sentences order field field :=
+    FormalCircuit order field field :=
   { (elaborated (sentences:=sentences) order) with
     Assumptions
     Spec := Spec (sentences:=sentences)

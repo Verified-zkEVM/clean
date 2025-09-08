@@ -18,7 +18,7 @@ open Circuit (ConstraintsHold)
   Justification for using a modified statement for `ConstraintsHold`
   in the `FormalCircuit` definition.
 -/
-theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) :
+theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α) :
     ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
     ConstraintsHold env yields checked (circuit.main b_var |>.operations offset) →
@@ -34,7 +34,7 @@ theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : Se
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
-theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) :
+theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α) :
     ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses yields offset (circuit.main b_var |>.operations offset) →
@@ -50,7 +50,7 @@ theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order :
   Justification for using a modified statement for `ConstraintsHold`
   in the `FormalAssertion` definition.
 -/
-theorem FormalAssertion.original_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion F sentences order β) :
+theorem FormalAssertion.original_soundness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion order β) :
     ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
     ConstraintsHold env yields checked (circuit.main b_var |>.operations offset) →
@@ -65,7 +65,7 @@ theorem FormalAssertion.original_soundness {sentences : PropertySet F} {order : 
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalAssertion` definition.
 -/
-theorem FormalAssertion.original_completeness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion F sentences order β) :
+theorem FormalAssertion.original_completeness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion order β) :
     ∀ (offset : ℕ) env (yields : YieldContext sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses yields offset (circuit.main b_var |>.operations offset) →

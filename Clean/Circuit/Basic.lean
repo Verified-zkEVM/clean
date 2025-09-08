@@ -284,7 +284,7 @@ Note that soundness and completeness, taken together, show that the spec will ho
 This means that, when viewed as a black box, the circuit acts similar to a function. The assumptions act as
 preconditions, and the spec acts as the postcondition.
 -/
-structure FormalCircuit (F : Type) [Field F] (sentences : PropertySet F) (order : SentenceOrder sentences)
+structure FormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
     (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F sentences Input Output where
   Assumptions (_ : Input F) : Prop := True
@@ -298,9 +298,9 @@ This ensures that for any input satisfying the assumptions, the specification un
 Use this class when you want to formally guarantee that constraints uniquely determine the output,
 preventing ambiguity in deterministic circuits.
 -/
-structure DeterministicFormalCircuit (F : Type) [Field F] (sentences : PropertySet F) (order : SentenceOrder sentences)
+structure DeterministicFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
     (checked : CheckedYields sentences) (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
-    extends circuit : FormalCircuit F sentences order Input Output where
+    extends circuit : FormalCircuit order Input Output where
   uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
     circuit.Assumptions input → circuit.Spec checked input out1 → circuit.Spec checked input out2 → out1 = out2
 
@@ -345,8 +345,8 @@ of the constraints.
 (In the case of `FormalCircuit`, given assumptions, the constraints are always satisfiable and the spec can be
 strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F : Type) (sentences : PropertySet F) (order : SentenceOrder sentences)
-    (Input : TypeMap) [Field F] [ProvableType Input]
+structure FormalAssertion {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (Input : TypeMap) [ProvableType Input]
     extends elaborated : ElaboratedCircuit F sentences Input unit where
   Assumptions : Input F → Prop
   Spec : CheckedYields sentences → Input F → Prop
@@ -399,8 +399,8 @@ this assumption is not needed as the circuit adds that constraint itself. Using 
 add the range assumption to the soundness statement, thus making the circuit hard to use
 (in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
 -/
-structure GeneralFormalCircuit (F : Type) (sentences : PropertySet F) (order : SentenceOrder sentences)
-    (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
+structure GeneralFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F sentences Input Output where
   Assumptions : Input F → Prop -- the statement to be assumed for completeness
   Spec : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)

@@ -36,7 +36,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   -- Use (p-1)/2 as the constant for comparison
   CompConstant.circuit order ((p - 1) / 2) input
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order (fields 254) field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order (fields 254) field where
   main := main order
   localLength input := (CompConstant.circuit order ((p - 1) / 2)).localLength input
 

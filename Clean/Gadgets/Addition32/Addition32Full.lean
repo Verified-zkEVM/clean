@@ -151,7 +151,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order Inputs Outputs where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs Outputs where
   elaborated := elaborated order
   Assumptions := Assumptions
   Spec := Spec

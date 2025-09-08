@@ -63,7 +63,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     compress, ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit (F p) sentences order ApplyRounds.Inputs BLAKE3State := {
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order ApplyRounds.Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
   Spec

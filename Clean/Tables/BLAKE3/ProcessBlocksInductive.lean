@@ -76,7 +76,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (x : 
   U32.AssertNormalized.circuit order x.chunk_counter
   U32.AssertNormalized.circuit order x.blocks_compressed
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order ProcessBlocksState where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order ProcessBlocksState where
   main := main order
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
@@ -143,7 +143,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (x : 
   assertBool order x.block_exists
   Circuit.forEach x.block_data (U32.AssertNormalized.circuit order)
 
-def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order BlockInput where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order BlockInput where
   main := main order
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]

@@ -70,7 +70,7 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 -- circuits
 
-def KeccakBlock.normalized {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order KeccakBlock where
+def KeccakBlock.normalized {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order KeccakBlock where
   main block := .forEach block (assertion (U64.AssertNormalized.circuit order))
   Assumptions _ := True
   Spec _ block := block.Normalized

@@ -58,7 +58,7 @@ theorem Circuit.constraintsHold_toFlat_iff : ∀ {sentences : PropertySet F} {op
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
-def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α)
+def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit sentences n :=
   let ops := circuit.main input_var |>.operations n
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
@@ -126,7 +126,7 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
 /--
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
-def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion F sentences order β)
+def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion order β)
     (n : ℕ) (input_var : Var β F) : Subcircuit sentences n :=
   let ops := circuit.main input_var |>.operations n
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
@@ -183,7 +183,7 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/
-def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : GeneralFormalCircuit F sentences order β α)
+def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : GeneralFormalCircuit order β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit sentences n :=
   let ops := circuit.main input_var |>.operations n
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
@@ -229,7 +229,7 @@ end
 
 /-- Include a subcircuit. -/
 @[circuit_norm]
-def subcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) (b : Var β F) : Circuit sentences (Var α F) :=
+def subcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α) (b : Var β F) : Circuit sentences (Var α F) :=
   fun offset =>
     let a := circuit.output b offset
     let subcircuit := circuit.toSubcircuit offset b
@@ -237,14 +237,14 @@ def subcircuit {sentences : PropertySet F} {order : SentenceOrder sentences} (ci
 
 /-- Include an assertion subcircuit. -/
 @[circuit_norm]
-def assertion {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion F sentences order β) (b : Var β F) : Circuit sentences Unit :=
+def assertion {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion order β) (b : Var β F) : Circuit sentences Unit :=
   fun offset =>
     let subcircuit := circuit.toSubcircuit offset b
     ((), [.subcircuit subcircuit])
 
 /-- Include a general subcircuit. -/
 @[circuit_norm]
-def subcircuitWithAssertion {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : GeneralFormalCircuit F sentences order β α) (b : Var β F) : Circuit sentences (Var α F) :=
+def subcircuitWithAssertion {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : GeneralFormalCircuit order β α) (b : Var β F) : Circuit sentences (Var α F) :=
   fun offset =>
     let a := circuit.output b offset
     let subcircuit := circuit.toSubcircuit offset b
@@ -252,26 +252,26 @@ def subcircuitWithAssertion {sentences : PropertySet F} {order : SentenceOrder s
 
 -- we'd like to use subcircuits like functions
 
-instance {sentences : PropertySet F} {order : SentenceOrder sentences} : CoeFun (FormalCircuit F sentences order β α) (fun _ => Var β F → Circuit sentences (Var α F)) where
+instance {sentences : PropertySet F} {order : SentenceOrder sentences} : CoeFun (FormalCircuit order β α) (fun _ => Var β F → Circuit sentences (Var α F)) where
   coe circuit input := subcircuit circuit input
 
-instance {sentences : PropertySet F} {order : SentenceOrder sentences} : CoeFun (FormalAssertion F sentences order β) (fun _ => Var β F → Circuit sentences Unit) where
+instance {sentences : PropertySet F} {order : SentenceOrder sentences} : CoeFun (FormalAssertion order β) (fun _ => Var β F → Circuit sentences Unit) where
   coe circuit input := assertion circuit input
 
-instance {sentences : PropertySet F} {order : SentenceOrder sentences} : CoeFun (GeneralFormalCircuit F sentences order β α) (fun _ => Var β F → Circuit sentences (Var α F)) where
+instance {sentences : PropertySet F} {order : SentenceOrder sentences} : CoeFun (GeneralFormalCircuit order β α) (fun _ => Var β F → Circuit sentences (Var α F)) where
   coe circuit input := subcircuitWithAssertion circuit input
 
 namespace Circuit
 variable {α β: TypeMap} [ProvableType α] [ProvableType β]
 
 /-- The local length of a subcircuit is derived from the original formal circuit -/
-lemma subcircuit_localLength_eq {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) (input : Var β F) (offset : ℕ) :
+lemma subcircuit_localLength_eq {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α) (input : Var β F) (offset : ℕ) :
   (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 
-lemma assertion_localLength_eq {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion F sentences order β) (input : Var β F) (offset : ℕ) :
+lemma assertion_localLength_eq {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalAssertion order β) (input : Var β F) (offset : ℕ) :
   (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 
-lemma subcircuitWithAssertion_localLength_eq {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : GeneralFormalCircuit F sentences order β α) (input : Var β F) (offset : ℕ) :
+lemma subcircuitWithAssertion_localLength_eq {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : GeneralFormalCircuit order β α) (input : Var β F) (offset : ℕ) :
   (circuit.toSubcircuit offset input).localLength = circuit.localLength input := rfl
 end Circuit
 
@@ -337,7 +337,7 @@ theorem compose_computableWitnesses {sentences : PropertySet F} (circuit : Elabo
   exact h_input
 end ElaboratedCircuit
 
-theorem Circuit.subcircuit_computableWitnesses {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit F sentences order β α) (input : Var β F) (n : ℕ) :
+theorem Circuit.subcircuit_computableWitnesses {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α) (input : Var β F) (n : ℕ) :
   Environment.OnlyAccessedBelow n (eval · input) ∧ circuit.ComputableWitnesses →
     (subcircuit circuit input).ComputableWitnesses n := by
   intro h env env'
@@ -358,7 +358,7 @@ Simplifies UsesLocalWitnesses for FormalCircuit.toSubcircuit to avoid unfolding 
 theorem FormalCircuit.toSubcircuit_usesLocalWitnessesAndYields
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
+    (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields =
     (circuit.Assumptions (eval env input_var) → circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
@@ -370,7 +370,7 @@ Simplifies UsesLocalWitnesses for GeneralFormalCircuit.toSubcircuit to avoid unf
 theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnessesAndYields
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : GeneralFormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
+    (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields =
     (circuit.Assumptions (eval env input_var) → circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
@@ -382,7 +382,7 @@ Simplifies UsesLocalWitnesses for FormalAssertion.toSubcircuit to avoid unfoldin
 theorem FormalAssertion.toSubcircuit_usesLocalWitnessesAndYields
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalAssertion F sentences order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
+    (circuit : FormalAssertion order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields = True := by
   rfl
 
@@ -395,7 +395,7 @@ Simplifies localLength for FormalCircuit.toSubcircuit to avoid unfolding the ent
 theorem FormalCircuit.toSubcircuit_localLength
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) :
+    (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) :
     (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
   rfl
 
@@ -406,7 +406,7 @@ Simplifies localLength for GeneralFormalCircuit.toSubcircuit to avoid unfolding 
 theorem GeneralFormalCircuit.toSubcircuit_localLength
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : GeneralFormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) :
+    (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) :
     (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
   rfl
 
@@ -417,7 +417,7 @@ Simplifies localLength for FormalAssertion.toSubcircuit to avoid unfolding the e
 theorem FormalAssertion.toSubcircuit_localLength
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalAssertion F sentences order Input) (n : ℕ) (input_var : Var Input F) :
+    (circuit : FormalAssertion order Input) (n : ℕ) (input_var : Var Input F) :
     (circuit.toSubcircuit n input_var).localLength = circuit.localLength input_var := by
   rfl
 
@@ -430,7 +430,7 @@ Simplifies Soundness for FormalCircuit.toSubcircuit to avoid unfolding the entir
 theorem FormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
+    (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
     (circuit.toSubcircuit n input_var).Soundness env yields checked =
     (circuit.Assumptions (eval env input_var) → circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
@@ -442,7 +442,7 @@ Simplifies Soundness for GeneralFormalCircuit.toSubcircuit to avoid unfolding th
 theorem GeneralFormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : GeneralFormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
+    (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
     (circuit.toSubcircuit n input_var).Soundness env yields checked =
     circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)) := by
   rfl
@@ -454,7 +454,7 @@ Simplifies Soundness for FormalAssertion.toSubcircuit to avoid unfolding the ent
 theorem FormalAssertion.toSubcircuit_soundness
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalAssertion F sentences order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
+    (circuit : FormalAssertion order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
     (circuit.toSubcircuit n input_var).Soundness env yields checked =
     (circuit.Assumptions (eval env input_var) → circuit.Spec checked (eval env input_var)) := by
   rfl
@@ -468,7 +468,7 @@ Simplifies Completeness for FormalCircuit.toSubcircuit to avoid unfolding the en
 theorem FormalCircuit.toSubcircuit_completeness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
+    (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).Completeness env yields =
     circuit.Assumptions (eval env input_var) := by
   rfl
@@ -480,7 +480,7 @@ Simplifies Completeness for GeneralFormalCircuit.toSubcircuit to avoid unfolding
 theorem GeneralFormalCircuit.toSubcircuit_completeness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : GeneralFormalCircuit F sentences order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
+    (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).Completeness env yields =
     circuit.Assumptions (eval env input_var) := by
   rfl
@@ -492,7 +492,7 @@ Simplifies Completeness for FormalAssertion.toSubcircuit to avoid unfolding the 
 theorem FormalAssertion.toSubcircuit_completeness
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     {sentences : PropertySet F} {order : SentenceOrder sentences}
-    (circuit : FormalAssertion F sentences order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
+    (circuit : FormalAssertion order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).Completeness env yields =
     (circuit.Assumptions (eval env input_var) ∧ circuit.Spec Set.univ (eval env input_var)) := by
   rfl

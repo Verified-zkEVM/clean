@@ -9,7 +9,7 @@ Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
 def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order Addition8FullCarry.Inputs field where
+    : FormalCircuit order Addition8FullCarry.Inputs field where
   main := fun inputs => do
     let { z, .. } ← Addition8FullCarry.circuit order inputs
     return z
@@ -45,7 +45,7 @@ Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
-    : FormalCircuit (F p) sentences order Inputs field where
+    : FormalCircuit order Inputs field where
   main := fun { x, y } =>
     Addition8Full.circuit order { x, y, carryIn := 0 }
 

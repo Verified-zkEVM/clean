@@ -199,7 +199,7 @@ instance : Coe (Boolean (F p)) (Expression (F p)) where
 Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 -/
 @[circuit_norm]
-def assertBool {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion (F p) sentences order field where
+def assertBool {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order field where
   main (x : Expression (F p)) := assertZero (x * (x - 1))
   Assumptions _ := True
   Spec (_ : CheckedYields sentences) (x : F p) := IsBool x
