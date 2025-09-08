@@ -10,11 +10,14 @@ structure PropertySet (F : Type) where
   properties : Std.HashMap String (Property F)
   NameConsistency : ∀ name (p : Property F), properties[name]? = some p → p.name = name
 
-structure Sentence (s : PropertySet F) where
+structure Sentence (s : PropertySet F) (α : Type) where
   name : String
   property : Property F
   propertyFound : s.properties[name]? = some property
-  entry : Vector F property.arity
+  entry : Vector α property.arity
+
+instance {s : PropertySet F} {α : Type} [Repr α] : Repr (Sentence s α) where
+  reprPrec sentence _ := "(Sentence " ++ sentence.name ++ " " ++ repr sentence.entry ++ ")"
 
 /-
 Ordering of sentecnes: `s ≺ t` means, for yielding `t` (and especially for proving that `t` is valid),
@@ -22,7 +25,7 @@ the knowledge gained by using `s` is available. `SentenceOrder` is just relevant
 -/
 
 structure SentenceOrder (s : PropertySet F) where
-  CanDepend : Sentence s → Sentence s → Prop
+  CanDepend : Sentence s F → Sentence s F → Prop
   well_founded : WellFounded CanDepend
 
 /-
@@ -52,7 +55,7 @@ A type for keeping track of "all `yield`s of this form have been checked."
 When a sentence `s` is in `CheckedYields`, if there is `yield s` anywhere, `s` is known to hold.
 If nobody ever does `yield s`, `s` can be false even when `s` is in `CheckedYield`.
 -/
-def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences)
+def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences F)
 
 instance {F : Type} {sentences : PropertySet F} : EmptyCollection (CheckedYields sentences) where
   emptyCollection := by unfold CheckedYields; exact ∅

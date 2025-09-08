@@ -23,7 +23,7 @@ structure Environment (F : Type) where
 
 /-- Context for tracking yielded sentences during circuit execution -/
 structure YieldContext (sentences : PropertySet F) where
-  yielded : Set (Sentence sentences)
+  yielded : Set (Sentence sentences F)
 
 /-- Empty YieldContext for use in contexts that don't need the use/yield framework -/
 def emptyYields (F : Type) : YieldContext (emptyPropertySet F) where

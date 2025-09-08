@@ -28,6 +28,7 @@ instance {sentences : PropertySet F} [Repr F] : Repr (FlatOperation sentences) w
 What it means that "constraints hold" on a list of flat operations:
 - For assertions, the expression must evaluate to 0
 - For lookups, the evaluated entry must be in the table
+- For witness operations, the constraints do not guarantee anything additional
 -/
 def ConstraintsHoldFlat {sentences : PropertySet F} (eval : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) : List (FlatOperation sentences) → Prop
   | [] => True
