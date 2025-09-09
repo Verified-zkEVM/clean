@@ -25,9 +25,35 @@ variable {F : Type} [Field F] {sentences : PropertySet F}
 def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environment F :=
   circuit.main (const input) |>.proverEnvironment
 
-theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β) (input : α F) :
-    (circuit.proverEnvironment input).UsesLocalWitnesses (emptyYields F) 0 ((circuit.main (const input)).operations 0) := by
-  apply Circuit.proverEnvironment_usesLocalWitnesses
+omit [Field F] in
+/--
+Any YieldContext for emptyPropertySet has an empty yielded set, since there are no sentences to yield.
+-/
+lemma yieldContext_emptyPropertySet_empty (y : YieldContext (emptyPropertySet F)) :
+    y = emptyYields F := by
+  ext
+  -- Show y.yielded = ∅
+  simp only [emptyYields]
+  constructor
+  · rename_i x
+    simp only [Sentence, emptyPropertySet] at x
+    cases x
+    rename_i found _
+    simp at found
+  · intro
+    contradiction
+
+/--
+For circuits with empty property sets, proverYields equals emptyYields.
+-/
+lemma proverYields_eq_emptyYields {α : Type} (circuit : Circuit (emptyPropertySet F) α) (init : List F) :
+    circuit.proverYields init = emptyYields F :=
+  yieldContext_emptyPropertySet_empty _
+
+theorem proverEnvironment_usesLocalWitnessesAndYields (circuit : LookupCircuit F α β) (input : α F) :
+    (circuit.proverEnvironment input).UsesLocalWitnessesAndYields (emptyYields F) 0 ((circuit.main (const input)).operations 0) := by
+  rw [← proverYields_eq_emptyYields]
+  apply Circuit.proverEnvironment_usesLocalWitnessesAndYields
   apply circuit.compose_computableWitnesses
   simp [Environment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
@@ -60,7 +86,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     simp only [h_output, LookupCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
     apply circuit.original_completeness 0 env (emptyYields F) (emptyChecked F) (const input) input ProvableType.eval_const h_assumptions
-    exact circuit.proverEnvironment_usesLocalWitnesses input
+    exact circuit.proverEnvironment_usesLocalWitnessesAndYields input
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.

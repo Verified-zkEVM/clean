@@ -323,6 +323,7 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations (emptyPropertyS
   | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .yield _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`

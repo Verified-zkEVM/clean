@@ -52,6 +52,12 @@ def localWitnesses {sentences : PropertySet F} (env : Environment F) : (l : List
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops | yield _ :: ops => localWitnesses env ops
 
+/-- Collects all yielded sentences from a list of flat operations. -/
+def localYields {sentences : PropertySet F} (env : Environment F) : List (FlatOperation sentences) → Set (Sentence sentences F)
+  | [] => ∅
+  | yield s :: ops => {s.eval env} ∪ localYields env ops
+  | witness _ _ :: ops | assert _ :: ops | lookup _ :: ops => localYields env ops
+
 /-- Induction principle for `FlatOperation`s. -/
 def induct {sentences : PropertySet F} {motive : List (FlatOperation sentences) → Sort*}
   (empty : motive [])
@@ -100,13 +106,14 @@ structure Subcircuit (sentences : PropertySet F) (offset : ℕ) where
   imply_soundness : ∀ (env : Environment F) (yields : YieldContext sentences) (checkedYields : CheckedYields sentences),
     ConstraintsHoldFlat env yields checkedYields ops → Soundness env yields checkedYields
 
-  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences), env.ExtendsVector (localWitnesses env ops) offset →
+  -- `Completeness` needs to imply the constraints, when using the locally declared witness generators and yields of this circuit
+  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences), 
+    env.ExtendsVector (localWitnesses env ops) offset ∧ FlatOperation.localYields env ops ⊆ yields.yielded →
     Completeness env yields → ConstraintsHoldFlat env yields checked ops
 
-  -- `UsesLocalWitnessesAndYields` needs to follow from the local witness generator condition
-  -- TODO: Add condition for yields once yield operations are implemented
-  imply_usesLocalWitnessesAndYields : ∀ (env : Environment F) (yields : YieldContext sentences), env.ExtendsVector (localWitnesses env ops) offset →
+  -- `UsesLocalWitnessesAndYields` needs to follow from the local witness generator condition and yielded sentences
+  imply_usesLocalWitnessesAndYields : ∀ (env : Environment F) (yields : YieldContext sentences), 
+    env.ExtendsVector (localWitnesses env ops) offset ∧ FlatOperation.localYields env ops ⊆ yields.yielded →
     UsesLocalWitnessesAndYields env yields
 
   -- `localLength` must be consistent with the operations
@@ -155,6 +162,12 @@ def localWitnesses {sentences : PropertySet F} (env : Environment F) : (op : Ope
   | .lookup _ => #v[]
   | .yield _ => #v[]
   | .subcircuit s => s.witnesses env
+
+/-- Collects all yielded sentences from a single operation. -/
+def localYields {sentences : PropertySet F} (env : Environment F) : Operation sentences → Set (Sentence sentences F)
+  | .yield s => {s.eval env}
+  | .witness _ _ | .assert _ | .lookup _ => ∅
+  | .subcircuit s => FlatOperation.localYields env s.ops
 end Operation
 
 /--
@@ -199,6 +212,13 @@ def localWitnesses {sentences : PropertySet F} (env : Environment F) : (ops : Op
   | .lookup _ :: ops => localWitnesses env ops
   | .yield _ :: ops => localWitnesses env ops
   | .subcircuit s :: ops => s.witnesses env ++ localWitnesses env ops
+
+/-- Collects all yielded sentences from a list of operations. -/
+def localYields {sentences : PropertySet F} (env : Environment F) : Operations sentences → Set (Sentence sentences F)
+  | [] => ∅
+  | .yield s :: ops => {s.eval env} ∪ localYields env ops
+  | .witness _ _ :: ops | .assert _ :: ops | .lookup _ :: ops => localYields env ops
+  | .subcircuit s :: ops => FlatOperation.localYields env s.ops ∪ localYields env ops
 
 /-- Induction principle for `Operations`. -/
 def induct {sentences : PropertySet F} {motive : Operations sentences → Sort*}

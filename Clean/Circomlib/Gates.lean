@@ -421,13 +421,13 @@ theorem subcircuitsConsistent {sentences : PropertySet (F p)} (order : SentenceO
           apply IH n2 h_n2_lt input2
         · apply (AND.circuit order).subcircuitsConsistent
 
--- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
+-- Helper lemma: UsesLocalWitnessesAndYields and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
 lemma main_usesLocalWitnesses_iff_completeness
     {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ)
     (env : Environment (F p)) (yields : YieldContext sentences) :
     offset1 = offset2 ->
-    (env.UsesLocalWitnesses yields offset1 ((main order input).operations offset2) ↔
+    (env.UsesLocalWitnessesAndYields yields offset1 ((main order input).operations offset2) ↔
      env.UsesLocalWitnessesCompleteness yields offset1 ((main order input).operations offset2)) := by
   induction n using Nat.strong_induction_on generalizing offset1 offset2 with
   | _ n IH =>
@@ -453,7 +453,7 @@ lemma main_usesLocalWitnesses_iff_completeness
       · intro h_completeness
         simp only [AND.circuit, AND.main, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
         simp only [Fin.isValue, Nat.add_zero, id_eq]
-        unfold Environment.UsesLocalWitnesses Operations.forAllFlat
+        unfold Environment.UsesLocalWitnessesAndYields Operations.forAllFlat
         unfold Operations.forAll
 
         constructor
@@ -480,18 +480,17 @@ lemma main_usesLocalWitnesses_iff_completeness
         simp only [circuit_norm] at h_completeness ⊢
         rcases h_completeness with ⟨ h_c1, h_c2, h_c3 ⟩
 
-        rw[Environment.UsesLocalWitnesses, Operations.forAllFlat]
-
+        rw[Environment.UsesLocalWitnessesAndYields, Operations.forAllFlat]
         rw [Operations.forAll_append]
         constructor
-        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnessesAndYields]
           rw[IH]
           · aesop
           · omega
           · trivial
         rw [Operations.forAll_append]
         constructor
-        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnesses]
+        · rw[← Operations.forAllFlat, ← Environment.UsesLocalWitnessesAndYields]
           rw[IH]
           · aesop
           · omega

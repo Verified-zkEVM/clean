@@ -25,6 +25,13 @@ structure Environment (F : Type) where
 structure YieldContext (sentences : PropertySet F) where
   yielded : Set (Sentence sentences F)
 
+/-- Extensionality for YieldContext: two YieldContexts are equal if their yielded sets are equal. -/
+@[ext]
+lemma YieldContext.ext {sentences : PropertySet F} {y1 y2 : YieldContext sentences} 
+    (h : y1.yielded = y2.yielded) : y1 = y2 := by
+  cases y1; cases y2
+  congr
+
 /-- Empty YieldContext for use in contexts that don't need the use/yield framework -/
 def emptyYields (F : Type) : YieldContext (emptyPropertySet F) where
   yielded := ∅

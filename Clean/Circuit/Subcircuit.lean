@@ -49,7 +49,7 @@ theorem Circuit.constraintsHold_toFlat_iff : ∀ {sentences : PropertySet F} {op
   induction ops using Operations.induct with
   | empty => trivial
   -- we can handle all non-empty cases at once
-  | witness | assert | lookup | subcircuit =>
+  | witness | assert | lookup | yield | subcircuit =>
     dsimp only [Operations.toFlat]
     try rw [constraintsHold_cons]
     try rw [constraintsHold_append]
@@ -81,16 +81,18 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
     exact constraintsHold_toFlat_iff.mp h_holds
 
   have implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
-      env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
+      env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧ 
+      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded →
       circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env yields checked ops.toFlat := by
     -- we are given that the assumptions are true
     intro env yields checked h_env
     let input := eval env input_var
     intro (as : circuit.Assumptions input)
 
-    have h_env : env.UsesLocalWitnesses yields n ops := by
-      guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
-      rw [env.usesLocalWitnesses_iff_flat yields, env.usesLocalWitnessesFlat_iff_extends yields]
+    have h_env : env.UsesLocalWitnessesAndYields yields n ops := by
+      guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧ 
+                         FlatOperation.localYields env ops.toFlat ⊆ yields.yielded
+      rw [env.usesLocalWitnessesAndYields_iff_flat, env.usesLocalWitnessesAndYieldsFlat_iff_extends]
       exact h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
@@ -161,9 +163,10 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
       let input := eval env input_var
       have as : circuit.Assumptions input ∧ circuit.Spec Set.univ input := h_completeness
 
-      have h_env : env.UsesLocalWitnesses yields n ops := by
-        guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n
-        rw [env.usesLocalWitnesses_iff_flat yields, env.usesLocalWitnessesFlat_iff_extends yields]
+      have h_env : env.UsesLocalWitnessesAndYields yields n ops := by
+        guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧ 
+                           FlatOperation.localYields env ops.toFlat ⊆ yields.yielded
+        rw [env.usesLocalWitnessesAndYields_iff_flat, env.usesLocalWitnessesAndYieldsFlat_iff_extends]
         exact h_env
       have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
@@ -198,11 +201,12 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
     exact constraintsHold_toFlat_iff.mp h_holds
 
   have implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
-      env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n →
+      env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧ 
+      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded →
       circuit.Assumptions (eval env input_var) → ConstraintsHoldFlat env yields checked ops.toFlat := by
     intro env yields checked h_env assumptions
     set input := eval env input_var
-    rw [←env.usesLocalWitnessesFlat_iff_extends yields, ←env.usesLocalWitnesses_iff_flat yields] at h_env
+    rw [←env.usesLocalWitnessesAndYieldsFlat_iff_extends, ←env.usesLocalWitnessesAndYields_iff_flat] at h_env
     rw [constraintsHold_toFlat_iff]
     apply can_replace_completeness yields checked h_consistent h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
@@ -314,7 +318,7 @@ lemma computableWitnesses_implies {sentences : PropertySet F} {circuit : Elabora
   simp only [Condition.implies, Condition.ignoreSubcircuit, imp_self]
   induction ops using FlatOperation.induct generalizing n with
   | empty => trivial
-  | assert | lookup => simp_all [FlatOperation.forAll]
+  | assert | lookup | yield => simp_all [FlatOperation.forAll]
   | witness m c ops ih =>
     simp_all only [FlatOperation.forAll, forall_const, implies_true, true_and]
     apply ih (m + n)

@@ -182,17 +182,20 @@ def ConstraintsHold.Completeness {sentences : PropertySet F} (eval : Environment
 end Circuit
 
 /--
-If an environment "uses local witnesses", it means that the environment's evaluation
+If an environment "uses local witnesses and yields", it means that the environment's evaluation
 matches the output of the witness generator passed along with a `witness` declaration,
-for all variables declared locally within the circuit.
+for all variables declared locally within the circuit, and all yielded sentences are in the yield context.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.UsesLocalWitnesses {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) (ops : Operations sentences) : Prop :=
-  ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
+def Environment.UsesLocalWitnessesAndYields {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) (ops : Operations sentences) : Prop :=
+  ops.forAllFlat offset {
+    witness n _ compute := env.ExtendsVector (compute env) n,
+    yield _ s := s.eval env ∈ yields.yielded
+  }
 
 /--
-Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
+Modification of `UsesLocalWitnessesAndYields` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
 def Environment.UsesLocalWitnessesCompleteness {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) : List (Operation sentences) → Prop
@@ -203,9 +206,24 @@ def Environment.UsesLocalWitnessesCompleteness {sentences : PropertySet F} (env 
   | .yield s :: ops => s.eval env ∈ yields.yielded ∧ env.UsesLocalWitnessesCompleteness yields offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnessesAndYields env yields ∧ env.UsesLocalWitnessesCompleteness yields (offset + s.localLength) ops
 
-/-- Same as `UsesLocalWitnesses`, but on flat operations -/
-def Environment.UsesLocalWitnessesFlat {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
+/-- Environment uses local witnesses for flat operations (witness checking only) -/
+def Environment.UsesLocalWitnessesFlat {sentences : PropertySet F} (env : Environment F) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
+  FlatOperation.forAll n {
+    witness n _ compute := env.ExtendsVector (compute env) n
+  } ops
+
+/-- Environment uses local yields for flat operations (yield checking only) -/
+def Environment.UsesLocalYieldsFlat {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
+  FlatOperation.forAll n {
+    yield _ s := s.eval env ∈ yields.yielded
+  } ops
+
+/-- Environment uses local witnesses and yields for flat operations (both witness and yield checking) -/
+def Environment.UsesLocalWitnessesAndYieldsFlat {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
+  FlatOperation.forAll n {
+    witness n _ compute := env.ExtendsVector (compute env) n,
+    yield _ s := s.eval env ∈ yields.yielded
+  } ops
 
 section
 open Circuit (ConstraintsHold)
@@ -456,6 +474,12 @@ def FlatOperation.dynamicWitnesses {sentences : PropertySet F} (ops : List (Flat
 def FlatOperation.proverEnvironment {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : Environment F :=
   Environment.fromList (FlatOperation.dynamicWitnesses ops init)
 
+/--
+Computes the set of yielded sentences from the prover environment.
+-/
+def FlatOperation.proverYields {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : YieldContext sentences :=
+  { yielded := FlatOperation.localYields (FlatOperation.proverEnvironment ops init) ops }
+
 def Environment.AgreesBelow (n : ℕ) (env env' : Environment F) :=
   ∀ i < n, env.get i = env'.get i
 
@@ -474,10 +498,16 @@ def Circuit.ComputableWitnesses {sentences : PropertySet F} (circuit : Circuit s
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
-that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
+that satisfies `UsesLocalWitnessesAndYields`. (Proof in `Theorems`.)
 -/
 def Circuit.proverEnvironment {sentences : PropertySet F} (circuit : Circuit sentences α) (init : List F := []) : Environment F :=
   Environment.fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
+
+/--
+Computes the set of yielded sentences from the prover environment for a circuit.
+-/
+def Circuit.proverYields {sentences : PropertySet F} (circuit : Circuit sentences α) (init : List F := []) : YieldContext sentences :=
+  FlatOperation.proverYields (circuit.operations init.length).toFlat init
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
