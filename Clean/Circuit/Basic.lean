@@ -198,13 +198,13 @@ def Environment.UsesLocalWitnessesAndYields {sentences : PropertySet F} (env : E
 Modification of `UsesLocalWitnessesAndYields` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.UsesLocalWitnessesCompleteness {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) : List (Operation sentences) → Prop
+def Environment.UsesLocalWitnessesAndYieldsCompleteness {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) : List (Operation sentences) → Prop
   | [] => True
-  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness yields (offset + m) ops
-  | .assert _ :: ops => env.UsesLocalWitnessesCompleteness yields offset ops
-  | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness yields offset ops
-  | .yield s :: ops => s.eval env ∈ yields.yielded ∧ env.UsesLocalWitnessesCompleteness yields offset ops
-  | .subcircuit s :: ops => s.UsesLocalWitnessesAndYields env yields ∧ env.UsesLocalWitnessesCompleteness yields (offset + s.localLength) ops
+  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields (offset + m) ops
+  | .assert _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .lookup _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .yield s :: ops => s.eval env ∈ yields.yielded ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .subcircuit s :: ops => s.UsesLocalWitnessesAndYields env yields ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields (offset + s.localLength) ops
 
 /-- Environment uses local witnesses for flat operations (witness checking only) -/
 def Environment.UsesLocalWitnessesFlat {sentences : PropertySet F} (env : Environment F) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
@@ -286,7 +286,7 @@ def Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : Ela
     (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness yields offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →
@@ -346,7 +346,7 @@ def FormalAssertion.Completeness (F : Type) [Field F] (sentences : PropertySet F
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness yields offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
@@ -399,7 +399,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : PropertySet
 def GeneralFormalCircuit.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input Output) (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness yields offset (circuit.main input_var |>.operations offset) →
+  env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input →

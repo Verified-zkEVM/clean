@@ -37,7 +37,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
 theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
   rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
-    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
+    Environment.UsesLocalWitnessesAndYieldsCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
   intro _
   trivial
 

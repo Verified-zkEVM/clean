@@ -101,7 +101,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   · exact c8.right
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
-  circuit_proof_start [elaborated, G.circuit, G.elaborated, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
+  circuit_proof_start [elaborated, G.circuit, G.elaborated, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesAndYieldsCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env

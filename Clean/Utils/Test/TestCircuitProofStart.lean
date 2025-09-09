@@ -105,7 +105,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : ℕ := i₀
   have : Environment F := env
   have : Input (Expression F) := input_var
-  have : env.UsesLocalWitnessesCompleteness yields i₀ ((circuit.main input_var).operations i₀) := h_env
+  have : env.UsesLocalWitnessesAndYieldsCompleteness yields i₀ ((circuit.main input_var).operations i₀) := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input
   sorry
 

@@ -288,13 +288,13 @@ theorem usesLocalWitnessesAndYieldsFlat_iff_extends {env : Environment F} {sente
     trivial
 
 theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {sentences : PropertySet F} {yields : YieldContext sentences} {ops : Operations sentences} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
-  env.UsesLocalWitnessesAndYields yields n ops → env.UsesLocalWitnessesCompleteness yields n ops := by
+  env.UsesLocalWitnessesAndYields yields n ops → env.UsesLocalWitnessesAndYieldsCompleteness yields n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
   | witness | assert | lookup | yield =>
-    simp_all +arith [UsesLocalWitnessesAndYields, UsesLocalWitnessesCompleteness, Operations.forAllFlat, Operations.forAll]
+    simp_all +arith [UsesLocalWitnessesAndYields, UsesLocalWitnessesAndYieldsCompleteness, Operations.forAllFlat, Operations.forAll]
   | subcircuit n circuit ops ih =>
-    simp only [UsesLocalWitnessesAndYields, UsesLocalWitnessesCompleteness, Operations.forAllFlat, Operations.forAll_cons, Condition.apply]
+    simp only [UsesLocalWitnessesAndYields, UsesLocalWitnessesAndYieldsCompleteness, Operations.forAllFlat, Operations.forAll_cons, Condition.apply]
     intro h
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
@@ -302,8 +302,8 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {senten
     rw [← usesLocalWitnessesAndYieldsFlat_iff_extends yields]
     exact h.left
 
-theorem usesLocalWitnessesCompleteness_iff_forAll {sentences : PropertySet F} (yields : YieldContext sentences) (n : ℕ) {env : Environment F} {ops : Operations sentences} :
-  env.UsesLocalWitnessesCompleteness yields n ops ↔ ops.forAll n {
+theorem usesLocalWitnessesAndYieldsCompleteness_iff_forAll {sentences : PropertySet F} (yields : YieldContext sentences) (n : ℕ) {env : Environment F} {ops : Operations sentences} :
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
     yield _ s := s.eval env ∈ yields.yielded,
     subcircuit _ _ s := s.UsesLocalWitnessesAndYields env yields
@@ -311,7 +311,7 @@ theorem usesLocalWitnessesCompleteness_iff_forAll {sentences : PropertySet F} (y
   induction ops using Operations.induct generalizing n with
   | empty => trivial
   | assert | lookup | witness | yield | subcircuit =>
-    simp_all +arith [UsesLocalWitnessesCompleteness, Operations.forAll]
+    simp_all +arith [UsesLocalWitnessesAndYieldsCompleteness, Operations.forAll]
 
 theorem usesLocalWitnessesAndYields_iff_forAll {sentences : PropertySet F} (yields : YieldContext sentences) (n : ℕ) {env : Environment F} {ops : Operations sentences} :
   env.UsesLocalWitnessesAndYields yields n ops ↔ ops.forAll n {
@@ -569,17 +569,17 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {sentence
     ConstraintsHold.completeness_iff_forAll (n + f.localLength n) _ _ yields, bind_forAll]
 
 @[circuit_norm] theorem ConstraintsHold.append_localWitnesses {sentences : PropertySet F} {as bs : Operations sentences} (n : ℕ) (yields : YieldContext sentences) :
-  env.UsesLocalWitnessesCompleteness yields n (as ++ bs)
-  ↔ env.UsesLocalWitnessesCompleteness yields n as ∧ env.UsesLocalWitnessesCompleteness yields (as.localLength + n) bs := by
-  rw [env.usesLocalWitnessesCompleteness_iff_forAll yields, Operations.forAll_append,
-    ←env.usesLocalWitnessesCompleteness_iff_forAll yields n, ←env.usesLocalWitnessesCompleteness_iff_forAll yields (as.localLength + n)]
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n (as ++ bs)
+  ↔ env.UsesLocalWitnessesAndYieldsCompleteness yields n as ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields (as.localLength + n) bs := by
+  rw [env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, Operations.forAll_append,
+    ←env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields n, ←env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields (as.localLength + n)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_usesLocalWitnesses {sentences : PropertySet F} {f : Circuit sentences α} {g : α → Circuit sentences β} (n : ℕ) (yields : YieldContext sentences) :
-  env.UsesLocalWitnessesCompleteness yields n ((f >>= g).operations n)
-  ↔ env.UsesLocalWitnessesCompleteness yields n (f.operations n) ∧
-    env.UsesLocalWitnessesCompleteness yields (n + f.localLength n) ((g (f.output n)).operations (n + f.localLength n)) := by
-  rw [env.usesLocalWitnessesCompleteness_iff_forAll yields, env.usesLocalWitnessesCompleteness_iff_forAll yields,
-    env.usesLocalWitnessesCompleteness_iff_forAll yields, bind_forAll]
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n ((f >>= g).operations n)
+  ↔ env.UsesLocalWitnessesAndYieldsCompleteness yields n (f.operations n) ∧
+    env.UsesLocalWitnessesAndYieldsCompleteness yields (n + f.localLength n) ((g (f.output n)).operations (n + f.localLength n)) := by
+  rw [env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields,
+    env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, bind_forAll]
 end Circuit
 
 -- more theorems about forAll / forAllFlat

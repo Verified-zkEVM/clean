@@ -421,14 +421,14 @@ theorem subcircuitsConsistent {sentences : PropertySet (F p)} (order : SentenceO
           apply IH n2 h_n2_lt input2
         · apply (AND.circuit order).subcircuitsConsistent
 
--- Helper lemma: UsesLocalWitnessesAndYields and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
+-- Helper lemma: UsesLocalWitnessesAndYields and UsesLocalWitnessesAndYieldsCompleteness are equivalent for MultiAND.main
 lemma main_usesLocalWitnesses_iff_completeness
     {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ)
     (env : Environment (F p)) (yields : YieldContext sentences) :
     offset1 = offset2 ->
     (env.UsesLocalWitnessesAndYields yields offset1 ((main order input).operations offset2) ↔
-     env.UsesLocalWitnessesCompleteness yields offset1 ((main order input).operations offset2)) := by
+     env.UsesLocalWitnessesAndYieldsCompleteness yields offset1 ((main order input).operations offset2)) := by
   induction n using Nat.strong_induction_on generalizing offset1 offset2 with
   | _ n IH =>
     match n with
@@ -703,7 +703,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (or
 lemma completeness_zero {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (offset : ℕ) (env : Environment (F p)) (yields : YieldContext sentences) (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
-    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness yields offset ((main order input_var).operations offset))
+    (_h_local_witnesses : env.UsesLocalWitnessesAndYieldsCompleteness yields offset ((main order input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input) :
     Circuit.ConstraintsHold.Completeness env yields ((main order input_var).operations offset) := by
@@ -713,7 +713,7 @@ lemma completeness_zero {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)}
 lemma completeness_one {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (offset : ℕ) (env : Environment (F p)) (yields : YieldContext sentences) (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
-    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness yields offset ((main order input_var).operations offset))
+    (_h_local_witnesses : env.UsesLocalWitnessesAndYieldsCompleteness yields offset ((main order input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 1 input) :
     Circuit.ConstraintsHold.Completeness env yields ((main order input_var).operations offset) := by
@@ -723,7 +723,7 @@ lemma completeness_one {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} 
 lemma completeness_two {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (offset : ℕ) (env : Environment (F p)) (yields : YieldContext sentences) (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p))
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness yields offset ((main order input_var).operations offset))
+    (h_local_witnesses : env.UsesLocalWitnessesAndYieldsCompleteness yields offset ((main order input_var).operations offset))
     (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input) :
     Circuit.ConstraintsHold.Completeness env yields ((main order input_var).operations offset) := by
@@ -898,7 +898,7 @@ lemma main_output_binary_from_completeness {sentences : PropertySet (F p)} (orde
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness yields offset ((main order input_var).operations offset))
+    (h_local_witnesses : env.UsesLocalWitnessesAndYieldsCompleteness yields offset ((main order input_var).operations offset))
     (h_completeness : Circuit.ConstraintsHold.Completeness env yields ((main order input_var).operations offset)) :
     let output : field (F p) := eval env ((main order input_var).output offset)
     IsBool output := by
@@ -915,7 +915,7 @@ lemma main_output_binary_from_completeness {sentences : PropertySet (F p)} (orde
 theorem completeness {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (yields : YieldContext sentences) (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
-    env.UsesLocalWitnessesCompleteness yields offset ((main order input_var).operations offset) →
+    env.UsesLocalWitnessesAndYieldsCompleteness yields offset ((main order input_var).operations offset) →
     input = eval env input_var →
     Assumptions n input →
     Circuit.ConstraintsHold.Completeness env yields ((main order input_var).operations offset) := by

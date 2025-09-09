@@ -28,6 +28,6 @@ def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit sentences 
   witness (computeValueFromOffset α offset)
 
 theorem ProvableType.witnessAny.localWitnesses (n : ℕ) (env : Environment F) (yields : YieldContext sentences) :
-    env.UsesLocalWitnessesCompleteness yields n (ProvableType.witnessAny α |>.operations n) ↔ True := by
+    env.UsesLocalWitnessesAndYieldsCompleteness yields n (ProvableType.witnessAny α |>.operations n) ↔ True := by
   simp only [circuit_norm, getOffset, ProvableType.witnessAny, computeValueFromOffset,
     ProvableType.toElements_fromElements]

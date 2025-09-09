@@ -34,7 +34,7 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
     (eval env acc_var = acc) ∧ (eval env x_var = x) →
   -- when using honest-prover witnesses (using empty yields for tables)
-  env.UsesLocalWitnessesCompleteness (emptyYields F) ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
+  env.UsesLocalWitnessesAndYieldsCompleteness (emptyYields F) ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
   -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
   InitialStateAssumptions initialState ∧
   Spec initialState xs row_index xs_len acc ∧ InputAssumptions row_index x →

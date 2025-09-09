@@ -430,9 +430,9 @@ lemma forEach.completeness :
 
 @[circuit_norm ↓]
 lemma forEach.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness yields n ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yields (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [forEach, Environment.usesLocalWitnessesCompleteness_iff_forAll (yields:=yields), ←forAll_def]
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesAndYieldsCompleteness yields (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  simp only [forEach, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 end forEach
 
@@ -475,9 +475,9 @@ lemma map.completeness :
 
 @[circuit_norm ↓]
 lemma map.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness yields n (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yields (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [map, Environment.usesLocalWitnessesCompleteness_iff_forAll (yields:=yields), ←forAll_def]
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesAndYieldsCompleteness yields (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  simp only [map, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, ←forAll_def]
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 end map
 
@@ -522,9 +522,9 @@ lemma mapFinRange.completeness :
 
 @[circuit_norm ↓]
 lemma mapFinRange.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness yields n (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yields (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
-  simp only [mapFinRange, Environment.usesLocalWitnessesCompleteness_iff_forAll (yields:=yields), ←forAll_def]
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesAndYieldsCompleteness yields (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
+  simp only [mapFinRange, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 end mapFinRange
 
@@ -587,13 +587,13 @@ lemma foldl.completeness [NeZero m] :
 
 @[circuit_norm ↓]
 lemma foldl.usesLocalWitnesses [NeZero m] :
-  env.UsesLocalWitnessesCompleteness yields n (foldl xs init body const_out constant |>.operations n) ↔
-    env.UsesLocalWitnessesCompleteness yields n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n (foldl xs init body const_out constant |>.operations n) ↔
+    env.UsesLocalWitnessesAndYieldsCompleteness yields n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).localLength;
       let acc := (body default xs[i]).output (n + i*k);
-      env.UsesLocalWitnessesCompleteness yields (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
-  simp only [foldl, Environment.usesLocalWitnessesCompleteness_iff_forAll (yields:=yields), ←forAll_def]
+      env.UsesLocalWitnessesAndYieldsCompleteness yields (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
+  simp only [foldl, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
 end foldl
 
@@ -652,11 +652,11 @@ lemma foldlRange.completeness :
 
 @[circuit_norm ↓]
 lemma foldlRange.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness yields n (foldlRange m init body constant |>.operations n) ↔
+  env.UsesLocalWitnessesAndYieldsCompleteness yields n (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-      env.UsesLocalWitnessesCompleteness yields (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+      env.UsesLocalWitnessesAndYieldsCompleteness yields (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
       |>.operations (n + i * (body default i).localLength)) := by
-  simp only [Environment.usesLocalWitnessesCompleteness_iff_forAll (yields:=yields), foldlRange.forAll]
+  simp only [env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, foldlRange.forAll]
 
 end foldlRange
 
