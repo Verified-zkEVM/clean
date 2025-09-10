@@ -7,7 +7,6 @@ variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation64.Theorems
-open Bitwise (rotRight64)
 open Utils.Rotation
 
 /--
@@ -60,7 +59,7 @@ lemma h_div {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     Nat.add_left_inj]
 
 lemma h_x0_const {o : ℕ} (ho : o < 8) :
-    2^(8 - o) * 256^7 = 2^(64 - o) := by
+    2^(8-o) * 256^7 = 2^(64-o) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, pow_right_inj₀ (by norm_num) (by norm_num)]
   omega
 

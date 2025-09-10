@@ -41,7 +41,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro n env initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
-  simp only [main, circuit_norm, subcircuit_norm, Spec,
+  simp only [main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
   simp only [zero_add, h_input] at h_holds
@@ -79,7 +79,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, subcircuit_norm, Spec,
+  simp only [main, h_input, h_assumptions, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
 

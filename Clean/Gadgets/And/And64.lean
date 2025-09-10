@@ -28,11 +28,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let z7 ← And8.circuit ⟨ x.x7, y.x7 ⟩
   return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
-def Assumptions (input: Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input: Inputs (F p)) (z : U64 (F p)) :=
+def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.Normalized
 
@@ -66,14 +66,14 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
 
   suffices z.value = x.value &&& y.value from ⟨ this, z_norm ⟩
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq]
-  repeat rw [Bitwise.and_xor_sum]
+  repeat rw [and_xor_sum]
   repeat assumption
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
   cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
-  simp only [circuit_norm, subcircuit_norm, explicit_provable_type, Vector.mapRange,
+  simp only [circuit_norm, explicit_provable_type, Vector.mapRange,
     main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
@@ -81,7 +81,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
-  simp only [circuit_norm, subcircuit_norm, explicit_provable_type,
+  simp only [circuit_norm, explicit_provable_type,
     main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all

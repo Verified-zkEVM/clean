@@ -12,11 +12,12 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 /--
   A 32-bit unsigned integer is represented using four limbs of 8 bits each.
 -/
-structure U32 (T: Type) where
+structure U32 (T : Type) where
   x0 : T
   x1 : T
   x2 : T
   x3 : T
+deriving DecidableEq
 
 instance : ProvableType U32 where
   size := 4
@@ -28,10 +29,10 @@ instance : ProvableType U32 where
 instance : NonEmptyProvableType U32 where
   nonempty := by simp only [size, Nat.reduceGT]
 
-instance (T: Type) [Inhabited T] : Inhabited (U32 T) where
+instance (T : Type) [Inhabited T] : Inhabited (U32 T) where
   default := ⟨ default, default, default, default ⟩
 
-instance (T: Type) [Repr T] : Repr (U32 T) where
+instance (T : Type) [Repr T] : Repr (U32 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ "⟩"
 
 namespace U32
@@ -62,17 +63,17 @@ lemma ext {x y : U32 (F p)}
 /--
   A 32-bit unsigned integer is normalized if all its limbs are less than 256.
 -/
-def Normalized (x: U32 (F p)) :=
+def Normalized (x : U32 (F p)) :=
   x.x0.val < 256 ∧ x.x1.val < 256 ∧ x.x2.val < 256 ∧ x.x3.val < 256
 
 /--
   Return the value of a 32-bit unsigned integer over the natural numbers.
 -/
-def value (x: U32 (F p)) :=
+def value (x : U32 (F p)) :=
   x.x0.val + x.x1.val * 256 + x.x2.val * 256^2 + x.x3.val * 256^3
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem value_lt_of_normalized {x : U32 (F p)} (hx: x.Normalized) : x.value < 2^32 := by
+theorem value_lt_of_normalized {x : U32 (F p)} (hx : x.Normalized) : x.value < 2^32 := by
   simp_all only [value, Normalized]
   linarith
 
@@ -83,15 +84,15 @@ theorem value_horner (x : U32 (F p)) : x.value =
   ring
 
 omit [Fact (Nat.Prime p)] p_large_enough in
-theorem value_xor_horner {x : U32 (F p)} (hx: x.Normalized) : x.value =
+theorem value_xor_horner {x : U32 (F p)} (hx : x.Normalized) : x.value =
     x.x0.val ^^^ 2^8 * (x.x1.val ^^^ 2^8 * (x.x2.val ^^^ 2^8 * x.x3.val)) := by
   let ⟨ x0, x1, x2, x3 ⟩ := x
   simp_all only [Normalized, value_horner]
   let ⟨ hx0, hx1, hx2, hx3 ⟩ := hx
-  repeat rw [Bitwise.xor_eq_add 8]
+  repeat rw [xor_eq_add 8]
   repeat assumption
 
-def valueNat (x: U32 ℕ) :=
+def valueNat (x : U32 ℕ) :=
   x.x0 + x.x1 * 256 + x.x2 * 256^2 + x.x3 * 256^3
 
 omit [Fact (Nat.Prime p)] p_large_enough in
@@ -101,7 +102,7 @@ lemma vals_valueNat (x : U32 (F p)) : x.vals.valueNat = x.value := rfl
   Return a 32-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decomposeNat (x: ℕ) : U32 (F p) :=
+def decomposeNat (x : ℕ) : U32 (F p) :=
   let x0 := x % 256
   let x1 : ℕ := (x / 256) % 256
   let x2 : ℕ := (x / 256^2) % 256
@@ -112,7 +113,7 @@ def decomposeNat (x: ℕ) : U32 (F p) :=
   Return a 32-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decomposeNatNat (x: ℕ) : U32 ℕ :=
+def decomposeNatNat (x : ℕ) : U32 ℕ :=
   let x0 := x % 256
   let x1 : ℕ := (x / 256) % 256
   let x2 : ℕ := (x / 256^2) % 256
@@ -123,7 +124,7 @@ def decomposeNatNat (x: ℕ) : U32 ℕ :=
   Return a 32-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
 -/
-def decomposeNatExpr (x: ℕ) : U32 (Expression (F p)) :=
+def decomposeNatExpr (x : ℕ) : U32 (Expression (F p)) :=
   let (⟨x0, x1, x2, x3⟩ : U32 (F p)) := decomposeNat x
   ⟨ x0, x1, x2, x3 ⟩
 
@@ -132,6 +133,28 @@ def fromUInt32 (x : UInt32) : U32 (F p) :=
 
 def valueU32 (x : U32 (F p)) (h : x.Normalized) : UInt32 :=
   UInt32.ofNatLT x.value (value_lt_of_normalized h)
+
+lemma value_of_decomposedNat_of_small (x : ℕ) :
+    x < 256^4 ->
+    (decomposeNat (p:=p) x).value = x := by
+  intro hx
+  simp only [value, decomposeNat]
+  -- Need to show that ZMod.val of each component equals the component itself
+  have h (y : ℕ) : y < 256 → ZMod.val (n:=p) (y : ℕ) = y := by
+    intro hy
+    rw [ZMod.val_cast_of_lt]
+    linarith [p_large_enough.elim]
+  -- Apply h to each component
+  rw [h (x % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+  rw [h (x / 256 % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+  rw [h (x / 256^2 % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+  rw [h (x / 256^3 % 256) (Nat.mod_lt _ (by norm_num : 256 > 0))]
+
+  have h1 := Nat.div_add_mod x 256
+  have h2 := Nat.div_add_mod (x / 256) 256
+  have h3 := Nat.div_add_mod (x / 256 ^ 2) 256
+  have h4 := Nat.div_add_mod (x / 256 ^ 3) 256
+  omega
 
 lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := by
   simp only [Normalized, fromUInt32, decomposeNat]
@@ -143,25 +166,11 @@ lemma fromUInt32_normalized (x : UInt32) : (fromUInt32 (p:=p) x).Normalized := b
   simp [h]
 
 theorem value_fromUInt32 (x : UInt32) : value (fromUInt32 (p:=p) x) = x.toNat := by
-  simp only [valueU32, value_horner, fromUInt32, decomposeNat, UInt32.toFin_val]
-  set x := x.toNat
-  have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
-    rw [ZMod.val_cast_of_lt]
-    have : x % 256 < 256 := Nat.mod_lt _ (by norm_num)
-    linarith [p_large_enough.elim]
-  simp only [h]
-  have : 2^8 = 256 := rfl
-  simp only [this]
-  have : x < 256^4 := by simp [x, UInt32.toNat_lt_size]
-  have : x / 256^3 % 256 = x / 256^3 := by rw [Nat.mod_eq_of_lt]; omega
-  rw [this]
-  have div_succ_pow (n : ℕ) : x / 256^(n + 1) = (x / 256^n) / 256 := by rw [Nat.div_div_eq_div_mul]; rfl
-  have mod_add_div (n : ℕ) : x / 256^n % 256 + 256 * (x / 256^(n + 1)) = x / 256^n := by
-    rw [div_succ_pow n, Nat.mod_add_div]
-  simp only [mod_add_div]
-  rw [div_succ_pow 1, Nat.pow_one, Nat.mod_add_div, Nat.mod_add_div]
+  simp only [fromUInt32, UInt32.toFin_val]
+  apply value_of_decomposedNat_of_small
+  simp [UInt32.toNat_lt_size]
 
-def fromByte (x: Fin 256) : U32 (F p) :=
+def fromByte (x : Fin 256) : U32 (F p) :=
   ⟨ x.val, 0, 0, 0 ⟩
 
 lemma fromByte_value {x : Fin 256} : (fromByte x).value (p:=p) = x := by
@@ -173,6 +182,83 @@ lemma fromByte_normalized {x : Fin 256} : (fromByte x).Normalized (p:=p) := by
   simp [Normalized, fromByte]
   rw [FieldUtils.val_lt_p x]
   repeat linarith [x.is_lt, p_large_enough.elim]
+
+omit p_large_enough in
+lemma value_injective_on_normalized (x y : U32 (F p))
+    (hx : x.Normalized) (hy : y.Normalized) :
+    x.value = y.value → x = y := by
+  intro h_eq
+  -- Use horner form of value
+  have hx_value := U32.value_horner x
+  have hy_value := U32.value_horner y
+
+  simp only [U32.Normalized] at hx hy
+
+  have : x.x0 = y.x0 := by apply ZMod.val_injective; omega
+  have : x.x1 = y.x1 := by apply ZMod.val_injective; omega
+  have : x.x2 = y.x2 := by apply ZMod.val_injective; omega
+  have : x.x3 = y.x3 := by apply ZMod.val_injective; omega
+
+  cases x; cases y
+  simp_all
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[circuit_norm]
+lemma value_of_literal (a b c d : F p) :
+  (U32.mk a b c d).value =
+    a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+@[circuit_norm]
+lemma value_of_literal' (a b c d : field (F p)) :
+  (U32.mk a b c d).value =
+    a.val + b.val * 256 + c.val * 256^2 + d.val * 256^3 := by rfl
+
+omit p_large_enough in
+@[circuit_norm]
+lemma eval_of_literal (env : Environment (F p)) (a b c d : Var field (F p)) :
+    eval env (U32.mk a b c d) =
+    U32.mk (eval env a) (eval env b) (eval env c) (eval env d) := by
+  simp only [explicit_provable_type, circuit_norm]
+
+omit p_large_enough in
+omit [Fact (Nat.Prime p)] in
+@[circuit_norm]
+lemma normalized_componentwise (a b c d : F p):
+    (U32.mk a b c d).Normalized ↔
+    (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
+  simp only [explicit_provable_type, circuit_norm, U32.Normalized]
+
+omit p_large_enough in
+omit [Fact (Nat.Prime p)] in
+@[circuit_norm]
+lemma normalized_componentwise' (a b c d : field (F p)):
+    (U32.mk a b c d).Normalized ↔
+    (a.val < 256 ∧ b.val < 256 ∧ c.val < 256 ∧ d.val < 256) := by
+  simp only [explicit_provable_type, circuit_norm, U32.Normalized]
+
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero :
+    (0 : U32 (F p)) = U32.mk 0 0 0 0 := by
+  aesop
+
+omit p_large_enough in
+@[circuit_norm]
+lemma value_zero_iff_zero {x : U32 (F p)} (hx : x.Normalized) :
+    x.value = 0 ↔ x = U32.mk 0 0 0 0 := by
+  have := U32.value_injective_on_normalized (x:=x) (y:=U32.mk 0 0 0 0) hx (by
+    simp only [U32.Normalized, ZMod.val_zero]
+    norm_num)
+  constructor
+  · intro h_val_zero
+    simp only [h_val_zero, circuit_norm, ZMod.val_zero] at this
+    specialize this (by trivial)
+    assumption
+  · intro h_zero
+    simp only [h_zero, circuit_norm, ZMod.val_zero]
+    ring
+
 end U32
 
 namespace U32.AssertNormalized
@@ -211,7 +297,6 @@ def U32.witness (compute : Environment (F p) → U32 (F p)) := do
   let x ← ProvableType.witness compute
   U32.AssertNormalized.circuit x
   return x
-
 
 namespace U32.ByteVector
 -- results about U32 when viewed as a vector of bytes, via `toLimbs` and `fromLimbs`
@@ -253,4 +338,61 @@ lemma eval_fromLimbs {F} [Field F] {env : Environment F} {v : Vector (Expression
     eval env (U32.fromLimbs v) = .fromLimbs (v.map env) := by
   simp only [U32.fromLimbs, ProvableType.eval_fromElements]
 end ByteVector
+
+-- Bitwise operations on U32
+section Bitwise
+
+-- helper lemma to prepare the goal for testBit_two_pow_mul_add
+private lemma reorganize_value (a b c d : ℕ) :
+  a + 256 * (b + 256 * (c + 256 * d)) =
+  2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
+
+private lemma reorganize_value' (a b c d : ℕ) :
+  a + b * 256 + c * 256 ^ 2 + d * 256 ^ 3 =
+  2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
+
+-- General lemma: operations defined with bitwise can be computed componentwise on U32
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma bitwise_componentwise (f : Bool → Bool → Bool)
+    {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
+    f false false = false →
+    Nat.bitwise f x.value y.value =
+      Nat.bitwise f x.x0.val y.x0.val + 256 *
+        (Nat.bitwise f x.x1.val y.x1.val + 256 *
+          (Nat.bitwise f x.x2.val y.x2.val + 256 * Nat.bitwise f x.x3.val y.x3.val)) := by
+  intro _
+  simp only [value]
+
+  have ⟨_, _, _, _⟩ := x_norm
+  have ⟨_, _, _, _⟩ := y_norm
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp only [reorganize_value, reorganize_value']
+  rw [Nat.testBit_bitwise] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x0)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x0)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x0) (ZMod.val y.x0))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  split
+  · simp_all only [Nat.testBit_bitwise]
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x1)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x1)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x1) (ZMod.val y.x1))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  split
+  · simp_all only [not_lt, Nat.testBit_bitwise]
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val x.x2)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=ZMod.val y.x2)] <;> try assumption
+  rw [Nat.testBit_two_pow_mul_add (i:=8) (b:=Nat.bitwise f (ZMod.val x.x2) (ZMod.val y.x2))] <;> try (apply Nat.bitwise_lt_two_pow <;> assumption)
+  aesop
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Normalized) :
+    x.value ||| y.value =
+    (x.x0.val ||| y.x0.val) + 256 *
+      ((x.x1.val ||| y.x1.val) + 256 *
+        ((x.x2.val ||| y.x2.val) + 256 * (x.x3.val ||| y.x3.val))) := by
+  show Nat.bitwise _ _ _ = _
+  rw [bitwise_componentwise or x_norm y_norm] <;> rfl
+
+end Bitwise
+
 end U32

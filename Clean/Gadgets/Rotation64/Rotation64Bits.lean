@@ -12,7 +12,6 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Bitwise (rotRight64)
 open Rotation64.Theorems
 open ByteDecomposition (Outputs)
 open ByteDecomposition.Theorems (byteDecomposition_lt)
@@ -25,19 +24,19 @@ def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :=
   let highs := parts.map Outputs.high
 
   let rotated := highs.zip (lows.rotate 1) |>.map fun (high, low) =>
-    high + low * ((2^(8 - offset.val) : ℕ) : F p)
+    high + low * ((2^(8-offset.val) : ℕ) : F p)
 
   return U64.fromLimbs rotated
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U64 (F p)) (y: U64 (F p)) :=
+def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
-def output (offset : Fin 8) (i0 : Nat) : U64 (Expression (F p)) :=
+def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
-    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8 - offset.val) : ℕ) : F p))
+    (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
 def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   main := main off
@@ -59,7 +58,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   -- simplify statements
   dsimp only [circuit_norm, elaborated, main,
     ByteDecomposition.circuit, ByteDecomposition.elaborated] at h_holds
-  simp only [Spec, circuit_norm, elaborated, subcircuit_norm,
+  simp only [Spec, circuit_norm, elaborated,
     ByteDecomposition.Assumptions, ByteDecomposition.Spec] at h_holds ⊢
 
   -- targeted rewriting of the assumptions
@@ -67,7 +66,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   simp only [U64.ByteVector.getElem_eval_toLimbs, h_input, x_normalized, true_implies,
     Fin.forall_iff] at h_holds
 
-  set base := ((2^(8 - offset.val) : ℕ) : F p)
+  set base := ((2^(8-offset.val) : ℕ) : F p)
   have neg_offset_le : 8 - offset.val ≤ 8 := by
     rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 
@@ -87,7 +86,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
     have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
     have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
-    have ⟨lt, eq⟩ := byteDecomposition_lt (8-o) neg_offset_le high_lt next_low_lt'
+    have ⟨lt, eq⟩ := byteDecomposition_lt (8 - o) neg_offset_le high_lt next_low_lt'
     use lt
     rw [eq, high_eq, next_low_eq]
 
@@ -111,7 +110,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
-  simp only [main, elaborated, circuit_norm, subcircuit_norm,
+  simp only [main, elaborated, circuit_norm,
     ByteDecomposition.circuit, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions

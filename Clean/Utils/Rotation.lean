@@ -4,7 +4,6 @@ import Mathlib.Data.Nat.Bitwise
 import Clean.Utils.Bits
 
 namespace Utils.Rotation
-open Bitwise (rotRight64 rotRight32)
 open Bits (toBits toBits_injective)
 
 -- Theorems about 64-bit rotation
@@ -27,7 +26,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
     apply Nat.mod_eq_of_lt
     linarith
 
-  · have h1 : 2^(64 - offset%64) < 2^64 := by
+  · have h1 : 2^(64-offset%64) < 2^64 := by
       apply Nat.pow_lt_pow_of_lt
       · linarith
       · simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
@@ -128,7 +127,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
         apply Nat.le_of_lt
         apply Nat.mod_lt
         linarith
-      rw (occs:= .pos [4]) [eq]
+      rw (occs:=.pos [4]) [eq]
       apply Nat.shiftLeft_lt
       rw [Nat.one_shiftLeft]
       apply Nat.mod_lt
@@ -157,7 +156,7 @@ lemma rotRight64_off_mod_64 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 64) :
   rw [Nat.mod_eq_of_lt h']
 
 lemma rotRight64_fin (x : ℕ) (offset : Fin 64) :
-    rotRight64 x offset.val = x % (2^offset.val) * (2^(64 - offset.val)) + x / (2^offset.val) := by
+    rotRight64 x offset.val = x % (2^offset.val) * (2^(64-offset.val)) + x / (2^offset.val) := by
   simp only [rotRight64]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
@@ -205,7 +204,6 @@ lemma rotRight64_testBit (x r i : ℕ) (h : x < 2^64) :
   · rw [rotRight64_testBit_of_ge]
     repeat omega
 
-
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
@@ -220,7 +218,6 @@ theorem rotRight64_toBits (x r : ℕ) (h : x < 2^64):
   simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
   split <;> (congr; omega)
   linarith
-
 
 theorem rotRight64_lt (x r : ℕ) (h : x < 2^64) :
     rotRight64 x r < 2^64 := by
@@ -254,7 +251,6 @@ theorem rotRight64_composition (x n m : ℕ) (h : x < 2^64) :
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
 
-
 -- Theorems about 32-bit rotation
 
 /--
@@ -275,7 +271,7 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
     apply Nat.mod_eq_of_lt
     linarith
 
-  · have h1 : 2^(32 - offset%32) < 2^32 := by
+  · have h1 : 2^(32-offset%32) < 2^32 := by
       apply Nat.pow_lt_pow_of_lt
       · linarith
       · simp only [tsub_lt_self_iff, Nat.ofNat_pos, true_and]
@@ -376,7 +372,7 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
         apply Nat.le_of_lt
         apply Nat.mod_lt
         linarith
-      rw (occs:= .pos [4]) [eq]
+      rw (occs:=.pos [4]) [eq]
       apply Nat.shiftLeft_lt
       rw [Nat.one_shiftLeft]
       apply Nat.mod_lt
@@ -405,7 +401,7 @@ lemma rotRight32_off_mod_32 (x : ℕ) (off1 off2 : ℕ) (h : off1 = off2 % 32) :
   rw [Nat.mod_eq_of_lt h']
 
 lemma rotRight32_fin (x : ℕ) (offset : Fin 32) :
-    rotRight32 x offset.val = x % (2^offset.val) * (2^(32 - offset.val)) + x / (2^offset.val) := by
+    rotRight32 x offset.val = x % (2^offset.val) * (2^(32-offset.val)) + x / (2^offset.val) := by
   simp only [rotRight32]
   rw [Nat.mod_eq_of_lt offset.is_lt]
 
@@ -453,7 +449,6 @@ lemma rotRight32_testBit (x r i : ℕ) (h : x < 2^32) :
   · rw [rotRight32_testBit_of_ge]
     repeat omega
 
-
 /--
   The bits of the result of a rotation are the rotated bits of the input
 -/
@@ -468,7 +463,6 @@ theorem rotRight32_toBits (x r : ℕ) (h : x < 2^32):
   simp only [hi, decide_true, Bool.true_and, Bool.ite_eq_true_distrib]
   split <;> (congr; omega)
   linarith
-
 
 theorem rotRight32_lt (x r : ℕ) (h : x < 2^32) :
     rotRight32 x r < 2^32 := by
@@ -502,7 +496,6 @@ theorem rotRight32_composition (x n m : ℕ) (h : x < 2^32) :
   -- now this is easy, it is just rotation composition over vectors
   rw [Vector.rotate_rotate]
 
-
 -- helpful lemmas for {32, 64}-bit rotation with offset in [0, 7]
 
 lemma two_power_val {p : ℕ} {offset : Fin 8} [p_large_enough: Fact (p > 2^16 + 2^8)] :
@@ -532,7 +525,7 @@ lemma divides_256_two_power {offset : ℕ} (ho : offset < 8) {x i : ℕ} (h : i 
   linarith
 
 lemma div_256_two_power {offset : ℕ} (ho : offset < 8) {i : ℕ} (h : i > 0):
-    256^i / 2^offset = 256^(i-1) * 2^(8 - offset) := by
+    256^i / 2^offset = 256^(i-1) * 2^(8-offset) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, Nat.pow_div]
   rw [←Nat.pow_mul, ←Nat.pow_add]
   rw [Nat.mul_sub_left_distrib, Nat.mul_one]
@@ -540,7 +533,7 @@ lemma div_256_two_power {offset : ℕ} (ho : offset < 8) {i : ℕ} (h : i > 0):
   repeat linarith
 
 lemma mul_div_256_off {offset : ℕ} (ho : offset < 8) {x : ℕ} (i : ℕ) (h : i > 0):
-    (x * 256^i) / 2^offset = x * 256^(i-1) * 2^(8 - offset) := by
+    (x * 256^i) / 2^offset = x * 256^(i-1) * 2^(8-offset) := by
   rw [Nat.mul_div_assoc, div_256_two_power ho h]
   rw [show 256=2^8 by rfl, ←Nat.pow_mul]
   ac_rfl
@@ -548,47 +541,44 @@ lemma mul_div_256_off {offset : ℕ} (ho : offset < 8) {x : ℕ} (i : ℕ) (h : 
   apply Nat.pow_dvd_pow
   linarith
 
-
 lemma two_off_eq_mod (offset : Fin 8) (h : offset.val ≠ 0):
-    (2 ^ (8 - offset.val) % 256) = 2 ^ (8 - offset.val) := by
+    (2 ^ (8-offset.val) % 256) = 2 ^ (8-offset.val) := by
   apply Nat.mod_eq_of_lt
   fin_cases offset <;>
     first
     | contradiction
     | simp
 
-
 lemma shifted_decomposition_eq {offset : ℕ} (ho : offset < 8) {x1 x2 : ℕ} :
-    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256 =
-    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) := by
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8-offset)) * 256 =
+    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8-offset) := by
   ring_nf
   simp only [Nat.add_left_inj]
   rw [Nat.mul_assoc, ←Nat.pow_add, Nat.add_sub_of_le (by linarith)]
   rfl
 
 lemma shifted_decomposition_eq' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ} (hi : i > 0) :
-    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256^i =
-    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8 - offset) * 256^(i-1) := by
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8-offset)) * 256^i =
+    (2^offset * (x1 / 2^offset) + (x2 % 2^offset) * 256) * 2^(8-offset) * 256^(i-1) := by
   rw [Nat.pow_minus_one_mul hi, ←Nat.mul_assoc, shifted_decomposition_eq ho]
 
 lemma shifted_decomposition_eq'' {offset : ℕ} (ho : offset < 8) {x1 x2 i : ℕ} (hi : i > 0) :
-    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8 - offset)) * 256^i =
-    (2^offset * (x1 / 2^offset) * 2^(8 - offset) * 256^(i-1) +
-    (x2 % 2^offset) * 2^(8 - offset) * 256^i) := by
+    (x1 / 2 ^ offset + x2 % 2 ^ offset * 2 ^ (8-offset)) * 256^i =
+    (2^offset * (x1 / 2^offset) * 2^(8-offset) * 256^(i-1) +
+    (x2 % 2^offset) * 2^(8-offset) * 256^i) := by
   rw [shifted_decomposition_eq' ho hi]
   ring_nf
   rw [Nat.mul_assoc _ _ 256, Nat.mul_comm _ 256, Nat.pow_minus_one_mul hi]
 
-
 lemma soundness_simp {offset : ℕ} {x y : ℕ} :
-    x % 2 ^ offset * 2 ^ (8 - offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) * y =
-    x * y * 2^ (8 - offset) := by
+    x % 2 ^ offset * 2 ^ (8-offset) * y + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8-offset) * y =
+    x * y * 2^ (8-offset) := by
   rw [Nat.mul_assoc, Nat.mul_assoc, ←Nat.add_mul, add_comm, Nat.div_add_mod]
   ac_rfl
 
 lemma soundness_simp' {offset : ℕ} {x : ℕ} :
-    x % 2 ^ offset * 2 ^ (8 - offset) + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset) =
-    x * 2^ (8 - offset) := by
+    x % 2 ^ offset * 2 ^ (8-offset) + 2 ^ offset * (x / 2 ^ offset) * 2 ^ (8-offset) =
+    x * 2^ (8-offset) := by
   rw [←Nat.mul_one (x % 2 ^ offset * 2 ^ (8 - offset))]
   rw [←Nat.mul_one (2 ^ offset * (x / 2 ^ offset) * 2 ^ (8 - offset))]
   rw [soundness_simp, Nat.mul_one]

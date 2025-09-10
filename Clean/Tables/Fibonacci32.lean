@@ -130,7 +130,8 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   simp only [table_norm, circuit_norm, recursiveRelation,
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
-  simp only [table_norm, circuit_norm, subcircuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
+  simp only [table_norm, circuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
+  simp only [circuit_norm] at hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
   clear hcurr_x hcurr_y hnext_x hnext_y
@@ -149,8 +150,8 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
-  have hx : eval env (varFromOffset U32 0) = first_row.x := by rfl
-  have hy : eval env (varFromOffset U32 4) = first_row.y := by rfl
+  have hx : eval env (varFromOffset U32 0) = first_row.x := rfl
+  have hy : eval env (varFromOffset U32 4) = first_row.y := rfl
   rw [hx, hy]
   clear hx hy
   intro x_zero y_one

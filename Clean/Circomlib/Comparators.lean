@@ -26,7 +26,7 @@ template IsZero() {
 }
 -/
 def main (input : Expression (F p)) := do
-  let inv ← witnessField fun env =>
+  let inv ← witness fun env =>
     let x := input.eval env
     if x ≠ 0 then x⁻¹ else 0
 
@@ -39,16 +39,34 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 2
 
   Assumptions _ := True
+
   Spec input output :=
     output = (if input = 0 then 1 else 0)
 
   soundness := by
-    simp_all only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp only [id_eq, h_holds]
+    split_ifs with h_ifs
+    . simp only [h_ifs, zero_mul, neg_zero, zero_add]
+    . rw [neg_add_eq_zero]
+      have h1 := h_holds.left
+      have h2 := h_holds.right
+      rw [h1] at h2
+      simp only [id_eq, mul_eq_zero] at h2
+      cases h2
+      case neg.inl hl => contradiction
+      case neg.inr hr =>
+        rw [neg_add_eq_zero] at hr
+        exact hr
 
   completeness := by
-    simp_all only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    cases h_env with
+    | intro left right =>
+      simp only [left, ne_eq, id_eq, ite_not, mul_ite, mul_zero] at right
+      simp only [id_eq, right, left, ne_eq, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
+      split_ifs <;> aesop
+
 end IsZero
 
 namespace IsEqual
@@ -148,7 +166,7 @@ template LessThan(n) {
 -/
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
-  let bits ← Num2Bits.circuit (n+1) hn diff
+  let bits ← Num2Bits.circuit (n + 1) hn diff
   let out <== 1 - bits[n]
   return out
 
@@ -198,8 +216,8 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   soundness := by
     intro i env input (x, y) h_input assumptions h_holds
-    simp_all only [circuit_norm, subcircuit_norm, LessThan.circuit, Prod.mk.injEq]
-    have : 2^n < 2^(n + 1) := by gcongr; repeat linarith
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
+    have : 2^n < 2^(n+1) := by gcongr; repeat linarith
     have hy : y.val + (1 : F p).val < p := by
       simp only [ZMod.val_one]; linarith
     rw [ZMod.val_add_of_lt hy, ZMod.val_one] at h_holds
@@ -212,7 +230,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input assumptions
-    simp_all only [circuit_norm, subcircuit_norm, LessThan.circuit, Prod.mk.injEq]
+    simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
     -- TODO impossible to prove
     sorry
 end LessEqThan
@@ -242,10 +260,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
-    simp_all [circuit_norm, subcircuit_norm, LessThan.circuit]
+    simp_all [circuit_norm, LessThan.circuit]
 
   completeness := by
-    simp_all [circuit_norm, subcircuit_norm, LessThan.circuit]
+    simp_all [circuit_norm, LessThan.circuit]
 end GreaterThan
 
 namespace GreaterEqThan

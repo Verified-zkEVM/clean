@@ -72,7 +72,7 @@ lemma boundaryFib_eq : boundaryFib (p:=p) = (do
   := rfl
 
 omit p_large_enough in
-lemma boundary_step (first_row: Row (F p) RowType) (aux_env : Environment (F p)) :
+lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
   Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
@@ -129,7 +129,7 @@ def formalFibTable : FormalTable (F p) RowType := {
 
       simp only [fibTable, fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at ConstraintsHold
-      simp only [circuit_norm, subcircuit_norm, eval, varFromOffset, Vector.mapRange] at ConstraintsHold
+      simp only [circuit_norm, eval, varFromOffset, Vector.mapRange] at ConstraintsHold
 
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl

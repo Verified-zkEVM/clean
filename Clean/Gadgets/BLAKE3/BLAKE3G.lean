@@ -4,6 +4,7 @@ import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Rotation32.Rotation32
 import Clean.Specs.BLAKE3
 import Clean.Circuit.Provable
+import Clean.Utils.Tactics
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -71,19 +72,14 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input
   state.Normalized ∧ x.Normalized ∧ y.Normalized
 
-def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
 theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assumptions (Spec a b c d) := by
-  intro i0 env ⟨state_var, x_var, y_var⟩ ⟨state, x, y⟩ h_input h_normalized h_holds
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
-
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_holds
-  simp only [circuit_norm, subcircuit_norm, and_imp,
+  circuit_proof_start [BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector, h_input] at h_holds
+    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
@@ -98,16 +94,17 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
   -- case-by-case reasoning on the indices.
   -- NOTE: This is not a bug, we are following the BLAKE specification of the g function verbatim.
   -- See, for example, https://www.ietf.org/archive/id/draft-aumasson-blake3-00.html#name-quarter-round-function-g
-  simp only [Spec, ElaboratedCircuit.output]
   constructor
   · ext i hi
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
-      Vector.getElem_map, g, Fin.getElem_fin, Bitwise.add32]
+      Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
     · rw [c11.left]
-    · rw [c12.left]
+    · simp only [circuit_norm]
+      rw [c12.left]
     · rw [c14.left]
-    · rw [c9.left]
+    · simp only [circuit_norm]
+      rw [c9.left]
     · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
 
   · intro i
@@ -117,17 +114,15 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Assu
     · exact c12.right
     · exact c14.right
     · exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_normalized]
+    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Assumptions := by
-  rintro i0 env ⟨state_var, x_var, y_var⟩ henv ⟨state, x, y⟩ h_input h_normalized
-  simp only [circuit_norm, Inputs.mk.injEq] at h_input
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
+  circuit_proof_start [BLAKE3State.Normalized]
 
-  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at henv ⊢
-  simp only [h_input, circuit_norm, subcircuit_norm, and_imp,
+  dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_env ⊢
+  simp only [circuit_norm, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
+    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
 
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const, and_true]
@@ -139,6 +134,5 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State := {
   soundness := soundness a b c d
   completeness := completeness a b c d
 }
-
 
 end Gadgets.BLAKE3.G

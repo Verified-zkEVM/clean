@@ -74,7 +74,7 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out: BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
@@ -131,10 +131,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
     Fin.getElem_fin] at state_norm chaining_value_norm
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
-  simp only [h_input, circuit_norm, subcircuit_norm, and_imp,
+  simp only [h_input, circuit_norm, and_imp,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
   simp_all only [gt_iff_lt, forall_const, and_self]
-
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

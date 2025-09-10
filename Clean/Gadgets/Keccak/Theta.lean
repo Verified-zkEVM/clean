@@ -19,18 +19,18 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state: KeccakState (F p)) : Prop :=
+def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  simp_all [circuit_norm, subcircuit_norm, Spec, main, Assumptions,
+  simp_all [circuit_norm, Spec, main, Assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  simp_all [circuit_norm, subcircuit_norm, main, Assumptions, Spec,
+  simp_all [circuit_norm, main, Assumptions, Spec,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]

@@ -8,7 +8,6 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Bitwise (not64)
 open Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
@@ -54,7 +53,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [Assumptions, KeccakState.Normalized] at state_norm
-  simp only [main, circuit_norm, subcircuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd] at h_holds
 
   simp_all
@@ -67,7 +66,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [state_norm, h_input, main, circuit_norm, subcircuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  simp_all [state_norm, h_input, main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=

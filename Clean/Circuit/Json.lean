@@ -9,7 +9,7 @@ open Lean
 instance (p : ℕ) : ToJson (F p) where
   toJson x := toJson x.val
 
-variable {F: Type} [Field F] [ToJson F]
+variable {F : Type} [Field F] [ToJson F]
 
 def Expression.toJson [ToJson F]: Expression F → Json
   | .var v => Json.mkObj [
@@ -64,7 +64,7 @@ instance : ToJson (Operations F) where
   toJson ops := toJson ops.toFlat
 
 instance {α} : ToJson (Circuit F α) where
-  toJson circuit := toJson circuit.operations
+  toJson circuit := toJson (circuit.operations 0)
 
 instance {α β} [ProvableType α] [ProvableType β] : ToJson (FormalCircuit F α β) where
   toJson circuit :=

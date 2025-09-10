@@ -11,7 +11,6 @@ namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
-
 namespace CompConstant
 /-
 template CompConstant(ct) {
@@ -110,8 +109,7 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
-    simp only [circuit_norm, subcircuit_norm]
+    simp only [circuit_norm, main]
     sorry
 
   completeness := by

@@ -8,7 +8,6 @@ variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 namespace Gadgets.Rotation32.Theorems
-open Bitwise (rotRight32)
 open Gadgets.ByteDecomposition.Theorems (byteDecomposition_lift)
 open Utils.Rotation
 
@@ -53,7 +52,7 @@ lemma h_div32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3: ℕ} :
     Nat.add_left_inj]
 
 lemma h_x0_const32 {o : ℕ} (ho : o < 8) :
-    2^(8 - o) * 256^3 = 2^(32 - o) := by
+    2^(8-o) * 256^3 = 2^(32-o) := by
   rw [show 256 = 2^8 by rfl, ←Nat.pow_mul, ←Nat.pow_add, pow_right_inj₀ (by norm_num) (by norm_num)]
   omega
 

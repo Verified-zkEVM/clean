@@ -1,4 +1,5 @@
 import Clean.Utils.Field
+import Clean.Gadgets.Boolean
 
 namespace Gadgets.Addition8.Theorems
 variable {p : ℕ} [Fact p.Prime]
@@ -7,7 +8,7 @@ variable [p_large_enough: Fact (p > 512)]
 /-
   First part of the soundness direction: case of zero carry
 -/
-theorem soundness_zero_carry (x y out carry_in: F p):
+theorem soundness_zero_carry (x y out carry_in : F p):
     x.val < 256 -> y.val < 256 -> out.val < 256  -> carry_in.val < 2 ->
     (carry_in + x + y - out = 0 -> (out.val = (carry_in.val + x.val + y.val) % 256
     ∧ (carry_in.val + x.val + y.val) / 256 = 0)) := by
@@ -25,7 +26,7 @@ theorem soundness_zero_carry (x y out carry_in: F p):
 /-
   Second part of the soundness direction: case of one carry
 -/
-theorem soundness_one_carry (x y out carry_in: F p):
+theorem soundness_one_carry (x y out carry_in : F p):
     x.val < 256 -> y.val < 256 -> out.val < 256 -> carry_in.val < 2 ->
     carry_in + x + y - out - 256 = 0 -> (out.val = (carry_in.val + x.val + y.val) % 256
     ∧ (carry_in.val + x.val + y.val) / 256 = 1) := by
@@ -52,7 +53,6 @@ theorem soundness_one_carry (x y out carry_in: F p):
     simp at hb
     apply Nat.add_le_add hb sum_bound
   rw [xy_not_wrap, ←add_assoc] at sum_le_511
-
 
   set x := x.val
   set y := y.val
@@ -81,16 +81,16 @@ theorem soundness_one_carry (x y out carry_in: F p):
   carry modulo 256. Additionally the output carry is exactly the integer division
   of the aforementioned sum by 256.
 -/
-theorem soundness (x y out carry_in carry_out: F p):
+theorem soundness (x y out carry_in carry_out : F p):
     x.val < 256 -> y.val < 256 ->
     out.val < 256 ->
-    (carry_in = 0 ∨ carry_in = 1) ->
-    (carry_out = 0 ∨ carry_out = 1) ->
+    IsBool carry_in ->
+    IsBool carry_out ->
     (x + y + carry_in + -out + -(carry_out * 256) = 0) ->
     (out.val = (x.val + y.val + carry_in.val) % 256
     ∧ carry_out.val = (x.val + y.val + carry_in.val) / 256):= by
   intros hx hy hout carry_in_bool carry_out_bool h
-  have carry_in_bound := FieldUtils.boolean_lt_2 carry_in_bool
+  have carry_in_bound := IsBool.val_lt_two carry_in_bool
 
   rcases carry_out_bool with zero_carry | one_carry
   -- case with zero carry
@@ -139,7 +139,7 @@ theorem soundness (x y out carry_in carry_out: F p):
 /--
   Given the default witness generation, we show that the addition constraint is satisfied
 -/
-theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
+theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in : F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
@@ -192,12 +192,12 @@ theorem completeness_add [p_neq_zero : NeZero p] (x y carry_in: F p) :
   Given the default witness generation, we show that the output carry
   is either 0 or 1
 -/
-theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in: F p) :
+theorem completeness_bool [p_neq_zero : NeZero p] (x y carry_in : F p) :
     x.val < 256 ->
     y.val < 256 ->
     carry_in.val < 2 ->
     let carry_out := FieldUtils.floorDiv (x + y + carry_in) 256
-    carry_out = 0 ∨ carry_out = 1 := by
+    IsBool carry_out := by
   intro as_x as_y carry_in_bound
   dsimp only [FieldUtils.floorDiv, PNat.val_ofNat]
 

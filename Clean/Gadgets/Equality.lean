@@ -38,6 +38,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
+@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
   Assumptions _ := True
 
@@ -98,12 +99,12 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 @[circuit_norm]
 theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit]
+  simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
     ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
-  simp only [subcircuit_norm, circuit_norm, circuit]
+  simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
@@ -156,12 +157,8 @@ instance {F : Type} [Field F] {α : TypeMap} [ProvableType α] :
     witness === rhs
     return witness
 
-instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) F where
-  assignEq vals := do
-    vals.mapM fun v => do
-      let witness ← witnessField fun env => v.eval env
-      witness === v
-      return witness
+instance {F : Type} [Field F] {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
+  inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
 
 attribute [circuit_norm] HasAssignEq.assignEq
 

@@ -44,7 +44,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
-  x.val < 256 ∧ y.val < 256 ∧ (carryIn = 0 ∨ carryIn = 1)
+  x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
 def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
@@ -71,18 +71,16 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, subcircuit_norm, h_inputs, Spec, Assumptions, main,
-      ByteTable]
+    simp_all only [circuit_norm, h_inputs, Spec, Assumptions, main, ByteTable]
+
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    guard_hyp h_bool_carry: carry_out = 0 ∨ carry_out = 1
-
     show z.val = (x.val + y.val + carry_in.val) % 256 ∧
          carry_out.val = (x.val + y.val + carry_in.val) / 256
 
@@ -98,17 +96,17 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, subcircuit_norm, h_inputs, Assumptions, main,
-      ByteTable] at *
+    simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
+
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
 
     -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ (carry_in = 0 ∨ carry_in = 1)
+    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
 
     let goal_byte := z.val < 256
-    let goal_bool := carry_out = 0 ∨ carry_out = 1
+    let goal_bool := IsBool carry_out
     let goal_add := x + y + carry_in + -z + -(carry_out * 256) = 0
     show goal_byte ∧ goal_bool ∧ goal_add
 
@@ -117,9 +115,9 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       apply ByteUtils.mod256_lt
 
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    have carry_in_bound := FieldUtils.boolean_lt_2 as_carry_in
+    have carry_in_bound := IsBool.val_lt_two as_carry_in
 
-    have completeness2 : carry_out = 0 ∨ carry_out = 1 := by
+    have completeness2 : IsBool carry_out := by
       rw [hcarry_out]
       apply Addition8.Theorems.completeness_bool
       repeat assumption
@@ -136,7 +134,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by
-    simp_all only [circuit_norm, subcircuit_norm, circuit, main,
+    simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
       Operations.forAllFlat, Operations.toFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 

@@ -30,7 +30,7 @@ def Assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   state.Normalized ∧ d.Normalized
 
-def Spec (inputs : Inputs (F p)) (out: KeccakState (F p)) : Prop :=
+def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaXor state.value d.value
@@ -50,7 +50,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [circuit_norm, subcircuit_norm, main, h_input, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
+  simp only [circuit_norm, main, h_input, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
 
   -- use assumptions, prove goal
   intro i
@@ -60,7 +60,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [h_input, main, circuit_norm, subcircuit_norm, Xor64.circuit, Xor64.Assumptions]
+  simp only [h_input, main, circuit_norm, Xor64.circuit, Xor64.Assumptions]
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 

@@ -14,7 +14,6 @@ instance : Fact (p > 512) := by
   constructor
   linarith [p_large_enough.elim]
 
-open Bitwise (rotRight64)
 open Utils.Rotation (rotRight64_composition)
 
 /--
@@ -30,11 +29,11 @@ def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 64) (x : U64 (F p)) (y: U64 (F p)) :=
+def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
-def output (offset : Fin 64) (i0 : Nat) : U64 (Expression (F p)) :=
+def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output (offset % 8).val i0
 
 -- #eval! (main (p:=p_babybear) 0) default |>.localLength
@@ -47,7 +46,7 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds
 
-  simp [circuit_norm, main, elaborated, subcircuit_norm,
+  simp [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
 
   -- abstract away intermediate U64
@@ -85,10 +84,10 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
 theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
-  simp [circuit_norm, main, elaborated, subcircuit_norm,
+  simp [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
     Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions]
-  simp [circuit_norm, elaborated, main, subcircuit_norm,
+  simp [circuit_norm, elaborated, main,
     Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env
 
   obtain ⟨h0, _⟩ := h_env

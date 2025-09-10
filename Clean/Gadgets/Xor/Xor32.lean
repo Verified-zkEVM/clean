@@ -39,11 +39,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   lookup ByteXorTable (x.x3, y.x3, z.x3)
   return z
 
-def Assumptions (input: Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input: Inputs (F p)) (z : U32 (F p)) :=
+def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
@@ -70,7 +70,7 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
       Nat.xor_lt_two_pow (n:=8) hx2 hy2, Nat.xor_lt_two_pow (n:=8) hx3 hy3 ⟩
 
   suffices z.value = x.value ^^^ y.value from ⟨ this, z_norm ⟩
-  simp only [U32.value_xor_horner, x_norm, y_norm, z_norm, h_eq, Bitwise.xor_mul_two_pow]
+  simp only [U32.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
   ac_rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
@@ -89,7 +89,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [h_input, circuit_norm, main, ByteXorTable,
     varFromOffset, Vector.mapRange] at h_holds
 
-  apply soundness_to_u32 x_norm y_norm
+  apply soundness_to_u32 (by simp [circuit_norm, x_norm]) (by simp [circuit_norm, y_norm])
   simp only [circuit_norm, explicit_provable_type]
   simp [h_holds]
 

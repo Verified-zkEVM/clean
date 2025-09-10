@@ -41,7 +41,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
 
   -- simplify constraints
   simp only [Assumptions] at state_norm
-  simp only [main, h_input, state_norm, circuit_norm, subcircuit_norm,
+  simp only [main, h_input, state_norm, circuit_norm,
     Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
@@ -83,7 +83,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Assumpti
 
   -- simplify goal and witness hypotheses
   simp only [Assumptions] at state_norm
-  dsimp only [main, circuit_norm, subcircuit_norm,
+  dsimp only [main, circuit_norm,
     Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
