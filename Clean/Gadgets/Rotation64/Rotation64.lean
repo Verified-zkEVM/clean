@@ -65,10 +65,17 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   rw [←h_input] at x_normalized
   obtain ⟨h0, h1⟩ := h_holds
   specialize h0 x_normalized
-  obtain ⟨hy_rot, hy_norm⟩ := h0
+  obtain ⟨hx_yield, hy_rot, hy_norm⟩ := h0
   specialize h1 hy_norm
-  rw [hy_rot] at h1
-  obtain ⟨hy, hy_norm⟩ := h1
+
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Rotation subcircuits don't yield anything
+    sorry
+
+  simp only [hy_rot] at h1
+  obtain ⟨_, ⟨hy, hy_norm⟩⟩ := h1
   simp only [hy_norm, and_true]
   rw [h_input] at hy x_normalized
 

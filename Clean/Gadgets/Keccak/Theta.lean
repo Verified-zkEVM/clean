@@ -24,6 +24,9 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (s
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  circuit_proof_start
+  constructor
+  · sorry
   simp_all [circuit_norm, Spec, elaborated, main, Assumptions,
     ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,

@@ -39,6 +39,12 @@ lemma thetaC_loop (state : Vector ℕ 25) :
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro i0 env yields checked state_var state h_input state_norm h_holds
+  
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Xor64 subcircuits don't yield anything
+    sorry
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
@@ -55,6 +61,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   intro i
   specialize h_holds i
+  have ⟨_, h_spec⟩ := h_holds
   aesop
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by

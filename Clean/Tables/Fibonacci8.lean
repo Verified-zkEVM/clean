@@ -155,6 +155,8 @@ def formalFibTable : FormalTable (F p) RowType := {
         apply fib8_less_than_256
 
       specialize add_holds ⟨ lookup_first_col, lookup_second_col ⟩
+      -- Extract the actual spec from the conjunction (skip yields part)
+      have add_spec := add_holds.2
 
       have spec1 : next.x.val = fib8 (rest.len + 1) := by
         rw [←curr_fib1]
@@ -164,7 +166,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       have spec2 : (next.y).val = fib8 (rest.len + 2) := by
         simp only [fib8]
         rw [←curr_fib0, ←curr_fib1]
-        assumption
+        exact add_spec
 
       exact ⟨spec1, spec2⟩
 }

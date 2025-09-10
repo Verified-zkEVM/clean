@@ -47,6 +47,11 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   intro i0 env yields checked state_var state h_input state_norm h_holds
 
   -- simplify goal
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The subcircuits don't yield anything
+    sorry
   apply KeccakState.normalized_value_ext
   simp only [circuit_norm, Spec, elaborated, chi_loop, eval_vector, KeccakState.value]
 

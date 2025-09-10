@@ -46,6 +46,10 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (i
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start [elaborated]
+  
+  constructor
+  · sorry  -- Prove yielded sentences hold
+  
   simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]

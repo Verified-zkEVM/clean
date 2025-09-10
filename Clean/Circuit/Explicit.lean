@@ -148,7 +148,7 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F senten
     reduce
     trivial
 
-instance : ExplicitCircuits (F:=F) (sentences:=sentences) assertZero where
+instance : ExplicitCircuits (F:=F) (sentences:=sentences) (assertZero sentences) where
   output _ _ := ()
   localLength _ _ := 0
   operations e n := [.assert e]
@@ -201,7 +201,7 @@ example {sentences : PropertySet F} :
     let x : Expression F ← witness fun _ => 0
     let y ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
-    assertZero (x + y - z)
+    assertZero sentences (x + y - z)
     return z
 
   ExplicitCircuit add := by infer_explicit_circuit
@@ -213,7 +213,7 @@ example {sentences : PropertySet F} :
   let add (x : Expression F) : Circuit sentences (Expression F) := do
     let y : Expression F ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
-    assertZero (x + y - z)
+    assertZero sentences (x + y - z)
     return z
 
   ExplicitCircuits add := by infer_explicit_circuits

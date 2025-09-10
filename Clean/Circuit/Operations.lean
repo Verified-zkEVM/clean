@@ -58,6 +58,21 @@ def localYields {sentences : PropertySet F} (env : Environment F) : List (FlatOp
   | yield s :: ops => {s.eval env} ∪ localYields env ops
   | witness _ _ :: ops | assert _ :: ops | lookup _ :: ops => localYields env ops
 
+@[circuit_norm]
+lemma localYields_append {sentences : PropertySet F} (env : Environment F) (ops1 ops2 : List (FlatOperation sentences)) :
+    localYields env (ops1 ++ ops2) = localYields env ops1 ∪ localYields env ops2 := by
+  induction ops1 with
+  | nil => simp [localYields]
+  | cons op ops1 ih =>
+    cases op with
+    | witness m c => simp [localYields, ih, Set.union_assoc]
+    | assert e => simp [localYields, ih, Set.union_assoc]
+    | lookup l => simp [localYields, ih, Set.union_assoc]
+    | yield s =>
+        simp only [List.cons_append, localYields, ih, Set.singleton_union]
+        aesop
+
+
 /-- Induction principle for `FlatOperation`s. -/
 def induct {sentences : PropertySet F} {motive : List (FlatOperation sentences) → Sort*}
   (empty : motive [])
@@ -107,12 +122,12 @@ structure Subcircuit (sentences : PropertySet F) (offset : ℕ) where
     ConstraintsHoldFlat env yields checkedYields ops → Soundness env yields checkedYields
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators and yields of this circuit
-  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences), 
+  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
     env.ExtendsVector (localWitnesses env ops) offset ∧ FlatOperation.localYields env ops ⊆ yields.yielded →
     Completeness env yields → ConstraintsHoldFlat env yields checked ops
 
   -- `UsesLocalWitnessesAndYields` needs to follow from the local witness generator condition and yielded sentences
-  imply_usesLocalWitnessesAndYields : ∀ (env : Environment F) (yields : YieldContext sentences), 
+  imply_usesLocalWitnessesAndYields : ∀ (env : Environment F) (yields : YieldContext sentences),
     env.ExtendsVector (localWitnesses env ops) offset ∧ FlatOperation.localYields env ops ⊆ yields.yielded →
     UsesLocalWitnessesAndYields env yields
 
@@ -220,6 +235,47 @@ def localYields {sentences : PropertySet F} (env : Environment F) : Operations s
   | .witness _ _ :: ops | .assert _ :: ops | .lookup _ :: ops => localYields env ops
   | .subcircuit s :: ops => FlatOperation.localYields env s.ops ∪ localYields env ops
 
+@[circuit_norm]
+lemma localYields_nil {sentences : PropertySet F} (env : Environment F) :
+    localYields env ([] : Operations sentences) = ∅ := rfl
+
+@[circuit_norm]
+lemma localYields_cons_subcircuit {sentences : PropertySet F} (env : Environment F) {n : ℕ} (s : Subcircuit sentences n) (ops : Operations sentences) :
+    localYields env (.subcircuit s :: ops) = FlatOperation.localYields env s.ops ∪ localYields env ops := rfl
+
+@[circuit_norm]
+lemma localYields_cons_witness {sentences : PropertySet F} (env : Environment F) (m : ℕ) (c : Environment F → Vector F m) (ops : Operations sentences) :
+    localYields env (.witness m c :: ops) = localYields env ops := rfl
+
+@[circuit_norm]
+lemma localYields_cons_assert {sentences : PropertySet F} (env : Environment F) (e : Expression F) (ops : Operations sentences) :
+    localYields env (.assert e :: ops) = localYields env ops := rfl
+
+@[circuit_norm]
+lemma localYields_cons_lookup {sentences : PropertySet F} (env : Environment F) (l : Lookup F) (ops : Operations sentences) :
+    localYields env (.lookup l :: ops) = localYields env ops := rfl
+
+@[circuit_norm]
+lemma localYields_cons_yield {sentences : PropertySet F} (env : Environment F) (s : Sentence sentences (Expression F)) (ops : Operations sentences) :
+    localYields env (.yield s :: ops) = {s.eval env} ∪ localYields env ops := rfl
+
+@[circuit_norm]
+lemma localYields_append {sentences : PropertySet F} (env : Environment F) (ops1 ops2 : Operations sentences) :
+    localYields env (ops1 ++ ops2) = localYields env ops1 ∪ localYields env ops2 := by
+  induction ops1 with
+  | nil => simp [localYields]
+  | cons op ops1 ih =>
+    cases op with
+    | witness m c => simp [localYields, ih, Set.union_assoc]
+    | assert e => simp [localYields, ih, Set.union_assoc]
+    | lookup l => simp [localYields, ih, Set.union_assoc]
+    | yield s => 
+      simp only [List.cons_append, localYields, ih]
+      ext x
+      simp only [Set.mem_singleton_iff, Set.mem_union]
+      tauto
+    | subcircuit s => simp [localYields, ih, Set.union_assoc]
+
 /-- Induction principle for `Operations`. -/
 def induct {sentences : PropertySet F} {motive : Operations sentences → Sort*}
   (empty : motive [])
@@ -236,6 +292,21 @@ def induct {sentences : PropertySet F} {motive : Operations sentences → Sort*}
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup yield subcircuit ops)
   | .yield s :: ops => yield s ops (induct empty witness assert lookup yield subcircuit ops)
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup yield subcircuit ops)
+
+/-- The localYields of operations equals the localYields of their flat representation -/
+@[circuit_norm]
+lemma localYields_toFlat {sentences : PropertySet F} (env : Environment F) (ops : Operations sentences) :
+    FlatOperation.localYields env ops.toFlat = Operations.localYields env ops := by
+  induction ops using induct with
+  | empty => rfl
+  | witness m c ops ih => simp [toFlat, FlatOperation.localYields, localYields, ih]
+  | assert e ops ih => simp [toFlat, FlatOperation.localYields, localYields, ih]
+  | lookup l ops ih => simp [toFlat, FlatOperation.localYields, localYields, ih]
+  | yield s ops ih => simp [toFlat, FlatOperation.localYields, localYields, ih]
+  | subcircuit s ops ih =>
+    simp [toFlat, localYields]
+    rw [FlatOperation.localYields_append, ih]
+
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition

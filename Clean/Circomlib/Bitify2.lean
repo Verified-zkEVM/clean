@@ -58,22 +58,27 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     intro i0 env yields checked input_var input h_input assumptions h_holds
+    
+    constructor
+    · sorry  -- Prove yielded sentences hold
+    
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
       Vector.map_mapRange, Vector.map_map, Function.comp_apply]
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
     obtain ⟨ h_bits, h_eq, h_alias ⟩ := h_holds
-    specialize h_alias h_bits
-    rw [← h_eq, fieldToBits, fieldFromBits,
+    have h_bits' := fun i hi => (h_bits i hi).2
+    specialize h_alias h_bits'
+    rw [← h_eq.2, fieldToBits, fieldFromBits,
       ZMod.val_natCast, Vector.map_mapRange]
-    rw [Nat.mod_eq_of_lt h_alias, toBits_fromBits, Vector.ext_iff]
+    rw [Nat.mod_eq_of_lt h_alias.2, toBits_fromBits, Vector.ext_iff]
     simp only [circuit_norm]
     intro i hi
     rw [ZMod.natCast_zmod_val]
     intro i hi; specialize h_bits i hi
     simp only [circuit_norm]
-    rcases h_bits with h_bits | h_bits
+    rcases h_bits.2 with h_bits | h_bits
       <;> simp [h_bits, ZMod.val_one]
 
   completeness := by

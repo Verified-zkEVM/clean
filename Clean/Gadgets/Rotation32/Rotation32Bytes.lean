@@ -65,8 +65,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   simp [circuit_norm, Spec, U32.value, -Nat.reducePow]
   constructor
-  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
+  · fin_cases off <;> (simp_all [explicit_provable_type, main, rotRight32, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, main, rotRight32, circuit_norm, -Nat.reducePow]; omega)
 
 theorem completeness {sentences : PropertySet (F p)} (off : Fin 4) : Completeness (F p) sentences (elaborated (sentences := sentences) off) Assumptions := by
   rintro i0 env yields ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _

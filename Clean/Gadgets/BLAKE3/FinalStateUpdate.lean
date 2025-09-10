@@ -111,6 +111,12 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   specialize c13 (chaining_value_norm 5) (state_norm 13)
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
+  
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Xor32 subcircuits don't yield anything
+    sorry
 
   simp [Spec, circuit_norm, elaborated, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf

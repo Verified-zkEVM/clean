@@ -56,7 +56,6 @@ theorem soundness [DecidableEq F] {sentences : PropertySet F} (order : SentenceO
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
   simp only [Assumptions, Spec] at h_assumptions ⊢
 
-  -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.eval_fromElements]

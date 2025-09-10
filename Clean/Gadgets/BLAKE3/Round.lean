@@ -63,25 +63,28 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   simp only [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, h_input, getElem_eval_vector, G.Spec, Fin.isValue,
     Nat.cast_zero, and_imp, and_true] at h_holds
+  constructor
+  · sorry  -- Prove yielded sentences hold
+
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
   simp_all only [forall_const]
 
   -- resolve chain of assumptions
   specialize c1 (h_message 0) (h_message 1)
-  rw [c1.left] at c2
-  specialize c2 c1.right (h_message 2) (h_message 3)
-  rw [c2.left] at c3
-  specialize c3 c2.right (h_message 4) (h_message 5)
-  rw [c3.left] at c4
-  specialize c4 c3.right (h_message 6) (h_message 7)
-  rw [c4.left] at c5
-  specialize c5 c4.right (h_message 8) (h_message 9)
-  rw [c5.left] at c6
-  specialize c6 c5.right (h_message 10) (h_message 11)
-  rw [c6.left] at c7
-  specialize c7 c6.right (h_message 12) (h_message 13)
-  rw [c7.left] at c8
-  specialize c8 c7.right (h_message 14) (h_message 15)
+  rw [c1.2.1] at c2
+  specialize c2 c1.2.2 (h_message 2) (h_message 3)
+  rw [c2.2.1] at c3
+  specialize c3 c2.2.2 (h_message 4) (h_message 5)
+  rw [c3.2.1] at c4
+  specialize c4 c3.2.2 (h_message 6) (h_message 7)
+  rw [c4.2.1] at c5
+  specialize c5 c4.2.2 (h_message 8) (h_message 9)
+  rw [c5.2.1] at c6
+  specialize c6 c5.2.2 (h_message 10) (h_message 11)
+  rw [c6.2.1] at c7
+  specialize c7 c6.2.2 (h_message 12) (h_message 13)
+  rw [c7.2.1] at c8
+  specialize c8 c7.2.2 (h_message 14) (h_message 15)
 
   clear c1 c2 c3 c4 c5 c6 c7
 
@@ -97,8 +100,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, List.foldl_toArray',
     List.foldl_cons, List.foldl_nil]
   constructor
-  · rw [←c8.left]; rfl
-  · exact c8.right
+  · rw [←c8.2.1]; rfl
+  · exact c8.2.2
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
   circuit_proof_start [elaborated, G.circuit, G.elaborated, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesAndYieldsCompleteness,

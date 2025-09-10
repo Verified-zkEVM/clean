@@ -109,7 +109,7 @@ def witnessVector {sentences : PropertySet F} (m : ℕ) (compute : Environment F
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assertZero {sentences : PropertySet F} (e : Expression F) : Circuit sentences Unit := fun _ =>
+def assertZero (sentences : PropertySet F) (e : Expression F) : Circuit sentences Unit := fun _ =>
   ((), [.assert e])
 
 /-- Add a lookup. -/
@@ -278,7 +278,9 @@ def Soundness (F : Type) [Field F] {sentences : PropertySet F}
   ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  -- TODO: prove `yield`ed properties hold, when their dependencies are already checked
+  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  -- prove locally yielded sentences are valid (when their dependencies are satisfied)
+  (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   Spec checked input output
 
 @[circuit_norm]
@@ -337,8 +339,10 @@ def FormalAssertion.Soundness (F : Type) [Field F] (sentences : PropertySet F) (
   Assumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
+  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  -- prove locally yielded sentences are valid (when their dependencies are satisfied)
+  (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   -- the spec holds on the input
-  -- TODO: prove `yield`ed properties hold, when their dependencies are already checked
   Spec checked input
 
 @[circuit_norm]
@@ -383,16 +387,21 @@ structure FormalAssertion {F : Type} [Field F] {sentences : PropertySet F} (orde
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : PropertySet F) (order : SentenceOrder sentences)
     (circuit : ElaboratedCircuit F sentences Input Output)
+    (SoundnessAssumptions : Input F → Prop)
     (Spec : CheckedYields sentences → Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
   -- for all inputs
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  -- if the assumptions hold
+  SoundnessAssumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  -- TODO: prove `yield`ed properties hold, when their dependencies are already checked
+  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  -- prove locally yielded sentences are valid (when their dependencies are satisfied)
+  (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   Spec checked input output
 
 @[circuit_norm]
@@ -425,8 +434,9 @@ structure GeneralFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} 
     (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F sentences Input Output where
   Assumptions : Input F → Prop -- the statement to be assumed for completeness
+  SoundnessAssumptions : Input F → Prop := fun _ => True -- assumptions that are given when proving soundness
   Spec : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
-  soundness : GeneralFormalCircuit.Soundness F sentences order elaborated Spec
+  soundness : GeneralFormalCircuit.Soundness F sentences order elaborated SoundnessAssumptions Spec
   completeness : GeneralFormalCircuit.Completeness F sentences elaborated Assumptions
 end
 
@@ -563,7 +573,7 @@ example {sentences : PropertySet F} :
   let add (x : Expression F) : Circuit sentences (Expression F) := do
     let y : Expression F ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
-    assertZero (x + y - z)
+    assertZero sentences (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length
 end Circuit
@@ -571,7 +581,7 @@ end Circuit
 -- `circuit_norm` attributes
 
 -- basic logical simplifcations
-attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
+attribute [circuit_norm] true_and and_true true_implies implies_true forall_const Set.forall_mem_empty Set.empty_union
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form

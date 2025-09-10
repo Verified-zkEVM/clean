@@ -39,6 +39,8 @@ example (state : Vector ℕ 25) :
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro n env yields checked initial_state_var initial_state h_input h_assumptions h_holds
+  constructor
+  · sorry
 
   -- simplify
   simp only [elaborated, main, circuit_norm, Spec,
@@ -51,11 +53,12 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
 
+  obtain ⟨ _, h_init ⟩ := h_init
   change (state 0).Normalized ∧
     (state 0).value = keccakRound initial_state.value roundConstants[0]
   at h_init
 
-  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → (state (i + 1)).Normalized ∧
+  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → _ ∧ (state (i + 1)).Normalized ∧
     (state (i + 1)).value = keccakRound (state i).value roundConstants[i + 1]
   at h_succ
 
@@ -69,8 +72,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       have hi' : i < 24 := Nat.lt_of_succ_lt hi
       specialize ih hi'
       specialize h_succ i hi ih.left
-      use h_succ.left
-      rw [h_succ.right, Fin.foldl_succ_last, ih.right]
+      use h_succ.2.left
+      rw [h_succ.2.right, Fin.foldl_succ_last, ih.right]
       simp
   exact h_inductive 23 (by norm_num)
 

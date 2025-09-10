@@ -9,8 +9,25 @@ open Circuit (ConstraintsHold)
 
 namespace Gadgets
 
-def allZero {sentences : PropertySet F} {n} (xs : Vector (Expression F) n) : Circuit sentences Unit :=
-  Circuit.forEach xs (body:=assertZero)
+def allZero (sentences : PropertySet F) {n} (xs : Vector (Expression F) n) : Circuit sentences Unit :=
+  Circuit.forEach xs (body:=assertZero sentences)
+
+@[circuit_norm]
+lemma allZero.localYields_eq_empty {sentences : PropertySet F} {n} (xs : Vector (Expression F) n) (env : Environment F) (offset : ℕ) :
+    Operations.localYields env ((allZero (sentences:=sentences) xs).operations offset) = ∅ := by
+  simp only [allZero, Circuit.forEach]
+  -- Convert to list operations
+  rw [Vector.forM_toList]
+  -- Now we can use list induction
+  induction xs.toList with
+  | nil =>
+    simp only [forM, circuit_norm]
+    rfl
+  | cons x xs ih =>
+    simp only [List.forM_cons]
+    rw [Circuit.bind_operations_eq]
+    simp only [assertZero, circuit_norm] at ih ⊢
+    assumption
 
 theorem allZero.soundness {sentences : PropertySet F} {offset : ℕ} {env : Environment F}
     {yields : YieldContext sentences} {checked : CheckedYields sentences}
@@ -36,7 +53,7 @@ def main {sentences : PropertySet F} {α : TypeMap} [ProvableType α]
     (input : Var α F × Var α F) : Circuit sentences Unit := do
   let (x, y) := input
   let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
-  Circuit.forEach diffs (body:=assertZero)
+  allZero sentences diffs
 
 @[reducible]
 instance elaborated {sentences : PropertySet F} (α : TypeMap) [ProvableType α] :
@@ -44,8 +61,8 @@ instance elaborated {sentences : PropertySet F} (α : TypeMap) [ProvableType α]
   main := fun ⟨x, y⟩ => main (sentences:=sentences) (α:=α) (x, y)
   localLength _ := 0
   output _ _ := ()
-  localLength_eq _ _ := by simp only [main, circuit_norm, mul_zero]
-  subcircuitsConsistent _ := by simp only [main, circuit_norm]
+  localLength_eq _ _ := by simp only [main, circuit_norm, mul_zero, allZero]
+  subcircuitsConsistent _ := by simp only [main, circuit_norm, allZero]
 
 @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit {sentences : PropertySet F} (order : SentenceOrder sentences)
@@ -63,17 +80,23 @@ def circuit {sentences : PropertySet F} (order : SentenceOrder sentences)
     let ⟨x_var, y_var⟩ := input_var
     simp only [circuit_norm, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
-    rw [←hx, ←hy]
-    simp only [eval]
-    congr 1
-    ext i hi
-    simp only [Vector.getElem_map]
-    rw [toVars, toVars, ←Vector.forall_getElem] at h_holds
-    specialize h_holds i hi
-    rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
-    simp only [Expression.eval] at h_holds
-    rw [neg_one_mul] at h_holds
-    exact eq_of_add_neg_eq_zero h_holds
+    constructor
+    · -- Prove yielded sentences hold (vacuous since nothing is yielded)
+      intro s hs
+      simp only [elaborated, main, allZero.localYields_eq_empty] at hs
+      contradiction
+    · -- Prove the spec
+      rw [←hx, ←hy]
+      simp only [eval]
+      congr 1
+      ext i hi
+      simp only [Vector.getElem_map]
+      rw [toVars, toVars, ←Vector.forall_getElem] at h_holds
+      specialize h_holds i hi
+      rw [Vector.getElem_map, Vector.getElem_zip] at h_holds
+      simp only [Expression.eval] at h_holds
+      rw [neg_one_mul] at h_holds
+      exact eq_of_add_neg_eq_zero h_holds
 
   completeness := by
     intro offset env yields input_var h_env input h_input _ h_spec

@@ -64,10 +64,10 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   rw [←h_input] at x_normalized
   obtain ⟨h0, h1⟩ := h_holds
   specialize h0 x_normalized
-  obtain ⟨hy_rot, hy_norm⟩ := h0
+  obtain ⟨hy_yield, hy_rot, hy_norm⟩ := h0
   specialize h1 hy_norm
   rw [hy_rot] at h1
-  obtain ⟨hy, hy_norm⟩ := h1
+  obtain ⟨hy_yield, hy, hy_norm⟩ := h1
   simp only [hy_norm, and_true]
   rw [h_input] at hy x_normalized
 
@@ -79,6 +79,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     apply Nat.div_lt_of_lt_mul
     exact offset.is_lt]
   rw [Nat.div_add_mod']
+  constructor
+  · sorry
+  rfl
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
   intro i0 env yields x_var h_env x h_eval x_normalized

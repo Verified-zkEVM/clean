@@ -8,7 +8,7 @@ instance {α : TypeMap} [ProvableType α] : Inhabited (Circuit sentences (Var α
 
 def copyToVar (x : Expression F) : Circuit sentences (Variable F) := do
   let x' ← witnessVar x.eval
-  assertZero (x - (var x'))
+  assertZero sentences (x - (var x'))
   return x'
 
 def toVar : Expression F → Circuit sentences (Variable F)

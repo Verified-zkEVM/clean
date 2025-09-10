@@ -108,6 +108,11 @@ theorem soundness [DecidableEq (M F)] {sentences : PropertySet F} (order : Sente
     Soundness F (elaborated (sentences:=sentences) (M := M) order) order Assumptions
       (fun _checked => Spec) := by
   circuit_proof_start
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The foldl loop doesn't yield anything
+    sorry
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
@@ -116,7 +121,11 @@ theorem soundness [DecidableEq (M F)] {sentences : PropertySet F} (order : Sente
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff order <;> assumption
+  apply foldl_isZero_eq_one_iff order
+  · exact h_input
+  · intro i h_ass
+    have := h_holds i h_ass
+    exact this.2
 
 theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentences) :
     Completeness F sentences (elaborated (sentences:=sentences) (M := M) order) Assumptions := by

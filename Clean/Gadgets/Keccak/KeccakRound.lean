@@ -36,6 +36,9 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : Soundness (F p) (elaborated order rc) order Assumptions (Spec (rc := rc)) := by
   intro i0 env yields checked state_var state h_input state_norm h_holds
 
+  constructor
+  · sorry  -- Prove yielded sentences hold
+
   -- simplify goal
   apply KeccakState.normalized_value_ext
   simp only [circuit_norm, elaborated, eval_vector, keccakRound, iota]
@@ -49,9 +52,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   ] at h_holds
   simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
-  obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
-  have ⟨ rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
-  have ⟨ chi_norm, chi_eq ⟩ := h_chi rhopi_norm
+  obtain ⟨ _, theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
+  have ⟨ _, rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
+  have ⟨ _, chi_norm, chi_eq ⟩ := h_chi rhopi_norm
   rw [rhopi_eq, theta_eq] at chi_eq
   clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi state_norm h_input
 

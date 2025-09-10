@@ -40,15 +40,27 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
-    simp_all
+    intros offset env yields checked input_var input h_input h_assumption h_holds
+    constructor
+    · sorry
     have : p > 2^135 := hp135.elim
-    omega
+    rcases h_holds with ⟨ h_holds1, h_holds2, h_holds3 ⟩
+    simp only [h_holds3, h_input] at h_holds1
+    specialize h_holds1 (by
+      intros i x
+      specialize h_assumption i x
+      simp only [← h_input, eval_vector] at h_assumption
+      aesop)
+    rcases h_holds1 with ⟨ h_holds11, h_holds12 ⟩
+    split at h_holds12
+    · aesop
+    · omega
 
   completeness := by
     simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
     simp_all
     omega
-  
+
 end AliasCheck
 
 end Circomlib

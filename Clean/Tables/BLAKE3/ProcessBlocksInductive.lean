@@ -89,6 +89,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
     constructor
+    · sorry
+    constructor
     · intro i
       simp only [← h_input, eval_vector]
       simp_all
@@ -154,6 +156,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
+    constructor
+    · sorry
     constructor
     · simp_all
     simp only [←h_input, eval_vector] -- provable_vector_simp wanted
@@ -267,6 +271,7 @@ private lemma step_process_block (env : Environment (F p))
   rcases h_holds with ⟨ _, h_holds ⟩
   rcases h_holds with ⟨ _, h_holds ⟩
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
+  obtain h_iszero := h_iszero.2
   rcases h_holds with ⟨ h_compress, h_holds ⟩
   specialize h_compress (by
     simp only [acc_normalized, x_normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]
@@ -280,6 +285,7 @@ private lemma step_process_block (env : Environment (F p))
         simp only [h_iszero]
         norm_num
     )
+  obtain h_compress := h_compress.2
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]

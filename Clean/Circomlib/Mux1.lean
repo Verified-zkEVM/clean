@@ -78,7 +78,16 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   soundness := by
     simp only [circuit_norm, main]
     intro offset env yields checked input_var input h_input h_assumptions h_output
-    -- We need to show the spec holds for all i < n
+    constructor
+    · -- Prove yielded sentences hold
+      intro s
+      simp only [FlatOperation.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, FormalAssertion.toSubcircuit,
+        Gadgets.allZero]
+      simp only [Operations.localYields_toFlat]
+      rw [Circuit.forEach_localYields_of_empty]
+      · simp
+      simp only [assertZero, circuit_norm]
+    -- Prove the spec holds for all i < n
     intro i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
     -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
@@ -87,7 +96,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
     -- Get the i-th element equality from h_output
     -- h_output gives us equality of vectors, extract element i
-    have h_output_i := congrArg (fun v => v[i]) h_output
+    have h_output_i := congrArg (fun v => v[i]) h_output.2
     -- Simplify the outer Vector.map on both sides
     simp only [Vector.getElem_map] at h_output_i
     -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }
@@ -198,8 +207,16 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     clear input
     clear h_input
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
-    specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    rw [h_subcircuit_sound]
+    have h_spec := h_subcircuit_sound h_assumptions
+    constructor
+    · -- Prove yielded sentences hold
+      intro s h_s
+      apply h_spec.1
+      simp_all
+    -- Prove our spec
+    rcases h_spec with ⟨ h_spec1, h_spec2 ⟩
+    specialize h_spec2 0 (by omega)
+    rw [h_spec2]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]

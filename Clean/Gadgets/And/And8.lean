@@ -86,29 +86,29 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   set z := x + y + -(2*w)
-  show w.val = x.val &&& y.val
+  · show w.val = x.val &&& y.val
 
-  -- it's easier to prove something about 2*w since it features in the constraint
-  have two_and_field : 2*w = x + y - z := by ring
+    -- it's easier to prove something about 2*w since it features in the constraint
+    have two_and_field : 2*w = x + y - z := by ring
 
-  have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
-  have z_lt : z.val ≤ (x + y).val := by
-    rw [h_xor, x_y_val]
-    exact xor_le_add hx_byte hy_byte
-  have x_y_z_val : (x + y - z).val = x.val + y.val - z.val := by
-    rw [ZMod.val_sub z_lt, x_y_val]
+    have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
+    have z_lt : z.val ≤ (x + y).val := by
+      rw [h_xor, x_y_val]
+      exact xor_le_add hx_byte hy_byte
+    have x_y_z_val : (x + y - z).val = x.val + y.val - z.val := by
+      rw [ZMod.val_sub z_lt, x_y_val]
 
-  have two_and : (2*w).val = 2*(x.val &&& y.val) := by
-    rw [two_and_field, x_y_z_val, h_xor, ←and_times_two_add_xor hx_byte hy_byte, Nat.add_sub_cancel]
+    have two_and : (2*w).val = 2*(x.val &&& y.val) := by
+      rw [two_and_field, x_y_z_val, h_xor, ←and_times_two_add_xor hx_byte hy_byte, Nat.add_sub_cancel]
 
-  clear two_and_field x_y_val x_y_z_val h_xor z_lt
+    clear two_and_field x_y_val x_y_z_val h_xor z_lt
 
-  -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
-  have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
-    (by linarith [p_large_enough.elim]) two_and
+    -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
+    have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
+      (by linarith [p_large_enough.elim]) two_and
 
-  rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
-  exact two_and
+    rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
+    exact two_and
 
 theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) sentences elaborated Assumptions := by
   intro i env yields ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions

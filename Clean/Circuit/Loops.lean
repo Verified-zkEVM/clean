@@ -359,6 +359,25 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit s
     (_constant : ConstantLength body := by infer_constant_length) : Circuit sentences Unit :=
   xs.forM body
 
+@[circuit_norm]
+lemma forEach_localYields_of_empty {m : ℕ} (xs : Vector α m) [Inhabited α] 
+    (body : α → Circuit sentences Unit) (_constant : ConstantLength body)
+    (env : Environment F) (offset : ℕ)
+    (h_empty : ∀ x n, Operations.localYields env ((body x).operations n) = ∅) :
+    Operations.localYields env ((forEach xs body _constant).operations offset) = ∅ := by
+  simp only [forEach]
+  -- Convert to list and use induction
+  rw [Vector.forM_toList]
+  induction xs.toList generalizing offset with
+  | nil =>
+    simp only [forM, circuit_norm]
+    rfl
+  | cons x xs ih =>
+    simp only [List.forM_cons, Circuit.bind_operations_eq, circuit_norm]
+    rw [h_empty x offset]
+    simp only [Set.empty_union]
+    exact ih (offset + Operations.localLength (body x offset).2)
+
 def map {m : ℕ} (xs : Vector α m) (body : α → Circuit sentences β)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit sentences (Vector β m) :=
   xs.mapM body

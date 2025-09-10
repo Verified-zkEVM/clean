@@ -63,6 +63,12 @@ instance {F : Type} {sentences : PropertySet F} : EmptyCollection (CheckedYields
 instance {F : Type} {sentences : PropertySet F} : HasSubset (CheckedYields sentences) where
   Subset := by unfold CheckedYields; exact Set.Subset
 
+instance {F : Type} {sentences : PropertySet F} : Membership (Sentence sentences F) (CheckedYields sentences) where
+  mem := by
+    unfold CheckedYields
+    intro s elm
+    exact (elm ∈ s)
+
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.
 The completeness proof will need to keep track of the set of the yielded sentences.
@@ -85,6 +91,15 @@ def emptyOrder (F : Type) : SentenceOrder (emptyPropertySet F) where
 
 /-- Empty CheckedYields for use in contexts that don't need the use/yield framework -/
 def emptyChecked (F : Type) : CheckedYields (emptyPropertySet F) := ∅
+
+/-- Check if a sentence's predicate holds on its evaluated entry -/
+def SentenceHolds {F : Type} {s : PropertySet F} (sentence : Sentence s F) : Prop :=
+  sentence.property.Predicate sentence.entry
+
+/-- Check if all sentences that the given sentence depends on are in CheckedYields -/
+def AllDependenciesChecked {F : Type} {s : PropertySet F} (order : SentenceOrder s)
+    (checked : CheckedYields s) (sentence : Sentence s F) : Prop :=
+  ∀ dep, order.CanDepend dep sentence → dep ∈ checked
 
 /- TODO:
 

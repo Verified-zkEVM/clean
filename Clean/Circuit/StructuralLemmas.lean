@@ -41,10 +41,30 @@ def FormalCircuit.concat
   Spec checked input output := ∃ mid, circuit1.Spec checked input mid ∧ circuit2.Spec checked mid output
   soundness := by
     simp only [Soundness]
-    intros
-    rename_i h_hold
+    intros offset env yields checked input_var input h_eval h_assumptions h_hold
     simp only [Circuit.bind_def, circuit_norm] at h_hold
-    aesop
+    rcases h_hold with ⟨ h_hold1, h_hold2 ⟩
+    specialize h_hold1 (by simp_all)
+    rcases h_hold1 with ⟨ h_hold1_yield, h_hold1_spec ⟩
+    specialize h_compat _ _ _ (by simp_all) h_hold1_spec
+    specialize h_hold2 h_compat
+    rcases h_hold2 with ⟨ h_hold2_yield, h_hold2_spec ⟩
+    constructor
+    · intro s h_s
+      simp only [circuit_norm] at h_s
+      simp only [Nat.add_zero, Set.union_empty, Set.mem_union] at h_s
+      cases h_s
+      · apply h_hold1_yield
+        rename_i h_s
+        simp only [circuit_norm, FormalCircuit.toSubcircuit] at h_s
+        assumption
+      · apply h_hold2_yield
+        rename_i h_s
+        simp only [circuit_norm, FormalCircuit.toSubcircuit] at h_s
+        assumption
+    · exists (eval env (circuit1.elaborated.output input_var offset))
+      aesop
+
   completeness := by
     simp only [circuit_norm]
     aesop
@@ -86,9 +106,9 @@ def FormalCircuit.weakenSpec
   soundness := by
     intro offset env yields checked input_var input h_eval h_assumptions h_holds
     -- Use the original circuit's soundness
-    have h_strong_spec := circuit.soundness offset env yields checked input_var input h_eval h_assumptions h_holds
+    have ⟨h_yields, h_strong_spec⟩ := circuit.soundness offset env yields checked input_var input h_eval h_assumptions h_holds
     -- Apply the implication to get the weaker spec
-    exact h_spec_implication checked input _ h_assumptions h_strong_spec
+    exact ⟨h_yields, h_spec_implication checked input _ h_assumptions h_strong_spec⟩
   completeness := by
     -- Completeness is preserved since we use the same elaborated circuit
     -- and the same assumptions

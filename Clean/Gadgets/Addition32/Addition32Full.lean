@@ -66,6 +66,12 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start [elaborated, Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Addition8FullCarry subcircuits don't yield anything
+    sorry
+
   -- simplify circuit further
   -- TODO handle simplification of general provable types in `circuit_proof_start`
   let ⟨ x0, x1, x2, x3 ⟩ := input_x

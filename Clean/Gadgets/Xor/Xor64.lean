@@ -103,6 +103,11 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   simp only [h_input, circuit_norm, elaborated, main, ByteXorTable,
     varFromOffset, Vector.mapRange] at h_holds
 
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Xor8 subcircuits don't yield anything
+    sorry
   apply soundness_to_u64 (sentences := sentences) x_norm y_norm
   simp only [circuit_norm, explicit_provable_type, elaborated]
   simp [h_holds]

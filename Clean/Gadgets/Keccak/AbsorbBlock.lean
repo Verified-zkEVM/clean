@@ -46,6 +46,9 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro i0 env yields checked ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
+  constructor
+  · sorry  -- Prove yielded sentences hold
+
   -- simplify goal and constraints
   simp only [circuit_norm, elaborated, RATE, main, Spec, Assumptions, absorbBlock,
     Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec,
@@ -61,7 +64,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     ∧ (eval env state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all
-  replace h_holds := h_holds.left
+  obtain ⟨ h_xor, h_perm ⟩ := h_holds
 
   -- finish the proof by cases on i < 17
   apply KeccakState.normalized_value_ext
@@ -71,9 +74,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   by_cases hi' : i < 17 <;> simp only [hi', reduceDIte]
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_left hi']
-    specialize h_holds ⟨ i, hi'⟩
-    simp only [getElem_eval_vector, h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_holds
-    exact ⟨ h_holds.right, h_holds.left ⟩
+    specialize h_xor ⟨ i, hi'⟩
+    simp only [getElem_eval_vector, h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_xor
+    exact ⟨ h_xor.2.2, h_xor.2.1 ⟩
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]

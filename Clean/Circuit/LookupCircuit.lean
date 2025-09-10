@@ -108,7 +108,14 @@ def lookupCircuit (circuit : LookupCircuit F α β) (order : SentenceOrder sente
 
   soundness := by
     intro n env yields' checked input_var input h_input h_assumptions h_holds
-    simp_all only [circuit_norm, toTable]
+    simp only [ElaboratedCircuit.output]
+    constructor
+    · -- Prove yielded sentences hold (vacuous since nothing is yielded - only witness and lookup)
+      intro s hs
+      simp only [ElaboratedCircuit.main, circuit_norm, Operations.localYields] at hs
+      contradiction
+    · -- Prove the spec
+      simp_all only [circuit_norm, toTable]
 
   completeness := by
     intro n env yields' input_var h_env input h_input h_assumptions

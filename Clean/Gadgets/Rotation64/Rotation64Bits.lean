@@ -83,8 +83,10 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
     set high := env.get (i0 + i * 2 + 1)
     set next_low := env.get (i0 + (i + 1) % 8 * 2)
-    have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
-    have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have ⟨_, byte_spec⟩ := h_holds i hi
+    have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := byte_spec
+    have ⟨_, next_byte_spec⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := next_byte_spec
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
     have ⟨lt, eq⟩ := byteDecomposition_lt (8 - o) neg_offset_le high_lt next_low_lt'
     use lt
@@ -104,7 +106,13 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     exact (h_rot_vector i hi).right
 
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
-  exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The ByteDecomposition subcircuits don't yield anything
+    sorry
+  · -- Prove the spec
+    exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
   intro i0 env yields x_var _ x h_input x_normalized

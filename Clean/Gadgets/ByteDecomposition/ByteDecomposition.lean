@@ -52,9 +52,12 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
 
-  obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
+  obtain ⟨low_lt, high_lt, h_yields_and_eq⟩ := h_holds
   set low := env.get i0
   set high := env.get (i0 + 1)
+  
+  -- Extract the equation from the conjunction
+  have h_eq : x = low + high * 2^offset.val := h_yields_and_eq.2
 
   have : 2^16 < p := by linarith [p_large_enough.elim]
   let n : ℕ := 8 - offset.val
@@ -95,8 +98,18 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   -- finally we have the desired inequality on `low`
   have h_lt_low : low.val < 2^offset.val := h_lt_mul_low
   have ⟨ low_eq, high_eq ⟩ := Theorems.soundness offset x low high x_byte h_lt_low high_lt h_eq
-  use ⟨ low_eq, high_eq ⟩, h_lt_low
-  rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
+  
+  constructor
+  · -- Prove yielded sentences hold
+    intro s hs hdeps
+    -- The subcircuit structure adds complexity, but we can use h_yields_and_eq.1
+    -- We need to show that the subcircuit yields match
+    simp only [FlatOperation.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false] at hs
+    -- Apply the yields proof from h_yields_and_eq
+    exact h_yields_and_eq.1 s hs hdeps
+  · -- Prove the spec
+    use ⟨ low_eq, high_eq ⟩, h_lt_low
+    rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
 theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
   rintro i0 env yielded x_var henv (x : F p) h_input (x_byte : x.val < 256)

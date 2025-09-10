@@ -24,8 +24,12 @@ def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder
     z.val = (x.val + y.val + carryIn.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
-  soundness := by simp_all [circuit_norm,
-    Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
+  soundness := by
+    circuit_proof_start
+    constructor
+    · sorry
+    simp_all [circuit_norm,
+      Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
   completeness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
@@ -58,6 +62,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by
+    circuit_proof_start
+    constructor
+    · sorry
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]

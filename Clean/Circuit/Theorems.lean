@@ -834,47 +834,49 @@ end FlatOperation
 -- theorem about relationship between FormalCircuit and GeneralFormalCircuit
 
 /--
-`FormalCircuit.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` a generalization of
-`FormalCircuit`. The idea is to make `FormalCircuit.Assumption` available in the soundness
-by assuming it within `GeneralFormalCircuit.Spec`.
+`FormalCircuit.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` is a generalization of
+`FormalCircuit`. The idea is to make `FormalCircuit.Assumptions` available in the soundness
+by putting it in `GeneralFormalCircuit.SoundnessAssumptions`.
 -/
 def FormalCircuit.isGeneralFormalCircuit {F : Type} {sentences : PropertySet F} (order : SentenceOrder sentences) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
     (orig : FormalCircuit order Input Output): GeneralFormalCircuit order Input Output := by
-  let Spec (checked : CheckedYields sentences) input output := orig.Assumptions input → orig.Spec checked input output
   exact {
     elaborated := orig.elaborated,
     Assumptions := orig.Assumptions,
-    Spec,
+    SoundnessAssumptions := orig.Assumptions,
+    Spec := orig.Spec,
     soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
+      intro offset env yields checked input_var input h_eq h_assumptions constraints_hold
+      have h := orig.soundness offset env yields checked input_var input h_eq h_assumptions constraints_hold
+      exact h
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
+      simp only [GeneralFormalCircuit.Completeness, forall_eq']
       intros
       apply orig.completeness <;> trivial
   }
 
 /--
 `FormalAssertion.isGeneralFormalCircuit` explains how `GeneralFormalCircuit` is a generalization of
-`FormalAssertion`.  The idea is to make `FormalAssertion.Spec` available in the completeness
-by putting it within `GeneralFormalCircuit.Assumption`.
+`FormalAssertion`. The assumptions are placed in `SoundnessAssumptions` for soundness,
+and `FormalAssertion.Spec` is made available in the completeness by putting it within `GeneralFormalCircuit.Assumptions`.
 -/
 def FormalAssertion.isGeneralFormalCircuit {F : Type} {sentences : PropertySet F} (order : SentenceOrder sentences) (Input : TypeMap) [Field F] [ProvableType Input]
     (orig : FormalAssertion order Input) : GeneralFormalCircuit order Input unit := by
-  let Spec (checked : CheckedYields sentences) input (_ : Unit) := orig.Assumptions input → orig.Spec checked input
+  let Spec (checked : CheckedYields sentences) input (_ : Unit) := orig.Spec checked input
   exact {
     elaborated := orig.elaborated,
     Assumptions input := orig.Assumptions input ∧ orig.Spec Set.univ input,
+    SoundnessAssumptions := orig.Assumptions,
     Spec,
     soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
+      intro offset env yields checked input_var input h_eq h_assumptions constraints_hold
+      simp only [Spec]
+      have h := orig.soundness offset env yields checked input_var input h_eq h_assumptions constraints_hold
+      exact ⟨h.1, h.2⟩
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
+      simp only [GeneralFormalCircuit.Completeness, forall_eq']
       intros
       apply orig.completeness <;> aesop
   }

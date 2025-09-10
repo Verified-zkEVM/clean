@@ -40,7 +40,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   -- assert that carryOut is boolean (as a subcircuit assertion)
   assertBool order carryOut
 
-  assertZero (x + y + carryIn - z - carryOut * 256)
+  assertZero sentences (x + y + carryIn - z - carryOut * 256)
 
   return { z, carryOut }
 
@@ -84,9 +84,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    show z.val = (x.val + y.val + carry_in.val) % 256 ∧
-         carry_out.val = (x.val + y.val + carry_in.val) / 256
 
+    show z.val = (x.val + y.val + carry_in.val) % 256 ∧
+          carry_out.val = (x.val + y.val + carry_in.val) / 256
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry h_add
 

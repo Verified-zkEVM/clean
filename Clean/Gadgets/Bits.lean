@@ -38,7 +38,11 @@ def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   soundness := by
     circuit_proof_start
-    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    obtain ⟨ h_bits_conj , ⟨ h_eq_yield, h_eq_conj ⟩ ⟩ := h_holds
+
+    -- Extract the parts from the conjunctions
+    have h_bits : ∀ (i : Fin n), IsBool (env.get (i₀ + i)) := fun i => (h_bits_conj i)
+    have h_eq : input = env (fieldFromBitsExpr (.mapRange n (var ⟨i₀ + ·⟩))) := h_eq_conj
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨i₀ + ·⟩)
     let bits : Vector (F p) n := bit_vars.map env
@@ -49,7 +53,15 @@ def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
     change input = env (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt _ h_bits
+
+    constructor
+    · -- Prove yielded sentences hold (should be empty)
+      intro s
+      simp [circuit_norm, Operations.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false, FormalAssertion.toSubcircuit, Equality.main]
+    · -- Prove the spec
+      constructor
+      · exact fieldFromBits_lt _ h_bits
+      · rfl
 
   completeness := by
     circuit_proof_start
@@ -83,7 +95,10 @@ def rangeCheck {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   Assumptions _ := True
   Spec (_ : CheckedYields sentences) (x : F p) := x.val < 2^n
 
-  soundness := by simp_all only [circuit_norm, toBits]
+  soundness := by
+    simp_all only [circuit_norm, toBits]
+    intro offset env yields checked input_var input h_input h_holds s
+    simp [circuit_norm, GeneralFormalCircuit.toSubcircuit, FormalAssertion.toSubcircuit, main, Equality.main]
   completeness := by simp_all only [circuit_norm, toBits]
 
 end ToBits

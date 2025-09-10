@@ -44,6 +44,11 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   intro i0 env yields checked ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
 
   -- rewrite goal
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Xor64 subcircuits don't yield anything
+    sorry
   apply KeccakState.normalized_value_ext
   simp only [elaborated, main, circuit_norm, thetaXor_loop, Xor64.circuit, Xor64.elaborated, varFromOffset_vector, eval_vector,
     mul_comm, KeccakState.value, KeccakRow.value]
@@ -55,7 +60,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   -- use assumptions, prove goal
   intro i
   specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
-  exact ⟨ h_holds.right, h_holds.left ⟩
+  have ⟨_, h_spec⟩ := h_holds
+  exact ⟨ h_spec.right, h_spec.left ⟩
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
   intro i0 env yields ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩

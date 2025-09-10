@@ -276,6 +276,8 @@ private lemma bytesToWords_value (env : Environment (F p))
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start
+  constructor
+  · sorry
   rcases h_holds with ⟨h_IsZero, h_holds⟩
   specialize h_IsZero trivial
   simp only [IsZero.circuit, IsZero.Spec] at h_IsZero
@@ -317,7 +319,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       omega)
   constructor
   · simp only [finalizeChunk, eval_vector, ← Vector.map_take]
-    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
+    rcases h_Compress with ⟨_, h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.value, eval_vector] at h_Compress_value
     simp only [h_Compress_value]
     clear h_Compress_value
@@ -346,7 +348,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       arg 2
       change (Vector.take _ 8)[i]
       rw [Vector.getElem_take]
-    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
+    rcases h_Compress with ⟨_, h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
     specialize h_Compress_Normalized i
     simp only [Fin.val_natCast] at h_Compress_Normalized

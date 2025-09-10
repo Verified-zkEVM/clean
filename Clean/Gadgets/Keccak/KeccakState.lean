@@ -77,7 +77,19 @@ def KeccakBlock.normalized {sentences : PropertySet (F p)} (order : SentenceOrde
   localLength_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
   soundness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
-    simp [getElem_eval_vector, KeccakBlock.Normalized]
+    intro offset env yields checked input_var input h_input h_each
+    constructor
+    · -- Prove yielded sentences hold
+      intro s
+      rw [Circuit.forEach_localYields_of_empty]
+      · simp
+      intro x n
+      simp [circuit_norm, FormalAssertion.toSubcircuit, U64.AssertNormalized.main]
+    · -- Prove the spec
+      simp only [getElem_eval_vector, KeccakBlock.Normalized] at h_each ⊢
+      intro i
+      specialize h_each i
+      simp_all
   completeness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]

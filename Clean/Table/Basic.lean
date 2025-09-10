@@ -426,7 +426,7 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
     let new_var ← (witnessVar x.eval : Circuit (emptyPropertySet F) (Variable F))
-    (assertZero (x - var new_var) : Circuit (emptyPropertySet F) Unit)
+    (assertZero (emptyPropertySet F) (x - var new_var) : Circuit (emptyPropertySet F) Unit)
     assignVar off new_var
 
 @[table_norm, table_assignment_norm]

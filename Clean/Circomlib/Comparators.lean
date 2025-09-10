@@ -206,6 +206,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     rw [ZMod.val_add_of_lt hy, ZMod.val_one] at h_holds
     by_cases hy : y.val + 1 = 2^n
     case neg =>
+      constructor
+      · sorry
       specialize h_holds (by omega)
       simp_all [Nat.lt_add_one_iff]
     -- TODO the spec of LessThan is not strong enough to handle this case
@@ -243,7 +245,13 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
-    simp_all [circuit_norm, LessThan.circuit]
+    circuit_proof_start
+    constructor
+    · sorry
+    simp_all only [circuit_norm, LessThan.circuit]
+    simp only [← h_input] at h_assumptions ⊢
+    specialize h_holds (by simp_all)
+    simp_all
 
   completeness := by
     simp_all [circuit_norm, LessThan.circuit]

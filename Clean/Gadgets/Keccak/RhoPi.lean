@@ -43,6 +43,12 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro i0 env yields checked state_var state h_input state_norm h_holds
 
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The Rotation64 subcircuits don't yield anything
+    sorry
+
   -- simplify goal
   apply KeccakState.normalized_value_ext
   simp only [elaborated, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,

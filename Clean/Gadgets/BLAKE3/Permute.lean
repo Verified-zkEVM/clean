@@ -20,19 +20,24 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (s
 
 theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro i0 env state_var checked state_input state h_input h_assumptions h_holds
-  simp only [Spec, BLAKE3State.value, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
-    eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
-    ↓Vector.getElem_toArray, Vector.mk_eq]
   constructor
-  · ext i hi
-    · simp only [Array.size_map, Array.size_ofFn]
-    simp only [Array.getElem_map, Array.getElem_ofFn]
-    rw [Function.comp_apply, getElem_eval_vector, h_input]
-  · simp [BLAKE3State.Normalized]
-    intro i
-    rw [getElem_eval_vector, h_input]
-    simp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
-    fin_cases i <;> simp only [msgPermutation, h_assumptions]
+  · -- Prove yielded sentences hold (nothing is yielded)
+    intro s
+    simp [Operations.localYields, circuit_norm, main]
+  · -- Prove the spec
+    simp only [Spec, BLAKE3State.value, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
+      eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
+      ↓Vector.getElem_toArray, Vector.mk_eq]
+    constructor
+    · ext i hi
+      · simp only [Array.size_map, Array.size_ofFn]
+      simp only [Array.getElem_map, Array.getElem_ofFn]
+      rw [Function.comp_apply, getElem_eval_vector, h_input]
+    · simp [BLAKE3State.Normalized]
+      intro i
+      rw [getElem_eval_vector, h_input]
+      simp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
+      fin_cases i <;> simp only [msgPermutation, h_assumptions]
 
 theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
   rintro i0 env state_var henv state h_inputs h_normalized

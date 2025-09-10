@@ -28,7 +28,8 @@ theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : Se
 
   intro offset env yields checked b_var b h_input h_assumptions h_holds
   have h_holds' := Circuit.can_replace_soundness yields checked h_holds
-  exact circuit.soundness offset env yields checked b_var b h_input h_assumptions h_holds'
+  have ⟨_, h_spec⟩ := circuit.soundness offset env yields checked b_var b h_input h_assumptions h_holds'
+  exact h_spec
 
 /--
   Justification for using modified statements for `UsesLocalWitnessesAndYields`
@@ -59,7 +60,8 @@ theorem FormalAssertion.original_soundness {sentences : PropertySet F} {order : 
 
   intro offset env yields checked b_var b h_input h_assumptions h_holds
   have h_holds' := Circuit.can_replace_soundness yields checked h_holds
-  exact circuit.soundness offset env yields checked b_var b h_input h_assumptions h_holds'
+  have ⟨_, h_spec⟩ := circuit.soundness offset env yields checked b_var b h_input h_assumptions h_holds'
+  exact h_spec
 
 /--
   Justification for using modified statements for `UsesLocalWitnessesAndYields`

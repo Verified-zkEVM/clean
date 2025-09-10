@@ -59,10 +59,16 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   specialize h_holds3 (by omega)
   specialize h_holds4 (by omega)
   simp only [U32.value] at ⊢ l_components
-  simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2] -- use the Normalized conditions
-  simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1, l_components]
+  simp only [h_holds1.2.2, h_holds2.2.2, h_holds3.2.2, h_holds4.2.2] -- use the Normalized conditions
+  simp only [h_holds1.2.1, h_holds2.2.1, h_holds3.2.1, h_holds4.2.1, l_components]
   ring_nf
-  simp
+
+  constructor
+  · -- Prove yielded sentences hold
+    intro s
+    simp [circuit_norm, FormalCircuit.toSubcircuit, Or8.circuit, Or8.elaborated, Or8.main]
+  · -- Prove the spec
+    simp
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
   circuit_proof_start

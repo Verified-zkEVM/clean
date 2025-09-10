@@ -54,6 +54,10 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env yields checked input_var input h_eval h_assumptions h_holds
+
+    constructor
+    · sorry  -- Prove yielded sentences hold
+
     simp only [Circuit.ConstraintsHold.Soundness] at h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
@@ -75,10 +79,10 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
 
     constructor
-    · exact h_holds1.1
+    · exact h_holds1.2.1
     constructor
-    · exact h_holds1.2
-    · exact h_holds2
+    · exact h_holds1.2.2
+    · exact h_holds2.2
 
   completeness := by
     intro offset env yields input_var h_env_uses_witnesses input h_eval h_assumptions
@@ -539,8 +543,11 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
   simp only [SevenRoundsSpec] at h_spec
 
-  obtain ⟨h_value, h_normalized⟩ := h_spec
+  obtain ⟨h_value, h_normalized⟩ := h_spec.2
 
+  constructor
+  · sorry  -- Prove yielded sentences hold
+  
   constructor
   · -- Show out.value = applyRounds ...
     -- Use our lemma to express applyRounds in terms of applySevenRounds

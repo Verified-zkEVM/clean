@@ -76,10 +76,15 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (a
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
+set_option maxHeartbeats 600000
+
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : Soundness (F p) (elaborated order a b c d) order Assumptions (Spec (a:=a) (b:=b) (c:=c) (d:=d)) := by
   circuit_proof_start [elaborated, BLAKE3State.Normalized, Xor32.circuit, Xor32.elaborated, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
+
+  constructor
+  · sorry  -- Prove yielded sentences hold
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
@@ -99,21 +104,21 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
-    · rw [c11.left]
+    · rw [c11.2.1]
     · simp only [circuit_norm]
-      rw [c12.left]
-    · rw [c14.left]
+      rw [c12.2.1]
+    · rw [c14.2.1]
     · simp only [circuit_norm]
-      rw [c9.left]
-    · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
+      rw [c9.2.1]
+    · rw [Function.comp_apply, ←h_input.1, getElem_eval_vector]
 
   · intro i
     simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
     repeat' split
-    · exact c11.right
-    · exact c12.right
-    · exact c14.right
-    · exact c9.right
+    · exact c11.2.2
+    · exact c12.2.2
+    · exact c14.2.2
+    · exact c9.2.2
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : Completeness (F p) sentences (elaborated order a b c d) Assumptions := by
