@@ -39,16 +39,34 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 2
 
   Assumptions _ := True
+
   Spec input output :=
     output = (if input = 0 then 1 else 0)
 
   soundness := by
-    simp_all only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp only [id_eq, h_holds]
+    split_ifs with h_ifs
+    . simp only [h_ifs, zero_mul, neg_zero, zero_add]
+    . rw [neg_add_eq_zero]
+      have h1 := h_holds.left
+      have h2 := h_holds.right
+      rw [h1] at h2
+      simp only [id_eq, mul_eq_zero] at h2
+      cases h2
+      case neg.inl hl => contradiction
+      case neg.inr hr =>
+        rw [neg_add_eq_zero] at hr
+        exact hr
 
   completeness := by
-    simp_all only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    cases h_env with
+    | intro left right =>
+      simp only [left, ne_eq, id_eq, ite_not, mul_ite, mul_zero] at right
+      simp only [id_eq, right, left, ne_eq, ite_not, mul_ite, mul_zero, mul_eq_zero, true_and]
+      split_ifs <;> aesop
+
 end IsZero
 
 namespace IsEqual
