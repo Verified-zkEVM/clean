@@ -11,7 +11,7 @@
 
 `clean` is developed by [zkSecurity](https://zksecurity.xyz/), currently as part of a Verified-zkEVM grant.
 
-We intend to build out `clean` into a universal zk framework that produces **formally verified, bug-free circuits** for the entire ecosystem.
+We intend to build out `clean` into a universal zk framework that produces **formally verified, bug-free circuits** for the entire ecosystem. See the [roadmap](#roadmap).
 
 ## Community
 
@@ -37,7 +37,7 @@ Make sure to install the `lean4` extension for VSCode!
 
 ## Documentation
 
-We are actively working on creating proper documentation for `clean`. In the meantime, we recommend checking out our [AI-generated DeepWiki](https://deepwiki.com/Verified-zkEVM/clean).  
+We are actively working on creating proper documentation for `clean`. In the meantime, we recommend checking out our [AI-generated DeepWiki](https://deepwiki.com/Verified-zkEVM/clean).
 
 ⚠️ **Disclaimer:** The wiki may contain inaccuracies or outdated details. Please take all information with a grain of salt until the official documentation is released.
 
