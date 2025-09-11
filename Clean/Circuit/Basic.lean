@@ -117,6 +117,11 @@ def assertZero (sentences : PropertySet F) (e : Expression F) : Circuit sentence
 def lookup {sentences : PropertySet F} {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit sentences Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
+/-- Use a sentence that has been (or will be) yielded. -/
+@[circuit_norm]
+def use {sentences : PropertySet F} (s : Sentence sentences (Expression F)) : Circuit sentences Unit := fun _ =>
+  ((), [.use s])
+
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
@@ -149,6 +154,9 @@ def ConstraintsHold {sentences : PropertySet F} (eval : Environment F) (yields :
   | .lookup { table, entry, .. } :: ops =>
     table.Contains (entry.map eval) ∧ ConstraintsHold eval yields checked ops
   | .yield _ :: ops => ConstraintsHold eval yields checked ops
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
+                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+                     ConstraintsHold eval yields checked ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval yields checked s.ops ∧ ConstraintsHold eval yields checked ops
 
@@ -163,6 +171,9 @@ def ConstraintsHold.Soundness {sentences : PropertySet F} (eval : Environment F)
   | .lookup { table, entry } :: ops =>
     table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval yields checked ops
   | .yield _ :: ops => ConstraintsHold.Soundness eval yields checked ops
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
+                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+                     ConstraintsHold.Soundness eval yields checked ops
   | .subcircuit s :: ops =>
     s.Soundness eval yields checked ∧ ConstraintsHold.Soundness eval yields checked ops
 
@@ -177,6 +188,9 @@ def ConstraintsHold.Completeness {sentences : PropertySet F} (eval : Environment
   | .lookup { table, entry } :: ops =>
     table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval yields ops
   | .yield _ :: ops => ConstraintsHold.Completeness eval yields ops
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
+                     (s.eval eval ∈ Set.univ → SentenceHolds (s.eval eval)) ∧ 
+                     ConstraintsHold.Completeness eval yields ops
   | .subcircuit s :: ops =>
     s.Completeness eval yields ∧ ConstraintsHold.Completeness eval yields ops
 end Circuit
@@ -204,6 +218,7 @@ def Environment.UsesLocalWitnessesAndYieldsCompleteness {sentences : PropertySet
   | .assert _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
   | .yield s :: ops => s.eval env ∈ yields.yielded ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .use _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnessesAndYields env yields ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields (offset + s.localLength) ops
 
 /-- Environment uses local witnesses for flat operations (witness checking only) -/
@@ -440,7 +455,7 @@ structure GeneralFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} 
   completeness : GeneralFormalCircuit.Completeness F sentences elaborated Assumptions
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup use)
 
 -- general `witness` method
 
@@ -475,6 +490,7 @@ def FlatOperation.dynamicWitness {sentences : PropertySet F} (op : FlatOperation
   | .assert _ => []
   | .lookup _ => []
   | .yield _ => []
+  | .use _ => []
 
 def FlatOperation.dynamicWitnesses {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation sentences) =>
@@ -528,6 +544,7 @@ def FlatOperation.witnessGenerators {sentences : PropertySet F} : (l : List (Fla
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .yield _ :: ops => witnessGenerators ops
+  | .use _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators {sentences : PropertySet F} : (ops : Operations sentences) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
@@ -535,6 +552,7 @@ def Operations.witnessGenerators {sentences : PropertySet F} : (ops : Operations
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .yield _ :: ops => witnessGenerators ops
+  | .use _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
 
 -- statements about constant length or output

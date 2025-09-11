@@ -15,7 +15,7 @@ theorem append_localLength {sentences : PropertySet F} {a b: Operations sentence
     (a ++ b).localLength = a.localLength + b.localLength := by
   induction a using induct with
   | empty => ac_rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp_all +arith [localLength, ih]
 
 theorem localLength_cons {sentences : PropertySet F} {a : Operation sentences} {as : Operations sentences} :
@@ -26,6 +26,7 @@ theorem localWitnesses_cons {sentences : PropertySet F} (op : Operation sentence
   localWitnesses env (op :: ops) =
     (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
   cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
+  rw [Vector.empty_append]; simp
   rw [Vector.empty_append]; simp
   rw [Vector.empty_append]; simp
   rw [Vector.empty_append]; simp
@@ -45,7 +46,7 @@ theorem forAll_append {sentences : PropertySet F} {condition : Condition sentenc
     forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
   induction as using induct generalizing offset with
   | empty => simp [forAll_empty, localLength]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
 end Operations
 
@@ -136,7 +137,7 @@ theorem can_replace_soundness {sentences : PropertySet F} {ops : Operations sent
   intro h
   induction ops using Operations.induct with
   | empty => trivial
-  | witness | assert | lookup | yield =>
+  | witness | assert | lookup | yield | use =>
     simp_all [ConstraintsHold.Soundness, ConstraintsHold, RawTable.imply_soundness]
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
@@ -158,7 +159,7 @@ lemma localLength_append {F} {sentences : PropertySet F} {a b: List (FlatOperati
   | case1 => simp only [List.nil_append, localLength]; ac_rfl
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, ih]; ac_rfl
-  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih =>
+  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih | case6 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
 theorem forAll_empty {sentences : PropertySet F} {condition : Condition sentences} {n : ℕ} : forAll n condition [] = True := rfl
@@ -184,7 +185,7 @@ lemma localWitnesses_append {F} {sentences : PropertySet F} {a b: List (FlatOper
     Array.empty_append]
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, Vector.toArray_append, ih, Array.append_assoc]
-  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih =>
+  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih | case6 _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, ih]
 
 /--
@@ -194,7 +195,7 @@ lemma localLength_toFlat {sentences : PropertySet F} {ops : Operations sentences
     localLength ops.toFlat = ops.localLength := by
   induction ops using Operations.induct with
   | empty => trivial
-  | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih | yield _ ops ih | subcircuit _ ops ih =>
+  | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih | yield _ ops ih | use _ ops ih | subcircuit _ ops ih =>
     dsimp only [Operations.toFlat, Operations.localLength]
     generalize ops.toFlat = flat_ops at *
     generalize Operations.localLength ops = n at *
@@ -205,7 +206,7 @@ lemma localLength_toFlat {sentences : PropertySet F} {ops : Operations sentences
       specialize ih' (n - m') (by rw [←ih]; omega)
       simp_all +arith only [localLength_append, localLength]
       try omega
-    | case3 ops _ ih' | case4 ops _ ih' | case5 ops _ ih' =>
+    | case3 ops _ ih' | case4 ops _ ih' | case5 ops _ ih' | case6 ops _ ih' =>
       simp_all only [localLength_append, forall_eq', localLength, List.cons_append]
 
 /--
@@ -215,7 +216,7 @@ lemma localWitnesses_toFlat {sentences : PropertySet F} {ops : Operations senten
   (localWitnesses env ops.toFlat).toArray = (ops.localWitnesses env).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp only [Operations.toFlat, Operations.localLength, Operations.localWitnesses, Vector.toArray_append]
     rw [←ih]
     try rw [localWitnesses_append]
@@ -257,7 +258,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} {sentences : Pr
   | witness m _ _ ih =>
     rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
     trivial
-  | assert | lookup | yield =>
+  | assert | lookup | yield | use =>
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
 
@@ -273,7 +274,7 @@ theorem usesLocalWitnessesAndYieldsFlat_iff_extends {env : Environment F} {sente
       rw [and_assoc]
       rw [← ih']
     trivial
-  | assert | lookup =>
+  | assert | lookup | use =>
     simp_all [UsesLocalWitnessesAndYieldsFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength, FlatOperation.localYields]
   | yield _ _ ih =>
@@ -291,7 +292,7 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {senten
   env.UsesLocalWitnessesAndYields yields n ops → env.UsesLocalWitnessesAndYieldsCompleteness yields n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
-  | witness | assert | lookup | yield =>
+  | witness | assert | lookup | yield | use =>
     simp_all +arith [UsesLocalWitnessesAndYields, UsesLocalWitnessesAndYieldsCompleteness, Operations.forAllFlat, Operations.forAll]
   | subcircuit n circuit ops ih =>
     simp only [UsesLocalWitnessesAndYields, UsesLocalWitnessesAndYieldsCompleteness, Operations.forAllFlat, Operations.forAll_cons, Condition.apply]
@@ -310,7 +311,7 @@ theorem usesLocalWitnessesAndYieldsCompleteness_iff_forAll {sentences : Property
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | assert | lookup | witness | yield | subcircuit =>
+  | assert | lookup | witness | yield | use | subcircuit =>
     simp_all +arith [UsesLocalWitnessesAndYieldsCompleteness, Operations.forAll]
 
 theorem usesLocalWitnessesAndYields_iff_forAll {sentences : PropertySet F} (yields : YieldContext sentences) (n : ℕ) {env : Environment F} {ops : Operations sentences} :
@@ -341,7 +342,8 @@ lemma FlatOperation.forAll_equiv {sentences : PropertySet F} (n : ℕ) (c1 c2 : 
   (h_witness : ∀ offset m compute, c1.witness offset m compute ↔ c2.witness offset m compute)
   (h_assert : ∀ offset e, c1.assert offset e ↔ c2.assert offset e)
   (h_lookup : ∀ offset l, c1.lookup offset l ↔ c2.lookup offset l)
-  (h_yield : ∀ offset s, c1.yield offset s ↔ c2.yield offset s) :
+  (h_yield : ∀ offset s, c1.yield offset s ↔ c2.yield offset s)
+  (h_use : ∀ offset s, c1.use offset s ↔ c2.use offset s) :
   FlatOperation.forAll n c1 ops ↔ FlatOperation.forAll n c2 ops := by
   induction ops generalizing n with
   | nil => simp [FlatOperation.forAll]
@@ -360,6 +362,9 @@ lemma FlatOperation.forAll_equiv {sentences : PropertySet F} (n : ℕ) (c1 c2 : 
     | yield s =>
       simp only [Condition.applyFlat]
       rw [h_yield, ih]
+    | use s =>
+      simp only [Condition.applyFlat]
+      rw [h_use, ih]
 
 -- Helper lemma for FlatOperation.forAll with combined conditions
 lemma FlatOperation.forAll_and {sentences : PropertySet F} (n : ℕ) (c1 c2 : Condition sentences) (ops : List (FlatOperation sentences)) :
@@ -368,7 +373,8 @@ lemma FlatOperation.forAll_and {sentences : PropertySet F} (n : ℕ) (c1 c2 : Co
     witness n offset compute := c1.witness n offset compute ∧ c2.witness n offset compute,
     assert offset e := c1.assert offset e ∧ c2.assert offset e,
     lookup offset l := c1.lookup offset l ∧ c2.lookup offset l,
-    yield offset s := c1.yield offset s ∧ c2.yield offset s
+    yield offset s := c1.yield offset s ∧ c2.yield offset s,
+    use offset s := c1.use offset s ∧ c2.use offset s
   } ops := by
   induction ops generalizing n with
   | nil => simp [FlatOperation.forAll]
@@ -382,6 +388,7 @@ lemma Operations.forAll_equiv {sentences : PropertySet F} (n : ℕ) (c1 c2 : Con
   (h_assert : ∀ offset e, c1.assert offset e ↔ c2.assert offset e)
   (h_lookup : ∀ offset l, c1.lookup offset l ↔ c2.lookup offset l)
   (h_yield : ∀ offset s, c1.yield offset s ↔ c2.yield offset s)
+  (h_use : ∀ offset s, c1.use offset s ↔ c2.use offset s)
   (h_subcircuit : ∀ offset {m} (s : Subcircuit sentences m), c1.subcircuit offset s ↔ c2.subcircuit offset s) :
   ops.forAll n c1 ↔ ops.forAll n c2 := by
   induction ops using Operations.induct generalizing n with
@@ -398,6 +405,9 @@ lemma Operations.forAll_equiv {sentences : PropertySet F} (n : ℕ) (c1 c2 : Con
   | yield s ops ih =>
     simp only [Operations.forAll_cons, Condition.apply]
     rw [h_yield, ih]
+  | use s ops ih =>
+    simp only [Operations.forAll_cons, Condition.apply]
+    rw [h_use, ih]
   | subcircuit s ops ih =>
     simp only [Operations.forAll_cons, Condition.apply]
     rw [h_subcircuit, ih]
@@ -409,11 +419,12 @@ lemma Operations.forAll_and {sentences : PropertySet F} (n : ℕ) (c1 c2 : Condi
     assert offset e := c1.assert offset e ∧ c2.assert offset e,
     lookup offset l := c1.lookup offset l ∧ c2.lookup offset l,
     yield offset s := c1.yield offset s ∧ c2.yield offset s,
+    use offset s := c1.use offset s ∧ c2.use offset s,
     subcircuit offset _ s := c1.subcircuit offset s ∧ c2.subcircuit offset s
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => simp [Operations.forAll]
-  | witness m _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | subcircuit _ _ ih =>
+  | witness m _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp only [Operations.forAll_cons, Condition.apply, and_assoc]
     rw [← ih]
     tauto
@@ -434,11 +445,14 @@ theorem usesLocalWitnessesAndYields_iff_conjunction {sentences : PropertySet F} 
   · intros; simp
   -- yield case
   · intros; simp [and_comm]
+  -- use case
+  · intros; simp [and_comm]
   -- subcircuit case
   · intros offset m s
     simp only
     rw [FlatOperation.forAll_and]
     apply FlatOperation.forAll_equiv
+    · intros; simp
     · intros; simp
     · intros; simp
     · intros; simp
@@ -452,6 +466,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) {se
   ConstraintsHold.Soundness env yields checked ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
+    use _ s := s.eval env ∈ yields.yielded ∧ (s.eval env ∈ checked → SentenceHolds (s.eval env)),
     subcircuit _ _ s := s.Soundness env yields checked
   } := by
   induction ops using Operations.induct generalizing n with
@@ -460,11 +475,17 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) {se
     simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
+  | use _ _ ih =>
+    simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
+    try intros
+    rw [ih n]
+    tauto
 
 theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) {sentences : PropertySet F} (ops : Operations sentences) (yields : YieldContext sentences) :
   ConstraintsHold.Completeness env yields ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
+    use _ s := s.eval env ∈ yields.yielded ∧ (s.eval env ∈ Set.univ → SentenceHolds (s.eval env)),
     subcircuit _ _ s := s.Completeness env yields
   } := by
   induction ops using Operations.induct generalizing n with
@@ -473,6 +494,11 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
     simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
+  | use _ _ ih =>
+    simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
+    try intros
+    rw [ih n]
+    tauto
 
 /--
 Completeness theorem which proves that we can replace constraints in subcircuits
@@ -486,7 +512,7 @@ theorem can_replace_completeness {env} {sentences : PropertySet F} {ops : Operat
     ConstraintsHold.Completeness env yields ops → ConstraintsHold env yields checked ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
-  | witness | assert | lookup | yield =>
+  | witness | assert | lookup | yield | use =>
     simp_all [circuit_norm, Environment.UsesLocalWitnessesAndYields, Operations.forAllFlat, Operations.forAll, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnessesAndYields, Operations.forAllFlat, Operations.forAll, and_true]
@@ -528,6 +554,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {sentences :
   ConstraintsHold.Soundness env yields checked (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
+    use _ s := s.eval env ∈ yields.yielded ∧ (s.eval env ∈ checked → SentenceHolds (s.eval env)),
     subcircuit _ _ s := s.Soundness env yields checked
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n _ _ yields checked]
@@ -536,6 +563,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {sentence
   ConstraintsHold.Completeness env yields (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
+    use _ s := s.eval env ∈ yields.yielded ∧ (s.eval env ∈ Set.univ → SentenceHolds (s.eval env)),
     subcircuit _ _ s := s.Completeness env yields
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n _ _ yields]
@@ -601,7 +629,7 @@ lemma forAll_toFlat_iff {sentences : PropertySet F} (n : ℕ) (condition : Condi
     FlatOperation.forAll n condition ops.toFlat ↔ ops.forAllFlat n condition := by
   induction ops using Operations.induct generalizing n with
   | empty => simp only [forAllFlat, forAll, toFlat, FlatOperation.forAll]
-  | witness | assert | lookup | yield =>
+  | witness | assert | lookup | yield | use =>
     simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll, Condition.applyFlat, FlatOperation.localLength]
   | subcircuit s ops ih =>
     simp_all only [forAllFlat, forAll, toFlat]
@@ -663,7 +691,7 @@ theorem proverEnvironment_usesLocalWitnesses {sentences : PropertySet F} {ops : 
   | cons op ops ih =>
     simp only [forAll_cons] at h_computable ⊢
     cases op with
-    | assert | lookup | yield =>
+    | assert | lookup | yield | use =>
       simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness, proverYields]
     | witness m compute =>
       simp_all only [Condition.applyFlat, singleLocalLength, dynamicWitness, Environment.AgreesBelow]
@@ -692,7 +720,8 @@ def Condition.always_implies {sentences : PropertySet F} (c c' : Condition sente
   (∀ n m compute, c.witness n m compute → c'.witness n m compute) ∧
   (∀ offset e, c.assert offset e → c'.assert offset e) ∧
   (∀ offset l, c.lookup offset l → c'.lookup offset l) ∧
-  (∀ offset s, c.yield offset s → c'.yield offset s)
+  (∀ offset s, c.yield offset s → c'.yield offset s) ∧
+  (∀ offset s, c.use offset s → c'.use offset s)
 
 /--
 If a condition always implies another, then forAll is monotonic.
@@ -717,7 +746,10 @@ lemma FlatOperation.forAll_mono {sentences : PropertySet F} (n : ℕ) {c c' : Co
         exact h_implies.2.2.1 _ _ h_forAll.1
       | yield s =>
         simp [Condition.applyFlat] at h_forAll ⊢
-        exact h_implies.2.2.2 _ _ h_forAll.1
+        exact h_implies.2.2.2.1 _ _ h_forAll.1
+      | use s =>
+        simp [Condition.applyFlat] at h_forAll ⊢
+        exact h_implies.2.2.2.2 _ _ h_forAll.1
     · exact ih (op.singleLocalLength + n) h_forAll.2
 
 /--
@@ -731,6 +763,7 @@ lemma FlatOperation.localYields_cons_subset {sentences : PropertySet F} (env : E
   · exact hx
   · exact hx
   · exact Or.inr hx
+  · exact hx
 
 /--
 Any list of flat operations satisfies the yield condition when checked against its own computed yields.
@@ -746,6 +779,7 @@ theorem FlatOperation.forAll_localYields {sentences : PropertySet F} (env : Envi
       | witness _ _ => simp [Condition.applyFlat]
       | assert _ => simp [Condition.applyFlat]
       | lookup _ => simp [Condition.applyFlat]
+      | use _ => simp [Condition.applyFlat]
       | yield s =>
         simp [Condition.applyFlat, FlatOperation.localYields]
     · -- Apply IH with monotonicity using the subset lemma
@@ -758,10 +792,12 @@ theorem FlatOperation.forAll_localYields {sentences : PropertySet F} (env : Envi
         · intros; trivial  -- assert case: both conditions are trivial
         constructor
         · intros; trivial  -- lookup case: both conditions are trivial
+        constructor
         · intros _ s h      -- yield case: need to show subset property
           -- h says: s.eval env ∈ localYields env ops
           -- goal: s.eval env ∈ localYields env (op :: ops)
           apply FlatOperation.localYields_cons_subset env op ops h
+        · intros; trivial  -- use case: both conditions are trivial
       · exact ih (op.singleLocalLength + n)
 
 /--
@@ -820,7 +856,7 @@ theorem onlyAccessedBelow_all {sentences : PropertySet F} {ops : List (FlatOpera
     specialize h_ih h_env
     clear ih
     cases op with
-    | assert | lookup | yield =>
+    | assert | lookup | yield | use =>
       simp_all only [Condition.applyFlat, localWitnesses]
     | witness m c =>
       simp_all only [Condition.applyFlat, localWitnesses,

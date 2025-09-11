@@ -136,7 +136,7 @@ theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
-  | witness | assert | lookup | subcircuit | yield =>
+  | witness | assert | lookup | subcircuit | yield | use =>
     simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Operations.localLength]
 
 theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations (emptyPropertySet F)) :
@@ -144,7 +144,7 @@ theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations (
       ).cast (assignmentFromCircuit_offset ..).symm := by
   induction ops using Operations.induct generalizing as with
   | empty => rfl
-  | witness | assert | lookup | subcircuit | yield =>
+  | witness | assert | lookup | subcircuit | yield | use =>
     simp_all +arith [assignmentFromCircuit, pushVarsAux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Array.append_assoc]
 

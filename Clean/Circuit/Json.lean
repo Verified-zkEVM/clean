@@ -51,6 +51,7 @@ instance {sentences : PropertySet F} : ToJson (FlatOperation sentences) where
     | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
     | FlatOperation.yield s => Json.mkObj [("yield", toJson s)]
+    | FlatOperation.use s => Json.mkObj [("use", toJson s)]
 
 instance {sentences : PropertySet F} : ToJson (Operation sentences) where
   toJson
@@ -58,6 +59,7 @@ instance {sentences : PropertySet F} : ToJson (Operation sentences) where
     | Operation.assert e => Json.mkObj [("assert", toJson e)]
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
     | Operation.yield s => Json.mkObj [("yield", toJson s)]
+    | Operation.use s => Json.mkObj [("use", toJson s)]
     | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
 
 instance {sentences : PropertySet F} : ToJson (Operations sentences) where
