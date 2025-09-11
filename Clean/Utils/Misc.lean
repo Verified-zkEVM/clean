@@ -37,7 +37,7 @@ theorem snd_cast {α α' β : Type} (h : α = α') (p : α × β) :
   subst h; rfl
 
 theorem Fin.foldl_const_succ (n : ℕ) (f : Fin (n + 1) → α) (init : α) :
-    Fin.foldl (n + 1) (fun _ i => f i) init = f n := by
+    Fin.foldl (n + 1) (fun _ i => f i) init = f ⟨n, Nat.lt_succ_self n⟩ := by
   induction n generalizing init with
   | zero => rfl
   | succ n ih =>
@@ -45,8 +45,7 @@ theorem Fin.foldl_const_succ (n : ℕ) (f : Fin (n + 1) → α) (init : α) :
     rw [Fin.foldl_succ]
     show Fin.foldl (n + 1) (fun x i ↦ f' i) _ = _
     rw [ih]
-    simp only [f']
-    rw [Fin.natCast_eq_last, Fin.succ_last, ←Fin.natCast_eq_last]
+    simp only [f', succ_mk]
 
 theorem Fin.foldl_const_zero (f : Fin 0 → α) (init : α) :
     Fin.foldl 0 (fun _ i => f i) init = init := by
@@ -55,7 +54,7 @@ theorem Fin.foldl_const_zero (f : Fin 0 → α) (init : α) :
 theorem Fin.foldl_const (n : ℕ) (f : Fin n → α) (init : α) :
   Fin.foldl n (fun _ i => f i) init = match n with
     | 0 => init
-    | n + 1 => f n := by
+    | n + 1 => f ⟨n, Nat.lt_succ_self n⟩ := by
   split <;> simp [foldl_const_succ]
 
 lemma Fin.foldl_eq_foldl_finRange (n : ℕ) (f : α → Fin n → α) (init : α) :
