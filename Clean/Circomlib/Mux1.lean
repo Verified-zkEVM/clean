@@ -4,6 +4,8 @@ import Clean.Utils.Tactics
 import Clean.Gadgets.Equality
 import Clean.Gadgets.Boolean
 
+set_option linter.unusedSimpArgs false
+
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

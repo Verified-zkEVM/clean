@@ -4,6 +4,8 @@ import Clean.Circomlib.Bitify
 import Clean.Circomlib.AliasCheck
 import Clean.Circomlib.Comparators
 
+set_option linter.unusedSimpArgs false
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/bitify.circom

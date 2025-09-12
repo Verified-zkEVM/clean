@@ -5,6 +5,8 @@ import Clean.Utils.Primes
 import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
+set_option linter.unusedSimpArgs false
+
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

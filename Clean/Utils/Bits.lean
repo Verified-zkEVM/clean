@@ -6,6 +6,8 @@ import Clean.Utils.Field
 import Clean.Utils.Vector
 import Clean.Circuit.Expression
 
+set_option linter.unusedSimpArgs false
+
 namespace Utils.Bits
 /--
   Convert a natural number to a vector of bits.

@@ -3,6 +3,8 @@ import Clean.Gadgets.ByteLookup
 import Clean.Gadgets.Boolean
 import Clean.Gadgets.Addition8.Theorems
 
+set_option linter.unusedSimpArgs false
+
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

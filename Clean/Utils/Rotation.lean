@@ -3,6 +3,8 @@ import Clean.Utils.Vector
 import Mathlib.Data.Nat.Bitwise
 import Clean.Utils.Bits
 
+set_option linter.unusedSimpArgs false
+
 namespace Utils.Rotation
 open Bits (toBits toBits_injective)
 

@@ -7,6 +7,8 @@ import Clean.Utils.BinaryOps
 import Clean.Circuit.Theorems
 import Mathlib.Data.Nat.Bitwise
 
+set_option linter.unusedSimpArgs false
+
 open IsBool
 
 /-

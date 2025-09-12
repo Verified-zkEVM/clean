@@ -3,6 +3,8 @@ import Clean.Utils.Field
 import Clean.Utils.Tactics.CircuitProofStart
 import Mathlib.Data.Nat.Bitwise
 
+set_option linter.unusedSimpArgs false
+
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
 

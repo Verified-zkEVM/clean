@@ -2,6 +2,8 @@ import Mathlib.Data.ZMod.Basic
 import Mathlib.Data.Fin.Basic
 import Mathlib.Algebra.BigOperators.Fin
 
+set_option linter.unusedSimpArgs false
+
 namespace Fin
 
 /-! ## Lemmas about Fin.foldl and sums -/

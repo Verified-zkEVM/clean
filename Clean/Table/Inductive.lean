@@ -9,6 +9,8 @@ Thus far, only the common `k=2` case is handled.
 import Clean.Table.Theorems
 import Clean.Gadgets.Equality
 
+set_option linter.unusedSimpArgs false
+
 def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → Prop)
     (step : Var State F → Var Input F → Circuit F (Var State F)) :=

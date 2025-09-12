@@ -6,6 +6,8 @@ import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Specs.Keccak256
 
+set_option linter.unusedSimpArgs false
+
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

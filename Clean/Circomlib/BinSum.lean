@@ -7,6 +7,8 @@ import Clean.Gadgets.Bits
 import Clean.Gadgets.Boolean
 import Clean.Circomlib.Bitify
 
+set_option linter.unusedSimpArgs false
+
 namespace Circomlib
 open Utils.Bits Expression
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

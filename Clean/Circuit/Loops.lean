@@ -7,6 +7,8 @@ under `circuit_norm` in every way we need them to.
 -/
 import Clean.Circuit.Subcircuit
 import Clean.Utils.Misc
+
+set_option linter.unusedSimpArgs false
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :

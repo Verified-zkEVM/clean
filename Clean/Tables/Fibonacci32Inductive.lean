@@ -2,6 +2,8 @@
 import Clean.Table.Inductive
 import Clean.Gadgets.Addition32.Addition32
 
+set_option linter.unusedSimpArgs false
+
 namespace Tables.Fibonacci32Inductive
 open Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]

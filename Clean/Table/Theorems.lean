@@ -1,5 +1,7 @@
 import Clean.Table.Basic
 
+set_option linter.unusedSimpArgs false
+
 namespace Trace
 variable {F : Type} {S : Type → Type} [ProvableType S]
 
