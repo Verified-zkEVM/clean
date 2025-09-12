@@ -1,9 +1,13 @@
 <p align="center"> <img src="clean-logo-turnstilehex-greenwhite.svg" width="96" alt="Clean logo"> </p>
 
 <h1 align="center" id="clean">Clean</h1>
-<a href="https://deepwiki.com/Verified-zkEVM/clean"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-<br>
-<br>
+
+<div align="center">
+  
+[![Chat on Telegram][ico-telegram]][link-telegram]
+[![Ask DeepWiki][ico-deep-wiki]][link-deep-wiki]
+
+</div>
 
 `clean` is an embedded Lean DSL for writing zk circuits, targeting popular arithmetizations like AIR, PLONK and R1CS.
 
@@ -81,3 +85,11 @@ Reach out [on TG](https://t.me/clean_zk) if you are looking for long-term contri
 - Advanced: Mixed proof systems like Longfellow-ZK
 - MORE GADGETS
 - MORE INTEGRATIONS
+
+
+
+[ico-telegram]: https://img.shields.io/badge/@clean__zk-2CA5E0.svg?style=flat-square&logo=telegram&label=Telegram
+[link-telegram]: https://t.me/clean_zk
+
+[ico-deep-wiki]: https://deepwiki.com/badge.svg
+[link-deep-wiki]: https://deepwiki.com/Verified-zkEVM/clean
