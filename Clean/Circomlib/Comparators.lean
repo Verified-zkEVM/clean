@@ -83,6 +83,12 @@ template IsEqual() {
     isz.out ==> out;
 }
 -/
+def substraction_eq_zero {n : ℕ} (input : fieldPair (F p) := 
+  if input.1 + -input.2 = 0 then (return 1) else (return 0) 
+
+lemma minus_eq_if_else {n: ℕ} (input : fieldPair (F p)) : if input.1 + -input.2 = 0 then 1 else 0 ↔ if input.1 = input.2 then 1 else 0 := by
+  sorry
+
 def main (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 - input.2
   let out ← IsZero.circuit diff
@@ -115,7 +121,23 @@ def circuit : FormalCircuit (F p) fieldPair field where
     simp only [h1, h2] at h_holds
 
     simp only [IsZero.circuit]
-    sorry
+    simp only [IsZero.circuit] at h_holds
+    
+    /- rw [h_holds, h1, h2] -/
+    rw [h_holds, h1, h2]
+    
+
+    
+    /- rw [h_input]  -/
+
+
+
+
+
+
+
+
+    /- sorry -/
     
 end IsEqual
 
