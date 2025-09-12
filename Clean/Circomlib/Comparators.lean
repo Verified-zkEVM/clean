@@ -2,6 +2,7 @@ import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Circomlib.Bitify
 import Mathlib.Tactic.Cases
+import Mathlib.Algebra.Field.Basic
 
 /-
 Original source code:
@@ -83,12 +84,6 @@ template IsEqual() {
     isz.out ==> out;
 }
 -/
-def substraction_eq_zero {n : ℕ} (input : fieldPair (F p) := 
-  if input.1 + -input.2 = 0 then (return 1) else (return 0) 
-
-lemma minus_eq_if_else {n: ℕ} (input : fieldPair (F p)) : if input.1 + -input.2 = 0 then 1 else 0 ↔ if input.1 = input.2 then 1 else 0 := by
-  sorry
-
 def main (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 - input.2
   let out ← IsZero.circuit diff
@@ -118,28 +113,47 @@ def circuit : FormalCircuit (F p) fieldPair field where
     have h2 : Expression.eval env input_var.2 = input.2 := by
       rw [← h_input]
 
-    simp only [h1, h2] at h_holds
-
+    
+    rw [h1, h2] at h_holds
     simp only [IsZero.circuit]
     simp only [IsZero.circuit] at h_holds
-    
-    /- rw [h_holds, h1, h2] -/
+
     rw [h_holds, h1, h2]
-    
 
-    
-    /- rw [h_input]  -/
+    apply ite_congr
+    . 
 
+      simp only [sub_eq_zero, id_eq, eq_iff_iff]
+      constructor
+      . intro p
+        have : (input.1 - input.2 = 0) ↔ (input.1 = input.2) := by
+          rw [sub_eq_zero]
+        rw [← this]
+        rw [← p]
+        rw [@Mathlib.Tactic.RingNF.add_neg]
 
+      . intro p
+        
+        rw [p]
+        rw [@Mathlib.Tactic.RingNF.add_neg]
+        rw [sub_self]
 
+    . intro h_eq
+      rfl
+    . intro h_eq
+      rfl
 
-
-
-
-
-    /- sorry -/
+    trivial
     
 end IsEqual
+
+/- lemma minus_eq_if_else (input : fieldPair (F p)) : (input.1 + -input.2 = 0) ↔ (input.1 = input.2) := by -/
+/-   constructor -/
+/-   . intro h -/
+/--/
+/-     apply FieldUtils.ext_iff.mpr -/
+/-     .  -/
+/-   . sorry -/
 
 namespace ForceEqualIfEnabled
 /-
