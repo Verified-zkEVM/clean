@@ -92,16 +92,39 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength _ := 2
 
   Assumptions _ := True
-  Spec := fun (x, y) output =>
-    output = (if x = y then 1 else 0)
 
-  soundness := by
-    simp only [circuit_norm, main]
-    sorry
+  Spec input output :=
+    output = (if input.1 = input.2 then 1 else 0)
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    simp only [circuit_norm, main, IsZero.circuit]
+
+  soundness := by
+    circuit_proof_start
+    rw [← h_input]
+    simp only [id_eq]
+
+    have h1 : Expression.eval env input_var.1 = input.1 := by
+      rw [← h_input]
+    have h2 : Expression.eval env input_var.2 = input.2 := by
+      rw [← h_input]
+
+    rw [h1, h2] at h_holds
+    simp only [IsZero.circuit] at h_holds ⊢
+
+    rw [h_holds, h1, h2]
+
+    apply ite_congr
+    . ring_nf
+      simp [sub_eq_zero]
+
+    . intro h_eq
+      rfl
+    . intro h_eq
+      rfl
+
+    trivial
+
 end IsEqual
 
 namespace ForceEqualIfEnabled
