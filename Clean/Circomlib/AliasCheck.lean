@@ -39,13 +39,13 @@ def circuit : FormalAssertion (F p) (fields 254) where
   Spec bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
     have : p > 2^135 := hp135.elim
     omega
 
   completeness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [circuit_norm, main, CompConstant.circuit]
     simp_all
     omega
 end AliasCheck
