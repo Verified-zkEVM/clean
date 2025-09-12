@@ -11,15 +11,20 @@ variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
     xs.forM body = forM xs.toList body := by
-  rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]
+  rw [Vector.forM_eq_forM, Vector.forM_mk, List.forM_toArray, List.forM_eq_forM]; rfl
 
-lemma Vector.mapM_toList (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m β) :
-    (fun v => v.toArray.toList) <$> (xs.mapM body) = xs.toList.mapM body := by
-  rw [←Array.toList_mapM, ←Vector.toArray_mapM, Functor.map_map]
+lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m] [LawfulMonad m] (body : α → m β) :
+    Vector.toList <$> (xs.mapM body) = xs.toList.mapM body := by
+  rw [←Array.toList_mapM]
+  suffices toList <$> mapM body xs = Array.toList <$> Array.mapM body xs.toArray by
+    convert this
+  rw [←Vector.toArray_mapM, Functor.map_map]
+  congr
 
 lemma Vector.foldlM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : β → α → m β) (init : β) :
     xs.foldlM body init = xs.toList.foldlM body init := by
   rw [Vector.foldlM_mk, List.foldlM_toArray]
+  congr
 
 namespace Circuit
 variable {sentences : PropertySet F}
@@ -87,7 +92,7 @@ theorem localLength_eq : (xs.forM circuit).localLength n = m * constant.localLen
   induction xs using Vector.induct generalizing n
   case nil => ac_rfl
   case cons x xs ih =>
-    rw [Vector.forM_toList, Vector.cons, List.forM_cons, ←Vector.forM_toList,
+    rw [Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
       bind_localLength_eq, ih, constant.localLength_eq]
     ring
 
@@ -99,7 +104,7 @@ theorem operations_eq :
   induction xs using Vector.induct generalizing n
   case nil => rfl
   case cons x xs ih =>
-    rw [ofFn_flatten_cons, Vector.forM_toList, Vector.cons, List.forM_cons, ←Vector.forM_toList,
+    rw [ofFn_flatten_cons, Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons, ←Vector.forM_toList,
       bind_operations_eq, ih, constant.localLength_eq]
 
 theorem forAll_iff {prop : Condition sentences} :
@@ -129,7 +134,7 @@ theorem output_eq : (xs.mapM circuit).output n =
     simp
 
 lemma ext_map_toList (f g : Circuit sentences (Vector α n)) :
-    (fun v => v.toArray.toList) <$> f = (fun v => v.toArray.toList) <$> g → f = g := by
+    (fun v => v.toList) <$> f = (fun v => v.toList) <$> g → f = g := by
   intro h
   rw [ext_iff] at h
   ext1 n
@@ -146,8 +151,8 @@ lemma mapM_cons (xs : Vector α n) (body : α → Circuit sentences β) (x : α)
     let ys ← xs.mapM body
     return Vector.cons y ys := by
   apply ext_map_toList
-  rw [Vector.mapM_toList, Vector.toList_cons, List.mapM_cons, ←Vector.mapM_toList]
-  simp only [map_bind, map_pure, Vector.toList_cons]
+  rw [Vector.toList_mapM, Vector.toList_cons, List.mapM_cons, ←Vector.toList_mapM]
+  simp only [map_bind, map_pure]
   rfl
 
 theorem operations_eq : (xs.mapM circuit).operations n =
@@ -182,7 +187,7 @@ lemma foldlM_cons (x : α) :
   (Vector.cons x xs).foldlM circuit init = (do
     let init' ← circuit init x
     xs.foldlM circuit init') := by
-  rw [Vector.foldlM_toList, Vector.cons, List.foldlM_cons]
+  rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
   simp only [←Vector.foldlM_toList]
 
 theorem localLength_eq :
@@ -360,7 +365,7 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit s
   xs.forM body
 
 @[circuit_norm]
-lemma forEach_localYields_of_empty {m : ℕ} (xs : Vector α m) [Inhabited α] 
+lemma forEach_localYields_of_empty {m : ℕ} (xs : Vector α m) [Inhabited α]
     (body : α → Circuit sentences Unit) (_constant : ConstantLength body)
     (env : Environment F) (offset : ℕ)
     (h_empty : ∀ x n, Operations.localYields env ((body x).operations n) = ∅) :

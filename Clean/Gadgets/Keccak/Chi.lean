@@ -34,7 +34,7 @@ instance elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sente
     simp only [main, circuit_norm]
     intro i
     and_intros <;> ac_rfl
-  output_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, Not.circuit,
+  output_eq state i0 := by simp [main, circuit_norm, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, Not.circuit,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite the chi spec as a loop
@@ -53,7 +53,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     -- The subcircuits don't yield anything
     sorry
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, Spec, elaborated, chi_loop, eval_vector, KeccakState.value]
+  simp only [circuit_norm, chi_loop, eval_vector, KeccakState.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
@@ -71,7 +71,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [state_norm, h_input, main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=

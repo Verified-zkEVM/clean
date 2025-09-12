@@ -443,8 +443,8 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     dsimp only [main, Round.circuit, Round.elaborated, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
       fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
       FormalCircuit.concat,
-      Permute.circuit, Circuit.pure_def, Circuit.bind_def,
-      subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
+      Permute.circuit, Circuit.pure_def, Circuit.bind_def]
+    dsimp only [subcircuit.eq_1, ElaboratedCircuit.output, Circuit.output, FormalCircuit.toSubcircuit.eq_1,
       ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
       Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
@@ -481,9 +481,7 @@ lemma initial_state_and_messages_are_normalized
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
-    convert h_normalized.1 i
-    norm_num
-    omega
+    convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
   have h_state_normalized : (eval env state_vec).Normalized := by
@@ -496,7 +494,7 @@ lemma initial_state_and_messages_are_normalized
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all [Assumptions, h_input]
+    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all
 
   constructor
   · apply h_state_normalized
@@ -547,7 +545,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   constructor
   · sorry  -- Prove yielded sentences hold
-  
+
   constructor
   · -- Show out.value = applyRounds ...
     -- Use our lemma to express applyRounds in terms of applySevenRounds

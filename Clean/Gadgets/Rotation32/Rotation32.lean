@@ -19,8 +19,8 @@ open Utils.Rotation (rotRight32_composition)
   Rotate the 32-bit integer by `offset` bits
 -/
 def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) (x : Var U32 (F p)) : Circuit sentences (Var U32 (F p)) := do
-  let byte_offset : ℕ := offset.val / 8
-  let bit_offset : ℕ := (offset % 8).val
+  let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
+  let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
 
   -- rotation is performed by combining a bit and a byte rotation
   let byte_rotated ← Rotation32Bytes.circuit order byte_offset x
@@ -33,7 +33,7 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (o
   ∧ y.Normalized
 
 def output (offset : Fin 32) (i0 : ℕ) : U32 (Expression (F p)) :=
-  Rotation32Bits.output (offset % 8).val i0
+  Rotation32Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.localLength
 -- #eval! (rot32 (p:=p_babybear) 0) default |>.output
@@ -49,16 +49,15 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     Rotation32Bits.circuit, Rotation32Bits.elaborated] at h_holds
 
   -- abstract away intermediate U32
-  let byte_offset : ℕ := offset.val / 8
-  let bit_offset : ℕ := (offset % 8).val
+  let byte_offset : Fin 4 := ⟨ offset.val / 8, by omega ⟩
+  let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
   set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation32Bytes.elaborated byte_offset) sentences x_var i0)
 
-  simp [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Spec, Rotation32Bytes.Assumptions,
-    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Spec, Rotation32Bits.Assumptions,
-    Vector.finRange] at h_holds
+  simp only [Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions,
+    Rotation32Bytes.Spec, Rotation32Bits.Assumptions, Rotation32Bits.Spec, add_zero] at h_holds
 
-  simp [circuit_norm, Spec, output, h_holds, elaborated]
-  set y := eval env (Rotation32Bits.output (offset.val % 8 : ℕ) i0)
+  simp only [Spec, elaborated, output, ElaboratedCircuit.output]
+  set y := eval env (Rotation32Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
 
   simp [Assumptions] at x_normalized
   rw [←h_input] at x_normalized
@@ -73,12 +72,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   -- reason about rotation
   rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
-  rw [hy]
-  rw [show(offset.val / 8) % 4 = offset.val / 8 by
-    apply Nat.mod_eq_of_lt
-    apply Nat.div_lt_of_lt_mul
-    exact offset.is_lt]
-  rw [Nat.div_add_mod']
+  rw [hy, Nat.div_add_mod']
   constructor
   · sorry
   rfl
@@ -86,11 +80,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
   intro i0 env yields x_var h_env x h_eval x_normalized
 
-  simp [circuit_norm, main, elaborated,
+  simp only [circuit_norm, main, elaborated,
     Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Assumptions,
-    Rotation32Bytes.circuit, Rotation32Bytes.elaborated, Rotation32Bytes.Assumptions]
-  simp [circuit_norm, elaborated, main,
-    Rotation32Bytes.circuit, Rotation32Bytes.Assumptions, Rotation32Bytes.Spec] at h_env
+    Rotation32Bytes.circuit, Rotation32Bytes.Assumptions, Rotation32Bytes.Spec] at h_env ⊢
 
   obtain ⟨h0, _⟩ := h_env
   rw [h_eval] at h0

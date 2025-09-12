@@ -83,17 +83,11 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   exact ⟨ chi_norm, chi_eq ⟩
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : Completeness (F p) sentences (elaborated order rc) Assumptions := by
-  intro i0 env yields state_var h_env state h_input state_norm
-
-  -- simplify goal and witness hypotheses
-  simp only [Assumptions] at state_norm
-  dsimp only [elaborated, main, circuit_norm,
-    Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated,
+  circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
-    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec
-  ] at h_env ⊢
-  simp_all only [elaborated, main, h_input, state_norm, circuit_norm,
-    U64.fromUInt64_normalized]
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
+
+  simp_all only [forall_const, U64.fromUInt64_normalized, and_true, true_and]
 
   -- `simp_all` left one goal to pull out of hypotheses
   obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
