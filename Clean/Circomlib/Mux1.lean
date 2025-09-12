@@ -108,7 +108,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       | inl h0 =>
         -- When s = 0
         rw [h0]
-        simp only [mul_zero, add_zero, if_pos rfl, circuit_norm]
+        simp only [mul_zero, circuit_norm]
         norm_num
         rfl
       | inr h1 =>
@@ -123,12 +123,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- We need to show that the witnessed values equal the computed expressions
     ext i hi
     -- Left side: eval of varFromOffset
-    simp only [varFromOffset_vector, eval_vector, Vector.getElem_map, Vector.getElem_mapRange]
+    simp only [Vector.getElem_map, Vector.getElem_mapRange]
     -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
-    simp only [Expression.eval, mul_one]
+    simp only [Expression.eval]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
-    simp only [Fin.val_mk, mul_one] at h_env_i
     rw [h_env_i]
     norm_num
 
@@ -197,18 +196,17 @@ def circuit : FormalCircuit (F p) Inputs field where
     rw[← h_input] at *
     clear input
     clear h_input
-    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
+    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
-    simp only [eval_vector, Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
-    rfl
+    simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
     intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
+    simp only [MultiMux1.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all
 
