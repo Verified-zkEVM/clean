@@ -73,13 +73,13 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     simp only [id_eq, Fin.getElem_fin, Fin.coe_castSucc, Fin.val_last]
     specialize h_ih (by
       intro i
-      specialize h_isZero i
+      specialize h_isZero i.castSucc
       norm_num at h_isZero ⊢
       simp only [Nat.add_one_sub_one, Nat.sub_zero, Vector.getElem_cast, Vector.getElem_pop',
         h_isZero])
     simp only [Vector.getElem_take] at h_ih
     rw [h_ih]
-    specialize h_isZero pre trivial
+    specialize h_isZero (.last pre) trivial
     norm_num at h_isZero ⊢
     simp only [h_isZero, Fin.forall_fin_succ']
     split_ifs <;> try rfl

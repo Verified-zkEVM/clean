@@ -38,15 +38,15 @@ def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
 -- rewrite thetaXor as a loop
 lemma thetaXor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
     Specs.Keccak256.thetaXor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
-  simp only [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+  simp [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
-  simp only [main, circuit_norm, thetaXor_loop, Xor64.circuit, varFromOffset_vector, eval_vector,
-    mul_comm, KeccakState.value, KeccakRow.value]
+  simp only [main, circuit_norm, thetaXor_loop, Xor64.circuit, eval_vector,
+    KeccakState.value, KeccakRow.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input

@@ -34,7 +34,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
     simp only [main, circuit_norm]
     intro i
     and_intros <;> ac_rfl
-  output_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  output_eq state i0 := by simp [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Vector.mapRange, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 -- rewrite the chi spec as a loop
@@ -48,7 +48,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, Spec, elaborated, chi_loop, eval_vector, KeccakState.value]
+  simp only [circuit_norm, chi_loop, eval_vector, KeccakState.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
@@ -66,7 +66,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
-  simp_all [state_norm, h_input, main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
+  simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=

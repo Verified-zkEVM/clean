@@ -25,11 +25,7 @@ def ByteTable : Table (F p) field := .fromStatic {
       rw [h'']
       exact i.is_lt
     · intro h
-      use x.val
-      simp only [fromByte, Fin.val_natCast]
-      have h' : (x.val) % 256 = x.val := by
-        rw [Nat.mod_eq_iff_lt]; assumption; norm_num
-      simp only [h', List.cons.injEq]
-      simp [FieldUtils.natToField_of_val_eq_iff]
+      use ⟨ x.val, h ⟩
+      simp [fromByte, FieldUtils.natToField_of_val_eq_iff]
 }
 end Gadgets
