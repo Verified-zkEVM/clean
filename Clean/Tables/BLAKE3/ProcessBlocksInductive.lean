@@ -88,12 +88,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    constructor
-    · intro i
-      simp only [← h_input, eval_vector]
-      simp_all
-    simp only [←h_input, eval_vector] -- provable_vector_simp wanted
-    simp_all
+    simp_all [← h_input, eval_vector]
 
   completeness := by
     circuit_proof_start [U32.AssertNormalized.circuit]
@@ -105,11 +100,8 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
       simp only [Vector.getElem_map] at this
       simp only [this]
       rcases h_spec with ⟨h_spec, _⟩
-      specialize h_spec i
+      specialize h_spec ⟨ i, h_i ⟩
       convert h_spec
-      simp only [Fin.getElem_fin, Fin.val_natCast]
-      congr
-      omega
     simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
     simp_all
 
@@ -298,7 +290,7 @@ private lemma step_process_block (env : Environment (F p))
   norm_num at ⊢ h_compress h_iszero
   constructor
   · constructor
-    · simp only [IsZero.circuit, circuit_norm, h_iszero]
+    · simp only [circuit_norm, h_iszero]
       congr
       conv_rhs =>
         arg 1
@@ -309,11 +301,8 @@ private lemma step_process_block (env : Environment (F p))
     constructor
     · rcases h_compress with ⟨ _, h_compress_normalized ⟩
       simp only [BLAKE3.BLAKE3State.Normalized] at h_compress_normalized
-      rintro ⟨ i, _ ⟩
-      specialize h_compress_normalized i
-      norm_num at ⊢ h_compress_normalized
-      convert h_compress_normalized
-      omega
+      rintro ⟨ i, hi ⟩
+      convert h_compress_normalized ⟨ i, by omega ⟩
     · simp_all
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by

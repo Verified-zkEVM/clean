@@ -553,18 +553,8 @@ lemma extract_from_offset_preserves_element {p n n1 n2 : ℕ} (input : fields n 
     input2[i]'hi = input[n1 + i]'(by omega) := by
   simp only [getElem]
   have h_extract : (input.toArray.extract n1 n)[i]'(by
-    simp only [Array.size_extract]
-    have h1 : i < n2 := hi
-    have h2 : input.toArray.size = n := by simp [Vector.size_toArray]
-    rw [h2]
-    omega) =
-                  input.toArray[n1 + i]'(by
-                    have : n1 + i < input.size := by
-                      have h1 : i < n2 := hi
-                      have h2 : input.size = n := by simp only [Vector.size_toArray]
-                      rw [h2]
-                      omega
-                    exact this) := by
+      simp only [Array.size_extract, Vector.size_toArray, min_self]
+      omega) = input.toArray[n1 + i]'(by simp only [Vector.size_toArray]; linarith) := by
     rw [Array.getElem_extract]
   exact h_extract
 
@@ -599,6 +589,7 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
          Vector.foldl (· &&& ·) init vec = List.foldl (· &&& ·) init vec.toList := by
     intros init vec
     rw [Vector.foldl_mk, ← Array.foldl_toList]
+    rfl
   rw [this, this]
 
   rw [List.and_foldl_eq_foldl]
@@ -641,7 +632,7 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
       have h_toList : (v.map (·.val)).toList = [v[0].val] := by
         rw [Vector.toList_length_one]
         simp only [Vector.getElem_map]
-      rw [h_toList]
+      rw [Vector.toList_toArray, h_toList]
       simp only [List.foldl_cons, List.foldl_nil]
     rw [h_fold_one]
     exact (one_land_of_IsBool input[0].val (val_of_IsBool h_input0)).symm
@@ -674,7 +665,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
       have h_toList : (input.map (·.val)).toList = [input[0].val, input[1].val] := by
         rw [Vector.toList_length_two]
         simp only [Vector.getElem_map]
-      rw [h_toList]
+      rw [Vector.toList_toArray, h_toList]
       simp only [List.foldl_cons, List.foldl_nil]
       rw [one_land_of_IsBool input[0].val (val_of_IsBool h_input0)]
     rw [h_fold_two]
