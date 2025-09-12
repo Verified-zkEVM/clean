@@ -116,7 +116,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
     apply ite_congr
     . ring_nf
-      simp only [sub_eq_zero, id_eq, eq_iff_iff]
+      simp [sub_eq_zero]
 
     . intro h_eq
       rfl
