@@ -437,7 +437,7 @@ theorem eval_const {F : Type} [Field F] {α : TypeMap} [ProvableType α] {env : 
 
 theorem eval_varFromOffset {α : TypeMap} [ProvableType α] (env : Environment F) (offset : ℕ) :
     eval env (varFromOffset α offset) = fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
-  simp only [eval, varFromOffset, toVars, fromVars, toElements, fromElements]
+  simp only [eval, varFromOffset, toVars, fromVars]
   rw [toElements_fromElements]
   congr
   rw [Vector.ext_iff]
@@ -457,7 +457,7 @@ theorem ext_iff {F : Type} {α : TypeMap} [ProvableType α] (x y : α F) :
 theorem eval_fromElements {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
     eval env (fromElements (F:=Expression F) xs) = fromElements (xs.map env) := by
-  simp only [eval, toVars, fromVars, toElements_fromElements]
+  simp only [eval, toVars, toElements_fromElements]
 
 theorem eval_fromVars {F : Type} [Field F] {α : TypeMap} [ProvableType α] (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
@@ -503,7 +503,7 @@ theorem eval_vector (env : Environment F)
   simp only [eval, toVars, toElements, fromElements]
   simp only [Vector.map_flatten, Vector.map_map]
   rw [Vector.flatten_toChunks]
-  simp [fromElements, eval, toVars]
+  simp [eval, toVars]
 
 theorem getElem_eval_vector (env : Environment F) (x : Var (ProvableVector α n) F) (i : ℕ) (h : i < n) :
     (eval env x[i]) = (eval env x)[i] := by
@@ -569,14 +569,14 @@ instance ProvablePair.instance {α β: TypeMap} [ProvableType α] [ProvableType 
 instance {α β: TypeMap} [NonEmptyProvableType α] [ProvableType β] :
   NonEmptyProvableType (ProvablePair α β) where
   nonempty := by
-    simp only [ProvablePair.instance, size]
+    simp only [size]
     have h1 := NonEmptyProvableType.nonempty (M:=α)
     omega
 
 instance {α β: TypeMap} [ProvableType α] [NonEmptyProvableType β] :
   NonEmptyProvableType (ProvablePair α β) where
   nonempty := by
-    simp only [ProvablePair.instance, size]
+    simp only [size]
     have h2 := NonEmptyProvableType.nonempty (M:=β)
     omega
 
