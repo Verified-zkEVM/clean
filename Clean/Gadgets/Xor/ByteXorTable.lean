@@ -23,7 +23,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
     dsimp only
     constructor
     · rintro ⟨ i, h: (x, y, z) = _ ⟩
-      simp only [id_eq, Prod.mk.injEq] at h
+      simp only [Prod.mk.injEq] at h
       rcases h with ⟨ hx, hy, hz ⟩
       and_intros
       · rw [hx]
@@ -32,7 +32,7 @@ def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
         apply fromByte_lt
       rw [hx, hy, hz]
       repeat rw [fromByte, FieldUtils.val_of_natToField_eq]
-      simp only [HXor.hXor, Xor.xor, Fin.xor]
+      simp only [HXor.hXor, XorOp.xor, Fin.xor]
       rw [Nat.mod_eq_iff_lt (by norm_num)]
       apply Nat.xor_lt_two_pow (n:=8)
       exact (splitTwoBytes i).1.is_lt

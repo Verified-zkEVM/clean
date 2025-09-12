@@ -94,7 +94,9 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
   dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32]
-  simp only [table_assignment_norm, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero, Vector.mapRange_succ]
+  simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
+    Vector.mapRange_zero, Vector.mapRange_succ]
+  simp
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -110,9 +112,8 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   rw [fib_assignment]
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
   -- TODO it's annoying that we explicitly need the GetElem instance here
-  simp only [PNat.mk_ofNat, Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
-    Fin.ofNat'_eq_cast, Nat.cast_zero, Fin.isValue, Nat.cast_one, Nat.cast_ofNat,
-    List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
+  simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
+    Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
   and_intros <;> rfl
 
 /--
@@ -130,7 +131,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   simp only [table_norm, circuit_norm, recursiveRelation,
     assignU32, Gadgets.Addition32.circuit]
   rintro ⟨ h_add, h_eq ⟩
-  simp only [table_norm, circuit_norm, true_implies, Nat.reduceAdd, zero_add] at h_add
+  simp only [table_norm, circuit_norm, Nat.reduceAdd, zero_add] at h_add
   simp only [circuit_norm] at hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
   rw [hcurr_y, hnext_x] at h_eq
@@ -197,10 +198,9 @@ def formalFib32Table : FormalTable (F p) RowType := {
 
       -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y
-      simp only [fib32, Trace.len]
+      simp only [fib32]
       rw [←curr_fib0, ←curr_fib1, ←eq_spec]
-      simp only [curr_fib1, Trace.len, Nat.succ_eq_add_one, add_spec,
-        Nat.reducePow, and_self, curr_normalized_y]
+      simp only [curr_fib1, add_spec, Nat.reducePow, and_self, curr_normalized_y]
 }
 
 end Tables.Fibonacci32

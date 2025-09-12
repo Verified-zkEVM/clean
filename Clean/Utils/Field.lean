@@ -93,11 +93,7 @@ theorem natToField_eq_natCast {n : ℕ} (lt : n < p) : ↑n = FieldUtils.natToFi
   | zero => exact False.elim (Nat.not_lt_zero n lt)
   | succ n' => {
     simp only [FieldUtils.natToField]
-    rw [Fin.natCast_def]
-    apply_fun Fin.val
-    · simp only [Nat.mod_succ_eq_iff_lt, Nat.succ_eq_add_one]
-      exact lt
-    · apply Fin.val_injective
+    rw [Fin.natCast_eq_mk]
   }
 
 theorem val_of_natToField_eq {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
@@ -302,12 +298,6 @@ lemma fromByte_lt (x : Fin 256) : (fromByte (p:=p) x).val < 256 := by
 
 lemma fromByte_eq (x : F p) (x_lt : x.val < 256) : fromByte ⟨ x.val, x_lt ⟩ = x := by
   dsimp [fromByte]
-  apply FieldUtils.natToField_of_val_eq_iff
-
-lemma fromByte_cast_eq {z : F p} (z_lt : z.val < 256) : fromByte z.cast = z := by
-  simp only [fromByte]
-  have : (z.cast : Fin 256).val = z.val := ZMod.val_cast_eq_val_of_lt z_lt
-  simp only [this]
   apply FieldUtils.natToField_of_val_eq_iff
 
 end

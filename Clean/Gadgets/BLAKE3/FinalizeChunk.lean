@@ -38,7 +38,7 @@ Convert 64 bytes to 16 U32 words (little-endian).
 Each U32 word is formed from 4 consecutive bytes.
 This is just a data reorganization, no constraints needed.
 -/
-def bytesToWords (bytes : Var (ProvableVector field 64) (F p)) : Var (ProvableVector U32 16) (F p) :=
+def bytesToWords {F} (bytes : Vector F 64) : Vector (U32 F) 16 :=
   Vector.ofFn fun (i : Fin 16) =>
     let base := i.val*4
     U32.mk
@@ -50,32 +50,17 @@ def bytesToWords (bytes : Var (ProvableVector field 64) (F p)) : Var (ProvableVe
 omit p_large_enough in
 lemma bytesToWords_normalized (env : Environment (F p)) (bytes_var : Var (ProvableVector field 64) (F p))
     (h_bytes : ∀ i : Fin 64, (eval env bytes_var)[i].val < 256) :
-    ∀ i : Fin 16, (eval env (bytesToWords bytes_var))[i].Normalized := by
+    ∀ i : Fin 16, (eval env (α := ProvableVector U32 16) (bytesToWords bytes_var))[i].Normalized := by
   rintro ⟨i, h_i⟩
-  simp only [bytesToWords]
-  simp only [id_eq, Fin.getElem_fin]
-  have h0 := h_bytes (i*4)
-  have h1 := h_bytes (i*4 + 1)
-  have h2 := h_bytes (i*4 + 2)
-  have h3 := h_bytes (i*4 + 3)
+  simp only [bytesToWords, Fin.getElem_fin]
+  have h0 := h_bytes ⟨ i*4, by omega ⟩
+  have h1 := h_bytes ⟨ i*4 + 1, by omega ⟩
+  have h2 := h_bytes ⟨ i*4 + 2, by omega ⟩
+  have h3 := h_bytes ⟨ i*4 + 3, by omega ⟩
   simp only [circuit_norm, eval_vector] at h0 h1 h2 h3 ⊢
   simp only [Vector.getElem_ofFn, U32.Normalized, explicit_provable_type, toVars]
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-  simp only [Fin.val_mul, Fin.val_add, Fin.val_natCast, Fin.val_ofNat', Nat.mod_eq_of_lt] at h0 h1 h2 h3
-  simp only [id_eq, Fin.isValue, Nat.mod_mul_mod, Fin.val_one, Nat.mod_add_mod, Fin.val_two] at h0 h1 h2 h3
-  and_intros
-  · calc
-      _ = _ := by congr; omega
-      _ < 256 := h0
-  · calc
-      _ = _ := by congr; omega
-      _ < 256 := h1
-  · calc
-      _ = _ := by congr; omega
-      _ < 256 := h2
-  · calc
-      _ = _ := by congr; omega
-      _ < 256 := h3
+  and_intros <;> assumption
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma block_len_normalized (buffer_len : F p) (h : buffer_len.val ≤ 64) :
@@ -141,217 +126,91 @@ private lemma ZMod_val_chunkEnd :
   simp only [ZMod.val_natCast, chunkEnd, pow_one]
   rw [Nat.mod_eq_of_lt]; omega
 
--- When I tried to prove all of these inline, I got 'deep recursion detected' in Lean kernel.
 omit p_large_enough in
-private lemma bytesToWords_value (env : Environment (F p))
-    (input_var_buffer_data : Vector (Expression (F p)) 64)
-    (input_buffer_data : Vector (F p) 64)
-    (input_buffer_len : F p)
-    (h_small : ZMod.val input_buffer_len ≤ 64)
-    (h_data : eval (α:=ProvableVector field 64) env input_var_buffer_data = input_buffer_data)
-    (h_rest : ∀ (i : Fin 64), ↑i ≥ ZMod.val input_buffer_len → input_buffer_data[↑i] = 0) :
-    Vector.map U32.value (Vector.map (eval env) (bytesToWords input_var_buffer_data)) =
-    Specs.BLAKE3.bytesToWords (List.map (fun x ↦ ZMod.val x) (input_buffer_data.take (ZMod.val input_buffer_len)).toList) := by
-  simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
-  ext i h_i
-  simp only [explicit_provable_type, circuit_norm]
-  norm_num
-  congr
-  · rw [List.getElem_append]
-    simp only [List.length_take, List.length_map]
-    split
-    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp only [← h_data]
-      simp
-    · rename_i h_large
-      simp only [List.getElem_replicate]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp only [← h_data] at h_rest
-      rw [min_eq_left] at h_large
-      rotate_left
-      · convert h_small
-        simp
-      specialize h_rest (i*4) (by
-        simp only [Fin.val_mul, Fin.val_natCast, Nat.mod_mul_mod, ge_iff_le]
-        omega)
-      simp only [id_eq, Nat.cast_mul, Fin.isValue, Fin.getElem_fin,
-        Vector.getElem_map] at h_rest
-      simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_mul, Fin.val_natCast] at h_rest
-      simp only [← h_rest]
-      congr
-      omega
-  · rw [List.getElem_append]
-    simp only [List.length_take, List.length_map]
-    split
-    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp [← h_data]
-    · rename_i h_large
-      simp only [List.getElem_replicate]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp only [← h_data] at h_rest
-      rw [min_eq_left] at h_large
-      rotate_left
-      · convert h_small
-        simp
-      specialize h_rest (i*4 + 1) (by
-        simp only [Fin.val_add, Fin.val_mul]
-        simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
-        omega)
-      simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
-        Vector.getElem_map] at h_rest
-      simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_add, Fin.val_mul] at h_rest
-      simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod] at h_rest
-      simp only [← h_rest]
-      congr
-      omega
-  · rw [List.getElem_append]
-    simp only [List.length_take, List.length_map]
-    split
-    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp [← h_data]
-    · rename_i h_large
-      simp only [List.getElem_replicate]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp only [← h_data] at h_rest
-      rw [min_eq_left] at h_large
-      rotate_left
-      · convert h_small
-        simp
-      specialize h_rest (i*4 + 2) (by
-        simp only [Fin.val_add, Fin.val_mul]
-        simp only [Fin.val_natCast, Fin.isValue, Nat.mod_mul_mod, ge_iff_le]
-        omega)
-      simp only [Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
-        Vector.getElem_map] at h_rest
-      simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue] at h_rest
-      simp only [← h_rest]
-      congr
-      omega
-  · rw [List.getElem_append]
-    simp only [List.length_take, List.length_map]
-    split
-    · simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Vector.getElem_toArray]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp [← h_data]
-    · rename_i h_large
-      simp only [List.getElem_replicate]
-      simp only [← ProvableType.eval_field]
-      have := eval_vector (α:=field) (env:=env) (n:=64)
-      rw [this] at h_data
-      simp only [← h_data] at h_rest
-      rw [min_eq_left] at h_large
-      rotate_left
-      · convert h_small
-        simp
-      specialize h_rest (i*4 + 3) (by
-        simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue]
-        omega)
-      simp only [id_eq, Nat.cast_mul, Nat.cast_ofNat, Fin.isValue, Fin.getElem_fin,
-        Vector.getElem_map] at h_rest
-      simp only [ZMod.val_eq_zero]
-      simp only [Fin.val_add, Fin.val_mul, Fin.val_natCast, Fin.isValue] at h_rest
-      simp only [← h_rest]
-      congr
-      omega
+private lemma eval_bytesToWords (env : Environment (F p))
+    (input_var_buffer_data : Vector (Expression (F p)) 64) :
+    eval env (α := ProvableVector U32 16) (bytesToWords input_var_buffer_data) =
+      bytesToWords (eval (α:=ProvableVector field 64) env input_var_buffer_data) := by
+  simp only [bytesToWords, circuit_norm, eval_vector]
+  simp only [id_eq]
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal, U32.mk.injEq]
+  have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4) (by omega)
+  have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 1) (by omega)
+  have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 2) (by omega)
+  have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 3) (by omega)
+  simp_all
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
-  rcases h_holds with ⟨h_IsZero, h_holds⟩
-  specialize h_IsZero trivial
-  simp only [IsZero.circuit, IsZero.Spec] at h_IsZero
-  rcases h_holds with ⟨h_Or32_1, h_holds⟩
-  simp only [Or32.circuit, Or32.Assumptions, Or32.Spec] at h_Or32_1
+  circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
+    IsZero.Spec, IsZero.Assumptions,
+    Or32.Spec, Or32.Assumptions,
+    Compress.Spec, Compress.Assumptions,
+    ApplyRounds.Spec, ApplyRounds.Assumptions,
+    FinalStateUpdate.circuit, FinalStateUpdate.Spec, FinalStateUpdate.Assumptions]
+  rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
+  simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_self, and_true, true_and,
+    Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
   specialize h_Or32_1 (by
-    constructor
-    · simp_all
-    · simp only [circuit_norm, h_IsZero]
-      split
-      · simp only [circuit_norm, Nat.ofNat_pos]
-        linarith
-      · simp only [circuit_norm, Nat.ofNat_pos])
-  rcases h_holds with ⟨h_Or32_2, h_Compress⟩
-  simp only [Or32.circuit, Or32.Assumptions, Or32.Spec] at h_Or32_2
-  specialize h_Or32_2 (by
-    constructor
-    · simp only [h_Or32_1]
-    · simp only [circuit_norm]
-      rw [ZMod_val_chunkEnd]
-      decide)
-  simp only [Compress.circuit, Compress.Assumptions, Compress.Spec] at h_Compress
-  specialize h_Compress (by
-    simp only [ApplyRounds.Assumptions]
-    simp only [h_Or32_2.2]
-    simp only [ProcessBlocksState.Normalized] at h_assumptions
-    constructor
-    · simp only [h_assumptions]
-      trivial
-    constructor
-    · apply bytesToWords_normalized
-      aesop
-    constructor
-    · simp only [circuit_norm]
-      decide
-    constructor
-    · simp only [h_assumptions]
-    · simp only [circuit_norm]
-      omega)
+    split <;> simp [ZMod.val_one])
+
+  simp_all only [forall_const]
+  have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
+  specialize h_Or32_2 (by simp [val_two])
+  specialize h_Compress (by simp_all)
+    (by apply bytesToWords_normalized; simp_all)
+    (by linarith)
+    (by simp_all)
+  simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
+  have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
+  simp only [Vector.map_take, BLAKE3State, eval_vector] at h_compress'
+  rw [← eval_vector] at h_compress'
+  simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
+    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero,
+    Vector.map_map] at h_compress'
+  rw [← Vector.take_eq_extract] at h_compress'
   constructor
-  · simp only [finalizeChunk, eval_vector, ← Vector.map_take]
-    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
-    simp only [BLAKE3State.value, eval_vector] at h_Compress_value
-    simp only [h_Compress_value]
-    clear h_Compress_value
-    simp only [h_Or32_2, h_Or32_1]
-    rw [bytesToWords_value] <;> try assumption
-    · simp only [circuit_norm]
-      norm_num
-      rw [Nat.min_eq_left (h:=by simp_all)]
-      rw [ZMod_val_chunkEnd]
-      simp only [h_IsZero]
-      simp only [ProcessBlocksState.Normalized] at h_assumptions
-      congr
-      split
-      · simp_all only [circuit_norm]
-        norm_num
-      · simp_all only [circuit_norm]
-        norm_num
-    · simp only [h_assumptions]
-    · simp only [h_input]
-    · simp_all
+  · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
+    List.extract_eq_drop_take, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
+    rw [h_compress']
+    simp only [finalizeChunk]
+    apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
+    have : Vector.map (U32.value ∘ eval env) (bytesToWords input_var_buffer_data) =
+        (Specs.BLAKE3.bytesToWords
+        (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
+      clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
+      rw [← Vector.map_map, ← eval_vector, eval_bytesToWords]
+      simp only [h_input]
+      simp only [bytesToWords, Specs.BLAKE3.bytesToWords]
+      ext i hi
+      simp only [explicit_provable_type, circuit_norm, Vector.getElem_ofFn, List.getElem_append,
+        List.length_map, Vector.length_toList, Vector.getElem_extract,
+        List.getElem_map, Vector.getElem_toList, List.getElem_replicate, dite_mul, zero_mul]
+      have h_rest := h_assumptions.2.2.2.1
+      congr <;> (
+        split
+        · ac_rfl
+        · simp only [Nat.reducePow, mul_eq_zero, ZMod.val_eq_zero, OfNat.ofNat_ne_zero, or_false]
+          exact h_rest ⟨ _, by omega ⟩ (by simp only; omega))
+    rw [this]
+    congr 1
+    · rw [List.length_map, Vector.length_toList, left_eq_inf]
+      linarith
+    · congr
+      simp only [startFlag, chunkStart]
+      split <;> simp_all [circuit_norm]
   · rintro ⟨i, h_i⟩
     simp only [eval_vector]
     rw [Vector.getElem_map (i:=i) (n:=8) (α:=U32 (Expression (F p))) (β:=U32 (F p))]
     conv =>
       arg 1
       arg 2
-      change (Vector.take _ 8)[i]
+      change (Vector.take _ 8)[i]'(by omega)
       rw [Vector.getElem_take]
     rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
-    specialize h_Compress_Normalized i
-    simp only [Fin.val_natCast] at h_Compress_Normalized
-    have : i % 16 = i := by omega
-    simp only [this] at h_Compress_Normalized
+    specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
