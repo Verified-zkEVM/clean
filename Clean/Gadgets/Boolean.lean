@@ -53,7 +53,7 @@ theorem land_inherit_left (l r : ℕ) (h : IsBool l) : IsBool (l &&& r) := by
     simp only [HAnd.hAnd, AndOp.and]
     have : (0 : ℕ).land r = 0 := by
       unfold Nat.land
-      simp [Nat.bitwise]
+      simp
     exact this
   · -- Case: l = 1
     subst h_l1
@@ -71,23 +71,23 @@ theorem val_lt_two {p : ℕ} [Fact p.Prime] {x : F p} (h : IsBool x) : x.val < 2
 theorem and_is_bool {α : Type*} [MulZeroOneClass α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x * y) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, mul_zero, zero]
+  · simp [hx0, zero]
   · simp [hx1, one_mul, hy]
 
 /-- If x and y are boolean, then x OR y is boolean -/
 theorem or_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x - x*y + y) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, zero_add, zero_mul, sub_zero, hy]
+  · simp [hx0, zero_add, zero_mul, hy]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, one_mul, mul_zero, add_zero, sub_zero, one]
-    · simp [hx1, hy1, one_mul, mul_one, sub_self, one]
+    · simp [hx1, hy0, mul_zero, add_zero, sub_zero, one]
+    · simp [hx1, hy1, mul_one, sub_self, one]
 
 /-- If x is boolean, then NOT x is boolean -/
 theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
     IsBool (1 + x - 2*x) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, add_zero, zero_mul, sub_zero, one]
+  · simp [hx0, add_zero, sub_zero, one]
   · simp only [hx1]
     norm_num
     exact zero
@@ -98,8 +98,8 @@ theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBo
   rcases hx with hx0 | hx1
   · simp [hx0, zero_add, zero_mul, mul_zero, sub_zero, hy]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, add_zero, one_mul, mul_zero, sub_zero, one]
-    · simp only [hx1, hy1, one_mul, mul_one]
+    · simp [hx1, hy0, add_zero, mul_zero, sub_zero, one]
+    · simp only [hx1, hy1, mul_one]
       norm_num
       exact zero
 
@@ -107,21 +107,21 @@ theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBo
 theorem nand_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (1 - x * y) := by
   rcases hx with hx0 | hx1
-  · simp [hx0, mul_zero, sub_zero, one]
+  · simp [hx0, sub_zero, one]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, one_mul, sub_zero, one]
-    · simp [hx1, hy1, one_mul, sub_self, zero]
+    · simp [hx1, hy0, sub_zero, one]
+    · simp [hx1, hy1, sub_self, zero]
 
 /-- If x and y are boolean, then NOR(x,y) is boolean -/
 theorem nor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
     IsBool (x * y + 1 - x - y) := by
   rcases hx with hx0 | hx1
   · rcases hy with hy0 | hy1
-    · simp [hx0, hy0, zero_mul, zero_add, sub_zero, one]
-    · simp [hx0, hy1, zero_mul, zero_add, sub_self, zero]
+    · simp [hx0, hy0, zero_add, sub_zero, one]
+    · simp [hx0, hy1, zero_add, sub_self, zero]
   · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, one_mul, mul_zero, add_sub_cancel, sub_self, zero]
-    · simp [hx1, hy1, one_mul]
+    · simp [hx1, hy0, mul_zero, sub_self, zero]
+    · simp [hx1, hy1]
       exact zero
 
 /-- If a is boolean (0 or 1), then a &&& 1 = a -/
