@@ -52,7 +52,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert xor_eq_val_xor h_a h_b using 1
       ring_nf
@@ -94,7 +94,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · exact and_eq_val_and h_a h_b
     · convert and_is_bool h_a h_b using 1
@@ -134,7 +134,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert or_eq_val_or h_a h_b using 1
       ring_nf
@@ -174,7 +174,7 @@ def circuit : FormalCircuit (F p) field field where
     rintro _ _ _ _ h_env h_in h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rw [h_env] at h_hold
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert not_eq_val_not h_in using 1
       ring_nf
@@ -216,7 +216,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert nand_eq_val_nand h_a h_b using 1
       ring_nf
@@ -258,7 +258,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert nor_eq_val_nor h_a h_b using 1
       ring_nf
@@ -333,7 +333,7 @@ theorem localLength_eq (n : ℕ) (input : Var (fields n) (F p)) (offset : ℕ) :
       rfl
     | 2 =>
       simp only [main]
-      simp only [Fin.isValue, Nat.add_one_sub_one]
+      simp only [Nat.add_one_sub_one]
       have h := AND.circuit.localLength_eq (input[0], input[1]) offset
       rw [show AND.circuit.localLength _ = 1 from rfl] at h
       exact h
@@ -432,8 +432,8 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         · apply AND.circuit.subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
-        simp only [AND.circuit, AND.main, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
-        simp only [Fin.isValue, Nat.add_zero, id_eq]
+        simp only [AND.circuit, AND.main, circuit_norm] at h_completeness ⊢
+        simp only [Nat.add_zero]
         unfold Environment.UsesLocalWitnesses Operations.forAllFlat
         unfold Operations.forAll
 
@@ -441,7 +441,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
         · simp only [Environment.ExtendsVector, Vector.getElem_mk]
           intro i
           fin_cases i
-          simp only [Fin.val_zero, add_zero, List.getElem_toArray]
+          simp only [add_zero, List.getElem_toArray]
           exact h_completeness
         · simp only [Operations.forAll]
           trivial
@@ -483,7 +483,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
           · exact h_c3
           · simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main]
             rw [Circuit.forEach]
-            simp_all [toVars, assertZero, var, circuit_norm, Operations.toFlat, FlatOperation.forAll]
+            simp_all [assertZero, circuit_norm, Operations.toFlat, FlatOperation.forAll]
 
 -- Extract Assumptions and Spec outside the circuit
 def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
@@ -708,18 +708,15 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
   apply AND.circuit.completeness
   · exact h_local_witnesses
   · subst h_env
-    simp_all only [forall_eq', id_eq, Fin.isValue]
     rfl
   · simp only [Assumptions] at h_assumptions
     constructor
-    · simp only [ProvableType.eval_fieldPair]
-      have h_eval0 : env input_var[0] = input[0] :=
+    · have h_eval0 : env input_var[0] = input[0] :=
         by simp[h_env, circuit_norm]
       change IsBool (env input_var[0])
       rw [h_eval0]
       exact h_binary0
-    · simp only [ProvableType.eval_fieldPair]
-      have h_eval1 : env input_var[1] = input[1] :=
+    · have h_eval1 : env input_var[1] = input[1] :=
         by simp[h_env, circuit_norm]
       change IsBool (env input_var[1])
       rw [h_eval1]
@@ -810,7 +807,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       · trans (Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input1.map (·.val)) &&&
                Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input2.map (·.val)))
         · convert h_and_val using 1
-          simp only [ProvableType.eval_fieldPair, out1, out2]
+          simp only [out1, out2]
           simp only [h_val1, h_val2]
 
         have h_append : input1.cast (by omega : n1 = n1) ++ input2.cast (by omega : n2 = n2) =
