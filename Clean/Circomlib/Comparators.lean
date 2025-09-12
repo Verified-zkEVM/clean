@@ -101,7 +101,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   soundness := by
     circuit_proof_start
-    rw [← h_input] 
+    rw [← h_input]
     simp only [id_eq]
 
     have h1 : Expression.eval env input_var.1 = input.1 := by
@@ -110,29 +110,21 @@ def circuit : FormalCircuit (F p) fieldPair field where
       rw [← h_input]
 
     rw [h1, h2] at h_holds
-    simp only [IsZero.circuit]
-    simp only [IsZero.circuit] at h_holds
+    simp only [IsZero.circuit] at h_holds ⊢
 
     rw [h_holds, h1, h2]
 
     apply ite_congr
-    . simp only [sub_eq_zero, id_eq, eq_iff_iff]
-      constructor
-      . intro p
-        have : (input.1 - input.2 = 0) ↔ (input.1 = input.2) := by
-          rw [sub_eq_zero]
-        rw [← this, ← p, Mathlib.Tactic.RingNF.add_neg]
+    . ring_nf
+      simp only [sub_eq_zero, id_eq, eq_iff_iff]
 
-      . intro p
-        rw [p, Mathlib.Tactic.RingNF.add_neg, sub_self]
-        
     . intro h_eq
       rfl
     . intro h_eq
       rfl
 
     trivial
-    
+
 end IsEqual
 
 namespace ForceEqualIfEnabled
