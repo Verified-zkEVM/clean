@@ -16,7 +16,7 @@ theorem append_localLength {a b: Operations F} :
   induction a using induct with
   | empty => ac_rfl
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all +arith [localLength, ih]
+    simp_all +arith [localLength]
 
 theorem localLength_cons {a : Operation F} {as : Operations F} :
     localLength (a :: as) = a.localLength + as.localLength := by
@@ -149,7 +149,7 @@ end Circuit
 namespace FlatOperation
 lemma localLength_cons {F} {op : FlatOperation F} {ops : List (FlatOperation F)} :
     localLength (op :: ops) = op.singleLocalLength + localLength ops := by
-  cases op <;> simp +arith only [localLength, singleLocalLength, List.cons_append]
+  cases op <;> simp +arith only [localLength, singleLocalLength]
 
 lemma localLength_append {F} {a b: List (FlatOperation F)} :
     localLength (a ++ b) = localLength a + localLength b := by
@@ -198,14 +198,14 @@ lemma localLength_toFlat {ops : Operations F} :
     generalize ops.toFlat = flat_ops at *
     generalize Operations.localLength ops = n at *
     induction flat_ops using localLength.induct generalizing n with
-    | case1 => simp_all [localLength, add_comm, List.nil_append, right_eq_add, Subcircuit.localLength_eq]
+    | case1 => simp_all [localLength, add_comm, Subcircuit.localLength_eq]
     | case2 m' _ ops' ih' =>
       dsimp only [localLength, witness] at *
       specialize ih' (n - m') (by rw [←ih]; omega)
       simp_all +arith only [localLength_append, localLength]
       try omega
     | case3 ops _ ih' | case4 ops _ ih' =>
-      simp_all only [localLength_append, forall_eq', localLength, List.cons_append]
+      simp_all only [localLength_append, forall_eq', localLength]
 
 /--
 The witnesses created from flat and nested operations are the same
@@ -449,7 +449,7 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
   induction ops using Operations.induct generalizing n with
   | empty => simp only [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | witness | assert | lookup =>
-    simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll, Condition.applyFlat, FlatOperation.localLength]
+    simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | subcircuit s ops ih =>
     simp_all only [forAllFlat, forAll, toFlat]
     rw [FlatOperation.forAll_append, s.localLength_eq]
@@ -513,7 +513,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
     | assert | lookup  =>
       simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness]
     | witness m compute =>
-      simp_all only [Condition.applyFlat, singleLocalLength, dynamicWitness, Environment.AgreesBelow]
+      simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
       -- get rid of ih first
       constructor; case right =>
         specialize ih (init ++ (compute (.fromList init)).toList)
@@ -602,7 +602,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
       apply orig.soundness <;> trivial
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
+      simp only [GeneralFormalCircuit.Completeness, forall_eq']
       intros
       apply orig.completeness <;> trivial
   }
@@ -625,7 +625,7 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
       apply orig.soundness <;> trivial
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq', Spec]
+      simp only [GeneralFormalCircuit.Completeness, forall_eq']
       rintro _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }
