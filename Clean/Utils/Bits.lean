@@ -58,7 +58,7 @@ lemma toBits_fromBits_aux {n : ℕ} (bits : Vector ℕ n)
       · exact ih_eq i hin
       · have : n = i := by linarith
         subst this
-        rcases h_bits_n <;> simp [*, ZMod.val_one]
+        rcases h_bits_n <;> simp [*]
 
 /-- `toBits` is a left-inverse of `fromBits` -/
 theorem toBits_fromBits {n : ℕ} (bits : Vector ℕ n)
@@ -145,7 +145,7 @@ lemma fieldToBits_fieldFromBits_aux {n : ℕ} (hn : 2^n < p) (bits : Vector (F p
   (h_bits : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1) :
     (fieldFromBits bits).val < 2^n ∧ fieldToBits n (fieldFromBits bits) = bits := by
   rw [Vector.ext_iff]
-  simp only [fieldFromBits, fieldToBits, Vector.getElem_mapRange]
+  simp only [fieldFromBits, fieldToBits]
 
   have h_bool : ∀ i (hi : i < n), (bits.map ZMod.val)[i] = 0 ∨ (bits.map ZMod.val)[i] = 1 := by
     intro i hi
@@ -154,7 +154,7 @@ lemma fieldToBits_fieldFromBits_aux {n : ℕ} (hn : 2^n < p) (bits : Vector (F p
     · intro h; apply Or.inl; simp only [Vector.getElem_map, ZMod.val_eq_zero]; assumption
     · intro h; apply Or.inr; simp only [Vector.getElem_map]
       apply_fun ZMod.val at h
-      simp only [ZMod.val_zero, ZMod.val_one] at h
+      simp only [ZMod.val_one] at h
       exact h
 
   obtain ⟨thm_lt, thm_val⟩ := toBits_fromBits_aux (bits.map ZMod.val) h_bool
@@ -215,7 +215,7 @@ lemma val_natCast_toBits {n} {x : ℕ} :
     Vector.map (ZMod.val ∘ Nat.cast (R:=F p)) (toBits n x) = toBits n x := by
   rw [Vector.ext_iff]
   intro i hi
-  simp only [Vector.getElem_map, Function.comp_apply, id_eq]
+  simp only [Vector.getElem_map, Function.comp_apply]
   rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
   simp only [toBits, Vector.getElem_mapRange]
   split
