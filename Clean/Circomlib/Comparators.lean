@@ -1,8 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Circomlib.Bitify
-import Mathlib.Tactic.Cases
-import Mathlib.Algebra.Field.Basic
 
 /-
 Original source code:
@@ -128,16 +126,11 @@ def circuit : FormalCircuit (F p) fieldPair field where
       . intro p
         have : (input.1 - input.2 = 0) ↔ (input.1 = input.2) := by
           rw [sub_eq_zero]
-        rw [← this]
-        rw [← p]
-        rw [Mathlib.Tactic.RingNF.add_neg]
+        rw [← this, ← p, Mathlib.Tactic.RingNF.add_neg]
 
       . intro p
+        rw [p, Mathlib.Tactic.RingNF.add_neg, sub_self]
         
-        rw [p]
-        rw [Mathlib.Tactic.RingNF.add_neg]
-        rw [sub_self]
-
     . intro h_eq
       rfl
     . intro h_eq
