@@ -130,12 +130,12 @@ def circuit : FormalCircuit (F p) fieldPair field where
           rw [sub_eq_zero]
         rw [← this]
         rw [← p]
-        rw [@Mathlib.Tactic.RingNF.add_neg]
+        rw [Mathlib.Tactic.RingNF.add_neg]
 
       . intro p
         
         rw [p]
-        rw [@Mathlib.Tactic.RingNF.add_neg]
+        rw [Mathlib.Tactic.RingNF.add_neg]
         rw [sub_self]
 
     . intro h_eq
@@ -146,14 +146,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
     trivial
     
 end IsEqual
-
-/- lemma minus_eq_if_else (input : fieldPair (F p)) : (input.1 + -input.2 = 0) ↔ (input.1 = input.2) := by -/
-/-   constructor -/
-/-   . intro h -/
-/--/
-/-     apply FieldUtils.ext_iff.mpr -/
-/-     .  -/
-/-   . sorry -/
 
 namespace ForceEqualIfEnabled
 /-
