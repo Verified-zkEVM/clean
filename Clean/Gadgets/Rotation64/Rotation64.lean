@@ -20,8 +20,8 @@ open Utils.Rotation (rotRight64_composition)
   Rotate the 64-bit integer by `offset` bits
 -/
 def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let byte_offset : ℕ := offset.val / 8
-  let bit_offset : ℕ := (offset % 8).val
+  let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
+  let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
 
   -- rotation is performed by combining a bit and a byte rotation
   let byte_rotated ← Rotation64Bytes.circuit byte_offset x
@@ -34,7 +34,7 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   ∧ y.Normalized
 
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
-  Rotation64Bits.output (offset % 8).val i0
+  Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
 -- #eval! (main (p:=p_babybear) 0) default |>.localLength
 -- #eval! (main (p:=p_babybear) 0) default |>.output
@@ -50,16 +50,14 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
     Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
 
   -- abstract away intermediate U64
-  let byte_offset : ℕ := offset.val / 8
-  let bit_offset : ℕ := (offset % 8).val
+  let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
+  let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
   set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
 
-  simp [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Spec, Rotation64Bytes.Assumptions,
-    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Spec, Rotation64Bits.Assumptions,
-    Vector.finRange] at h_holds
-
-  simp [circuit_norm, Spec, output, h_holds, elaborated]
-  set y := eval env (Rotation64Bits.output (offset.val % 8 : ℕ) i0)
+  simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions,
+    Rotation64Bytes.Spec, Rotation64Bits.Assumptions, Rotation64Bits.Spec, add_zero] at h_holds
+  simp only [Spec, elaborated, output, ElaboratedCircuit.output]
+  set y := eval env (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
 
   simp [Assumptions] at x_normalized
   rw [←h_input] at x_normalized
@@ -74,21 +72,14 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
 
   -- reason about rotation
   rw [rotRight64_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
-  rw [hy]
-  rw [show(offset.val / 8) % 8 = offset.val / 8 by
-    apply Nat.mod_eq_of_lt
-    apply Nat.div_lt_of_lt_mul
-    exact offset.is_lt]
-  rw [Nat.div_add_mod']
+  rw [hy, Nat.div_add_mod']
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
-  simp [circuit_norm, main, elaborated,
+  simp only [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
-    Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions]
-  simp [circuit_norm, elaborated, main,
-    Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env
+    Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env ⊢
 
   obtain ⟨h0, _⟩ := h_env
   rw [h_eval] at h0
