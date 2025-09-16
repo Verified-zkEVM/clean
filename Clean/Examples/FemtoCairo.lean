@@ -347,7 +347,10 @@ def stateTransitionCircuit (program : (F p) → (F p)) (memory : (F p) → (F p)
   assertZero (decoded.instrType.isLoadState * (nextState.pc - v1))
   assertZero (decoded.instrType.isLoadState * (nextState.ap - v2))
   assertZero (decoded.instrType.isLoadState * (nextState.fp - v3))
+
   assertZero ((1 - decoded.instrType.isLoadState) * (nextState.pc - (state.pc + 4)))
+  assertZero ((1 - decoded.instrType.isLoadState) * (nextState.ap - state.ap))
+  assertZero ((1 - decoded.instrType.isLoadState) * (nextState.fp - state.fp))
 
   return nextState
 
