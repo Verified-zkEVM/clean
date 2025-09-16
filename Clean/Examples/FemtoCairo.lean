@@ -97,10 +97,14 @@ def femtoCairoMachineBoundedExecution (program : (F p) → (F p)) (memory : (F p
   aux initial_pc initial_ap initial_fp steps
 
 /--
-  Construct a table that represents a read-only memory
-  containing all pairs (i, f(i)) for i in [0, length)
+  Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
+  - The **program table** it is OK, as it a fixed and public,
+    so the verifier always has access to lookups into its table.
+  - For the **memory table**, it is committed by the prover, and no constraints are enforced on it.
+    For our formalization, we represent it also as a fixed table. This is without loss of generality,
+    since we do not make any assumptions on its content, and its role is just to fix a function.
 
-  TODO: once we figure out proper lookups, switch to use formal tables.
+  To represent, e.g., a read-write memory we will need a more complex construction.
 -/
 def ReadOnlyTableFromFunction (f : (F p) → (F p)) (length : ℕ) (h : length < p) [NeZero length] : Table (F p) fieldPair := .fromStatic {
   name := "ReadOnlyMemory"
@@ -120,7 +124,9 @@ def ReadOnlyTableFromFunction (f : (F p) → (F p)) (length : ℕ) (h : length <
       sorry
 }
 
-
+/--
+  State of the femtoCairo machine, represented as a triple (pc, ap, fp).
+-/
 structure State (F : Type) where
   pc : F
   ap : F
