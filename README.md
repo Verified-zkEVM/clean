@@ -1,13 +1,11 @@
-<p align="center"> <img src="images/logo-w-subtitle.png" width="400" height="" alt="Clean logo"> </p>
+<p align="center"> <img src="images/logo-w-subtitle-rect.png" width="400" alt="Clean logo"> </p>
 
 <div align="center">
-  
+
 [![Chat on Telegram][ico-telegram]][link-telegram]
 [![Ask DeepWiki][ico-deep-wiki]][link-deep-wiki]
 
 </div>
-
-## About clean
 
 `clean` is an embedded Lean DSL for writing zk circuits, targeting popular arithmetizations like AIR, PLONK and R1CS.
 
