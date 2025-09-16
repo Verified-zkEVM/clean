@@ -77,4 +77,23 @@ def femtoCairoMachineTransition (program : (F p) → (F p)) (memory : (F p) → 
   -- Invalid instruction type
   | _ => none
 
+/--
+  Executes the femtoCairo machine for a bounded number of steps `steps`.
+  Returns the final (pc, ap, fp) triple if `steps` iteration of the state
+  transition execution completed successfully, otherwise returns None.
+-/
+def femtoCairoMachineBoundedExecution (program : (F p) → (F p)) (memory : (F p) → (F p))
+    (initial_pc : (F p)) (initial_ap : (F p)) (initial_fp : (F p)) (steps : Nat) :
+    Option ((F p) × (F p) × (F p)) :=
+  let rec aux (pc : (F p)) (ap : (F p)) (fp : (F p)) (steps_left : Nat) :
+      Option ((F p) × (F p) × (F p)) :=
+    if steps_left = 0 then
+      some (pc, ap, fp)
+    else
+      match femtoCairoMachineTransition program memory pc ap fp with
+      | some (new_pc, new_ap, new_fp) =>
+          aux new_pc new_ap new_fp (steps_left - 1)
+      | none => none
+  aux initial_pc initial_ap initial_fp steps
+
 end Examples.FemtoCairo
