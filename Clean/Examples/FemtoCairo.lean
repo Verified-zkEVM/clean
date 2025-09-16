@@ -283,7 +283,7 @@ instance : ProvableStruct MemoryReadInput where
 def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPair) : FormalCircuit (F p)
     MemoryReadInput field where
   main := fun { state, offset, mode } => do
-    -- read into memory for all cases of addr1
+    -- read into memory for all cases of addressing mode
     let v0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + offset)
     let v1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + offset)
     let v2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + offset)
@@ -291,19 +291,13 @@ def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPa
     lookup memoryTable ⟨(state.ap + offset), v1⟩
     lookup memoryTable ⟨(state.fp + offset), v2⟩
 
-    -- witness the actual value based on the addressing mode
-    let value : Expression _ ← witness fun eval =>
-      eval mode.isDoubleAddressing * eval v0 +
-      eval mode.isApRelative * eval v1 +
-      eval mode.isFpRelative * eval v2 +
-      eval mode.isImmediate * eval offset
+    -- select the correct value based on the addressing mode
+    let value <==
+      mode.isDoubleAddressing * v0 +
+      mode.isApRelative * v1 +
+      mode.isFpRelative * v2 +
+      mode.isImmediate * offset
 
-    -- enforce that value is correctly selected
-    assertZero <|
-      mode.isDoubleAddressing * (value - v0) +
-      mode.isApRelative * (value - v1) +
-      mode.isFpRelative * (value - v2) +
-      mode.isImmediate * (value - offset)
     return value
 
   localLength _ := 4
