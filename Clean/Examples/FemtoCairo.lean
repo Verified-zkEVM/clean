@@ -125,6 +125,133 @@ def ReadOnlyTableFromFunction (f : (F p) → (F p)) (length : ℕ) (h : length <
 }
 
 /--
+  Decoded instruction type, represented as a one-hot encoding in a vector of 4 field elements.
+  The four possible instruction types are:
+  - ADD
+  - MUL
+  - STORE_STATE
+  - LOAD_STATE
+-/
+structure DecodedInstructionType (F : Type) where
+  isAdd : F
+  isMul : F
+  isStoreState : F
+  isLoadState : F
+
+instance : ProvableType DecodedInstructionType where
+  size := 4
+  toElements := fun { isAdd, isMul, isStoreState, isLoadState } => #v[isAdd, isMul, isStoreState, isLoadState]
+  fromElements := fun elements => {
+    isAdd := elements[0],
+    isMul := elements[1],
+    isStoreState := elements[2],
+    isLoadState := elements[3]
+  }
+
+/--
+  Decoded addressing mode, represented as a one-hot encoding in a vector of 4 field elements.
+  The four possible addressing modes are:
+  - Double addressing (i.e., dereference twice from ap)
+  - ap-relative addressing (i.e., dereference once from ap)
+  - fp-relative addressing (i.e., dereference once from fp)
+  - immediate (i.e., no dereference)
+-/
+structure DecodedAddressingMode (F : Type) where
+  isDoubleAddressing : F
+  isApRelative : F
+  isFpRelative : F
+  isImmediate : F
+
+instance : ProvableType DecodedAddressingMode where
+  size := 4
+  toElements := fun { isDoubleAddressing, isApRelative, isFpRelative, isImmediate } => #v[isDoubleAddressing, isApRelative, isFpRelative,
+    isImmediate]
+  fromElements := fun elements => {
+    isDoubleAddressing := elements[0],
+    isApRelative := elements[1],
+    isFpRelative := elements[2],
+    isImmediate := elements[3]
+  }
+
+/--
+  Decoded instruction, containing the instruction type and the addressing modes for the three operands.
+-/
+structure DecodedInstruction (F : Type) where
+  instrType : DecodedInstructionType F
+  addr1 : DecodedAddressingMode F
+  addr2 : DecodedAddressingMode F
+  addr3 : DecodedAddressingMode F
+
+instance : ProvableStruct DecodedInstruction where
+  components := [DecodedInstructionType, DecodedAddressingMode, DecodedAddressingMode, DecodedAddressingMode]
+  toComponents := fun { instrType, addr1, addr2, addr3 } => .cons instrType (.cons addr1 (.cons addr2 (.cons addr3 .nil)))
+  fromComponents := fun (.cons instrType (.cons addr1 (.cons addr2 (.cons addr3 .nil)))) => {
+    instrType, addr1, addr2, addr3
+  }
+
+def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
+  main := fun instruction => do
+    let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
+    return {
+      instrType := {
+        isAdd := (1 : Expression _) - bits[0] - bits[1] + bits[0] * bits[1],
+        isMul := bits[0] - bits[0] * bits[1],
+        isStoreState := bits[1] - bits[0] * bits[1],
+        isLoadState := bits[0] * bits[1]
+      },
+      addr1 := {
+        isDoubleAddressing := (1 : Expression _) - bits[2] - bits[3] + bits[2] * bits[3],
+        isApRelative := bits[2] - bits[2] * bits[3],
+        isFpRelative := bits[3] - bits[2] * bits[3],
+        isImmediate := bits[2] * bits[3]
+      },
+      addr2 := {
+        isDoubleAddressing := (1 : Expression _) - bits[4] - bits[5] + bits[4] * bits[5],
+        isApRelative := bits[4] - bits[4] * bits[5],
+        isFpRelative := bits[5] - bits[4] * bits[5],
+        isImmediate := bits[4] * bits[5]
+      },
+      addr3 := {
+        isDoubleAddressing := (1 : Expression _) - bits[6] - bits[7] + bits[6] * bits[7],
+        isApRelative := bits[6] - bits[6] * bits[7],
+        isFpRelative := bits[7] - bits[6] * bits[7],
+        isImmediate := bits[6] * bits[7]
+      }
+    }
+  localLength _ := 8
+
+  Assumptions | instruction => instruction.val < 256
+
+  Spec
+  | instruction, output =>
+    let (instr_type, addr1, addr2, addr3) := decodeInstruction instruction
+    (output.instrType.isAdd = if instr_type = 0 then 1 else 0) ∧
+    (output.instrType.isMul = if instr_type = 1 then 1 else 0) ∧
+    (output.instrType.isStoreState = if instr_type = 2 then 1 else 0) ∧
+    (output.instrType.isLoadState = if instr_type = 3 then 1 else 0) ∧
+
+    (output.addr1.isDoubleAddressing = if addr1 = 0 then 1 else 0) ∧
+    (output.addr1.isApRelative = if addr1 = 1 then 1 else 0) ∧
+    (output.addr1.isFpRelative = if addr1 = 2 then 1 else 0) ∧
+    (output.addr1.isImmediate = if addr1 = 3 then 1 else 0) ∧
+
+    (output.addr2.isDoubleAddressing = if addr2 = 0 then 1 else 0) ∧
+    (output.addr2.isApRelative = if addr2 = 1 then 1 else 0) ∧
+    (output.addr2.isFpRelative = if addr2 = 2 then 1 else 0) ∧
+    (output.addr2.isImmediate = if addr2 = 3 then 1 else 0) ∧
+
+    (output.addr3.isDoubleAddressing = if addr3 = 0 then 1 else 0) ∧
+    (output.addr3.isApRelative = if addr3 = 1 then 1 else 0) ∧
+    (output.addr3.isFpRelative = if addr3 = 2 then 1 else 0) ∧
+    (output.addr3.isImmediate = if addr3 = 3 then 1 else 0)
+
+  soundness := by
+    sorry
+  completeness := by
+    sorry
+
+
+/--
   State of the femtoCairo machine, represented as a triple (pc, ap, fp).
 -/
 structure State (F : Type) where
