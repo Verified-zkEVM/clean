@@ -268,115 +268,164 @@ instance : ProvableType State where
     fp := elements[2]
   }
 
-def table
-    (program : (F p) → (F p)) (memory : (F p) → (F p))
-    (len : ℕ) [NeZero len] (h_len : len < p) :
-    InductiveTable (F p) State unit where
-  step state _ := do
-    let programTable := ReadOnlyTableFromFunction program len h_len
-    let memoryTable := ReadOnlyTableFromFunction memory len h_len
+structure MemoryReadInput (F : Type) where
+  state : State F
+  offset : F
+  mode : DecodedAddressingMode F
 
-    let instruction ← witness fun eval => program (eval state.pc)
-    let op1 ← witness fun eval => memory (eval state.pc + 1)
-    let op2 ← witness fun eval => memory (eval state.pc + 2)
-    let op3 ← witness fun eval => memory (eval state.pc + 3)
-    lookup programTable ⟨state.pc, instruction⟩
-    lookup programTable ⟨state.pc + 1, op1⟩
-    lookup programTable ⟨state.pc + 2, op2⟩
-    lookup programTable ⟨state.pc + 3, op3⟩
+instance : ProvableStruct MemoryReadInput where
+  components := [State, field, DecodedAddressingMode]
+  toComponents := fun { state, offset, mode } => .cons state (.cons offset (.cons mode .nil))
+  fromComponents := fun (.cons state (.cons offset (.cons mode .nil))) => {
+    state, offset, mode
+  }
 
-    let bits ← (Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction)
-
+def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPair) : FormalCircuit (F p)
+    MemoryReadInput field where
+  main := fun { state, offset, mode } => do
     -- read into memory for all cases of addr1
-    let v1_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op1)
-    let v1_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op1)
-    let v1_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op1)
-    lookup memoryTable ⟨(state.ap + op1), v1_0⟩
-    lookup memoryTable ⟨(state.ap + op1), v1_1⟩
-    lookup memoryTable ⟨(state.fp + op1), v1_2⟩
+    let v0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + offset)
+    let v1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + offset)
+    let v2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + offset)
+    lookup memoryTable ⟨(state.ap + offset), v0⟩
+    lookup memoryTable ⟨(state.ap + offset), v1⟩
+    lookup memoryTable ⟨(state.fp + offset), v2⟩
 
-    -- witness the actual v1 based on bits[2] and bits[3]
-    let v1 ← witness fun eval =>
-      let addressing1 := eval bits[2] + 2 * eval bits[3]
-      match addressing1.val with
-      | 0 => eval v1_0
-      | 1 => eval v1_1
-      | 2 => eval v1_2
-      | _ => eval op1
+    -- witness the actual value based on the addressing mode
+    let value : Expression _ ← witness fun eval =>
+      eval mode.isDoubleAddressing * eval v0 +
+      eval mode.isApRelative * eval v1 +
+      eval mode.isFpRelative * eval v2 +
+      eval mode.isImmediate * eval offset
 
-    -- enforce that v1 is correctly selected
-    assertZero
-      (((1 : Expression _) - bits[2]) * ((1 : Expression _) - bits[3]) * (v1 - v1_0) +
-      bits[2] * ((1 : Expression _) - bits[3]) * (v1 - v1_1) +
-      ((1 : Expression _) - bits[2]) * bits[3] * (v1 - v1_2) +
-      bits[2] * bits[3] * (v1 - op1))
+    -- enforce that value is correctly selected
+    assertZero <|
+      mode.isDoubleAddressing * (value - v0) +
+      mode.isApRelative * (value - v1) +
+      mode.isFpRelative * (value - v2) +
+      mode.isImmediate * (value - offset)
+    return value
 
-    let v2_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op2)
-    let v2_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op2)
-    let v2_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op2)
-    lookup memoryTable ⟨(state.ap + op2), v2_0⟩
-    lookup memoryTable ⟨(state.ap + op2), v2_1⟩
-    lookup memoryTable ⟨(state.fp + op2), v2_2⟩
+  localLength _ := 4
+  Assumptions := sorry
+  Spec := sorry
+  soundness := by
+    sorry
+  completeness := by
+    sorry
 
-    let v2 ← witness fun eval =>
-      let addressing2 := eval bits[4] + 2 * eval bits[5]
-      match addressing2.val with
-      | 0 => eval v2_0
-      | 1 => eval v2_1
-      | 2 => eval v2_2
-      | _ => eval op2
 
-    assertZero
-      (((1 : Expression _) - bits[4]) * ((1 : Expression _) - bits[5]) * (v2 - v2_0) +
-      bits[4] * ((1 : Expression _) - bits[5]) * (v2 - v2_1) +
-      ((1 : Expression _) - bits[4]) * bits[5] * (v2 - v2_2) +
-      bits[4] * bits[5] * (v2 - op2))
+def main (program : (F p) → (F p)) (memory : (F p) → (F p))
+    (len : ℕ) [NeZero len] (h_len : len < p) (state : Var State (F p)) :
+    Circuit (F p) (Var State (F p)) := do
+  let programTable := ReadOnlyTableFromFunction program len h_len
+  let memoryTable := ReadOnlyTableFromFunction memory len h_len
 
-    let v3_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op3)
-    let v3_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op3)
-    let v3_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op3)
-    lookup memoryTable ⟨(state.ap + op3), v3_0⟩
-    lookup memoryTable ⟨(state.ap + op3), v3_1⟩
-    lookup memoryTable ⟨(state.fp + op3), v3_2⟩
+  let instruction : Expression _ ← witness fun eval => program (eval state.pc)
+  let op1 ← witness fun eval => memory (eval state.pc + 1)
+  let op2 ← witness fun eval => memory (eval state.pc + 2)
+  let op3 ← witness fun eval => memory (eval state.pc + 3)
+  lookup programTable ⟨state.pc, instruction⟩
+  lookup programTable ⟨state.pc + 1, op1⟩
+  lookup programTable ⟨state.pc + 2, op2⟩
+  lookup programTable ⟨state.pc + 3, op3⟩
 
-    let v3 ← witness fun eval =>
-      let addressing3 := eval bits[6] + 2 * eval bits[7]
-      match addressing3.val with
-      | 0 => eval v3_0
-      | 1 => eval v3_1
-      | 2 => eval v3_2
-      | _ => eval op3
+  let decoded : DecodedInstruction (Expression (F p)) ← subcircuit decodeInstructionCircuit instruction
 
-    assertZero
-      (((1 : Expression _) - bits[6]) * ((1 : Expression _) - bits[7]) * (v3 - v3_0) +
-      bits[6] * ((1 : Expression _) - bits[7]) * (v3 - v3_1) +
-      ((1 : Expression _) - bits[6]) * bits[7] * (v3 - v3_2) +
-      bits[6] * bits[7] * (v3 - op3))
+  let v1_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op1)
+  let v1_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op1)
+  let v1_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op1)
+  lookup memoryTable ⟨(state.ap + op1), v1_0⟩
+  lookup memoryTable ⟨(state.ap + op1), v1_1⟩
+  lookup memoryTable ⟨(state.fp + op1), v1_2⟩
 
-    let is_add := ((1 : F p) - bits[0]) * ((1 : F p) - bits[1])
-    let is_mul := bits[0] * ((1 : F p) - bits[1])
-    let is_store_state := ((1 : F p) - bits[0]) * bits[1]
-    let is_load_state := bits[0] * bits[1]
+  let v1 : Expression _ ← witness fun eval =>
+    let addressing1 := eval decoded.addr1.isApRelative + 2 * eval decoded.addr1.isFpRelative
+    match addressing1.val with
+    | 0 => eval v1_0
+    | 1 => eval v1_1
+    | 2 => eval v1_2
+    | _ => eval op1
 
-    assertZero (is_add * (v3 - (v1 + v2)))
-    assertZero (is_mul * (v3 - (v1 * v2)))
-    assertZero (is_store_state * (v1 - state.pc))
-    assertZero (is_store_state * (v2 - state.ap))
-    assertZero (is_store_state * (v3 - state.fp))
+  assertZero <|
+    decoded.addr1.isDoubleAddressing * (v1 - v1_0) +
+    decoded.addr1.isApRelative * (v1 - v1_1) +
+    decoded.addr1.isFpRelative * (v1 - v1_2) +
+    decoded.addr1.isImmediate * (v1 - op1)
 
-    let pc_next : Expression _ ← witness fun eval => if eval is_load_state = 1 then eval v1 else eval state.pc + 4
-    let ap_next : Expression _ ← witness fun eval => if eval is_load_state = 1 then eval v2 else eval state.ap
-    let fp_next : Expression _ ← witness fun eval => if eval is_load_state = 1 then eval v3 else eval state.fp
+  -- let v2_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op2)
+  -- let v2_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op2)
+  -- let v2_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op2)
+  -- lookup memoryTable ⟨(state.ap + op2), v2_0⟩
+  -- lookup memoryTable ⟨(state.ap + op2), v2_1⟩
+  -- lookup memoryTable ⟨(state.fp + op2), v2_2⟩
 
-    assertZero (is_load_state * (pc_next - v1))
-    assertZero (is_load_state * (ap_next - v2))
-    assertZero (is_load_state * (fp_next - v3))
-    assertZero ((1 - is_load_state) * (pc_next - (state.pc + 4)))
+  -- let v2 ← witness fun eval =>
+  --   let addressing2 := eval bits[4] + 2 * eval bits[5]
+  --   match addressing2.val with
+  --   | 0 => eval v2_0
+  --   | 1 => eval v2_1
+  --   | 2 => eval v2_2
+  --   | _ => eval op2
 
-    return { pc := pc_next, ap := ap_next, fp := fp_next }
+  -- assertZero
+  --   decoded.addr2.isDoubleAddressing * (v2 - v2_0) +
+  --   decoded.addr2.isApRelative * (v2 - v2_1) +
+  --   decoded.addr2.isFpRelative * (v2 - v2_2) +
+  --   decoded.addr2.isImmediate * (v2 - op2)
 
-  Spec _ _ i _ row : Prop := sorry
-  soundness := sorry
-  completeness := sorry
+  -- let v3_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op3)
+  -- let v3_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op3)
+  -- let v3_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op3)
+  -- lookup memoryTable ⟨(state.ap + op3), v3_0⟩
+  -- lookup memoryTable ⟨(state.ap + op3), v3_1⟩
+  -- lookup memoryTable ⟨(state.fp + op3), v3_2⟩
+
+  -- let v3 ← witness fun eval =>
+  --   let addressing3 := eval bits[6] + 2 * eval bits[7]
+  --   match addressing3.val with
+  --   | 0 => eval v3_0
+  --   | 1 => eval v3_1
+  --   | 2 => eval v3_2
+  --   | _ => eval op3
+
+  -- assertZero
+  --   decoded.addr3.isDoubleAddressing * (v3 - v3_0) +
+  --   decoded.addr3.isApRelative * (v3 - v3_1) +
+  --   decoded.addr3.isFpRelative * (v3 - v3_2) +
+  --   decoded.addr3.isImmediate * (v3 - op3)
+
+  -- assertZero (decoded.instrType.isAdd * (v3 - (v1 + v2)))
+  -- assertZero (decoded.instrType.isMul * (v3 - (v1 * v2)))
+  -- assertZero (decoded.instrType.isStoreState * (v1 - state.pc))
+  -- assertZero (decoded.instrType.isStoreState * (v2 - state.ap))
+  -- assertZero (decoded.instrType.isStoreState * (v3 - state.fp))
+
+  -- let pc_next : Expression _ ← witness fun eval => if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
+  -- let ap_next : Expression _ ← witness fun eval => if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap
+  -- let fp_next : Expression _ ← witness fun eval => if eval decoded.instrType.isLoadState = 1 then eval v3 else eval state.fp
+
+  -- assertZero (decoded.instrType.isLoadState * (pc_next - v1))
+  -- assertZero (decoded.instrType.isLoadState * (ap_next - v2))
+  -- assertZero (decoded.instrType.isLoadState * (fp_next - v3))
+  -- assertZero ((1 - decoded.instrType.isLoadState) * (pc_next - (state.pc + 4)))
+
+  return { pc := state.pc, ap := state.ap, fp := state.fp }
+
+
+-- def stateTransitionCircuit
+--     (program : (F p) → (F p)) (memory : (F p) → (F p))
+--     (len : ℕ) [NeZero len] (h_len : len < p) :
+--     FormalCircuit (F p) State State where
+--   main := main
+--   localLength _ := 10
+
+--   Assumptions := sorry
+--   Spec := sorry
+--   soundness := by
+--     sorry
+--   completeness := by
+--     sorry
+
 
 end Examples.FemtoCairo
