@@ -96,4 +96,28 @@ def femtoCairoMachineBoundedExecution (program : (F p) → (F p)) (memory : (F p
       | none => none
   aux initial_pc initial_ap initial_fp steps
 
+/--
+  Construct a table that represents a read-only memory
+  containing all pairs (i, f(i)) for i in [0, length)
+
+  TODO: once we figure out proper lookups, switch to use formal tables.
+-/
+def ReadOnlyTableFromFunction (f : (F p) → (F p)) (length : ℕ) (h : length < p) [NeZero length] : Table (F p) fieldPair := .fromStatic {
+  name := "ReadOnlyMemory"
+  length := length
+  row i := (i, f i)
+  index := fun (i, _) => i.val
+  Spec := fun (i, v) => v = f i ∧ i.val < length
+  contains_iff := by
+    intro t
+    constructor
+    · rintro ⟨ i, h: t = _ ⟩
+      simp_all
+      sorry
+    · intro h
+      simp_all
+      use Fin.ofNat length t.1.val
+      sorry
+}
+
 end Examples.FemtoCairo
