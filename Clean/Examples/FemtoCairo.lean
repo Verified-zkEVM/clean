@@ -315,7 +315,7 @@ def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPa
     sorry
 
 
-def main (program : (F p) → (F p)) (memory : (F p) → (F p))
+def stateTransitionCircuit (program : (F p) → (F p)) (memory : (F p) → (F p))
     (len : ℕ) [NeZero len] (h_len : len < p) (state : Var State (F p)) :
     Circuit (F p) (Var State (F p)) := do
   let programTable := ReadOnlyTableFromFunction program len h_len
@@ -332,100 +332,29 @@ def main (program : (F p) → (F p)) (memory : (F p) → (F p))
 
   let decoded : DecodedInstruction (Expression (F p)) ← subcircuit decodeInstructionCircuit instruction
 
-  let v1_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op1)
-  let v1_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op1)
-  let v1_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op1)
-  lookup memoryTable ⟨(state.ap + op1), v1_0⟩
-  lookup memoryTable ⟨(state.ap + op1), v1_1⟩
-  lookup memoryTable ⟨(state.fp + op1), v1_2⟩
+  let v1 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op1, mode := decoded.addr1 }
+  let v2 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op2, mode := decoded.addr2 }
+  let v3 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op3, mode := decoded.addr3 }
 
-  let v1 : Expression _ ← witness fun eval =>
-    let addressing1 := eval decoded.addr1.isApRelative + 2 * eval decoded.addr1.isFpRelative
-    match addressing1.val with
-    | 0 => eval v1_0
-    | 1 => eval v1_1
-    | 2 => eval v1_2
-    | _ => eval op1
+  let nextState : State _ ← ProvableType.witness fun eval => {
+    pc := if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
+    ap := if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap
+    fp := if eval decoded.instrType.isLoadState = 1 then eval v3 else eval state.fp
+  }
 
-  assertZero <|
-    decoded.addr1.isDoubleAddressing * (v1 - v1_0) +
-    decoded.addr1.isApRelative * (v1 - v1_1) +
-    decoded.addr1.isFpRelative * (v1 - v1_2) +
-    decoded.addr1.isImmediate * (v1 - op1)
+  assertZero (decoded.instrType.isAdd * (v3 - (v1 + v2)))
 
-  -- let v2_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op2)
-  -- let v2_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op2)
-  -- let v2_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op2)
-  -- lookup memoryTable ⟨(state.ap + op2), v2_0⟩
-  -- lookup memoryTable ⟨(state.ap + op2), v2_1⟩
-  -- lookup memoryTable ⟨(state.fp + op2), v2_2⟩
+  assertZero (decoded.instrType.isMul * (v3 - (v1 * v2)))
 
-  -- let v2 ← witness fun eval =>
-  --   let addressing2 := eval bits[4] + 2 * eval bits[5]
-  --   match addressing2.val with
-  --   | 0 => eval v2_0
-  --   | 1 => eval v2_1
-  --   | 2 => eval v2_2
-  --   | _ => eval op2
+  assertZero (decoded.instrType.isStoreState * (v1 - state.pc))
+  assertZero (decoded.instrType.isStoreState * (v2 - state.ap))
+  assertZero (decoded.instrType.isStoreState * (v3 - state.fp))
 
-  -- assertZero
-  --   decoded.addr2.isDoubleAddressing * (v2 - v2_0) +
-  --   decoded.addr2.isApRelative * (v2 - v2_1) +
-  --   decoded.addr2.isFpRelative * (v2 - v2_2) +
-  --   decoded.addr2.isImmediate * (v2 - op2)
+  assertZero (decoded.instrType.isLoadState * (nextState.pc - v1))
+  assertZero (decoded.instrType.isLoadState * (nextState.ap - v2))
+  assertZero (decoded.instrType.isLoadState * (nextState.fp - v3))
+  assertZero ((1 - decoded.instrType.isLoadState) * (nextState.pc - (state.pc + 4)))
 
-  -- let v3_0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + op3)
-  -- let v3_1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + op3)
-  -- let v3_2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + op3)
-  -- lookup memoryTable ⟨(state.ap + op3), v3_0⟩
-  -- lookup memoryTable ⟨(state.ap + op3), v3_1⟩
-  -- lookup memoryTable ⟨(state.fp + op3), v3_2⟩
-
-  -- let v3 ← witness fun eval =>
-  --   let addressing3 := eval bits[6] + 2 * eval bits[7]
-  --   match addressing3.val with
-  --   | 0 => eval v3_0
-  --   | 1 => eval v3_1
-  --   | 2 => eval v3_2
-  --   | _ => eval op3
-
-  -- assertZero
-  --   decoded.addr3.isDoubleAddressing * (v3 - v3_0) +
-  --   decoded.addr3.isApRelative * (v3 - v3_1) +
-  --   decoded.addr3.isFpRelative * (v3 - v3_2) +
-  --   decoded.addr3.isImmediate * (v3 - op3)
-
-  -- assertZero (decoded.instrType.isAdd * (v3 - (v1 + v2)))
-  -- assertZero (decoded.instrType.isMul * (v3 - (v1 * v2)))
-  -- assertZero (decoded.instrType.isStoreState * (v1 - state.pc))
-  -- assertZero (decoded.instrType.isStoreState * (v2 - state.ap))
-  -- assertZero (decoded.instrType.isStoreState * (v3 - state.fp))
-
-  -- let pc_next : Expression _ ← witness fun eval => if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
-  -- let ap_next : Expression _ ← witness fun eval => if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap
-  -- let fp_next : Expression _ ← witness fun eval => if eval decoded.instrType.isLoadState = 1 then eval v3 else eval state.fp
-
-  -- assertZero (decoded.instrType.isLoadState * (pc_next - v1))
-  -- assertZero (decoded.instrType.isLoadState * (ap_next - v2))
-  -- assertZero (decoded.instrType.isLoadState * (fp_next - v3))
-  -- assertZero ((1 - decoded.instrType.isLoadState) * (pc_next - (state.pc + 4)))
-
-  return { pc := state.pc, ap := state.ap, fp := state.fp }
-
-
--- def stateTransitionCircuit
---     (program : (F p) → (F p)) (memory : (F p) → (F p))
---     (len : ℕ) [NeZero len] (h_len : len < p) :
---     FormalCircuit (F p) State State where
---   main := main
---   localLength _ := 10
-
---   Assumptions := sorry
---   Spec := sorry
---   soundness := by
---     sorry
---   completeness := by
---     sorry
-
+  return nextState
 
 end Examples.FemtoCairo
