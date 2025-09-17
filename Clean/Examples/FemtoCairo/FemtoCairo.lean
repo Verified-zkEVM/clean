@@ -185,13 +185,16 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
   completeness := by
     sorry
 
-def fetchInstruction (program : (F p) → (F p)) (programTable : Table (F p) fieldPair) : FormalCircuit (F p)
-    field RawInstruction where
+def fetchInstruction
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+    FormalCircuit (F p) field RawInstruction where
   main := fun pc => do
-    let rawInstrType : Expression _ ← witness fun eval => program (eval pc)
-    let op1 ← witness fun eval => program (eval pc + 1)
-    let op2 ← witness fun eval => program (eval pc + 2)
-    let op3 ← witness fun eval => program (eval pc + 3)
+    let programTable := ReadOnlyTableFromFunction program h_programSize
+
+    let rawInstrType : Expression _ ← witness fun eval => program <| Fin.ofNat _ (eval pc).val
+    let op1 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 1)).val
+    let op2 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 2)).val
+    let op3 ← witness fun eval => program <| Fin.ofNat _ (eval (pc + 3)).val
 
     lookup programTable ⟨pc, rawInstrType⟩
     lookup programTable ⟨pc + 1, op1⟩
@@ -209,10 +212,10 @@ def fetchInstruction (program : (F p) → (F p)) (programTable : Table (F p) fie
     sorry
 
 def readFromMemory
-    {memorySize : ℕ} [NeZero memorySize] (h : memorySize < p) (memory : (Fin memorySize) → (F p)) :
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
-    let memoryTable := ReadOnlyTableFromFunction memory h
+    let memoryTable := ReadOnlyTableFromFunction memory h_memorySize
 
     -- read into memory for all cases of addressing mode
     let v1_tmp : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval (state.ap + offset)).val
@@ -270,22 +273,21 @@ def checkStateTransition : FormalAssertion (F p) StateTransitionInput where
 
 
 def femtoCairoStepCircuit
-    (program : (F p) → (F p)) (memory : (F p) → (F p))
-    (len : ℕ) [NeZero len] (h_len : len < p) (state : Var State (F p)) :
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (state : Var State (F p)) :
     Circuit (F p) (Var State (F p)) := do
-  let programTable := ReadOnlyTableFromFunction program len h_len
-  let memoryTable := ReadOnlyTableFromFunction memory len h_len
 
   -- Fetch instruction
-  let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstruction program programTable) state.pc
+  let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstruction program h_programSize) state.pc
 
   -- Decode instruction
   let decoded ← subcircuit decodeInstructionCircuit rawInstrType
 
   -- Perform relevant memory accesses
-  let v1 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op1, mode := decoded.addr1 }
-  let v2 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op2, mode := decoded.addr2 }
-  let v3 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op3, mode := decoded.addr3 }
+  let v1 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
+  let v2 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
+  let v3 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
   -- Witness the claimed next state
   let nextState : State _ ← ProvableType.witness fun eval => {
