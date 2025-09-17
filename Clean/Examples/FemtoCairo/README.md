@@ -103,6 +103,8 @@ if instruction_type == LOAD_STATE:
     assert fp_next == v3
 else:
     assert pc_next == pc + 4
+    assert ap_next == ap
+    assert fp_next == fp
 ```
 
 The addressing modes for each operand can be one of the following:
@@ -111,7 +113,8 @@ The addressing modes for each operand can be one of the following:
 - **fp-relative**: the operand is an offset from the `fp` register, and the value is read from the memory at that address.
 - **Immediate**: the operand is the value itself.
 
-We define accessing the memory out-of-bounds, as well as not encoding correctly the instruction type to be **undefined behaviour** (UB).
+> [!NOTE]
+> We define accessing the program and data memory out-of-bounds, as well as not encoding correctly the instruction type to be **undefined behaviour** (UB).
 
 As a final remark, technically the only addressing modes strictly needed are the immediate and the double indirection, which would save some constraints.
 
