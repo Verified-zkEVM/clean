@@ -103,6 +103,29 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
   completeness := by
     sorry
 
+def fetchInstruction (program : (F p) → (F p)) (programTable : Table (F p) fieldPair) : FormalCircuit (F p)
+    field RawInstruction where
+  main := fun pc => do
+    let rawInstrType : Expression _ ← witness fun eval => program (eval pc)
+    let op1 ← witness fun eval => program (eval pc + 1)
+    let op2 ← witness fun eval => program (eval pc + 2)
+    let op3 ← witness fun eval => program (eval pc + 3)
+
+    lookup programTable ⟨pc, rawInstrType⟩
+    lookup programTable ⟨pc + 1, op1⟩
+    lookup programTable ⟨pc + 2, op2⟩
+    lookup programTable ⟨pc + 3, op3⟩
+
+    return { rawInstrType, op1, op2, op3 }
+
+  localLength _ := 4
+  Assumptions := sorry
+  Spec := sorry
+  soundness := by
+    sorry
+  completeness := by
+    sorry
+
 def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPair) : FormalCircuit (F p)
     MemoryReadInput field where
   main := fun { state, offset, mode } => do
@@ -138,21 +161,18 @@ def stateTransitionCircuit (program : (F p) → (F p)) (memory : (F p) → (F p)
   let programTable := ReadOnlyTableFromFunction program len h_len
   let memoryTable := ReadOnlyTableFromFunction memory len h_len
 
-  let instruction : Expression _ ← witness fun eval => program (eval state.pc)
-  let op1 ← witness fun eval => memory (eval state.pc + 1)
-  let op2 ← witness fun eval => memory (eval state.pc + 2)
-  let op3 ← witness fun eval => memory (eval state.pc + 3)
-  lookup programTable ⟨state.pc, instruction⟩
-  lookup programTable ⟨state.pc + 1, op1⟩
-  lookup programTable ⟨state.pc + 2, op2⟩
-  lookup programTable ⟨state.pc + 3, op3⟩
+  -- Fetch instruction
+  let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstruction program programTable) state.pc
 
-  let decoded : DecodedInstruction (Expression (F p)) ← subcircuit decodeInstructionCircuit instruction
+  -- Decode instruction
+  let decoded ← subcircuit decodeInstructionCircuit rawInstrType
 
+  -- Perform relevant memory accesses
   let v1 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op1, mode := decoded.addr1 }
   let v2 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op2, mode := decoded.addr2 }
   let v3 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op3, mode := decoded.addr3 }
 
+  -- check state transition
   let nextState : State _ ← ProvableType.witness fun eval => {
     pc := if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
     ap := if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap

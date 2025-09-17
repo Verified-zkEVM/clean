@@ -3,12 +3,22 @@ import Clean.Circuit.Provable
 namespace Examples.FemtoCairo.Types
 
 /--
-  State of the femtoCairo machine, represented as a triple (pc, ap, fp).
+  State of the femtoCairo machine, represented as a structure (pc, ap, fp).
 -/
 structure State (F : Type) where
   pc : F
   ap : F
   fp : F
+
+/--
+  Raw instruction that is fetched from the program memory,
+  represented as a structure (instrType, op1, op2, op3).
+-/
+structure RawInstruction (F : Type) where
+  rawInstrType : F
+  op1 : F
+  op2 : F
+  op3 : F
 
 /--
   Decoded instruction type, represented as a one-hot encoding in a vector of 4 field elements.
@@ -67,6 +77,16 @@ instance : ProvableType State where
     pc := elements[0],
     ap := elements[1],
     fp := elements[2]
+  }
+
+instance : ProvableType RawInstruction where
+  size := 4
+  toElements := fun { rawInstrType, op1, op2, op3 } => #v[rawInstrType, op1, op2, op3]
+  fromElements := fun elements => {
+    rawInstrType := elements[0],
+    op1 := elements[1],
+    op2 := elements[2],
+    op3 := elements[3]
   }
 
 instance : ProvableType DecodedInstructionType where
