@@ -23,21 +23,22 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
   To represent, e.g., a read-write memory we will need a more complex construction.
 -/
-def ReadOnlyTableFromFunction (f : (F p) → (F p)) (length : ℕ) (h : length < p) [NeZero length] : Table (F p) fieldPair := .fromStatic {
+def ReadOnlyTableFromFunction
+    {n : ℕ} (f : Fin n → (F p)) (h : n < p) [NeZero n] :
+    Table (F p) fieldPair
+  := .fromStatic {
   name := "ReadOnlyMemory"
-  length := length
+  length := n
   row i := (i, f i)
   index := fun (i, _) => i.val
-  Spec := fun (i, v) => v = f i ∧ i.val < length
+  Spec := fun (i, v) => v = f (Fin.ofNat n i.val) ∧ i.val < n
   contains_iff := by
     intro t
     constructor
     · rintro ⟨ i, h: t = _ ⟩
-      simp_all
       sorry
     · intro h
       simp_all
-      use Fin.ofNat length t.1.val
       sorry
 }
 
@@ -207,27 +208,32 @@ def fetchInstruction (program : (F p) → (F p)) (programTable : Table (F p) fie
   completeness := by
     sorry
 
-def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPair) : FormalCircuit (F p)
-    MemoryReadInput field where
+def readFromMemory
+    {memorySize : ℕ} [NeZero memorySize] (h : memorySize < p) (memory : (Fin memorySize) → (F p)) :
+    FormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
+    let memoryTable := ReadOnlyTableFromFunction memory h
+
     -- read into memory for all cases of addressing mode
-    let v0 : Expression _ ← witness fun eval => (memory ∘ memory ∘ eval) (state.ap + offset)
-    let v1 : Expression _ ← witness fun eval => (memory ∘ eval) (state.ap + offset)
-    let v2 : Expression _ ← witness fun eval => (memory ∘ eval) (state.fp + offset)
-    lookup memoryTable ⟨(state.ap + offset), v0⟩
-    lookup memoryTable ⟨(state.ap + offset), v1⟩
-    lookup memoryTable ⟨(state.fp + offset), v2⟩
+    let v1_tmp : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval (state.ap + offset)).val
+    let v1 : Expression _ ← witness fun eval => memory <| Fin.ofNat _ (eval v1_tmp).val
+    let v2 : Expression _ ← witness fun eval =>  memory <| Fin.ofNat _ (eval (state.ap + offset)).val
+    let v3 : Expression _ ← witness fun eval =>  memory <| Fin.ofNat _ (eval (state.fp + offset)).val
+    lookup memoryTable ⟨(state.ap + offset), v1_tmp⟩
+    lookup memoryTable ⟨v1_tmp, v1⟩
+    lookup memoryTable ⟨(state.ap + offset), v2⟩
+    lookup memoryTable ⟨(state.fp + offset), v3⟩
 
     -- select the correct value based on the addressing mode
     let value <==
-      mode.isDoubleAddressing * v0 +
-      mode.isApRelative * v1 +
-      mode.isFpRelative * v2 +
+      mode.isDoubleAddressing * v1 +
+      mode.isApRelative * v2 +
+      mode.isFpRelative * v3 +
       mode.isImmediate * offset
 
     return value
 
-  localLength _ := 4
+  localLength _ := 5
   Assumptions := sorry
   Spec := sorry
   soundness := by
