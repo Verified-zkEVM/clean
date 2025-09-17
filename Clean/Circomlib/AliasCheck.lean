@@ -57,7 +57,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     · omega
 
   completeness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [circuit_norm, main, CompConstant.circuit, eval_vector, CompConstant.CompletenessAssumptions]
     simp_all
     omega
 

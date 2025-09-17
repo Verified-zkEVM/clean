@@ -77,14 +77,16 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       simp
   exact h_inductive 23 (by norm_num)
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : KeccakState (F p)) := Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro n env yields initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
-  dsimp only [Assumptions] at h_assumptions
+  dsimp only [CompletenessAssumptions, Assumptions] at h_assumptions
   simp only [elaborated, main, h_input, h_assumptions, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
+    KeccakRound.Spec, KeccakRound.CompletenessAssumptions, KeccakRound.Assumptions] at h_env ⊢
 
   -- only keep the statements about normalization
   obtain ⟨ h_init, h_succ ⟩ := h_env
@@ -117,6 +119,8 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState := {
   elaborated := elaborated order
   Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
   Spec
   soundness := soundness order
   -- TODO why does this time out??

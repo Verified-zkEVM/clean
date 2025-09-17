@@ -48,6 +48,9 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   out.z.val = (x.val + y.val + carryIn.val) % 256 ∧
@@ -61,9 +64,11 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order Inputs Outputs where
   main := main order
   Assumptions := Assumptions
+  CompletenessAssumptions := CompletenessAssumptions
   Spec _ := Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
   soundness := by
     -- introductions
@@ -74,7 +79,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, h_inputs, Spec, Assumptions, main, ByteTable, FormalAssertion.toSubcircuit]
+    simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable, FormalAssertion.toSubcircuit]
 
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -99,7 +104,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable, FormalAssertion.toSubcircuit] at *
+    simp only [circuit_norm, h_inputs, main, ByteTable, FormalAssertion.toSubcircuit] at *
+    simp only [CompletenessAssumptions, Assumptions] at h_assumptions
 
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0

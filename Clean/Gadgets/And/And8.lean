@@ -110,9 +110,12 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
     exact two_and
 
-theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) sentences elaborated Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) sentences elaborated CompletenessAssumptions := by
   intro i env yields ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
+  simp_all only [circuit_norm, main, ByteXorTable, Inputs.mk.injEq, CompletenessAssumptions]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
@@ -135,15 +138,18 @@ theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) senten
     rw [two_and_val, x_y_val]
     exact two_and_le_add hx_byte hy_byte
 
+  refine ⟨hx_byte, hy_byte, ?_⟩
   rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field :=
   { elaborated with
       Assumptions,
+      CompletenessAssumptions,
       Spec,
       soundness := soundness order,
       completeness,
+      completenessAssumptions_implies_assumptions := fun _ _ h => h
   }
 
 end Gadgets.And.And8

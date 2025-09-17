@@ -52,6 +52,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     Num2Bits.main, AliasCheck.circuit]
 
   Assumptions _ := True
+  CompletenessAssumptions _ _ := True
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec _ input bits :=
     bits = fieldToBits 254 input
@@ -137,6 +139,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     Bits2Num.main, AliasCheck.circuit]
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  CompletenessAssumptions _ input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec _ input output :=
     output.val = fromBits (input.map ZMod.val)
@@ -198,6 +202,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
+
+  Assumptions _ := True
+  CompletenessAssumptions _ _ := True
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec _ input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)

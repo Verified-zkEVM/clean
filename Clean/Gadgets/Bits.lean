@@ -31,7 +31,7 @@ def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
-  Assumptions (x : F p) := x.val < 2^n
+  Assumptions _ (x : F p) := x.val < 2^n
 
   Spec (_checked : CheckedYields sentences) (x : F p) (bits : Vector (F p) n) :=
     x.val < 2^n ∧ bits = fieldToBits n x

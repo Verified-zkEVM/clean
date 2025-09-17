@@ -130,9 +130,12 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   show Nat.bitwise _ _ _ < 2 ^ 8
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i env yields ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, elaborated, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
+  simp_all only [circuit_norm, main, elaborated, ByteXorTable, Inputs.mk.injEq, CompletenessAssumptions]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x ||| ZMod.val y
   have hw : w = ZMod.val x ||| ZMod.val y := rfl
@@ -159,6 +162,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   have : 2 * w + -x + -y = 2*w - x - y := by ring
   rw [this]
 
+  refine ⟨hx_byte, hy_byte, ?_⟩
   simp only [w]
   rw [← or_times_two_sub_xor']
   · rw [ZMod.val_sub]
@@ -184,6 +188,12 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   · omega
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field :=
-  { elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order }
+  { elaborated := elaborated order, 
+    Assumptions, 
+    CompletenessAssumptions,
+    Spec, 
+    soundness := soundness order, 
+    completeness := completeness order,
+    completenessAssumptions_implies_assumptions := fun _ _ h => h }
 
 end Gadgets.Or.Or8

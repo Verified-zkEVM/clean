@@ -116,6 +116,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
 
+  CompletenessAssumptions _ input :=
+    -- All inputs are binary
+    ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
+
   Spec _ input output :=
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
@@ -132,6 +136,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
   completeness := by
     sorry
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end BinSub
 

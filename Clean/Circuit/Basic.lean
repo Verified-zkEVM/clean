@@ -300,13 +300,13 @@ def Soundness (F : Type) [Field F] {sentences : PropertySet F}
 
 @[circuit_norm]
 def Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input Output)
-    (Assumptions : Input F → Prop) :=
+    (CompletenessAssumptions : YieldContext sentences → Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
   env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the assumptions
+  -- for all inputs that satisfy the assumptions (which can now depend on yields)
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  CompletenessAssumptions yields input →
   -- the constraints hold
   ConstraintsHold.Completeness env yields (circuit.main input_var |>.operations offset)
 
@@ -327,9 +327,13 @@ structure FormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order 
     (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F sentences Input Output where
   Assumptions (_ : Input F) : Prop := True
+  CompletenessAssumptions (_ : YieldContext sentences) (_ : Input F) : Prop := True
   Spec : CheckedYields sentences → Input F → Output F → Prop
   soundness : Soundness F elaborated order Assumptions Spec
-  completeness : Completeness F sentences elaborated Assumptions
+  completeness : Completeness F sentences elaborated CompletenessAssumptions
+  -- CompletenessAssumptions should imply Assumptions to avoid growing assumptions in nested concat operations
+  -- This allows concat to use just circuit1.CompletenessAssumptions without accumulating conditions
+  completenessAssumptions_implies_assumptions : ∀ yields input, CompletenessAssumptions yields input → Assumptions input
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
@@ -420,13 +424,13 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : PropertySet
   Spec checked input output
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input Output) (Assumptions : Input F → Prop) :=
+def GeneralFormalCircuit.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input Output) (Assumptions : YieldContext sentences → Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
   env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the "honest prover" assumptions
+  -- for all inputs that satisfy the "honest prover" assumptions (which can now depend on yields)
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions yields input →
   -- the constraints hold
   ConstraintsHold.Completeness env yields (circuit.main input_var |>.operations offset)
 
@@ -448,7 +452,7 @@ add the range assumption to the soundness statement, thus making the circuit har
 structure GeneralFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
     (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F sentences Input Output where
-  Assumptions : Input F → Prop -- the statement to be assumed for completeness
+  Assumptions : YieldContext sentences → Input F → Prop -- the statement to be assumed for completeness (can now depend on yields)
   SoundnessAssumptions : Input F → Prop := fun _ => True -- assumptions that are given when proving soundness
   Spec : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F sentences order elaborated SoundnessAssumptions Spec

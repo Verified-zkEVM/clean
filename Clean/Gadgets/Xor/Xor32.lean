@@ -104,7 +104,10 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yielded input_var h_env input h_input as
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
@@ -112,7 +115,7 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
 
-  simp only [Assumptions, circuit_norm, U32.Normalized] at as
+  simp only [CompletenessAssumptions, Assumptions, circuit_norm, U32.Normalized] at as
   obtain ⟨ x_bytes, y_bytes ⟩ := as
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
@@ -125,7 +128,9 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U32 where
   elaborated := elaborated order
   Assumptions := Assumptions
+  CompletenessAssumptions := CompletenessAssumptions
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Gadgets.Xor32

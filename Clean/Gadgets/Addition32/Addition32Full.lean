@@ -42,6 +42,9 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
@@ -109,7 +112,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -160,7 +163,9 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs Outputs where
   elaborated := elaborated order
   Assumptions := Assumptions
+  CompletenessAssumptions
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Gadgets.Addition32Full

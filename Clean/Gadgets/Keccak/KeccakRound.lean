@@ -82,12 +82,17 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : Completeness (F p) sentences (elaborated order rc) Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : KeccakState (F p)) := Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (rc : UInt64) : Completeness (F p) sentences (elaborated order rc) CompletenessAssumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
-    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec,
+    Theta.CompletenessAssumptions, RhoPi.CompletenessAssumptions,
+    Chi.CompletenessAssumptions, Xor64.CompletenessAssumptions, Assumptions]
 
-  simp_all only [forall_const, U64.fromUInt64_normalized, and_true, true_and]
+  simp_all only [Theta.CompletenessAssumptions, RhoPi.CompletenessAssumptions,
+    Chi.CompletenessAssumptions, Xor64.CompletenessAssumptions, forall_const, U64.fromUInt64_normalized, and_true, true_and]
 
   -- `simp_all` left one goal to pull out of hypotheses
   obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
@@ -100,6 +105,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (r
   elaborated := elaborated order rc
   Spec := Spec (rc := rc)
   Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
   soundness := soundness order rc
   completeness := completeness order rc
 }

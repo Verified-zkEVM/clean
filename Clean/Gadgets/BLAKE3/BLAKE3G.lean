@@ -72,6 +72,8 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input
   state.Normalized ∧ x.Normalized ∧ y.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) := Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
@@ -121,13 +123,13 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     · exact c9.2.2
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : Completeness (F p) sentences (elaborated order a b c d) Assumptions := by
-  circuit_proof_start [elaborated, BLAKE3State.Normalized]
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : Completeness (F p) sentences (elaborated order a b c d) CompletenessAssumptions := by
+  circuit_proof_start [elaborated, CompletenessAssumptions, Assumptions, BLAKE3State.Normalized]
 
   dsimp only [elaborated, main, circuit_norm, Xor32.circuit, Xor32.elaborated, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated] at h_env ⊢
   simp only [circuit_norm, and_imp,
-    Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
+    Addition32.CompletenessAssumptions, Addition32.Assumptions, Addition32.Spec, Rotation32.CompletenessAssumptions, Rotation32.Assumptions, Rotation32.Spec,
+    Xor32.CompletenessAssumptions, Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
 
   -- resolve all chains of assumptions
   simp_all only [implies_true, forall_const, and_true]
@@ -135,9 +137,11 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order a b c d
   Assumptions
+  CompletenessAssumptions
   Spec := Spec (a:=a) (b:=b) (c:=c) (d:=d)
   soundness := soundness order a b c d
   completeness := completeness order a b c d
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 }
 
 end Gadgets.BLAKE3.G

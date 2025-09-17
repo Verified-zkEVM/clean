@@ -26,6 +26,9 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
@@ -48,15 +51,17 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   simp_all [circuit_norm, Spec, main, Addition32Full.circuit,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
     circuit_proof_start
-    simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
-    Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
+    simp_all [circuit_norm, Addition32Full.circuit, Addition32Full.elaborated,
+    Addition32Full.CompletenessAssumptions, Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U32 where
   elaborated := elaborated order
   Assumptions
+  CompletenessAssumptions
   Spec
   soundness := soundness order
   completeness := completeness order
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Gadgets.Addition32

@@ -72,7 +72,8 @@ def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceO
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := input.val < 2^n
+  Assumptions _ input := input.val < 2^n
+
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
@@ -121,7 +122,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input := input.val < 2^n
+  Assumptions _ input := input.val < 2^n
 
   Spec _ input output :=
     input.val < 2^n ∧ output = fieldToBits n input
@@ -199,6 +200,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   Assumptions input :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
 
+  CompletenessAssumptions _ input :=
+    ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
+
   Spec _ input output :=
     output = fieldFromBits input
     ∧ output.val < 2^n
@@ -228,6 +232,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     apply fieldFromBits_lt _ h_assumptions
 
   completeness := by circuit_proof_all
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Bits2Num
 
 end Circomlib

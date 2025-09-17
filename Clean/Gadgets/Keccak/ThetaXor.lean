@@ -30,6 +30,9 @@ def Assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   state.Normalized ∧ d.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (inputs : Inputs (F p)) :=
+  Assumptions inputs
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
@@ -63,18 +66,20 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   have ⟨_, h_spec⟩ := h_holds
   exact ⟨ h_spec.right, h_spec.left ⟩
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
-  simp only [h_input, elaborated, main, circuit_norm, Xor64.circuit, Xor64.elaborated, Xor64.Assumptions]
+  simp only [h_input, elaborated, main, circuit_norm, Xor64.circuit, Xor64.elaborated]
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs KeccakState :=
   { elaborated := elaborated order
     Assumptions
+    CompletenessAssumptions
     Spec
     soundness := soundness order
-    completeness := completeness order }
+    completeness := completeness order
+    completenessAssumptions_implies_assumptions := fun _ _ h => h }
 
 end Gadgets.Keccak256.ThetaXor

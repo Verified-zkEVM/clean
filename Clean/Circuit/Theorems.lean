@@ -878,7 +878,7 @@ def FormalCircuit.isGeneralFormalCircuit {F : Type} {sentences : PropertySet F} 
     (orig : FormalCircuit order Input Output): GeneralFormalCircuit order Input Output := by
   exact {
     elaborated := orig.elaborated,
-    Assumptions := orig.Assumptions,
+    Assumptions := orig.CompletenessAssumptions,
     SoundnessAssumptions := orig.Assumptions,
     Spec := orig.Spec,
     soundness := by
@@ -902,7 +902,7 @@ def FormalAssertion.isGeneralFormalCircuit {F : Type} {sentences : PropertySet F
   let Spec (checked : CheckedYields sentences) input (_ : Unit) := orig.Spec checked input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input := orig.Assumptions input ∧ orig.Spec Set.univ input,
+    Assumptions _ input := orig.Assumptions input ∧ orig.Spec Set.univ input,
     SoundnessAssumptions := orig.Assumptions,
     Spec,
     soundness := by

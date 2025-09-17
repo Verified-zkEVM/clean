@@ -36,7 +36,7 @@ lemma yieldContext_emptyPropertySet_empty (y : YieldContext (emptyPropertySet F)
   simp only [emptyYields]
   constructor
   · rename_i x
-    simp only [Sentence, emptyPropertySet] at x
+    simp only [emptyPropertySet] at x
     cases x
     rename_i found _
     simp at found
@@ -73,7 +73,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     ∧ output = eval env (circuit.output (const input) n)
 
   Soundness := fun (input, output) => circuit.Assumptions input → circuit.Spec (emptyChecked F) input output
-  Completeness := fun (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input
+  Completeness := fun (input, output) => circuit.CompletenessAssumptions (emptyYields F) input ∧ output = circuit.constantOutput input
 
   imply_soundness := by
     intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
@@ -92,7 +92,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
 -- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.
 
 @[circuit_norm]
-def lookupCircuit (circuit : LookupCircuit F α β) (order : SentenceOrder sentences) : FormalCircuit order α β where
+def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit (emptyOrder F) α β where
   main (input : Var α F) := do
     -- we witness the output for the given input, and look up the pair in the table
     let output ← witness fun env => circuit.constantOutput (eval env input)
@@ -104,6 +104,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) (order : SentenceOrder sente
   output _ n := varFromOffset β n
 
   Assumptions := circuit.Assumptions
+  CompletenessAssumptions _ input := circuit.CompletenessAssumptions (emptyYields F) input
   Spec _ := circuit.Spec (emptyChecked F)
 
   soundness := by
@@ -112,7 +113,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) (order : SentenceOrder sente
     constructor
     · -- Prove yielded sentences hold (vacuous since nothing is yielded - only witness and lookup)
       intro s hs
-      simp only [ElaboratedCircuit.main, circuit_norm, Operations.localYields] at hs
+      simp only [circuit_norm, Operations.localYields] at hs
       contradiction
     · -- Prove the spec
       simp_all only [circuit_norm, toTable]
@@ -123,8 +124,12 @@ def lookupCircuit (circuit : LookupCircuit F α β) (order : SentenceOrder sente
     rw [ProvableType.ext_iff]
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
+  
+  completenessAssumptions_implies_assumptions := by
+    intro _ input h
+    exact circuit.completenessAssumptions_implies_assumptions (emptyYields F) input h
 
 @[circuit_norm]
-def lookup (circuit : LookupCircuit F α β) (order : SentenceOrder sentences) (input : Var α F) : Circuit sentences (Var β F) :=
-  lookupCircuit circuit order input
+def lookup (circuit : LookupCircuit F α β) (input : Var α F) : Circuit (emptyPropertySet F) (Var β F) :=
+  lookupCircuit circuit input
 end LookupCircuit

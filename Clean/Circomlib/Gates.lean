@@ -47,6 +47,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
+  CompletenessAssumptions _ input := IsBool input.1 ∧ IsBool input.2
   Spec _ input output :=
     output.val = input.1.val ^^^ input.2.val
     ∧ IsBool output
@@ -72,6 +73,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end XOR
 
 namespace AND
@@ -99,6 +101,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
+  CompletenessAssumptions _ input := IsBool input.1 ∧ IsBool input.2
   Spec _ input output :=
     output.val = input.1.val &&& input.2.val
     ∧ IsBool output
@@ -121,6 +124,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end AND
 
 namespace OR
@@ -148,6 +152,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
+  CompletenessAssumptions _ input := IsBool input.1 ∧ IsBool input.2
   Spec _ input output :=
     output.val = input.1.val ||| input.2.val
     ∧ IsBool output
@@ -172,6 +177,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end OR
 
 namespace NOT
@@ -197,6 +203,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input := IsBool input
+  CompletenessAssumptions _ input := IsBool input
   Spec _ input output :=
     output.val = 1 - input.val
     ∧ IsBool output
@@ -221,6 +228,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end NOT
 
 namespace NAND
@@ -248,6 +256,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := by simp +arith [circuit_norm, NAND.main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
+  CompletenessAssumptions _ input := IsBool input.1 ∧ IsBool input.2
   Spec _ input output :=
     output.val = 1 - (input.1.val &&& input.2.val)
     ∧ IsBool output
@@ -272,6 +281,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, NAND.main]
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end NAND
 
 namespace NOR
@@ -299,6 +309,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := by simp +arith [circuit_norm, NOR.main]
 
   Assumptions input := IsBool input.1 ∧ IsBool input.2
+  CompletenessAssumptions _ input := IsBool input.1 ∧ IsBool input.2
   Spec _ input output :=
     output.val = 1 - (input.1.val ||| input.2.val)
     ∧ IsBool output
@@ -323,6 +334,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   completeness := by
     simp_all only [circuit_norm, main]
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end NOR
 
 namespace MultiAND
@@ -1083,6 +1095,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   subcircuitsConsistent := subcircuitsConsistent order n
 
   Assumptions := Assumptions n
+  CompletenessAssumptions _ := Assumptions n
   Spec checked := Spec n
 
   soundness := by
@@ -1093,6 +1106,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   completeness := by
     intro offset env yields input_var h_local_witnesses input h_env h_assumptions
     exact completeness order n offset env yields input_var input h_local_witnesses h_env.symm h_assumptions
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end MultiAND
 

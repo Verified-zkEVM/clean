@@ -19,6 +19,8 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (state : KeccakState (F p)) := Assumptions state
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
@@ -32,16 +34,18 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
-  simp_all [circuit_norm, elaborated, main, Assumptions, Spec,
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  simp_all [circuit_norm, elaborated, main, CompletenessAssumptions, Assumptions, Spec,
     ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
-    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
+    ThetaC.CompletenessAssumptions, ThetaC.Assumptions, ThetaD.CompletenessAssumptions, ThetaD.Assumptions, ThetaXor.CompletenessAssumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
  { elaborated := elaborated order
    Assumptions
+   CompletenessAssumptions
    Spec
    soundness := soundness order
-   completeness := completeness order }
+   completeness := completeness order
+   completenessAssumptions_implies_assumptions := fun _ _ h => h }
 end Gadgets.Keccak256.Theta

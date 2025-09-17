@@ -19,6 +19,8 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (stat
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (yields : YieldContext sentences) (state : KeccakState (F p)) := state.Normalized
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
@@ -39,7 +41,7 @@ lemma thetaC_loop (state : Vector ℕ 25) :
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro i0 env yields checked state_var state h_input state_norm h_holds
-  
+
   constructor
   · -- Prove yielded sentences hold (vacuous - no yields)
     intro s hs _
@@ -64,19 +66,21 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   have ⟨_, h_spec⟩ := h_holds
   aesop
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm, Assumptions, eval_vector,
-    main, Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec, KeccakState.Normalized] at h_env ⊢
+    main, Xor64.circuit, Xor64.elaborated, Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec, KeccakState.Normalized] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakRow :=
  { elaborated := elaborated order
    Assumptions
+   CompletenessAssumptions
    Spec
    soundness := soundness order
-   completeness := completeness order }
+   completeness := completeness order
+   completenessAssumptions_implies_assumptions := fun _ _ h => h }
 
 end Gadgets.Keccak256.ThetaC

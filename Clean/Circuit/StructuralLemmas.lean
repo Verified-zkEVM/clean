@@ -19,6 +19,7 @@ def FormalCircuit.concat
     (circuit1 : FormalCircuit order Input Mid)
     (circuit2 : FormalCircuit order Mid Output)
     (h_compat : ∀ checked input mid, circuit1.Assumptions input → circuit1.Spec checked input mid → circuit2.Assumptions mid)
+    (h_compat_completeness : ∀ yields input mid, circuit1.CompletenessAssumptions yields input → circuit1.Spec Set.univ input mid → circuit2.CompletenessAssumptions yields mid)
     (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
     FormalCircuit order Input Output := {
   elaborated := {
@@ -38,6 +39,7 @@ def FormalCircuit.concat
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
   }
   Assumptions := circuit1.Assumptions
+  CompletenessAssumptions := circuit1.CompletenessAssumptions
   Spec checked input output := ∃ mid, circuit1.Spec checked input mid ∧ circuit2.Spec checked mid output
   soundness := by
     simp only [Soundness]
@@ -68,13 +70,17 @@ def FormalCircuit.concat
   completeness := by
     simp only [circuit_norm]
     aesop
+  
+  completenessAssumptions_implies_assumptions := by
+    intro yields input h
+    exact circuit1.completenessAssumptions_implies_assumptions yields input h
 }
 
 @[circuit_norm]
 lemma FormalCircuit.concat_assumptions {F : Type} [Field F] {sentences : PropertySet F} {order : SentenceOrder sentences}
     {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
-    (c1 : FormalCircuit order Input Mid) (c2 : FormalCircuit order Mid Output) p0 p1 :
-    (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
+    (c1 : FormalCircuit order Input Mid) (c2 : FormalCircuit order Mid Output) p0 p1 p2 :
+    (c1.concat c2 p0 p1 p2).Assumptions = c1.Assumptions := by
   simp only [FormalCircuit.concat]
 
 /--
@@ -102,6 +108,7 @@ def FormalCircuit.weakenSpec
     FormalCircuit order Input Output := {
   elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
+  CompletenessAssumptions := circuit.CompletenessAssumptions
   Spec := WeakerSpec
   soundness := by
     intro offset env yields checked input_var input h_eval h_assumptions h_holds
@@ -114,6 +121,7 @@ def FormalCircuit.weakenSpec
     -- and the same assumptions
     intro offset env yields input_var h_env_completeness input h_eval h_assumptions
     exact circuit.completeness offset env yields input_var h_env_completeness input h_eval h_assumptions
+  completenessAssumptions_implies_assumptions := circuit.completenessAssumptions_implies_assumptions
 }
 
 @[circuit_norm]

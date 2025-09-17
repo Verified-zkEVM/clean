@@ -29,6 +29,8 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offs
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : U64 (F p)) := Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
@@ -81,7 +83,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   rw [rotRight64_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
   rw [hy, Nat.div_add_mod']
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 64) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 64) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
   intro i0 env yields x_var h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
@@ -93,16 +95,18 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   specialize h0 x_normalized
   obtain ⟨h_rot, h_norm⟩ := h0
 
-  simp only [Assumptions] at x_normalized
+  simp only [CompletenessAssumptions, Assumptions] at x_normalized
   rw [h_eval]
-  simp only [x_normalized, true_and, h_norm]
+  exact ⟨x_normalized, h_norm⟩
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 64) : FormalCircuit order U64 U64 := {
   elaborated := elaborated order offset
   Assumptions
+  CompletenessAssumptions
   Spec := Spec (offset := offset)
   soundness := soundness order offset
   completeness := completeness order offset
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 }
 
 end Gadgets.Rotation64

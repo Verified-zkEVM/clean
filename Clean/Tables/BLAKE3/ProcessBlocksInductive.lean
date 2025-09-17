@@ -366,7 +366,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     provable_struct_simp
     simp only [h_eval] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions
-    dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
+    dsimp only [IsZero.circuit, IsZero.Assumptions, IsZero.CompletenessAssumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
     constructor
     · simp_all [BLAKE3ProcessBlocksStateNormalized.circuit]
     constructor
@@ -385,7 +385,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       constructor
       · omega
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
-      simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
+      simp only [IsZero.circuit, IsZero.Assumptions, IsZero.CompletenessAssumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       constructor
@@ -401,10 +401,10 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       · norm_num
     simp_all only [Addition32.circuit, Addition32.Assumptions, Conditional.circuit, Conditional.Assumptions]
     constructor
-    · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at h_witnesses
+    · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.CompletenessAssumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions, Conditional.CompletenessAssumptions, Addition32.CompletenessAssumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
       -- The following is a repetition of the above
-      simp only [IsZero.circuit, IsZero.Assumptions] at h_witnesses_iszero
+      simp only [IsZero.circuit, IsZero.Assumptions, IsZero.CompletenessAssumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
@@ -422,8 +422,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           · simp only [h_witnesses_iszero]
             norm_num
         · norm_num)
-      simp_all [circuit_norm]
-    trivial
+      simp_all [circuit_norm, Addition32.CompletenessAssumptions, Addition32.Assumptions]
+    simp_all [Conditional.CompletenessAssumptions, Conditional.Assumptions, Conditional.CompletenessAssumptions]
 
 /--
 The InductiveTable for processBlocks.

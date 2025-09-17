@@ -94,6 +94,9 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (ct :
   let out <==[order] bits[127]
   return out
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : fields 254 (F p)) :=
+  ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c : ℕ) : FormalCircuit order (fields 254) field where
   main := main order c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
@@ -105,6 +108,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
+  CompletenessAssumptions := CompletenessAssumptions
+
+  completenessAssumptions_implies_assumptions _ _ h := h
+
   Spec _ bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
@@ -113,7 +120,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c
     sorry
 
   completeness := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
+    simp only [circuit_norm, main, Num2Bits.circuit, CompletenessAssumptions]
     sorry
 end CompConstant
 

@@ -36,7 +36,7 @@ theorem FormalCircuit.original_soundness {sentences : PropertySet F} {order : Se
   and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_completeness {sentences : PropertySet F} {order : SentenceOrder sentences} (circuit : FormalCircuit order β α) :
-    ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (yields : YieldContext sentences) (checked : CheckedYields sentences) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.CompletenessAssumptions yields b →
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnessesAndYields yields offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)

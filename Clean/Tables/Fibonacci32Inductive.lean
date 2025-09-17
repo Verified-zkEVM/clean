@@ -34,7 +34,7 @@ def table : InductiveTable (F p) Row unit where
       Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
   completeness := by simp_all [InductiveTable.Completeness, fib32, circuit_norm,
-    Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
+    Addition32.circuit, Addition32.CompletenessAssumptions, Addition32.Assumptions, Addition32.Spec]
 
 -- the input is hard-coded to (0, 1)
 def formalTable (output : Row (F p)) := 

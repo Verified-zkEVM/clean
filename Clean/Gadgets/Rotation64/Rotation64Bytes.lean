@@ -31,6 +31,9 @@ def main {sentences : PropertySet (F p)} (_order : SentenceOrder sentences) (off
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : U64 (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
@@ -91,14 +94,16 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
   · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (off : Fin 8) : Completeness (F p) sentences (elaborated order off) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (off : Fin 8) : Completeness (F p) sentences (elaborated order off) CompletenessAssumptions := by
   rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [elaborated, main, circuit_norm]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8) : FormalCircuit order U64 U64 where
   elaborated := elaborated order off
   Assumptions := Assumptions
+  CompletenessAssumptions
   Spec := Spec (offset := off)
   soundness := soundness off
   completeness := completeness off
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Gadgets.Rotation64Bytes

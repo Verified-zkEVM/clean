@@ -29,8 +29,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 -- Test that the tactic works for simple completeness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} (order : SentenceOrder sentences)
-    (circuit : ElaboratedCircuit F sentences Input Output) (Assumptions : Input F → Prop) :
-    Completeness F sentences circuit Assumptions := by
+    (circuit : ElaboratedCircuit F sentences Input Output) (CompletenessAssumptions : YieldContext sentences → Input F → Prop) :
+    Completeness F sentences circuit CompletenessAssumptions := by
   circuit_proof_start
   -- At this point:
   -- - All standard completeness parameters have been introduced
@@ -53,8 +53,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} (order : SentenceOrder sentences)
     (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F sentences Input Output)
-    (Assumptions : Input F → Prop) :
-    Completeness F sentences (circuit offset) Assumptions := by
+    (CompletenessAssumptions : YieldContext sentences → Input F → Prop) :
+    Completeness F sentences (circuit offset) CompletenessAssumptions := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
   sorry
@@ -96,8 +96,8 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     {sentences : PropertySet F} (order : SentenceOrder sentences)
     (circuit : ElaboratedCircuit F sentences Input Output)
-     (Assumptions : Input F → Prop) :
-    Completeness F sentences circuit Assumptions := by
+     (CompletenessAssumptions : YieldContext sentences → Input F → Prop) :
+    Completeness F sentences circuit CompletenessAssumptions := by
   circuit_proof_start
   -- At this point we should have: i₀, env, input_var, h_env
   -- Note: provable_struct_simp eliminates input and h_input by substituting eval env input_var

@@ -32,6 +32,9 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ||| y.value ∧ z.Normalized
@@ -48,7 +51,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   rcases input_var_x
   rcases input_var_y
   simp only [U32.Normalized] at *
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢ l_components
+  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢ l_components
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
   simp only [Or8.circuit, Or8.Assumptions, Or8.Spec, h_input] at h_holds
   rcases h_holds with ⟨h_holds1, h_holds⟩
@@ -70,18 +73,24 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   · -- Prove the spec
     simp
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   circuit_proof_start
   rcases input_x
   rcases input_y
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢
+  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
-  simp only [Or8.circuit, Or8.Assumptions, h_input]
+  simp only [Or8.circuit, h_input, Or8.CompletenessAssumptions, Or8.Assumptions]
   simp only [Assumptions, U32.Normalized] at h_assumptions
   omega
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U32 :=
-  { elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order }
+  { elaborated := elaborated order,
+    Assumptions,
+    CompletenessAssumptions,
+    Spec,
+    soundness := soundness order,
+    completeness := completeness order,
+    completenessAssumptions_implies_assumptions := fun _ _ h => h }
 
 end Gadgets.Or32
 end

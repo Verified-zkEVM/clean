@@ -34,6 +34,9 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.Assumptions input
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : ApplyRounds.Inputs (F p)) : Prop :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   output.value = compress
@@ -46,10 +49,10 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (i
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start [elaborated]
-  
+
   constructor
   · sorry  -- Prove yielded sentences hold
-  
+
   simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
@@ -60,16 +63,19 @@ lemma ApplyRounds.circuit_assumptions_is {sentences : PropertySet (F p)} (order 
 lemma ApplyRouunds.circuit_spec_is {sentences : PropertySet (F p)} (order : SentenceOrder sentences) :
   (ApplyRounds.circuit order).Spec = ApplyRounds.Spec := rfl
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
-  circuit_proof_start [elaborated]
-  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is,
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  circuit_proof_start [elaborated, CompletenessAssumptions, Assumptions, ApplyRounds.Assumptions]
+  simp_all only [circuit_norm, CompletenessAssumptions, Assumptions,
+    ApplyRounds.circuit, ApplyRounds.CompletenessAssumptions,
     ApplyRouunds.circuit_spec_is,
-    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
-    compress, ApplyRounds.Assumptions, FinalStateUpdate.Spec]
+    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, FinalStateUpdate.CompletenessAssumptions,
+    FinalStateUpdate.Spec, ApplyRounds.Assumptions]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order ApplyRounds.Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
   Spec
   soundness := soundness order
   completeness := completeness order

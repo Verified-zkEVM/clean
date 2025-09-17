@@ -33,6 +33,8 @@ instance elaborated {sentences : PropertySet F} (order : SentenceOrder sentences
 
 def Assumptions (_ : F) : Prop := True
 
+def CompletenessAssumptions {sentences : PropertySet F} (_ : YieldContext sentences) (_ : F) : Prop := True
+
 def Spec {sentences : PropertySet F} (_checked : CheckedYields sentences) (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0
 
@@ -52,7 +54,7 @@ theorem soundness {sentences : PropertySet F} (order : SentenceOrder sentences) 
   · aesop
 
 theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentences) :
-    Completeness F sentences (elaborated (sentences:=sentences) order) Assumptions := by
+    Completeness F sentences (elaborated (sentences:=sentences) order) CompletenessAssumptions := by
   circuit_proof_start
   aesop
 
@@ -60,8 +62,10 @@ def circuit {sentences : PropertySet F} (order : SentenceOrder sentences) :
     FormalCircuit order field field :=
   { (elaborated (sentences:=sentences) order) with
     Assumptions
+    CompletenessAssumptions := CompletenessAssumptions (sentences:=sentences)
     Spec := Spec (sentences:=sentences)
     soundness := soundness (sentences:=sentences) order
-    completeness := completeness (sentences:=sentences) order }
+    completeness := completeness (sentences:=sentences) order
+    completenessAssumptions_implies_assumptions := fun _ _ _ => trivial }
 
 end Gadgets.IsZeroField

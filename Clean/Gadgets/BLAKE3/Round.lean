@@ -44,6 +44,9 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, message } := input
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
@@ -103,9 +106,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   · rw [←c8.2.1]; rfl
   · exact c8.2.2
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
-  circuit_proof_start [elaborated, G.circuit, G.elaborated, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesAndYieldsCompleteness,
-    getElem_eval_vector, Fin.isValue, and_imp, and_true]
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  circuit_proof_start [elaborated, G.circuit, G.elaborated, G.Assumptions, G.CompletenessAssumptions, G.Spec, Environment.UsesLocalWitnessesAndYieldsCompleteness,
+    getElem_eval_vector, Fin.isValue, and_imp, and_true, Assumptions]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env
 
@@ -130,6 +133,8 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
   Spec
   soundness := soundness order
   completeness := completeness order

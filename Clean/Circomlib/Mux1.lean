@@ -70,6 +70,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     let ⟨c, s⟩ := input
     IsBool s
 
+  CompletenessAssumptions _ input :=
+    let ⟨c, s⟩ := input
+    IsBool s
+
   Spec _ input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
@@ -141,6 +145,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     rw [h_env_i]
     norm_num
 
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
+
  end MultiMux1
 
 namespace Mux1
@@ -196,6 +202,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     let ⟨_, s⟩ := input
     IsBool s
 
+  CompletenessAssumptions _ input :=
+    let ⟨_, s⟩ := input
+    IsBool s
+
   Spec _ input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
@@ -228,6 +238,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
     rw [← h_input] at h_s
     simp_all
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Mux1
 

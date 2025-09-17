@@ -71,7 +71,7 @@ partial def circuitProofStartCore : TacticM Unit := do
 
   This tactic:
   1. Automatically introduces all parameters for `Soundness` or `Completeness` goals
-  2. Unfolds `main`, `Assumptions`, and `Spec` definitions
+  2. Unfolds `main`, `Assumptions`, `CompletenessAssumptions`, and `Spec` definitions
   3. Normalizes the goal state using circuit_norm
   4. Applies provable_struct_simp to decompose structs and decompose eval that mention struct components
   5. Additionally simplifies h_holds henv and the goal with circuit_norm and h_input
@@ -106,8 +106,9 @@ elab_rules : tactic
   -- intro all hypotheses
   circuitProofStartCore
 
-  -- try to unfold main, Assumptions and Spec as local definitions
+  -- try to unfold main, Assumptions, CompletenessAssumptions and Spec as local definitions
   try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold $(mkIdent `CompletenessAssumptions):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
   try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()

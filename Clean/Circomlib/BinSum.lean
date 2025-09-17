@@ -179,6 +179,12 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     -- All inputs are binary
     ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
 
+  CompletenessAssumptions _ input :=
+    -- All inputs are binary
+    ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
+
+  completenessAssumptions_implies_assumptions _ _ h := h
+
   Spec _ input output :=
     let nout := nbits ((2^n - 1) * ops)
     -- All outputs are binary

@@ -30,6 +30,9 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offs
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : U64 (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
@@ -114,23 +117,25 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   · -- Prove the spec
     exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
   intro i0 env yields x_var _ x h_input x_normalized
 
   -- simplify goal
   simp only [main, elaborated, circuit_norm,
-    ByteDecomposition.circuit, ByteDecomposition.Assumptions]
+    ByteDecomposition.circuit, ByteDecomposition.CompletenessAssumptions, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions
-  rw [Assumptions, U64.ByteVector.normalized_iff] at x_normalized
+  rw [CompletenessAssumptions, Assumptions, U64.ByteVector.normalized_iff] at x_normalized
   simp_all only [size, U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit order U64 U64 := {
   elaborated := elaborated order offset
   Assumptions
+  CompletenessAssumptions
   Spec := Spec (offset := offset)
   soundness := soundness order offset
   completeness := completeness order offset
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 }
 
 end Gadgets.Rotation64Bits

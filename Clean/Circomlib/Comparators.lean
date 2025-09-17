@@ -34,11 +34,15 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
   input * out ===[order] 0
   return out
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (_ : F p) := True
+
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order field field where
   main := main order
   localLength _ := 2
 
   Assumptions _ := True
+  CompletenessAssumptions := CompletenessAssumptions
+  completenessAssumptions_implies_assumptions _ _ h := h
   Spec _ input output :=
     output = (if input = 0 then 1 else 0)
 
@@ -61,7 +65,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
         exact hr
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [CompletenessAssumptions]
     cases h_env with
     | intro left right =>
       simp only [left, ne_eq, id_eq, ite_not, mul_ite, mul_zero] at right
@@ -93,12 +97,14 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   localLength _ := 2
 
   Assumptions _ := True
+  CompletenessAssumptions _ _ := True
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec _ input output :=
     output = (if input.1 = input.2 then 1 else 0)
 
   completeness := by
-    simp only [circuit_norm, main, IsZero.circuit]
+    circuit_proof_start [IsZero.circuit, IsZero.CompletenessAssumptions]
 
   soundness := by
     circuit_proof_start
@@ -204,6 +210,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  CompletenessAssumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec := fun _ (x, y) output =>
     output = (if x.val < y.val then 1 else 0)
@@ -237,6 +245,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  CompletenessAssumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
+  completenessAssumptions_implies_assumptions _ _ h := h
   Spec := fun _ (x, y) output =>
     output = (if x.val <= y.val then 1 else 0)
 
@@ -283,6 +293,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  CompletenessAssumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec := fun _ (x, y) output =>
     output = (if x.val > y.val then 1 else 0)
@@ -320,6 +332,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   localLength _ := n + 2
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
+  CompletenessAssumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
+  completenessAssumptions_implies_assumptions _ _ h := h
   Spec := fun _ (x, y) output =>
     output = (if x.val >= y.val then 1 else 0)
 

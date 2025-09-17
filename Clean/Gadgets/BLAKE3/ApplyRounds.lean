@@ -46,6 +46,8 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
 
   Assumptions := Round.Assumptions
+  CompletenessAssumptions := fun _ input => Round.Assumptions input
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
   Spec := fun _checked input output =>
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
@@ -116,7 +118,17 @@ def twoRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder 
     intros
     simp_all only [roundWithPermute, Round.Assumptions]
     aesop
-  ) (by aesop)
+  ) (by
+    -- Prove CompletenessAssumptions compatibility
+    intros yields input mid h_input h_spec
+    -- The spec ensures mid is normalized
+    rcases h_spec with ⟨_, h_mid_state_norm, _, h_mid_msg_norm⟩
+    exact ⟨h_mid_state_norm, h_mid_msg_norm⟩
+  ) (by
+    -- Prove local lengths are equal
+    intros
+    rfl
+  )
 
 /--
 Apply two rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -174,7 +186,19 @@ def fourRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
     constructor <;> aesop
-  ) (by aesop)
+  ) (by
+    -- Prove CompletenessAssumptions compatibility
+    intro yields input mid h_assumptions h_spec
+    -- twoRoundsWithPermute.Spec ensures mid is normalized
+    obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
+    simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2
+    rcases h_spec2 with ⟨_, h_mid_state_norm, _, h_mid_msg_norm⟩
+    exact ⟨h_mid_state_norm, h_mid_msg_norm⟩
+  ) (by
+    -- Prove local lengths are equal
+    intros
+    rfl
+  )
 
 /--
 Apply four rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -245,7 +269,20 @@ def sixRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder 
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
     constructor <;> aesop
-  ) (by aesop)
+  ) (by
+    -- Prove CompletenessAssumptions compatibility
+    intro yields input mid h_assumptions h_spec
+    -- fourRoundsWithPermute.Spec ensures mid is normalized through its chain
+    obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
+    obtain ⟨mid'', h_spec2_1, h_spec2_2⟩ := h_spec2
+    simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2
+    rcases h_spec2_2 with ⟨_, h_mid_state_norm, _, h_mid_msg_norm⟩
+    exact ⟨h_mid_state_norm, h_mid_msg_norm⟩
+  ) (by
+    -- Prove local lengths are equal
+    intros
+    rfl
+  )
 
 /--
 Apply six rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -309,7 +346,18 @@ def sevenRoundsFinal {sentences : PropertySet (F p)} (order : SentenceOrder sent
     intro _checked input mid h_assumptions h_spec
     -- sixRoundsApplyStyle.Spec gives us normalized outputs
     simp_all [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Assumptions]
-  ) (by aesop)
+  ) (by
+    -- Prove CompletenessAssumptions compatibility
+    intro yields input mid h_assumptions h_spec
+    -- sixRoundsApplyStyle.Spec ensures mid is normalized
+    simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.CompletenessAssumptions,
+      Round.Assumptions, sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, FormalCircuit.concat, roundWithPermute] at h_spec ⊢ h_assumptions
+    aesop
+  ) (by
+    -- Prove local lengths are equal
+    intros
+    rfl
+  )
 
 /--
 Apply seven rounds of BLAKE3 compression, starting from a Round.Inputs state.
@@ -563,7 +611,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   · -- Show out.Normalized
     exact h_normalized
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) := Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   circuit_proof_start
 
   -- Use the helper lemma to prove normalization
@@ -578,6 +628,8 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
   Spec
   soundness := soundness order
   completeness := completeness order

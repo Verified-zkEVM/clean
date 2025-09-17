@@ -21,6 +21,8 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (stat
 
 def Assumptions := KeccakState.Normalized (p:=p)
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) := Assumptions (p:=p)
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
@@ -56,27 +58,29 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
+  simp only [CompletenessAssumptions, Assumptions, KeccakState.Normalized] at state_norm
   simp only [h_input, state_norm, elaborated, main, circuit_norm,
     Rotation64.circuit, Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec,
     Vector.getElem_zip] at h_holds ⊢
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields state_var h_env state h_input state_norm
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
+  simp only [CompletenessAssumptions, Assumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [elaborated, main, circuit_norm,
-    Rotation64.circuit, Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec]
+    Rotation64.circuit, Rotation64.elaborated, Rotation64.CompletenessAssumptions, Rotation64.Assumptions, Rotation64.Spec]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
   { elaborated := elaborated order
     Assumptions
+    CompletenessAssumptions
     Spec
     soundness := soundness order
-    completeness := completeness order }
+    completeness := completeness order
+    completenessAssumptions_implies_assumptions := fun _ _ h => h }
 end Gadgets.Keccak256.RhoPi

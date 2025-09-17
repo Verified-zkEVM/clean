@@ -40,9 +40,15 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   main := main order
   localLength input := (CompConstant.circuit order ((p - 1) / 2)).localLength input
 
-  Assumptions input := 
+  Assumptions input :=
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
+
+  CompletenessAssumptions _ input :=
+    -- Input should be binary representation of a field element
+    ∀ i (_ : i < 254), IsBool input[i]
+
+  completenessAssumptions_implies_assumptions _ _ h := h
 
   Spec _ input output :=
     -- The output is 1 if the input (as a number) is greater than (p-1)/2

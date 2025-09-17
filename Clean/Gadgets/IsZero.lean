@@ -37,6 +37,8 @@ instance elaborated {sentences : PropertySet F} (order : SentenceOrder sentences
 
 def Assumptions (_ : M F) : Prop := True
 
+def CompletenessAssumptions {sentences : PropertySet F} (_ : YieldContext sentences) (_ : M F) : Prop := True
+
 def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
   output = if input = 0 then 1 else 0
 
@@ -128,17 +130,20 @@ theorem soundness [DecidableEq (M F)] {sentences : PropertySet F} (order : Sente
     exact this.2
 
 theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentences) :
-    Completeness F sentences (elaborated (sentences:=sentences) (M := M) order) Assumptions := by
-  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
+    Completeness F sentences (elaborated (sentences:=sentences) (M := M) order) CompletenessAssumptions := by
+  circuit_proof_start [IsZeroField.circuit, IsZeroField.CompletenessAssumptions, IsZeroField.Assumptions]
 
 def circuit [DecidableEq (M F)] {sentences : PropertySet F} (order : SentenceOrder sentences) :
     FormalCircuit order M field := {
   (elaborated (sentences:=sentences) (M := M) order) with
-  Assumptions, Spec := (fun _ input output => Spec input output),
+  Assumptions
+  CompletenessAssumptions
+  Spec := (fun _ input output => Spec input output)
   soundness := by
     -- coerce Spec to include `checked` parameter
     simpa using (soundness (sentences:=sentences) (M:=M) order)
-  completeness := completeness (sentences:=sentences) (M:=M) order,
+  completeness := completeness (sentences:=sentences) (M:=M) order
+  completenessAssumptions_implies_assumptions := fun _ _ _ => trivial
 }
 
 end Gadgets.IsZero

@@ -36,6 +36,9 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offs
 
 def Assumptions (x : F p) := x.val < 256
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (x : F p) :=
+  Assumptions x
+
 def Spec {sentences : PropertySet (F p)} (offset : Fin 8) (_checked : CheckedYields sentences) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
@@ -111,7 +114,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
     use ⟨ low_eq, high_eq ⟩, h_lt_low
     rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
   rintro i0 env yielded x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
@@ -139,7 +142,9 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit order field Outputs where
   elaborated := elaborated order offset
   Assumptions := Assumptions
+  CompletenessAssumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Gadgets.ByteDecomposition

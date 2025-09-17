@@ -39,7 +39,10 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
       simp only [Assumptions, BLAKE3State.Normalized] at h_assumptions
       fin_cases i <;> simp only [msgPermutation, h_assumptions]
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (state : BLAKE3State (F p)) :=
+  Assumptions state
+
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
     Environment.UsesLocalWitnessesAndYieldsCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
@@ -49,9 +52,11 @@ theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sent
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order BLAKE3State BLAKE3State :=
   { elaborated order with
     Assumptions
+    CompletenessAssumptions
     Spec
     soundness
     completeness
+    completenessAssumptions_implies_assumptions := fun _ _ h => h
   }
 
 end Gadgets.BLAKE3.Permute

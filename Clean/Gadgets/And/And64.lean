@@ -32,6 +32,9 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.Normalized
@@ -79,23 +82,25 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
     sorry
   apply soundness_to_u64 (sentences:=sentences) h_assumptions.left h_assumptions.right
   simp only [circuit_norm, explicit_provable_type, Vector.mapRange,
-    elaborated, main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
+    elaborated, main, Assumptions, And8.circuit, And8.Assumptions, And8.Spec,
     U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i env yielded input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, explicit_provable_type,
-    elaborated, main, Assumptions, Spec, And8.circuit, And8.Assumptions, And8.Spec,
-    U64.Normalized] at h_assumptions h_input ⊢
+    elaborated, main, And8.circuit, And8.CompletenessAssumptions, And8.Assumptions] at h_input ⊢
+  simp only [CompletenessAssumptions, Assumptions, U64.Normalized] at h_assumptions
   simp_all
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs U64 where
   elaborated := elaborated order
   Assumptions := Assumptions
+  CompletenessAssumptions := CompletenessAssumptions
   Spec := Spec
   soundness := soundness
   completeness := completeness
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Gadgets.And.And64

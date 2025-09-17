@@ -75,7 +75,10 @@ theorem soundness [DecidableEq F] {sentences : PropertySet F} (order : SentenceO
     simp only [this, if_true]
     ring_nf
 
-theorem completeness [DecidableEq F] {sentences : PropertySet F} : Completeness F sentences (elaborated (F:=F) (M:=M) (sentences:=sentences)) Assumptions := by
+def CompletenessAssumptions [DecidableEq F] {sentences : PropertySet F} (_ : YieldContext sentences) (input : Inputs M F) :=
+  Assumptions input
+
+theorem completeness [DecidableEq F] {sentences : PropertySet F} : Completeness F sentences (elaborated (F:=F) (M:=M) (sentences:=sentences)) CompletenessAssumptions := by
   circuit_proof_start
 
 /--
@@ -84,9 +87,11 @@ Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 def circuit [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder sentences) : FormalCircuit order (Inputs M) M where
   elaborated := elaborated
   Assumptions
+  CompletenessAssumptions
   Spec
   soundness := soundness order
   completeness
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end
 

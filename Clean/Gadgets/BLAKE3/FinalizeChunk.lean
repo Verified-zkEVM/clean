@@ -110,6 +110,9 @@ def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 64, i.val ≥ input.buffer_len.val → input.buffer_data[i] = 0) ∧
   input.base_flags.Normalized
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) : Prop :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   let chunk_state : ChunkState := {
     chaining_value := input.state.chaining_value.map U32.value
@@ -215,15 +218,15 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
-  circuit_proof_start
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  circuit_proof_start[Or32.circuit, IsZero.circuit, Assumptions]
   apply And.intro
   · trivial
   rcases h_env with ⟨h_iszero, h_env⟩
   specialize h_iszero trivial
   simp only [IsZero.circuit, IsZero.Spec] at h_iszero
   apply And.intro
-  · simp only [Or32.circuit, Or32.Assumptions]
+  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     apply And.intro
     · aesop
     · simp only [circuit_norm]
@@ -235,7 +238,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
       · norm_num
   rcases h_env with ⟨h_or, h_env⟩
   specialize h_or (by
-    simp only [Or32.circuit, Or32.Assumptions]
+    simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     apply And.intro
     · aesop
     · simp only [h_iszero]
@@ -247,7 +250,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
         norm_num)
   simp only [Or32.circuit, Or32.Spec] at h_or
   apply And.intro
-  · simp only [Or32.circuit, Or32.Assumptions]
+  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     simp only [h_or]
     constructor
     · trivial
@@ -257,7 +260,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp only [Compress.circuit, Compress.Assumptions, ApplyRounds.Assumptions]
   rcases h_env with ⟨h_or2, h_env⟩
   specialize h_or2 (by
-  · simp only [Or32.circuit, Or32.Assumptions]
+  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     simp only [h_or]
     constructor
     · trivial
@@ -267,7 +270,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
   simp only [ProcessBlocksState.Normalized] at h_assumptions
-  simp only [h_or2, h_assumptions]
+  simp only [h_or2, h_assumptions, Compress.CompletenessAssumptions, Compress.Assumptions, ApplyRounds.Assumptions]
   simp only [circuit_norm]
   constructor
   · apply bytesToWords_normalized
@@ -276,7 +279,13 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   omega
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs (ProvableVector U32 8) := {
-  elaborated := elaborated order, Assumptions, Spec, soundness := soundness order, completeness := completeness order
+  elaborated := elaborated order
+  Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
+  Spec
+  soundness := soundness order
+  completeness := completeness order
 }
 
 end Gadgets.BLAKE3.FinalizeChunk

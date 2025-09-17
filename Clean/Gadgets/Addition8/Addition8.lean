@@ -20,6 +20,9 @@ def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder
   Assumptions := fun { x, y, carryIn } =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
+  CompletenessAssumptions _ := fun { x, y, carryIn } =>
+    x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
+
   Spec _ := fun { x, y, carryIn } z =>
     z.val = (x.val + y.val + carryIn.val) % 256
 
@@ -32,7 +35,9 @@ def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder
       Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
   completeness := by simp_all [circuit_norm,
-    Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
+    Addition8FullCarry.circuit, Addition8FullCarry.CompletenessAssumptions, Addition8FullCarry.Assumptions]
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 namespace Addition8
 structure Inputs (F : Type) where
@@ -58,6 +63,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
+  CompletenessAssumptions _ | { x, y } => x.val < 256 ∧ y.val < 256
+
   Spec _ | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
@@ -68,6 +75,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Addition8
 end Gadgets

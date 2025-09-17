@@ -16,7 +16,7 @@ omit p_large_enough in
 lemma eval_not {env} {x_var : Var U64 (F p)} :
     eval env (not64_bytewise x_var) = not64_bytewise_value (eval env x_var) := by
   rw [not64_bytewise, not64_bytewise_value, U64.map, U64.map]
-  simp only [not64_bytewise, circuit_norm, explicit_provable_type]
+  simp only [circuit_norm, explicit_provable_type]
   ring_nf
 
 theorem not_zify (n : ℕ) {x : ℕ} (hx : x < n) : ((n - 1 - x : ℕ) : ℤ) = ↑n - 1 - ↑x := by
@@ -55,6 +55,7 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order U64 U64 where
   main x := pure (not64_bytewise x)
   Assumptions x := x.Normalized
+  CompletenessAssumptions _ x := x.Normalized
   Spec _ x z := z.value = not64 x.value ∧ z.Normalized
 
   localLength _ := 0
@@ -69,5 +70,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     -- there are no constraints to satisfy!
     intros
     exact trivial
+  
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Gadgets.Not

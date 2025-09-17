@@ -74,6 +74,9 @@ def Assumptions (input : Inputs (F p)) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
@@ -127,26 +130,28 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     Fin.val_succ, List.getElem_cons_succ, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   rintro i0 env yields ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_normalized
   simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
-  dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized
+  dsimp only [CompletenessAssumptions, Assumptions, BLAKE3State.Normalized] at h_normalized
   obtain ⟨state_norm, chaining_value_norm⟩ := h_normalized
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true,
     Fin.getElem_fin] at state_norm chaining_value_norm
   dsimp only [elaborated, main, circuit_norm, Xor32.circuit, Xor32.elaborated] at henv ⊢
-  simp only [h_input, circuit_norm, and_imp,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at henv ⊢
-  simp_all only [gt_iff_lt, forall_const, and_self]
+  simp only [h_input, circuit_norm, Xor32.CompletenessAssumptions, Xor32.Assumptions,
+    Xor32.Spec, getElem_eval_vector] at henv ⊢
+  simp_all only [gt_iff_lt, and_self]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
   Assumptions
+  CompletenessAssumptions
   Spec
   soundness := soundness order
   completeness := completeness order
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 }
 
 end Gadgets.BLAKE3.FinalStateUpdate

@@ -18,6 +18,9 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (stat
 
 def Assumptions := KeccakState.Normalized (p:=p)
 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) := 
+  KeccakState.Normalized (p:=p)
+
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
@@ -63,21 +66,24 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   simp_all
 
-theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) Assumptions := by
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields state_var h_env state h_input state_norm
 
   -- simplify Assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [Assumptions, KeccakState.Normalized] at state_norm
+  simp only [CompletenessAssumptions, KeccakState.Normalized] at state_norm
 
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
-    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd]
+    Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec, 
+    And.And64.CompletenessAssumptions, And.And64.Assumptions, And.And64.Spec]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
   { elaborated := elaborated order
     Assumptions
+    CompletenessAssumptions
     Spec
     soundness := soundness order
-    completeness := completeness order }
+    completeness := completeness order
+    completenessAssumptions_implies_assumptions := fun _ _ h => h }
 end Gadgets.Keccak256.Chi
