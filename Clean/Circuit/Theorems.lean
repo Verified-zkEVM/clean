@@ -444,9 +444,9 @@ theorem usesLocalWitnessesAndYields_iff_conjunction {sentences : PropertySet F} 
   -- lookup case
   · intros; simp
   -- yield case
-  · intros; simp [and_comm]
+  · intros; simp
   -- use case
-  · intros; simp [and_comm]
+  · intros; simp
   -- subcircuit case
   · intros offset m s
     simp only
