@@ -49,62 +49,81 @@ We remark that the whole point of the execution is to **perform assertions on th
 The program starts in the state $(0, 0, 0)$. The transition function is specified in the pseudocode below.
 
 ```python
-# verifies a state transition function:
-# inputs are the memory functions p and m, current state (pc, ap, fp)
-# and claimed next state (pc_next, ap_next, fp_next)
+# computes the state transition function, given the current state (pc, ap, fp)
+# and the program memory p of size p_size and data memory m of size m_size
+# returns the next state (pc_next, ap_next, fp_next), or None if the state transition is invalid
 
-# decoding of the instruction: 4 elements of 2 bits each
-instruction_type, addressing1, addressing2, addressing3 = decode(p(pc))
-op1 = p(pc + 1)
-op2 = p(pc + 2)
-op3 = p(pc + 3)
+def read_program(pc):
+    if pc >= p_size:
+        return None
+    return p(pc)
 
-if addressing1 == 0:
-    v1 = m(m(ap + op1))
-else if addressing1 == 1:
-    v1 = m(ap + op1)
-else if addressing1 == 2:
-    v1 = m(fp + op1)
-else:
-    v1 = op1
+def read_memory(addr):
+    if addr >= m_size:
+        return None
+    return m(addr)
 
-if addressing2 == 0:
-    v2 = m(m(ap + op2))
-else if addressing2 == 1:
-    v2 = m(ap + op2)
-else if addressing2 == 2:
-    v2 = m(fp + op2)
-else:
-    v2 = op2
+def perform_memory_access(mode, addr, ap, fp):
+    if mode == 0:  # double indirection
+        addr = read_memory(ap + addr)
+        if addr is None:
+            return None
+        return read_memory(addr)
+    elif mode == 1:  # ap-relative
+        return read_memory(ap + addr)
+    elif mode == 2:  # fp-relative
+        return read_memory(fp + addr)
+    else:  # immediate
+        return addr
 
-if addressing3 == 0:
-    v3 = m(m(ap + op3))
-else if addressing3 == 1:
-    v3 = m(ap + op3)
-else if addressing3 == 2:
-    v3 = m(fp + op3)
-else:
-    v3 = op3
+def decode(instruction):
+    # instruction is an 8-bit integer
+    instruction_type = instruction & 0b11
+    addressing1 = (instruction >> 2) & 0b11
+    addressing2 = (instruction >> 4) & 0b11
+    addressing3 = (instruction >> 6) & 0b11
+    return (instruction_type, addressing1, addressing2, addressing3)
 
-if instruction_type == ADD:
-    assert v3 == v1 + v2
+def nextState(pc, ap, fp):    
+    # decoding of the instruction: 4 elements of 2 bits each
+    instruction = read_program(pc)
+    if instruction is None:
+        return None
+    if instruction >= 256:
+        # instruction must fit in 8 bits
+        return None
 
-if instruction_type == MUL:
-    assert v3 == v1 * v2
+    instruction_type, addressing1, addressing2, addressing3 = decode(instruction)
+    op1 = read_program(pc + 1)
+    op2 = read_program(pc + 2)
+    op3 = read_program(pc + 3)
 
-if instruction_type == STORE_STATE:
-    assert v1 == pc
-    assert v2 == ap
-    assert v3 == fp
+    if op1 is None or op2 is None or op3 is None:
+        return None
 
-if instruction_type == LOAD_STATE:
-    assert pc_next == v1
-    assert ap_next == v2
-    assert fp_next == v3
-else:
-    assert pc_next == pc + 4
-    assert ap_next == ap
-    assert fp_next == fp
+    v1 = perform_memory_access(addressing1, op1, ap, fp)
+    v2 = perform_memory_access(addressing2, op2, ap, fp)
+    v3 = perform_memory_access(addressing3, op3, ap, fp)
+
+    if v1 is None or v2 is None or v3 is None:
+        return None
+
+    if instruction_type == ADD:
+        if v3 != v1 + v2:
+            return None
+
+    elif instruction_type == MUL:
+        if v3 != v1 * v2:
+            return None
+
+    elif instruction_type == STORE_STATE:
+        if v1 != pc or v2 != ap or v3 != fp:
+            return None
+
+    elif instruction_type == LOAD_STATE:
+        return (v1, v2, v3)
+    else:
+        return (pc + 4, ap, fp)
 ```
 
 The addressing modes for each operand can be one of the following:
@@ -113,10 +132,15 @@ The addressing modes for each operand can be one of the following:
 - **fp-relative**: the operand is an offset from the `fp` register, and the value is read from the memory at that address.
 - **Immediate**: the operand is the value itself.
 
-> [!NOTE]
-> We define accessing the program and data memory out-of-bounds, as well as not encoding correctly the instruction type to be **undefined behaviour** (UB).
+We define **the result of a $N$-bounded execution of the femtoCairo machine** with program memory $\mathfrak{p}$, data memory $\mathfrak{m}$, denoted as
+$$
+\mathcal{C}_N(\mathfrak{p}, \mathfrak{m})
+$$
+to be the result of a sequence of valid state transitions starting from the initial state $(0, 0, 0)$, and ending in a final state $(\text{pc}_{\text{final}}, \text{ap}_{\text{final}}, \text{fp}_{\text{final}})$ after $N$ steps, where $N$ is a parameter of the execution. If at any point the state transition function returns `None`, then the whole execution is considered invalid.
 
-As a final remark, technically the only addressing modes strictly needed are the immediate and the double indirection, which would save some constraints.
+Our final AIR constraints will ensure that the prover **knows a valid memory function $\mathfrak{m}$ such that the $N$-bounded execution $\mathcal{C}_N(\mathfrak{p}, \mathfrak{m})$ is valid,** where $\mathfrak{p}$ is the fixed, publicly known program memory, and $N$ is the number of steps in the AIR trace.
+
+As a final minor note, technically the only addressing modes strictly needed are the immediate and the double indirection, which would save some constraints.
 
 ### Universality of femtoCairo
 The instructions `ADD`, `MUL`, `STORE_STATE` and `LOAD_STATE` are enough to encode any useful program. We give some examples of gadgets that can be implemented using these instructions. We refer to the Cairo paper for more details on how to structure the memory to encode loops and recursion, but we note that our ISA can encode Cairo's instructions such as `RET`, `CALL` and so on. In our assembly, we write `[[ap + off]]` to denote double indirection, `[ap + off]` to denote ap-relative access, and `[fp + off]` to denote fp-relative access, and `imm` to denote an immediate value.
