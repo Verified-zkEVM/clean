@@ -7,6 +7,7 @@ under `circuit_norm` in every way we need them to.
 -/
 import Clean.Circuit.Subcircuit
 import Clean.Utils.Misc
+
 variable {n m : ℕ} {F : Type} [Field F] {α β : Type}
 
 lemma Vector.forM_toList (xs : Vector α n) {m : Type → Type} [Monad m] (body : α → m Unit) :
@@ -228,7 +229,7 @@ lemma foldlAcc_cons_succ (i : Fin m) (x : α) [constant : ConstantLength (prod c
     foldlAcc (n + (circuit init x).localLength n) xs circuit ((circuit init x).output n) i := by
   simp only [foldlAcc]
   simp only [Fin.val_succ, Vector.cons, Vector.getElem_mk, List.getElem_toArray, Fin.foldl_succ,
-    List.getElem_cons_succ, Array.getElem_toList, Vector.getElem_toArray, add_mul, one_mul,
+    List.getElem_cons_succ, add_mul, one_mul,
     Fin.val_zero, List.getElem_cons_zero, zero_mul, add_zero]
   congr
   funext acc j
@@ -287,7 +288,7 @@ theorem foldlAcc_const_succ (constant : ConstantLength (prod circuit))
   conv => lhs; lhs; intro acc i; rw [h_const_out (acc, _),
     ConstantLength.length_eq_default constant (acc, _)]
   rw [h_const_out (_, xs[i])]
-  simp only [prod, Fin.foldl_const, Fin.natCast_eq_last, Fin.val_last]
+  simp only [prod, Fin.foldl_const, Fin.val_last]
   rfl
 
 theorem foldlAcc_const (constant : ConstantLength (prod circuit))
@@ -350,7 +351,7 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
       rfl
   intro h i
   rcases i with ⟨ _ | i, hi ⟩
-  · simp only [Fin.mk_zero', Fin.val_zero]
+  · simp only [Fin.mk_zero']
     rw [foldlAcc_zero, zero_mul, add_zero]
     exact h.left
   · rw [foldlAcc_const_succ constant h_const_out]
@@ -576,7 +577,7 @@ lemma foldl.output_eq [NeZero m] :
   conv => lhs; lhs; intro acc i; rw [const_out (acc, _)]
   rcases m with _ | m
   · nomatch this
-  simp only [Fin.foldl_const, Fin.natCast_eq_last, Fin.val_last, add_tsub_cancel_right]
+  simp only [Fin.foldl_const, Fin.val_last, add_tsub_cancel_right]
 
 @[circuit_norm ↓]
 lemma foldl.forAll [NeZero m] :

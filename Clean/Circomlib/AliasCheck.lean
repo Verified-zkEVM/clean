@@ -39,7 +39,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   Spec _ bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector]
+    simp only [circuit_norm, main, CompConstant.circuit]
     intros offset env yields checked input_var input h_input h_assumption h_holds
     constructor
     · sorry
@@ -49,7 +49,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     specialize h_holds1 (by
       intros i x
       specialize h_assumption i x
-      simp only [← h_input, eval_vector] at h_assumption
+      simp only [← h_input] at h_assumption
       aesop)
     rcases h_holds1 with ⟨ h_holds11, h_holds12 ⟩
     split at h_holds12
@@ -57,7 +57,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     · omega
 
   completeness := by
-    simp only [circuit_norm, main, CompConstant.circuit, eval_vector, CompConstant.CompletenessAssumptions]
+    simp only [circuit_norm, main, CompConstant.circuit, CompConstant.CompletenessAssumptions]
     simp_all
     omega
 

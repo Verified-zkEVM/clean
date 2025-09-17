@@ -515,7 +515,7 @@ lemma main_usesLocalWitnesses_iff_completeness
         · simp only [Environment.ExtendsVector, Vector.getElem_mk]
           intro i
           fin_cases i
-          simp only [Fin.val_zero, add_zero, List.getElem_toArray]
+          simp only [add_zero, List.getElem_toArray]
           exact h_completeness
         · simp only [Operations.forAll]
           trivial
@@ -556,7 +556,7 @@ lemma main_usesLocalWitnesses_iff_completeness
           · exact h_c3
           · simp only [circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main, Gadgets.allZero]
             rw [Circuit.forEach]
-            simp_all [toVars, assertZero, var, circuit_norm, Operations.toFlat, FlatOperation.forAll]
+            simp_all [assertZero, circuit_norm, Operations.toFlat, FlatOperation.forAll]
 
 -- Extract Assumptions and Spec outside the circuit
 def Assumptions (n : ℕ) (input : fields n (F p)) : Prop :=
@@ -781,18 +781,15 @@ lemma completeness_two {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} 
   apply (AND.circuit order).completeness
   · exact h_local_witnesses
   · subst h_env
-    simp_all only [forall_eq', id_eq, Fin.isValue]
     rfl
   · simp only [Assumptions] at h_assumptions
     constructor
-    · simp only [ProvableType.eval_fieldPair]
-      have h_eval0 : env input_var[0] = input[0] :=
+    · have h_eval0 : env input_var[0] = input[0] :=
         by simp[h_env, circuit_norm]
       change IsBool (env input_var[0])
       rw [h_eval0]
       exact h_binary0
-    · simp only [ProvableType.eval_fieldPair]
-      have h_eval1 : env input_var[1] = input[1] :=
+    · have h_eval1 : env input_var[1] = input[1] :=
         by simp[h_env, circuit_norm]
       change IsBool (env input_var[1])
       rw [h_eval1]
@@ -883,7 +880,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (orde
       · trans (Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input1.map (·.val)) &&&
                Vector.foldl (fun x1 x2 => x1 &&& x2) 1 (input2.map (·.val)))
         · convert h_and_val using 1
-          simp only [ProvableType.eval_fieldPair, out1, out2]
+          simp only [out1, out2]
           simp only [h_val1, h_val2]
 
         have h_append : input1.cast (by omega : n1 = n1) ++ input2.cast (by omega : n2 = n2) =

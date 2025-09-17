@@ -121,7 +121,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
       | inl h0 =>
         -- When s = 0
         rw [h0]
-        simp only [mul_zero, add_zero, if_pos rfl, circuit_norm]
+        simp only [mul_zero, circuit_norm]
         norm_num
         rfl
       | inr h1 =>
@@ -136,12 +136,11 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     -- We need to show that the witnessed values equal the computed expressions
     ext i hi
     -- Left side: eval of varFromOffset
-    simp only [varFromOffset_vector, eval_vector, Vector.getElem_map, Vector.getElem_mapRange]
+    simp only [Vector.getElem_map, Vector.getElem_mapRange]
     -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
-    simp only [Expression.eval, mul_one]
+    simp only [Expression.eval]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
-    simp only [Fin.val_mk, mul_one] at h_env_i
     rw [h_env_i]
     norm_num
 
@@ -229,8 +228,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     rw [h_spec2]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
-    simp only [eval_vector, Vector.getElem_map, id_eq, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
-    rfl
+    simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]

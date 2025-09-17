@@ -57,8 +57,7 @@ lemma ext {x y : U32 (F p)}
     : x = y :=
   by match x, y with
   | ⟨ x0, x1, x2, x3 ⟩, ⟨ y0, y1, y2, y3 ⟩ =>
-    simp only [h0, h1, h2, h3] at *
-    simp only [h0, h1, h2, h3]
+    simp_all only
 
 /--
   A 32-bit unsigned integer is normalized if all its limbs are less than 256.
@@ -316,10 +315,10 @@ omit [Fact (Nat.Prime p)] p_large_enough in
 theorem normalized_iff {x : U32 (F p)} :
     x.Normalized ↔ ∀ i (_ : i < 4), x.toLimbs[i].val < 256 := by
   rcases x with ⟨ x0, x1, x2, x3 ⟩
-  simp only [toLimbs, Normalized, toElements, size, Vector.getElem_mk, List.getElem_toArray]
+  simp only [toLimbs, Normalized, toElements, Vector.getElem_mk, List.getElem_toArray]
   constructor
   · intro h i hi
-    repeat (rcases hi with _ | hi; try simp [*, size])
+    repeat (rcases hi with _ | hi; try simp [*])
   · intro h
     let h0 := h 0 (by decide)
     let h1 := h 1 (by decide)

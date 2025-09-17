@@ -151,7 +151,7 @@ end Circuit
 namespace FlatOperation
 lemma localLength_cons {F} {sentences : PropertySet F} {op : FlatOperation sentences} {ops : List (FlatOperation sentences)} :
     localLength (op :: ops) = op.singleLocalLength + localLength ops := by
-  cases op <;> simp +arith only [localLength, singleLocalLength, List.cons_append]
+  cases op <;> simp +arith only [localLength, singleLocalLength]
 
 lemma localLength_append {F} {sentences : PropertySet F} {a b: List (FlatOperation sentences)} :
     localLength (a ++ b) = localLength a + localLength b := by
@@ -200,7 +200,7 @@ lemma localLength_toFlat {sentences : PropertySet F} {ops : Operations sentences
     generalize ops.toFlat = flat_ops at *
     generalize Operations.localLength ops = n at *
     induction flat_ops using localLength.induct generalizing n with
-    | case1 => simp_all [localLength, add_comm, List.nil_append, right_eq_add, Subcircuit.localLength_eq]
+    | case1 => simp_all [localLength, add_comm, Subcircuit.localLength_eq]
     | case2 m' _ ops' ih' =>
       dsimp only [localLength, witness] at *
       specialize ih' (n - m') (by rw [←ih]; omega)
@@ -694,7 +694,7 @@ theorem proverEnvironment_usesLocalWitnesses {sentences : PropertySet F} {ops : 
     | assert | lookup | yield | use =>
       simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness, proverYields]
     | witness m compute =>
-      simp_all only [Condition.applyFlat, singleLocalLength, dynamicWitness, Environment.AgreesBelow]
+      simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
       -- get rid of ih first
       constructor; case right =>
         specialize ih (init ++ (compute (.fromList init)).toList)
