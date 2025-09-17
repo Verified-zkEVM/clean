@@ -155,7 +155,35 @@ def readFromMemory (memory : (F p) → (F p)) (memoryTable : Table (F p) fieldPa
     sorry
 
 
-def stateTransitionCircuit (program : (F p) → (F p)) (memory : (F p) → (F p))
+def checkStateTransition : FormalAssertion (F p) StateTransitionInput where
+  main := fun { state, nextState, decoded, memoryValues } => do
+    assertZero (decoded.instrType.isAdd * (memoryValues[2] - (memoryValues[0] + memoryValues[1])))
+
+    assertZero (decoded.instrType.isMul * (memoryValues[2] - (memoryValues[0] * memoryValues[1])))
+
+    assertZero (decoded.instrType.isStoreState * (memoryValues[0] - state.pc))
+    assertZero (decoded.instrType.isStoreState * (memoryValues[1] - state.ap))
+    assertZero (decoded.instrType.isStoreState * (memoryValues[2] - state.fp))
+
+    assertZero (decoded.instrType.isLoadState * (nextState.pc - memoryValues[0]))
+    assertZero (decoded.instrType.isLoadState * (nextState.ap - memoryValues[1]))
+    assertZero (decoded.instrType.isLoadState * (nextState.fp - memoryValues[2]))
+
+    assertZero ((1 - decoded.instrType.isLoadState) * (nextState.pc - (state.pc + 4)))
+    assertZero ((1 - decoded.instrType.isLoadState) * (nextState.ap - state.ap))
+    assertZero ((1 - decoded.instrType.isLoadState) * (nextState.fp - state.fp))
+
+  localLength _ := 0
+  Assumptions := sorry
+  Spec := sorry
+  soundness := by
+    sorry
+  completeness := by
+    sorry
+
+
+def femtoCairoStepCircuit
+    (program : (F p) → (F p)) (memory : (F p) → (F p))
     (len : ℕ) [NeZero len] (h_len : len < p) (state : Var State (F p)) :
     Circuit (F p) (Var State (F p)) := do
   let programTable := ReadOnlyTableFromFunction program len h_len
@@ -172,28 +200,15 @@ def stateTransitionCircuit (program : (F p) → (F p)) (memory : (F p) → (F p)
   let v2 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op2, mode := decoded.addr2 }
   let v3 ← subcircuit (readFromMemory memory memoryTable) { state, offset := op3, mode := decoded.addr3 }
 
-  -- check state transition
+  -- Witness the claimed next state
   let nextState : State _ ← ProvableType.witness fun eval => {
     pc := if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
     ap := if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap
     fp := if eval decoded.instrType.isLoadState = 1 then eval v3 else eval state.fp
   }
 
-  assertZero (decoded.instrType.isAdd * (v3 - (v1 + v2)))
-
-  assertZero (decoded.instrType.isMul * (v3 - (v1 * v2)))
-
-  assertZero (decoded.instrType.isStoreState * (v1 - state.pc))
-  assertZero (decoded.instrType.isStoreState * (v2 - state.ap))
-  assertZero (decoded.instrType.isStoreState * (v3 - state.fp))
-
-  assertZero (decoded.instrType.isLoadState * (nextState.pc - v1))
-  assertZero (decoded.instrType.isLoadState * (nextState.ap - v2))
-  assertZero (decoded.instrType.isLoadState * (nextState.fp - v3))
-
-  assertZero ((1 - decoded.instrType.isLoadState) * (nextState.pc - (state.pc + 4)))
-  assertZero ((1 - decoded.instrType.isLoadState) * (nextState.ap - state.ap))
-  assertZero ((1 - decoded.instrType.isLoadState) * (nextState.fp - state.fp))
+  -- Check state transition
+  assertion checkStateTransition { state, nextState, decoded, memoryValues := #v[v1, v2, v3] }
 
   return nextState
 

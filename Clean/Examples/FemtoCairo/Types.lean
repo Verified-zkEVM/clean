@@ -67,6 +67,15 @@ structure MemoryReadInput (F : Type) where
   offset : F
   mode : DecodedAddressingMode F
 
+/--
+  Input structure for checking the validity of a state transition.
+  Contains the current state, the next state, the decoded instruction, and the values read from memory.
+-/
+structure StateTransitionInput (F : Type) where
+  state : State F
+  nextState : State F
+  decoded : DecodedInstruction F
+  memoryValues : ProvableVector field 3 F
 
 
 
@@ -122,6 +131,14 @@ instance : ProvableStruct MemoryReadInput where
   toComponents := fun { state, offset, mode } => .cons state (.cons offset (.cons mode .nil))
   fromComponents := fun (.cons state (.cons offset (.cons mode .nil))) => {
     state, offset, mode
+  }
+
+instance : ProvableStruct StateTransitionInput where
+  components := [State, State, DecodedInstruction, ProvableVector field 3]
+  toComponents := fun { state, nextState, decoded, memoryValues } =>
+    .cons state (.cons nextState (.cons decoded (.cons memoryValues .nil)))
+  fromComponents := fun (.cons state (.cons nextState (.cons decoded (.cons memoryValues .nil)))) => {
+    state, nextState, decoded, memoryValues
   }
 
 
