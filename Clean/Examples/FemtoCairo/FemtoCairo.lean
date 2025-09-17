@@ -100,13 +100,14 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
 
   soundness := by
     circuit_proof_start
-    simp [Gadgets.toBits] at h_holds
+    simp only [id_eq, Gadgets.toBits, Nat.reducePow] at h_holds
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
 
-    simp [Gadgets.toBits, Spec.decodeInstruction]
+    simp only [id_eq, Gadgets.toBits, Nat.reducePow, Spec.decodeInstruction, Nat.add_eq_zero,
+      ZMod.val_eq_zero, mul_eq_zero, OfNat.ofNat_ne_zero, false_or]
 
     rw [Vector.ext_iff] at h_eq
-    simp at h_eq
+    simp only [Vector.getElem_map] at h_eq
     have h1 := h_eq 0 (by linarith)
     have h2 := h_eq 1 (by linarith)
     have h3 := h_eq 2 (by linarith)
@@ -115,8 +116,13 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     have h6 := h_eq 5 (by linarith)
     have h7 := h_eq 6 (by linarith)
     have h8 := h_eq 7 (by linarith)
-    simp [circuit_norm, explicit_provable_type]
-    simp [circuit_norm] at h1 h2 h3 h4 h5 h6 h7 h8
+    simp only [eval, fromElements, size, toVars, toElements, ↓ProvableType.varFromOffset_fields,
+      Vector.mapRange_succ, Vector.mapRange_zero, add_zero, Vector.push_mk, Nat.reduceAdd,
+      List.push_toArray, List.nil_append, List.cons_append, Vector.getElem_mk,
+      ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, Vector.map_mk,
+      List.map_toArray, List.map_cons, Expression.eval, neg_mul, one_mul, List.map_nil]
+    simp only [↓ProvableType.varFromOffset_fields, ↓Vector.getElem_mapRange, add_zero,
+      Expression.eval] at h1 h2 h3 h4 h5 h6 h7 h8
     rw [h1, h2, h3, h4, h5, h6, h7, h8]
 
 
@@ -134,30 +140,46 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     repeat
       cases' h_bits0 with h0 h0
       · cases' h_bits1 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
+          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
       · cases' h_bits1 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
+          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
 
     repeat
       cases' h_bits2 with h0 h0
       · cases' h_bits3 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
+          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
       · cases' h_bits3 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
+          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
 
     repeat
       cases' h_bits4 with h0 h0
       · cases' h_bits5 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
+          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
       · cases' h_bits5 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
+          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
 
     repeat
       cases' h_bits6 with h0 h0
       · cases' h_bits7 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
+          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
       · cases' h_bits7 with h1 h1
-        repeat simp [ZMod.val_one, h0, h1]
+        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
+          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
+          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
 
   completeness := by
     sorry
