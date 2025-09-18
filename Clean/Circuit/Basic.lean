@@ -122,6 +122,11 @@ def lookup {sentences : PropertySet F} {Row : TypeMap} [ProvableType Row] (table
 def use {sentences : PropertySet F} (s : Sentence sentences (Expression F)) : Circuit sentences Unit := fun _ =>
   ((), [.use s])
 
+/-- Yield a sentence for use by other circuits. -/
+@[circuit_norm]
+def yield {sentences : PropertySet F} (s : Sentence sentences (Expression F)) : Circuit sentences Unit := fun _ =>
+  ((), [.yield s])
+
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
