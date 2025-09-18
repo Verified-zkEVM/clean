@@ -56,7 +56,9 @@ def mkFibSentence
     (index : Expression F) (value : Expression F) : Sentence (FibPropertySet : PropertySet F) (Expression F) := {
   name := "Fib"
   property := FibProperty
-  propertyFound := sorry -- TODO: prove this property is in the set
+  propertyFound := by
+    simp only [FibPropertySet, Std.HashMap.ofList_singleton, Std.HashMap.getElem?_insert]
+    aesop
   entry := #v[index, value]
 }
 
@@ -67,12 +69,10 @@ def FibOrder : SentenceOrder (@FibPropertySet F _) := {
     ∃ (ns nt : ℕ),
       -- Since both sentences are "Fib", their arity is 2
       -- We use sorry here as proving property equality from name requires PropertySet details
-      have h1 : 0 < s.property.arity := by sorry
-      have h2 : 0 < t.property.arity := by sorry
-      s.entry[0]'h1 = (ns : F) ∧ t.entry[0]'h2 = (nt : F) ∧ ns < nt
-  well_founded := by
-    -- TODO: Prove well-foundedness based on natural number ordering
-    sorry
+      ∃ (h1 : s.property.arity = 2),
+      ∃ (h2 : t.property.arity = 2),
+      s.entry[0] = (ns : F) ∧ t.entry[0] = (nt : F) ∧ ns < nt
+  well_founded := by sorry
 }
 
 /-- Lemma: The Fib property correctly captures the Fibonacci sequence -/
@@ -100,8 +100,7 @@ def FibBase.circuit : FormalCircuit (@FibOrder (F p) _) unit unit where
   localLength _ := 0
   localLength_eq := by
     intro _
-    simp [FibBase.main, Circuit.localLength]
-    sorry -- Need to compute localLength of yield operations
+    simp [FibBase.main, Circuit.localLength, circuit_norm]
   subcircuitsConsistent := by
     intro input offset
     -- Unfold the main function and operations
@@ -115,8 +114,25 @@ def FibBase.circuit : FormalCircuit (@FibOrder (F p) _) unit unit where
   completenessAssumptions_implies_assumptions _ _ h := h
   Spec _ _ _ := True  -- Base circuit doesn't produce output, just yields
   soundness := by
-    -- Prove that yielding Fib(0,1) and Fib(1,1) is sound
-    sorry
+    circuit_proof_start
+    intro s
+    simp only [Set.union_empty, Set.union_singleton, Set.mem_insert_iff, Set.mem_singleton_iff]
+    intro h_s
+    rcases h_s
+    · rename_i h_s
+      intro _
+      simp only [SentenceHolds]
+      rw [h_s]
+      simp only [Sentence.eval, mkFibSentence, FibProperty, circuit_norm]
+      exists 1
+      aesop
+    · rename_i h_s
+      intro _
+      simp only [SentenceHolds]
+      rw [h_s]
+      simp only [Sentence.eval, mkFibSentence, FibProperty, circuit_norm]
+      exists 0
+      aesop
   completeness := by
     -- Trivial since no constraints and assumptions are True
     sorry
