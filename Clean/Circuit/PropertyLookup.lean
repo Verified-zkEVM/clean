@@ -105,12 +105,15 @@ def AllDependenciesChecked {F : Type} {s : PropertySet F} (order : SentenceOrder
 
  * (done) Add yielded argument next to Environment
  * (done) Add CheckedYields argument to Spec's used during the soundness proof
-   + In Soundness, Spec needs to take sentances and checked
- * Add `yield` operation
+   + (done) In Soundness, Spec needs to take sentences and checked
+ * (done) Add `yield` operation
    + `yield` is similar to `witness` (for completeness, `yield` makes sure that the yielded tuple is in `YieldContext`.)
- * Change Soundness statement so that `yield` validity becomes a goal according to the above rule
- * Add `use` operation
+ * (done) Change Soundness statement so that `yield` validity becomes a goal according to the above rule
+ * (done) Add `use` operation
    + `use` is similar to `lookup`
    + `use` constraint guarantees properties if it's in the current `CheckedYield`
+ * Add an example
+ * Adjust `FormalAssertion` about `use` and `yield` (similarly to `FormalCircuit` and `GeneralFormalCircuit`)
+ * remove `sorry`s that have been introduced
 
 -/
