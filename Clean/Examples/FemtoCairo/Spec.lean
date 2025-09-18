@@ -100,14 +100,18 @@ def femtoCairoMachineTransition
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (state : State (F p)) : Option (State (F p)) := do
-  -- read and decode the current instruction
+  -- fetch instruction
   let { rawInstrType, op1, op2, op3 } ← fetchInstruction program state.pc
+
+  -- decode instruction
   let (instr_type, addr1, addr2, addr3) ← decodeInstruction rawInstrType
 
+  -- perform relevant memory accesses
   let v1 ← dataMemoryAccess memory op1 addr1 state.ap state.fp
   let v2 ← dataMemoryAccess memory op2 addr2 state.ap state.fp
   let v3 ← dataMemoryAccess memory op3 addr3 state.ap state.fp
 
+  -- return the next state
   computeNextState instr_type v1 v2 v3 state
 
 /--

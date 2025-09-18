@@ -259,7 +259,6 @@ def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode 
   else if mode.isFpRelative = 1 then 2
   else 3
 
-
 def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
   (mode.isDoubleAddressing = 1 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 1 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
@@ -306,24 +305,41 @@ def readFromMemory
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
 
-    simp [explicit_provable_type, circuit_norm] at h_holds h_input
-    simp [h_input] at h_holds
-    simp
+    simp only [Fin.ofNat_eq_cast, id_eq, eval, fromElements, size, toVars, toElements,
+      Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+      ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
+      DecodedAddressingMode.mk.injEq] at h_holds h_input
+    simp only [h_input] at h_holds
+    simp only [Option.bind_eq_bind, id_eq]
 
+    -- does the memory accesses return some or none?
     split
+
     -- the lookups imply that the memory accesses are valid, therefore
     -- here we prove that Spec.memoryAccess never returns none
     case h_2 x h_eq =>
-      sorry
+      simp only [and_assoc] at h_holds
+      obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4', h_final_constraint ⟩ := h_holds
 
-    simp only [and_assoc] at h_holds
-    obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4', h_final_constraint ⟩ := h_holds
+      split at h_eq
+      · have h1'' := h1'
+        simp_all only [gt_iff_lt, ite_eq_left_iff, ↓reduceDIte, Option.bind_some, dite_eq_right_iff,
+          reduceCtorEq, imp_false, not_lt]
+        have contradiction := Nat.not_le_of_lt h2'
+        rw [←Fin.mk_val (@Nat.cast (Fin memorySize) (Fin.NatCast.instNatCast memorySize) (ZMod.val (ap + input_offset)))] at contradiction
+        simp_all only [Fin.val_natCast, Nat.mod_eq_of_lt h1'', not_true_eq_false]
+      · simp_all only [gt_iff_lt, ↓reduceDIte, reduceCtorEq]
+      · simp_all only [gt_iff_lt, ↓reduceDIte, reduceCtorEq]
+      · simp_all only [gt_iff_lt, reduceCtorEq]
 
+    -- handle the case where all memory accesses are valid
     case h_1 rawInstrType _ _ value h_eq =>
+      simp only [and_assoc] at h_holds
+      obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4', h_final_constraint ⟩ := h_holds
 
       -- by cases on the addressing mode, the proof for each case is pretty simple
       rcases h_assumptions with isDoubleAddressing_cases | isApRelative_cases | isFpRelative_cases | isImmediate_cases
-      · simp_all only [gt_iff_lt, ↓reduceDIte, Option.bind_some, one_mul, zero_mul, add_zero,
+      · simp_all [gt_iff_lt, ↓reduceDIte, Option.bind_some, one_mul, zero_mul, add_zero,
         ↓reduceIte, Option.dite_none_right_eq_some, Option.some.injEq]
         obtain ⟨h, h_eq⟩ := h_eq
         rw [← h_eq]
