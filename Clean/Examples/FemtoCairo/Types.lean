@@ -74,7 +74,9 @@ structure MemoryReadInput (F : Type) where
 structure StateTransitionInput (F : Type) where
   state : State F
   decoded : DecodedInstruction F
-  memoryValues : ProvableVector field 3 F
+  v1 : F
+  v2 : F
+  v3 : F
 
 
 
@@ -133,12 +135,16 @@ instance : ProvableStruct MemoryReadInput where
   }
 
 instance : ProvableStruct StateTransitionInput where
-  components := [State, DecodedInstruction, ProvableVector field 3]
-  toComponents := fun { state, decoded, memoryValues } =>
-    .cons state (.cons decoded (.cons memoryValues .nil))
-  fromComponents := fun (.cons state (.cons decoded (.cons memoryValues .nil))) => {
-    state, decoded, memoryValues
+  components := [State, DecodedInstruction, field, field, field]
+  toComponents := fun { state, decoded, v1, v2, v3 } =>
+    .cons state (.cons decoded (.cons v1 (.cons v2 (.cons v3 .nil))))
+  fromComponents := fun (.cons state (.cons decoded (.cons v1 (.cons v2 (.cons v3 .nil))))) => {
+    state, decoded, v1, v2, v3
   }
+
+@[ext]
+lemma State.ext {F : Type} {s1 s2 : State F} (h1 : s1.pc = s2.pc) (h2 : s1.ap = s2.ap) (h3 : s1.fp = s2.fp) : s1 = s2 := by
+  cases s1; cases s2; simp_all only
 
 
 end Examples.FemtoCairo.Types
