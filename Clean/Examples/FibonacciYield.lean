@@ -46,14 +46,14 @@ def FibProperty : Property F := {
 def FibPropertySet : PropertySet F := {
   properties := Std.HashMap.ofList [("Fib", FibProperty)]
   NameConsistency := by
-    intro name p h
-    -- If p is found with key "name", then p.name = name
-    sorry -- TODO: complete this proof
+    intro _ _
+    simp only [Std.HashMap.ofList_singleton, Std.HashMap.getElem?_insert]
+    aesop
 }
 
 /-- Helper function to create a Fibonacci sentence -/
-def mkFibSentence (sentences : PropertySet F)
-    (index : Expression F) (value : Expression F) : Sentence sentences (Expression F) := {
+def mkFibSentence
+    (index : Expression F) (value : Expression F) : Sentence (FibPropertySet : PropertySet F) (Expression F) := {
   name := "Fib"
   property := FibProperty
   propertyFound := sorry -- TODO: prove this property is in the set
@@ -88,10 +88,10 @@ variable {p : ℕ} [Fact p.Prime]
 /-- Base circuit that yields Fib(0,1) and Fib(1,1) -/
 def FibBase.main (_input : Var unit (F p)) : Circuit (@FibPropertySet (F p) _) (Var unit (F p)) := do
   -- Yield Fib 0 1 (0th Fibonacci number is 1)
-  Circuit.yield (mkFibSentence (@FibPropertySet (F p) _) 0 1)
+  Circuit.yield (mkFibSentence 0 1)
 
   -- Yield Fib 1 1 (1st Fibonacci number is 1)
-  Circuit.yield (mkFibSentence (@FibPropertySet (F p) _) 1 1)
+  Circuit.yield (mkFibSentence 1 1)
 
   return ()
 
@@ -124,13 +124,13 @@ def FibBase.circuit : FormalCircuit (@FibOrder (F p) _) unit unit where
 /-- Step circuit parameterized by n, a, b that uses Fib(n,a) and Fib(n+1,b) and yields Fib(n+2,a+b) -/
 def FibStep.main (n a b : F p) (_input : Var unit (F p)) : Circuit (@FibPropertySet (F p) _) (Var unit (F p)) := do
   -- Use Fib n a (assert that Fib(n) = a is available)
-  use (mkFibSentence (@FibPropertySet (F p) _) n a)
+  use (mkFibSentence n a)
 
   -- Use Fib (n+1) b (assert that Fib(n+1) = b is available)
-  use (mkFibSentence (@FibPropertySet (F p) _) (n + 1) b)
+  use (mkFibSentence (n + 1) b)
 
   -- Yield Fib (n+2) (a+b)
-  Circuit.yield (mkFibSentence (@FibPropertySet (F p) _) (n + 2) (a + b))
+  Circuit.yield (mkFibSentence (n + 2) (a + b))
 
   return ()
 
@@ -159,7 +159,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
     (∃ k : ℕ, k + 2 < p ∧ n = (k : F p) ∧
               a = fib k ∧
               b = fib (k + 1)) ∧
-    let mkSent := @mkFibSentence (F p) _ (@FibPropertySet (F p) _)
+    let mkSent := @mkFibSentence (F p) _
     let env : Environment (F p) := Environment.mk (fun _ => 0)
     (mkSent n a).eval env ∈ yields.yielded ∧
     (mkSent (n + 1) b).eval env ∈ yields.yielded
