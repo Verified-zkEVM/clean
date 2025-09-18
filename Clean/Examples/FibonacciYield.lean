@@ -133,9 +133,7 @@ def FibBase.circuit : FormalCircuit (@FibOrder (F p) _) unit unit where
       simp only [Sentence.eval, mkFibSentence, FibProperty, circuit_norm]
       exists 0
       aesop
-  completeness := by
-    -- Trivial since no constraints and assumptions are True
-    sorry
+  completeness := by circuit_proof_start
 
 /-- Step circuit parameterized by n, a, b that uses Fib(n,a) and Fib(n+1,b) and yields Fib(n+2,a+b) -/
 def FibStep.main (n a b : F p) (_input : Var unit (F p)) : Circuit (@FibPropertySet (F p) _) (Var unit (F p)) := do
@@ -215,8 +213,22 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
       List.getElem_cons_succ, circuit_norm]
     aesop
   completeness := by
-    -- Given completeness assumptions, show constraints can be satisfied
-    sorry
+    circuit_proof_start
+    rcases h_assumptions with ⟨ h_k, h_assumptions ⟩
+    rcases h_k with ⟨ k, h_k ⟩
+    and_intros
+    · simp only [Sentence.eval, circuit_norm, mkFibSentence] at ⊢ h_assumptions
+      aesop
+    · intro _
+      simp only [Sentence.eval, circuit_norm, mkFibSentence, SentenceHolds, FibProperty] at ⊢
+      exists k
+      aesop
+    · simp only [Sentence.eval, circuit_norm, mkFibSentence] at ⊢ h_assumptions
+      aesop
+    · intro _
+      simp only [Sentence.eval, circuit_norm, mkFibSentence, SentenceHolds, FibProperty] at ⊢
+      exists k + 1
+      aesop
 
 /-- Example: Compose circuits to compute Fibonacci sequence up to index 4 -/
 def computeFibUpTo4 : GeneralFormalCircuit (@FibOrder (F p) _) unit unit := by
