@@ -217,7 +217,20 @@ def fetchInstructionCircuit
     -- the lookups imply that the memory accesses are valid, therefore
     -- here we prove that Spec.memoryAccess never returns none
     case h_2 x h_eq =>
-      sorry
+      -- does reading the type return some or none?
+      split at h_eq
+      · -- does reading op1 return some or none?
+        split at h_eq
+        · -- does reading op2 return some or none?
+          split at h_eq
+          · -- does reading op3 return some or none?
+            split at h_eq
+            · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_true, Option.bind_eq_bind,
+              Option.bind_some, reduceCtorEq]
+            · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_false]
+          · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_false, false_and]
+        · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_false, false_and]
+      · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_false, false_and]
 
     case h_1 rawInstrType op1 op2 op3 h_eq =>
       simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, ↓reduceDIte, Option.bind_eq_bind,
@@ -233,11 +246,9 @@ def fetchInstructionCircuit
 
       (repeat' constructor) <;>
       · congr
-        apply_fun Fin.val
-        · simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1',
-            Nat.mod_eq_of_lt h2', Nat.mod_eq_of_lt h3', Nat.mod_eq_of_lt h4']
-        · exact Fin.val_injective
-
+        rw [←Fin.val_eq_val]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1',
+          Nat.mod_eq_of_lt h2', Nat.mod_eq_of_lt h3', Nat.mod_eq_of_lt h4']
 
   completeness := by
     sorry
