@@ -69,7 +69,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    simp only []
+    simp only
     rw [ProvableStruct.eval_eq_eval]
     simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
@@ -82,7 +82,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   completeness := by
     intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-    simp
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
