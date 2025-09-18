@@ -383,25 +383,25 @@ def readFromMemory
     sorry
 
 def nextState : FormalCircuit (F p) StateTransitionInput State where
-  main := fun { state, decoded, memoryValues } => do
+  main := fun { state, decoded, v1, v2, v3 } => do
     -- Witness the claimed next state
     let nextState : State _ ← ProvableType.witness fun eval => {
-      pc := if eval decoded.instrType.isLoadState = 1 then eval memoryValues[0] else eval state.pc + 4
-      ap := if eval decoded.instrType.isLoadState = 1 then eval memoryValues[1] else eval state.ap
-      fp := if eval decoded.instrType.isLoadState = 1 then eval memoryValues[2] else eval state.fp
+      pc := if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
+      ap := if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap
+      fp := if eval decoded.instrType.isLoadState = 1 then eval v3 else eval state.fp
     }
 
-    assertZero (decoded.instrType.isAdd * (memoryValues[2] - (memoryValues[0] + memoryValues[1])))
+    assertZero (decoded.instrType.isAdd * (v3 - (v1 + v2)))
 
-    assertZero (decoded.instrType.isMul * (memoryValues[2] - (memoryValues[0] * memoryValues[1])))
+    assertZero (decoded.instrType.isMul * (v3 - (v1 * v2)))
 
-    assertZero (decoded.instrType.isStoreState * (memoryValues[0] - state.pc))
-    assertZero (decoded.instrType.isStoreState * (memoryValues[1] - state.ap))
-    assertZero (decoded.instrType.isStoreState * (memoryValues[2] - state.fp))
+    assertZero (decoded.instrType.isStoreState * (v1 - state.pc))
+    assertZero (decoded.instrType.isStoreState * (v2 - state.ap))
+    assertZero (decoded.instrType.isStoreState * (v3 - state.fp))
 
-    assertZero (decoded.instrType.isLoadState * (nextState.pc - memoryValues[0]))
-    assertZero (decoded.instrType.isLoadState * (nextState.ap - memoryValues[1]))
-    assertZero (decoded.instrType.isLoadState * (nextState.fp - memoryValues[2]))
+    assertZero (decoded.instrType.isLoadState * (nextState.pc - v1))
+    assertZero (decoded.instrType.isLoadState * (nextState.ap - v2))
+    assertZero (decoded.instrType.isLoadState * (nextState.fp - v3))
 
     assertZero ((1 - decoded.instrType.isLoadState) * (nextState.pc - (state.pc + 4)))
     assertZero ((1 - decoded.instrType.isLoadState) * (nextState.ap - state.ap))
@@ -410,15 +410,52 @@ def nextState : FormalCircuit (F p) StateTransitionInput State where
     return nextState
 
   localLength _ := 3
-  Assumptions | {state, decoded, memoryValues} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
+  Assumptions | {state, decoded, v1, v2, v3} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
   Spec
-  | {state, decoded, memoryValues}, output =>
-    match Spec.computeNextState (DecodedInstructionType.val decoded.instrType)
-        memoryValues[0] memoryValues[1] memoryValues[2] state with
+  | {state, decoded, v1, v2, v3}, output =>
+    match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
       | some nextState => output = nextState
       | none => False -- impossible, constraints ensure that the transition is valid
   soundness := by
-    sorry
+    circuit_proof_start [DecodedInstructionType.isEncodedCorrectly, Spec.computeNextState, DecodedInstructionType.val]
+
+    -- unpack the decoded instruction type
+    obtain ⟨isAdd, isMul, isStoreState, isLoadState⟩ := input_decoded_instrType
+    obtain ⟨pc, ap, fp⟩ := input_state
+
+    obtain ⟨h_input_state, h_input_decoded, h_input_memoryValues⟩ := h_input
+    simp [circuit_norm, explicit_provable_type] at h_input_decoded h_input_state h_holds ⊢
+
+    obtain ⟨h_input_decoded_isAdd, h_input_decoded_isMul, h_input_decoded_isStoreState, h_input_decoded_isLoadState⟩ := h_input_decoded
+    obtain ⟨h_input_state_pc, h_input_state_ap, h_input_state_fp⟩ := h_input_state
+
+    rw [h_input_state_pc, h_input_state_ap, h_input_state_fp] at h_holds
+
+    obtain ⟨c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10⟩ := h_holds
+
+    simp_all only [gt_iff_lt]
+
+    -- give names to the next state for readability
+    set pc_next := env.get i₀
+    set ap_next := env.get (i₀ + 1)
+    set fp_next := env.get (i₀ + 2)
+
+    -- case analysis on the instruction type
+    rcases h_assumptions with isAdd_cases | isMul_cases | isStoreState_cases | isLoadState_cases
+    · simp_all only [one_ne_zero, false_or, true_or, neg_zero, add_zero, ↓reduceIte]
+      rw [add_eq_zero_iff_eq_neg] at c0 c8 c9 c10
+      -- does the transition return some or none for the ADD case?
+      split
+      case h_1 nextState h_eq =>
+        simp_all only [Option.ite_none_right_eq_some, Option.some.injEq]
+        rw [←h_eq.right]
+        congr
+        repeat ring
+      case h_2 h_eq =>
+        simp_all only [neg_add_rev, neg_neg, ↓reduceIte, reduceCtorEq]
+    · sorry
+    · sorry
+    · sorry
   completeness := by
     sorry
 
@@ -441,6 +478,6 @@ def femtoCairoStepCircuit
   let v3 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
   -- Compute next state
-  nextState { state, decoded, memoryValues := #v[v1, v2, v3] }
+  nextState { state, decoded, v1, v2, v3 }
 
 end Examples.FemtoCairo
