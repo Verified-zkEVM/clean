@@ -34,6 +34,18 @@ def memoryAccess {n : ℕ} [NeZero n] (memory : Fin n → F p) (addr : F p) : Op
     none
 
 /--
+  Fetch an instruction from the program memory at the given program counter (pc).
+-/
+def fetchInstruction
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    (pc : (F p)) : Option (RawInstruction (F p)) := do
+  let type ← memoryAccess program pc
+  let op1 ← memoryAccess program (pc + 1)
+  let op2 ← memoryAccess program (pc + 2)
+  let op3 ← memoryAccess program (pc + 3)
+  some { rawInstrType := type, op1, op2, op3 }
+
+/--
   Perform a memory access based on the addressing mode.
 -/
 def dataMemoryAccess
@@ -89,12 +101,8 @@ def femtoCairoMachineTransition
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (state : State (F p)) : Option (State (F p)) := do
   -- read and decode the current instruction
-  let instruction ← memoryAccess program state.pc
-  let (instr_type, addr1, addr2, addr3) ← decodeInstruction instruction
-
-  let op1 ← memoryAccess program (state.pc + 1)
-  let op2 ← memoryAccess program (state.pc + 2)
-  let op3 ← memoryAccess program (state.pc + 3)
+  let { rawInstrType, op1, op2, op3 } ← fetchInstruction program state.pc
+  let (instr_type, addr1, addr2, addr3) ← decodeInstruction rawInstrType
 
   let v1 ← dataMemoryAccess memory op1 addr1 state.ap state.fp
   let v2 ← dataMemoryAccess memory op2 addr2 state.ap state.fp
