@@ -259,6 +259,13 @@ def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode 
   else if mode.isFpRelative = 1 then 2
   else 3
 
+
+def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
+  (mode.isDoubleAddressing = 1 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 1 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 1)
+
 def readFromMemory
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalCircuit (F p) MemoryReadInput field where
@@ -285,14 +292,15 @@ def readFromMemory
     return value
 
   localLength _ := 5
-  Assumptions := sorry
+  Assumptions | {state, mode, offset} => DecodedAddressingMode.isEncodedCorrectly mode
   Spec
   | {state, offset, mode}, output =>
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
   soundness := by
-    circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess, Spec.memoryAccess, DecodedAddressingMode.val]
+    circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
+      Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly]
 
     -- circuit_proof_start did not unpack those, so we manually unpack here
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
@@ -308,8 +316,39 @@ def readFromMemory
     case h_2 x h_eq =>
       sorry
 
+    simp only [and_assoc] at h_holds
+    obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4', h_final_constraint ⟩ := h_holds
+
     case h_1 rawInstrType _ _ value h_eq =>
-      sorry
+
+      -- by cases on the addressing mode, the proof for each case is pretty simple
+      rcases h_assumptions with isDoubleAddressing_cases | isApRelative_cases | isFpRelative_cases | isImmediate_cases
+      · simp_all only [gt_iff_lt, ↓reduceDIte, Option.bind_some, one_mul, zero_mul, add_zero,
+        ↓reduceIte, Option.dite_none_right_eq_some, Option.some.injEq]
+        obtain ⟨h, h_eq⟩ := h_eq
+        rw [← h_eq]
+        -- first addressing
+        congr
+        rw [←Fin.val_eq_val]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h2']
+        -- second addressing
+        congr
+        rw [←Fin.val_eq_val]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1']
+      · simp_all only [gt_iff_lt, ↓reduceDIte, Option.bind_some, zero_mul, one_mul, zero_add,
+        add_zero, zero_ne_one, ↓reduceIte, Option.some.injEq]
+        rw [← h_eq]
+        congr
+        rw [←Fin.val_eq_val]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h3']
+      · simp_all only [gt_iff_lt, ↓reduceDIte, Option.bind_some, zero_mul, add_zero, one_mul,
+        zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
+        rw [← h_eq]
+        congr
+        rw [←Fin.val_eq_val]
+        simp only [Fin.val_natCast, Nat.mod_eq_of_lt h4']
+      · simp_all only [gt_iff_lt, ↓reduceDIte, Option.bind_some, zero_mul, add_zero, one_mul,
+        zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
 
   completeness := by
     sorry
