@@ -286,9 +286,15 @@ def readFromMemory
   completeness := by
     sorry
 
+def nextState : FormalCircuit (F p) StateTransitionInput State where
+  main := fun { state, decoded, memoryValues } => do
+    -- Witness the claimed next state
+    let nextState : State _ ← ProvableType.witness fun eval => {
+      pc := if eval decoded.instrType.isLoadState = 1 then eval memoryValues[0] else eval state.pc + 4
+      ap := if eval decoded.instrType.isLoadState = 1 then eval memoryValues[1] else eval state.ap
+      fp := if eval decoded.instrType.isLoadState = 1 then eval memoryValues[2] else eval state.fp
+    }
 
-def checkStateTransition : FormalAssertion (F p) StateTransitionInput where
-  main := fun { state, nextState, decoded, memoryValues } => do
     assertZero (decoded.instrType.isAdd * (memoryValues[2] - (memoryValues[0] + memoryValues[1])))
 
     assertZero (decoded.instrType.isMul * (memoryValues[2] - (memoryValues[0] * memoryValues[1])))
@@ -305,7 +311,9 @@ def checkStateTransition : FormalAssertion (F p) StateTransitionInput where
     assertZero ((1 - decoded.instrType.isLoadState) * (nextState.ap - state.ap))
     assertZero ((1 - decoded.instrType.isLoadState) * (nextState.fp - state.fp))
 
-  localLength _ := 0
+    return nextState
+
+  localLength _ := 3
   Assumptions := sorry
   Spec := sorry
   soundness := by
@@ -331,16 +339,7 @@ def femtoCairoStepCircuit
   let v2 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
   let v3 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
-  -- Witness the claimed next state
-  let nextState : State _ ← ProvableType.witness fun eval => {
-    pc := if eval decoded.instrType.isLoadState = 1 then eval v1 else eval state.pc + 4
-    ap := if eval decoded.instrType.isLoadState = 1 then eval v2 else eval state.ap
-    fp := if eval decoded.instrType.isLoadState = 1 then eval v3 else eval state.fp
-  }
-
-  -- Check state transition
-  assertion checkStateTransition { state, nextState, decoded, memoryValues := #v[v1, v2, v3] }
-
-  return nextState
+  -- Compute next state
+  nextState { state, decoded, memoryValues := #v[v1, v2, v3] }
 
 end Examples.FemtoCairo
