@@ -98,7 +98,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
       (output.addr3.isApRelative = if addr3 = 1 then 1 else 0) ∧
       (output.addr3.isFpRelative = if addr3 = 2 then 1 else 0) ∧
       (output.addr3.isImmediate = if addr3 = 3 then 1 else 0)
-    | none => False
+    | none => False -- impossible, constraints ensure that input < 256
 
   soundness := by
     circuit_proof_start
@@ -109,6 +109,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
 
     simp only [Spec.decodeInstruction, ge_iff_le, id_eq, Gadgets.toBits, Nat.reducePow]
     split
+
+    -- the bit decomposition also implies that the input is < 256
+    -- therefore, Spec.decodeInstruction never returns none
     case h_2 => simp_all only [gt_iff_lt, id_eq, not_le, ite_eq_left_iff, reduceCtorEq, imp_false,
       not_true_eq_false]
     case _ x instr_type addr1 addr2 addr3 h_eq =>
@@ -178,7 +181,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
   completeness := by
     sorry
 
-def fetchInstruction
+def fetchInstructionCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     FormalCircuit (F p) field RawInstruction where
   main := fun pc => do
@@ -198,9 +201,44 @@ def fetchInstruction
 
   localLength _ := 4
   Assumptions := sorry
-  Spec := sorry
+  Spec
+  | pc, output =>
+    match Spec.fetchInstruction program pc with
+      | some { rawInstrType, op1, op2, op3 } =>
+          output.rawInstrType = rawInstrType ∧
+          output.op1 = op1 ∧
+          output.op2 = op2 ∧
+          output.op3 = op3
+      | none => False -- impossible, constraints ensure that memory accesses are valid
   soundness := by
-    sorry
+    circuit_proof_start [ReadOnlyTableFromFunction, Spec.fetchInstruction, Spec.memoryAccess]
+    split
+
+    -- the lookups imply that the memory accesses are valid, therefore
+    -- here we prove that Spec.memoryAccess never returns none
+    case h_2 x h_eq =>
+      sorry
+
+    case h_1 rawInstrType op1 op2 op3 h_eq =>
+      simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, ↓reduceDIte, Option.bind_eq_bind,
+        Option.bind_some, Option.some.injEq, RawInstruction.mk.injEq, eval, fromElements, size,
+        toVars, toElements, Vector.map_mk, List.map_toArray, List.map_cons, Expression.eval,
+        List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray, ↓List.getElem_cons_zero,
+        ↓List.getElem_cons_succ]
+      obtain ⟨ h_eq_type, h_eq_op1, h_eq_op2, h_eq_op3 ⟩ := h_eq
+      rw [←h_eq_type, ←h_eq_op1, ←h_eq_op2, ←h_eq_op3]
+
+      simp only [and_assoc] at h_holds
+      obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4' ⟩ := h_holds
+
+      (repeat' constructor) <;>
+      · congr
+        apply_fun Fin.val
+        · simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1',
+            Nat.mod_eq_of_lt h2', Nat.mod_eq_of_lt h3', Nat.mod_eq_of_lt h4']
+        · exact Fin.val_injective
+
+
   completeness := by
     sorry
 
@@ -272,7 +310,7 @@ def femtoCairoStepCircuit
     Circuit (F p) (Var State (F p)) := do
 
   -- Fetch instruction
-  let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstruction program h_programSize) state.pc
+  let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstructionCircuit program h_programSize) state.pc
 
   -- Decode instruction
   let decoded ← subcircuit decodeInstructionCircuit rawInstrType
