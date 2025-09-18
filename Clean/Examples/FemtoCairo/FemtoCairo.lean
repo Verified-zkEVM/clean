@@ -78,109 +78,102 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
 
   Spec
   | instruction, output =>
-    let (instr_type, addr1, addr2, addr3) := Spec.decodeInstruction instruction
-    (output.instrType.isAdd = if instr_type = 0 then 1 else 0) ∧
-    (output.instrType.isMul = if instr_type = 1 then 1 else 0) ∧
-    (output.instrType.isStoreState = if instr_type = 2 then 1 else 0) ∧
-    (output.instrType.isLoadState = if instr_type = 3 then 1 else 0) ∧
+    match Spec.decodeInstruction instruction with
+    | some (instr_type, addr1, addr2, addr3) =>
+      (output.instrType.isAdd = if instr_type = 0 then 1 else 0) ∧
+      (output.instrType.isMul = if instr_type = 1 then 1 else 0) ∧
+      (output.instrType.isStoreState = if instr_type = 2 then 1 else 0) ∧
+      (output.instrType.isLoadState = if instr_type = 3 then 1 else 0) ∧
+      (output.addr1.isDoubleAddressing = if addr1 = 0 then 1 else 0) ∧
+      (output.addr1.isApRelative = if addr1 = 1 then 1 else 0) ∧
+      (output.addr1.isFpRelative = if addr1 = 2 then 1 else 0) ∧
+      (output.addr1.isImmediate = if addr1 = 3 then 1 else 0) ∧
 
-    (output.addr1.isDoubleAddressing = if addr1 = 0 then 1 else 0) ∧
-    (output.addr1.isApRelative = if addr1 = 1 then 1 else 0) ∧
-    (output.addr1.isFpRelative = if addr1 = 2 then 1 else 0) ∧
-    (output.addr1.isImmediate = if addr1 = 3 then 1 else 0) ∧
+      (output.addr2.isDoubleAddressing = if addr2 = 0 then 1 else 0) ∧
+      (output.addr2.isApRelative = if addr2 = 1 then 1 else 0) ∧
+      (output.addr2.isFpRelative = if addr2 = 2 then 1 else 0) ∧
+      (output.addr2.isImmediate = if addr2 = 3 then 1 else 0) ∧
 
-    (output.addr2.isDoubleAddressing = if addr2 = 0 then 1 else 0) ∧
-    (output.addr2.isApRelative = if addr2 = 1 then 1 else 0) ∧
-    (output.addr2.isFpRelative = if addr2 = 2 then 1 else 0) ∧
-    (output.addr2.isImmediate = if addr2 = 3 then 1 else 0) ∧
-
-    (output.addr3.isDoubleAddressing = if addr3 = 0 then 1 else 0) ∧
-    (output.addr3.isApRelative = if addr3 = 1 then 1 else 0) ∧
-    (output.addr3.isFpRelative = if addr3 = 2 then 1 else 0) ∧
-    (output.addr3.isImmediate = if addr3 = 3 then 1 else 0)
+      (output.addr3.isDoubleAddressing = if addr3 = 0 then 1 else 0) ∧
+      (output.addr3.isApRelative = if addr3 = 1 then 1 else 0) ∧
+      (output.addr3.isFpRelative = if addr3 = 2 then 1 else 0) ∧
+      (output.addr3.isImmediate = if addr3 = 3 then 1 else 0)
+    | none => False
 
   soundness := by
     circuit_proof_start
     simp only [id_eq, Gadgets.toBits, Nat.reducePow] at h_holds
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
 
-    simp only [id_eq, Gadgets.toBits, Nat.reducePow, Spec.decodeInstruction, Nat.add_eq_zero,
-      ZMod.val_eq_zero, mul_eq_zero, OfNat.ofNat_ne_zero, false_or]
+    have h : ¬ 256 ≤ input.val := by linarith
 
-    rw [Vector.ext_iff] at h_eq
-    simp only [Vector.getElem_map] at h_eq
-    have h1 := h_eq 0 (by linarith)
-    have h2 := h_eq 1 (by linarith)
-    have h3 := h_eq 2 (by linarith)
-    have h4 := h_eq 3 (by linarith)
-    have h5 := h_eq 4 (by linarith)
-    have h6 := h_eq 5 (by linarith)
-    have h7 := h_eq 6 (by linarith)
-    have h8 := h_eq 7 (by linarith)
-    simp only [eval, fromElements, size, toVars, toElements, ↓ProvableType.varFromOffset_fields,
-      Vector.mapRange_succ, Vector.mapRange_zero, add_zero, Vector.push_mk, Nat.reduceAdd,
-      List.push_toArray, List.nil_append, List.cons_append, Vector.getElem_mk,
-      ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, Vector.map_mk,
-      List.map_toArray, List.map_cons, Expression.eval, neg_mul, one_mul, List.map_nil]
-    simp only [↓ProvableType.varFromOffset_fields, ↓Vector.getElem_mapRange, add_zero,
-      Expression.eval] at h1 h2 h3 h4 h5 h6 h7 h8
-    rw [h1, h2, h3, h4, h5, h6, h7, h8]
+    simp only [Spec.decodeInstruction, ge_iff_le, id_eq, Gadgets.toBits, Nat.reducePow]
+    split
+    case h_2 => simp_all only [gt_iff_lt, id_eq, not_le, ite_eq_left_iff, reduceCtorEq, imp_false,
+      not_true_eq_false]
+    case _ x instr_type addr1 addr2 addr3 h_eq =>
+
+      simp [h] at h_eq
+      obtain ⟨ h_eq_type, h_eq_addr1, h_eq_addr2, h_eq_addr3 ⟩ := h_eq
+
+      rw [Vector.ext_iff] at h_eq
+      simp only [Vector.getElem_map] at h_eq
+      have h1 := h_eq 0 (by linarith)
+      have h2 := h_eq 1 (by linarith)
+      have h3 := h_eq 2 (by linarith)
+      have h4 := h_eq 3 (by linarith)
+      have h5 := h_eq 4 (by linarith)
+      have h6 := h_eq 5 (by linarith)
+      have h7 := h_eq 6 (by linarith)
+      have h8 := h_eq 7 (by linarith)
+      simp only [eval, fromElements, size, toVars, toElements, ↓ProvableType.varFromOffset_fields,
+        Vector.mapRange_succ, Vector.mapRange_zero, add_zero, Vector.push_mk, Nat.reduceAdd,
+        List.push_toArray, List.nil_append, List.cons_append, Vector.getElem_mk,
+        ↓List.getElem_toArray, ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, Vector.map_mk,
+        List.map_toArray, List.map_cons, Expression.eval, neg_mul, one_mul, List.map_nil]
+      simp only [↓ProvableType.varFromOffset_fields, ↓Vector.getElem_mapRange, add_zero,
+        Expression.eval] at h1 h2 h3 h4 h5 h6 h7 h8
+      rw [h1, h2, h3, h4, h5, h6, h7, h8]
 
 
-    have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
-    have h_bits0 := h_bits_are_binary 0 (by linarith)
-    have h_bits1 := h_bits_are_binary 1 (by linarith)
-    have h_bits2 := h_bits_are_binary 2 (by linarith)
-    have h_bits3 := h_bits_are_binary 3 (by linarith)
-    have h_bits4 := h_bits_are_binary 4 (by linarith)
-    have h_bits5 := h_bits_are_binary 5 (by linarith)
-    have h_bits6 := h_bits_are_binary 6 (by linarith)
-    have h_bits7 := h_bits_are_binary 7 (by linarith)
+      have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
+      have h_bits0 := h_bits_are_binary 0 (by linarith)
+      have h_bits1 := h_bits_are_binary 1 (by linarith)
+      have h_bits2 := h_bits_are_binary 2 (by linarith)
+      have h_bits3 := h_bits_are_binary 3 (by linarith)
+      have h_bits4 := h_bits_are_binary 4 (by linarith)
+      have h_bits5 := h_bits_are_binary 5 (by linarith)
+      have h_bits6 := h_bits_are_binary 6 (by linarith)
+      have h_bits7 := h_bits_are_binary 7 (by linarith)
 
-    repeat' constructor
-    repeat
-      cases' h_bits0 with h0 h0
-      · cases' h_bits1 with h1 h1
-        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
-          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
-      · cases' h_bits1 with h1 h1
-        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
-          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
+      repeat' constructor
+      repeat
+        cases' h_bits0 with h0 h0
+        · cases' h_bits1 with h1 h1
+          repeat simp [←h_eq_type, h0, h1, ZMod.val_one]
+        · cases' h_bits1 with h1 h1
+          repeat simp [←h_eq_type, h0, h1, ZMod.val_one]
 
-    repeat
-      cases' h_bits2 with h0 h0
-      · cases' h_bits3 with h1 h1
-        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
-          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
-      · cases' h_bits3 with h1 h1
-        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
-          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
+      repeat
+        cases' h_bits2 with h0 h0
+        · cases' h_bits3 with h1 h1
+          repeat simp [←h_eq_addr1, h0, h1, ZMod.val_one]
+        · cases' h_bits3 with h1 h1
+          repeat simp [←h_eq_addr1, h0, h1, ZMod.val_one]
 
-    repeat
-      cases' h_bits4 with h0 h0
-      · cases' h_bits5 with h1 h1
-        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
-          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
-      · cases' h_bits5 with h1 h1
-        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
-          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
+      repeat
+        cases' h_bits4 with h0 h0
+        · cases' h_bits5 with h1 h1
+          repeat simp [←h_eq_addr2, h0, h1, ZMod.val_one]
+        · cases' h_bits5 with h1 h1
+          repeat simp [←h_eq_addr2, h0, h1, ZMod.val_one]
 
-    repeat
-      cases' h_bits6 with h0 h0
-      · cases' h_bits7 with h1 h1
-        repeat simp only [h0, h1, neg_zero, add_zero, zero_add, add_neg_cancel,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, one_ne_zero, zero_ne_one,
-          OfNat.zero_ne_ofNat, OfNat.ofNat_ne_one, and_self, and_false, Nat.reduceEqDiff, ↓reduceIte]
-      · cases' h_bits7 with h1 h1
-        repeat simp only [h0, h1, add_zero, zero_add, add_neg_cancel, neg_add_cancel, neg_zero,
-          mul_zero, mul_one, ZMod.val_zero, ZMod.val_one, Nat.reduceAdd, Nat.succ_ne_self,
-          one_ne_zero, OfNat.ofNat_ne_one, OfNat.one_ne_ofNat, and_true, and_self, ↓reduceIte]
+      repeat
+        cases' h_bits6 with h0 h0
+        · cases' h_bits7 with h1 h1
+          repeat simp [←h_eq_addr3, h0, h1, ZMod.val_one]
+        · cases' h_bits7 with h1 h1
+          repeat simp [←h_eq_addr3, h0, h1, ZMod.val_one]
 
   completeness := by
     sorry
