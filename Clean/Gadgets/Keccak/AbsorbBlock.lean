@@ -116,7 +116,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     Vector.getElem_mapFinRange, state_after_absorb]
   by_cases hi' : i < 17 <;> simp only [hi', reduceDIte]
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_left hi']
-    exact ⟨ (h_env ⟨ i, hi'⟩).right, (h_env ⟨ i, hi'⟩).left ⟩
+    exact ⟨ (h_env ⟨ i, hi'⟩).2.2, (h_env ⟨ i, hi'⟩).2.1 ⟩
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]

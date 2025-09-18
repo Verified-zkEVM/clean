@@ -112,6 +112,8 @@ def AllDependenciesChecked {F : Type} {s : PropertySet F} (order : SentenceOrder
  * (done) Add `use` operation
    + `use` is similar to `lookup`
    + `use` constraint guarantees properties if it's in the current `CheckedYield`
+ * (done) Ensure `UsesLocalWitnessesAndYields` of `FormalCircuit.toSubcircuit` concludes, in addition to `circuit.Spec`,
+   `FlatOperation.localYields env ops.toFlat ⊆ yields.yielded`.
  * Add an example
  * Adjust `FormalAssertion` about `use` and `yield` (similarly to `FormalCircuit` and `GeneralFormalCircuit`)
  * remove `sorry`s that have been introduced

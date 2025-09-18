@@ -115,6 +115,7 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env yields := circuit.CompletenessAssumptions yields (eval env input_var),
     UsesLocalWitnessesAndYields env yields := circuit.CompletenessAssumptions yields (eval env input_var) →
+      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded ∧
       circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
@@ -122,13 +123,17 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
     implied_by_completeness
     imply_usesLocalWitnessesAndYields := by
       intro env yields h_env as
-      -- by completeness, the constraints hold
-      have h_holds := implied_by_completeness env yields Set.univ h_env as
-      -- Convert CompletenessAssumptions to Assumptions using the implication
-      have h_assumptions := circuit.completenessAssumptions_implies_assumptions yields (eval env input_var) as
-      -- by soundness, this implies the spec and yielded sentences
-      have ⟨_, h_spec⟩ := imply_soundness env yields Set.univ h_holds h_assumptions
-      exact h_spec
+      constructor
+      · -- prove yields subset
+        exact h_env.2
+      · -- prove spec
+        -- by completeness, the constraints hold
+        have h_holds := implied_by_completeness env yields Set.univ h_env as
+        -- Convert CompletenessAssumptions to Assumptions using the implication
+        have h_assumptions := circuit.completenessAssumptions_implies_assumptions yields (eval env input_var) as
+        -- by soundness, this implies the spec and yielded sentences
+        have ⟨_, h_spec⟩ := imply_soundness env yields Set.univ h_holds h_assumptions
+        exact h_spec
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
@@ -395,7 +400,9 @@ theorem FormalCircuit.toSubcircuit_usesLocalWitnessesAndYields
     {sentences : PropertySet F} {order : SentenceOrder sentences}
     (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields =
-    (circuit.CompletenessAssumptions yields (eval env input_var) → circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
+    (circuit.CompletenessAssumptions yields (eval env input_var) →
+      FlatOperation.localYields env (circuit.main input_var |>.operations n).toFlat ⊆ yields.yielded ∧
+      circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
 
 /--

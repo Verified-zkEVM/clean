@@ -95,9 +95,9 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     Chi.CompletenessAssumptions, Xor64.CompletenessAssumptions, forall_const, U64.fromUInt64_normalized, and_true, true_and]
 
   -- `simp_all` left one goal to pull out of hypotheses
-  obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
-  have ⟨ rhopi_norm, _ ⟩ := h_rhopi theta_norm
-  have ⟨ chi_norm, _ ⟩ := h_chi rhopi_norm
+  obtain ⟨ ⟨_, theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
+  have ⟨ _, rhopi_norm, _ ⟩ := h_rhopi theta_norm
+  have ⟨ _, chi_norm, _ ⟩ := h_chi rhopi_norm
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 

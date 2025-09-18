@@ -95,9 +95,12 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   specialize h0 x_normalized
   obtain ⟨h_rot, h_norm⟩ := h0
 
-  simp only [CompletenessAssumptions, Assumptions] at x_normalized
-  rw [h_eval]
-  exact ⟨x_normalized, h_norm⟩
+  constructor
+  · simp only [Rotation64Bytes.CompletenessAssumptions, Rotation64Bytes.Assumptions]
+    rw [h_eval]
+    exact x_normalized
+  · simp only [Rotation64Bits.CompletenessAssumptions, Rotation64Bits.Assumptions]
+    exact h_norm.2
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 64) : FormalCircuit order U64 U64 := {
   elaborated := elaborated order offset

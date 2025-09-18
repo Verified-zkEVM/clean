@@ -90,8 +90,8 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
   -- only keep the statements about normalization
   obtain ⟨ h_init, h_succ ⟩ := h_env
-  replace h_init := h_init.left
-  replace h_succ := fun i hi ih => (h_succ i hi ih).left
+  replace h_init := h_init.2.1
+  replace h_succ := fun i hi ih => (h_succ i hi ih).2.1
 
   intro i hi
 

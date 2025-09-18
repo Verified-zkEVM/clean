@@ -113,16 +113,16 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env
 
   specialize c1 h_assumptions.left (h_assumptions.right 0) (h_assumptions.right 1)
-  specialize c2 c1.right (h_assumptions.right 2) (h_assumptions.right 3)
-  specialize c3 c2.right (h_assumptions.right 4) (h_assumptions.right 5)
-  specialize c4 c3.right (h_assumptions.right 6) (h_assumptions.right 7)
-  specialize c5 c4.right (h_assumptions.right 8) (h_assumptions.right 9)
-  specialize c6 c5.right (h_assumptions.right 10) (h_assumptions.right 11)
-  specialize c7 c6.right (h_assumptions.right 12) (h_assumptions.right 13)
-  specialize c8 c7.right (h_assumptions.right 14) (h_assumptions.right 15)
+  specialize c2 c1.2.2 (h_assumptions.right 2) (h_assumptions.right 3)
+  specialize c3 c2.2.2 (h_assumptions.right 4) (h_assumptions.right 5)
+  specialize c4 c3.2.2 (h_assumptions.right 6) (h_assumptions.right 7)
+  specialize c5 c4.2.2 (h_assumptions.right 8) (h_assumptions.right 9)
+  specialize c6 c5.2.2 (h_assumptions.right 10) (h_assumptions.right 11)
+  specialize c7 c6.2.2 (h_assumptions.right 12) (h_assumptions.right 13)
+  specialize c8 c7.2.2 (h_assumptions.right 14) (h_assumptions.right 15)
 
-  simp only [Fin.isValue, c1.right, true_and, c2.right, c3.right, c4.right, c5.right, c6.right,
-    c7.right]
+  simp only [Fin.isValue, c1.2.2, true_and, c2.2.2, c3.2.2, c4.2.2, c5.2.2, c6.2.2,
+    c7.2.2]
   clear c1 c2 c3 c4 c5 c6 c7 c8
 
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
