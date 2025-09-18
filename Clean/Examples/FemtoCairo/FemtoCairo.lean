@@ -26,6 +26,12 @@ def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 1)
 
+def DecodedInstructionType.val : DecodedInstructionType (F p) → ℕ := fun instrType =>
+  if instrType.isAdd = 1 then 0
+  else if instrType.isMul = 1 then 1
+  else if instrType.isStoreState = 1 then 2
+  else 3
+
 def DecodedInstructionType.isEncodedCorrectly (instrType : DecodedInstructionType (F p)) : Prop :=
   (instrType.isAdd = 1 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
   (instrType.isAdd = 0 ∧ instrType.isMul = 1 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
@@ -404,8 +410,13 @@ def nextState : FormalCircuit (F p) StateTransitionInput State where
     return nextState
 
   localLength _ := 3
-  Assumptions := sorry
-  Spec := sorry
+  Assumptions | {state, decoded, memoryValues} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
+  Spec
+  | {state, decoded, memoryValues}, output =>
+    match Spec.computeNextState (DecodedInstructionType.val decoded.instrType)
+        memoryValues[0] memoryValues[1] memoryValues[2] state with
+      | some nextState => output = nextState
+      | none => False -- impossible, constraints ensure that the transition is valid
   soundness := by
     sorry
   completeness := by
