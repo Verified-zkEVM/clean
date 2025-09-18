@@ -4,6 +4,7 @@ import Clean.Circuit.PropertyLookup
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Expression
 import Clean.Utils.Field
+import Clean.Utils.Tactics.CircuitProofStart
 
 /-!
 # Fibonacci Example with Yield/Use Framework
@@ -138,8 +139,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
   localLength _ := 0
   localLength_eq := by
     intro _
-    simp [FibStep.main, Circuit.localLength]
-    sorry -- Need to compute localLength of use and yield operations
+    simp [FibStep.main, Circuit.localLength, circuit_norm]
   subcircuitsConsistent := by
     intro input offset
     -- Unfold the main function and operations
@@ -150,7 +150,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
     trivial
   Assumptions _ :=
     -- Assume the parameters correspond to actual Fibonacci values
-    ∃ k : ℕ, n = (k : F p) ∧
+    ∃ k : ℕ, k + 2 < p ∧ n = (k : F p) ∧
              a = fib k ∧
              b = fib (k + 1)
   CompletenessAssumptions yields _ :=
@@ -164,12 +164,32 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
     (mkSent n a).eval env ∈ yields.yielded ∧
     (mkSent (n + 1) b).eval env ∈ yields.yielded
   completenessAssumptions_implies_assumptions yields _ h := by
-    obtain ⟨⟨k, _, hn, ha, hb⟩, _, _⟩ := h
-    exact ⟨k, hn, ha, hb⟩
+    obtain ⟨h_n, _, _⟩ := h
+    exact h_n
   Spec _ _ _ := True  -- Step circuit doesn't produce output, just yields
   soundness := by
-    -- Prove: if Fib(n,a) and Fib(n+1,b) hold, then Fib(n+2,a+b) is correct
-    sorry
+    circuit_proof_start
+    intro s
+    simp only [Operations.localYields]
+    simp only [Set.union_empty, Set.mem_singleton_iff]
+    intro s_eq
+    simp only [s_eq, AllDependenciesChecked]
+    intro h_dep
+    rcases h_holds with ⟨ h_n_yielded, h_n_valid, h_s_n_yielded, h_s_n_valid ⟩
+    specialize h_n_valid (by sorry)
+    specialize h_s_n_valid (by sorry)
+    simp only [SentenceHolds, Sentence.eval, mkFibSentence, FibProperty] at h_n_valid h_s_n_valid ⊢
+    obtain ⟨ n', h_n, h_n_valid ⟩ := h_n_valid
+    obtain ⟨ s_n, h_s_n, h_s_n_valid ⟩ := h_s_n_valid
+    simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+      List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] at h_n h_s_n h_n_valid h_s_n_valid
+    simp only [circuit_norm] at h_n h_s_n
+    obtain ⟨ k, h_assumptions ⟩ := h_assumptions
+    exists (k + 2)
+    simp only [Vector.getElem_mk,
+      List.getElem_toArray, List.getElem_cons_zero, Nat.cast_add, Nat.cast_ofNat,
+      List.getElem_cons_succ, circuit_norm]
+    aesop
   completeness := by
     -- Given completeness assumptions, show constraints can be satisfied
     sorry
