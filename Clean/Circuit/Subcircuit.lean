@@ -241,6 +241,7 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
     Completeness env yields := circuit.Assumptions yields (eval env input_var),
     UsesLocalWitnessesAndYields env yields :=
       circuit.Assumptions yields (eval env input_var) ∧ circuit.SoundnessAssumptions (eval env input_var) →
+      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded ∧
       circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
     localLength := circuit.localLength input_var
 
@@ -252,7 +253,9 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
       have h_holds := implied_by_completeness env yields Set.univ h_env assumptions
       -- Now we have the SoundnessAssumptions directly from the input
       have ⟨_, h_spec⟩ := imply_soundness env yields Set.univ h_holds sound_assumptions
-      exact h_spec
+      constructor
+      · exact h_env.2
+      · exact h_spec
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
@@ -415,6 +418,7 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnessesAndYields
     (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields =
     (circuit.Assumptions yields (eval env input_var) ∧ circuit.SoundnessAssumptions (eval env input_var) →
+     FlatOperation.localYields env (circuit.main input_var |>.operations n).toFlat ⊆ yields.yielded ∧
      circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
 
