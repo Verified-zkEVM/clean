@@ -164,12 +164,12 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
   case one first_row =>
     intro constraints
-    simp only [table_norm, tableConstraints,
+    simp only [table_norm,
       List.size_toArray, List.length_nil, List.push_toArray, List.nil_append,
       List.length_cons, zero_add, List.cons_append, reduceIte, and_true] at constraints
     obtain ⟨ input_eq, output_eq ⟩ := constraints
     rw [equalityConstraint.soundness] at input_eq output_eq
-    simp only [table_norm, and_true, Trace.lastRow, Trace.ForAllRowsWithPrevious]
+    simp only [table_norm, and_true, Trace.ForAllRowsWithPrevious]
     constructor
     · rw [input_eq]
       exact input_spec
@@ -180,15 +180,15 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
 
   case more curr next rest ih1 ih2 =>
     intro constraints
-    simp only [table_norm, tableConstraints, List.size_toArray, List.length_nil, List.push_toArray,
+    simp only [table_norm, List.size_toArray, List.length_nil, List.push_toArray,
       List.nil_append, List.length_cons, zero_add, List.cons_append, Nat.add_eq_zero, one_ne_zero,
-      and_false, reduceIte, PNat.mk_coe, Nat.add_one_sub_one, tsub_zero, Nat.add_left_inj,
+      and_false, reduceIte, tsub_zero,
       Nat.reduceAdd, true_and, Trace.ForAllRowsWithPrevious] at constraints ih1 ih2 ⊢
     rcases constraints with ⟨ constraints, output_eq, h_rest ⟩
     specialize ih2 h_rest
     have spec_previous : table.Spec input (traceInputs ⟨rest, rfl⟩) rest.len (traceInputs_length ⟨rest, rfl⟩) curr.1 := by
       simp [ih2]
-    simp only [ih2, and_self, and_true, Trace.lastRow]
+    simp only [ih2, and_self, and_true]
     clear ih1 ih2
     set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env 0 (rest.len + 1))
     simp only [table_norm, circuit_norm, inductiveConstraint] at constraints
@@ -208,7 +208,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       have hi'' : i < 0 + (s + x) := by linarith
       have hi''' : i < 0 + (s + x) + t := by linarith
       rw [h_env']
-      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
 
@@ -217,7 +217,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       have hi'' : i + s < 0 + (s + x) := by linarith
       have hi''' : i + s < 0 + (s + x) + t := by linarith
       rw [h_env']
-      simp +arith only [main_ops, s, t, x, hi, hi', hi'', hi''', table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+      simp +arith only [main_ops, s, t, x, hi', hi'', hi''', table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       congr; omega
@@ -227,7 +227,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
       have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
       rw [h_env']
-      simp +arith only [main_ops, hi, hi', hi'', hi''', s, t, x, table_assignment_norm, inductiveConstraint, circuit_norm, reduceDIte,
+      simp +arith only [main_ops, hi', s, t, x, table_assignment_norm, circuit_norm, reduceDIte,
         CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       simp +arith [hi, s, add_assoc]
@@ -258,7 +258,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp only [t, s, x]
       ac_rfl
 
-    simp only [t, x] at main_constraints
+    simp only [x] at main_constraints
     have constraints : Circuit.ConstraintsHold.Soundness
         env' ((table.step curr_var.1 curr_var.2).operations (size State + size Input)) := by
       simp only [curr_var, varFromOffset_pair]
@@ -281,7 +281,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     intro h_len
     rw [equalityConstraint.soundness] at output_eq
     rw [←h_len] at output_eq
-    simp only [add_tsub_cancel_right, Nat.add_left_inj, reduceIte] at output_eq
+    simp only [add_tsub_cancel_right, reduceIte] at output_eq
     exact output_eq
 
 theorem table_soundness (table : InductiveTable F State Input) (input output : State F)
