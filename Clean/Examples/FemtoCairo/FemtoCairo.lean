@@ -209,7 +209,7 @@ def fetchInstructionCircuit
           output.op1 = op1 ∧
           output.op2 = op2 ∧
           output.op3 = op3
-      | none => False -- impossible, constraints ensure that memory accesses are valid
+      | none => False -- impossible, lookups ensure that memory accesses are valid
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.fetchInstruction, Spec.memoryAccess]
     split
@@ -253,6 +253,12 @@ def fetchInstructionCircuit
   completeness := by
     sorry
 
+def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode =>
+  if mode.isDoubleAddressing = 1 then 0
+  else if mode.isApRelative = 1 then 1
+  else if mode.isFpRelative = 1 then 2
+  else 3
+
 def readFromMemory
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalCircuit (F p) MemoryReadInput field where
@@ -280,9 +286,31 @@ def readFromMemory
 
   localLength _ := 5
   Assumptions := sorry
-  Spec := sorry
+  Spec
+  | {state, offset, mode}, output =>
+    match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
+      | some value => output = value
+      | none => False -- impossible, constraints ensure that memory accesses are valid
   soundness := by
-    sorry
+    circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess, Spec.memoryAccess, DecodedAddressingMode.val]
+
+    -- circuit_proof_start did not unpack those, so we manually unpack here
+    obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
+    obtain ⟨_pc, ap, fp⟩ := input_state
+
+    simp [explicit_provable_type, circuit_norm] at h_holds h_input
+    simp [h_input] at h_holds
+    simp
+
+    split
+    -- the lookups imply that the memory accesses are valid, therefore
+    -- here we prove that Spec.memoryAccess never returns none
+    case h_2 x h_eq =>
+      sorry
+
+    case h_1 rawInstrType _ _ value h_eq =>
+      sorry
+
   completeness := by
     sorry
 
