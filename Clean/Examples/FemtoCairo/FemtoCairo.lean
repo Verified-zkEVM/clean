@@ -13,6 +13,25 @@ open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
+
+def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode =>
+  if mode.isDoubleAddressing = 1 then 0
+  else if mode.isApRelative = 1 then 1
+  else if mode.isFpRelative = 1 then 2
+  else 3
+
+def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
+  (mode.isDoubleAddressing = 1 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 1 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 1)
+
+def DecodedInstructionType.isEncodedCorrectly (instrType : DecodedInstructionType (F p)) : Prop :=
+  (instrType.isAdd = 1 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
+  (instrType.isAdd = 0 ∧ instrType.isMul = 1 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
+  (instrType.isAdd = 0 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 1 ∧ instrType.isLoadState = 0) ∨
+  (instrType.isAdd = 0 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 1)
+
 /--
   Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
   - The **program table** it is OK, as it a fixed and public,
@@ -252,18 +271,6 @@ def fetchInstructionCircuit
 
   completeness := by
     sorry
-
-def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode =>
-  if mode.isDoubleAddressing = 1 then 0
-  else if mode.isApRelative = 1 then 1
-  else if mode.isFpRelative = 1 then 2
-  else 3
-
-def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
-  (mode.isDoubleAddressing = 1 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
-  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 1 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
-  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨
-  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 1)
 
 def readFromMemory
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
