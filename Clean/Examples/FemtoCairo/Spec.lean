@@ -53,8 +53,8 @@ def dataMemoryAccess
     (addr : (F p)) (mode : ℕ) (ap : F p) (fp : F p) : Option (F p) :=
   match mode with
   | 0 => do
-      let addr' ← memoryAccess memory addr
-      memoryAccess memory (ap + addr')
+      let addr' ← memoryAccess memory (ap + addr)
+      memoryAccess memory addr'
   | 1 => memoryAccess memory (ap + addr)
   | 2 => memoryAccess memory (fp + addr)
   | _ => addr
