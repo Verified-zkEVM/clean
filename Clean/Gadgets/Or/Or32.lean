@@ -48,7 +48,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rcases input_var_x
   rcases input_var_y
   simp only [U32.Normalized] at *
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢ l_components
+  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢ l_components
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
   simp only [Or8.circuit, Or8.Assumptions, Or8.Spec, h_input] at h_holds
   rcases h_holds with ⟨h_holds1, h_holds⟩
@@ -68,10 +68,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
   rcases input_x
   rcases input_y
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff, toVars, fromElements] at h_input ⊢
+  simp only [explicit_provable_type, toVars, fromElements] at h_input ⊢
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
   simp only [Or8.circuit, Or8.Assumptions, h_input]
-  simp only [Assumptions, U32.Normalized] at h_assumptions
+  simp only [U32.Normalized] at h_assumptions
   omega
 
 def circuit : FormalCircuit (F p) Inputs U32 :=

@@ -54,7 +54,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
-  simp only [Assumptions, Spec] at h_assumptions ⊢
+  simp at h_assumptions
 
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
@@ -73,7 +73,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
   | inr h_one =>
     simp only [h_one]
     have : (1 : F) = 1 ↔ True := by simp
-    simp only [this, if_true]
+    simp only [if_true]
     ring_nf
 
 theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by

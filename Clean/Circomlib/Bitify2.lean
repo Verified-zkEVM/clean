@@ -58,7 +58,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     intro i0 env input_var input h_input assumptions h_holds
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
-      Vector.map_mapRange, Vector.map_map, Function.comp_apply]
+      Vector.map_mapRange]
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
     obtain ⟨ h_bits, h_eq, h_alias ⟩ := h_holds
