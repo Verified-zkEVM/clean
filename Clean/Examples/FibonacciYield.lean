@@ -176,15 +176,23 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
     simp only [s_eq, AllDependenciesChecked]
     intro h_dep
     rcases h_holds with ⟨ h_n_yielded, h_n_valid, h_s_n_yielded, h_s_n_valid ⟩
-    specialize h_n_valid (by sorry)
-    specialize h_s_n_valid (by sorry)
+    obtain ⟨ k, h_assumptions ⟩ := h_assumptions
+    specialize h_n_valid (by
+      apply h_dep
+      simp only [FibOrder, mkFibSentence, Sentence.eval, true_and, circuit_norm]
+      exists k, k + 2
+      aesop)
+    specialize h_s_n_valid (by
+      apply h_dep
+      simp only [FibOrder, mkFibSentence, Sentence.eval, true_and, circuit_norm]
+      exists k + 1, k + 2
+      aesop)
     simp only [SentenceHolds, Sentence.eval, mkFibSentence, FibProperty] at h_n_valid h_s_n_valid ⊢
     obtain ⟨ n', h_n, h_n_valid ⟩ := h_n_valid
     obtain ⟨ s_n, h_s_n, h_s_n_valid ⟩ := h_s_n_valid
     simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
       List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ] at h_n h_s_n h_n_valid h_s_n_valid
     simp only [circuit_norm] at h_n h_s_n
-    obtain ⟨ k, h_assumptions ⟩ := h_assumptions
     exists (k + 2)
     simp only [Vector.getElem_mk,
       List.getElem_toArray, List.getElem_cons_zero, Nat.cast_add, Nat.cast_ofNat,
