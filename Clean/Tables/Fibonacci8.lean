@@ -98,8 +98,8 @@ def formalFibTable : FormalTable (F p) RowType := {
 
   soundness := by
     intro N trace envs _
-    simp only [gt_iff_lt, TraceOfLength.ForAllRowsOfTrace, TableConstraintsHold,
-      fibTable, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex, and_imp]
+    simp only [TableConstraintsHold,
+      fibTable, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex]
 
     induction' trace.val using Trace.every_row_two_rows_induction with first_row curr next rest _ ih2
     · simp [table_norm]
@@ -117,7 +117,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       unfold TableConstraintsHold.foldl at ConstraintsHold
       simp [Trace.len] at ConstraintsHold
       specialize ih2 ConstraintsHold.right
-      simp only [ih2, and_self, and_true, Trace.len]
+      simp only [ih2, and_true, Trace.len]
 
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
 
@@ -127,9 +127,9 @@ def formalFibTable : FormalTable (F p) RowType := {
 
       set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs 1 (rest.len + 1))
 
-      simp only [fibTable, fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
+      simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
           Gadgets.Addition8.circuit] at ConstraintsHold
-      simp only [circuit_norm, eval, varFromOffset, Vector.mapRange] at ConstraintsHold
+      simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
       have hx_curr : env.get 0 = curr.x := by rfl
       have hy_curr : env.get 1 = curr.y := by rfl
