@@ -58,13 +58,30 @@ def ReadOnlyTableFromFunction
   index := fun (i, _) => i.val
   Spec := fun (i, v) => v = f (Fin.ofNat n i.val) ∧ i.val < n
   contains_iff := by
-    intro t
+    rintro ⟨row_index, row_value⟩
     constructor
-    · rintro ⟨ i, h: t = _ ⟩
-      sorry
+    · rintro ⟨ i', h' ⟩
+      split
+      case h_1 i snd h_eq =>
+        simp only [Prod.mk.injEq] at h' h_eq
+        rw [←h_eq.left, ←h_eq.right, h'.left, h'.right, Fin.ofNat.eq_1]
+        have h := Fin.isLt i'
+        constructor
+        · congr
+          rw [←Fin.val_eq_val]
+          simp only
+          rw [ZMod.val_cast_of_lt (by linarith), Nat.mod_eq_of_lt h]
+        · rw [ZMod.val_cast_of_lt (by linarith)]
+          assumption
     · intro h
-      simp_all
-      sorry
+      simp_all only [gt_iff_lt, Fin.ofNat_eq_cast, Prod.mk.injEq]
+      use (Fin.ofNat n row_index.val)
+      simp only [Fin.ofNat_eq_cast, Fin.val_natCast, and_true]
+      rw [Nat.mod_eq_of_lt (by linarith)]
+      simp only [ZMod.natCast_val]
+      apply_fun ZMod.val
+      · rw [ZMod.val_cast_eq_val_of_lt (by linarith)]
+      · apply ZMod.val_injective
 }
 
 
