@@ -96,9 +96,37 @@ def sentenceToNat (s : Sentence (@FibPropertySet p _) (F p)) : ℕ := by
     -- Not a Fib sentence, return 0
     exact 0
 
+/-- Helper lemma: FibCanDepend implies ordering on extracted natural numbers -/
+lemma FibCanDepend_implies_nat_lt {p : ℕ} [Fact p.Prime] :
+    ∀ s t, @FibCanDepend p _ s t → @sentenceToNat p _ s < @sentenceToNat p _ t := by
+  intro s t h_dep
+  -- Unpack the FibCanDepend relation
+  obtain ⟨h_s_fib, h_t_fib, ns, nt, h1, h2, h_s_entry, h_t_entry, h_lt⟩ := h_dep
+  -- Now we need to show sentenceToNat s < sentenceToNat t
+  -- By definition of sentenceToNat and the fact that both are Fib sentences
+  unfold sentenceToNat
+  -- Both have name "Fib", so the if branches are taken
+  simp only [h_s_fib, h_t_fib]
+  -- The goal now has if h : True then ... else 0 for both sides
+  -- Since True is always true, we can simplify
+  split
+  · -- Now we're in the case where both conditions are true
+    -- The goal is about (cast).mp s.entry[0].val < (cast).mp t.entry[0].val
+    -- We need to handle the cast operation
+    sorry  -- Need to complete the proof about ZMod.val
+  · -- This case is impossible since we have ¬True
+    contradiction
+
 /-- The FibCanDepend relation is well-founded -/
 theorem FibCanDepend_wf : WellFounded (@FibCanDepend p _) := by
-  sorry  -- Will prove using InvImage.wf
+  -- Use Subrelation.wf to show FibCanDepend is well-founded
+  apply Subrelation.wf
+  · -- Prove FibCanDepend ⊆ InvImage (· < ·) sentenceToNat
+    intro s t h_dep
+    -- InvImage (· < ·) sentenceToNat s t unfolds to sentenceToNat s < sentenceToNat t
+    exact FibCanDepend_implies_nat_lt s t h_dep
+  · -- Prove WellFounded (InvImage (· < ·) sentenceToNat)
+    exact InvImage.wf sentenceToNat Nat.lt_wfRel.wf
 
 /-- Simple order: Fib at smaller index can be used for Fib at larger index -/
 def FibOrder : SentenceOrder (@FibPropertySet p _) := {
