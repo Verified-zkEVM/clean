@@ -37,7 +37,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (S
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, elaborated, eval_vector, keccakRound, iota]
+  simp only [circuit_norm, eval_vector, keccakRound, iota]
 
   -- simplify constraints
   simp only [Assumptions] at state_norm

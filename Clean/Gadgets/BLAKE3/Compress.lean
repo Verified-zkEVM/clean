@@ -58,10 +58,9 @@ lemma ApplyRouunds.circuit_spec_is :
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is,
-    ApplyRouunds.circuit_spec_is,
+  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRouunds.circuit_spec_is,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
-    compress, ApplyRounds.Assumptions, FinalStateUpdate.Spec]
+    ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness
