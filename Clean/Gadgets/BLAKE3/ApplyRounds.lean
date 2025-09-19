@@ -54,7 +54,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
-    simp at h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
