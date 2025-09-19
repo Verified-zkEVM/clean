@@ -54,7 +54,7 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
-  simp at h_assumptions
+  simp only at h_assumptions
 
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
