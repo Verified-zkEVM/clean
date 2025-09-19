@@ -784,8 +784,13 @@ def femtoCairoFormalTable
   fp := 0
 } output
 
--- The table's statement implies that the output row contains the nth Fibonacci number
-theorem tableStatement
+/--
+  The table's statement implies that the state at each row is exactly the state reached by the
+  femtoCairo machine after executing that many steps from the initial state.
+  In particular, the bounded execution does not return `none`, which means that
+  the execution is successful for that many steps.
+-/
+theorem femtoCairoTableStatement
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
   (state : State (F p)) : ∀ i > 0, ∀ trace,
