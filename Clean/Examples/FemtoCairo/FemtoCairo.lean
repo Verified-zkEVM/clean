@@ -2,6 +2,7 @@ import Clean.Table.Inductive
 import Clean.Gadgets.Bits
 import Clean.Utils.Bits
 import Clean.Utils.Field
+import Clean.Table.Inductive
 
 import Clean.Examples.FemtoCairo.Spec
 import Clean.Examples.FemtoCairo.Types
@@ -768,5 +769,35 @@ def femtoCairoTable
         simp only [h_hold]
 
   completeness := by sorry
+
+
+/--
+  The formal table for the femtoCairo VM, which ensures that the execution starts with
+  the default initial state (pc=0, ap=0, fp=0)
+-/
+def femtoCairoFormalTable
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (output : State (F p)) := (femtoCairoTable program h_programSize memory h_memorySize).toFormal {
+  pc := 0,
+  ap := 0,
+  fp := 0
+} output
+
+-- The table's statement implies that the output row contains the nth Fibonacci number
+theorem tableStatement
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+  (state : State (F p)) : ∀ i > 0, ∀ trace,
+  (femtoCairoFormalTable program h_programSize memory h_memorySize state).statement i trace →
+    match
+      Spec.femtoCairoMachineBoundedExecution program memory (some {pc:=0, ap:=0, fp:=0}) (i - 1) with
+    | some reachedState => state = reachedState
+    | none => False -- impossible, constraints ensure that every transition is valid
+  := by
+  intro n hn trace Spec
+  simp only [FormalTable.statement, femtoCairoFormalTable,
+    InductiveTable.toFormal, femtoCairoTable, FemtoCairo.Spec.femtoCairoMachineBoundedExecution] at Spec
+  simp_all only [gt_iff_lt, and_self, forall_const]
 
 end Examples.FemtoCairo
