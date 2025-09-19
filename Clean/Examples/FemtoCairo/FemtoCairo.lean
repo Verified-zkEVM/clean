@@ -59,7 +59,11 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
-
+/--
+  Circuit that decodes a femtoCairo instruction into a one-hot representation.
+  It returns a `DecodedInstruction` struct containing the decoded fields.
+  This circuit is not satisfiable if the input instruction is not correctly encoded.
+-/
 def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
   main := fun instruction => do
     let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
@@ -292,8 +296,13 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
   completeness := by
     sorry
 
-
-
+/--
+  Circuit that fetches a femtoCairo instruction from a read-only program memory,
+  given the program counter.
+  It returns a `RawInstruction` struct containing the raw instruction and its operands.
+  The circuit uses lookups into a read-only table representing the program memory.
+  This circuit is not satisfiable if the program counter is out of bounds.
+-/
 def fetchInstructionCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
     FormalCircuit (F p) field RawInstruction where
@@ -356,7 +365,18 @@ def fetchInstructionCircuit
   completeness := by
     sorry
 
-def readFromMemory
+/--
+  Circuit that reads a value from a read-only memory, given a state, an offset,
+  and an addressing mode.
+  It returns the value read from memory, according to the addressing mode.
+  - If the addressing is a double addressing, it reads the value at `memory[memory[ap + offset]]`.
+  - If the addressing is ap-relative, it reads the value at `memory[ap + offset]`.
+  - If the addressing is fp-relative, it reads the value at `memory[fp + offset]`.
+  - If the addressing is immediate, it returns the offset itself.
+  The circuit uses lookups into a read-only table representing the memory.
+  This circuit is not satisfiable if any memory access is out of bounds.
+-/
+def readFromMemoryCircuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     FormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
@@ -460,7 +480,15 @@ def readFromMemory
   completeness := by
     sorry
 
-def nextState : FormalCircuit (F p) StateTransitionInput State where
+/--
+  Circuit that computes the next state of the femtoCairo VM, given the current state,
+  a decoded instruction, and the values of the three operands.
+  The circuit enforces constraints based on the current instruction type to ensure that
+  the state transition is valid, therefore this circuit is not satisfiable
+  if the claimed state transition is invalid.
+  Returns the next state.
+-/
+def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
   main := fun { state, decoded, v1, v2, v3 } => do
     -- Witness the claimed next state
     let nextState : State _ ← ProvableType.witness fun eval => {
@@ -563,7 +591,13 @@ def nextState : FormalCircuit (F p) StateTransitionInput State where
       simp only [and_self]
   completeness := by
     sorry
-
+/--
+  The main femtoCairo step circuit, which combines instruction fetch, decode,
+  memory accesses, and state transition into a single circuit.
+  Given a read-only program memory and a read-only data memory, it takes the current state
+  as input and returns the next state as output.
+  The circuit is not satisfiable if the state transition is invalid.
+-/
 def femtoCairoStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
@@ -576,12 +610,12 @@ def femtoCairoStepElaboratedCircuit
       let decoded ← subcircuit decodeInstructionCircuit rawInstrType
 
       -- Perform relevant memory accesses
-      let v1 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
-      let v2 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
-      let v3 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
+      let v1 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
+      let v2 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
+      let v3 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
       -- Compute next state
-      nextState { state, decoded, v1, v2, v3 }
+      nextStateCircuit { state, decoded, v1, v2, v3 }
     localLength := 30
 
 def femtoCairoCircuitSpec
@@ -600,7 +634,7 @@ def femtoCairoStepCircuitSoundness
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     : Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
   circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
-    Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemory, nextState, decodeInstructionCircuit]
+    Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemoryCircuit, nextStateCircuit, decodeInstructionCircuit]
 
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
