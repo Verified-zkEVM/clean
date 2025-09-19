@@ -317,11 +317,7 @@ def fetchInstructionCircuit
   Spec
   | pc, output =>
     match Spec.fetchInstruction program pc with
-      | some { rawInstrType, op1, op2, op3 } =>
-          output.rawInstrType = rawInstrType ∧
-          output.op1 = op1 ∧
-          output.op2 = op2 ∧
-          output.op3 = op3
+      | some claimed_output => output = claimed_output
       | none => False -- impossible, lookups ensure that memory accesses are valid
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.fetchInstruction, Spec.memoryAccess]
@@ -345,24 +341,18 @@ def fetchInstructionCircuit
         · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_false, false_and]
       · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, and_false, false_and]
 
-    case h_1 rawInstrType op1 op2 op3 h_eq =>
-      simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast, ↓reduceDIte, Option.bind_eq_bind,
-        Option.bind_some, Option.some.injEq, RawInstruction.mk.injEq, eval, fromElements, size,
-        toVars, toElements, Vector.map_mk, List.map_toArray, List.map_cons, Expression.eval,
-        List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray, ↓List.getElem_cons_zero,
-        ↓List.getElem_cons_succ]
-      obtain ⟨ h_eq_type, h_eq_op1, h_eq_op2, h_eq_op3 ⟩ := h_eq
-      rw [←h_eq_type, ←h_eq_op1, ←h_eq_op2, ←h_eq_op3]
+    case h_1 rawInstrType claimed_instruction instruction h_eq =>
+      simp_all [circuit_norm, explicit_provable_type]
+      -- obtain ⟨ h_eq_type, h_eq_op1, h_eq_op2, h_eq_op3 ⟩ := h_eq
+      rw [←h_eq]
 
       simp only [and_assoc] at h_holds
       obtain ⟨ h1, h1', h2, h2', h3, h3', h4, h4' ⟩ := h_holds
 
-      (repeat' constructor) <;>
-      · congr
-        rw [←Fin.val_eq_val]
+      congr <;>
+      · rw [←Fin.val_eq_val]
         simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1',
           Nat.mod_eq_of_lt h2', Nat.mod_eq_of_lt h3', Nat.mod_eq_of_lt h4']
-
   completeness := by
     sorry
 
@@ -574,7 +564,7 @@ def nextState : FormalCircuit (F p) StateTransitionInput State where
   completeness := by
     sorry
 
-def femtoCairoStepCircuit
+def femtoCairoStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) State State where
@@ -608,17 +598,96 @@ def femtoCairoAssumptions (_state : State (F p)) : Prop :=
 def femtoCairoStepCircuitSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : Soundness (F p) (femtoCairoStepCircuit program h_programSize memory h_memorySize) femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
-  circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepCircuit,
-    Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemory, nextState]
+    : Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
+  circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
+    Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemory, nextState, decodeInstructionCircuit]
+
+  obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
+  obtain ⟨pc, ap, fp⟩ := input
+  simp [circuit_norm, explicit_provable_type] at h_input
+  obtain ⟨h_input_pc, h_input_ap, h_input_fp⟩ := h_input
+
   obtain ⟨ c_fetch, c_decode, c_read1, c_read2, c_read3, c_next ⟩ := h_holds
-  simp [decodeInstructionCircuit] at c_decode
-  split at c_decode
-  case h_2 => contradiction
-  case h_1 instr_type addr1 addr2 addr3 h_eq =>
-    simp [circuit_norm, and_assoc] at c_decode
-    sorry
 
+  split at c_fetch
+  case h_2 =>
+    -- impossible, fetchInstructionCircuit ensures that
+    -- instruction fetch is always successful
+    contradiction
+  case h_1 raw_instruction h_eq =>
+    rw [h_input_pc] at h_eq
+    rw [h_eq, ←c_fetch]
+    simp [circuit_norm, explicit_provable_type]
 
+    split at c_decode
+    case h_2 =>
+      -- impossible, decodeInstructionCircuit ensures that
+      -- instruction decode is always successful
+      contradiction
+    case h_1 instr_type addr1 addr2 addr3 h_eq_decode =>
+      rw [h_eq_decode]
+      obtain ⟨ h_instr_type_val, h_instr_type_encoded_correctly, h_addr1_val,
+        h_addr1_encoded_correctly, h_addr2_val, h_addr2_encoded_correctly,
+        h_addr3_val, h_addr3_encoded_correctly ⟩ := c_decode
+      simp [circuit_norm, explicit_provable_type]
+
+      -- satisfy assumptions of read1
+      specialize c_read1 h_addr1_encoded_correctly
+      rw [h_addr1_val] at c_read1
+
+      -- satisfy assumptions of read2
+      specialize c_read2 h_addr2_encoded_correctly
+      rw [h_addr2_val] at c_read2
+
+      -- satisfy assumptions of read3
+      specialize c_read3 h_addr3_encoded_correctly
+      rw [h_addr3_val] at c_read3
+
+      -- satisfy assumptions of next
+      specialize c_next h_instr_type_encoded_correctly
+      rw [h_instr_type_val] at c_next
+
+      split at c_read1
+      case h_2 =>
+        -- impossible, readFromMemory ensures that
+        -- memory access is always successful
+        contradiction
+      case h_1 v1 h_eq_v1 =>
+        rw [h_eq_v1, ←c_read1]
+        split at c_read2
+        case h_2 =>
+          -- impossible, readFromMemory ensures that
+          -- memory access is always successful
+          contradiction
+        case h_1 v2 h_eq_v2 =>
+          rw [h_eq_v2, ←c_read2]
+          split at c_read3
+          case h_2 =>
+            -- impossible, readFromMemory ensures that
+            -- memory access is always successful
+            contradiction
+          case h_1 v3 h_eq_v3 =>
+            rw [h_eq_v3, ←c_read3]
+            simp [circuit_norm, explicit_provable_type]
+
+            split at c_next
+            case h_2 =>
+              -- impossible, nextState ensures that
+              -- state transition is always successful
+              contradiction
+            case h_1 next_state h_eq_next =>
+              rw [←c_next]
+              simp [explicit_provable_type, circuit_norm]
+
+def femtoCairoStepCircuit
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    : FormalCircuit (F p) State State := {
+      femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize with
+      Assumptions := femtoCairoAssumptions,
+      Spec := femtoCairoCircuitSpec program memory,
+      soundness := femtoCairoStepCircuitSoundness program h_programSize memory h_memorySize,
+      completeness := by sorry
+    }
 
 end Examples.FemtoCairo
