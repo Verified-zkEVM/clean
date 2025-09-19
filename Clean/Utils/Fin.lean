@@ -73,7 +73,7 @@ lemma foldl_eq_sum_range {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : 
   intro n' f'
   induction n' with
   | zero =>
-    simp [Fin.foldl_zero, Finset.range_zero, Finset.sum_empty]
+    simp [Fin.foldl_zero, Finset.range_zero]
   | succ n'' ih =>
     rw [Fin.foldl_succ_last]
     rw [Finset.sum_range_succ]

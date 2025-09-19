@@ -71,7 +71,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, h_inputs, Spec, Assumptions, main, ByteTable]
+    simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable]
 
     set z := env.get i0
     set carry_out := env.get (i0 + 1)

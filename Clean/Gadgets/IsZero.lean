@@ -28,9 +28,9 @@ instance elaborated : ElaboratedCircuit F M field where
   main
   localLength _ := 2 * size M
   localLength_eq := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
+    simp +arith [circuit_norm, main, IsZeroField.circuit]
   subcircuitsConsistent := by
-    simp +arith [circuit_norm, main, IsZeroField.circuit.localLength_eq, IsZeroField.circuit]
+    simp +arith [circuit_norm, main, IsZeroField.circuit]
 
 def Assumptions (_ : M F) : Prop := True
 
@@ -56,7 +56,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
   induction n generalizing i₀
-  · simp only [id_eq, Fin.getElem_fin, Fin.foldl_zero, IsEmpty.forall_iff, ↓reduceIte, Expression.eval]
+  · simp only [id_eq, Fin.getElem_fin, Fin.foldl_zero, Expression.eval]
     simp only [not_lt_zero', IsEmpty.forall_iff, implies_true, ↓reduceIte]
   · rename_i pre h_ih
     simp only [Fin.foldl_succ_last, Expression.eval]
@@ -68,8 +68,8 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
         vals_pre, vars_pre, h_eval]
     specialize h_ih h_eval_pre (i₀:=i₀)
     simp only [vars_pre, vals_pre] at *
-    simp only [Nat.add_one_sub_one, Vector.drop_eq_cast_extract, Vector.cast_rfl, Fin.getElem_fin,
-      Vector.getElem_cast, Vector.getElem_extract, forall_const, id_eq] at h_ih
+    simp only [Fin.getElem_fin,
+      Vector.getElem_cast, forall_const, id_eq] at h_ih
     simp only [id_eq, Fin.getElem_fin, Fin.coe_castSucc, Fin.val_last]
     specialize h_ih (by
       intro i
@@ -81,7 +81,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     rw [h_ih]
     specialize h_isZero (.last pre) trivial
     norm_num at h_isZero ⊢
-    simp only [h_isZero, Fin.forall_fin_succ']
+    simp only [h_isZero]
     split_ifs <;> try rfl
     · rename_i h_smaller h_last h_all
       apply False.elim

@@ -54,7 +54,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
-    simp only [Circuit.ConstraintsHold.Soundness] at h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
@@ -69,7 +68,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    simp only [roundWithPermute.output_eq]
+    simp only
     rw [ProvableStruct.eval_eq_eval]
     simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
@@ -82,7 +81,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   completeness := by
     intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-    simp only [Circuit.ConstraintsHold.Completeness]
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
@@ -216,7 +214,7 @@ def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
 
     simp only [roundWithPermute] at h_spec1_1 h_spec1_2 h_spec2_1 h_spec2_2
-    simp only [FourRoundsSpec, applyFourRounds, applyTwoRounds]
+    simp only [FourRoundsSpec, applyFourRounds]
 
     -- Build the result by chaining the four rounds
     constructor <;> aesop
