@@ -53,15 +53,14 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [elaborated, eval_vector, Vector.getElem_map, Vector.getElem_mapIdx,
+  simp only [elaborated, eval_vector, Vector.getElem_map,
     KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [CompletenessAssumptions, Assumptions, KeccakState.Normalized] at state_norm
-  simp only [h_input, state_norm, elaborated, main, circuit_norm,
-    Rotation64.circuit, Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec,
-    Vector.getElem_zip] at h_holds ⊢
+  simp only [Assumptions, KeccakState.Normalized] at state_norm
+  simp only [h_input, state_norm, elaborated, main, circuit_norm, Rotation64.circuit,
+    Rotation64.elaborated, Rotation64.Assumptions, Rotation64.Spec] at h_holds ⊢
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by

@@ -105,7 +105,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   have h_rot_vector' : y.vals = rotRight64_u64 x.vals o := by
     rw [U64.ByteVector.ext_iff, ←rotRight64_bytes_u64_eq]
     intro i hi
-    simp only [U64.vals, U64.ByteVector.toLimbs_map, Vector.getElem_map, rotRight64_bytes, size, Vector.getElem_ofFn]
+    simp only [U64.vals, U64.ByteVector.toLimbs_map, Vector.getElem_map, rotRight64_bytes, Vector.getElem_ofFn]
     exact (h_rot_vector i hi).right
 
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
@@ -126,7 +126,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
   -- we only have to prove the byte decomposition assumptions
   rw [CompletenessAssumptions, Assumptions, U64.ByteVector.normalized_iff] at x_normalized
-  simp_all only [size, U64.ByteVector.getElem_eval_toLimbs, forall_const]
+  simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit order U64 U64 := {
   elaborated := elaborated order offset

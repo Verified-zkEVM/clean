@@ -50,13 +50,14 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [elaborated, main, thetaC_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit, Xor64.elaborated]
+  simp only [main, thetaC_loop, circuit_norm, eval_vector, KeccakState.value, Xor64.circuit,
+    Xor64.elaborated]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, h_input, eval_vector, elaborated,
-    main, Xor64.circuit, Xor64.elaborated, Xor64.Assumptions, Xor64.Spec] at h_holds
-  simp only [and_assoc, Nat.reduceAdd, Nat.reduceMod] at h_holds
+  simp only [circuit_norm, h_input, main, Xor64.circuit, Xor64.elaborated, Xor64.Assumptions,
+    Xor64.Spec] at h_holds
+  simp only [Nat.reduceAdd] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
@@ -69,8 +70,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [h_input, circuit_norm, Assumptions, eval_vector,
-    main, Xor64.circuit, Xor64.elaborated, Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec, KeccakState.Normalized] at h_env ⊢
+  simp only [h_input, circuit_norm, main, Xor64.circuit, Xor64.elaborated,
+    Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 

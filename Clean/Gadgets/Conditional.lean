@@ -54,7 +54,7 @@ theorem soundness [DecidableEq F] {sentences : PropertySet F} (order : SentenceO
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
-  simp only [Assumptions, Spec] at h_assumptions ⊢
+  simp only at h_assumptions
 
   rw [ProvableType.ext_iff]
   intro i hi
@@ -72,7 +72,7 @@ theorem soundness [DecidableEq F] {sentences : PropertySet F} (order : SentenceO
   | inr h_one =>
     simp only [h_one]
     have : (1 : F) = 1 ↔ True := by simp
-    simp only [this, if_true]
+    simp only [if_true]
     ring_nf
 
 def CompletenessAssumptions [DecidableEq F] {sentences : PropertySet F} (_ : YieldContext sentences) (input : Inputs M F) :=

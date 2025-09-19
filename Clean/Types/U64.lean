@@ -61,8 +61,8 @@ lemma ext {x y : U64 (F p)}
     : x = y :=
   by match x, y with
   | ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩ =>
-    simp only [h0, h1, h2, h3, h4, h5, h6, h7] at *
-    simp only [h0, h1, h2, h3, h4, h5, h6, h7]
+    simp only at h0 h1 h2 h3 h4 h5 h6 h7
+    congr
 
 /--
   A 64-bit unsigned integer is normalized if all its limbs are less than 256.
@@ -161,7 +161,7 @@ lemma fromUInt64_normalized (x : UInt64) : (fromUInt64 (p:=p) x).Normalized := b
   simp [h]
 
 theorem value_fromUInt64 (x : UInt64) : value (fromUInt64 (p:=p) x) = x.toNat := by
-  simp only [valueU64, value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
+  simp only [value_horner, fromUInt64, decomposeNat, UInt64.toFin_val]
   set x := x.toNat
   have h (x : ℕ) : ZMod.val (n:=p) (x % 256 : ℕ) = x % 256 := by
     rw [ZMod.val_cast_of_lt]
@@ -256,10 +256,10 @@ omit [Fact (Nat.Prime p)] p_large_enough in
 theorem normalized_iff {x : U64 (F p)} :
     x.Normalized ↔ ∀ i (_ : i < 8), x.toLimbs[i].val < 256 := by
   rcases x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
-  simp only [toLimbs, Normalized, toElements, size, Vector.getElem_mk, List.getElem_toArray]
+  simp only [toLimbs, Normalized, toElements, Vector.getElem_mk, List.getElem_toArray]
   constructor
   · intro h i hi
-    repeat (rcases hi with _ | hi; try simp [*, size])
+    repeat (rcases hi with _ | hi; try simp [*])
   · intro h
     let h0 := h 0 (by decide)
     let h1 := h 1 (by decide)

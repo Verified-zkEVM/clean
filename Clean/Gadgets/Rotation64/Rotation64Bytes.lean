@@ -83,16 +83,16 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
 
   simp [circuit_norm, Spec, U64.value, -Nat.reducePow]
   and_intros
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow]; omega)
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, rotRight64, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, main, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, rotRight64, circuit_norm, -Nat.reducePow]; omega)
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
+  · fin_cases off <;> (simp_all [explicit_provable_type, elaborated, circuit_norm, -Nat.reducePow])
 
 theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (off : Fin 8) : Completeness (F p) sentences (elaborated order off) CompletenessAssumptions := by
   rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions

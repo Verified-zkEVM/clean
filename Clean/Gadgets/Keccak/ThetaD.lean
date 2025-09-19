@@ -44,8 +44,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   dsimp only [Assumptions] at row_norm
   dsimp only [circuit_norm, Spec, elaborated, main, Xor64.circuit, Xor64.elaborated, Rotation64.circuit, Rotation64.elaborated] at h_holds ⊢
   simp only [circuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
-  simp only [Nat.reduceMod, zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd, and_assoc] at h_holds
-  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, KeccakState.value, eval_vector]
+  simp only [zero_sub, Fin.coe_neg_one, and_imp, add_assoc, Nat.reduceAdd] at h_holds
+  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, eval_vector]
 
   have s (i : ℕ) (hi : i < 5) : eval env (row_var[i]) = row[i] := by
     rw [←h_input, Vector.getElem_map]
@@ -55,7 +55,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   specialize h_rot0 (row_norm 1)
   specialize h_xor0 (row_norm 4) h_rot0.2.2
-  
+
   constructor
   · -- Prove yielded sentences hold (vacuous - no yields)
     intro s hs _
@@ -64,7 +64,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   specialize h_rot1 (row_norm 2)
   specialize h_xor1 (row_norm 0) h_rot1.2.2
-  
+
   specialize h_rot2 (row_norm 3)
   specialize h_xor2 (row_norm 1) h_rot2.2.2
 
@@ -74,16 +74,16 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   specialize h_rot4 (row_norm 0)
   specialize h_xor4 (row_norm 3) h_rot4.2.2
 
-  simp [Specs.Keccak256.thetaD, h_xor0.2, h_xor1.2, h_xor2.2, h_xor3.2, h_xor4.2, 
+  simp [Specs.Keccak256.thetaD, h_xor0.2, h_xor1.2, h_xor2.2, h_xor3.2, h_xor4.2,
     h_rot0.2.1, h_rot1.2.1, h_rot2.2.1, h_rot3.2.1, h_rot4.2.1, rotLeft64]
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields row_var h_env row h_input h_assumptions
   simp only [CompletenessAssumptions, Assumptions, KeccakRow.normalized_iff] at h_assumptions
   dsimp only [circuit_norm, elaborated, main, Xor64.circuit, Xor64.elaborated, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
-  simp_all only [circuit_norm, getElem_eval_vector, h_input,
+  simp_all only [circuit_norm, getElem_eval_vector,
     Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec, Rotation64.CompletenessAssumptions, Rotation64.Assumptions, Rotation64.Spec,
-    add_assoc, seval, h_assumptions, true_and, true_implies]
+    add_assoc, seval, true_and, true_implies]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakRow KeccakRow :=
   { elaborated := elaborated order

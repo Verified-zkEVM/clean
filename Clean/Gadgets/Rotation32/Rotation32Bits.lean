@@ -105,7 +105,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   have h_rot_vector' : y.vals = rotRight32_u32 x.vals o := by
     rw [U32.ByteVector.ext_iff, ←rotRight32_bytes_u32_eq]
     intro i hi
-    simp only [U32.vals, U32.ByteVector.toLimbs_map, Vector.getElem_map, rotRight32_bytes, size, Vector.getElem_ofFn]
+    simp only [U32.vals, U32.ByteVector.toLimbs_map, Vector.getElem_map, rotRight32_bytes, Vector.getElem_ofFn]
     exact (h_rot_vector i hi).right
 
   rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']

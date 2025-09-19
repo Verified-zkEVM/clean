@@ -188,11 +188,11 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   · omega
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field :=
-  { elaborated := elaborated order, 
-    Assumptions, 
+  { elaborated := elaborated order,
+    Assumptions,
     CompletenessAssumptions,
-    Spec, 
-    soundness := soundness order, 
+    Spec,
+    soundness := soundness order,
     completeness := completeness order,
     completenessAssumptions_implies_assumptions := fun _ _ h => h }
 

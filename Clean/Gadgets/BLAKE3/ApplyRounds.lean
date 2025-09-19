@@ -60,7 +60,6 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     constructor
     · sorry  -- Prove yielded sentences hold
 
-    simp only [Circuit.ConstraintsHold.Soundness] at h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
@@ -75,7 +74,7 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     specialize h_holds2 asm2
 
     -- Now we need to show the spec holds for the output
-    simp only [(roundWithPermute order).output_eq]
+    simp only
     rw [ProvableStruct.eval_eq_eval]
     simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
@@ -88,7 +87,6 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
   completeness := by
     intro offset env yields input_var h_env_uses_witnesses input h_eval h_assumptions
-    simp only [Circuit.ConstraintsHold.Completeness]
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
@@ -244,7 +242,7 @@ def fourRoundsApplyStyle {sentences : PropertySet (F p)} (order : SentenceOrder 
     obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
 
     simp only [roundWithPermute] at h_spec1_1 h_spec1_2 h_spec2_1 h_spec2_2
-    simp only [FourRoundsSpec, applyFourRounds, applyTwoRounds]
+    simp only [FourRoundsSpec, applyFourRounds]
 
     -- Build the result by chaining the four rounds
     constructor
@@ -275,7 +273,7 @@ def sixRoundsWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder 
     -- fourRoundsWithPermute.Spec ensures mid is normalized through its chain
     obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
     obtain ⟨mid'', h_spec2_1, h_spec2_2⟩ := h_spec2
-    simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2
+    simp only [roundWithPermute] at h_spec2_2
     rcases h_spec2_2 with ⟨_, h_mid_state_norm, _, h_mid_msg_norm⟩
     exact ⟨h_mid_state_norm, h_mid_msg_norm⟩
   ) (by

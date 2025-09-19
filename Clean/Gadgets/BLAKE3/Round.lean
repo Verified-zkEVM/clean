@@ -63,9 +63,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     List.cons_append, List.nil_append, Operations.localLength.eq_5, Operations.localLength.eq_1,
     Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
     Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
-  simp only [G.Assumptions, ↓ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
-    ProvableStruct.eval.go, h_input, getElem_eval_vector, G.Spec, Fin.isValue,
-    Nat.cast_zero, and_imp, and_true] at h_holds
+  simp only [G.Assumptions, h_input, getElem_eval_vector, G.Spec, Fin.isValue, and_imp] at h_holds
   constructor
   · sorry  -- Prove yielded sentences hold
 
@@ -92,13 +90,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   clear c1 c2 c3 c4 c5 c6 c7
 
   -- now c8 is basically the goal
-  simp only [Spec, ElaboratedCircuit.output, Circuit.output, main, G.circuit, G.elaborated,
-    Fin.isValue, Fin.val_zero, Fin.coe_ofNat_eq_mod, Nat.reduceMod, Fin.val_one, Fin.val_two,
-    Nat.mod_succ, pure, Circuit.bind_def, subcircuit, FormalCircuit.toSubcircuit,
-    Circuit.operations, ElaboratedCircuit.main, ElaboratedCircuit.localLength, List.append_nil,
-    Operations.localLength.eq_5, Operations.localLength, add_zero, id_eq, subcircuit.eq_1,
-    FormalCircuit.toSubcircuit.eq_1, Operations.localLength.eq_1, Nat.add_zero, List.cons_append,
-    List.nil_append, Circuit.localLength, Operations.SubcircuitsConsistent.eq_1, Specs.BLAKE3.round,
+  simp only [ElaboratedCircuit.output, G.circuit, G.elaborated,
+    Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod,
+    Nat.mod_succ, ElaboratedCircuit.localLength, Specs.BLAKE3.round,
     Vector.foldl, roundConstants, ↓Fin.getElem_fin, ↓Vector.getElem_map, List.size_toArray,
     List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, List.foldl_toArray',
     List.foldl_cons, List.foldl_nil]
@@ -128,7 +122,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   simp only [Fin.forall_fin_succ, Fin.isValue, Fin.val_zero, Fin.val_succ, zero_add, Nat.reduceAdd,
     Fin.val_eq_zero, IsEmpty.forall_iff, and_true] at h_assumptions
 
-  simp only [h_assumptions, getElem_eval_vector, and_self]
+  simp only [h_assumptions, and_self]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs BLAKE3State := {
   elaborated := elaborated order
