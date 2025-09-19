@@ -62,17 +62,33 @@ def mkFibSentence
   entry := #v[index, value]
 }
 
-/-- Simple order: Fib at smaller index can be used for Fib at larger index -/
-def FibOrder : SentenceOrder (@FibPropertySet F _) := {
-  CanDepend := fun s t =>
+/-- Dependency relation for Fib sentences based on index ordering -/
+def FibCanDepend : Sentence (@FibPropertySet F _) F → Sentence (@FibPropertySet F _) F → Prop :=
+  fun s t =>
     s.name = "Fib" ∧ t.name = "Fib" ∧
     ∃ (ns nt : ℕ),
-      -- Since both sentences are "Fib", their arity is 2
-      -- We use sorry here as proving property equality from name requires PropertySet details
       ∃ (h1 : s.property.arity = 2),
       ∃ (h2 : t.property.arity = 2),
       s.entry[0] = (ns : F) ∧ t.entry[0] = (nt : F) ∧ ns < nt
-  well_founded := by sorry
+
+/-- Extract natural number index from a Fib sentence, default to 0 for non-Fib -/
+def sentenceToNat (s : Sentence (@FibPropertySet F _) F) : ℕ :=
+  if s.name = "Fib" then
+    -- For Fib sentences, we need to extract the natural number from entry[0]
+    -- This is safe because FibCanDepend only relates Fib sentences
+    -- and the well-foundedness proof only needs consistency for those
+    sorry  -- Will implement extraction logic
+  else
+    0
+
+/-- The FibCanDepend relation is well-founded -/
+theorem FibCanDepend_wf : WellFounded (@FibCanDepend F _) := by
+  sorry  -- Will prove using InvImage.wf
+
+/-- Simple order: Fib at smaller index can be used for Fib at larger index -/
+def FibOrder : SentenceOrder (@FibPropertySet F _) := {
+  CanDepend := FibCanDepend
+  well_founded := FibCanDepend_wf
 }
 
 /-- Lemma: The Fib property correctly captures the Fibonacci sequence -/
@@ -193,13 +209,13 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
     obtain ⟨ k, h_assumptions ⟩ := h_assumptions
     specialize h_n_valid (by
       apply h_dep
-      simp only [FibOrder, mkFibSentence, Sentence.eval, true_and, circuit_norm]
-      exists k, k + 2
+      simp only [FibOrder, FibCanDepend, mkFibSentence, Sentence.eval, circuit_norm]
+      use k, k + 2
       aesop)
     specialize h_s_n_valid (by
       apply h_dep
-      simp only [FibOrder, mkFibSentence, Sentence.eval, true_and, circuit_norm]
-      exists k + 1, k + 2
+      simp only [FibOrder, FibCanDepend, mkFibSentence, Sentence.eval, circuit_norm]
+      use k + 1, k + 2
       aesop)
     simp only [SentenceHolds, Sentence.eval, mkFibSentence, FibProperty] at h_n_valid h_s_n_valid ⊢
     obtain ⟨ n', h_n, h_n_valid ⟩ := h_n_valid
