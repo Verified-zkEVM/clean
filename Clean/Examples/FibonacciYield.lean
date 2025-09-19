@@ -30,20 +30,20 @@ lemma fib_add_two {F : Type} [Field F] (n : ℕ) :
 
 section FibProperty
 
-variable {F : Type} [Field F]
+variable {p : ℕ} [Fact p.Prime]
 
 /-- The Fib property that takes 2 arguments: index and value -/
-def FibProperty : Property F := {
+def FibProperty : Property (F p) := {
   name := "Fib"
   arity := 2
   Predicate := fun v =>
     -- v[0] is the index (as a field element), v[1] is the fibonacci value
     -- The predicate checks that v[1] equals fib of the natural number corresponding to v[0]
-    ∃ n : ℕ, v[0] = (n : F) ∧ v[1] = fib n
+    ∃ n : ℕ, v[0] = (n : F p) ∧ v[1] = fib n
 }
 
 /-- PropertySet containing only the Fib property -/
-def FibPropertySet : PropertySet F := {
+def FibPropertySet : PropertySet (F p) := {
   properties := Std.HashMap.ofList [("Fib", FibProperty)]
   NameConsistency := by
     intro _ _
@@ -53,7 +53,7 @@ def FibPropertySet : PropertySet F := {
 
 /-- Helper function to create a Fibonacci sentence -/
 def mkFibSentence
-    (index : Expression F) (value : Expression F) : Sentence (FibPropertySet : PropertySet F) (Expression F) := {
+    (index : Expression (F p)) (value : Expression (F p)) : Sentence (FibPropertySet : PropertySet (F p)) (Expression (F p)) := {
   name := "Fib"
   property := FibProperty
   propertyFound := by
@@ -63,37 +63,52 @@ def mkFibSentence
 }
 
 /-- Dependency relation for Fib sentences based on index ordering -/
-def FibCanDepend : Sentence (@FibPropertySet F _) F → Sentence (@FibPropertySet F _) F → Prop :=
+def FibCanDepend : Sentence (@FibPropertySet p _) (F p) → Sentence (@FibPropertySet p _) (F p) → Prop :=
   fun s t =>
     s.name = "Fib" ∧ t.name = "Fib" ∧
     ∃ (ns nt : ℕ),
       ∃ (h1 : s.property.arity = 2),
       ∃ (h2 : t.property.arity = 2),
-      s.entry[0] = (ns : F) ∧ t.entry[0] = (nt : F) ∧ ns < nt
+      s.entry[0] = (ns : F p) ∧ t.entry[0] = (nt : F p) ∧ ns < nt
 
 /-- Extract natural number index from a Fib sentence, default to 0 for non-Fib -/
-def sentenceToNat (s : Sentence (@FibPropertySet F _) F) : ℕ :=
-  if s.name = "Fib" then
-    -- For Fib sentences, we need to extract the natural number from entry[0]
-    -- This is safe because FibCanDepend only relates Fib sentences
-    -- and the well-foundedness proof only needs consistency for those
-    sorry  -- Will implement extraction logic
+def sentenceToNat (s : Sentence (@FibPropertySet p _) (F p)) : ℕ := by
+  -- Check if this is a Fib sentence
+  if h : s.name = "Fib" then
+    -- For a Fib sentence, we know from FibProperty.Predicate that
+    -- there exists n : ℕ such that s.entry[0] = (n : F)
+    -- We need to extract this n
+    have h_prop : s.property = FibProperty := by
+      rcases s
+      rename_i name prop h_prop entry
+      simp only at h
+      simp only [FibPropertySet, h] at h_prop
+      simp only [Std.HashMap.ofList_singleton, Std.HashMap.mem_insert, BEq.rfl,
+        Std.HashMap.not_mem_empty, or_false, getElem?_pos, Std.HashMap.getElem_insert_self,
+        Option.some.injEq] at h_prop
+      simp_all
+    rcases s
+    rename_i name prop h_prop entry
+    simp only at h_prop
+    simp only [h_prop, FibProperty] at entry
+    exact entry[0].val
   else
-    0
+    -- Not a Fib sentence, return 0
+    exact 0
 
 /-- The FibCanDepend relation is well-founded -/
-theorem FibCanDepend_wf : WellFounded (@FibCanDepend F _) := by
+theorem FibCanDepend_wf : WellFounded (@FibCanDepend p _) := by
   sorry  -- Will prove using InvImage.wf
 
 /-- Simple order: Fib at smaller index can be used for Fib at larger index -/
-def FibOrder : SentenceOrder (@FibPropertySet F _) := {
+def FibOrder : SentenceOrder (@FibPropertySet p _) := {
   CanDepend := FibCanDepend
   well_founded := FibCanDepend_wf
 }
 
 /-- Lemma: The Fib property correctly captures the Fibonacci sequence -/
 lemma fib_property_correct (n : ℕ) :
-  FibProperty.Predicate #v[(n : F), fib n] := by
+  FibProperty.Predicate #v[(n : F p), fib n] := by
   use n
   simp
 
@@ -102,7 +117,7 @@ end FibProperty
 variable {p : ℕ} [Fact p.Prime]
 
 /-- Base circuit that yields Fib(0,1) and Fib(1,1) -/
-def FibBase.main (_input : Var unit (F p)) : Circuit (@FibPropertySet (F p) _) (Var unit (F p)) := do
+def FibBase.main (_input : Var unit (F p)) : Circuit (@FibPropertySet p _) (Var unit (F p)) := do
   -- Yield Fib 0 1 (0th Fibonacci number is 1)
   Circuit.yield (mkFibSentence 0 1)
 
@@ -111,7 +126,7 @@ def FibBase.main (_input : Var unit (F p)) : Circuit (@FibPropertySet (F p) _) (
 
   return ()
 
-def FibBase.circuit : FormalCircuit (@FibOrder (F p) _) unit unit where
+def FibBase.circuit : FormalCircuit (@FibOrder p _) unit unit where
   main := FibBase.main
   localLength _ := 0
   localLength_eq := by
@@ -152,7 +167,7 @@ def FibBase.circuit : FormalCircuit (@FibOrder (F p) _) unit unit where
   completeness := by circuit_proof_start
 
 /-- Step circuit parameterized by n, a, b that uses Fib(n,a) and Fib(n+1,b) and yields Fib(n+2,a+b) -/
-def FibStep.main (n a b : F p) (_input : Var unit (F p)) : Circuit (@FibPropertySet (F p) _) (Var unit (F p)) := do
+def FibStep.main (n a b : F p) (_input : Var unit (F p)) : Circuit (@FibPropertySet p _) (Var unit (F p)) := do
   -- Use Fib n a (assert that Fib(n) = a is available)
   use (mkFibSentence n a)
 
@@ -164,7 +179,7 @@ def FibStep.main (n a b : F p) (_input : Var unit (F p)) : Circuit (@FibProperty
 
   return ()
 
-def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit where
+def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder p _) unit unit where
   main := FibStep.main n a b
   localLength _ := 0
   localLength_eq := by
@@ -189,7 +204,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
     (∃ k : ℕ, k + 2 < p ∧ n = (k : F p) ∧
               a = fib k ∧
               b = fib (k + 1)) ∧
-    let mkSent := @mkFibSentence (F p) _
+    let mkSent := @mkFibSentence p _
     let env : Environment (F p) := Environment.mk (fun _ => 0)
     (mkSent n a).eval env ∈ yields.yielded ∧
     (mkSent (n + 1) b).eval env ∈ yields.yielded
@@ -247,7 +262,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder (F p) _) unit unit 
       aesop
 
 /-- Example: Compose circuits to compute Fibonacci sequence up to index 4 -/
-def computeFibUpTo4 : GeneralFormalCircuit (@FibOrder (F p) _) unit unit := by
+def computeFibUpTo4 : GeneralFormalCircuit (@FibOrder p _) unit unit := by
   -- Start with base, then apply step twice
   -- Base yields Fib(0,1) and Fib(1,1)
   -- Step with (0,1,1) yields Fib(2,2)
