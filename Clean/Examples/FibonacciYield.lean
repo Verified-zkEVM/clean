@@ -69,7 +69,7 @@ def FibCanDepend : Sentence (@FibPropertySet p _) (F p) → Sentence (@FibProper
     ∃ (ns nt : ℕ),
       ∃ (h1 : s.property.arity = 2),
       ∃ (h2 : t.property.arity = 2),
-      s.entry[0] = (ns : F p) ∧ t.entry[0] = (nt : F p) ∧ ns < nt
+      s.entry[0]'(by omega) = (ns : F p) ∧ t.entry[0]'(by omega) = (nt : F p) ∧ ns < nt ∧ nt < p
 
 /-- Extract natural number index from a Fib sentence, default to 0 for non-Fib -/
 def sentenceToNat (s : Sentence (@FibPropertySet p _) (F p)) : ℕ := by
@@ -90,7 +90,9 @@ def sentenceToNat (s : Sentence (@FibPropertySet p _) (F p)) : ℕ := by
     rcases s
     rename_i name prop h_prop entry
     simp only at h_prop
-    simp only [h_prop, FibProperty] at entry
+    have : 0 < prop.arity := by
+      simp only [h_prop, FibProperty]
+      omega
     exact entry[0].val
   else
     -- Not a Fib sentence, return 0
@@ -101,19 +103,28 @@ lemma FibCanDepend_implies_nat_lt {p : ℕ} [Fact p.Prime] :
     ∀ s t, @FibCanDepend p _ s t → @sentenceToNat p _ s < @sentenceToNat p _ t := by
   intro s t h_dep
   -- Unpack the FibCanDepend relation
-  obtain ⟨h_s_fib, h_t_fib, ns, nt, h1, h2, h_s_entry, h_t_entry, h_lt⟩ := h_dep
+  obtain ⟨h_s_fib, h_t_fib, ns, nt, h1, h2, h_s_entry, h_t_entry, h_lt, h_nt_lt_p⟩ := h_dep
+
   -- Now we need to show sentenceToNat s < sentenceToNat t
   -- By definition of sentenceToNat and the fact that both are Fib sentences
   unfold sentenceToNat
   -- Both have name "Fib", so the if branches are taken
   simp only [h_s_fib, h_t_fib]
+
   -- The goal now has if h : True then ... else 0 for both sides
   -- Since True is always true, we can simplify
   split
   · -- Now we're in the case where both conditions are true
     -- The goal is about (cast).mp s.entry[0].val < (cast).mp t.entry[0].val
-    -- We need to handle the cast operation
-    sorry  -- Need to complete the proof about ZMod.val
+    -- We need to convert using our knowledge that s.entry[0] = (ns : F p) and ns < nt < p
+    have h_ns_lt_p : ns < p := Nat.lt_trans h_lt h_nt_lt_p
+    convert h_lt
+    · simp only [h_s_entry]
+      rw [ZMod.val_cast_of_lt]
+      assumption
+    · simp only [h_t_entry]
+      rw [ZMod.val_cast_of_lt]
+      assumption
   · -- This case is impossible since we have ¬True
     contradiction
 

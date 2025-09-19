@@ -11,6 +11,7 @@ import Clean.Circomlib.Mux1
 import Clean.Circomlib.Sign
 import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
+import Clean.Examples.FibonacciYield
 import Clean.Examples.ToJson
 import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
