@@ -1,6 +1,8 @@
 import Clean.Circuit.Provable
-
+import Clean.Utils.Field
+import Clean.Utils.Primes
 namespace Examples.FemtoCairo.Types
+variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
   State of the femtoCairo machine, represented as a structure (pc, ap, fp).
@@ -146,5 +148,28 @@ instance : ProvableStruct StateTransitionInput where
 lemma State.ext {F : Type} {s1 s2 : State F} (h1 : s1.pc = s2.pc) (h2 : s1.ap = s2.ap) (h3 : s1.fp = s2.fp) : s1 = s2 := by
   cases s1; cases s2; simp_all only
 
+def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode =>
+  if mode.isDoubleAddressing = 1 then 0
+  else if mode.isApRelative = 1 then 1
+  else if mode.isFpRelative = 1 then 2
+  else 3
+
+def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
+  (mode.isDoubleAddressing = 1 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 1 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨
+  (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 1)
+
+def DecodedInstructionType.val : DecodedInstructionType (F p) → ℕ := fun instrType =>
+  if instrType.isAdd = 1 then 0
+  else if instrType.isMul = 1 then 1
+  else if instrType.isStoreState = 1 then 2
+  else 3
+
+def DecodedInstructionType.isEncodedCorrectly (instrType : DecodedInstructionType (F p)) : Prop :=
+  (instrType.isAdd = 1 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
+  (instrType.isAdd = 0 ∧ instrType.isMul = 1 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
+  (instrType.isAdd = 0 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 1 ∧ instrType.isLoadState = 0) ∨
+  (instrType.isAdd = 0 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 1)
 
 end Examples.FemtoCairo.Types
