@@ -33,8 +33,8 @@ instance : ProvableType RowType where
 -/
 def fibRelation : TwoRowsConstraint RowType (F p) := do
   let curr ← TableConstraint.getCurrRow
-  let next_x ← copyToVar curr.y
-  let next_y ← Gadgets.Addition8.circuit { x := curr.x, y := curr.y }
+  let next_x ← copyToVar (sentences:=emptyPropertySet (F p)) curr.y
+  let next_y ← Gadgets.Addition8.circuit (emptyOrder (F p)) { x := curr.x, y := curr.y }
   assignVar (.next 0) next_x
   assign (.next 1) next_y
 
@@ -73,7 +73,8 @@ lemma boundaryFib_eq : boundaryFib (p:=p) = (do
 
 omit p_large_enough in
 lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
+  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) (emptyYields (F p)) (emptyChecked (F p))
+  boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
   set env := boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
@@ -132,7 +133,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
       have hx_curr : env.get 0 = curr.x := by rfl
-      have hy_curr : env.get 1 = curr.y := by rfl
+      have hy_curr : env.get (0 + 1) = curr.y := by rfl
       have hx_next : env.get 2 = next.x := by rfl
       have hy_next : env.get (2 + 1) = next.y := by rfl
       rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
@@ -154,6 +155,8 @@ def formalFibTable : FormalTable (F p) RowType := {
         apply fib8_less_than_256
 
       specialize add_holds ⟨ lookup_first_col, lookup_second_col ⟩
+      -- Extract the actual spec from the conjunction (skip yields part)
+      have add_spec := add_holds.2
 
       have spec1 : next.x.val = fib8 (rest.len + 1) := by
         rw [←curr_fib1]
@@ -163,7 +166,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       have spec2 : (next.y).val = fib8 (rest.len + 2) := by
         simp only [fib8]
         rw [←curr_fib0, ←curr_fib1]
-        assumption
+        exact add_spec
 
       exact ⟨spec1, spec2⟩
 }

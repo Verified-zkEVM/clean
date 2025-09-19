@@ -8,9 +8,10 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
-def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
+def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    : FormalCircuit order Addition8FullCarry.Inputs field where
   main := fun inputs => do
-    let { z, .. } ← Addition8FullCarry.circuit inputs
+    let { z, .. } ← Addition8FullCarry.circuit order inputs
     return z
 
   localLength _ := 2
@@ -19,15 +20,24 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
   Assumptions := fun { x, y, carryIn } =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-  Spec := fun { x, y, carryIn } z =>
+  CompletenessAssumptions _ := fun { x, y, carryIn } =>
+    x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
+
+  Spec _ := fun { x, y, carryIn } z =>
     z.val = (x.val + y.val + carryIn.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
-  soundness := by simp_all [circuit_norm,
-    Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
+  soundness := by
+    circuit_proof_start
+    constructor
+    · sorry
+    simp_all [circuit_norm,
+      Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
   completeness := by simp_all [circuit_norm,
-    Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
+    Addition8FullCarry.circuit, Addition8FullCarry.CompletenessAssumptions, Addition8FullCarry.Assumptions]
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 namespace Addition8
 structure Inputs (F : Type) where
@@ -43,22 +53,30 @@ instance : ProvableStruct Inputs where
 Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    : FormalCircuit order Inputs field where
   main := fun { x, y } =>
-    Addition8Full.circuit { x, y, carryIn := 0 }
+    Addition8Full.circuit order { x, y, carryIn := 0 }
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
 
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
-  Spec | { x, y }, z => z.val = (x.val + y.val) % 256
+  CompletenessAssumptions _ | { x, y } => x.val < 256 ∧ y.val < 256
+
+  Spec _ | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
-  soundness := by 
+  soundness := by
+    circuit_proof_start
+    constructor
+    · sorry
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
-  completeness := by 
+  completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Addition8
 end Gadgets

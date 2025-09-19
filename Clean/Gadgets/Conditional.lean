@@ -24,7 +24,7 @@ instance : ProvableStruct (Inputs M) where
   toComponents := fun { selector, ifTrue, ifFalse } => .cons selector (.cons ifTrue (.cons ifFalse .nil))
   fromComponents := fun (.cons selector (.cons ifTrue (.cons ifFalse .nil))) => { selector, ifTrue, ifFalse }
 
-def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
+def main [DecidableEq F] {sentences : PropertySet F} (input : Var (Inputs M) F) : Circuit sentences (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
 
   -- Inline element-wise scalar multiplication
@@ -42,21 +42,20 @@ def Assumptions (input : Inputs M F) : Prop :=
 /--
 Specification: Output is selected based on selector value using if-then-else.
 -/
-def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
+def Spec [DecidableEq F] {sentences : PropertySet F} (_ : CheckedYields sentences) (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
-instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
+instance elaborated [DecidableEq F] {sentences : PropertySet F} : ElaboratedCircuit F sentences (Inputs M) M where
   main
   localLength _ := 0
 
-theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
+theorem soundness [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder sentences) : Soundness F (elaborated (F:=F) (M:=M) (sentences:=sentences)) order Assumptions Spec := by
   circuit_proof_start
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
   simp only at h_assumptions
 
-  -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.eval_fromElements]
@@ -76,18 +75,23 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
     simp only [if_true]
     ring_nf
 
-theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
+def CompletenessAssumptions [DecidableEq F] {sentences : PropertySet F} (_ : YieldContext sentences) (input : Inputs M F) :=
+  Assumptions input
+
+theorem completeness [DecidableEq F] {sentences : PropertySet F} : Completeness F sentences (elaborated (F:=F) (M:=M) (sentences:=sentences)) CompletenessAssumptions := by
   circuit_proof_start
 
 /--
 Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 -/
-def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
+def circuit [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder sentences) : FormalCircuit order (Inputs M) M where
   elaborated := elaborated
   Assumptions
+  CompletenessAssumptions
   Spec
-  soundness
+  soundness := soundness order
   completeness
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end
 

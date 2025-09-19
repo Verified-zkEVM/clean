@@ -25,18 +25,18 @@ def circuit : Circuit F Unit := do
   lookup { table := MyTable, entry := [x], ... }
 ```
 -/
-def Circuit (F : Type) [Field F] (α : Type) := ℕ → α × List (Operation F)
+def Circuit (sentences : PropertySet F) (α : Type) := ℕ → α × List (Operation sentences)
 
 namespace Circuit
 -- definition of the circuit monad
 
-def bind {α β} (f : Circuit F α) (g : α → Circuit F β) : Circuit F β := fun (n : ℕ) =>
+def bind {sentences : PropertySet F} {α β} (f : Circuit sentences α) (g : α → Circuit sentences β) : Circuit sentences β := fun (n : ℕ) =>
   -- note: empirically, not unpacking the results of `f` here makes the monad scale to much more operations
   let (b, ops') := g (f n).1 (n + Operations.localLength (f n).2)
   (b, (f n).2 ++ ops')
 
-instance : Monad (Circuit F) where
-  map {α β} (f : α → β) (circuit : Circuit F α) := fun (n : ℕ) =>
+instance {sentences : PropertySet F} : Monad (Circuit sentences) where
+  map {α β} (f : α → β) (circuit : Circuit sentences α) := fun (n : ℕ) =>
     let (a, ops) := circuit n
     (f a, ops)
   pure {α} (a : α) := fun _ => (a, [])
@@ -47,88 +47,98 @@ In proofs, we rewrite `bind` into a definition that is more efficient to
 reason about (because it avoids the duplicated `f n` term).
  -/
 @[circuit_norm]
-theorem bind_def {α β} (f : Circuit F α) (g : α → Circuit F β) :
+theorem bind_def {sentences : PropertySet F} {α β} (f : Circuit sentences α) (g : α → Circuit sentences β) :
   f >>= g = fun n =>
     let (a, ops) := f n
     let (b, ops') := g a (n + Operations.localLength ops)
     (b, ops ++ ops') := rfl
 
 @[circuit_norm]
-theorem pure_def {α} (a : α) : (pure a : Circuit F α) = fun _ => (a, []) := rfl
+theorem pure_def {sentences : PropertySet F} {α} (a : α) : (pure a : Circuit sentences α) = fun _ => (a, []) := rfl
 
 @[circuit_norm]
-theorem map_def {α β} (f : α → β) (circuit : Circuit F α) :
+theorem map_def {sentences : PropertySet F} {α β} (f : α → β) (circuit : Circuit sentences α) :
   f <$> circuit = fun n => let (a, ops) := circuit n; (f a, ops) := rfl
 
 -- normalize `bind` to `>>=`
 @[circuit_norm]
-theorem bind_normalize {α β} (f : Circuit F α) (g : α → Circuit F β) : f.bind g = f >>= g := rfl
+theorem bind_normalize {sentences : PropertySet F} {α β} (f : Circuit sentences α) (g : α → Circuit sentences β) : f.bind g = f >>= g := rfl
 
 -- the results of a circuit: operations, output value and local length (which determines the next offset)
 
 @[reducible, circuit_norm]
-def operations (circuit : Circuit F α) (offset : ℕ) : Operations F :=
+def operations {sentences : PropertySet F} (circuit : Circuit sentences α) (offset : ℕ) : Operations sentences :=
   (circuit offset).2
 
 @[reducible, circuit_norm]
-def output (circuit : Circuit F α) (offset : ℕ) : α :=
+def output {sentences : PropertySet F} (circuit : Circuit sentences α) (offset : ℕ) : α :=
   (circuit offset).1
 
 @[reducible, circuit_norm]
-def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
+def localLength {sentences : PropertySet F} (circuit : Circuit sentences α) (offset := 0) : ℕ :=
   Operations.localLength (circuit offset).2
 
 -- core operations we can do in a circuit
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
+def witnessVar {sentences : PropertySet F} (compute : Environment F → F) : Circuit sentences (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
     (var, [.witness 1 fun env => #v[compute env]])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (compute : Environment F → F) := do
+def witnessField {sentences : PropertySet F} (compute : Environment F → F) : Circuit sentences (Expression F) := do
   let v ← witnessVar compute
   return var v
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
-def witnessVars (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+def witnessVars {sentences : PropertySet F} (m : ℕ) (compute : Environment F → Vector F m) : Circuit sentences (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
-    (vars, [.witness m compute])
+    (vars, [.witness m fun env => compute env])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVector {sentences : PropertySet F} (m : ℕ) (compute : Environment F → Vector F m) : Circuit sentences (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := varFromOffset (fields m) offset
-    (vars, [.witness m compute])
+    (vars, [.witness m fun env => compute env])
 
 /-- Add a constraint. -/
 @[circuit_norm]
-def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
+def assertZero (sentences : PropertySet F) (e : Expression F) : Circuit sentences Unit := fun _ =>
   ((), [.assert e])
 
 /-- Add a lookup. -/
 @[circuit_norm]
-def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
+def lookup {sentences : PropertySet F} {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit sentences Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
+
+/-- Use a sentence that has been (or will be) yielded. -/
+@[circuit_norm]
+def use {sentences : PropertySet F} (s : Sentence sentences (Expression F)) : Circuit sentences Unit := fun _ =>
+  ((), [.use s])
+
+/-- Yield a sentence for use by other circuits. -/
+@[circuit_norm]
+def yield {sentences : PropertySet F} (s : Sentence sentences (Expression F)) : Circuit sentences Unit := fun _ =>
+  ((), [.yield s])
 
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+def ProvableType.witness {sentences : PropertySet F} {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit sentences (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> toElements)])
 
 @[circuit_norm]
-def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
-    (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
+def ProvableVector.witness {sentences : PropertySet F} {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
+    (compute : Environment F → Vector (α F) m) : Circuit sentences (Vector (α (Expression F)) m) :=
   ProvableType.witness (α:=ProvableVector α m) compute
 
 namespace Circuit
@@ -142,66 +152,98 @@ What it means that "constraints hold" on a sequence of operations.
 - For subcircuits, the constraints must hold on the subcircuit's flat operations
 -/
 @[circuit_norm]
-def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
+def ConstraintsHold {sentences : PropertySet F} (eval : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) : List (Operation sentences) → Prop
   | [] => True
-  | .witness _ _ :: ops => ConstraintsHold eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
+  | .witness _ _ :: ops => ConstraintsHold eval yields checked ops
+  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval yields checked ops
   | .lookup { table, entry, .. } :: ops =>
-    table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
+    table.Contains (entry.map eval) ∧ ConstraintsHold eval yields checked ops
+  | .yield _ :: ops => ConstraintsHold eval yields checked ops
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
+                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+                     ConstraintsHold eval yields checked ops
   | .subcircuit s :: ops =>
-    ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
+    ConstraintsHoldFlat eval yields checked s.ops ∧ ConstraintsHold eval yields checked ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
 -/
 @[circuit_norm]
-def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
+def ConstraintsHold.Soundness {sentences : PropertySet F} (eval : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) : List (Operation sentences) → Prop
   | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
+  | .witness _ _ :: ops => ConstraintsHold.Soundness eval yields checked ops
+  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval yields checked ops
   | .lookup { table, entry } :: ops =>
-    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval yields checked ops
+  | .yield _ :: ops => ConstraintsHold.Soundness eval yields checked ops
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
+                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+                     ConstraintsHold.Soundness eval yields checked ops
   | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+    s.Soundness eval yields checked ∧ ConstraintsHold.Soundness eval yields checked ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
 -/
 @[circuit_norm]
-def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) → Prop
+def ConstraintsHold.Completeness {sentences : PropertySet F} (eval : Environment F) (yields : YieldContext sentences) : List (Operation sentences) → Prop
   | [] => True
-  | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
+  | .witness _ _ :: ops => ConstraintsHold.Completeness eval yields ops
+  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval yields ops
   | .lookup { table, entry } :: ops =>
-    table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
+    table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval yields ops
+  | .yield _ :: ops => ConstraintsHold.Completeness eval yields ops
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
+                     (s.eval eval ∈ Set.univ → SentenceHolds (s.eval eval)) ∧ 
+                     ConstraintsHold.Completeness eval yields ops
   | .subcircuit s :: ops =>
-    s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+    s.Completeness eval yields ∧ ConstraintsHold.Completeness eval yields ops
 end Circuit
 
 /--
-If an environment "uses local witnesses", it means that the environment's evaluation
+If an environment "uses local witnesses and yields", it means that the environment's evaluation
 matches the output of the witness generator passed along with a `witness` declaration,
-for all variables declared locally within the circuit.
+for all variables declared locally within the circuit, and all yielded sentences are in the yield context.
 
 This is the condition needed to prove completeness of a circuit.
 -/
-def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
-  ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
+def Environment.UsesLocalWitnessesAndYields {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) (ops : Operations sentences) : Prop :=
+  ops.forAllFlat offset {
+    witness n _ compute := env.ExtendsVector (compute env) n,
+    yield _ s := s.eval env ∈ yields.yielded
+  }
 
 /--
-Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
+Modification of `UsesLocalWitnessesAndYields` where subcircuits replace the condition with a custom statement.
 -/
 @[circuit_norm]
-def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
+def Environment.UsesLocalWitnessesAndYieldsCompleteness {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (offset : ℕ) : List (Operation sentences) → Prop
   | [] => True
-  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
-  | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
-  | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
+  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields (offset + m) ops
+  | .assert _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .lookup _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .yield s :: ops => s.eval env ∈ yields.yielded ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .use _ :: ops => env.UsesLocalWitnessesAndYieldsCompleteness yields offset ops
+  | .subcircuit s :: ops => s.UsesLocalWitnessesAndYields env yields ∧ env.UsesLocalWitnessesAndYieldsCompleteness yields (offset + s.localLength) ops
 
-/-- Same as `UsesLocalWitnesses`, but on flat operations -/
-def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
+/-- Environment uses local witnesses for flat operations (witness checking only) -/
+def Environment.UsesLocalWitnessesFlat {sentences : PropertySet F} (env : Environment F) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
+  FlatOperation.forAll n {
+    witness n _ compute := env.ExtendsVector (compute env) n
+  } ops
+
+/-- Environment uses local yields for flat operations (yield checking only) -/
+def Environment.UsesLocalYieldsFlat {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
+  FlatOperation.forAll n {
+    yield _ s := s.eval env ∈ yields.yielded
+  } ops
+
+/-- Environment uses local witnesses and yields for flat operations (both witness and yield checking) -/
+def Environment.UsesLocalWitnessesAndYieldsFlat {sentences : PropertySet F} (env : Environment F) (yields : YieldContext sentences) (n : ℕ) (ops : List (FlatOperation sentences)) : Prop :=
+  FlatOperation.forAll n {
+    witness n _ compute := env.ExtendsVector (compute env) n,
+    yield _ s := s.eval env ∈ yields.yielded
+  } ops
 
 section
 open Circuit (ConstraintsHold)
@@ -213,8 +255,8 @@ Common base type for circuits that are to be used in formal proofs.
 It contains the main circuit plus some of its properties in elaborated form, to make it
 faster to reason about them in proofs.
 -/
-class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output] where
-  main : Var Input F → Circuit F (Var Output F)
+class ElaboratedCircuit (F : Type) (sentences : PropertySet F) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output] where
+  main : Var Input F → Circuit sentences (Var Output F)
 
   /-- how many local witnesses this circuit introduces -/
   localLength : Var Input F → ℕ
@@ -239,31 +281,39 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
 
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
+/-
+`checked` is an argument because there will be an induction involving all circuits and all tables
+with respect to the growing `checked` set.
+-/
 @[circuit_norm]
-def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
+def Soundness (F : Type) [Field F] {sentences : PropertySet F}
+    (circuit : ElaboratedCircuit F sentences Input Output) (order : SentenceOrder sentences)
+    (Assumptions : Input F → Prop) (Spec : CheckedYields sentences → Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  -- prove locally yielded sentences are valid (when their dependencies are satisfied)
+  (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
+  Spec checked input output
 
 @[circuit_norm]
-def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) :=
+def Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input Output)
+    (CompletenessAssumptions : YieldContext sentences → Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the assumptions
+  ∀ offset : ℕ, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
+  -- for all inputs that satisfy the assumptions (which can now depend on yields)
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  CompletenessAssumptions yields input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env yields (circuit.main input_var |>.operations offset)
 
 /--
 `FormalCircuit` is the main object that encapsulates correctness of a circuit.
@@ -278,12 +328,17 @@ Note that soundness and completeness, taken together, show that the spec will ho
 This means that, when viewed as a black box, the circuit acts similar to a function. The assumptions act as
 preconditions, and the spec acts as the postcondition.
 -/
-structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
-    extends elaborated : ElaboratedCircuit F Input Output where
+structure FormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+    extends elaborated : ElaboratedCircuit F sentences Input Output where
   Assumptions (_ : Input F) : Prop := True
-  Spec : Input F → Output F → Prop
-  soundness : Soundness F elaborated Assumptions Spec
-  completeness : Completeness F elaborated Assumptions
+  CompletenessAssumptions (_ : YieldContext sentences) (_ : Input F) : Prop := True
+  Spec : CheckedYields sentences → Input F → Output F → Prop
+  soundness : Soundness F elaborated order Assumptions Spec
+  completeness : Completeness F sentences elaborated CompletenessAssumptions
+  -- CompletenessAssumptions should imply Assumptions to avoid growing assumptions in nested concat operations
+  -- This allows concat to use just circuit1.CompletenessAssumptions without accumulating conditions
+  completenessAssumptions_implies_assumptions : ∀ yields input, CompletenessAssumptions yields input → Assumptions input
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
@@ -291,35 +346,40 @@ This ensures that for any input satisfying the assumptions, the specification un
 Use this class when you want to formally guarantee that constraints uniquely determine the output,
 preventing ambiguity in deterministic circuits.
 -/
-structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
-    extends circuit : FormalCircuit F Input Output where
+structure DeterministicFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (checked : CheckedYields sentences) (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+    extends circuit : FormalCircuit order Input Output where
   uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
-    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+    circuit.Assumptions input → circuit.Spec checked input out1 → circuit.Spec checked input out2 → out1 = out2
 
 @[circuit_norm]
-def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
-    (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
+def FormalAssertion.Soundness (F : Type) [Field F] (sentences : PropertySet F) (order : SentenceOrder sentences)
+    (circuit : ElaboratedCircuit F sentences Input unit)
+    (Assumptions : Input F → Prop) (Spec : CheckedYields sentences → Input F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
   Assumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
+  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  -- prove locally yielded sentences are valid (when their dependencies are satisfied)
+  (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   -- the spec holds on the input
-  Spec input
+  Spec checked input
 
 @[circuit_norm]
-def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
+def FormalAssertion.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  ∀ offset, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
   Assumptions input → Spec input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env yields (circuit.main input_var |>.operations offset)
 
 /--
 `FormalAssertion` models a subcircuit that is "assertion-like":
@@ -335,12 +395,13 @@ of the constraints.
 (In the case of `FormalCircuit`, given assumptions, the constraints are always satisfiable and the spec can be
 strictly weaker than the constraints.)
 -/
-structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
-    extends elaborated : ElaboratedCircuit F Input unit where
+structure FormalAssertion {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (Input : TypeMap) [ProvableType Input]
+    extends elaborated : ElaboratedCircuit F sentences Input unit where
   Assumptions : Input F → Prop
-  Spec : Input F → Prop
-  soundness : FormalAssertion.Soundness F elaborated Assumptions Spec
-  completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
+  Spec : CheckedYields sentences → Input F → Prop
+  soundness : FormalAssertion.Soundness F sentences order elaborated Assumptions Spec
+  completeness : FormalAssertion.Completeness F sentences elaborated Assumptions (Spec Set.univ)
 
   -- assertions commonly don't introduce internal witnesses, so this is a convenient default
   localLength _ := 0
@@ -348,27 +409,35 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : PropertySet F) (order : SentenceOrder sentences)
+    (circuit : ElaboratedCircuit F sentences Input Output)
+    (SoundnessAssumptions : Input F → Prop)
+    (Spec : CheckedYields sentences → Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
   -- for all inputs
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  -- if the assumptions hold
+  SoundnessAssumptions input →
   -- if the constraints hold
-  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  -- prove locally yielded sentences are valid (when their dependencies are satisfied)
+  (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
+  Spec checked input output
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
+def GeneralFormalCircuit.Completeness (F : Type) [Field F] (sentences : PropertySet F) (circuit : ElaboratedCircuit F sentences Input Output) (Assumptions : YieldContext sentences → Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
-  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the "honest prover" assumptions
+  ∀ offset : ℕ, ∀ env, ∀ (yields : YieldContext sentences), ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesAndYieldsCompleteness yields offset (circuit.main input_var |>.operations offset) →
+  -- for all inputs that satisfy the "honest prover" assumptions (which can now depend on yields)
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions yields input →
   -- the constraints hold
-  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+  ConstraintsHold.Completeness env yields (circuit.main input_var |>.operations offset)
 
 /--
 `GeneralFormalCircuit` is the most general model of formal circuits, needed in cases where the circuit is a
@@ -385,37 +454,39 @@ this assumption is not needed as the circuit adds that constraint itself. Using 
 add the range assumption to the soundness statement, thus making the circuit hard to use
 (in particular, not usable as a bit range check, because it already _requires_ the bit range assumption).
 -/
-structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
-    extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
-  soundness : GeneralFormalCircuit.Soundness F elaborated Spec
-  completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+structure GeneralFormalCircuit {F : Type} [Field F] {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+    extends elaborated : ElaboratedCircuit F sentences Input Output where
+  Assumptions : YieldContext sentences → Input F → Prop -- the statement to be assumed for completeness (can now depend on yields)
+  SoundnessAssumptions : Input F → Prop := fun _ => True -- assumptions that are given when proving soundness
+  Spec : CheckedYields sentences → Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
+  soundness : GeneralFormalCircuit.Soundness F sentences order elaborated SoundnessAssumptions Spec
+  completeness : GeneralFormalCircuit.Completeness F sentences elaborated Assumptions
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup use)
 
 -- general `witness` method
 
-class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  witness : ((Environment F) → value F) → Circuit F (var F)
+class Witnessable (F : Type) [Field F] (sentences : PropertySet F) (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
+  witness : ((Environment F → value F) → Circuit sentences (var F))
   var_eq : var F = value (Expression F) := by rfl
   witness_eq (compute : Environment F → value F) :
     witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
 
 export Witnessable (witness)
 
-instance : Witnessable F field Expression where
+instance {sentences : PropertySet F} : Witnessable F sentences field Expression where
   witness := witnessField
 
-instance {m : ℕ} : Witnessable F (Vector · m) (fun F => Vector (Expression F) m) where
+instance {sentences : PropertySet F} {m : ℕ} : Witnessable F sentences (Vector · m) (fun F => Vector (Expression F) m) where
   witness := witnessVector m
 
-instance (α : TypeMap) [ProvableType α] : Witnessable F α (Var α) where
+instance {sentences : PropertySet F} (α : TypeMap) [ProvableType α] : Witnessable F sentences α (Var α) where
   witness := ProvableType.witness
 
-instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
-    Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
+instance {sentences : PropertySet F} {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
+    Witnessable F sentences (ProvableVector α m) (Var (ProvableVector α m)) where
   witness := ProvableVector.witness m
 
 -- witness generation
@@ -423,56 +494,74 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 def Environment.fromList (witnesses : List F) : Environment F :=
   .mk fun i => witnesses[i]?.getD 0
 
-def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ compute => (compute (.fromList acc)).toList
+def FlatOperation.dynamicWitness {sentences : PropertySet F} (op : FlatOperation sentences) (acc : List F) : List F := match op with
+  | .witness _ compute => (compute (Environment.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .yield _ => []
+  | .use _ => []
 
-def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
-  ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
+def FlatOperation.dynamicWitnesses {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : List F :=
+  ops.foldl (fun (acc : List F) (op : FlatOperation sentences) =>
     acc ++ op.dynamicWitness acc
   ) init
 
-def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
-  .fromList (FlatOperation.dynamicWitnesses ops init)
+def FlatOperation.proverEnvironment {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : Environment F :=
+  Environment.fromList (FlatOperation.dynamicWitnesses ops init)
+
+/--
+Computes the set of yielded sentences from the prover environment.
+-/
+def FlatOperation.proverYields {sentences : PropertySet F} (ops : List (FlatOperation sentences)) (init : List F) : YieldContext sentences :=
+  { yielded := FlatOperation.localYields (FlatOperation.proverEnvironment ops init) ops }
 
 def Environment.AgreesBelow (n : ℕ) (env env' : Environment F) :=
   ∀ i < n, env.get i = env'.get i
 
 def Environment.OnlyAccessedBelow (n : ℕ) (f : Environment F → α) :=
-  ∀ env env', env.AgreesBelow n env' → f env = f env'
+  ∀ env env', Environment.AgreesBelow n env env' → f env = f env'
 
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
+def Operations.ComputableWitnesses {sentences : PropertySet F} (ops : Operations sentences) (n : ℕ) (env env' : Environment F) : Prop :=
   ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute env = compute env' }
 
-def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
+def Circuit.ComputableWitnesses {sentences : PropertySet F} (circuit : Circuit sentences α) (n : ℕ) :=
   ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
-that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
+that satisfies `UsesLocalWitnessesAndYields`. (Proof in `Theorems`.)
 -/
-def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
-  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
+def Circuit.proverEnvironment {sentences : PropertySet F} (circuit : Circuit sentences α) (init : List F := []) : Environment F :=
+  Environment.fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
+
+/--
+Computes the set of yielded sentences from the prover environment for a circuit.
+-/
+def Circuit.proverYields {sentences : PropertySet F} (circuit : Circuit sentences α) (init : List F := []) : YieldContext sentences :=
+  FlatOperation.proverYields (circuit.operations init.length).toFlat init
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
 
-def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (Environment F → F) (localLength l)
+def FlatOperation.witnessGenerators {sentences : PropertySet F} : (l : List (FlatOperation sentences)) → Vector (Environment F → F) (localLength l)
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
+  | .use _ :: ops => witnessGenerators ops
 
-def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
+def Operations.witnessGenerators {sentences : PropertySet F} : (ops : Operations sentences) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
+  | .use _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
 
 -- statements about constant length or output
@@ -484,18 +573,18 @@ The given family of circuits all share the same `localLength`, for all inputs.
 This is a bit stronger than the assumption on local length implicit in `ElaboratedCircuit`,
 but still the typical case.
 -/
-class ConstantLength (circuit : α → Circuit F β) where
+class ConstantLength {sentences : PropertySet F} (circuit : α → Circuit sentences β) where
   localLength : ℕ
   localLength_eq : ∀ (a : α) (n : ℕ), (circuit a).localLength n = localLength
 
-def ConstantLength.fromConstantLength {circuit : α → Circuit F β} [Inhabited α]
+def ConstantLength.fromConstantLength {sentences : PropertySet F} {circuit : α → Circuit sentences β} [Inhabited α]
     (h : ∀ (a : α) n, (circuit a).localLength n = (circuit default).localLength 0) : ConstantLength circuit where
   localLength := (circuit default).localLength 0
   localLength_eq a n := h a n
 
 /-- The output of this circuit does not depend on the input. -/
 @[circuit_norm]
-def ConstantOutput (circuit : α → Circuit F β) [Inhabited α] :=
+def ConstantOutput {sentences : PropertySet F} (circuit : α → Circuit sentences β) [Inhabited α] :=
   ∀ (x : α) (n : ℕ), (circuit x).output n = (circuit default).output n
 
 syntax "infer_constant_length" : tactic
@@ -507,11 +596,11 @@ macro_rules
     try intros
     try ac_rfl))
 
-example :
-  let add (x : Expression F) := do
+example {sentences : PropertySet F} :
+  let add (x : Expression F) : Circuit sentences (Expression F) := do
     let y : Expression F ← witness fun _ => 1
     let z ← witness fun eval => eval (x + y)
-    assertZero (x + y - z)
+    assertZero sentences (x + y - z)
     pure z
   ConstantLength add := by infer_constant_length
 end Circuit
@@ -519,7 +608,7 @@ end Circuit
 -- `circuit_norm` attributes
 
 -- basic logical simplifcations
-attribute [circuit_norm] true_and and_true true_implies implies_true forall_const
+attribute [circuit_norm] true_and and_true true_implies implies_true forall_const Set.forall_mem_empty Set.empty_union
 
 /-
 when simplifying lookup constraints, `circuit_norm` has to deal with expressions of the form

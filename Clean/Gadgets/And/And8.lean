@@ -21,11 +21,11 @@ def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def Spec (input : Inputs (F p)) (z : F p) :=
+def Spec {sentences : PropertySet (F p)} (_ : CheckedYields sentences) (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (fieldVar (F p)) := do
+def main {sentences : PropertySet (F p)} (input : Var Inputs (F p)) : Circuit sentences (fieldVar (F p)) := do
   let ⟨x, y⟩ := input
   let and ← witness fun eval => (eval x).val &&& (eval y).val
   -- we prove AND correct using an XOR lookup and the following identity:
@@ -75,44 +75,47 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
-instance elaborated : ElaboratedCircuit (F p) Inputs field where
+instance elaborated {sentences : PropertySet (F p)} : ElaboratedCircuit (F p) sentences Inputs field where
   main
   localLength _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) elaborated order Assumptions Spec := by
+  intro i env yields checked ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
   set z := x + y + -(2*w)
-  show w.val = x.val &&& y.val
+  · show w.val = x.val &&& y.val
 
-  -- it's easier to prove something about 2*w since it features in the constraint
-  have two_and_field : 2*w = x + y - z := by ring
+    -- it's easier to prove something about 2*w since it features in the constraint
+    have two_and_field : 2*w = x + y - z := by ring
 
-  have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
-  have z_lt : z.val ≤ (x + y).val := by
-    rw [h_xor, x_y_val]
-    exact xor_le_add hx_byte hy_byte
-  have x_y_z_val : (x + y - z).val = x.val + y.val - z.val := by
-    rw [ZMod.val_sub z_lt, x_y_val]
+    have x_y_val : (x + y).val = x.val + y.val := by field_to_nat
+    have z_lt : z.val ≤ (x + y).val := by
+      rw [h_xor, x_y_val]
+      exact xor_le_add hx_byte hy_byte
+    have x_y_z_val : (x + y - z).val = x.val + y.val - z.val := by
+      rw [ZMod.val_sub z_lt, x_y_val]
 
-  have two_and : (2*w).val = 2*(x.val &&& y.val) := by
-    rw [two_and_field, x_y_z_val, h_xor, ←and_times_two_add_xor hx_byte hy_byte, Nat.add_sub_cancel]
+    have two_and : (2*w).val = 2*(x.val &&& y.val) := by
+      rw [two_and_field, x_y_z_val, h_xor, ←and_times_two_add_xor hx_byte hy_byte, Nat.add_sub_cancel]
 
-  clear two_and_field x_y_val x_y_z_val h_xor z_lt
+    clear two_and_field x_y_val x_y_z_val h_xor z_lt
 
-  -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
-  have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
-    (by linarith [p_large_enough.elim]) two_and
+    -- crucial step: since 2 divides (2*w).val, we can actually pull in .val
+    have two_mul_val : (2*w).val = 2*w.val := FieldUtils.mul_nat_val_of_dvd 2
+      (by linarith [p_large_enough.elim]) two_and
 
-  rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
-  exact two_and
+    rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
+    exact two_and
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} : Completeness (F p) sentences elaborated CompletenessAssumptions := by
+  intro i env yields ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+  simp_all only [circuit_norm, main, ByteXorTable, Inputs.mk.injEq, CompletenessAssumptions]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
@@ -135,10 +138,18 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     rw [two_and_val, x_y_val]
     exact two_and_le_add hx_byte hy_byte
 
+  refine ⟨hx_byte, hy_byte, ?_⟩
   rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-def circuit : FormalCircuit (F p) Inputs field :=
-  { Assumptions, Spec, soundness, completeness }
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field :=
+  { elaborated with
+      Assumptions,
+      CompletenessAssumptions,
+      Spec,
+      soundness := soundness order,
+      completeness,
+      completenessAssumptions_implies_assumptions := fun _ _ h => h
+  }
 
 end Gadgets.And.And8

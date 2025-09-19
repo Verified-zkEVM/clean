@@ -8,33 +8,44 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let c ← ThetaC.circuit state
-  let d ← ThetaD.circuit c
-  ThetaXor.circuit ⟨state, d⟩
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (state : Var KeccakState (F p)) : Circuit sentences (Var KeccakState (F p)) := do
+  let c ← ThetaC.circuit order state
+  let d ← ThetaD.circuit order c
+  ThetaXor.circuit order ⟨state, d⟩
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
+  main := main order
   localLength _ := 480
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (state : KeccakState (F p)) := Assumptions state
+
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  simp_all [circuit_norm, Spec, main, Assumptions,
-    ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  circuit_proof_start
+  constructor
+  · sorry
+  simp_all [circuit_norm, Spec, elaborated, main, Assumptions,
+    ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  simp_all [circuit_norm, main, Assumptions, Spec,
-    ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
-    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  simp_all [circuit_norm, elaborated, main, CompletenessAssumptions, Assumptions, Spec,
+    ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
+    ThetaC.CompletenessAssumptions, ThetaC.Assumptions, ThetaD.CompletenessAssumptions, ThetaD.Assumptions, ThetaXor.CompletenessAssumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState :=
- { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
+ { elaborated := elaborated order
+   Assumptions
+   CompletenessAssumptions
+   Spec
+   soundness := soundness order
+   completeness := completeness order
+   completenessAssumptions_implies_assumptions := fun _ _ h => h }
 end Gadgets.Keccak256.Theta

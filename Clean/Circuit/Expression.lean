@@ -1,5 +1,6 @@
 import Mathlib.Algebra.Field.Basic
 import Clean.Circuit.SimpGadget
+import Clean.Circuit.PropertyLookup
 
 variable {F : Type}
 
@@ -19,6 +20,21 @@ export Expression (var)
 
 structure Environment (F : Type) where
   get : ℕ → F
+
+/-- Context for tracking yielded sentences during circuit execution -/
+structure YieldContext (sentences : PropertySet F) where
+  yielded : Set (Sentence sentences F)
+
+/-- Extensionality for YieldContext: two YieldContexts are equal if their yielded sets are equal. -/
+@[ext]
+lemma YieldContext.ext {sentences : PropertySet F} {y1 y2 : YieldContext sentences} 
+    (h : y1.yielded = y2.yielded) : y1 = y2 := by
+  cases y1; cases y2
+  congr
+
+/-- Empty YieldContext for use in contexts that don't need the use/yield framework -/
+def emptyYields (F : Type) : YieldContext (emptyPropertySet F) where
+  yielded := ∅
 
 namespace Expression
 variable [Field F]
@@ -93,6 +109,15 @@ instance [Field F] : Inhabited F where
 
 instance [Field F] : Inhabited (Expression F) where
   default := .const 0
+
+namespace Sentence
+variable [Field F]
+
+/-- Evaluate a sentence with Expression entries to get a sentence with concrete F values -/
+def eval {s : PropertySet F} (env : Environment F) (sentence : Sentence s (Expression F)) : Sentence s F :=
+  { sentence with entry := sentence.entry.map (Expression.eval env) }
+
+end Sentence
 
 /-! ## Lemmas about Expression evaluation -/
 

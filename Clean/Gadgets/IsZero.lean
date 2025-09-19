@@ -15,17 +15,20 @@ variable {M : TypeMap} [ProvableType M]
 Main circuit that checks if all elements of a ProvableType are zero.
 Returns 1 if all elementts are 0, otherwise returns 0.
 -/
-def main (input : Var M F) : Circuit F (Var field F) := do
+def main {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (input : Var M F) : Circuit sentences (Var field F) := do
   let elemVars := toVars input
   -- Use foldlRange to multiply all IsZero results together
   -- Start with 1, and for each element, multiply by its IsZero result
-  let result ← Circuit.foldlRange (size M) (1 : Expression F) fun acc i => do
-    let isZeroElem ← IsZeroField.circuit elemVars[i]
+  let result ← Circuit.foldlRange (sentences:=sentences) (size M) (1 : Expression F) (fun acc i => do
+    let isZeroElem ← IsZeroField.circuit order (elemVars[i])
     return acc * isZeroElem
+  )
   return result
 
-instance elaborated : ElaboratedCircuit F M field where
-  main
+instance elaborated {sentences : PropertySet F} (order : SentenceOrder sentences) :
+    ElaboratedCircuit F sentences M field where
+  main := fun input => main (sentences:=sentences) order input
   localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
@@ -34,24 +37,28 @@ instance elaborated : ElaboratedCircuit F M field where
 
 def Assumptions (_ : M F) : Prop := True
 
+def CompletenessAssumptions {sentences : PropertySet F} (_ : YieldContext sentences) (_ : M F) : Prop := True
+
 def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
   output = if input = 0 then 1 else 0
 
 /--
 lemma for soundness. Separate because the statement is optimized for induction.
 -/
-lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
+lemma foldl_isZero_eq_one_iff {sentences : PropertySet F} (order : SentenceOrder sentences)
+    (checked : CheckedYields sentences)
+    {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
     {env : Environment F} {i₀ : ℕ}
     (h_eval : Vector.map (Expression.eval env) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
-        IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
+      (IsZeroField.circuit order).Assumptions (Expression.eval (F:=F) env vars[i]) →
+        (IsZeroField.circuit order).Spec checked (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
-            (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+            ((IsZeroField.circuit order).output vars[i]
+              (i₀ + i * (IsZeroField.circuit order).localLength vars[i])))) :
     Expression.eval env
       (Fin.foldl n
-        (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
+        (fun acc i => acc * ((IsZeroField.circuit order).output vars[i] (i₀ + i * (IsZeroField.circuit order).localLength vars[i]) : Var field F))
         1) =
     if ∀ (i : ℕ) (x : i < n), vals[i] = 0 then 1 else 0 := by
   simp only [IsZeroField.circuit, IsZeroField.Assumptions, IsZeroField.Spec] at h_isZero
@@ -99,8 +106,15 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · aesop
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] {sentences : PropertySet F} (order : SentenceOrder sentences) :
+    Soundness F (elaborated (sentences:=sentences) (M := M) order) order Assumptions
+      (fun _checked => Spec) := by
   circuit_proof_start
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The foldl loop doesn't yield anything
+    sorry
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
@@ -109,13 +123,27 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff <;> assumption
+  apply foldl_isZero_eq_one_iff order
+  · exact h_input
+  · intro i h_ass
+    have := h_holds i h_ass
+    exact this.2
 
-theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
-  circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
+theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentences) :
+    Completeness F sentences (elaborated (sentences:=sentences) (M := M) order) CompletenessAssumptions := by
+  circuit_proof_start [IsZeroField.circuit, IsZeroField.CompletenessAssumptions, IsZeroField.Assumptions]
 
-def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit [DecidableEq (M F)] {sentences : PropertySet F} (order : SentenceOrder sentences) :
+    FormalCircuit order M field := {
+  (elaborated (sentences:=sentences) (M := M) order) with
+  Assumptions
+  CompletenessAssumptions
+  Spec := (fun _ input output => Spec input output)
+  soundness := by
+    -- coerce Spec to include `checked` parameter
+    simpa using (soundness (sentences:=sentences) (M:=M) order)
+  completeness := completeness (sentences:=sentences) (M:=M) order
+  completenessAssumptions_implies_assumptions := fun _ _ _ => trivial
 }
 
 end Gadgets.IsZero

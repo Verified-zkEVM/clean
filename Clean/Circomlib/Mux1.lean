@@ -34,11 +34,11 @@ template MultiMux1(n) {
     }
 }
 -/
-def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (input : Var (Inputs n) (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   let { c, s } := input
 
   -- Witness and constrain output vector
-  let out <== c.map fun (c0, c1) =>
+  let out <==[order] c.map fun (c0, c1) =>
     (c1 - c0) * s + c0
   return out
 
@@ -61,8 +61,8 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
-def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
-  main := main n
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit order (Inputs n) (fields n) where
+  main := main order n
 
   localLength _ := n
 
@@ -70,15 +70,28 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     let ⟨c, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  CompletenessAssumptions _ input :=
+    let ⟨c, s⟩ := input
+    IsBool s
+
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
   soundness := by
     simp only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_output
-    -- We need to show the spec holds for all i < n
+    intro offset env yields checked input_var input h_input h_assumptions h_output
+    constructor
+    · -- Prove yielded sentences hold
+      intro s
+      simp only [FlatOperation.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, FormalAssertion.toSubcircuit,
+        Gadgets.allZero]
+      simp only [Operations.localYields_toFlat]
+      rw [Circuit.forEach_localYields_of_empty]
+      · simp
+      simp only [assertZero, circuit_norm]
+    -- Prove the spec holds for all i < n
     intro i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
     -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
@@ -87,7 +100,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
     -- Get the i-th element equality from h_output
     -- h_output gives us equality of vectors, extract element i
-    have h_output_i := congrArg (fun v => v[i]) h_output
+    have h_output_i := congrArg (fun v => v[i]) h_output.2
     -- Simplify the outer Vector.map on both sides
     simp only [Vector.getElem_map] at h_output_i
     -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }
@@ -131,7 +144,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     rw [h_env_i]
     norm_num
 
-end MultiMux1
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
+
+ end MultiMux1
 
 namespace Mux1
 
@@ -161,15 +176,15 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
-def main (input : Var Inputs (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Expression (F p)) := do
   let { c, s } := input
 
   -- Call MultiMux1 with n=1
-  let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
+  let mux_out ← MultiMux1.circuit order 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) Inputs field where
-  main := main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs field where
+  main := main order
 
   localLength _ := 1
   localLength_eq := by
@@ -186,29 +201,43 @@ def circuit : FormalCircuit (F p) Inputs field where
     let ⟨_, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  CompletenessAssumptions _ input :=
+    let ⟨_, s⟩ := input
+    IsBool s
+
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
+    intro offset env yields checked input_var input h_input h_assumptions h_subcircuit_sound
     rw[← h_input] at *
     clear input
     clear h_input
-    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
-    specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    rw [h_subcircuit_sound]
+    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
+    have h_spec := h_subcircuit_sound h_assumptions
+    constructor
+    · -- Prove yielded sentences hold
+      intro s h_s
+      apply h_spec.1
+      simp_all
+    -- Prove our spec
+    rcases h_spec with ⟨ h_spec1, h_spec2 ⟩
+    specialize h_spec2 0 (by omega)
+    rw [h_spec2]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, circuit_norm]
+    intros offset env yields input_var h_env input h_input h_s
+    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
     rw [← h_input] at h_s
     simp_all
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Mux1
 

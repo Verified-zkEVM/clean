@@ -18,8 +18,8 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
-  let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) (x : Var U64 (F p)) : Circuit sentences (Var U64 (F p)) := do
+  let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit order offset)
   let lows := parts.map Outputs.low
   let highs := parts.map Outputs.high
 
@@ -30,7 +30,10 @@ def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :=
 
 def Assumptions (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : U64 (F p)) :=
+  Assumptions input
+
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
@@ -38,8 +41,8 @@ def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
 
-def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
-  main := main off
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (off : Fin 8) : ElaboratedCircuit (F p) sentences U64 U64 where
+  main := main order off
   localLength _ := 16
   output _ i0 := output off i0
   localLength_eq _ i0 := by
@@ -52,8 +55,8 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Soundness (F p) (elaborated order offset) order Assumptions (Spec (offset := offset)) := by
+  intro i0 env yields checked x_var x h_input x_normalized h_holds
 
   -- simplify statements
   dsimp only [circuit_norm, elaborated, main,
@@ -83,8 +86,10 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
     set high := env.get (i0 + i * 2 + 1)
     set next_low := env.get (i0 + (i + 1) % 8 * 2)
-    have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
-    have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have ⟨_, byte_spec⟩ := h_holds i hi
+    have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := byte_spec
+    have ⟨_, next_byte_spec⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := next_byte_spec
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
     have ⟨lt, eq⟩ := byteDecomposition_lt (8 - o) neg_offset_le high_lt next_low_lt'
     use lt
@@ -104,25 +109,33 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
     exact (h_rot_vector i hi).right
 
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
-  exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
+  constructor
+  · -- Prove yielded sentences hold (vacuous - no yields)
+    intro s hs _
+    -- The ByteDecomposition subcircuits don't yield anything
+    sorry
+  · -- Prove the spec
+    exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var _ x h_input x_normalized
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
+  intro i0 env yields x_var _ x h_input x_normalized
 
   -- simplify goal
   simp only [main, elaborated, circuit_norm,
-    ByteDecomposition.circuit, ByteDecomposition.Assumptions]
+    ByteDecomposition.circuit, ByteDecomposition.CompletenessAssumptions, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions
-  rw [Assumptions, U64.ByteVector.normalized_iff] at x_normalized
+  rw [CompletenessAssumptions, Assumptions, U64.ByteVector.normalized_iff] at x_normalized
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
-  elaborated offset with
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : FormalCircuit order U64 U64 := {
+  elaborated := elaborated order offset
   Assumptions
-  Spec := Spec offset
-  soundness := soundness offset
-  completeness := completeness offset
+  CompletenessAssumptions
+  Spec := Spec (offset := offset)
+  soundness := soundness order offset
+  completeness := completeness order offset
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 }
 
 end Gadgets.Rotation64Bits

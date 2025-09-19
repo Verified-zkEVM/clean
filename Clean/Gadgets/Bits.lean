@@ -7,21 +7,23 @@ namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
-def main (n : ℕ) (x : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (n : ℕ) (x : Expression (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n fun env => fieldToBits n (x.eval env)
+  let bits ← witnessVector (sentences:=sentences) n (fun env => fieldToBits n (x.eval env))
 
   -- add boolean constraints on all bits
-  Circuit.forEach bits assertBool
+  Circuit.forEach bits (body := Boolean.assertBool (sentences:=sentences) order)
 
   -- check that the bits correctly sum to `x`
-  x === fieldFromBitsExpr bits
+  Gadgets.Equality.circuit (sentences:=sentences) order field (x, fieldFromBitsExpr bits)
   return bits
 
 -- formal circuit that implements `toBits` like a function, assuming `x.val < 2^n`
 
-def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit order field (fields n) where
+  main := main (sentences:=sentences) order n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
@@ -29,14 +31,18 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
-  Assumptions (x : F p) := x.val < 2^n
+  Assumptions _ (x : F p) := x.val < 2^n
 
-  Spec (x : F p) (bits : Vector (F p) n) :=
+  Spec (_checked : CheckedYields sentences) (x : F p) (bits : Vector (F p) n) :=
     x.val < 2^n ∧ bits = fieldToBits n x
 
   soundness := by
     circuit_proof_start
-    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    obtain ⟨ h_bits_conj , ⟨ h_eq_yield, h_eq_conj ⟩ ⟩ := h_holds
+
+    -- Extract the parts from the conjunctions
+    have h_bits : ∀ (i : Fin n), IsBool (env.get (i₀ + i)) := fun i => (h_bits_conj i)
+    have h_eq : input = env (fieldFromBitsExpr (.mapRange n (var ⟨i₀ + ·⟩))) := h_eq_conj
 
     let bit_vars : Vector (Expression (F p)) n := .mapRange n (var ⟨i₀ + ·⟩)
     let bits : Vector (F p) n := bit_vars.map env
@@ -47,7 +53,15 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
     change input = env (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt _ h_bits
+
+    constructor
+    · -- Prove yielded sentences hold (should be empty)
+      intro s
+      simp [circuit_norm, Operations.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false, FormalAssertion.toSubcircuit, Equality.main]
+    · -- Prove the spec
+      constructor
+      · exact fieldFromBits_lt _ h_bits
+      · rfl
 
   completeness := by
     circuit_proof_start
@@ -70,17 +84,21 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
 -- formal assertion that uses the same circuit to implement a range check. without input assumption
 
-def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
+def rangeCheck {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (n : ℕ) (hn : 2^n < p) : FormalAssertion order field where
   main x := do
     -- we wrap the toBits circuit but ignore the output
-    let _ ← toBits n hn x
+    let _ ← toBits (sentences:=sentences) order n hn x
 
   localLength _ := n
 
   Assumptions _ := True
-  Spec (x : F p) := x.val < 2^n
+  Spec (_ : CheckedYields sentences) (x : F p) := x.val < 2^n
 
-  soundness := by simp_all only [circuit_norm, toBits]
+  soundness := by
+    simp_all only [circuit_norm, toBits]
+    intro offset env yields checked input_var input h_input h_holds s
+    simp [circuit_norm, GeneralFormalCircuit.toSubcircuit, FormalAssertion.toSubcircuit, main, Equality.main]
   completeness := by simp_all only [circuit_norm, toBits]
 
 end ToBits

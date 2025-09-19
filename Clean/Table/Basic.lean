@@ -6,6 +6,7 @@ import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Expression
 import Clean.Circuit.Provable
+import Clean.Circuit.PropertyLookup
 import Clean.Utils.Field
 import Clean.Table.SimpTable
 
@@ -16,6 +17,7 @@ import Clean.Table.SimpTable
 def Row (F : Type) (S : Type → Type) [ProvableType S] := S F
 
 variable {F : Type} {S : Type → Type} [ProvableType S]
+variable {sentences : PropertySet F}
 
 @[table_norm, table_assignment_norm]
 def Row.get (row : Row F S) (i : Fin (size S)) : F :=
@@ -284,8 +286,9 @@ end CellAssignment
   Context of the TableConstraint that keeps track of the current state, this includes the underlying
   offset, and the current assignment of the variables to the cells in the trace.
 -/
+
 structure TableContext (W : ℕ+) (S : Type → Type) (F : Type) [Field F] [ProvableType S] where
-  circuit : Operations F
+  circuit : Operations (emptyPropertySet F)
   assignment : CellAssignment W S
 deriving Repr
 
@@ -315,15 +318,17 @@ instance [Repr F] : Repr (TableConstraint W S F α) where
   reprPrec table _ := reprStr (table .empty).2
 
 @[table_assignment_norm]
-def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssignment W S
+def assignmentFromCircuit (as : CellAssignment W S) : Operations (emptyPropertySet F) → CellAssignment W S
   | [] => as
   | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .yield _ :: ops => assignmentFromCircuit as ops
+  | .use _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
-def assignmentFromCircuit' (as : CellAssignment W S) (ops : Operations F) : CellAssignment W S where
+def assignmentFromCircuit' (as : CellAssignment W S) (ops : Operations (emptyPropertySet F)) : CellAssignment W S where
   offset := as.offset + ops.localLength
   aux_length := as.aux_length + ops.localLength
   vars := as.vars ++ (.mapRange _ fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
@@ -333,7 +338,7 @@ A `MonadLift` instance from `Circuit` to `TableConstraint` means that we can jus
 all circuit operations inside a table constraint.
 -/
 @[reducible, table_norm, table_assignment_norm]
-instance : MonadLift (Circuit F) (TableConstraint W S F) where
+instance : MonadLift (Circuit (emptyPropertySet F)) (TableConstraint W S F) where
   monadLift circuit ctx :=
     let (a, ops) := circuit ctx.circuit.localLength
     (a, {
@@ -347,7 +352,7 @@ def finalOffset (table : TableConstraint W S F α) : ℕ :=
   table .empty |>.snd.circuit.localLength
 
 @[table_norm]
-def operations (table : TableConstraint W S F α) : Operations F :=
+def operations (table : TableConstraint W S F α) : Operations (emptyPropertySet F) :=
   table .empty |>.snd.circuit
 
 @[table_assignment_norm]
@@ -379,7 +384,7 @@ def windowEnv (table : TableConstraint W S F Unit)
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
   let env := windowEnv table window aux_env
-  Circuit.ConstraintsHold.Soundness env table.operations
+  Circuit.ConstraintsHold.Soundness env (emptyYields F) (emptyChecked F) table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
@@ -421,8 +426,8 @@ def assign (off : CellOffset W S) : Expression F → TableConstraint W S F Unit
   | .var v => assignVar off v
   -- a composed expression or constant is first stored in a new variable, which is assigned
   | x => do
-    let new_var ← witnessVar x.eval
-    assertZero (x - var new_var)
+    let new_var ← (witnessVar x.eval : Circuit (emptyPropertySet F) (Variable F))
+    (assertZero (emptyPropertySet F) (x - var new_var) : Circuit (emptyPropertySet F) Unit)
     assignVar off new_var
 
 @[table_norm, table_assignment_norm]
@@ -594,7 +599,8 @@ attribute [table_norm, table_assignment_norm] modify modifyGet MonadStateOf.modi
 -- simp lemma to simplify updated circuit after an assignment
 @[table_norm, table_assignment_norm]
 theorem TableConstraint.assignVar_circuit : ∀ ctx (off : CellOffset W S) (v : Variable F),
-  (assignVar off v ctx).snd.circuit = ctx.circuit := by intros; rfl
+  (assignVar (F:=F) (S:=S) (W:=W) off v ctx).snd.circuit = ctx.circuit := by
+  intros; rfl
 
 /--
 Tactic script to unfold `assignCurrRow` and `assignNextRow` in a `TableConstraint`.

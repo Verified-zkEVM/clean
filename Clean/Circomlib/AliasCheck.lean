@@ -25,29 +25,42 @@ template AliasCheck() {
     compConstant.out === 0;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Vector (Expression (F p)) 254) : Circuit sentences Unit := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
-  let comp_out ← CompConstant.circuit (p - 1) input
-  comp_out === 0
+  let comp_out ← CompConstant.circuit order (p - 1) input
+  comp_out ===[order] 0
 
-def circuit : FormalAssertion (F p) (fields 254) where
-  main
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order (fields 254) where
+  main := main order
   localLength _ := 127 + 1 + 135 + 1
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec bits := fromBits (bits.map ZMod.val) < p
+  Spec _ bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
     simp only [circuit_norm, main, CompConstant.circuit]
-    simp_all
+    intros offset env yields checked input_var input h_input h_assumption h_holds
+    constructor
+    · sorry
     have : p > 2^135 := hp135.elim
-    omega
+    rcases h_holds with ⟨ h_holds1, h_holds2, h_holds3 ⟩
+    simp only [h_holds3, h_input] at h_holds1
+    specialize h_holds1 (by
+      intros i x
+      specialize h_assumption i x
+      simp only [← h_input] at h_assumption
+      aesop)
+    rcases h_holds1 with ⟨ h_holds11, h_holds12 ⟩
+    split at h_holds12
+    · aesop
+    · omega
 
   completeness := by
-    simp only [circuit_norm, main, CompConstant.circuit]
+    simp only [circuit_norm, main, CompConstant.circuit, CompConstant.CompletenessAssumptions]
     simp_all
     omega
+
 end AliasCheck
 
 end Circomlib

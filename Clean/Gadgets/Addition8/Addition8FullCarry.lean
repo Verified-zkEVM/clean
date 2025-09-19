@@ -27,7 +27,8 @@ instance : ProvableStruct Outputs where
   toComponents := fun { z, carryOut } => .cons z (.cons carryOut .nil)
   fromComponents := fun (.cons z (.cons carryOut .nil)) => { z, carryOut }
 
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    (input : Var Inputs (F p)) : Circuit sentences (Var Outputs (F p)) := do
   let ⟨x, y, carryIn⟩ := input
 
   -- witness the result
@@ -36,15 +37,19 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
   -- witness the output carry
   let carryOut ← witness fun eval => floorDiv256 (eval (x + y + carryIn))
-  assertBool carryOut
+  -- assert that carryOut is boolean (as a subcircuit assertion)
+  assertBool order carryOut
 
-  assertZero (x + y + carryIn - z - carryOut * 256)
+  assertZero sentences (x + y + carryIn - z - carryOut * 256)
 
   return { z, carryOut }
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
+
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) :=
+  Assumptions input
 
 def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
@@ -55,23 +60,26 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) Inputs Outputs where
-  main
-  Assumptions
-  Spec
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
+    : FormalCircuit order Inputs Outputs where
+  main := main order
+  Assumptions := Assumptions
+  CompletenessAssumptions := CompletenessAssumptions
+  Spec _ := Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 
   soundness := by
     -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
+    rintro i0 env yields checked ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable]
+    simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable, FormalAssertion.toSubcircuit]
 
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -81,22 +89,23 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
     guard_hyp h_byte: z.val < 256
     guard_hyp h_add: x + y + carry_in + -z + -(carry_out * 256) = 0
-    show z.val = (x.val + y.val + carry_in.val) % 256 ∧
-         carry_out.val = (x.val + y.val + carry_in.val) / 256
 
+    show z.val = (x.val + y.val + carry_in.val) % 256 ∧
+          carry_out.val = (x.val + y.val + carry_in.val) / 256
     have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
     apply Addition8.Theorems.soundness x y z carry_in carry_out as_x as_y h_byte as_carry_in h_bool_carry h_add
 
   completeness := by
    -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
+    rintro i0 env yields ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
+    simp only [circuit_norm, h_inputs, main, ByteTable, FormalAssertion.toSubcircuit] at *
+    simp only [CompletenessAssumptions, Assumptions] at h_assumptions
 
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
@@ -130,7 +139,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     exact ⟨completeness1, completeness2, completeness3⟩
 
 def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
-  circuit with
+  circuit := circuit (emptyOrder (F p)),
   name := "Addition8FullCarry"
 
   computableWitnesses n input := by

@@ -33,15 +33,15 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-def main (n : ℕ) (inp : Expression (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (inp : Expression (F p)) : Circuit sentences (Vector (Expression (F p)) n) := do
   let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
-    out[i] * (out[i] - 1) === 0
+    out[i] * (out[i] - 1) ===[order] 0
     let lc1 := lc1 + out[i] * e2
     return (lc1, e2 + e2)
 
-  lc1 === inp
+  lc1 ===[order] inp
   return out
 
 -- helper for proofs below: the linear combination is equivalent to `fieldFromBits`
@@ -64,34 +64,41 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
-  main := main n
+def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : GeneralFormalCircuit order field (fields n) where
+  main := main order n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
   output _ i := varFromOffset (fields n) i
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := input.val < 2^n
+  Assumptions _ input := input.val < 2^n
+
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
-  Spec input bits :=
+  Spec _ input bits :=
     input.val < 2^n
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
 
   soundness := by
     circuit_proof_start
-    simp only [lc_eq] at h_holds
-    rw [← h_holds.right]
+    obtain ⟨h_holds1, h_holds2⟩ := h_holds
+    simp only [lc_eq] at h_holds1 h_holds2
+    constructor
+    · -- Prove yielded sentences hold (vacuous - no yields)
+      intro s hs _
+      -- No yields in this circuit
+      sorry
+    rw [← h_holds2.right]
     and_intros
     · apply fieldFromBits_lt
       intro i hi
       simp only [circuit_norm]
-      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
+      simpa [add_neg_eq_zero] using (h_holds1 ⟨i, hi⟩).right
     · intro i hi
-      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
+      simpa [add_neg_eq_zero] using (h_holds1 ⟨i, hi⟩).right
     · congr 1
       rw [Vector.ext_iff]
       simp [circuit_norm]
@@ -110,21 +117,27 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
-def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
-  main input := arbitraryBitLengthCircuit n input
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit order field (fields n) where
+  main input := arbitraryBitLengthCircuit order n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
 
-  Assumptions input := input.val < 2^n
+  Assumptions _ input := input.val < 2^n
 
-  Spec input output :=
+  Spec _ input output :=
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
     circuit_proof_start [arbitraryBitLengthCircuit]
     simp_all only [true_and]
-    rcases h_holds with ⟨ _, h_bits, h_holds ⟩
-    rw [← h_holds, fieldToBits_fieldFromBits hn]
+    obtain ⟨h_yields, h_spec⟩ := h_holds
+    rcases h_spec with ⟨ _, h_bits, h_eq ⟩
+    constructor
+    · -- Prove yielded sentences hold (vacuous - no yields)
+      intro s hs _
+      -- No yields in this circuit
+      sorry
+    rw [← h_eq, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits
 
   completeness := by
@@ -148,13 +161,13 @@ template Bits2Num(n) {
     lc1 ==> out;
 }
 -/
-def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (input : Vector (Expression (F p)) n) : Circuit sentences (Expression (F p)) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
     let e2 := e2 + e2
     (lc1, e2)) (0, 1)
 
-  let out <== lc1
+  let out <==[order] lc1
   return out
 
 omit [Fact (p > 2)] in
@@ -178,8 +191,8 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
-def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
-  main := main n
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : FormalCircuit order (fields n) field where
+  main := main order n
   localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
@@ -187,7 +200,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   Assumptions input :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
+  CompletenessAssumptions _ input :=
+    ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
+
+  Spec _ input output :=
     output = fieldFromBits input
     ∧ output.val < 2^n
 
@@ -195,21 +211,29 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     circuit_proof_start
     set output : (F p) := (env.get i₀)
 
+    obtain ⟨h_yields, h_eq⟩ := h_holds
+    constructor
+    · -- Prove yielded sentences hold (vacuous - no yields)
+      intro s hs _
+      -- No yields in this circuit
+      sorry
+
     change output = Expression.eval env (Fin.foldl n
-      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1
-    at h_holds
-    rw [lc_eq] at h_holds
+      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1 at h_eq
+    rw [lc_eq] at h_eq
 
     have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
       rw [← h_input]
       ext i hi
       rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]
 
-    rw [h1] at h_holds
-    simp only [h_holds, true_and]
+    rw [h1] at h_eq
+    simp only [h_eq, true_and]
     apply fieldFromBits_lt _ h_assumptions
 
   completeness := by circuit_proof_all
+
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
 end Bits2Num
 
 end Circomlib

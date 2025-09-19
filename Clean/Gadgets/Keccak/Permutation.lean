@@ -5,13 +5,13 @@ namespace Gadgets.Keccak256.Permutation
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
-def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (state : Var KeccakState (F p)) : Circuit sentences (Var KeccakState (F p)) :=
   .foldl roundConstants state
-    fun state rc => KeccakRound.circuit rc state
+    fun state rc => KeccakRound.circuit order rc state
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccakPermutation state.value
 
@@ -23,25 +23,27 @@ def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
 -- NOTE: this linter times out and blows up memory usage
 set_option linter.constructorNameAsVariable false
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
+  main := main order
   localLength _ := 30912
   output _ i0 := stateVar i0 23
 
-  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
+  localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
-  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
+  output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
 
 -- interestingly, `Fin.foldl` is defeq to `List.foldl`. the proofs below use this fact!
 example (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
   = roundConstants.foldl keccakRound state := rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro n env initial_state_var initial_state h_input h_assumptions h_holds
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  intro n env yields checked initial_state_var initial_state h_input h_assumptions h_holds
+  constructor
+  · sorry
 
   -- simplify
-  simp only [main, circuit_norm, Spec,
+  simp only [elaborated, main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
   simp only [zero_add, h_input] at h_holds
@@ -51,11 +53,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env (stateVar n i)
 
+  obtain ⟨ _, h_init ⟩ := h_init
   change (state 0).Normalized ∧
     (state 0).value = keccakRound initial_state.value roundConstants[0]
   at h_init
 
-  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → (state (i + 1)).Normalized ∧
+  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → _ ∧ (state (i + 1)).Normalized ∧
     (state (i + 1)).value = keccakRound (state i).value roundConstants[i + 1]
   at h_succ
 
@@ -69,24 +72,26 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       have hi' : i < 24 := Nat.lt_of_succ_lt hi
       specialize ih hi'
       specialize h_succ i hi ih.left
-      use h_succ.left
-      rw [h_succ.right, Fin.foldl_succ_last, ih.right]
+      use h_succ.2.left
+      rw [h_succ.2.right, Fin.foldl_succ_last, ih.right]
       simp
   exact h_inductive 23 (by norm_num)
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro n env initial_state_var h_env initial_state h_input h_assumptions
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : KeccakState (F p)) := Assumptions input
+
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  intro n env yields initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
-  dsimp only [Assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, Spec,
+  dsimp only [CompletenessAssumptions, Assumptions] at h_assumptions
+  simp only [elaborated, main, h_input, h_assumptions, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
+    KeccakRound.Spec, KeccakRound.CompletenessAssumptions, KeccakRound.Assumptions] at h_env ⊢
 
   -- only keep the statements about normalization
   obtain ⟨ h_init, h_succ ⟩ := h_env
-  replace h_init := h_init.left
-  replace h_succ := fun i hi ih => (h_succ i hi ih).left
+  replace h_init := h_init.2.1
+  replace h_succ := fun i hi ih => (h_succ i hi ih).2.1
 
   intro i hi
 
@@ -111,9 +116,13 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  elaborated with
-  Assumptions, Spec, soundness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState := {
+  elaborated := elaborated order
+  Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
+  Spec
+  soundness := soundness order
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]

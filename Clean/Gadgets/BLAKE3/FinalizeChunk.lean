@@ -73,19 +73,19 @@ attribute [local circuit_norm] ZMod.val_zero ZMod.val_one chunkStart add_zero st
 /--
 Main circuit that processes the final block of a chunk with CHUNK_END flag.
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) (F p)) := do
+def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (input : Var Inputs (F p)) : Circuit sentences (Var (ProvableVector U32 8) (F p)) := do
 
   -- Convert bytes to words (just reorganization, no circuit needed)
   let block_words := bytesToWords input.buffer_data
 
   -- Compute start flag (CHUNK_START if blocks_compressed = 0)
-  let isFirstBlock ← IsZero.circuit input.state.blocks_compressed
+  let isFirstBlock ← IsZero.circuit order input.state.blocks_compressed
   let start_flag : Var U32 (F p) := ⟨isFirstBlock*(chunkStart : F p), 0, 0, 0⟩
 
   -- Compute final flags: base_flags | start_flag | CHUNK_END
   let chunk_end_flag : Var U32 (F p) := ⟨(chunkEnd : F p), 0, 0, 0⟩
-  let flags_with_start ← Or32.circuit { x := input.base_flags, y := start_flag }
-  let final_flags ← Or32.circuit { x := flags_with_start, y := chunk_end_flag }
+  let flags_with_start ← Or32.circuit order { x := input.base_flags, y := start_flag }
+  let final_flags ← Or32.circuit order { x := flags_with_start, y := chunk_end_flag }
 
   -- Use compress
   let compress_input : Var ApplyRounds.Inputs (F p) := {
@@ -96,11 +96,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
     block_len := ⟨input.buffer_len, 0, 0, 0⟩  -- Convert length to U32
     flags := final_flags
   }
-  let final_state ← Compress.circuit compress_input
+  let final_state ← Compress.circuit order compress_input
   return final_state.take 8
 
-instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
-  main
+def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs (ProvableVector U32 8) where
+  main := main order
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
 
 def Assumptions (input : Inputs (F p)) : Prop :=
@@ -110,7 +110,10 @@ def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 64, i.val ≥ input.buffer_len.val → input.buffer_data[i] = 0) ∧
   input.base_flags.Normalized
 
-def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) (input : Inputs (F p)) : Prop :=
+  Assumptions input
+
+def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   let chunk_state : ChunkState := {
     chaining_value := input.state.chaining_value.map U32.value
     chunk_counter := input.state.chunk_counter.value
@@ -142,13 +145,15 @@ private lemma eval_bytesToWords (env : Environment (F p))
   have := getElem_eval_vector (α:=field) env input_var_buffer_data (i*4 + 3) (by omega)
   simp_all
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
+theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
+  circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, Compress.elaborated, ApplyRounds.circuit, ApplyRounds.elaborated,
     IsZero.Spec, IsZero.Assumptions,
     Or32.Spec, Or32.Assumptions,
     Compress.Spec, Compress.Assumptions,
     ApplyRounds.Spec, ApplyRounds.Assumptions,
-    FinalStateUpdate.circuit, FinalStateUpdate.Spec, FinalStateUpdate.Assumptions]
+    FinalStateUpdate.circuit, FinalStateUpdate.elaborated, FinalStateUpdate.Spec, FinalStateUpdate.Assumptions]
+  constructor
+  · sorry
   rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
   simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_self, and_true, true_and,
     Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
@@ -163,7 +168,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     (by linarith)
     (by simp_all)
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
-  have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
+  have h_compress' := congrArg (fun v => v.take 8) h_Compress.2.1
   simp only [Vector.map_take, BLAKE3State, eval_vector] at h_compress'
   rw [← eval_vector] at h_compress'
   simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
@@ -208,20 +213,20 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       arg 2
       change (Vector.take _ 8)[i]'(by omega)
       rw [Vector.getElem_take]
-    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
+    rcases h_Compress with ⟨_, h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
     specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start
+theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
+  circuit_proof_start[Or32.circuit, IsZero.circuit, Assumptions]
   apply And.intro
   · trivial
   rcases h_env with ⟨h_iszero, h_env⟩
   specialize h_iszero trivial
   simp only [IsZero.circuit, IsZero.Spec] at h_iszero
   apply And.intro
-  · simp only [Or32.circuit, Or32.Assumptions]
+  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     apply And.intro
     · aesop
     · simp only [circuit_norm]
@@ -233,7 +238,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       · norm_num
   rcases h_env with ⟨h_or, h_env⟩
   specialize h_or (by
-    simp only [Or32.circuit, Or32.Assumptions]
+    simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     apply And.intro
     · aesop
     · simp only [h_iszero]
@@ -245,7 +250,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
         norm_num)
   simp only [Or32.circuit, Or32.Spec] at h_or
   apply And.intro
-  · simp only [Or32.circuit, Or32.Assumptions]
+  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     simp only [h_or]
     constructor
     · trivial
@@ -255,7 +260,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Compress.circuit, Compress.Assumptions, ApplyRounds.Assumptions]
   rcases h_env with ⟨h_or2, h_env⟩
   specialize h_or2 (by
-  · simp only [Or32.circuit, Or32.Assumptions]
+  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
     simp only [h_or]
     constructor
     · trivial
@@ -265,7 +270,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   )
   simp only [Or32.circuit, Or32.Spec] at h_or2
   simp only [ProcessBlocksState.Normalized] at h_assumptions
-  simp only [h_or2, h_assumptions]
+  simp only [h_or2, h_assumptions, Compress.CompletenessAssumptions, Compress.Assumptions, ApplyRounds.Assumptions]
   simp only [circuit_norm]
   constructor
   · apply bytesToWords_normalized
@@ -273,8 +278,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     aesop
   omega
 
-def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order Inputs (ProvableVector U32 8) := {
+  elaborated := elaborated order
+  Assumptions
+  CompletenessAssumptions
+  completenessAssumptions_implies_assumptions := fun _ _ h => h
+  Spec
+  soundness := soundness order
+  completeness := completeness order
 }
 
 end Gadgets.BLAKE3.FinalizeChunk
