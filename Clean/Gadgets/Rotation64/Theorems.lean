@@ -55,8 +55,7 @@ lemma h_div {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
   rw [mul_div_256_off ho 5 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
   rw [mul_div_256_off ho 6 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
   rw [mul_div_256_off ho 7 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow,
-    Nat.add_left_inj]
+  simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow]
 
 lemma h_x0_const {o : ℕ} (ho : o < 8) :
     2^(8-o) * 256^7 = 2^(64-o) := by

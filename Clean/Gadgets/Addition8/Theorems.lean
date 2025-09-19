@@ -116,7 +116,7 @@ theorem soundness (x y out carry_in carry_out : F p):
 
   -- case with one carry
   · rw [one_carry] at h
-    simp only [neg_mul, one_mul] at h
+    simp only [one_mul] at h
     -- rw [←sub_eq_add_neg, ←sub_eq_add_neg (carry_in + x + y)] at h
     have h_spec : carry_in + x + y - out - 256 = 0 := by
       rw [add_comm (x + y), ←add_assoc] at h

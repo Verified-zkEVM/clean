@@ -33,7 +33,7 @@ def table : InductiveTable (F p) Row unit where
   soundness := by simp_all [InductiveTable.Soundness, fib32, circuit_norm,
       Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
-  completeness := by simp_all [InductiveTable.Completeness, fib32, circuit_norm,
+  completeness := by simp_all [InductiveTable.Completeness, circuit_norm,
     Addition32.circuit, Addition32.Assumptions, Addition32.Spec]
 
 -- the input is hard-coded to (0, 1)
@@ -44,7 +44,7 @@ theorem tableStatement (output : Row (F p)) : ∀ n > 0, ∀ trace,
     (formalTable output).statement n trace → output.y.value = fib32 n := by
   intro n hn trace Spec
   simp only [FormalTable.statement, formalTable, InductiveTable.toFormal, table] at Spec
-  replace Spec := Spec ⟨hn, (by simp [table, fib32, U32.fromByte_value, U32.fromByte_normalized])⟩
+  replace Spec := Spec ⟨hn, (by simp [fib32, U32.fromByte_value, U32.fromByte_normalized])⟩
   simp_all +arith
 
 end Tables.Fibonacci32Inductive
