@@ -442,20 +442,47 @@ def nextState : FormalCircuit (F p) StateTransitionInput State where
 
     -- case analysis on the instruction type
     rcases h_assumptions with isAdd_cases | isMul_cases | isStoreState_cases | isLoadState_cases
+
+    -- prove the ADD case
     · simp_all only [one_ne_zero, false_or, true_or, neg_zero, add_zero, ↓reduceIte]
       rw [add_eq_zero_iff_eq_neg] at c0 c8 c9 c10
       -- does the transition return some or none for the ADD case?
       split
       case h_1 nextState h_eq =>
-        simp_all only [Option.ite_none_right_eq_some, Option.some.injEq]
+        simp only [Option.ite_none_right_eq_some, Option.some.injEq] at h_eq
+        simp only [c8, neg_add_rev, neg_neg, c9, c10]
         rw [←h_eq.right]
-        congr
-        repeat ring
       case h_2 h_eq =>
         simp_all only [neg_add_rev, neg_neg, ↓reduceIte, reduceCtorEq]
-    · sorry
-    · sorry
-    · sorry
+
+    -- prove the MUL case
+    · simp_all only [true_or, one_ne_zero, false_or, neg_zero, add_zero, zero_ne_one, ↓reduceIte]
+      rw [add_eq_zero_iff_eq_neg] at c1 c8 c9 c10
+      -- does the transition return some or none for the MUL case?
+      split
+      case h_1 nextState h_eq =>
+        simp_all only [neg_neg, neg_add_rev, ↓reduceIte, Option.some.injEq]
+      case h_2 h_eq =>
+        simp_all only [neg_add_rev, neg_neg, ↓reduceIte, reduceCtorEq]
+
+    -- prove the STORE_STATE case
+    · simp_all only [true_or, one_ne_zero, false_or, neg_zero, add_zero, zero_ne_one, ↓reduceIte]
+      rw [add_eq_zero_iff_eq_neg] at c2 c3 c4 c8 c9 c10
+      -- does the transition return some or none for the STORE_STATE case?
+      split
+      case h_1 nextState h_eq =>
+        simp only [Option.ite_none_right_eq_some, Option.some.injEq] at h_eq
+        rw [←h_eq.right]
+        simp only [c8, neg_add_rev, neg_neg, c9, c10]
+      case h_2 h_eq =>
+        simp_all only [neg_neg, neg_add_rev, and_self, ↓reduceIte, reduceCtorEq]
+
+    -- prove the LOAD_STATE case
+    · simp_all only [true_or, one_ne_zero, false_or, add_neg_cancel, zero_ne_one, ↓reduceIte,
+      State.mk.injEq]
+      rw [add_eq_zero_iff_eq_neg, neg_neg] at c5 c6 c7
+      rw [c5, c6, c7]
+      simp only [and_self]
   completeness := by
     sorry
 
