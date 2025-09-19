@@ -506,22 +506,37 @@ def nextState : FormalCircuit (F p) StateTransitionInput State where
 
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (state : Var State (F p)) :
-    Circuit (F p) (Var State (F p)) := do
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    FormalCircuit (F p) State State where
+  main := fun state => do
+    -- Fetch instruction
+    let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstructionCircuit program h_programSize) state.pc
 
-  -- Fetch instruction
-  let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstructionCircuit program h_programSize) state.pc
+    -- Decode instruction
+    let decoded ← subcircuit decodeInstructionCircuit rawInstrType
 
-  -- Decode instruction
-  let decoded ← subcircuit decodeInstructionCircuit rawInstrType
+    -- Perform relevant memory accesses
+    let v1 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
+    let v2 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
+    let v3 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
-  -- Perform relevant memory accesses
-  let v1 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
-  let v2 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
-  let v3 ← subcircuit (readFromMemory memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
+    -- Compute next state
+    nextState { state, decoded, v1, v2, v3 }
 
-  -- Compute next state
-  nextState { state, decoded, v1, v2, v3 }
+  localLength _ := 30
+  Assumptions | _ => True
+  Spec
+  | state, claimed_next_state =>
+    match Spec.femtoCairoMachineTransition program memory state with
+      | some next_state => claimed_next_state = next_state
+      | none => False -- impossible, constraints ensure that the transition is valid
+  soundness := by
+    circuit_proof_start
+    sorry
+
+  completeness := by
+    sorry
+
+
 
 end Examples.FemtoCairo
