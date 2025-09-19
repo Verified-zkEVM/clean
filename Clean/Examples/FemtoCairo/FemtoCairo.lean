@@ -724,4 +724,49 @@ def femtoCairoStepCircuit
       completeness := by sorry
     }
 
+/--
+  The femtoCairo table, which defines the step relation for the femtoCairo VM.
+  Given a read-only program memory and a read-only data memory, it defines
+  the step relation on states of the femtoCairo VM.
+
+  Proving knowledge of a table of length `n` proves the following statement:
+  the prover knows a memory function such that the bounded execution of the femtoCairo VM
+  for `n` steps from the given initial state, using the given program memory, does not
+  return `none`.
+-/
+def femtoCairoTable
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    : InductiveTable (F p) State unit where
+  step state _ := do
+    femtoCairoStepCircuit program h_programSize memory h_memorySize state
+
+  Spec initial_state _ i _ state : Prop := match
+      Spec.femtoCairoMachineBoundedExecution program memory (some initial_state) i with
+    | some reachedState => state = reachedState
+    | none => False -- impossible, constraints ensure that every transition is valid
+
+  soundness := by
+    intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
+    simp [Spec.femtoCairoMachineBoundedExecution, femtoCairoStepCircuit,
+      femtoCairoCircuitSpec, femtoCairoAssumptions, circuit_norm] at ⊢ h_hold
+    split at h_hold
+    case h_2 =>
+      contradiction
+    case h_1 next_state h_eq =>
+      rw [h_inputs.left] at h_eq
+      split
+      case h_2 =>
+        intros
+        contradiction
+      case h_1 reached_state h_eq_reached =>
+        intro ih
+        rw [ih] at h_eq
+        rw [h_eq_reached]
+        simp only [Option.bind_some]
+        rw [h_eq]
+        simp only [h_hold]
+
+  completeness := by sorry
+
 end Examples.FemtoCairo

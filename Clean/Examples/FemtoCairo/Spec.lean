@@ -122,17 +122,12 @@ def femtoCairoMachineTransition
 def femtoCairoMachineBoundedExecution
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (initial_pc : (F p)) (initial_ap : (F p)) (initial_fp : (F p)) (steps : Nat) :
-    Option (State (F p)) :=
-  let rec aux (curr_state : State (F p)) (steps_left : Nat) :
-      Option (State (F p)) :=
-    if steps_left = 0 then
-      some curr_state
-    else
-      match femtoCairoMachineTransition program memory curr_state with
-      | some new_state =>
-          aux new_state (steps_left - 1)
-      | none => none
-  aux { pc := initial_pc, ap := initial_ap, fp := initial_fp } steps
+    (state : Option (State (F p))) (steps : Nat) :
+    Option (State (F p)) := match steps with
+  | 0 => state
+  | i + 1 => do
+    let reachedState ← femtoCairoMachineBoundedExecution program memory state i
+    femtoCairoMachineTransition program memory reachedState
+
 
 end Examples.FemtoCairo.Spec
