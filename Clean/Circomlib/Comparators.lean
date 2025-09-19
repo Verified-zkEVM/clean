@@ -1,7 +1,7 @@
 import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Circomlib.Bitify
-
+import Mathlib.Data.Int.Basic
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/comparators.circom
@@ -165,12 +165,44 @@ def circuit : FormalAssertion (F p) Inputs where
     enabled = 1 → inp.1 = inp.2
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    intro h_ie
+    simp_all only [gt_iff_lt, one_ne_zero, or_true, id_eq, one_mul]
+    cases h_input with
+    | intro h_enabled h_inp =>
+      rw [← h_inp]
+      simp only
+      cases h_holds with
+      | intro h1 h2 =>
+        rw [h1] at h2
+        rw [add_comm] at h2
+        simp only [id_eq] at h2
+        split_ifs at h2 with h_ifs
+        . simp_all only [neg_add_cancel]
+          rw [add_comm, neg_add_eq_zero] at h_ifs
+          exact h_ifs
+        . simp_all only [neg_zero, zero_add, one_ne_zero]
+        rw [add_comm, neg_add_eq_zero] at h2
+        rw [h2] at h1
+        trivial
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp_all only [gt_iff_lt, id_eq]
+    constructor
+    trivial
+    rw [mul_eq_zero, add_comm, neg_add_eq_zero]
+    cases h_assumptions with
+    | inl h_enabled_l => apply Or.inl h_enabled_l
+    | inr h_enabled_r =>
+      simp_all only [forall_const, one_ne_zero, false_or]
+      have h_spec := h_spec.symm
+      rw [← sub_eq_zero, ← h_input.right] at h_spec
+      rw [← sub_eq_add_neg] at h_env
+      rw [h_env]
+      simp only [id_eq, h_spec, ↓reduceIte]
+      trivial
+
 end ForceEqualIfEnabled
 
 namespace LessThan
