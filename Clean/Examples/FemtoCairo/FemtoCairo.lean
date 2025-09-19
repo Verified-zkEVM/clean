@@ -793,10 +793,10 @@ def femtoCairoFormalTable
 theorem femtoCairoTableStatement
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-  (state : State (F p)) : ∀ i > 0, ∀ trace,
-  (femtoCairoFormalTable program h_programSize memory h_memorySize state).statement i trace →
+  (state : State (F p)) : ∀ n > 0, ∀ trace,
+  (femtoCairoFormalTable program h_programSize memory h_memorySize state).statement n trace →
     match
-      Spec.femtoCairoMachineBoundedExecution program memory (some {pc:=0, ap:=0, fp:=0}) (i - 1) with
+      Spec.femtoCairoMachineBoundedExecution program memory (some {pc:=0, ap:=0, fp:=0}) (n - 1) with
     | some reachedState => state = reachedState
     | none => False -- impossible, constraints ensure that every transition is valid
   := by
