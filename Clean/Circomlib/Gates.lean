@@ -60,8 +60,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Equality subcircuit doesn't yield anything
-      sorry
+      -- The XOR circuit doesn't yield anything, it only calls Equality which doesn't yield
+      -- The set is ∅ ∪ ∅ = ∅, so there's no s in it
+      simp only [Set.union_empty] at hs
+      contradiction
 
     constructor
     · convert xor_eq_val_xor h_a h_b using 1
@@ -114,8 +116,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Equality subcircuit doesn't yield anything
-      sorry
+      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
+      simp only [Set.union_empty] at hs
+      contradiction
 
     simp_all only [h_hold.2]
     constructor
@@ -165,8 +168,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Equality subcircuit doesn't yield anything
-      sorry
+      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
+      simp only [Set.union_empty] at hs
+      contradiction
 
     simp_all only [h_hold.2]
     constructor
@@ -216,8 +220,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Equality subcircuit doesn't yield anything
-      sorry
+      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
+      simp only [Set.union_empty] at hs
+      contradiction
 
     simp_all only [h_hold.2]
     constructor
@@ -269,8 +274,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Equality subcircuit doesn't yield anything
-      sorry
+      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
+      simp only [Set.union_empty] at hs
+      contradiction
 
     simp_all only [h_hold.2]
     constructor
@@ -322,8 +328,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Equality subcircuit doesn't yield anything
-      sorry
+      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
+      simp only [Set.union_empty] at hs
+      contradiction
 
     simp_all only [h_hold.2]
     constructor
@@ -1098,7 +1105,12 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   soundness := by
     intro offset env yields checked input_var input h_env h_assumptions h_hold
     constructor
-    · sorry
+    · -- Prove yielded sentences hold (vacuous - no yields)
+      intro s hs _
+      -- The Multi-AND circuit doesn't yield anything
+      simp only [ElaboratedCircuit.main, main] at hs
+      -- The localYields should be empty
+      sorry -- Need to prove this is empty, but it's more complex due to the recursive structure
     exact soundness order n offset env yields checked input_var input h_env.symm h_assumptions h_hold
   completeness := by
     intro offset env yields input_var h_local_witnesses input h_env h_assumptions
