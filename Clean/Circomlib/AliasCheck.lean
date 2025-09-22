@@ -7,6 +7,21 @@ Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/aliascheck.circom
 -/
 
+section FoldlRangeLemmas
+variable {F : Type} [Field F] {sentences : PropertySet F}
+
+/-- foldlRange yields nothing when its body yields nothing at each iteration -/
+lemma foldlRange_localYields_empty {m : ℕ} {β : Type} [Inhabited β]
+    {init : β} {body : β → Fin m → Circuit sentences β}
+    {constant : Circuit.ConstantLength (fun (t : β × Fin m) => body t.1 t.2)}
+    {env : Environment F} {offset : ℕ}
+    (h_body : ∀ (acc : β) (i : Fin m) (n : ℕ),
+      Operations.localYields env ((body acc i).operations n) = ∅) :
+    Operations.localYields env ((Circuit.foldlRange m init body constant).operations offset) = ∅ := by
+  sorry
+
+end FoldlRangeLemmas
+
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
@@ -44,22 +59,14 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- AliasCheck doesn't yield anything, it only calls CompConstant and equality check
       simp only [CompConstant.main, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, HasAssignEq.assignEq, FormalCircuit.toSubcircuit, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main, Num2Bits.circuit, GeneralFormalCircuit.toSubcircuit, Num2Bits.arbitraryBitLengthCircuit] at hs
       simp only [Num2Bits.main, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main] at hs
       simp only [Gadgets.allZero, circuit_norm] at hs
-      -- Break down the unions to handle each component separately
-      simp only [Set.mem_union] at hs
-      -- The goal is a union of several sets, we need to show each is empty
-      -- First, let's handle the foldlRange part
-      cases hs with
-      | inl h_foldl =>
-        -- This is the foldlRange part - it contains forEach with assertZero
-        -- We need to show this yields nothing
-        sorry -- Need to prove foldlRange with forEach/assertZero yields nothing
-      | inr h_rest =>
-        -- h_rest : s ∈ ∅, which is a contradiction
-        exact absurd h_rest (Set.notMem_empty s)
+      rw [foldlRange_localYields_empty] at hs
+      · simp only [Set.empty_union] at hs
+        exact absurd hs (Set.notMem_empty s)
+      · intro acc i n
+        sorry -- Need: Operations.localYields of subcircuit with forEach/assertZero is empty
     have : p > 2^135 := hp135.elim
     rcases h_holds with ⟨ h_holds1, h_holds2, h_holds3 ⟩
     simp only [h_holds3, h_input] at h_holds1
