@@ -42,7 +42,24 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     simp only [circuit_norm, main, CompConstant.circuit]
     intros offset env yields checked input_var input h_input h_assumption h_holds
     constructor
-    · sorry
+    · -- Prove yielded sentences hold (vacuous - no yields)
+      intro s hs _
+      -- AliasCheck doesn't yield anything, it only calls CompConstant and equality check
+      simp only [CompConstant.main, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, HasAssignEq.assignEq, FormalCircuit.toSubcircuit, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main, Num2Bits.circuit, GeneralFormalCircuit.toSubcircuit, Num2Bits.arbitraryBitLengthCircuit] at hs
+      simp only [Num2Bits.main, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main] at hs
+      simp only [Gadgets.allZero, circuit_norm] at hs
+      -- Break down the unions to handle each component separately
+      simp only [Set.mem_union] at hs
+      -- The goal is a union of several sets, we need to show each is empty
+      -- First, let's handle the foldlRange part
+      cases hs with
+      | inl h_foldl =>
+        -- This is the foldlRange part - it contains forEach with assertZero
+        -- We need to show this yields nothing
+        sorry -- Need to prove foldlRange with forEach/assertZero yields nothing
+      | inr h_rest =>
+        -- h_rest : s ∈ ∅, which is a contradiction
+        exact absurd h_rest (Set.notMem_empty s)
     have : p > 2^135 := hp135.elim
     rcases h_holds with ⟨ h_holds1, h_holds2, h_holds3 ⟩
     simp only [h_holds3, h_input] at h_holds1
