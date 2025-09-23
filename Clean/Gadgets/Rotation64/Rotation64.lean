@@ -89,9 +89,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 64) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
   intro i0 env yields x_var h_env x h_eval x_normalized
 
-  simp only [circuit_norm, main, elaborated,
-    Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
-    Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env ⊢
+  simp only [circuit_norm, main, elaborated, Rotation64Bits.circuit, Rotation64Bits.elaborated,
+    Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Spec] at h_env ⊢
 
   obtain ⟨h0, _⟩ := h_env
   rw [h_eval] at h0
