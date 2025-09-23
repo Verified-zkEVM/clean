@@ -683,6 +683,13 @@ lemma foldlRange.usesLocalWitnesses :
       |>.operations (n + i * (body default i).localLength)) := by
   simp only [env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, foldlRange.forAll]
 
+/-- foldlRange yields nothing when its body yields nothing at each iteration -/
+lemma foldlRange.localYields_empty
+    (h_body : ∀ (acc : β) (i : Fin m) (n : ℕ),
+      Operations.localYields env ((body acc i).operations n) = ∅) :
+    Operations.localYields env ((foldlRange m init body constant).operations n) = ∅ := by
+  sorry
+
 end foldlRange
 
 end Circuit

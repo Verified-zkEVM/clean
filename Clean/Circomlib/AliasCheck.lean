@@ -7,21 +7,6 @@ Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/aliascheck.circom
 -/
 
-section FoldlRangeLemmas
-variable {F : Type} [Field F] {sentences : PropertySet F}
-
-/-- foldlRange yields nothing when its body yields nothing at each iteration -/
-lemma foldlRange_localYields_empty {m : ℕ} {β : Type} [Inhabited β]
-    {init : β} {body : β → Fin m → Circuit sentences β}
-    {constant : Circuit.ConstantLength (fun (t : β × Fin m) => body t.1 t.2)}
-    {env : Environment F} {offset : ℕ}
-    (h_body : ∀ (acc : β) (i : Fin m) (n : ℕ),
-      Operations.localYields env ((body acc i).operations n) = ∅) :
-    Operations.localYields env ((Circuit.foldlRange m init body constant).operations offset) = ∅ := by
-  sorry
-
-end FoldlRangeLemmas
-
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
@@ -62,7 +47,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
       simp only [CompConstant.main, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, HasAssignEq.assignEq, FormalCircuit.toSubcircuit, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main, Num2Bits.circuit, GeneralFormalCircuit.toSubcircuit, Num2Bits.arbitraryBitLengthCircuit] at hs
       simp only [Num2Bits.main, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main] at hs
       simp only [Gadgets.allZero, circuit_norm] at hs
-      rw [foldlRange_localYields_empty] at hs
+      rw [Circuit.foldlRange.localYields_empty] at hs
       · simp only [Set.empty_union] at hs
         exact absurd hs (Set.notMem_empty s)
       · intro acc i n
