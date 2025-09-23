@@ -41,8 +41,8 @@ def ConstraintsHoldFlat {sentences : PropertySet F} (eval : Environment F) (yiel
     | lookup { table, entry } =>
       table.Contains (entry.map eval) ∧ ConstraintsHoldFlat eval yields checked ops
     | witness _ _ | yield _ => ConstraintsHoldFlat eval yields checked ops
-    | use s => s.eval eval ∈ yields.yielded ∧ 
-               (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+    | use s => s.eval eval ∈ yields.yielded ∧
+               (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧
                ConstraintsHoldFlat eval yields checked ops
 
 @[circuit_norm]
@@ -70,13 +70,13 @@ lemma localYields_append {sentences : PropertySet F} (env : Environment F) (ops1
   | nil => simp [localYields]
   | cons op ops1 ih =>
     cases op with
-    | witness m c => simp [localYields, ih, Set.union_assoc]
-    | assert e => simp [localYields, ih, Set.union_assoc]
-    | lookup l => simp [localYields, ih, Set.union_assoc]
+    | witness m c => simp [localYields, ih]
+    | assert e => simp [localYields, ih]
+    | lookup l => simp [localYields, ih]
     | yield s =>
         simp only [List.cons_append, localYields, ih, Set.singleton_union]
         aesop
-    | use s => simp [localYields, ih, Set.union_assoc]
+    | use s => simp [localYields, ih]
 
 
 /-- Induction principle for `FlatOperation`s. -/
@@ -281,15 +281,15 @@ lemma localYields_append {sentences : PropertySet F} (env : Environment F) (ops1
   | nil => simp [localYields]
   | cons op ops1 ih =>
     cases op with
-    | witness m c => simp [localYields, ih, Set.union_assoc]
-    | assert e => simp [localYields, ih, Set.union_assoc]
-    | lookup l => simp [localYields, ih, Set.union_assoc]
-    | yield s => 
+    | witness m c => simp [localYields, ih]
+    | assert e => simp [localYields, ih]
+    | lookup l => simp [localYields, ih]
+    | yield s =>
       simp only [List.cons_append, localYields, ih]
       ext x
       simp only [Set.mem_singleton_iff, Set.mem_union]
       tauto
-    | use s => simp [localYields, ih, Set.union_assoc]
+    | use s => simp [localYields, ih]
     | subcircuit s => simp [localYields, ih, Set.union_assoc]
 
 /-- Induction principle for `Operations`. -/
