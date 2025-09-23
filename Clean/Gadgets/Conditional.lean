@@ -47,6 +47,8 @@ def Spec [DecidableEq F] {sentences : PropertySet F} (_ : CheckedYields sentence
 
 instance elaborated [DecidableEq F] {sentences : PropertySet F} : ElaboratedCircuit F sentences (Inputs M) M where
   main
+  yields _ _ _ := ∅
+  yields_eq := by simp only [main, circuit_norm]
   localLength _ := 0
 
 theorem soundness [DecidableEq F] {sentences : PropertySet F} (order : SentenceOrder sentences) : Soundness F (elaborated (F:=F) (M:=M) (sentences:=sentences)) order Assumptions Spec := by

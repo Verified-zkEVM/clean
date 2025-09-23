@@ -79,14 +79,20 @@ instance elaborated {sentences : PropertySet (F p)} : ElaboratedCircuit (F p) se
   main
   localLength _ := 1
   output _ i := var ⟨i⟩
+  yields _ _ _ := ∅
+  yields_eq := by simp only [main, circuit_norm]
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) elaborated order Assumptions Spec := by
   intro i env yields checked ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
-  simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
-  have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  set w := env.get i
-  set z := x + y + -(2*w)
-  · show w.val = x.val &&& y.val
+  constructor
+  · intro s hs
+    simp only [elaborated] at hs
+    contradiction
+  · simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
+    have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+    set w := env.get i
+    set z := x + y + -(2*w)
+    show w.val = x.val &&& y.val
 
     -- it's easier to prove something about 2*w since it features in the constraint
     have two_and_field : 2*w = x + y - z := by ring

@@ -89,9 +89,15 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs field where
   main := main order
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by simp only [main, circuit_norm]
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro i env yields checked ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
+  constructor
+  · intro s hs
+    simp only [elaborated] at hs
+    contradiction
   simp_all only [circuit_norm, main, elaborated, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
