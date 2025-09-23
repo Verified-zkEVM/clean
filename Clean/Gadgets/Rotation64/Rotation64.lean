@@ -44,6 +44,11 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order off
   localLength _ := 16
   output _ i0 := output off i0
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bits.circuit, Rotation64Bits.elaborated]
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 64) : Soundness (F p) (elaborated order offset) order Assumptions (Spec (offset := offset)) := by
   intro i0 env yields checked x_var x h_input x_normalized h_holds
@@ -69,10 +74,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   specialize h1 hy_norm
 
   constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Rotation subcircuits don't yield anything
-    sorry
+  · -- Prove yielded sentences hold (vacuous - yields is empty)
+    simp
 
   simp only [hy_rot] at h1
   obtain ⟨_, ⟨hy, hy_norm⟩⟩ := h1

@@ -45,6 +45,11 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order off
   localLength _ := 16
   output _ i0 := output off i0
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [ByteDecomposition.circuit, ByteDecomposition.elaborated]
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
@@ -109,11 +114,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     exact (h_rot_vector i hi).right
 
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
-  constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The ByteDecomposition subcircuits don't yield anything
-    sorry
   · -- Prove the spec
     exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 

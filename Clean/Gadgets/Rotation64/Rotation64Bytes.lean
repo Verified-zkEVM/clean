@@ -51,6 +51,11 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     | 5 => ⟨ x5, x6, x7, x0, x1, x2, x3, x4 ⟩
     | 6 => ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
     | 7 => ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm]
+    fin_cases off <;> simp [Operations.localYields]
   subcircuitsConsistent x i0 := by
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
