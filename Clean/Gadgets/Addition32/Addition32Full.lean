@@ -65,15 +65,13 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp only [main, circuit_norm, Addition8FullCarry.main, FormalAssertion.toSubcircuit]
 
 theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start [elaborated, Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
-
-  constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Addition8FullCarry subcircuits don't yield anything
-    sorry
 
   -- simplify circuit further
   -- TODO handle simplification of general provable types in `circuit_proof_start`

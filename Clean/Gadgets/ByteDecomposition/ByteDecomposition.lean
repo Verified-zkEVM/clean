@@ -48,6 +48,10 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order offset
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros env input offset
+    simp only [main, circuit_norm, Equality.circuit, Equality.elaborated, FormalAssertion.toSubcircuit, Equality.main]
 
 theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Soundness (F p) (elaborated order offset) order Assumptions (Spec offset) := by
   intro i0 env state_var checked x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
@@ -58,7 +62,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   obtain ⟨low_lt, high_lt, h_yields_and_eq⟩ := h_holds
   set low := env.get i0
   set high := env.get (i0 + 1)
-  
+
   -- Extract the equation from the conjunction
   have h_eq : x = low + high * 2^offset.val := h_yields_and_eq.2
 
@@ -101,18 +105,9 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   -- finally we have the desired inequality on `low`
   have h_lt_low : low.val < 2^offset.val := h_lt_mul_low
   have ⟨ low_eq, high_eq ⟩ := Theorems.soundness offset x low high x_byte h_lt_low high_lt h_eq
-  
-  constructor
-  · -- Prove yielded sentences hold
-    intro s hs hdeps
-    -- The subcircuit structure adds complexity, but we can use h_yields_and_eq.1
-    -- We need to show that the subcircuit yields match
-    simp only [FlatOperation.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false] at hs
-    -- Apply the yields proof from h_yields_and_eq
-    exact h_yields_and_eq.1 s hs hdeps
-  · -- Prove the spec
-    use ⟨ low_eq, high_eq ⟩, h_lt_low
-    rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
+
+  use ⟨ low_eq, high_eq ⟩, h_lt_low
+  rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
 theorem completeness {sentences : PropertySet (F p)} {order : SentenceOrder sentences} (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
   rintro i0 env yielded x_var henv (x : F p) h_input (x_byte : x.val < 256)

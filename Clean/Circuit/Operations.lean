@@ -326,6 +326,14 @@ lemma localYields_toFlat {sentences : PropertySet F} (env : Environment F) (ops 
     simp [toFlat, localYields]
     rw [FlatOperation.localYields_append, ih]
 
+@[circuit_norm]
+lemma localYields_flatten {sentences : PropertySet F} (env : Environment F) (opsList : List (Operations sentences)) :
+    localYields env opsList.flatten = ⋃ ops ∈ opsList, localYields env ops := by
+  induction opsList with
+  | nil => simp [localYields]
+  | cons ops rest ih =>
+    simp [List.flatten, localYields_append, ih]
+
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition

@@ -39,6 +39,7 @@ instance elaborated {sentences : PropertySet (F p)} (off : Fin 4): ElaboratedCir
     | 1 => ⟨ x1, x2, x3, x0 ⟩
     | 2 => ⟨ x2, x3, x0, x1 ⟩
     | 3 => ⟨ x3, x0, x1, x2 ⟩
+  yields _ _ _ := ∅
 
   subcircuitsConsistent x i0 := by
     simp only [main]
@@ -48,6 +49,12 @@ instance elaborated {sentences : PropertySet (F p)} (off : Fin 4): ElaboratedCir
     intros
     fin_cases off
     repeat rfl
+  yields_eq := by
+    intros env input offset
+    rcases input
+    simp only [main, circuit_norm, explicit_provable_type]
+    aesop
+
   localLength_eq := by
     intros
     fin_cases off
@@ -66,10 +73,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   dsimp only [Assumptions, U32.Normalized] at as
   obtain ⟨ h0, h1, h2, h3 ⟩ := as
 
-  simp [circuit_norm, Spec, U32.value, -Nat.reducePow]
-  constructor
-  · fin_cases off <;> (simp_all [explicit_provable_type, main, circuit_norm, -Nat.reducePow])
-  · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
+  simp only [circuit_norm, Spec, U32.value, -Nat.reducePow]
+  fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
 
 theorem completeness {sentences : PropertySet (F p)} (off : Fin 4) : Completeness (F p) sentences (elaborated (sentences := sentences) off) CompletenessAssumptions := by
   rintro i0 env yields ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _

@@ -47,12 +47,17 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order off
   localLength _ := 8
   output _inputs i0 := output off i0
+  yields _ _ _ := ∅
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U32.fromLimbs
     simp [Vector.ext_iff, Vector.getElem_rotate]
+  yields_eq := by
+    intros env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [ByteDecomposition.circuit, ByteDecomposition.elaborated]
   subcircuitsConsistent _ _ := by
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
@@ -109,8 +114,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     exact (h_rot_vector i hi).right
 
   rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']
-  constructor
-  · sorry
   exact ⟨ rotation32_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 8) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by

@@ -51,6 +51,7 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order
   localLength _ := 4
   output _ i0 := varFromOffset U32 i0
+  yields _ _ _ := ∅
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u32 {sentences : PropertySet (F p)} {x y z : U32 (F p)}
@@ -92,7 +93,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   constructor
   · -- Prove yielded sentences hold
     intro s
-    simp [Operations.localYields, circuit_norm, elaborated, main]
+    simp [circuit_norm, elaborated]
   · -- Prove the spec
     apply soundness_to_u32 (sentences := sentences) (by simp [circuit_norm, x_norm]) (by simp [circuit_norm, y_norm])
     simp only [circuit_norm, explicit_provable_type, elaborated]

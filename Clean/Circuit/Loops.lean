@@ -504,6 +504,33 @@ lemma map.usesLocalWitnesses :
     ∀ i : Fin m, env.UsesLocalWitnessesAndYieldsCompleteness yields (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, ←forAll_def]
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
+
+@[circuit_norm]
+lemma map.localYields :
+  Operations.localYields env (map xs body constant |>.operations n) =
+    ⋃ i : Fin m, Operations.localYields env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  simp only [map]
+  rw [MapM.operations_eq, Operations.localYields_flatten, ConstantLength.localLength_eq]
+  ext s
+  simp only [Set.mem_iUnion]
+  constructor
+  · intro ⟨ops, hops, hs⟩
+    simp only [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact ⟨i, hs⟩
+  · intro ⟨i, hs⟩
+    use (body xs[↑i]).operations (n + ↑i * ConstantLength.localLength body)
+    refine ⟨?_, ?_⟩
+    · simp only [List.mem_ofFn]
+      exact ⟨i, rfl⟩
+    · convert hs using 3
+
+@[circuit_norm]
+lemma map.localYields_empty (h : ∀ i : Fin m, Operations.localYields env (body xs[i.val] |>.operations (n + i*(body default).localLength)) = ∅) :
+  Operations.localYields env (map xs body constant |>.operations n) = ∅ := by
+  rw [map.localYields]
+  simp only [h, Set.iUnion_empty]
+
 end map
 
 section mapFinRange

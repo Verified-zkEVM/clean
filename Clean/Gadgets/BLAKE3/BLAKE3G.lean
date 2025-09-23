@@ -59,11 +59,16 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     |>.set b (Rotation32.output 7 (i0 + 88)) b.is_lt
     |>.set c (⟨var ⟨i0 + 76⟩, var ⟨i0 + 78⟩, var ⟨i0 + 80⟩, var ⟨i0 + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i0 + 68)) d.is_lt
+  yields _ _ _ := ∅
 
   localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated]
   output_eq _ _ := by
     dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated]
+  yields_eq := by
+    intros env input offset
+    simp only [circuit_norm, main, ElaboratedCircuit.yields_eq]
+    simp [Xor32.circuit, Addition32.circuit, Addition32.elaborated, Xor32.elaborated, Rotation32.circuit, Rotation32.elaborated]
   subcircuitsConsistent _ _ := by
     simp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
@@ -84,9 +89,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   circuit_proof_start [elaborated, BLAKE3State.Normalized, Xor32.circuit, Xor32.elaborated, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
-
-  constructor
-  · sorry  -- Prove yielded sentences hold
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 

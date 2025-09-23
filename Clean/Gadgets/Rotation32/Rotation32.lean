@@ -43,6 +43,11 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order off
   localLength _ := 8
   output _inputs i0 := output off i0
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Rotation32Bytes.circuit, Rotation32Bits.circuit, Rotation32Bytes.elaborated, Rotation32Bits.elaborated]
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : Soundness (F p) (elaborated order offset) order Assumptions (Spec (offset := offset)) := by
   intro i0 env yields checked x_var x h_input x_normalized h_holds
@@ -75,9 +80,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   -- reason about rotation
   rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy, Nat.div_add_mod']
-  constructor
-  · sorry
-  rfl
+  simp
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (offset : Fin 32) : Completeness (F p) sentences (elaborated order offset) CompletenessAssumptions := by
   intro i0 env yields x_var h_env x h_eval x_normalized
