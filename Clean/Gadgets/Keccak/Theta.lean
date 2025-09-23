@@ -16,6 +16,12 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (stat
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
   main := main order
   localLength _ := 480
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp only [ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit]
+    simp [ThetaC.elaborated, ThetaD.elaborated, ThetaXor.elaborated]
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
@@ -27,8 +33,6 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (s
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start
-  constructor
-  · sorry
   simp_all [circuit_norm, Spec, elaborated, main, Assumptions,
     ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,

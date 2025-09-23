@@ -29,6 +29,14 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (s
 instance elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakRow where
   main := main order
   localLength _ := 160
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, Circuit.mapFinRange.localYields]
+    simp only [Set.iUnion_eq_empty]
+    intro i
+    simp only [ElaboratedCircuit.yields_eq]
+    simp [Xor64.circuit, Xor64.elaborated]
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
@@ -43,10 +51,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   intro i0 env yields checked state_var state h_input state_norm h_holds
 
   constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Xor64 subcircuits don't yield anything
-    sorry
+  · -- Prove yielded sentences hold (vacuous - yields is empty)
+    simp [elaborated]
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
