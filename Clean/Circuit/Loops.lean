@@ -715,7 +715,19 @@ lemma foldlRange.localYields_empty
     (h_body : ∀ (acc : β) (i : Fin m) (n : ℕ),
       Operations.localYields env ((body acc i).operations n) = ∅) :
     Operations.localYields env ((foldlRange m init body constant).operations n) = ∅ := by
-  sorry
+  simp only [foldlRange]
+  rw [FoldlM.operations_eq]
+  rw [Operations.localYields_flatten]
+  apply Set.eq_empty_iff_forall_notMem.mpr
+  intro s hs
+  simp only [Set.mem_iUnion] at hs
+  obtain ⟨ops, hops, hs'⟩ := hs
+  simp only [List.mem_ofFn] at hops
+  obtain ⟨i, rfl⟩ := hops
+  simp only [Vector.getElem_finRange] at hs'
+  have := h_body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i (n + ↑i * ConstantLength.localLength (FoldlM.prod body))
+  rw [this] at hs'
+  exact Set.notMem_empty s hs'
 
 end foldlRange
 
