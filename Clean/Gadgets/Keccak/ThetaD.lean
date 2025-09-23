@@ -29,6 +29,11 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (row 
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakRow KeccakRow where
   main := main order
   localLength _ := 120
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Rotation64.circuit, Rotation64.elaborated, Xor64.circuit, Xor64.elaborated]
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
@@ -55,12 +60,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   specialize h_rot0 (row_norm 1)
   specialize h_xor0 (row_norm 4) h_rot0.2.2
-
-  constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Rotation64 and Xor64 subcircuits don't yield anything
-    sorry
 
   specialize h_rot1 (row_norm 2)
   specialize h_xor1 (row_norm 0) h_rot1.2.2
