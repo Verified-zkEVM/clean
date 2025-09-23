@@ -42,6 +42,11 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (i
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs U32 where
   main := main order
   localLength _ := 4
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Or8.circuit, Or8.elaborated]
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start
@@ -67,9 +72,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   ring_nf
 
   constructor
-  · -- Prove yielded sentences hold
-    intro s
-    simp [circuit_norm, FormalCircuit.toSubcircuit, Or8.circuit, Or8.elaborated, Or8.main]
+  · -- Prove yielded sentences hold (vacuous - yields is empty)
+    trivial
   · -- Prove the spec
     simp
 

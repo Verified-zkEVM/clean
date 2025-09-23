@@ -59,6 +59,8 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order
   localLength _ := 8
   output _ i0 := varFromOffset U64 i0
+  yields _ _ _ := ∅
+  yields_eq := by simp only [main, circuit_norm]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {sentences : PropertySet (F p)} {x y z : U64 (F p)}
@@ -104,10 +106,8 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
     varFromOffset, Vector.mapRange] at h_holds
 
   constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Xor8 subcircuits don't yield anything
-    sorry
+  · -- Prove yielded sentences hold (vacuous - yields is empty)
+    simp [elaborated]
   apply soundness_to_u64 (sentences := sentences) x_norm y_norm
   simp only [circuit_norm, explicit_provable_type, elaborated]
   simp [h_holds]
