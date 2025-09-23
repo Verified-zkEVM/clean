@@ -114,8 +114,8 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
     Soundness env yields checked := circuit.Assumptions (eval env input_var) →
       let localYields := ops.localYields env
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
-      circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)),
-    Completeness env yields := circuit.CompletenessAssumptions yields (eval env input_var),
+      circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n))
+    Completeness env yields := circuit.CompletenessAssumptions yields (eval env input_var)
     UsesLocalWitnessesAndYields env yields := circuit.CompletenessAssumptions yields (eval env input_var) →
       FlatOperation.localYields env ops.toFlat ⊆ yields.yielded ∧
       circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
@@ -140,6 +140,12 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
   }
+
+@[circuit_norm]
+lemma FormalCircuit.toSubcircuit_ops {sentences : PropertySet F} {order : SentenceOrder sentences}
+    (circuit : FormalCircuit order β α) (n : ℕ) (input_var : Var β F) :
+    (circuit.toSubcircuit n input_var).ops = ((circuit.main input_var).operations n).toFlat := by
+  simp only [toSubcircuit]
 
 /--
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
