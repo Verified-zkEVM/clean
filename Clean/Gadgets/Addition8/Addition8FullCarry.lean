@@ -68,6 +68,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   Spec _ := Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros env input offset
+    simp only [circuit_norm, main, FormalAssertion.toSubcircuit]
   completenessAssumptions_implies_assumptions := fun _ _ h => h
 
   soundness := by

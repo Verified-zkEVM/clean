@@ -16,6 +16,11 @@ def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros env input offset
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Addition8FullCarry.circuit]
 
   Assumptions := fun { x, y, carryIn } =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
@@ -29,8 +34,6 @@ def Addition8Full.circuit {sentences : PropertySet (F p)} (order : SentenceOrder
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
   soundness := by
     circuit_proof_start
-    constructor
-    · sorry
     simp_all [circuit_norm,
       Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
@@ -60,6 +63,12 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros env input offset
+    rcases input
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Addition8Full.circuit]
 
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
@@ -70,8 +79,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by
     circuit_proof_start
-    constructor
-    · sorry
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
