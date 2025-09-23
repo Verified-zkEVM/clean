@@ -22,6 +22,14 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Var
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs KeccakState where
   main := main order
   localLength _ := 200
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, Circuit.mapFinRange.localYields]
+    simp only [Set.iUnion_eq_empty]
+    intro i
+    simp only [ElaboratedCircuit.yields_eq]
+    simp only [Xor64.circuit, Xor64.elaborated, Set.union_empty]
 
   localLength_eq _ n := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
@@ -48,10 +56,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   -- rewrite goal
   constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Xor64 subcircuits don't yield anything
-    sorry
+  · -- Prove yielded sentences hold (vacuous - yields is empty)
+    simp [elaborated]
   apply KeccakState.normalized_value_ext
   simp only [elaborated, main, circuit_norm, thetaXor_loop, Xor64.circuit, Xor64.elaborated, eval_vector,
     KeccakState.value, KeccakRow.value]

@@ -551,6 +551,23 @@ lemma mapFinRange.output_eq :
   ext i hi
   rw [Vector.getElem_mapIdx, Vector.getElem_finRange, Vector.getElem_mapFinRange]
 
+@[circuit_norm]
+lemma mapFinRange.localYields :
+  Operations.localYields env ((mapFinRange m body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body i).operations (n + i * (body default).localLength)) := by
+  simp only [mapFinRange, Vector.mapFinRangeM]
+  -- mapFinRange uses Vector.finRange which creates a vector [0, 1, ..., m-1]
+  -- then maps body over it using mapM
+  have : (Vector.finRange m).mapM body = map (Vector.finRange m) body constant := rfl
+  rw [this, map.localYields]
+  simp only [Vector.getElem_finRange]
+
+lemma mapFinRange.localYields_empty
+    (h : ∀ i : Fin m, Operations.localYields env ((body i).operations (n + i * (body default).localLength)) = ∅) :
+    Operations.localYields env ((mapFinRange m body constant).operations n) = ∅ := by
+  rw [mapFinRange.localYields]
+  simp only [h, Set.iUnion_empty]
+
 @[circuit_norm ↓]
 lemma mapFinRange.forAll :
   Operations.forAll n prop (mapFinRange m body constant |>.operations n) ↔
