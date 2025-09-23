@@ -62,6 +62,9 @@ instance elaborated {sentences : PropertySet F} (α : TypeMap) [ProvableType α]
   localLength _ := 0
   output _ _ := ()
   localLength_eq _ _ := by simp only [main, circuit_norm, mul_zero, allZero]
+  yields _ _ _ := ∅
+  yields_eq := by
+    simp only [main, circuit_norm, allZero.localYields_eq_empty]
   subcircuitsConsistent _ := by simp only [main, circuit_norm, allZero]
 
 @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
@@ -83,7 +86,7 @@ def circuit {sentences : PropertySet F} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous since nothing is yielded)
       intro s hs
-      simp only [elaborated, main, allZero.localYields_eq_empty] at hs
+      simp only [elaborated, main] at hs
       contradiction
     · -- Prove the spec
       rw [←hx, ←hy]

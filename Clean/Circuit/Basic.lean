@@ -272,6 +272,14 @@ class ElaboratedCircuit (F : Type) (sentences : PropertySet F) (Input Output : T
   output_eq : ∀ input offset, (main input).output offset = output input offset
     := by intros; rfl
 
+  /-- a direct way of computing the yielded sentences (i.e. without having to unfold `main`) -/
+  yields : Environment F → Var Input F → ℕ → Set (Sentence sentences F)
+    := fun env input offset => ((main input).operations offset).localYields env
+
+  /-- correctness of `yields` -/
+  yields_eq : ∀ env input offset, ((main input).operations offset).localYields env = yields env input offset
+    := by intros; rfl
+
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
     := by intros; and_intros <;> (
@@ -279,7 +287,7 @@ class ElaboratedCircuit (F : Type) (sentences : PropertySet F) (Input Output : T
       try first | ac_rfl | trivial
     )
 
-attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
+attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output ElaboratedCircuit.yields
 
 /-
 `checked` is an argument because there will be an induction involving all circuits and all tables
@@ -298,7 +306,7 @@ def Soundness (F : Type) [Field F] {sentences : PropertySet F}
   ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  let localYields := circuit.yields env input_var offset
   -- prove locally yielded sentences are valid (when their dependencies are satisfied)
   (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   Spec checked input output
@@ -363,7 +371,7 @@ def FormalAssertion.Soundness (F : Type) [Field F] (sentences : PropertySet F) (
   Assumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
-  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  let localYields := circuit.yields env input_var offset
   -- prove locally yielded sentences are valid (when their dependencies are satisfied)
   (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   -- the spec holds on the input
@@ -423,7 +431,7 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (sentences : PropertySet
   ConstraintsHold.Soundness env yields checked (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  let localYields := (circuit.main input_var |>.operations offset).localYields env
+  let localYields := circuit.yields env input_var offset
   -- prove locally yielded sentences are valid (when their dependencies are satisfied)
   (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
   Spec checked input output

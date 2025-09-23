@@ -77,7 +77,9 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
 
     -- by soundness of the circuit, the spec and yielded sentences are satisfied if only the constraints hold
     suffices h: ConstraintsHold.Soundness env yields checked ops by
-      exact circuit.soundness n env yields checked input_var input rfl as h
+      have soundness_result := circuit.soundness n env yields checked input_var input rfl as h
+      rw [← circuit.yields_eq] at soundness_result
+      exact soundness_result
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env yields checked ops.toFlat
@@ -165,7 +167,9 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
 
       -- by soundness of the circuit, the spec and yielded sentences are satisfied if only the constraints hold
       suffices h: ConstraintsHold.Soundness env yields checked ops by
-        exact circuit.soundness n env yields checked input_var input rfl as h
+        have soundness_result := circuit.soundness n env yields checked input_var input rfl as h
+        rw [← circuit.yields_eq] at soundness_result
+        exact soundness_result
 
       -- so we just need to go from flattened constraints to constraints
       guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env yields checked ops.toFlat
@@ -215,7 +219,10 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
       circuit.SoundnessAssumptions input →
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧ circuit.Spec checked input output := by
     intro env yields checked input output localYields h_holds h_assumptions
-    apply circuit.soundness n env yields checked input_var input rfl h_assumptions
+    suffices h: ConstraintsHold.Soundness env yields checked ops by
+      have soundness_result := circuit.soundness n env yields checked input_var input rfl h_assumptions h
+      rw [← circuit.yields_eq] at soundness_result
+      exact soundness_result
     apply can_replace_soundness yields checked
     exact constraintsHold_toFlat_iff.mp h_holds
 
