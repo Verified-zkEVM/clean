@@ -86,8 +86,8 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   intro i0 env yields x_var h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
-    Rotation32Bits.circuit, Rotation32Bits.elaborated, Rotation32Bits.Assumptions,
-    Rotation32Bytes.circuit, Rotation32Bytes.Assumptions, Rotation32Bytes.Spec] at h_env ⊢
+    Rotation32Bits.circuit, Rotation32Bits.elaborated,
+    Rotation32Bytes.circuit, Rotation32Bytes.Spec] at h_env ⊢
 
   obtain ⟨h0, _⟩ := h_env
   rw [h_eval] at h0
