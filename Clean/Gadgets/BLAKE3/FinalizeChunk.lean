@@ -102,6 +102,12 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs (ProvableVector U32 8) where
   main := main order
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp only [IsZero.circuit, Or32.circuit, Compress.circuit]
+    simp [IsZero.elaborated, Or32.elaborated, Compress.elaborated]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧
@@ -152,8 +158,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     Compress.Spec, Compress.Assumptions,
     ApplyRounds.Spec, ApplyRounds.Assumptions,
     FinalStateUpdate.circuit, FinalStateUpdate.elaborated, FinalStateUpdate.Spec, FinalStateUpdate.Assumptions]
-  constructor
-  · sorry
   rcases h_holds with ⟨h_IsZero, h_Or32_1, h_Or32_2, h_Compress⟩
   simp_all only [chunkEnd, ProcessBlocksState.Normalized, ge_iff_le, id_eq, mul_one, Nat.ofNat_pos, and_self, and_true, true_and,
     Nat.reduceMul, and_imp, Nat.reducePow, mul_zero, add_zero]
