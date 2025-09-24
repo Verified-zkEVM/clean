@@ -27,8 +27,13 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order rc
   localLength _ := 1288
   output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
+  yields _ _ _ := ∅
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated]
+  yields_eq := by
+    intros env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Theta.circuit, RhoPi.circuit, Chi.circuit, Theta.elaborated, RhoPi.elaborated, Chi.elaborated, Xor64.circuit, Xor64.elaborated]
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated]
     simp only [circuit_norm, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated, Vector.mapRange]
@@ -37,7 +42,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   intro i0 env yields checked state_var state h_input state_norm h_holds
 
   constructor
-  · sorry  -- Prove yielded sentences hold
+  · simp [elaborated]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
