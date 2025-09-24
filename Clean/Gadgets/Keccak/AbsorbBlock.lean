@@ -31,8 +31,14 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order
   localLength _ := 31048
   output _ i0 := Permutation.stateVar (i0 + 136) 23
+  yields _ _ _ := ∅
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Permutation.circuit, Permutation.elaborated, RATE]
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, Circuit.mapFinRange.localYields, ElaboratedCircuit.yields_eq]
+    simp only [Xor64.circuit, Permutation.circuit]
+    simp [Xor64.elaborated, Permutation.elaborated]
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Permutation.circuit, Permutation.elaborated, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, Permutation.circuit, Permutation.elaborated, RATE]
 
@@ -50,7 +56,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   intro i0 env yields checked ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   constructor
-  · sorry  -- Prove yielded sentences hold
+  · simp [elaborated]
 
   -- simplify goal and constraints
   simp only [circuit_norm, elaborated, RATE, main, Spec, Assumptions, absorbBlock,
