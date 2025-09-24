@@ -96,8 +96,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     Theta.CompletenessAssumptions, RhoPi.CompletenessAssumptions,
     Chi.CompletenessAssumptions, Xor64.CompletenessAssumptions, Assumptions]
 
-  simp_all only [Theta.CompletenessAssumptions, RhoPi.CompletenessAssumptions,
-    Chi.CompletenessAssumptions, Xor64.CompletenessAssumptions, forall_const, U64.fromUInt64_normalized, and_true, true_and]
+  simp_all only [forall_const, U64.fromUInt64_normalized, and_true, true_and]
 
   -- `simp_all` left one goal to pull out of hypotheses
   obtain ⟨ ⟨_, theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
