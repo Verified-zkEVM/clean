@@ -44,6 +44,11 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
   output_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro input offset env
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Round.circuit, Permute.circuit, Round.elaborated, Permute.elaborated]
 
   Assumptions := Round.Assumptions
   CompletenessAssumptions := fun _ input => Round.Assumptions input
@@ -56,9 +61,6 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     BLAKE3State.Normalized output.message
   soundness := by
     intro offset env yields checked input_var input h_eval h_assumptions h_holds
-
-    constructor
-    · sorry  -- Prove yielded sentences hold
 
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
@@ -79,11 +81,12 @@ def roundWithPermute {sentences : PropertySet (F p)} (order : SentenceOrder sent
     simp only [ProvableStruct.eval]
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
 
-    constructor
+    and_intros
+    · simp
     · exact h_holds1.2.1
-    constructor
     · exact h_holds1.2.2
-    · exact h_holds2.2
+    · exact h_holds2.2.1
+    · exact h_holds2.2.2
 
   completeness := by
     intro offset env yields input_var h_env_uses_witnesses input h_eval h_assumptions
@@ -485,6 +488,15 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences Inputs BLAKE3State where
   main := main order
   localLength _ := 5376
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, sixRoundsWithPermute, FormalCircuit.concat, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp only [fourRoundsWithPermute, FormalCircuit.concat, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp only [twoRoundsWithPermute, FormalCircuit.concat, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [roundWithPermute, Round.circuit, Round.elaborated]
   localLength_eq input i0 := by
     dsimp only [main, Round.circuit, Round.elaborated, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
       fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
@@ -588,9 +600,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   simp only [SevenRoundsSpec] at h_spec
 
   obtain ⟨h_value, h_normalized⟩ := h_spec.2
-
-  constructor
-  · sorry  -- Prove yielded sentences hold
 
   constructor
   · -- Show out.value = applyRounds ...

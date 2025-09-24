@@ -39,6 +39,11 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   localLength _ := 768
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, G.elaborated]
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [G.circuit, G.elaborated]
 
 def Assumptions (input : Inputs (F p)) :=
   let { state, message } := input
@@ -64,8 +69,6 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
     Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
   simp only [G.Assumptions, h_input, getElem_eval_vector, G.Spec, Fin.isValue, and_imp] at h_holds
-  constructor
-  · sorry  -- Prove yielded sentences hold
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
   simp_all only [forall_const]

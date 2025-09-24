@@ -12,6 +12,7 @@ instance elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sente
   main := main order
   localLength _ := 0
   output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
+  yields _ _ _ := ∅
 
 def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
@@ -23,7 +24,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   constructor
   · -- Prove yielded sentences hold (nothing is yielded)
     intro s
-    simp [Operations.localYields, circuit_norm, main]
+    simp [circuit_norm]
   · -- Prove the spec
     simp only [Spec, BLAKE3State.value, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
       eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,

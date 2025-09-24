@@ -66,6 +66,11 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     varFromOffset U32 (i0 + 56),
     varFromOffset U32 (i0 + 60)
   ]
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Xor32.circuit, Xor32.elaborated]
 
   localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
@@ -114,12 +119,10 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   specialize c13 (chaining_value_norm 5) (state_norm 13)
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
-  
+
   constructor
   · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Xor32 subcircuits don't yield anything
-    sorry
+    simp [elaborated]
 
   simp [Spec, circuit_norm, elaborated, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf

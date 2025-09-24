@@ -27,9 +27,14 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (FinalStateUpdate.circuit order).output
       ⟨applyRounds_out, input.chaining_value⟩
       (offset + (ApplyRounds.circuit order).localLength input)
+  yields _ _ _ := ∅
   output_eq := by
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [ApplyRounds.circuit, FinalStateUpdate.circuit, ApplyRounds.elaborated, FinalStateUpdate.elaborated]
 
 def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.Assumptions input
@@ -49,9 +54,6 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (i
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start [elaborated]
-
-  constructor
-  · sorry  -- Prove yielded sentences hold
 
   simp_all only [circuit_norm, ApplyRounds.circuit,
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
