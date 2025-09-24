@@ -32,8 +32,8 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
   yields_eq := by
     intros _ _ _
-    simp only [main, circuit_norm]
-    sorry
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [KeccakRound.circuit, KeccakRound.elaborated]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
 
@@ -89,7 +89,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
   -- simplify
   dsimp only [CompletenessAssumptions, Assumptions] at h_assumptions
-  simp only [elaborated, main, h_input, h_assumptions, circuit_norm, Spec,
+  simp only [elaborated, main, h_input, h_assumptions, circuit_norm,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.CompletenessAssumptions, KeccakRound.Assumptions] at h_env ⊢
 
