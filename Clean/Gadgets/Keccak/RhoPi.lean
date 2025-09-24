@@ -30,7 +30,12 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (s
 def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : ElaboratedCircuit (F p) sentences KeccakState KeccakState where
   main := main order
   localLength _ := 400
+  yields _ _ _ := ∅
   localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
+  yields_eq := by
+    intros env input offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Rotation64.circuit, Rotation64.elaborated]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
 
 -- recharacterize rhoPi as a loop
@@ -47,9 +52,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
 
   constructor
   · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Rotation64 subcircuits don't yield anything
-    sorry
+    intro _
+    simp [elaborated]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
