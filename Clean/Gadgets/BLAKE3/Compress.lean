@@ -67,11 +67,9 @@ lemma ApplyRouunds.circuit_spec_is {sentences : PropertySet (F p)} (order : Sent
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   circuit_proof_start [elaborated, CompletenessAssumptions, Assumptions, ApplyRounds.Assumptions]
-  simp_all only [circuit_norm, CompletenessAssumptions, Assumptions,
-    ApplyRounds.circuit, ApplyRounds.CompletenessAssumptions,
-    ApplyRouunds.circuit_spec_is,
-    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, FinalStateUpdate.CompletenessAssumptions,
-    FinalStateUpdate.Spec, ApplyRounds.Assumptions]
+  simp_all only [circuit_norm, ApplyRounds.circuit, ApplyRounds.CompletenessAssumptions,
+    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
+    FinalStateUpdate.CompletenessAssumptions, FinalStateUpdate.Spec, ApplyRounds.Assumptions]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order ApplyRounds.Inputs BLAKE3State := {
   elaborated := elaborated order

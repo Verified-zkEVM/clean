@@ -94,15 +94,15 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   intro i0 env yields ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
-  simp only [circuit_norm, elaborated, RATE, main, CompletenessAssumptions, Assumptions, absorbBlock,
-    Xor64.circuit, Xor64.elaborated, Xor64.CompletenessAssumptions, Xor64.Spec,
-    Permutation.circuit, Permutation.elaborated, Permutation.CompletenessAssumptions, Permutation.Spec,
+  simp only [circuit_norm, elaborated, RATE, main, CompletenessAssumptions, Assumptions,
+    Xor64.circuit, Xor64.elaborated, Xor64.CompletenessAssumptions, Xor64.Spec, Permutation.circuit,
+    Permutation.elaborated, Permutation.CompletenessAssumptions, Permutation.Spec,
     Input.mk.injEq] at *
   simp only [getElem_eval_vector, h_input] at h_env ⊢
 
   have assumptions' (i : Fin 17) : state[i.val].Normalized ∧ block[i.val].Normalized := by
     simp [h_assumptions.left ⟨i, by linarith [i.is_lt]⟩, h_assumptions.right i]
-  simp only [assumptions', and_true, true_implies, implies_true, true_and, Xor64.CompletenessAssumptions, Xor64.Assumptions] at h_env ⊢
+  simp only [assumptions', and_true, true_implies, implies_true, true_and, Xor64.Assumptions] at h_env ⊢
 
   -- reduce goal to characterizing absorb step
   set state_after_absorb : Var KeccakState (F p) :=
