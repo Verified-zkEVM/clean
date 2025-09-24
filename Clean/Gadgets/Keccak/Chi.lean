@@ -18,7 +18,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (stat
 
 def Assumptions := KeccakState.Normalized (p:=p)
 
-def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) := 
+def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext sentences) :=
   KeccakState.Normalized (p:=p)
 
 def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
@@ -31,8 +31,13 @@ instance elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sente
   main := main order
   localLength _ := 400
   output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
+  yields _ _ _ := ∅
 
   localLength_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, Not.circuit]
+  yields_eq := by
+    intros env inputs offset
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [Not.circuit, And.And64.circuit, Xor64.circuit, And.And64.elaborated, Xor64.elaborated]
   subcircuitsConsistent state i0 := by
     simp only [main, circuit_norm]
     intro i
@@ -52,9 +57,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   -- simplify goal
   constructor
   · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The subcircuits don't yield anything
-    sorry
+    intro _
+    simp [elaborated]
   apply KeccakState.normalized_value_ext
   simp only [circuit_norm, chi_loop, eval_vector, KeccakState.value]
 
@@ -75,7 +79,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
 
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit,
-    Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec, 
+    Xor64.CompletenessAssumptions, Xor64.Assumptions, Xor64.Spec,
     And.And64.CompletenessAssumptions, And.And64.Assumptions, And.And64.Spec]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=

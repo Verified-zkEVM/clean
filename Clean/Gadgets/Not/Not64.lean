@@ -60,6 +60,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   localLength _ := 0
   output x _ := not64_bytewise x
+  yields _ _ _ := ∅
 
   soundness := by
     intro i env yields checked x_var x h_input x_norm h_holds
@@ -70,7 +71,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     -- there are no constraints to satisfy!
     intros
     exact trivial
-  
+
   completenessAssumptions_implies_assumptions := fun _ _ h => h
 
 end Gadgets.Not
