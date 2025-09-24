@@ -39,6 +39,12 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order (fields 254) field where
   main := main order
   localLength input := (CompConstant.circuit order ((p - 1) / 2)).localLength input
+  yields _ _ _ := ∅
+
+  yields_eq := by
+    intros _ _ _
+    simp only [main, CompConstant.circuit]
+    sorry
 
   Assumptions input :=
     -- Input should be binary representation of a field element
@@ -56,10 +62,16 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
 
   soundness := by
-    sorry -- TODO: prove soundness using CompConstant's soundness
-  
+    circuit_proof_start
+    -- Proof follows easily from the fact that Sign is a
+    -- specialization of CompConstant
+    exact (h_holds h_assumptions).2
+
   completeness := by
-    sorry -- TODO: prove completeness
+    circuit_proof_start
+    -- We're just left to prove CompConstant's assumptions are met
+    -- which is trivial by h_assumptions
+    exact h_assumptions
 
 end Sign
 end Circomlib
