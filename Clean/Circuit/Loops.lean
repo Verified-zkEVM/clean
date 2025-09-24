@@ -664,6 +664,44 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
       env.UsesLocalWitnessesAndYieldsCompleteness yields (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
   simp only [foldl, env.usesLocalWitnessesAndYieldsCompleteness_iff_forAll yields, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
+
+/-- foldl yields the union of yields from all iterations -/
+@[circuit_norm]
+lemma foldl.localYields [NeZero m] :
+  Operations.localYields env (foldl xs init body const_out constant |>.operations n) =
+    Operations.localYields env ((body init (xs[0]'(NeZero.pos m))).operations n) ∪
+    ⋃ i : Fin (m - 1),
+      let k := (body default default).localLength
+      let acc := (body default xs[i.val]).output (n + i.val * k)
+      Operations.localYields env ((body acc xs[i.val + 1]).operations (n + (i.val + 1) * k)) := by
+  simp only [foldl]
+  rw [FoldlM.operations_eq_const constant const_out]
+  rw [Operations.localYields_append, Operations.localYields_flatten]
+  congr 1
+  ext s
+  simp only [Set.mem_iUnion]
+  constructor
+  · intro ⟨ops, hops, hs⟩
+    simp only [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    use i
+  · intro ⟨i, hs⟩
+    use (let k := (body default default).localLength
+         let acc := (body default xs[i.val]).output (n + i.val * k)
+         (body acc xs[i.val + 1]).operations (n + (i.val + 1) * k))
+    refine ⟨?_, hs⟩
+    simp only [List.mem_ofFn]
+    exact ⟨i, rfl⟩
+
+/-- foldl yields nothing when its body yields nothing at each iteration -/
+lemma foldl.localYields_empty [NeZero m]
+    (h_body : ∀ (acc : β) (x : α) (n : ℕ),
+      Operations.localYields env ((body acc x).operations n) = ∅) :
+    Operations.localYields env ((foldl xs init body const_out constant).operations n) = ∅ := by
+  rw [foldl.localYields]
+  simp only [h_body]
+  simp only [Set.empty_union, Set.iUnion_empty]
+
 end foldl
 
 section foldlRange
