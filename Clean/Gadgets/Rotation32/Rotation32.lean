@@ -73,7 +73,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   obtain ⟨hy_yield, hy_rot, hy_norm⟩ := h0
   specialize h1 hy_norm
   rw [hy_rot] at h1
-  obtain ⟨hy_yield, hy, hy_norm⟩ := h1
+  obtain ⟨hy, hy_norm⟩ := h1
   simp only [hy_norm, and_true]
   rw [h_input] at hy x_normalized
 

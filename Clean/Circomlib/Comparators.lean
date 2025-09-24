@@ -54,8 +54,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     split_ifs with h_ifs
     . simp only [h_ifs, zero_mul, neg_zero, zero_add]
     . rw [neg_add_eq_zero]
-      have h1 := h_holds.left.2
-      have h2 := h_holds.2.right
+      have h1 := h_holds.left
+      have h2 := h_holds.right
       rw [h1] at h2
       simp only [id_eq, mul_eq_zero] at h2
       cases h2
@@ -192,7 +192,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
           rw [add_comm, neg_add_eq_zero] at h_ifs
           exact h_ifs
         . simp_all only [neg_zero]
-          absurd h2.2
+          absurd h2
           field_simp
 
   completeness := by

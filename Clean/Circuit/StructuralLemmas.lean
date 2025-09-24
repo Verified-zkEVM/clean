@@ -58,12 +58,14 @@ def FormalCircuit.concat
       cases h_s
       · apply h_hold1_yield
         rename_i h_s
-        simp only [circuit_norm, FormalCircuit.toSubcircuit] at h_s
-        assumption
+        simp only [circuit_norm] at h_s
+        rw [circuit1.elaborated.yields_eq] at h_s
+        exact h_s
       · apply h_hold2_yield
         rename_i h_s
-        simp only [circuit_norm, FormalCircuit.toSubcircuit] at h_s
-        assumption
+        simp only [circuit_norm] at h_s
+        rw [circuit2.elaborated.yields_eq] at h_s
+        exact h_s
     · exists (eval env (circuit1.elaborated.output input_var offset))
       aesop
 

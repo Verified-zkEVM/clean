@@ -49,7 +49,7 @@ theorem soundness {sentences : PropertySet F} (order : SentenceOrder sentences) 
   · rename_i h_input
     simp only [h_input] at *
     norm_num at *
-    exact h_holds.1.2
+    exact h_holds
   · aesop
 
 theorem completeness {sentences : PropertySet F} (order : SentenceOrder sentences) :

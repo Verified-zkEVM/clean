@@ -85,7 +85,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_left hi']
     specialize h_xor ⟨ i, hi'⟩
     simp only [getElem_eval_vector, h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_xor
-    exact ⟨ h_xor.2.2, h_xor.2.1 ⟩
+    exact ⟨ h_xor.2, h_xor.1 ⟩
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]

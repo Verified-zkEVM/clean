@@ -108,21 +108,21 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
-    · rw [c11.2.1]
+    · rw [c11.1]
     · simp only [circuit_norm]
-      rw [c12.2.1]
-    · rw [c14.2.1]
+      rw [c12.1]
+    · rw [c14.1]
     · simp only [circuit_norm]
-      rw [c9.2.1]
+      rw [c9.1]
     · rw [Function.comp_apply, ←h_input.1, getElem_eval_vector]
 
   · intro i
     simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
     repeat' split
-    · exact c11.2.2
-    · exact c12.2.2
-    · exact c14.2.2
-    · exact c9.2.2
+    · exact c11.2
+    · exact c12.2
+    · exact c14.2
+    · exact c9.2
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (a b c d : Fin 16) : Completeness (F p) sentences (elaborated order a b c d) CompletenessAssumptions := by

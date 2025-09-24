@@ -263,7 +263,6 @@ private lemma step_process_block (env : Environment (F p))
   rcases h_holds with ⟨ _, h_holds ⟩
   rcases h_holds with ⟨ _, h_holds ⟩
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
-  obtain h_iszero := h_iszero.2
   rcases h_holds with ⟨ h_compress, h_holds ⟩
   specialize h_compress (by
     simp only [acc_normalized, x_normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]

@@ -67,10 +67,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
     constructor
     · convert xor_eq_val_xor h_a h_b using 1
-      simp_all only [h_hold.2]
+      simp_all only [h_hold]
       ring_nf
     · convert xor_is_bool h_a h_b using 1
-      simp_all only [h_hold.2]
+      simp_all only [h_hold]
       ring_nf
 
   completeness := by
@@ -120,7 +120,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simp only [Set.union_empty] at hs
       contradiction
 
-    simp_all only [h_hold.2]
+    simp_all only [h_hold]
     constructor
     · exact and_eq_val_and h_a h_b
     · convert and_is_bool h_a h_b using 1
@@ -172,7 +172,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simp only [Set.union_empty] at hs
       contradiction
 
-    simp_all only [h_hold.2]
+    simp_all only [h_hold]
     constructor
     · convert or_eq_val_or h_a h_b using 1
       ring_nf
@@ -224,7 +224,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simp only [Set.union_empty] at hs
       contradiction
 
-    simp_all only [h_hold.2]
+    simp_all only [h_hold]
     constructor
     · convert not_eq_val_not h_in using 1
       ring_nf
@@ -278,7 +278,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simp only [Set.union_empty] at hs
       contradiction
 
-    simp_all only [h_hold.2]
+    simp_all only [h_hold]
     constructor
     · convert nand_eq_val_nand h_a h_b using 1
       ring_nf
@@ -332,7 +332,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
       simp only [Set.union_empty] at hs
       contradiction
 
-    simp_all only [h_hold.2]
+    simp_all only [h_hold]
     constructor
     · convert nor_eq_val_nor h_a h_b using 1
       ring_nf

@@ -67,19 +67,20 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have imply_soundness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
-    let input := eval env input_var
-    let output := eval env (circuit.output input_var n)
-    let localYields := ops.localYields env
-    ConstraintsHoldFlat env yields checked ops.toFlat → circuit.Assumptions input →
-    (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧ circuit.Spec checked input output := by
+    ConstraintsHoldFlat env yields checked ops.toFlat → circuit.Assumptions (eval env input_var) →
+    let localYields := circuit.yields env input_var n
+    (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
+    circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)) := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env yields checked input output localYields h_holds (as : circuit.Assumptions input)
+    intro env yields checked h_holds as
 
     -- by soundness of the circuit, the spec and yielded sentences are satisfied if only the constraints hold
     suffices h: ConstraintsHold.Soundness env yields checked ops by
-      have soundness_result := circuit.soundness n env yields checked input_var input rfl as h
-      rw [← circuit.yields_eq] at soundness_result
-      exact soundness_result
+      have soundness_result := circuit.soundness n env yields checked input_var (eval env input_var) rfl as h
+      obtain ⟨h_yields, h_spec⟩ := soundness_result
+      constructor
+      · exact h_yields
+      · exact h_spec
 
     -- so we just need to go from flattened constraints to constraints
     guard_hyp h_holds : FlatOperation.ConstraintsHoldFlat env yields checked ops.toFlat
@@ -112,25 +113,46 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
   {
     ops := ops.toFlat,
     Soundness env yields checked := circuit.Assumptions (eval env input_var) →
-      let localYields := ops.localYields env
+      let localYields := circuit.yields env input_var n
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n))
     Completeness env yields := circuit.CompletenessAssumptions yields (eval env input_var)
     UsesLocalWitnessesAndYields env yields := circuit.CompletenessAssumptions yields (eval env input_var) →
-      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded ∧
+      circuit.yields env input_var n ⊆ yields.yielded ∧
       circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
-    localLength := circuit.localLength input_var
+    localLength := circuit.localLength input_var,
+    yields env := circuit.yields env input_var n
 
     imply_soundness
-    implied_by_completeness
+    implied_by_completeness env yields_context checked h_env as := by
+      have h_env' : env.UsesLocalWitnessesAndYields yields_context n ops := by
+        guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧
+                           circuit.yields env input_var n ⊆ yields_context.yielded
+        rw [env.usesLocalWitnessesAndYields_iff_flat, env.usesLocalWitnessesAndYieldsFlat_iff_extends]
+        constructor
+        · exact h_env.1
+        · rw [Operations.localYields_toFlat, circuit.yields_eq]; exact h_env.2
+      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env'
+      -- by completeness of the circuit, this means we can make the constraints hold
+      have h_holds := circuit.completeness n env yields_context input_var h_env_completeness (eval env input_var) rfl as
+      -- so we just need to go from constraints to flattened constraints
+      apply constraintsHold_toFlat_iff.mpr
+      exact can_replace_completeness yields_context checked h_consistent h_env' h_holds
+
     imply_usesLocalWitnessesAndYields := by
       intro env yields h_env as
       constructor
       · -- prove yields subset
         exact h_env.2
       · -- prove spec
+        -- convert back to flat for implied_by_completeness
+        have h_env' : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧
+                      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded := by
+          constructor
+          · exact h_env.1
+          · rw [Operations.localYields_toFlat, circuit.yields_eq]; exact h_env.2
         -- by completeness, the constraints hold
-        have h_holds := implied_by_completeness env yields Set.univ h_env as
+        have h_holds := implied_by_completeness env yields Set.univ h_env' as
         -- Convert CompletenessAssumptions to Assumptions using the implication
         have h_assumptions := circuit.completenessAssumptions_implies_assumptions yields (eval env input_var) as
         -- by soundness, this implies the spec and yielded sentences
@@ -139,6 +161,9 @@ def FormalCircuit.toSubcircuit {sentences : PropertySet F} {order : SentenceOrde
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+
+    yields_eq env := by
+      rw [Operations.localYields_toFlat, circuit.yields_eq env input_var n]
   }
 
 @[circuit_norm]
@@ -158,12 +183,13 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
   {
     ops := ops.toFlat,
     Soundness env yields checked := circuit.Assumptions (eval env input_var) →
-      let localYields := ops.localYields env
+      let localYields := circuit.yields env input_var n
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
       circuit.Spec checked (eval env input_var),
     Completeness env yields := circuit.Assumptions (eval env input_var) ∧ circuit.Spec Set.univ (eval env input_var),
     UsesLocalWitnessesAndYields env yields := True,
-    localLength := circuit.localLength input_var
+    localLength := circuit.localLength input_var,
+    yields env := circuit.yields env input_var n
 
     imply_soundness := by
       -- we are given an environment where the constraints hold, and can assume the assumptions are true
@@ -174,7 +200,6 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
       -- by soundness of the circuit, the spec and yielded sentences are satisfied if only the constraints hold
       suffices h: ConstraintsHold.Soundness env yields checked ops by
         have soundness_result := circuit.soundness n env yields checked input_var input rfl as h
-        rw [← circuit.yields_eq] at soundness_result
         exact soundness_result
 
       -- so we just need to go from flattened constraints to constraints
@@ -184,29 +209,34 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
 
     implied_by_completeness := by
       -- we are given that the assumptions and the spec are true
-      intro env yields checked h_env h_completeness
+      intro env yields_context checked h_env h_completeness
 
       let input := eval env input_var
       have as : circuit.Assumptions input ∧ circuit.Spec Set.univ input := h_completeness
 
-      have h_env : env.UsesLocalWitnessesAndYields yields n ops := by
+      have h_env : env.UsesLocalWitnessesAndYields yields_context n ops := by
         guard_hyp h_env : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧
-                           FlatOperation.localYields env ops.toFlat ⊆ yields.yielded
+                           circuit.yields env input_var n ⊆ yields_context.yielded
         rw [env.usesLocalWitnessesAndYields_iff_flat, env.usesLocalWitnessesAndYieldsFlat_iff_extends]
-        exact h_env
+        constructor
+        · exact h_env.1
+        · rw [Operations.localYields_toFlat, circuit.yields_eq]; exact h_env.2
       have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env yields input_var h_env_completeness input rfl as.left as.right
+      have h_holds := circuit.completeness n env yields_context input_var h_env_completeness input rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
       apply constraintsHold_toFlat_iff.mpr
-      exact can_replace_completeness yields checked h_consistent h_env h_holds
+      exact can_replace_completeness yields_context checked h_consistent h_env h_holds
 
     imply_usesLocalWitnessesAndYields := by intros; exact trivial
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+
+    yields_eq env := by
+      rw [Operations.localYields_toFlat, circuit.yields_eq env input_var n]
   }
 
 /--
@@ -218,17 +248,18 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
   have h_consistent : ops.SubcircuitsConsistent n := circuit.subcircuitsConsistent input_var n
 
   have imply_soundness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
-      let input := eval env input_var
-      let output := eval env (circuit.output input_var n)
-      let localYields := ops.localYields env
       ConstraintsHoldFlat env yields checked ops.toFlat →
-      circuit.SoundnessAssumptions input →
-      (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧ circuit.Spec checked input output := by
-    intro env yields checked input output localYields h_holds h_assumptions
+      circuit.SoundnessAssumptions (eval env input_var) →
+      let localYields := circuit.yields env input_var n
+      (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
+      circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)) := by
+    intro env yields checked h_holds h_assumptions
     suffices h: ConstraintsHold.Soundness env yields checked ops by
-      have soundness_result := circuit.soundness n env yields checked input_var input rfl h_assumptions h
-      rw [← circuit.yields_eq] at soundness_result
-      exact soundness_result
+      have soundness_result := circuit.soundness n env yields checked input_var (eval env input_var) rfl h_assumptions h
+      obtain ⟨h_yields, h_spec⟩ := soundness_result
+      constructor
+      · exact h_yields
+      · exact h_spec
     apply can_replace_soundness yields checked
     exact constraintsHold_toFlat_iff.mp h_holds
 
@@ -248,22 +279,41 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
     ops := ops.toFlat,
     Soundness env yields checked :=
       circuit.SoundnessAssumptions (eval env input_var) →
-      let localYields := ops.localYields env
+      let localYields := circuit.yields env input_var n
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n)),
     Completeness env yields := circuit.Assumptions yields (eval env input_var),
     UsesLocalWitnessesAndYields env yields :=
       circuit.Assumptions yields (eval env input_var) ∧ circuit.SoundnessAssumptions (eval env input_var) →
-      FlatOperation.localYields env ops.toFlat ⊆ yields.yielded ∧
+      circuit.yields env input_var n ⊆ yields.yielded ∧
       circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n)),
-    localLength := circuit.localLength input_var
+    localLength := circuit.localLength input_var,
+    yields env := circuit.yields env input_var n
 
     imply_soundness
-    implied_by_completeness
+    implied_by_completeness env yields_context checked h_env assumptions := by
+      set input := eval env input_var
+      have h_env' : env.UsesLocalWitnessesAndYields yields_context n ops := by
+        rw [env.usesLocalWitnessesAndYields_iff_flat, env.usesLocalWitnessesAndYieldsFlat_iff_extends]
+        constructor
+        · exact h_env.1
+        · rw [Operations.localYields_toFlat, circuit.yields_eq]; exact h_env.2
+      rw [constraintsHold_toFlat_iff]
+      apply can_replace_completeness yields_context checked h_consistent h_env'
+      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env'
+      apply circuit.completeness n env yields_context input_var h_env_completeness input rfl assumptions
+
     imply_usesLocalWitnessesAndYields env yields h_env h := by
       obtain ⟨assumptions, sound_assumptions⟩ := h
+      -- Use the yields_eq theorem to convert back
+      have h_env' : env.ExtendsVector (FlatOperation.localWitnesses env ops.toFlat) n ∧
+                    FlatOperation.localYields env ops.toFlat ⊆ yields.yielded := by
+        constructor
+        · exact h_env.1
+        · rw [Operations.localYields_toFlat, circuit.yields_eq]; exact h_env.2
       -- constraints hold by completeness, which implies the spec by soundness
-      have h_holds := implied_by_completeness env yields Set.univ h_env assumptions
+      have h_holds : ConstraintsHoldFlat env yields Set.univ ops.toFlat := by
+        apply implied_by_completeness env yields Set.univ h_env' assumptions
       -- Now we have the SoundnessAssumptions directly from the input
       have ⟨_, h_spec⟩ := imply_soundness env yields Set.univ h_holds sound_assumptions
       constructor
@@ -272,6 +322,9 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]
+
+    yields_eq env := by
+      rw [Operations.localYields_toFlat, circuit.yields_eq env input_var n]
   }
 end
 
@@ -417,7 +470,7 @@ theorem FormalCircuit.toSubcircuit_usesLocalWitnessesAndYields
     (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields =
     (circuit.CompletenessAssumptions yields (eval env input_var) →
-      FlatOperation.localYields env (circuit.main input_var |>.operations n).toFlat ⊆ yields.yielded ∧
+      circuit.yields env input_var n ⊆ yields.yielded ∧
       circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
 
@@ -431,7 +484,7 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnessesAndYields
     (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnessesAndYields env yields =
     (circuit.Assumptions yields (eval env input_var) ∧ circuit.SoundnessAssumptions (eval env input_var) →
-     FlatOperation.localYields env (circuit.main input_var |>.operations n).toFlat ⊆ yields.yielded ∧
+     circuit.yields env input_var n ⊆ yields.yielded ∧
      circuit.Spec Set.univ (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
 
@@ -493,8 +546,7 @@ theorem FormalCircuit.toSubcircuit_soundness
     (circuit : FormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
     (circuit.toSubcircuit n input_var).Soundness env yields checked =
     (circuit.Assumptions (eval env input_var) →
-      let ops := circuit.main input_var |>.operations n
-      let localYields := ops.localYields env
+      let localYields := circuit.yields env input_var n
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
@@ -509,8 +561,7 @@ theorem GeneralFormalCircuit.toSubcircuit_soundness
     (circuit : GeneralFormalCircuit order Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
     (circuit.toSubcircuit n input_var).Soundness env yields checked =
     (circuit.SoundnessAssumptions (eval env input_var) →
-      let ops := circuit.main input_var |>.operations n
-      let localYields := ops.localYields env
+      let localYields := circuit.yields env input_var n
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
       circuit.Spec checked (eval env input_var) (eval env (circuit.output input_var n))) := by
   rfl
@@ -525,8 +576,7 @@ theorem FormalAssertion.toSubcircuit_soundness
     (circuit : FormalAssertion order Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) :
     (circuit.toSubcircuit n input_var).Soundness env yields checked =
     (circuit.Assumptions (eval env input_var) →
-      let ops := circuit.main input_var |>.operations n
-      let localYields := ops.localYields env
+      let localYields := circuit.yields env input_var n
       (∀ s ∈ localYields, AllDependenciesChecked order checked s → SentenceHolds s) ∧
       circuit.Spec checked (eval env input_var)) := by
   rfl

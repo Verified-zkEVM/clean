@@ -59,22 +59,22 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   obtain ⟨ h_rot0, h_xor0, h_rot1, h_xor1, h_rot2, h_xor2, h_rot3, h_xor3, h_rot4, h_xor4 ⟩ := h_holds
 
   specialize h_rot0 (row_norm 1)
-  specialize h_xor0 (row_norm 4) h_rot0.2.2
+  specialize h_xor0 (row_norm 4) h_rot0.2
 
   specialize h_rot1 (row_norm 2)
-  specialize h_xor1 (row_norm 0) h_rot1.2.2
+  specialize h_xor1 (row_norm 0) h_rot1.2
 
   specialize h_rot2 (row_norm 3)
-  specialize h_xor2 (row_norm 1) h_rot2.2.2
+  specialize h_xor2 (row_norm 1) h_rot2.2
 
   specialize h_rot3 (row_norm 4)
-  specialize h_xor3 (row_norm 2) h_rot3.2.2
+  specialize h_xor3 (row_norm 2) h_rot3.2
 
   specialize h_rot4 (row_norm 0)
-  specialize h_xor4 (row_norm 3) h_rot4.2.2
+  specialize h_xor4 (row_norm 3) h_rot4.2
 
-  simp [Specs.Keccak256.thetaD, h_xor0.2, h_xor1.2, h_xor2.2, h_xor3.2, h_xor4.2,
-    h_rot0.2.1, h_rot1.2.1, h_rot2.2.1, h_rot3.2.1, h_rot4.2.1, rotLeft64]
+  simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4,
+    h_rot0.1, h_rot1.1, h_rot2.1, h_rot3.1, h_rot4.1, rotLeft64]
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields row_var h_env row h_input h_assumptions

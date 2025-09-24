@@ -141,7 +141,7 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   · simp_all
   intro h_norm_x h_norm_y
   specialize h_add ⟨ h_norm_x, h_norm_y ⟩
-  obtain ⟨ h_add_yield, h_add_mod, h_norm_next_y ⟩ := h_add
+  obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
   exact ⟨h_add_mod, h_norm_next_y⟩
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
@@ -155,7 +155,7 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   have hy : eval env (varFromOffset U32 4) = first_row.y := rfl
   rw [hx, hy]
   clear hx hy
-  intro _ x_zero _ y_one
+  intro x_zero y_one
   rw [x_zero, y_one]
   simp only [U32.fromByte_normalized, U32.fromByte_value, fib32]
   trivial

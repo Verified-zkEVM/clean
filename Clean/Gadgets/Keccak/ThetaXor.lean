@@ -69,8 +69,8 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   -- use assumptions, prove goal
   intro i
   specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
-  have ⟨_, h_spec⟩ := h_holds
-  exact ⟨ h_spec.right, h_spec.left ⟩
+  obtain ⟨h_eq, h_norm⟩ := h_holds
+  exact ⟨h_norm, h_eq⟩
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
   intro i0 env yields ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩

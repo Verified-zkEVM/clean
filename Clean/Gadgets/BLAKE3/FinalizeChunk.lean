@@ -172,7 +172,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     (by linarith)
     (by simp_all)
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
-  have h_compress' := congrArg (fun v => v.take 8) h_Compress.2.1
+  have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
   simp only [Vector.map_take, BLAKE3State, eval_vector] at h_compress'
   rw [← eval_vector] at h_compress'
   simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
@@ -217,7 +217,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       arg 2
       change (Vector.take _ 8)[i]'(by omega)
       rw [Vector.getElem_take]
-    rcases h_Compress with ⟨_, h_Compress_value, h_Compress_Normalized⟩
+    rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
     specialize h_Compress_Normalized ⟨ i, by omega ⟩
     simp only [getElem_eval_vector, h_Compress_Normalized]
@@ -228,9 +228,9 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
   · trivial
   rcases h_env with ⟨h_iszero, h_env⟩
   specialize h_iszero trivial
-  simp only [IsZero.circuit, IsZero.Spec] at h_iszero
+  simp only [IsZero.Spec] at h_iszero
   apply And.intro
-  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
+  · simp only [Or32.Assumptions, Or32.CompletenessAssumptions]
     apply And.intro
     · aesop
     · simp only [circuit_norm]
@@ -242,7 +242,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
       · norm_num
   rcases h_env with ⟨h_or, h_env⟩
   specialize h_or (by
-    simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
+    simp only [Or32.Assumptions, Or32.CompletenessAssumptions]
     apply And.intro
     · aesop
     · simp only [h_iszero]
@@ -252,19 +252,19 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
         omega
       · simp only [circuit_norm]
         norm_num)
-  simp only [Or32.circuit, Or32.Spec] at h_or
+  simp only [Or32.Spec] at h_or
   apply And.intro
-  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
+  · simp only [Or32.Assumptions, Or32.CompletenessAssumptions]
     simp only [h_or]
     constructor
     · trivial
     simp only [circuit_norm]
     rw [ZMod_val_chunkEnd]
     omega
-  simp only [Compress.circuit, Compress.Assumptions, ApplyRounds.Assumptions]
+  simp only [Compress.circuit]
   rcases h_env with ⟨h_or2, h_env⟩
   specialize h_or2 (by
-  · simp only [Or32.circuit, Or32.Assumptions, Or32.CompletenessAssumptions]
+  · simp only [Or32.Assumptions, Or32.CompletenessAssumptions]
     simp only [h_or]
     constructor
     · trivial
@@ -272,7 +272,7 @@ theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sent
     rw [ZMod_val_chunkEnd]
     omega
   )
-  simp only [Or32.circuit, Or32.Spec] at h_or2
+  simp only [Or32.Spec] at h_or2
   simp only [ProcessBlocksState.Normalized] at h_assumptions
   simp only [h_or2, h_assumptions, Compress.CompletenessAssumptions, Compress.Assumptions, ApplyRounds.Assumptions]
   simp only [circuit_norm]

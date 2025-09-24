@@ -91,10 +91,12 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
     set high := env.get (i0 + i * 2 + 1)
     set next_low := env.get (i0 + (i + 1) % 8 * 2)
-    have ⟨_, byte_spec⟩ := h_holds i hi
-    have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := byte_spec
-    have ⟨_, next_byte_spec⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
-    have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := next_byte_spec
+    have ⟨eq_spec, byte_spec⟩ := h_holds i hi
+    have ⟨_, high_eq⟩ := eq_spec
+    have ⟨_, high_lt⟩ := byte_spec
+    have ⟨next_eq_spec, next_byte_spec⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
+    have ⟨next_low_eq, _⟩ := next_eq_spec
+    have ⟨next_low_lt, _⟩ := next_byte_spec
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt
     have ⟨lt, eq⟩ := byteDecomposition_lt (8 - o) neg_offset_le high_lt next_low_lt'
     use lt

@@ -78,7 +78,7 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
     simp
 
   simp only [hy_rot] at h1
-  obtain ⟨_, ⟨hy, hy_norm⟩⟩ := h1
+  obtain ⟨hy, hy_norm⟩ := h1
   simp only [hy_norm, and_true]
   rw [h_input] at hy x_normalized
 

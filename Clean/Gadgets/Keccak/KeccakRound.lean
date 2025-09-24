@@ -57,9 +57,9 @@ theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentenc
   ] at h_holds
   simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
-  obtain ⟨ _, theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
-  have ⟨ _, rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
-  have ⟨ _, chi_norm, chi_eq ⟩ := h_chi rhopi_norm
+  obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
+  have ⟨ rhopi_norm, rhopi_eq ⟩ := h_rhopi theta_norm
+  have ⟨ chi_norm, chi_eq ⟩ := h_chi rhopi_norm
   rw [rhopi_eq, theta_eq] at chi_eq
   clear theta_norm theta_eq h_rhopi rhopi_eq rhopi_norm h_chi state_norm h_input
 

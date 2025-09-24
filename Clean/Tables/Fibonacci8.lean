@@ -156,7 +156,7 @@ def formalFibTable : FormalTable (F p) RowType := {
 
       specialize add_holds ⟨ lookup_first_col, lookup_second_col ⟩
       -- Extract the actual spec from the conjunction (skip yields part)
-      have add_spec := add_holds.2
+      have add_spec := add_holds
 
       have spec1 : next.x.val = fib8 (rest.len + 1) := by
         rw [←curr_fib1]

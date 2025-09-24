@@ -53,7 +53,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
       · intro acc i n
         sorry -- Need: Operations.localYields of subcircuit with forEach/assertZero is empty
     have : p > 2^135 := hp135.elim
-    rcases h_holds with ⟨ h_holds1, h_holds2, h_holds3 ⟩
+    rcases h_holds with ⟨ h_holds1, h_holds3 ⟩
     simp only [h_holds3, h_input] at h_holds1
     specialize h_holds1 (by
       intros i x

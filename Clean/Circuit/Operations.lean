@@ -125,22 +125,28 @@ structure Subcircuit (sentences : PropertySet F) (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
+  -- a direct way of computing the yielded sentences (i.e. without having to unfold ops)
+  yields : Environment F → Set (Sentence sentences F) := fun env => FlatOperation.localYields env ops
+
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ (env : Environment F) (yields : YieldContext sentences) (checkedYields : CheckedYields sentences),
     ConstraintsHoldFlat env yields checkedYields ops → Soundness env yields checkedYields
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators and yields of this circuit
-  implied_by_completeness : ∀ (env : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences),
-    env.ExtendsVector (localWitnesses env ops) offset ∧ FlatOperation.localYields env ops ⊆ yields.yielded →
-    Completeness env yields → ConstraintsHoldFlat env yields checked ops
+  implied_by_completeness : ∀ (env : Environment F) (yields_context : YieldContext sentences) (checked : CheckedYields sentences),
+    env.ExtendsVector (localWitnesses env ops) offset ∧ yields env ⊆ yields_context.yielded →
+    Completeness env yields_context → ConstraintsHoldFlat env yields_context checked ops
 
   -- `UsesLocalWitnessesAndYields` needs to follow from the local witness generator condition and yielded sentences
-  imply_usesLocalWitnessesAndYields : ∀ (env : Environment F) (yields : YieldContext sentences),
-    env.ExtendsVector (localWitnesses env ops) offset ∧ FlatOperation.localYields env ops ⊆ yields.yielded →
-    UsesLocalWitnessesAndYields env yields
+  imply_usesLocalWitnessesAndYields : ∀ (env : Environment F) (yields_context : YieldContext sentences),
+    env.ExtendsVector (localWitnesses env ops) offset ∧ yields env ⊆ yields_context.yielded →
+    UsesLocalWitnessesAndYields env yields_context
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops
+
+  -- correctness of `yields`
+  yields_eq : ∀ env, FlatOperation.localYields env ops = yields env := by intros; rfl
 
 @[reducible, circuit_norm]
 def Subcircuit.witnesses {sentences : PropertySet F} (sc : Subcircuit sentences n) (env : Environment F) :=
@@ -194,7 +200,7 @@ def localWitnesses {sentences : PropertySet F} (env : Environment F) : (op : Ope
 def localYields {sentences : PropertySet F} (env : Environment F) : Operation sentences → Set (Sentence sentences F)
   | .yield s => {s.eval env}
   | .witness _ _ | .assert _ | .lookup _ | .use _ => ∅
-  | .subcircuit s => FlatOperation.localYields env s.ops
+  | .subcircuit s => s.yields env
 end Operation
 
 /--

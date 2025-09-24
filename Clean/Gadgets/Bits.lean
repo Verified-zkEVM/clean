@@ -38,7 +38,7 @@ def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
   soundness := by
     circuit_proof_start
-    obtain ⟨ h_bits_conj , ⟨ h_eq_yield, h_eq_conj ⟩ ⟩ := h_holds
+    obtain ⟨ h_bits_conj , h_eq_conj ⟩ := h_holds
 
     -- Extract the parts from the conjunctions
     have h_bits : ∀ (i : Fin n), IsBool (env.get (i₀ + i)) := fun i => (h_bits_conj i)

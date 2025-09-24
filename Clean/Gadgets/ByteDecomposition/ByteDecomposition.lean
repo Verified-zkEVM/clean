@@ -64,7 +64,7 @@ theorem soundness {sentences : PropertySet (F p)} {order : SentenceOrder sentenc
   set high := env.get (i0 + 1)
 
   -- Extract the equation from the conjunction
-  have h_eq : x = low + high * 2^offset.val := h_yields_and_eq.2
+  have h_eq : x = low + high * 2^offset.val := h_yields_and_eq
 
   have : 2^16 < p := by linarith [p_large_enough.elim]
   let n : ℕ := 8 - offset.val

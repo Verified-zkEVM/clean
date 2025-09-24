@@ -126,7 +126,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
       ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
   -- h_sound is a conjunction, extract the spec part
   rw [←h_env]
-  exact h_sound.2
+  exact h_sound
 
 def traceInputs {N : ℕ} (trace : TraceOfLength F (ProvablePair State Input) N) : List (Input F) :=
   trace.val.toList.map Prod.snd
@@ -286,7 +286,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     simp only [curr_var, varFromOffset_pair] at h_soundness
     simp only [s, x, t, main_ops] at *
     simp +arith only at return_eq h_soundness
-    rw [←return_eq.2, next_eq] at h_soundness
+    rw [←return_eq, next_eq] at h_soundness
     simp only [xs_concat]
     use h_soundness
 

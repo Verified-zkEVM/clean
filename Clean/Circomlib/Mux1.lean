@@ -100,7 +100,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
     -- Get the i-th element equality from h_output
     -- h_output gives us equality of vectors, extract element i
-    have h_output_i := congrArg (fun v => v[i]) h_output.2
+    have h_output_i := congrArg (fun v => v[i]) h_output
     -- Simplify the outer Vector.map on both sides
     simp only [Vector.getElem_map] at h_output_i
     -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }

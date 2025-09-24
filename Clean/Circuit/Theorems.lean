@@ -300,8 +300,12 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {senten
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
     apply circuit.imply_usesLocalWitnessesAndYields
-    rw [← usesLocalWitnessesAndYieldsFlat_iff_extends yields]
-    exact h.left
+    have h_flat : env.ExtendsVector (localWitnesses env circuit.ops) n ∧ FlatOperation.localYields env circuit.ops ⊆ yields.yielded := by
+      rw [← usesLocalWitnessesAndYieldsFlat_iff_extends yields]
+      exact h.left
+    constructor
+    · exact h_flat.1
+    · rw [← circuit.yields_eq]; exact h_flat.2
 
 theorem usesLocalWitnessesAndYieldsCompleteness_iff_forAll {sentences : PropertySet F} (yields : YieldContext sentences) (n : ℕ) {env : Environment F} {ops : Operations sentences} :
   env.UsesLocalWitnessesAndYieldsCompleteness yields n ops ↔ ops.forAll n {
@@ -518,8 +522,12 @@ theorem can_replace_completeness {env} {sentences : PropertySet F} {ops : Operat
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnessesAndYields, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
     apply circuit.implied_by_completeness env yields checked ?_ h_compl.left
-    rw [←Environment.usesLocalWitnessesAndYieldsFlat_iff_extends yields]
-    exact h_env.left
+    have h_flat : env.ExtendsVector (FlatOperation.localWitnesses env circuit.ops) n ∧ FlatOperation.localYields env circuit.ops ⊆ yields.yielded := by
+      rw [←Environment.usesLocalWitnessesAndYieldsFlat_iff_extends yields]
+      exact h_env.left
+    constructor
+    · exact h_flat.1
+    · rw [← circuit.yields_eq]; exact h_flat.2
 end Circuit
 
 namespace Circuit
