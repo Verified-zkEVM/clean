@@ -33,16 +33,15 @@ def Spec {sentences : PropertySet (F p)} (_checked : CheckedYields sentences) (s
 
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   circuit_proof_start
-  simp_all [circuit_norm, Spec, elaborated, main, Assumptions,
-    ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
-    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
-    ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
+  simp_all [circuit_norm, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated,
+    ThetaXor.circuit, ThetaXor.elaborated, ThetaC.Assumptions, ThetaD.Assumptions,
+    ThetaXor.Assumptions, ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
 theorem completeness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Completeness (F p) sentences (elaborated order) CompletenessAssumptions := by
-  simp_all [circuit_norm, elaborated, main, CompletenessAssumptions, Assumptions, Spec,
-    ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
-    ThetaC.CompletenessAssumptions, ThetaC.Assumptions, ThetaD.CompletenessAssumptions, ThetaD.Assumptions, ThetaXor.CompletenessAssumptions, ThetaXor.Assumptions,
-    ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
+  simp_all [circuit_norm, elaborated, main, CompletenessAssumptions, Assumptions, ThetaC.circuit,
+    ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated,
+    ThetaC.CompletenessAssumptions, ThetaD.CompletenessAssumptions, ThetaD.Assumptions,
+    ThetaXor.CompletenessAssumptions, ThetaXor.Assumptions, ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec]
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order KeccakState KeccakState :=
  { elaborated := elaborated order
