@@ -30,8 +30,16 @@ instance elaborated {sentences : PropertySet F} (order : SentenceOrder sentences
     ElaboratedCircuit F sentences M field where
   main := fun input => main (sentences:=sentences) order input
   localLength _ := 2 * size M
+  yields _ _ _ := ∅
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
+  yields_eq := by
+    intro env input offset
+    simp only [main, circuit_norm, Set.union_empty]
+    apply Circuit.foldlRange.localYields_empty
+    intro acc i n
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [IsZeroField.circuit, IsZeroField.elaborated]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 
@@ -110,11 +118,6 @@ theorem soundness [DecidableEq (M F)] {sentences : PropertySet F} (order : Sente
     Soundness F (elaborated (sentences:=sentences) (M := M) order) order Assumptions
       (fun _checked => Spec) := by
   circuit_proof_start
-  constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The foldl loop doesn't yield anything
-    sorry
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1

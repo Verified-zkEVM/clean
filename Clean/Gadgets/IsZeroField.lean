@@ -30,6 +30,10 @@ instance elaborated {sentences : PropertySet F} (order : SentenceOrder sentences
     ElaboratedCircuit F sentences field field where
   main := fun x => main (sentences:=sentences) order x
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
+  yields _ _ _ := ∅
+  yields_eq := by
+    intro env input offset
+    simp [main, circuit_norm, Equality.circuit, FormalAssertion.toSubcircuit, Equality.main]
 
 def Assumptions (_ : F) : Prop := True
 
@@ -41,11 +45,6 @@ def Spec {sentences : PropertySet F} (_checked : CheckedYields sentences) (x : F
 theorem soundness {sentences : PropertySet F} (order : SentenceOrder sentences) :
     Soundness F (elaborated (sentences:=sentences) order) order Assumptions (Spec (sentences:=sentences)) := by
   circuit_proof_start
-  constructor
-  · -- Prove yielded sentences hold (vacuous - no yields)
-    intro s hs _
-    -- The Equality subcircuits don't yield anything
-    sorry
   split
   · rename_i h_input
     simp only [h_input] at *
