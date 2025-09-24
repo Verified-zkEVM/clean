@@ -27,8 +27,13 @@ def elaborated {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main := main order
   localLength _ := 30912
   output _ i0 := stateVar i0 23
+  yields _ _ _ := ∅
 
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm]
+    sorry
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit, KeccakRound.elaborated]
 
@@ -40,13 +45,13 @@ example (state : Vector ℕ 25) :
 theorem soundness {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : Soundness (F p) (elaborated order) order Assumptions Spec := by
   intro n env yields checked initial_state_var initial_state h_input h_assumptions h_holds
   constructor
-  · sorry
+  · simp [elaborated]
 
   -- simplify
   simp only [elaborated, main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
-  simp only [zero_add, h_input] at h_holds
+  simp only [h_input] at h_holds
   obtain ⟨ h_init, h_succ ⟩ := h_holds
   specialize h_init h_assumptions
 
