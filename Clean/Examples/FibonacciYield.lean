@@ -405,6 +405,19 @@ def computeFibUpTo4 : FormalCircuit (@FibOrder p _) unit unit where
 
   completeness := by
     circuit_proof_start
+    obtain ⟨ h0, h1, h2, h3 ⟩ := h_env
+    specialize h0 (by simp [FibBase.circuit])
+    simp only [FibBase.circuit, mkFibSentenceValue] at h0
+    specialize h1 (by
+      simp only [FibStep.circuit, circuit_norm]
+      and_intros
+      · use 0
+        simp [fib]; omega
+      · simp only [Sentence.eval, mkFibSentence]
+        aesop
+      · simp only [circuit_norm, mkFibSentence, Sentence.eval]
+        aesop
+      )
     -- Need to satisfy the assumptions of each subcircuit
     and_intros
     · -- FibBase assumptions (True)
