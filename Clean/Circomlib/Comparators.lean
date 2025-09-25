@@ -348,11 +348,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
-    circuit_proof_start
-    simp_all only [circuit_norm, LessThan.circuit]
-    simp only [← h_input] at h_assumptions ⊢
-    specialize h_holds (by simp_all)
-    simp_all
+    simp_all [circuit_norm, LessThan.circuit]
 
   completeness := by
     simp_all [circuit_norm, LessThan.circuit]
