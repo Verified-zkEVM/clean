@@ -1113,11 +1113,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   soundness := by
     intro offset env yields checked input_var input h_env h_assumptions h_hold
     constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The yields field is ∅, so there's nothing to prove
-      simp only at hs
-      exact absurd hs (Set.notMem_empty s)
+    · simp
     exact soundness order n offset env yields checked input_var input h_env.symm h_assumptions h_hold
   completeness := by
     intro offset env yields input_var h_local_witnesses input h_env h_assumptions
