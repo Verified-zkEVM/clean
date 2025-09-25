@@ -137,9 +137,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   soundness := by
     circuit_proof_start [arbitraryBitLengthCircuit]
     simp_all only [true_and]
-    obtain ⟨h_yields, h_spec⟩ := h_holds
-    rcases h_spec with ⟨ h_bits, h_eq ⟩
-    rw [← h_eq, fieldToBits_fieldFromBits hn]
+    rcases h_holds with ⟨ _, h_bits, h_holds ⟩
+    rw [← h_holds, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits
 
   completeness := by
