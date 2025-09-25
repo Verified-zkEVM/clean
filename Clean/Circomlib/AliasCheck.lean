@@ -44,17 +44,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   Spec _ bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp only [circuit_norm, main]
-    intros offset env yields checked input_var input h_input h_assumption h_holds
-    simp only[CompConstant.circuit] at *
+    simp only [circuit_norm, main, CompConstant.circuit]
+    simp_all
     have : p > 2^135 := hp135.elim
-    rcases h_holds with ⟨ h_holds1, h_holds3 ⟩
-    simp only [h_holds3, h_input] at h_holds1
-    specialize h_holds1 (by assumption)
-    rcases h_holds1 with ⟨ h_holds11, h_holds12 ⟩
-    split at h_holds12
-    · aesop
-    · omega
+    omega
 
   completeness := by
     simp only [circuit_norm, main, CompConstant.circuit, CompConstant.CompletenessAssumptions]
