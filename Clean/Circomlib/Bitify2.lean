@@ -74,8 +74,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_holds
     obtain ⟨ h_bits, h_eq, h_alias ⟩ := h_holds
-    have h_bits' := fun i hi => (h_bits i hi)
-    specialize h_alias h_bits'
+    specialize h_alias h_bits
     rw [← h_eq, fieldToBits, fieldFromBits,
       ZMod.val_natCast, Vector.map_mapRange]
     rw [Nat.mod_eq_of_lt h_alias, toBits_fromBits, Vector.ext_iff]
