@@ -239,6 +239,11 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit order fieldPair field where
   main := main order n hn
   localLength _ := n + 2
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm]
+    simp [Num2Bits.circuit]
   localLength_eq := by simp [circuit_norm, main, Num2Bits.circuit]
   output _ i := var ⟨ i + n + 1 ⟩
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
@@ -277,6 +282,11 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     LessThan.circuit order n hn (x, y + 1)
 
   localLength _ := n + 2
+  yields _ _ _ := ∅
+  yields_eq := by
+    rintro _ ⟨_, _⟩ _
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [LessThan.circuit]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   CompletenessAssumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
@@ -293,8 +303,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     rw [ZMod.val_add_of_lt hy, ZMod.val_one] at h_holds
     by_cases hy : y.val + 1 = 2^n
     case neg =>
-      constructor
-      · sorry
       specialize h_holds (by omega)
       simp_all [Nat.lt_add_one_iff]
     -- TODO the spec of LessThan is not strong enough to handle this case
@@ -323,6 +331,11 @@ template GreaterThan(n) {
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit order fieldPair field where
   main := fun (x, y) =>
     LessThan.circuit order n hn (y, x)
+  yields _ _ _ := ∅
+  yields_eq := by
+    rintro _ ⟨_, _⟩ _
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [LessThan.circuit]
 
   localLength _ := n + 2
 
@@ -335,8 +348,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
   soundness := by
     circuit_proof_start
-    constructor
-    · sorry
     simp_all only [circuit_norm, LessThan.circuit]
     simp only [← h_input] at h_assumptions ⊢
     specialize h_holds (by simp_all)
