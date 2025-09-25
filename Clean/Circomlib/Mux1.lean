@@ -217,7 +217,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     rw[← h_input] at *
     clear input
     clear h_input
-    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
+    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     have h_spec := h_subcircuit_sound h_assumptions
     -- Prove our spec
     specialize h_spec 0 (by omega)
@@ -229,7 +229,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   completeness := by
     simp only [circuit_norm, main]
     intros offset env yields input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit]
+    simp only [MultiMux1.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp_all
 
