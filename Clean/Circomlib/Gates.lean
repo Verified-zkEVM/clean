@@ -89,7 +89,7 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order fieldPair field where
-  main := fun input => main order input
+  main input := main order input
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
@@ -104,7 +104,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only []
     constructor
     · exact and_eq_val_and h_a h_b
     · convert and_is_bool h_a h_b using 1
@@ -148,8 +148,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert or_eq_val_or h_a h_b using 1
       ring_nf
@@ -193,7 +192,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ _ _ h_env h_in h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rw [h_env] at h_hold
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert not_eq_val_not h_in using 1
       ring_nf
@@ -239,7 +238,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, NAND.main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert nand_eq_val_nand h_a h_b using 1
       ring_nf
@@ -286,7 +285,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
 
-    simp_all only [h_hold]
+    simp_all only
     constructor
     · convert nor_eq_val_nor h_a h_b using 1
       ring_nf
@@ -363,7 +362,7 @@ theorem localLength_eq {sentences : PropertySet (F p)} (order : SentenceOrder se
       rfl
     | 2 =>
       simp only [main]
-      simp only [Fin.isValue, Nat.add_one_sub_one]
+      simp only [Nat.add_one_sub_one]
       have h := (AND.circuit order).localLength_eq (input[0], input[1]) offset
       rw [show (AND.circuit order).localLength _ = 1 from rfl] at h
       exact h
@@ -467,8 +466,8 @@ lemma main_usesLocalWitnesses_iff_completeness
         · apply (AND.circuit order).subcircuitsConsistent
         · exact h_witnesses
       · intro h_completeness
-        simp only [AND.circuit, AND.main, bind_pure, Fin.isValue, bind_pure_comp, circuit_norm] at h_completeness ⊢
-        simp only [Fin.isValue, Nat.add_zero, id_eq]
+        simp only [AND.circuit, AND.main, circuit_norm] at h_completeness ⊢
+        simp only [Nat.add_zero, id_eq]
         unfold Environment.UsesLocalWitnessesAndYields Operations.forAllFlat
         unfold Operations.forAll
 
@@ -1062,7 +1061,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
       -- The Multi-AND circuit doesn't yield anything
-      simp only [ElaboratedCircuit.main, main] at hs
+      simp only at hs
       -- The localYields should be empty
       sorry -- Need to prove this is empty, but it's more complex due to the recursive structure
     exact soundness order n offset env yields checked input_var input h_env.symm h_assumptions h_hold
