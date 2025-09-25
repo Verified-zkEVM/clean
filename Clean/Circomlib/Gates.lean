@@ -43,6 +43,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm]
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
@@ -59,10 +63,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
 
     constructor
     · convert xor_eq_val_xor h_a h_b using 1
-      simp_all only [h_hold]
+      simp_all only
       ring_nf
     · convert xor_is_bool h_a h_b using 1
-      simp_all only [h_hold]
+      simp_all only
       ring_nf
 
   completeness := by
@@ -91,6 +95,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order fieldPair field where
   main input := main order input
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm]
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
@@ -135,6 +143,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm]
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
@@ -179,6 +191,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order field field where
   main := fun input => main order input
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm]
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
@@ -225,6 +241,10 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     : FormalCircuit order fieldPair field where
   main := fun input => main order input
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm]
   localLength_eq := by simp [circuit_norm, NAND.main]
   subcircuitsConsistent := by simp +arith [circuit_norm, NAND.main]
 
