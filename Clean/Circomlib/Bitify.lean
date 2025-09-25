@@ -211,12 +211,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     circuit_proof_start
     set output : (F p) := (env.get i₀)
 
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- No yields in this circuit
-      sorry
-
     change output = Expression.eval env (Fin.foldl n
       (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1 at h_holds
     rw [lc_eq] at h_holds

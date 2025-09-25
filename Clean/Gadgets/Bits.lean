@@ -55,13 +55,8 @@ def toBits {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
 
     constructor
-    · -- Prove yielded sentences hold (should be empty)
-      intro s
-      simp [circuit_norm, Operations.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false, FormalAssertion.toSubcircuit, Equality.main]
-    · -- Prove the spec
-      constructor
-      · exact fieldFromBits_lt _ h_bits
-      · rfl
+    · exact fieldFromBits_lt _ h_bits
+    · rfl
 
   completeness := by
     circuit_proof_start

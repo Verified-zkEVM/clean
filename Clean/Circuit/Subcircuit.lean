@@ -239,6 +239,11 @@ def FormalAssertion.toSubcircuit {sentences : PropertySet F} {order : SentenceOr
       rw [Operations.localYields_toFlat, circuit.yields_eq env input_var n]
   }
 
+@[circuit_norm]
+lemma FormalAssertion.toSubcircuit_yields {sentences : PropertySet F} {order : SentenceOrder sentences}
+    (circuit : FormalAssertion order β) (n : ℕ) (input_var : Var β F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).yields env = circuit.yields env input_var n := rfl
+
 /--
 Theorem and implementation that allows us to take a formal circuit and use it as a subcircuit.
 -/

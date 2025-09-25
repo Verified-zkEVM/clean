@@ -82,11 +82,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
   soundness := by
     simp only [circuit_norm, main]
     intro offset env yields checked input_var input h_input h_assumptions h_output
-    constructor
-    · -- Prove yielded sentences hold
-      intro s
-      simp [Set.mem_empty_iff_false, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, FormalAssertion.toSubcircuit,
-        Gadgets.allZero]
     -- Prove the spec holds for all i < n
     intro i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]

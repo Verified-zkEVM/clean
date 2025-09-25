@@ -58,14 +58,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rcases h_env.symm with ⟨ _, _ ⟩
 
     constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The XOR circuit doesn't yield anything, it only calls Equality which doesn't yield
-      -- The set is ∅ ∪ ∅ = ∅, so there's no s in it
-      simp only [Set.union_empty] at hs
-      contradiction
-
-    constructor
     · convert xor_eq_val_xor h_a h_b using 1
       simp_all only [h_hold]
       ring_nf
@@ -112,14 +104,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
-      simp only [Set.union_empty] at hs
-      contradiction
-
     simp_all only [h_hold]
     constructor
     · exact and_eq_val_and h_a h_b
@@ -165,13 +149,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
 
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
-      simp only [Set.union_empty] at hs
-      contradiction
-
     simp_all only [h_hold]
     constructor
     · convert or_eq_val_or h_a h_b using 1
@@ -216,14 +193,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ _ _ h_env h_in h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rw [h_env] at h_hold
-
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
-      simp only [Set.union_empty] at hs
-      contradiction
-
     simp_all only [h_hold]
     constructor
     · convert not_eq_val_not h_in using 1
@@ -270,14 +239,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, NAND.main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
-      simp only [Set.union_empty] at hs
-      contradiction
-
     simp_all only [h_hold]
     constructor
     · convert nand_eq_val_nand h_a h_b using 1
@@ -324,13 +285,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     rintro _ _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
-
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- The AND circuit doesn't yield anything, it only calls Equality which doesn't yield
-      simp only [Set.union_empty] at hs
-      contradiction
 
     simp_all only [h_hold]
     constructor

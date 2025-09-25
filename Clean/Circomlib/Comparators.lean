@@ -48,8 +48,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     circuit_proof_start
-    constructor
-    · simp [circuit_norm, Gadgets.Equality.circuit, FormalAssertion.toSubcircuit, Gadgets.Equality.main]
     simp only [id_eq, h_holds]
     split_ifs with h_ifs
     . simp only [h_ifs, zero_mul, neg_zero, zero_add]
