@@ -1064,10 +1064,45 @@ theorem completeness {p : ℕ} [Fact p.Prime] {sentences : PropertySet (F p)} (o
               rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
               convert main_output_binary_from_completeness order n2 (offset + (main order input_var1).localLength offset) env yields input_var2 input2 h_eval2 h_assumptions2 h_rest.1 h_comp2 using 1
 
+/-- The MultiAND main circuit yields nothing -/
+lemma main_localYields_empty {sentences : PropertySet (F p)} (order : SentenceOrder sentences) :
+    ∀ (n : ℕ) (env : Environment (F p)) (input : Var (fields n) (F p)) (offset : ℕ),
+    Operations.localYields env ((main order input).operations offset) = ∅ := by
+  intro n
+  induction n using Nat.strongRec with
+  | ind n ih =>
+    intros env input offset
+    match n with
+    | 0 => simp [main, circuit_norm]
+    | 1 => simp [main, circuit_norm]
+    | 2 =>
+      simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+      simp [AND.circuit]
+    | n + 3 =>
+      simp only [main]
+      rw [Circuit.bind_operations_eq]
+      rw [Operations.localYields_append]
+      simp only [Set.union_empty_iff]
+      constructor
+      · have : (n + 3) / 2 < n + 3 := Nat.div_lt_self (by omega) (by omega)
+        apply ih _ this
+      · rw [Circuit.bind_operations_eq]
+        rw [Operations.localYields_append]
+        simp only [Set.union_empty_iff]
+        constructor
+        · have : (n + 3) - (n + 3) / 2 < n + 3 := by omega
+          apply ih _ this
+        · simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+          simp [AND.circuit]
+
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     (n : ℕ) : FormalCircuit order (fields n) field where
   main := main order
   localLength _ := n - 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    apply main_localYields_empty
   localLength_eq := localLength_eq order n
   subcircuitsConsistent := subcircuitsConsistent order n
 
@@ -1080,10 +1115,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
       intro s hs _
-      -- The Multi-AND circuit doesn't yield anything
+      -- The yields field is ∅, so there's nothing to prove
       simp only at hs
-      -- The localYields should be empty
-      sorry -- Need to prove this is empty, but it's more complex due to the recursive structure
+      exact absurd hs (Set.notMem_empty s)
     exact soundness order n offset env yields checked input_var input h_env.symm h_assumptions h_hold
   completeness := by
     intro offset env yields input_var h_local_witnesses input h_env h_assumptions
