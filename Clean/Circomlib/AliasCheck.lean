@@ -33,6 +33,11 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order (fields 254) where
   main := main order
   localLength _ := 127 + 1 + 135 + 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [CompConstant.circuit]
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
@@ -41,11 +46,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   soundness := by
     simp only [circuit_norm, main]
     intros offset env yields checked input_var input h_input h_assumption h_holds
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s
-      simp only [circuit_norm, ElaboratedCircuit.yields_eq]
-      simp [CompConstant.circuit]
     simp only[CompConstant.circuit] at *
     have : p > 2^135 := hp135.elim
     rcases h_holds with ⟨ h_holds1, h_holds3 ⟩

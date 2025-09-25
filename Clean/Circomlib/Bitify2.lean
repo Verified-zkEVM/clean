@@ -62,7 +62,13 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     intro i0 env yields checked input_var input h_input assumptions h_holds
 
     constructor
-    · sorry  -- Prove yielded sentences hold
+    · intro s
+      simp only [circuit_norm, main, Num2Bits.main]
+      rw [Circuit.foldlRange.localYields_empty]
+      · simp only [circuit_norm]
+        simp [AliasCheck.circuit]
+      intros _ _ _
+      simp [circuit_norm]
 
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
@@ -74,7 +80,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     specialize h_alias h_bits'
     rw [← h_eq, fieldToBits, fieldFromBits,
       ZMod.val_natCast, Vector.map_mapRange]
-    rw [Nat.mod_eq_of_lt h_alias.2, toBits_fromBits, Vector.ext_iff]
+    rw [Nat.mod_eq_of_lt h_alias, toBits_fromBits, Vector.ext_iff]
     simp only [circuit_norm]
     intro i hi
     rw [ZMod.natCast_zmod_val]
