@@ -46,6 +46,13 @@ set_option linter.constructorNameAsVariable false
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order field (fields 254) where
   main := main order
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp only [main, circuit_norm, Num2Bits.main]
+    rw [Circuit.foldlRange.localYields_empty]
+    · simp [AliasCheck.circuit]
+    simp [circuit_norm]
   localLength_eq _ _ := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
   subcircuitsConsistent _ _ := by simp +arith [circuit_norm, main,
@@ -60,15 +67,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     intro i0 env yields checked input_var input h_input assumptions h_holds
-
-    constructor
-    · intro s
-      simp only [circuit_norm, main, Num2Bits.main]
-      rw [Circuit.foldlRange.localYields_empty]
-      · simp only [circuit_norm]
-        simp [AliasCheck.circuit]
-      intros _ _ _
-      simp [circuit_norm]
 
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
