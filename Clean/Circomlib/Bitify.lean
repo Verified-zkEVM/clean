@@ -92,16 +92,15 @@ def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceO
 
   soundness := by
     circuit_proof_start
-    obtain ⟨h_holds1, h_holds2⟩ := h_holds
-    simp only [lc_eq] at h_holds1 h_holds2
-    rw [← h_holds2]
+    simp only [lc_eq] at h_holds
+    rw [← h_holds.right]
     and_intros
     · apply fieldFromBits_lt
       intro i hi
       simp only [circuit_norm]
-      simpa [add_neg_eq_zero] using (h_holds1 ⟨i, hi⟩)
+      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
     · intro i hi
-      simpa [add_neg_eq_zero] using (h_holds1 ⟨i, hi⟩)
+      simpa [add_neg_eq_zero] using h_holds.left ⟨i, hi⟩
     · congr 1
       rw [Vector.ext_iff]
       simp [circuit_norm]
