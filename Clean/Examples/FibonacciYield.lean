@@ -62,6 +62,17 @@ def mkFibSentence
   entry := #v[index, value]
 }
 
+/-- Helper function to create a Fibonacci sentence with field element values -/
+def mkFibSentenceValue
+    (index : F p) (value : F p) : Sentence (FibPropertySet : PropertySet (F p)) (F p) := {
+  name := "Fib"
+  property := FibProperty
+  propertyFound := by
+    simp only [FibPropertySet, Std.HashMap.ofList_singleton, Std.HashMap.getElem?_insert]
+    aesop
+  entry := #v[index, value]
+}
+
 /-- Dependency relation for Fib sentences based on index ordering -/
 def FibCanDepend : Sentence (@FibPropertySet p _) (F p) → Sentence (@FibPropertySet p _) (F p) → Prop :=
   fun s t =>
@@ -168,6 +179,13 @@ def FibBase.main (_input : Var unit (F p)) : Circuit (@FibPropertySet p _) (Var 
 def FibBase.circuit : FormalCircuit (@FibOrder p _) unit unit where
   main := FibBase.main
   localLength _ := 0
+  yields _ _ _ :={
+      mkFibSentenceValue 0 1,
+      mkFibSentenceValue 1 1 }
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm, Sentence.eval, mkFibSentence, mkFibSentenceValue]
+    aesop
   localLength_eq := by
     intro _
     simp [FibBase.main, Circuit.localLength, circuit_norm]
@@ -186,22 +204,22 @@ def FibBase.circuit : FormalCircuit (@FibOrder p _) unit unit where
   soundness := by
     circuit_proof_start
     intro s
-    simp only [Set.union_empty, Set.union_singleton, Set.mem_insert_iff, Set.mem_singleton_iff]
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff]
     intro h_s
     rcases h_s
     · rename_i h_s
       intro _
       simp only [SentenceHolds]
       rw [h_s]
-      simp only [Sentence.eval, mkFibSentence, FibProperty, circuit_norm]
-      exists 1
+      simp only [FibProperty, circuit_norm, mkFibSentenceValue]
+      exists 0
       aesop
     · rename_i h_s
       intro _
       simp only [SentenceHolds]
       rw [h_s]
-      simp only [Sentence.eval, mkFibSentence, FibProperty, circuit_norm]
-      exists 0
+      simp only [FibProperty, circuit_norm, mkFibSentenceValue]
+      exists 1
       aesop
   completeness := by circuit_proof_start
 
@@ -221,9 +239,13 @@ def FibStep.main (n a b : F p) (_input : Var unit (F p)) : Circuit (@FibProperty
 def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder p _) unit unit where
   main := FibStep.main n a b
   localLength _ := 0
+  yields _ _ _ := { mkFibSentenceValue (n + 2) (a + b) }
   localLength_eq := by
     intro _
     simp [FibStep.main, Circuit.localLength, circuit_norm]
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm, mkFibSentence, Operations.localYields, Sentence.eval, mkFibSentenceValue]
   subcircuitsConsistent := by
     intro input offset
     -- Unfold the main function and operations
@@ -254,8 +276,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder p _) unit unit wher
   soundness := by
     circuit_proof_start
     intro s
-    simp only [Operations.localYields]
-    simp only [Set.union_empty, Set.mem_singleton_iff]
+    simp only [Set.mem_singleton_iff]
     intro s_eq
     simp only [s_eq, AllDependenciesChecked]
     intro h_dep
@@ -263,14 +284,16 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder p _) unit unit wher
     obtain ⟨ k, h_assumptions ⟩ := h_assumptions
     specialize h_n_valid (by
       apply h_dep
-      simp only [FibOrder, FibCanDepend, mkFibSentence, Sentence.eval, circuit_norm]
+      simp only [FibOrder, FibCanDepend, mkFibSentence, Sentence.eval, circuit_norm, mkFibSentenceValue]
       use k, k + 2
-      aesop)
+      aesop
+    )
     specialize h_s_n_valid (by
       apply h_dep
-      simp only [FibOrder, FibCanDepend, mkFibSentence, Sentence.eval, circuit_norm]
+      simp only [FibOrder, FibCanDepend, mkFibSentence, Sentence.eval, circuit_norm, mkFibSentenceValue]
       use k + 1, k + 2
-      aesop)
+      aesop
+    )
     simp only [SentenceHolds, Sentence.eval, mkFibSentence, FibProperty] at h_n_valid h_s_n_valid ⊢
     obtain ⟨ n', h_n, h_n_valid ⟩ := h_n_valid
     obtain ⟨ s_n, h_s_n, h_s_n_valid ⟩ := h_s_n_valid
@@ -280,7 +303,7 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder p _) unit unit wher
     exists (k + 2)
     simp only [Vector.getElem_mk,
       List.getElem_toArray, List.getElem_cons_zero, Nat.cast_add, Nat.cast_ofNat,
-      List.getElem_cons_succ, circuit_norm]
+      List.getElem_cons_succ, circuit_norm, mkFibSentenceValue]
     aesop
   completeness := by
     circuit_proof_start
@@ -301,12 +324,117 @@ def FibStep.circuit (n a b : F p) : FormalCircuit (@FibOrder p _) unit unit wher
       aesop
 
 /-- Example: Compose circuits to compute Fibonacci sequence up to index 4 -/
-def computeFibUpTo4 : GeneralFormalCircuit (@FibOrder p _) unit unit := by
-  -- Start with base, then apply step twice
-  -- Base yields Fib(0,1) and Fib(1,1)
-  -- Step with (0,1,1) yields Fib(2,2)
-  -- Step with (1,1,2) yields Fib(3,3)
-  -- Step with (2,2,3) yields Fib(4,5)
-  sorry
+def computeFibUpTo4 : FormalCircuit (@FibOrder p _) unit unit where
+  main := fun (_input : Var unit (F p)) => do
+    -- Base yields Fib(0,1) and Fib(1,1)
+    subcircuit FibBase.circuit ()
+
+    -- Step with (0,1,1) yields Fib(2,2)
+    subcircuit (FibStep.circuit 0 1 1) ()
+
+    -- Step with (1,1,2) yields Fib(3,3)
+    subcircuit (FibStep.circuit 1 1 2) ()
+
+    -- Step with (2,2,3) yields Fib(4,5)
+    subcircuit (FibStep.circuit 2 2 3) ()
+
+    return ()
+
+  localLength _ := 0
+
+  yields _ _ _ :=
+    -- Concrete set of all Fibonacci sentences from 0 to 4
+    { mkFibSentenceValue 0 1,
+      mkFibSentenceValue 1 1,
+      mkFibSentenceValue 2 2,
+      mkFibSentenceValue 3 3,
+      mkFibSentenceValue 4 5 }
+
+  yields_eq := by
+    intros env input offset
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    sorry -- Will implement this proof
+
+  localLength_eq := by
+    intro _
+    simp only [Circuit.localLength, circuit_norm]
+    aesop
+
+  subcircuitsConsistent := by
+    intro input offset
+    simp only [circuit_norm, FibBase.circuit, FibStep.circuit]
+    omega
+
+  Assumptions _ := 4 < p
+
+  CompletenessAssumptions _ _ := 4 < p
+
+  completenessAssumptions_implies_assumptions _ _ h := h
+
+  Spec _ _ _ := True
+
+  soundness := by
+    circuit_proof_start
+    intro s hs h_dep
+    -- The circuit yields the concrete set of Fibonacci values
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hs
+    rcases hs with (rfl | rfl | rfl | rfl | rfl)
+    · -- Fib(0,1)
+      simp only [SentenceHolds, mkFibSentenceValue, FibProperty, circuit_norm]
+      use 0
+      simp [fib]
+    · -- Fib(1,1)
+      simp only [SentenceHolds, mkFibSentenceValue, FibProperty, circuit_norm]
+      use 1
+      simp [fib]
+    · -- Fib(2,2)
+      simp only [SentenceHolds, mkFibSentenceValue, FibProperty, circuit_norm]
+      use 2
+      simp [fib]
+      norm_num
+    · -- Fib(3,3)
+      simp only [SentenceHolds, mkFibSentenceValue, FibProperty, circuit_norm]
+      use 3
+      simp [fib]
+      norm_num
+    · -- Fib(4,5)
+      simp only [SentenceHolds, mkFibSentenceValue, FibProperty, circuit_norm]
+      use 4
+      simp [fib]
+      norm_num
+
+  completeness := by
+    circuit_proof_start
+    -- Need to satisfy the assumptions of each subcircuit
+    and_intros
+    · -- FibBase assumptions (True)
+      trivial
+    · -- FibStep (0,1,1) assumptions
+      use 0
+      simp only [fib]
+      and_intros <;> norm_num
+      omega
+    · -- For the second use of FibBase yielded sentences
+      sorry -- Will complete this
+    · -- For the first use of FibStep yielded sentences
+      sorry -- Will complete this
+    · -- FibStep (1,1,2) assumptions
+      use 1
+      simp only [fib]
+      and_intros <;> norm_num
+      omega
+    · -- For FibStep (1,1,2) yielded sentences
+      sorry -- Will complete this
+    · -- For FibStep (1,1,2) yielded sentences
+      sorry -- Will complete this
+    · -- FibStep (2,2,3) assumptions
+      use 2
+      simp only [fib]
+      and_intros <;> norm_num
+      omega
+    · -- For FibStep (2,2,3) yielded sentences
+      sorry -- Will complete this
+    · -- For FibStep (2,2,3) yielded sentences
+      sorry -- Will complete this
 
 end Clean.Examples.FibonacciYield
