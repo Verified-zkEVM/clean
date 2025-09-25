@@ -208,7 +208,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
       Num2Bits.arbitraryBitLengthCircuit] at *
 
     -- Extract the two parts of the constraint
-    obtain ⟨_, ⟨h_output_binary, h_output_sum⟩ ⟩ := h_constraints_hold
+    obtain ⟨h_output_binary, h_output_sum⟩ := h_constraints_hold
     use h_output_sum.1
     rw [h_output_sum.2]
 

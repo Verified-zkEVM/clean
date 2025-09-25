@@ -67,6 +67,14 @@ lemma lc_eq {i0} {env} {n : ℕ} :
 def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) : GeneralFormalCircuit order field (fields n) where
   main := main order n
   localLength _ := n
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm]
+    rw [Circuit.foldlRange.localYields_empty]
+    · simp
+    intros _ _ _
+    simp [circuit_norm]
   localLength_eq := by simp +arith [circuit_norm, main]
   output _ i := varFromOffset (fields n) i
 
@@ -86,11 +94,6 @@ def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceO
     circuit_proof_start
     obtain ⟨h_holds1, h_holds2⟩ := h_holds
     simp only [lc_eq] at h_holds1 h_holds2
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- No yields in this circuit
-      sorry
     rw [← h_holds2]
     and_intros
     · apply fieldFromBits_lt
@@ -120,6 +123,11 @@ def arbitraryBitLengthCircuit {sentences : PropertySet (F p)} (order : SentenceO
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit order field (fields n) where
   main input := arbitraryBitLengthCircuit order n input
   localLength _ := n
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [circuit_norm]
+    simp [arbitraryBitLengthCircuit]
   output _ i := varFromOffset (fields n) i
 
   Assumptions _ input := input.val < 2^n
@@ -131,12 +139,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     circuit_proof_start [arbitraryBitLengthCircuit]
     simp_all only [true_and]
     obtain ⟨h_yields, h_spec⟩ := h_holds
-    rcases h_spec with ⟨ _, h_bits, h_eq ⟩
-    constructor
-    · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      -- No yields in this circuit
-      sorry
+    rcases h_spec with ⟨ h_bits, h_eq ⟩
     rw [← h_eq, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits
 

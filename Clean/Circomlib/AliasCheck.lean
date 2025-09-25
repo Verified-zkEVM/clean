@@ -39,19 +39,14 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   Spec _ bits := fromBits (bits.map ZMod.val) < p
 
   soundness := by
-    simp only [circuit_norm, main, CompConstant.circuit]
+    simp only [circuit_norm, main]
     intros offset env yields checked input_var input h_input h_assumption h_holds
     constructor
     · -- Prove yielded sentences hold (vacuous - no yields)
-      intro s hs _
-      simp only [CompConstant.main, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, HasAssignEq.assignEq, FormalCircuit.toSubcircuit, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main, Num2Bits.circuit, GeneralFormalCircuit.toSubcircuit, Num2Bits.arbitraryBitLengthCircuit] at hs
-      simp only [Num2Bits.main, circuit_norm, FormalAssertion.toSubcircuit, Gadgets.Equality.main] at hs
-      simp only [Gadgets.allZero, circuit_norm] at hs
-      rw [Circuit.foldlRange.localYields_empty] at hs
-      · simp only [Set.empty_union] at hs
-        exact absurd hs (Set.notMem_empty s)
-      · intro acc i n
-        sorry -- Need: Operations.localYields of subcircuit with forEach/assertZero is empty
+      intro s
+      simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+      simp [CompConstant.circuit]
+    simp only[CompConstant.circuit] at *
     have : p > 2^135 := hp135.elim
     rcases h_holds with ⟨ h_holds1, h_holds3 ⟩
     simp only [h_holds3, h_input] at h_holds1

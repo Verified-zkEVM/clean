@@ -100,6 +100,11 @@ def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext se
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (c : ℕ) : FormalCircuit order (fields 254) field where
   main := main order c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp only [main, circuit_norm]
+    simp [Num2Bits.circuit]
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
   subcircuitsConsistent input n := by
     simp only [circuit_norm, main, Num2Bits.circuit]
