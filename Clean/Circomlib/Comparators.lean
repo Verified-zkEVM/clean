@@ -39,6 +39,10 @@ def CompletenessAssumptions {sentences : PropertySet (F p)} (_ : YieldContext se
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order field field where
   main := main order
   localLength _ := 2
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros _ _ _
+    simp [main, circuit_norm]
 
   Assumptions _ := True
   CompletenessAssumptions := CompletenessAssumptions
@@ -108,7 +112,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     circuit_proof_start
     constructor
     · intro _
-      sorry
+      simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+      simp [IsZero.circuit]
     rw [← h_input]
     simp only [id_eq]
 
@@ -174,7 +179,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   soundness := by
     circuit_proof_start
     constructor
-    · sorry
+    · simp only [ElaboratedCircuit.yields_eq]
+      simp [IsZero.circuit]
     intro h_ie
     simp_all only [gt_iff_lt, one_ne_zero, or_true, id_eq, one_mul, IsZero.circuit, forall_const]
     cases h_input with
