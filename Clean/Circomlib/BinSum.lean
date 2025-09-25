@@ -217,7 +217,7 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
   completeness := by
     intros witness_offset env yields inputs_var h_witness_extends inputs h_inputs_eval h_inputs_binary
-    simp only [circuit_norm, main, subcircuit, Num2Bits.arbitraryBitLengthCircuit]
+    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
     convert sum_bound_of_binary_inputs hnout inputs h_inputs_binary
     exact inputLinearSum_eval_eq_sum _ _ _ h_inputs_eval
 
