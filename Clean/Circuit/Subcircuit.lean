@@ -172,6 +172,11 @@ lemma FormalCircuit.toSubcircuit_ops {sentences : PropertySet F} {order : Senten
     (circuit.toSubcircuit n input_var).ops = ((circuit.main input_var).operations n).toFlat := by
   simp only [toSubcircuit]
 
+@[circuit_norm]
+lemma FormalCircuit.toSubcircuit_yields {sentences : PropertySet F} {order : SentenceOrder sentences}
+    (circuit : FormalCircuit order β α) (n : ℕ) (input_var : Var β F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).yields env = circuit.yields env input_var n := rfl
+
 /--
 Theorem and implementation that allows us to take a formal assertion and use it as a subcircuit.
 -/
@@ -331,6 +336,12 @@ def GeneralFormalCircuit.toSubcircuit {sentences : PropertySet F} {order : Sente
     yields_eq env := by
       rw [Operations.localYields_toFlat, circuit.yields_eq env input_var n]
   }
+
+@[circuit_norm]
+lemma GeneralFormalCircuit.toSubcircuit_yields {sentences : PropertySet F} {order : SentenceOrder sentences}
+    (circuit : GeneralFormalCircuit order β α) (n : ℕ) (input_var : Var β F) (env : Environment F) :
+    (circuit.toSubcircuit n input_var).yields env = circuit.yields env input_var n := rfl
+
 end
 
 /-- Include a subcircuit. -/
