@@ -43,8 +43,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   yields_eq := by
     intros _ _ _
-    simp only [main, CompConstant.circuit]
-    sorry
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [CompConstant.circuit]
 
   Assumptions input :=
     -- Input should be binary representation of a field element
