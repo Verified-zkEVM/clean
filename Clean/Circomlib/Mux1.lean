@@ -66,6 +66,12 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
 
   localLength _ := n
 
+  yields _ _ _ := ∅
+
+  yields_eq := by
+    intros
+    simp [main, circuit_norm]
+
   Assumptions input :=
     let ⟨c, s⟩ := input
     IsBool s
@@ -178,6 +184,11 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
   main := main order
 
   localLength _ := 1
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [MultiMux1.circuit]
   localLength_eq := by
     intro input offset
     simp only [main, circuit_norm]
@@ -208,15 +219,9 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
     clear h_input
     simp only [MultiMux1.circuit, subcircuit, circuit_norm, FormalCircuit.toSubcircuit] at h_subcircuit_sound h_assumptions ⊢
     have h_spec := h_subcircuit_sound h_assumptions
-    constructor
-    · -- Prove yielded sentences hold
-      intro s h_s
-      apply h_spec.1
-      simp_all
     -- Prove our spec
-    rcases h_spec with ⟨ h_spec1, h_spec2 ⟩
-    specialize h_spec2 0 (by omega)
-    rw [h_spec2]
+    specialize h_spec 0 (by omega)
+    rw [h_spec]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]

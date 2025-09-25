@@ -375,6 +375,11 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     LessThan.circuit order n hn (y, x + 1)
 
   localLength _ := n + 2
+  yields _ _ _ := ∅
+  yields_eq := by
+    rintro _ ⟨_, _⟩ _
+    simp only [circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [LessThan.circuit]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   CompletenessAssumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
