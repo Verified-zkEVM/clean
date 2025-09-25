@@ -85,12 +85,8 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (n
     constructor
     · -- Prove yielded sentences hold
       intro s
-      simp only [FlatOperation.localYields, Set.mem_union, Set.mem_empty_iff_false, or_false, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, FormalAssertion.toSubcircuit,
+      simp [Set.mem_empty_iff_false, Gadgets.Equality.circuit, Gadgets.Equality.elaborated, Gadgets.Equality.main, FormalAssertion.toSubcircuit,
         Gadgets.allZero]
-      simp only [Operations.localYields_toFlat]
-      rw [Circuit.forEach_localYields_of_empty]
-      · simp
-      simp only [assertZero, circuit_norm]
     -- Prove the spec holds for all i < n
     intro i hi
     -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]

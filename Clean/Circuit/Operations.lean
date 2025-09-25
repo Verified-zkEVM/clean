@@ -152,6 +152,11 @@ structure Subcircuit (sentences : PropertySet F) (offset : ℕ) where
 def Subcircuit.witnesses {sentences : PropertySet F} (sc : Subcircuit sentences n) (env : Environment F) :=
   (FlatOperation.localWitnesses env sc.ops).cast sc.localLength_eq.symm
 
+@[circuit_norm]
+lemma Subcircuit.localYields_ops_eq_yields {sentences : PropertySet F} {n : ℕ}
+    (sc : Subcircuit sentences n) (env : Environment F) :
+    FlatOperation.localYields env sc.ops = sc.yields env := sc.yields_eq env
+
 /--
 Core type representing the result of a circuit: a sequence of operations.
 
