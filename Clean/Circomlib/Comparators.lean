@@ -97,6 +97,11 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalCircuit order fieldPair field where
   main := main order
   localLength _ := 2
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [IsZero.circuit]
 
   Assumptions _ := True
   CompletenessAssumptions _ _ := True
@@ -110,10 +115,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     circuit_proof_start
-    constructor
-    · intro _
-      simp only [circuit_norm, ElaboratedCircuit.yields_eq]
-      simp [IsZero.circuit]
     rw [← h_input]
     simp only [id_eq]
 
