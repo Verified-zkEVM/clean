@@ -358,7 +358,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
     simp only [Conditional.circuit, Conditional.Assumptions, Conditional.Spec, h_eval, step, circuit_norm] at h_holds ⊢
-    simp only [step, circuit_norm, h_holds, h_eval, ProcessBlocksState.toChunkState] at ⊢ spec_previous
+    simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
     omega
@@ -398,7 +398,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       constructor
       · omega
       rcases h_witnesses with ⟨ h_witnesses_iszero, h_witnesses ⟩
-      simp only [IsZero.circuit, IsZero.Assumptions, IsZero.CompletenessAssumptions] at h_witnesses_iszero
+      simp only [IsZero.circuit, IsZero.CompletenessAssumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       constructor
@@ -412,12 +412,12 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
           simp only [h_witnesses_iszero]
           norm_num
       · norm_num
-    simp_all only [Addition32.circuit, Addition32.Assumptions, Conditional.circuit, Conditional.Assumptions]
+    simp_all only [Addition32.circuit, Conditional.circuit]
     constructor
     · dsimp only [BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.Compress.CompletenessAssumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions, Conditional.CompletenessAssumptions, Addition32.CompletenessAssumptions] at h_witnesses
       rcases h_witnesses with ⟨ h_witnesses_iszero, ⟨ h_compress, _ ⟩ ⟩
       -- The following is a repetition of the above
-      simp only [IsZero.circuit, IsZero.Assumptions, IsZero.CompletenessAssumptions] at h_witnesses_iszero
+      simp only [IsZero.circuit, IsZero.CompletenessAssumptions] at h_witnesses_iszero
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
