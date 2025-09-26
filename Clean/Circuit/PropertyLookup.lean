@@ -116,6 +116,6 @@ def AllDependenciesChecked {F : Type} {s : PropertySet F} (order : SentenceOrder
    `FlatOperation.localYields env ops.toFlat ⊆ yields.yielded`.
  * (done) Add an example
  * (done) Adjust `FormalAssertion` about `use` and `yield` (similarly to `FormalCircuit` and `GeneralFormalCircuit`)
- * remove `sorry`s that have been introduced
+ * (done) remove `sorry`s that have been introduced
 
 -/
