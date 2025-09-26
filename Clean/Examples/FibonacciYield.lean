@@ -353,7 +353,9 @@ def computeFibUpTo4 : FormalCircuit (@FibOrder p _) unit unit where
   yields_eq := by
     intros env input offset
     simp only [circuit_norm, ElaboratedCircuit.yields_eq]
-    sorry -- Will implement this proof
+    simp only [FibBase.circuit, FibStep.circuit]
+    ring_nf
+    aesop
 
   localLength_eq := by
     intro _
