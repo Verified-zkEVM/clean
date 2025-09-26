@@ -16,7 +16,7 @@ theorem append_localLength {sentences : PropertySet F} {a b: Operations sentence
   induction a using induct with
   | empty => ac_rfl
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
-    simp_all +arith [localLength, ih]
+    simp_all +arith [localLength]
 
 theorem localLength_cons {sentences : PropertySet F} {a : Operation sentences} {as : Operations sentences} :
     localLength (a :: as) = a.localLength + as.localLength := by
@@ -207,7 +207,7 @@ lemma localLength_toFlat {sentences : PropertySet F} {ops : Operations sentences
       simp_all +arith only [localLength_append, localLength]
       try omega
     | case3 ops _ ih' | case4 ops _ ih' | case5 ops _ ih' | case6 ops _ ih' =>
-      simp_all only [localLength_append, forall_eq', localLength, List.cons_append]
+      simp_all only [localLength_append, forall_eq', localLength]
 
 /--
 The witnesses created from flat and nested operations are the same
@@ -475,12 +475,16 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) {se
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | subcircuit _ _ ih =>
-    simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
+  | witness _ _ _ ih | yield _ _ ih =>
+    simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and]
     try intros
     apply ih
+  | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all only [ConstraintsHold.Soundness, Operations.forAll]
+    try intros
+    rw [ih]
   | use _ _ ih =>
-    simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
+    simp_all only [ConstraintsHold.Soundness, Operations.forAll]
     try intros
     rw [ih n]
     tauto
@@ -494,12 +498,16 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | subcircuit _ _ ih =>
-    simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
+  | witness _ _ _ ih | yield _ _ ih =>
+    simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and]
     try intros
     apply ih
+  | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+    simp_all only [ConstraintsHold.Completeness, Operations.forAll]
+    try intros
+    rw [ih]
   | use _ _ ih =>
-    simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
+    simp_all only [ConstraintsHold.Completeness, Operations.forAll]
     try intros
     rw [ih n]
     tauto
@@ -638,7 +646,7 @@ lemma forAll_toFlat_iff {sentences : PropertySet F} (n : ℕ) (condition : Condi
   induction ops using Operations.induct generalizing n with
   | empty => simp only [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | witness | assert | lookup | yield | use =>
-    simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll, Condition.applyFlat, FlatOperation.localLength]
+    simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | subcircuit s ops ih =>
     simp_all only [forAllFlat, forAll, toFlat]
     rw [FlatOperation.forAll_append, s.localLength_eq]
@@ -700,7 +708,7 @@ theorem proverEnvironment_usesLocalWitnesses {sentences : PropertySet F} {ops : 
     simp only [forAll_cons] at h_computable ⊢
     cases op with
     | assert | lookup | yield | use =>
-      simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness, proverYields]
+      simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness]
     | witness m compute =>
       simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
       -- get rid of ih first
@@ -834,7 +842,7 @@ theorem Circuit.proverEnvironment_usesLocalWitnessesAndYields {sentences : Prope
     exact FlatOperation.proverEnvironment_usesLocalWitnesses init h_computable
   · -- Prove the yield part
     simp only [proverYields, FlatOperation.proverYields, proverEnvironment,
-               FlatOperation.proverEnvironment, Operations.forAllFlat]
+               FlatOperation.proverEnvironment]
     apply usesLocalYieldsFlat_of_localYields
 
 lemma Environment.agreesBelow_of_le {F} {n m : ℕ} {env env' : Environment F} :
