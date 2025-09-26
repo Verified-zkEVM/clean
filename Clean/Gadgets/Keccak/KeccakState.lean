@@ -72,24 +72,31 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 def KeccakBlock.normalized {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order KeccakBlock where
   main block := .forEach block (assertion (U64.AssertNormalized.circuit order))
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    rw [Circuit.forEach_localYields_of_empty]
+    intro x n
+    simp only [circuit_norm, U64.AssertNormalized.circuit]
   Assumptions _ := True
   Spec _ block := block.Normalized
   localLength_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
   soundness := by
-    simp only [circuit_norm, U64.AssertNormalized.circuit]
-    intro offset env yields checked input_var input h_input h_each
+    intro offset env yields checked input_var input h_input h_assumes h_holds
     constructor
-    · -- Prove yielded sentences hold
-      intro s
-      rw [Circuit.forEach_localYields_of_empty]
-      · simp
-      intro x n
-      simp [circuit_norm, FormalAssertion.toSubcircuit, U64.AssertNormalized.main]
+    · -- Prove that locally yielded sentences are valid (empty set)
+      simp
     · -- Prove the spec
-      simp only [getElem_eval_vector, KeccakBlock.Normalized] at h_each ⊢
+      simp only [KeccakBlock.Normalized]
       intro i
-      specialize h_each i
-      simp_all
+      simp only [circuit_norm] at h_holds
+      specialize h_holds i
+      simp only [U64.AssertNormalized.circuit] at h_holds
+      specialize h_holds trivial
+      have : eval env input_var[i.val] = input[i.val] := by
+        rw [getElem_eval_vector, h_input]
+      rw [this] at h_holds
+      exact h_holds.2
   completeness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]

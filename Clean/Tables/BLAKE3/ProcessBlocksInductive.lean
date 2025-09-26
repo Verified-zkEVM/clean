@@ -78,6 +78,16 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (x : 
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order ProcessBlocksState where
   main := main order
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp [main, circuit_norm]
+    constructor
+    · -- forEach yields nothing
+      rw [Circuit.forEach_localYields_of_empty]
+      intro x n
+      simp only [circuit_norm, U32.AssertNormalized.circuit]
+    · constructor <;> simp only [U32.AssertNormalized.circuit]
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
@@ -137,6 +147,14 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (x : 
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order BlockInput where
   main := main order
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp [main, circuit_norm]
+    -- forEach yields nothing
+    rw [Circuit.forEach_localYields_of_empty]
+    intro x n
+    simp only [circuit_norm, U32.AssertNormalized.circuit]
   localLength_eq := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
