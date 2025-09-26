@@ -276,6 +276,8 @@ def main {sentences : PropertySet (F p)} (_order : SentenceOrder sentences) (inp
 
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order U32 where
   main := main order
+  yields _ _ _ := ∅
+  yields_eq := by simp only [main, circuit_norm]
   Assumptions _ := True
   Spec _ inputs := inputs.Normalized
 

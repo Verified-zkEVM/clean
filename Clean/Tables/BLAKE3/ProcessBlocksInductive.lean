@@ -88,8 +88,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    constructor
-    · sorry
     simp_all [← h_input, eval_vector]
 
   completeness := by
@@ -148,8 +146,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
-    constructor
-    · sorry
     constructor
     · simp_all
     simp only [←h_input, eval_vector] -- provable_vector_simp wanted
