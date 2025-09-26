@@ -498,12 +498,8 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | yield _ _ ih =>
+  | witness _ _ _ ih | yield _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
     simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and]
-    try intros
-    apply ih
-  | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
-    simp_all only [ConstraintsHold.Completeness, Operations.forAll]
     try intros
     rw [ih]
   | use _ _ ih =>
