@@ -170,6 +170,11 @@ def main {sentences : PropertySet (F p)} (order : SentenceOrder sentences) (inpu
 def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order Inputs where
   main := main order
   localLength _ := 2
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp only [main, circuit_norm, ElaboratedCircuit.yields_eq]
+    simp [IsZero.circuit]
 
   Assumptions := fun { enabled, inp } =>
     enabled = 0 ∨ enabled = 1
@@ -179,9 +184,6 @@ def circuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : 
 
   soundness := by
     circuit_proof_start
-    constructor
-    · simp only [ElaboratedCircuit.yields_eq]
-      simp [IsZero.circuit]
     intro h_ie
     simp_all only [gt_iff_lt, one_ne_zero, or_true, id_eq, one_mul, IsZero.circuit, forall_const]
     cases h_input with

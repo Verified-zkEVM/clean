@@ -84,16 +84,15 @@ def rangeCheck {sentences : PropertySet (F p)} (order : SentenceOrder sentences)
   main x := do
     -- we wrap the toBits circuit but ignore the output
     let _ ← toBits (sentences:=sentences) order n hn x
+  yields _ _ _ := ∅
+  yields_eq := by simp [circuit_norm, toBits, main]
 
   localLength _ := n
 
   Assumptions _ := True
   Spec (_ : CheckedYields sentences) (x : F p) := x.val < 2^n
 
-  soundness := by
-    simp_all only [circuit_norm, toBits]
-    intro offset env yields checked input_var input h_input h_holds s
-    simp [circuit_norm, GeneralFormalCircuit.toSubcircuit, FormalAssertion.toSubcircuit, main, Equality.main]
+  soundness := by simp_all only [circuit_norm, toBits]
   completeness := by simp_all only [circuit_norm, toBits]
 
 end ToBits

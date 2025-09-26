@@ -201,6 +201,10 @@ Asserts that x is boolean by adding the constraint x * (x - 1) = 0
 @[circuit_norm]
 def assertBool {sentences : PropertySet (F p)} (order : SentenceOrder sentences) : FormalAssertion order field where
   main (x : Expression (F p)) := assertZero sentences (x * (x - 1))
+  yields _ _ _ := ∅
+  yields_eq := by
+    intros
+    simp [circuit_norm, assertZero]
   Assumptions _ := True
   Spec (_ : CheckedYields sentences) (x : F p) := IsBool x
 
