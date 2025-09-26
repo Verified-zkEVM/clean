@@ -418,6 +418,40 @@ def computeFibUpTo4 : FormalCircuit (@FibOrder p _) unit unit where
       · simp only [circuit_norm, mkFibSentence, Sentence.eval]
         aesop
       )
+    simp only [FibStep.circuit, mkFibSentenceValue] at h1
+    ring_nf at h1
+    specialize h2 (by
+      simp only [FibStep.circuit, circuit_norm]
+      and_intros
+      · use 1
+        simp [fib]
+        constructor
+        · omega
+        · ring_nf
+      · simp only [Sentence.eval, mkFibSentence]
+        aesop
+      · simp only [circuit_norm, mkFibSentence, Sentence.eval]
+        ring_nf
+        aesop
+    )
+    simp only [FibStep.circuit, mkFibSentenceValue] at h2
+    ring_nf at h2
+    specialize h3 (by
+      and_intros
+      · use 2
+        simp [fib]
+        constructor
+        · omega
+        · ring_nf; trivial
+      · simp only [Sentence.eval, mkFibSentence]
+        aesop
+      · simp only [circuit_norm, mkFibSentence, Sentence.eval]
+        ring_nf
+        aesop
+    )
+    simp only [FibStep.circuit, mkFibSentenceValue] at h3
+    ring_nf at h3
+
     -- Need to satisfy the assumptions of each subcircuit
     and_intros
     · -- FibBase assumptions (True)
@@ -428,26 +462,38 @@ def computeFibUpTo4 : FormalCircuit (@FibOrder p _) unit unit where
       and_intros <;> norm_num
       omega
     · -- For the second use of FibBase yielded sentences
-      sorry -- Will complete this
+      simp only [circuit_norm, mkFibSentence, Sentence.eval]
+      ring_nf
+      aesop
     · -- For the first use of FibStep yielded sentences
-      sorry -- Will complete this
+      simp only [circuit_norm, mkFibSentence, Sentence.eval]
+      ring_nf
+      aesop
     · -- FibStep (1,1,2) assumptions
       use 1
       simp only [fib]
       and_intros <;> norm_num
       omega
     · -- For FibStep (1,1,2) yielded sentences
-      sorry -- Will complete this
+      simp only [circuit_norm, mkFibSentence, Sentence.eval]
+      ring_nf
+      aesop
     · -- For FibStep (1,1,2) yielded sentences
-      sorry -- Will complete this
+      simp only [circuit_norm, mkFibSentence, Sentence.eval]
+      ring_nf
+      aesop
     · -- FibStep (2,2,3) assumptions
       use 2
       simp only [fib]
       and_intros <;> norm_num
       omega
     · -- For FibStep (2,2,3) yielded sentences
-      sorry -- Will complete this
+      simp only [circuit_norm, mkFibSentence, Sentence.eval]
+      ring_nf
+      aesop
     · -- For FibStep (2,2,3) yielded sentences
-      sorry -- Will complete this
+      simp only [circuit_norm, mkFibSentence, Sentence.eval]
+      ring_nf
+      aesop
 
 end Clean.Examples.FibonacciYield
