@@ -30,10 +30,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  simp_all [circuit_norm, main, Assumptions, Spec,
-    ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
-    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
-    ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta]
+  simp_all [circuit_norm, main, Assumptions, ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
+    ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions, ThetaC.Spec, ThetaD.Spec,
+    ThetaXor.Spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState :=
  { elaborated with Assumptions, Spec, soundness, completeness }

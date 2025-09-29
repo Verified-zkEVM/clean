@@ -44,7 +44,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
     KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
-  simp only [zero_add, h_input] at h_holds
+  simp only [h_input] at h_holds
   obtain ⟨ h_init, h_succ ⟩ := h_holds
   specialize h_init h_assumptions
 
@@ -79,11 +79,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, Spec,
-    KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions] at h_env ⊢
+  simp only [main, h_input, h_assumptions, circuit_norm, KeccakRound.circuit,
+    KeccakRound.elaborated, KeccakRound.Spec,
+    KeccakRound.Assumptions] at h_env ⊢
 
-  -- only keep the statements about normalization
   obtain ⟨ h_init, h_succ ⟩ := h_env
   replace h_init := h_init.left
   replace h_succ := fun i hi ih => (h_succ i hi ih).left
