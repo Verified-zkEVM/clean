@@ -25,7 +25,7 @@ def fib {F : Type} [Field F] : ℕ → F
 
 /-- Helper lemma: fib satisfies the recurrence relation -/
 lemma fib_add_two {F : Type} [Field F] (n : ℕ) :
-  fib (F:=F) (n + 2) = fib (F:=F) n + fib (F:=F) (n + 1) := by
+  fib (F:=F) (n + 2) = fib n + fib (n + 1) := by
   rfl
 
 section FibProperty
@@ -80,7 +80,7 @@ def FibCanDepend : Sentence (@FibPropertySet p _) (F p) → Sentence (@FibProper
     ∃ (ns nt : ℕ),
       ∃ (h1 : s.property.arity = 2),
       ∃ (h2 : t.property.arity = 2),
-      s.entry[0]'(by omega) = (ns : F p) ∧ t.entry[0]'(by omega) = (nt : F p) ∧ ns < nt ∧ nt < p
+      s.entry[0] = ns ∧ t.entry[0] = nt ∧ ns < nt ∧ nt < p
 
 /-- Extract natural number index from a Fib sentence, default to 0 for non-Fib -/
 def sentenceToNat (s : Sentence (@FibPropertySet p _) (F p)) : ℕ := by

@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Field.Basic
 variable {F : Type}
 
+-- should be called channel
 structure Property (F : Type) where
   name : String
   arity : ℕ
@@ -10,6 +11,21 @@ structure PropertySet (F : Type) where
   properties : Std.HashMap String (Property F)
   NameConsistency : ∀ name (p : Property F), properties[name]? = some p → p.name = name
 
+/--
+A sentence is a claim that a property of a given `name` holds for a specific `entry`,
+along with a proof that a property with that name indeed exists in the input PropertySet.
+
+TODO: why do we need to reference the `PropertySet` here?
+Probably because it's hard to keep track of the property set in circuit state, because
+we cannot compare two properties using decidable equality (due to the `Predicate` field).
+
+On the other hand, we could just use the string name for decidable equality, and _prove_ that
+the corresponding properties are always equal. (Equality doesn't need to be decidable for that.)
+The channels a circuit accesses could be an exposed property of formal circuits,
+or even just of _certain_ formal circuits.
+When accessing a channel you need to prove that either that name wasn't used yet, or that is matches previous accesses.
+This proof could be expected in a `channelsUnique` field
+-/
 structure Sentence (s : PropertySet F) (α : Type) where
   name : String
   property : Property F
@@ -58,16 +74,13 @@ If nobody ever does `yield s`, `s` can be false even when `s` is in `CheckedYiel
 def CheckedYields {F : Type} (sentences : PropertySet F) := Set (Sentence sentences F)
 
 instance {F : Type} {sentences : PropertySet F} : EmptyCollection (CheckedYields sentences) where
-  emptyCollection := by unfold CheckedYields; exact ∅
+  emptyCollection : Set _ := ∅
 
 instance {F : Type} {sentences : PropertySet F} : HasSubset (CheckedYields sentences) where
-  Subset := by unfold CheckedYields; exact Set.Subset
+  Subset := Set.Subset
 
 instance {F : Type} {sentences : PropertySet F} : Membership (Sentence sentences F) (CheckedYields sentences) where
-  mem := by
-    unfold CheckedYields
-    intro s elm
-    exact (elm ∈ s)
+  mem (s: Set _) elm := elm ∈ s
 
 /-
 The completeness proof is simpler. `yield s` requires `s` is valid. `use s` requires that `yield s` is done somewhere.

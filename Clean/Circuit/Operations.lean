@@ -34,7 +34,8 @@ What it means that "constraints hold" on a list of flat operations:
 - For lookups, the evaluated entry must be in the table
 - For witness and yield operations, the constraints do not guarantee anything additional
 -/
-def ConstraintsHoldFlat {sentences : PropertySet F} (eval : Environment F) (yields : YieldContext sentences) (checked : CheckedYields sentences) : List (FlatOperation sentences) → Prop
+def ConstraintsHoldFlat {sentences : PropertySet F} (eval : Environment F) (yields : YieldContext sentences)
+    (checked : CheckedYields sentences) : List (FlatOperation sentences) → Prop
   | [] => True
   | op :: ops => match op with
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval yields checked ops
@@ -52,13 +53,15 @@ def localLength {sentences : PropertySet F} : List (FlatOperation sentences) →
   | assert _ :: ops | lookup _ :: ops | yield _ :: ops | use _ :: ops => localLength ops
 
 @[circuit_norm]
-def localWitnesses {sentences : PropertySet F} (env : Environment F) : (l : List (FlatOperation sentences)) → Vector F (localLength l)
+def localWitnesses {sentences : PropertySet F} (env : Environment F) :
+    (l : List (FlatOperation sentences)) → Vector F (localLength l)
   | [] => #v[]
   | witness _ compute :: ops => compute env ++ localWitnesses env ops
   | assert _ :: ops | lookup _ :: ops | yield _ :: ops | use _ :: ops => localWitnesses env ops
 
 /-- Collects all yielded sentences from a list of flat operations. -/
-def localYields {sentences : PropertySet F} (env : Environment F) : List (FlatOperation sentences) → Set (Sentence sentences F)
+def localYields {sentences : PropertySet F} (env : Environment F) :
+    List (FlatOperation sentences) → Set (Sentence sentences F)
   | [] => ∅
   | yield s :: ops => {s.eval env} ∪ localYields env ops
   | witness _ _ :: ops | assert _ :: ops | lookup _ :: ops | use _ :: ops => localYields env ops
@@ -117,7 +120,8 @@ structure Subcircuit (sentences : PropertySet F) (offset : ℕ) where
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnessesAndYields` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness : (env : Environment F) → (yields : YieldContext sentences) → (checkedYields : CheckedYields sentences) → Prop -- usually useful after `checkYields` covers all `use`es in the subcircuit.
+  Soundness : (env : Environment F) → (yields : YieldContext sentences) → (checkedYields : CheckedYields sentences) → Prop
+    -- usually useful after `checkYields` covers all `use`es in the subcircuit.
   Completeness : Environment F → YieldContext sentences → Prop
   UsesLocalWitnessesAndYields : Environment F → YieldContext sentences → Prop -- SentenceOrder is useful for setting up `Set.univ` to be used as the `checkedYields`
 
