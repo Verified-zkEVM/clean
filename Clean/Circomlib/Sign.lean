@@ -40,7 +40,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
 
-  Assumptions input := 
+  Assumptions input :=
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
 
@@ -50,10 +50,16 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
 
   soundness := by
-    sorry -- TODO: prove soundness using CompConstant's soundness
-  
+    circuit_proof_start
+    -- Proof follows easily from the fact that Sign is a
+    -- specialization of CompConstant
+    exact h_holds h_assumptions
+
   completeness := by
-    sorry -- TODO: prove completeness
+    circuit_proof_start
+    -- We're just left to prove CompConstant's assumptions are met
+    -- which is trivial by h_assumptions
+    exact h_assumptions
 
 end Sign
 end Circomlib

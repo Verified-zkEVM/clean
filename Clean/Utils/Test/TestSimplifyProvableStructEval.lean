@@ -109,7 +109,7 @@ theorem test_complex_eval {F : Type} [Field F] (env : Environment F)
   simplify_provable_struct_eval
   -- Should simplify the eval expression
   -- now h should be a conjunction of literal = literal
-  simp only [TestInputs.mk.injEq, SimpleStruct.mk.injEq] at h
+  simp only [TestInputs.mk.injEq] at h
   exact h
 
 -- Test conjunction with an eval to be decomposed and another eval not to be decomposed

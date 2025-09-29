@@ -101,7 +101,7 @@ theorem lastRow_of_forAllWithIndex {N : ℕ+} {prop : Row F S → ℕ → Prop}
     simp only [table_norm, and_true] at h
     exact h
   | more N curr next rest ih =>
-    simp only [table_norm, and_true] at h ⊢
+    simp only [table_norm] at h ⊢
     rw [rest.property] at h
     exact h.left
 
@@ -115,7 +115,7 @@ theorem lastRow_of_forAllWithPrevious {N : ℕ+} {prop : Row F S → (i : ℕ) �
   | more N curr next rest ih =>
     rcases rest with ⟨ rest, hN ⟩
     subst hN
-    simp only [ForAllRowsWithPrevious, Trace.ForAllRowsWithPrevious, table_norm, and_true] at h ⊢
+    simp only [ForAllRowsWithPrevious, Trace.ForAllRowsWithPrevious, table_norm] at h ⊢
     simp only [PNat.mk_coe, Nat.add_one_sub_one, tail, Trace.tail]
     exact h.left
 

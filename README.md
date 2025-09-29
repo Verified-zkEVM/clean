@@ -1,9 +1,7 @@
-<p align="center"> <img src="clean-logo-turnstilehex-greenwhite.svg" width="96" alt="Clean logo"> </p>
-
-<h1 align="center" id="clean">Clean</h1>
+<p align="center"> <img src="images/logo-w-subtitle-rect.png" width="400" alt="Clean logo"> </p>
 
 <div align="center">
-  
+
 [![Chat on Telegram][ico-telegram]][link-telegram]
 [![Ask DeepWiki][ico-deep-wiki]][link-deep-wiki]
 

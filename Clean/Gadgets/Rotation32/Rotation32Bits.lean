@@ -103,7 +103,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   have h_rot_vector' : y.vals = rotRight32_u32 x.vals o := by
     rw [U32.ByteVector.ext_iff, ←rotRight32_bytes_u32_eq]
     intro i hi
-    simp only [U32.vals, U32.ByteVector.toLimbs_map, Vector.getElem_map, rotRight32_bytes, size, Vector.getElem_ofFn]
+    simp only [U32.vals, U32.ByteVector.toLimbs_map, Vector.getElem_map, rotRight32_bytes, Vector.getElem_ofFn]
     exact (h_rot_vector i hi).right
 
   rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']
@@ -118,7 +118,7 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
 
   -- we only have to prove the byte decomposition assumptions
   rw [Assumptions, U32.ByteVector.normalized_iff] at x_normalized
-  simp_all only [size, U32.ByteVector.getElem_eval_toLimbs, forall_const]
+  simp_all only [U32.ByteVector.getElem_eval_toLimbs, forall_const]
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 := {
   elaborated offset with
