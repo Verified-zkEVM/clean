@@ -71,7 +71,7 @@ structure MemoryReadInput (F : Type) where
 
 /--
   Input structure for checking the validity of a state transition.
-  Contains the current state, the next state, the decoded instruction, and the values read from memory.
+  Contains the current state, the decoded instruction, and the values read from memory.
 -/
 structure StateTransitionInput (F : Type) where
   state : State F
