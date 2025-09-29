@@ -205,8 +205,48 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   Spec := fun (x, y) output =>
     output = (if x.val < y.val then 1 else 0)
 
+
   soundness := by
-    simp only [circuit_norm, main]
+    circuit_proof_start
+    simp only [circuit_norm, Num2Bits.circuit] at h_holds ⊢
+    rcases h_assumptions with ⟨hx, hy⟩
+    have hx_eval : Expression.eval env input_var.1 = input.1 := by
+      simpa using congrArg Prod.fst h_input
+    have hy_eval : Expression.eval env input_var.2 = input.2 := by
+      simpa using congrArg Prod.snd h_input
+
+    simp [hx_eval, hy_eval] at h_holds
+
+    set out := env.get (i₀ + n + 1) with hout
+    by_cases hlt : ZMod.val input.1 < ZMod.val input.2
+    -- CASE input.1 < input.2
+    simp [hlt]
+
+
+    have hdiff_lt : ZMod.val (input.1 + 2 ^ n - input.2) < 2^n := by
+      sorry
+
+
+    -- split h_holds to h1 h2 h3
+    have h3 := h_holds.right
+    have h2 := h_holds.left.right
+    have h1 := h_holds.left.left
+
+    rw[add_assoc] at hout
+    rw[← hout] at h3
+    rw[h3]
+    --simp the goal basic math
+
+
+    unfold fieldToBits at h2
+    unfold toBits at h2
+    unfold Nat.testBit at h2
+    --now I need to use that On Nat, shift is equivalent to a / 2 ^ b.
+
+    apply congrArg (fun v => v[n]) at h2
+
+
+
     sorry
 
   completeness := by
