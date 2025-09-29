@@ -4,6 +4,7 @@ This document describes certain well-trodden paths for finding proofs. These are
 
 ## Opening moves
 
+* Start a soundness or completeness proof with `circuit_proof_start`.
 * The simpset `circuit_norm` is supposed to bring the goal state to well-trodden forms: `simp only [circuit_norm]`.
 * Often, `Subcircuit.circuit` `Subcircuit.Assumption` and `Subcircuit.Spec` need to be unfolded.
 * In many cases, it's needed to keep unfolding things so that only the math content remains.
