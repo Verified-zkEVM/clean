@@ -159,8 +159,8 @@ def ConstraintsHold {sentences : PropertySet F} (eval : Environment F) (yields :
   | .lookup { table, entry, .. } :: ops =>
     table.Contains (entry.map eval) ∧ ConstraintsHold eval yields checked ops
   | .yield _ :: ops => ConstraintsHold eval yields checked ops
-  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
-                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧
+                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧
                      ConstraintsHold eval yields checked ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval yields checked s.ops ∧ ConstraintsHold eval yields checked ops
@@ -176,8 +176,8 @@ def ConstraintsHold.Soundness {sentences : PropertySet F} (eval : Environment F)
   | .lookup { table, entry } :: ops =>
     table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval yields checked ops
   | .yield _ :: ops => ConstraintsHold.Soundness eval yields checked ops
-  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
-                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧ 
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧
+                     (s.eval eval ∈ checked → SentenceHolds (s.eval eval)) ∧
                      ConstraintsHold.Soundness eval yields checked ops
   | .subcircuit s :: ops =>
     s.Soundness eval yields checked ∧ ConstraintsHold.Soundness eval yields checked ops
@@ -193,8 +193,8 @@ def ConstraintsHold.Completeness {sentences : PropertySet F} (eval : Environment
   | .lookup { table, entry } :: ops =>
     table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval yields ops
   | .yield _ :: ops => ConstraintsHold.Completeness eval yields ops
-  | .use s :: ops => s.eval eval ∈ yields.yielded ∧ 
-                     (s.eval eval ∈ Set.univ → SentenceHolds (s.eval eval)) ∧ 
+  | .use s :: ops => s.eval eval ∈ yields.yielded ∧
+                     (s.eval eval ∈ Set.univ → SentenceHolds (s.eval eval)) ∧
                      ConstraintsHold.Completeness eval yields ops
   | .subcircuit s :: ops =>
     s.Completeness eval yields ∧ ConstraintsHold.Completeness eval yields ops
@@ -274,11 +274,14 @@ class ElaboratedCircuit (F : Type) (sentences : PropertySet F) (Input Output : T
 
   /-- a direct way of computing the yielded sentences (i.e. without having to unfold `main`) -/
   yields : Environment F → Var Input F → ℕ → Set (Sentence sentences F)
-    := fun env input offset => ((main input).operations offset).localYields env
+    := fun _ _ _ => ∅ -- default is no yields
 
   /-- correctness of `yields` -/
   yields_eq : ∀ env input offset, ((main input).operations offset).localYields env = yields env input offset
-    := by intros; rfl
+    := by
+      try circuit_simp
+      try intros
+      try rfl
 
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset

@@ -37,6 +37,9 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+
+    yields env input offset := (((circuit1 · >>= circuit2) input).operations offset).localYields env
+    yields_eq := by intros; rfl
   }
   Assumptions := circuit1.Assumptions
   CompletenessAssumptions := circuit1.CompletenessAssumptions
@@ -72,7 +75,7 @@ def FormalCircuit.concat
   completeness := by
     simp only [circuit_norm]
     aesop
-  
+
   completenessAssumptions_implies_assumptions := by
     intro yields input h
     exact circuit1.completenessAssumptions_implies_assumptions yields input h

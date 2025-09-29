@@ -113,7 +113,6 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit (emptyOrder 
     constructor
     · -- Prove yielded sentences hold (vacuous since nothing is yielded - only witness and lookup)
       intro s hs
-      simp only [circuit_norm, Operations.localYields] at hs
       contradiction
     · -- Prove the spec
       simp_all only [circuit_norm, toTable]
@@ -124,7 +123,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit (emptyOrder 
     rw [ProvableType.ext_iff]
     intro i hi
     rw [←h_env ⟨ i, hi ⟩, ProvableType.eval_varFromOffset, ProvableType.toElements_fromElements, Vector.getElem_mapRange]
-  
+
   completenessAssumptions_implies_assumptions := by
     intro _ input h
     exact circuit.completenessAssumptions_implies_assumptions (emptyYields F) input h

@@ -65,9 +65,10 @@ def ReadOnlyTableFromFunction
   It returns a `DecodedInstruction` struct containing the decoded fields.
   This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
-def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
+def decodeInstructionCircuit {sentences : PropertySet (F p)} (order : SentenceOrder sentences) :
+    FormalCircuit order field DecodedInstruction where
   main := fun instruction => do
-    let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
+    let bits ← Gadgets.ToBits.toBits order 8 (by linarith [p_large_enough.elim]) instruction
     return {
       instrType := {
         isAdd := (1 : Expression _) - bits[0] - bits[1] + bits[0] * bits[1],
@@ -99,7 +100,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
   Assumptions | instruction => True
 
   Spec
-  | instruction, output =>
+  | _, instruction, output =>
     match Spec.decodeInstruction instruction with
     | some (instr_type, addr1, addr2, addr3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
