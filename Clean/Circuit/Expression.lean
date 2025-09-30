@@ -17,7 +17,7 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-structure NamedTuple (F : Type) where
+structure NamedList (F : Type) where
   name : String
   value : List F
 deriving DecidableEq
@@ -27,7 +27,7 @@ structure Tape (F : Type) where
 
 structure Environment (F : Type) where
   tape : Tape F
-  yielded : Set (NamedTuple F)
+  yielded : Set (NamedList F)
 
 namespace Expression
 variable [Field F]
