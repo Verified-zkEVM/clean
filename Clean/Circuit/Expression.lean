@@ -22,6 +22,9 @@ structure NamedList (F : Type) where
   value : List F
 deriving DecidableEq
 
+instance [Repr F] : Repr (NamedList F) where
+  reprPrec nl _ := "⟨" ++ repr nl.name ++ ", " ++ repr nl.value ++ "⟩"
+
 structure Tape (F : Type) where
   get : ℕ → F
 
