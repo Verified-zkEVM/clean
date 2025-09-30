@@ -52,12 +52,12 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U64
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
+  set byte_rotated := eval env.tape (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
 
   simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions,
     Rotation64Bytes.Spec, Rotation64Bits.Assumptions, Rotation64Bits.Spec, add_zero] at h_holds
   simp only [Spec, elaborated, output, ElaboratedCircuit.output]
-  set y := eval env (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
+  set y := eval env.tape (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
 
   simp [Assumptions] at x_normalized
   rw [←h_input] at x_normalized

@@ -85,8 +85,8 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   (env : Environment (F p))
   (input : Var (BinSumInput n ops) (F p))
   (input_val : BinSumInput n ops (F p))
-  (h_eval : eval env input = input_val) :
-    Expression.eval env (inputLinearSum n ops input) =
+  (h_eval : eval env.tape input = input_val) :
+    Expression.eval env.tape (inputLinearSum n ops input) =
     Fin.foldl ops (fun acc j => acc + fieldFromBits input_val[j.val]) 0 := by
   -- The main function uses input[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
@@ -94,7 +94,7 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [hn : NeZero n]
   -- Step 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
   simp only [inputLinearSum, circuit_norm, eval_foldl, Fin.foldl_factor_const]
 
-  -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
+  -- Step 2: Replace Expression.eval env.tape input[j][k] with input_val[j][k]
   simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
 
   rw [Fin.sum_interchange]

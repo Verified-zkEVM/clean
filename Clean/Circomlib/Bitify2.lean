@@ -83,9 +83,9 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
     rw [Vector.map_mapRange]
     simp only [Expression.eval]
-    have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
+    have h_bits i (hi : i < 254) : env.tape.get (i0 + i) = 0 ∨ env.tape.get (i0 + i) = 1 := by
       simp [h_env i hi, fieldToBits_bits]
-    set bits := Vector.mapRange 254 fun i => env.get (i0 + i)
+    set bits := Vector.mapRange 254 fun i => env.tape.get (i0 + i)
     have h_eq : bits = fieldToBits 254 input := by
       ext i hi; simp [bits, circuit_norm, h_env i hi]
     have input_lt : input.val < 2^254 := by
@@ -169,8 +169,8 @@ template Num2BitsNeg(n) {
 -/
 def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
-  let out ← witnessVector n fun env =>
-    fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
+  let out ← witnessVector n fun tape =>
+    fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval tape)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
   let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do

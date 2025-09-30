@@ -94,7 +94,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
-  set w := env.get i
+  set w := env.tape.get i
   -- The constraint from lookup is about xor = 2*or - x - y
   -- which in field arithmetic is 2*w + -x + -y
   set xor := 2*w + -x + -y

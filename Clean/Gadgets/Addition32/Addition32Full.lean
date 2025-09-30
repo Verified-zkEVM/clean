@@ -76,14 +76,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit
-  set z0 := env.get i₀
-  set c0 := env.get (i₀ + 1)
-  set z1 := env.get (i₀ + 2)
-  set c1 := env.get (i₀ + 3)
-  set z2 := env.get (i₀ + 4)
-  set c2 := env.get (i₀ + 5)
-  set z3 := env.get (i₀ + 6)
-  set c3 := env.get (i₀ + 7)
+  set z0 := env.tape.get i₀
+  set c0 := env.tape.get (i₀ + 1)
+  set z1 := env.tape.get (i₀ + 2)
+  set c1 := env.tape.get (i₀ + 3)
+  set z2 := env.tape.get (i₀ + 4)
+  set c2 := env.tape.get (i₀ + 5)
+  set z3 := env.tape.get (i₀ + 6)
+  set c3 := env.tape.get (i₀ + 7)
 
   -- get rid of the boolean carry_out and normalized output
   simp only [h_holds, and_self, and_true]
@@ -115,14 +115,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit
-  set z0 := env.get i₀
-  set c0 := env.get (i₀ + 1)
-  set z1 := env.get (i₀ + 2)
-  set c1 := env.get (i₀ + 3)
-  set z2 := env.get (i₀ + 4)
-  set c2 := env.get (i₀ + 5)
-  set z3 := env.get (i₀ + 6)
-  set c3 := env.get (i₀ + 7)
+  set z0 := env.tape.get i₀
+  set c0 := env.tape.get (i₀ + 1)
+  set z1 := env.tape.get (i₀ + 2)
+  set c1 := env.tape.get (i₀ + 3)
+  set z2 := env.tape.get (i₀ + 4)
+  set c2 := env.tape.get (i₀ + 5)
+  set z3 := env.tape.get (i₀ + 6)
+  set c3 := env.tape.get (i₀ + 7)
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := h_env
 
   -- the add8 completeness proof, four times

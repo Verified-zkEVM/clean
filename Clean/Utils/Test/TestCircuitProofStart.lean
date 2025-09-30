@@ -80,7 +80,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Environment F := env
   have : Input (Expression F) := input_var
   have : Input F := input
-  have : eval env input_var = input := h_input
+  have : eval env.tape input_var = input := h_input
   have : Assumptions input := h_assumptions
   have : ConstraintsHold.Soundness env (circuit.main input_var i₀).2 := h_holds
   sorry
@@ -91,13 +91,13 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point we should have: i₀, env, input_var, h_env
-  -- Note: provable_struct_simp eliminates input and h_input by substituting eval env input_var
+  -- Note: provable_struct_simp eliminates input and h_input by substituting eval env.tape input_var
   -- Check that these names exist by using them
   have : ℕ := i₀
   have : Environment F := env
   have : Input (Expression F) := input_var
   have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
-  -- After provable_struct_simp, we work with eval env input_var instead of input
+  -- After provable_struct_simp, we work with eval env.tape input_var instead of input
   sorry
 
 end NamePreservationTests

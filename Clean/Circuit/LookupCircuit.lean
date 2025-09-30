@@ -24,10 +24,10 @@ theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β) (
     (circuit.proverEnvironment input).UsesLocalWitnesses 0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
-  simp [Environment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
+  simp [Tape.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) : β F :=
-  circuit.output (const input) 0 |> eval (circuit.proverEnvironment input)
+  circuit.output (const input) 0 |> eval (circuit.proverEnvironment input).tape
 
 def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) where
   name := circuit.name
@@ -39,7 +39,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- the circuit constraints hold
     Circuit.ConstraintsHold env (circuit.main (const input) |>.operations n)
     -- and the output matches
-    ∧ output = eval env (circuit.output (const input) n)
+    ∧ output = eval env.tape (circuit.output (const input) n)
 
   Soundness := fun (input, output) => circuit.Assumptions input → circuit.Spec input output
   Completeness := fun (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input

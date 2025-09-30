@@ -100,10 +100,10 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
-    eval env (varFromOffset U32 0) = curr.x ∧
-    eval env (varFromOffset U32 4) = curr.y ∧
-    eval env (varFromOffset U32 8) = next.x ∧
-    eval env (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
+    eval env.tape (varFromOffset U32 0) = curr.x ∧
+    eval env.tape (varFromOffset U32 4) = curr.y ∧
+    eval env.tape (varFromOffset U32 8) = next.x ∧
+    eval env.tape (U32.mk (var ⟨16⟩) (var ⟨18⟩) (var ⟨20⟩) (var ⟨22⟩)) = next.y
   := by
   intro env
   dsimp only [env, windowEnv]
@@ -151,8 +151,8 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environmen
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
   simp only [and_imp]
-  have hx : eval env (varFromOffset U32 0) = first_row.x := rfl
-  have hy : eval env (varFromOffset U32 4) = first_row.y := rfl
+  have hx : eval env.tape (varFromOffset U32 0) = first_row.x := rfl
+  have hy : eval env.tape (varFromOffset U32 4) = first_row.y := rfl
   rw [hx, hy]
   clear hx hy
   intro x_zero y_one

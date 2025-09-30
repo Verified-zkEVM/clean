@@ -67,14 +67,14 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
 
     -- characterize inputs
-    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
+    replace h_inputs : x_var.eval env.tape = x ∧ y_var.eval env.tape = y ∧ carry_in_var.eval env.tape = carry_in := by
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
     simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable]
 
-    set z := env.get i0
-    set carry_out := env.get (i0 + 1)
+    set z := env.tape.get i0
+    set carry_out := env.tape.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     -- now it's just mathematics!
@@ -92,15 +92,15 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
-    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
+    replace h_inputs : x_var.eval env.tape = x ∧ y_var.eval env.tape = y ∧ carry_in_var.eval env.tape = carry_in := by
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
     simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
 
     obtain ⟨hz, hcarry_out⟩ := h_env
-    set z := env.get i0
-    set carry_out := env.get (i0 + 1)
+    set z := env.tape.get i0
+    set carry_out := env.tape.get (i0 + 1)
 
     -- now it's just mathematics!
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in

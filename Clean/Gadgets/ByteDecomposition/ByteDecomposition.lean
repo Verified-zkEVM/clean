@@ -53,8 +53,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   clear h_input
 
   obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
-  set low := env.get i0
-  set high := env.get (i0 + 1)
+  set low := env.tape.get i0
+  set high := env.tape.get (i0 + 1)
 
   have : 2^16 < p := by linarith [p_large_enough.elim]
   let n : ℕ := 8 - offset.val

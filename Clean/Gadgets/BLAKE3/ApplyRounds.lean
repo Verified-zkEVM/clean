@@ -370,7 +370,7 @@ lemma applyRounds_eq_applySevenRounds
 
 lemma eval_decomposeNatExpr_small (env : Environment (F p)) (x : ℕ) :
     x < 256^4 ->
-    (eval env (U32.decomposeNatExpr x)).value = x := by
+    (eval env.tape (U32.decomposeNatExpr x)).value = x := by
   intro _
   simp only [U32.decomposeNatExpr]
   apply U32.value_of_decomposedNat_of_small
@@ -463,20 +463,20 @@ lemma initial_state_and_messages_are_normalized
     (input_var : Var Inputs (F p))
     (block_words : BLAKE3State (F p))
     (chaining_value counter_high counter_low block_len flags)
-    (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
+    (h_input : eval env.tape input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
-    (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
+    (eval env.tape (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
   provable_struct_simp
 
   -- Helper to prove normalization of chaining value elements
-  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var_chaining_value[i]).Normalized := by
+  have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env.tape input_var_chaining_value[i]).Normalized := by
     simp_all only [circuit_norm, eval_vector_eq_get]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
-  have h_state_normalized : (eval env state_vec).Normalized := by
+  have h_state_normalized : (eval env.tape state_vec).Normalized := by
     simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
     intro i
     fin_cases i

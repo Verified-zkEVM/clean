@@ -20,8 +20,8 @@ def toVar : Expression F → Circuit F (Variable F)
 
 def getOffset : Circuit F ℕ := fun n => (n, [])
 
-def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (env : Environment F) : α F :=
-  fromElements <| .mapRange _ fun i => env.get (offset + i)
+def computeValueFromOffset (α : TypeMap) [ProvableType α] (offset : ℕ) (tape : Tape F) : α F :=
+  fromElements <| .mapRange _ fun i => tape.get (offset + i)
 
 def ProvableType.witnessAny (α: TypeMap) [ProvableType α] : Circuit F (Var α F) := do
   let offset ← getOffset

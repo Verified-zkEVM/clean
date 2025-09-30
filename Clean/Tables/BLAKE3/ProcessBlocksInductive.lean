@@ -95,7 +95,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     simp only [ProcessBlocksState.Normalized] at h_spec
     constructor
     · rintro ⟨i, h_i⟩
-      have : (eval env input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
+      have : (eval env.tape input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
       simp only [eval_vector] at this
       simp only [Vector.getElem_map] at this
       simp only [this]
@@ -239,15 +239,15 @@ Shows that the step correctly processes a block using processBlockWords.
 private lemma step_process_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
-    (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
+    (h_eval : eval env.tape acc_var = acc ∧ eval env.tape x_var = x)
     (h_x : x.block_exists = 1)
     (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
-    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
+    (eval env.tape ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
-    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+    (eval env.tape ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
   simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
     Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds

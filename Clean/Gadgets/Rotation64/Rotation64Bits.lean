@@ -71,7 +71,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
     rw [tsub_le_iff_right, le_add_iff_nonneg_right]; apply zero_le
 
   -- capture the rotation relation in terms of byte vectors
-  set y := eval env (output offset i0)
+  set y := eval env.tape (output offset i0)
   set xs := x.toLimbs
   set ys := y.toLimbs
   set o := offset.val
@@ -81,8 +81,8 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
       ys[i].val = xs[i].val / 2^o + (xs[(i + 1) % 8].val % 2^o) * 2^(8-o) := by
     simp only [ys, y, output, U64.ByteVector.eval_fromLimbs, U64.ByteVector.toLimbs_fromLimbs,
       Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
-    set high := env.get (i0 + i * 2 + 1)
-    set next_low := env.get (i0 + (i + 1) % 8 * 2)
+    set high := env.tape.get (i0 + i * 2 + 1)
+    set next_low := env.tape.get (i0 + (i + 1) % 8 * 2)
     have ⟨⟨_, high_eq⟩, ⟨_, high_lt⟩⟩ := h_holds i hi
     have ⟨⟨next_low_eq, _⟩, ⟨next_low_lt, _⟩⟩ := h_holds ((i + 1) % 8) (Nat.mod_lt _ (by norm_num))
     have next_low_lt' : next_low.val < 2^(8 - (8 - o)) := by rw [Nat.sub_sub_self offset.is_le']; exact next_low_lt

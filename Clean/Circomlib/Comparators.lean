@@ -104,9 +104,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rw [← h_input]
     simp only [id_eq]
 
-    have h1 : Expression.eval env input_var.1 = input.1 := by
+    have h1 : Expression.eval env.tape input_var.1 = input.1 := by
       rw [← h_input]
-    have h2 : Expression.eval env input_var.2 = input.2 := by
+    have h2 : Expression.eval env.tape input_var.2 = input.2 := by
       rw [← h_input]
 
     rw [h1, h2] at h_holds

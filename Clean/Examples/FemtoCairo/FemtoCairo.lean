@@ -543,9 +543,9 @@ def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
     simp_all only [gt_iff_lt]
 
     -- give names to the next state for readability
-    set pc_next := env.get i₀
-    set ap_next := env.get (i₀ + 1)
-    set fp_next := env.get (i₀ + 2)
+    set pc_next := env.tape.get i₀
+    set ap_next := env.tape.get (i₀ + 1)
+    set fp_next := env.tape.get (i₀ + 2)
 
     -- case analysis on the instruction type
     rcases h_assumptions with isAdd_cases | isMul_cases | isStoreState_cases | isLoadState_cases

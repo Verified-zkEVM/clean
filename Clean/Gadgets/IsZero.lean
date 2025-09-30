@@ -42,14 +42,14 @@ lemma for soundness. Separate because the statement is optimized for induction.
 -/
 lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
     {env : Environment F} {i₀ : ℕ}
-    (h_eval : Vector.map (Expression.eval env) vars = vals)
+    (h_eval : Vector.map (Expression.eval env.tape) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
-        IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
-          (Expression.eval (F:=F) env
+      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env.tape vars[i]) →
+        IsZeroField.circuit.Spec (Expression.eval (F:=F) env.tape vars[i])
+          (Expression.eval (F:=F) env.tape
             (IsZeroField.circuit.output vars[i]
               (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
-    Expression.eval env
+    Expression.eval env.tape
       (Fin.foldl n
         (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
         1) =
@@ -62,7 +62,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     simp only [Fin.foldl_succ_last, Expression.eval]
     let vars_pre := vars.take pre |>.cast (by simp : min pre (pre + 1) = pre)
     let vals_pre := vals.take pre |>.cast (by simp : min pre (pre + 1) = pre)
-    have h_eval_pre : Vector.map (Expression.eval env) vars_pre = vals_pre := by
+    have h_eval_pre : Vector.map (Expression.eval env.tape) vars_pre = vals_pre := by
       simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
         Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl, Vector.map_pop,
         vals_pre, vars_pre, h_eval]

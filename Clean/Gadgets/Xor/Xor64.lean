@@ -120,7 +120,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Assumptions, circuit_norm, U64.Normalized] at as
   simp only [h_input, circuit_norm, main, ByteXorTable,
     explicit_provable_type, Fin.forall_iff] at h_env ⊢
-  have h_env0 : env.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
+  have h_env0 : env.tape.get i0 = ↑(ZMod.val x0 ^^^ ZMod.val y0) := by simpa using h_env 0
   simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U64 where
