@@ -157,7 +157,7 @@ lemma localLength_append {F} {a b: List (FlatOperation F)} :
   | case1 => simp only [List.nil_append, localLength]; ac_rfl
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, ih]; ac_rfl
-  | case3 _ _ ih | case4 _ _ ih =>
+  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
 theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
@@ -183,6 +183,8 @@ lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {tape : Tape F} :
     Array.empty_append]
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, Vector.toArray_append, ih, Array.append_assoc]
+  | case5 _ _ ih =>
+    simp only [List.cons_append, localLength, localWitnesses, ih]
   | case3 _ _ ih | case4 _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, ih]
 
@@ -204,7 +206,7 @@ lemma localLength_toFlat {ops : Operations F} :
       specialize ih' (n - m') (by rw [←ih]; omega)
       simp_all +arith only [localLength_append, localLength]
       try omega
-    | case3 ops _ ih' | case4 ops _ ih' =>
+    | case3 ops _ ih' | case4 ops _ ih' | case5 ops _ ih' =>
       simp_all only [localLength_append, forall_eq', localLength]
 
 /--
@@ -256,6 +258,9 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops 
   | witness m _ _ ih =>
     rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
     trivial
+  | yield _ _ ih =>
+    simp [UsesLocalWitnessesFlat, FlatOperation.forAll, localWitnesses]
+    exact ih n
   | assert | lookup =>
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
@@ -440,7 +445,7 @@ theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : List (FlatOperation
   | nil => simp [forAll_empty]
   | cons op ops ih =>
     specialize ih (op.singleLocalLength + n)
-    cases op <;> simp_all [forAll_cons, Condition.applyFlat]
+    cases op <;> simp_all [forAll_cons, Condition.applyFlat, singleLocalLength]
 end FlatOperation
 
 namespace Operations
@@ -511,7 +516,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
   | cons op ops ih =>
     simp only [forAll_cons] at h_computable ⊢
     cases op with
-    | assert | lookup  =>
+    | assert | lookup | yield =>
       simp only [dynamicWitnesses_cons, dynamicWitness, List.append_nil, Condition.applyFlat,
         singleLocalLength, FlatOperation.proverTape, Tape.fromList, zero_add] at h_computable ⊢
       constructor
@@ -528,7 +533,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       clear ih
       replace h_computable := fun tape tape' => (h_computable tape tape').left
       intro i
-      simp only [proverEnvironment, proverTape, Tape.fromList]
+      simp only [proverTape, Tape.fromList]
       rw [getElem?_dynamicWitnesses_cons_right i.is_lt]
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
@@ -576,7 +581,7 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
     specialize h_ih h_tape
     clear ih
     cases op with
-    | assert | lookup =>
+    | assert | lookup | yield =>
       simp_all only [Condition.applyFlat, localWitnesses]
     | witness m c =>
       simp_all only [Condition.applyFlat, localWitnesses,

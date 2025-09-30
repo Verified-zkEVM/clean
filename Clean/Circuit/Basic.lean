@@ -427,6 +427,7 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .witness _ compute => (compute (Tape.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .yield _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
@@ -478,6 +479,7 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (T
   | .witness m c :: ops => Vector.mapFinRange m (fun i (tape : Tape F) => (c tape)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Tape F → F) ops.localLength
   | [] => #v[]

@@ -39,11 +39,18 @@ instance : ToJson (Lookup F) where
     ("entry", toJson l.entry.toArray),
   ]
 
+instance : ToJson (NamedList (Expression F)) where
+  toJson nl := Json.mkObj [
+    ("name", toJson nl.name),
+    ("value", toJson nl.value.toArray)
+  ]
+
 instance : ToJson (FlatOperation F) where
   toJson
     | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
     | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
+    | FlatOperation.yield nl => Json.mkObj [("yield", toJson nl)]
 
 instance : ToJson (Operation F) where
   toJson

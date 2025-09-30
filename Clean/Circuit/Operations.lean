@@ -16,6 +16,7 @@ inductive FlatOperation (F : Type) where
   | witness : (m : ℕ) → (Tape F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
+  | yield : NamedList (Expression F) → FlatOperation F
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
@@ -23,6 +24,7 @@ instance [Repr F] : Repr (FlatOperation F) where
   | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
   | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l, _ => reprStr l
+  | yield nl, _ => "(Yield " ++ reprStr nl ++ ")"
 
 /--
 What it means that "constraints hold" on a list of flat operations:
@@ -41,13 +43,13 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
 def localLength : List (FlatOperation F) → ℕ
   | [] => 0
   | witness m _ :: ops => m + localLength ops
-  | assert _ :: ops | lookup _ :: ops => localLength ops
+  | assert _ :: ops | lookup _ :: ops | yield _ :: ops => localLength ops
 
 @[circuit_norm]
 def localWitnesses (tape : Tape F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
   | witness _ compute :: ops => compute tape ++ localWitnesses tape ops
-  | assert _ :: ops | lookup _ :: ops => localWitnesses tape ops
+  | assert _ :: ops | lookup _ :: ops | yield _ :: ops => localWitnesses tape ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
@@ -55,12 +57,14 @@ def induct {motive : List (FlatOperation F) → Sort*}
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
   (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
+  (yield : ∀ nl ops, motive ops → motive (.yield nl :: ops))
     (ops : List (FlatOperation F)) : motive ops :=
   match ops with
   | [] => empty
-  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup ops)
-  | .assert e :: ops => assert e ops (induct empty witness assert lookup ops)
-  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup ops)
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup yield ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup yield ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup yield ops)
+  | .yield nl :: ops => yield nl ops (induct empty witness assert lookup yield ops)
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
@@ -213,6 +217,7 @@ structure Condition (F : Type) [Field F] where
   witness (offset : ℕ) : (m : ℕ) → (Tape F → Vector F m) → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
+  yield (offset : ℕ) (_ : NamedList (Expression F)) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 @[circuit_norm]
@@ -226,6 +231,7 @@ def Condition.implies (c c': Condition F) : Condition F where
   witness n m compute := c.witness n m compute → c'.witness n m compute
   assert offset e := c.assert offset e → c'.assert offset e
   lookup offset l := c.lookup offset l → c'.lookup offset l
+  yield offset nl := c.yield offset nl → c'.yield offset nl
   subcircuit offset _ s := c.subcircuit offset s → c'.subcircuit offset s
 
 namespace Operations
@@ -292,17 +298,20 @@ def Condition.applyFlat (condition : Condition F) (offset : ℕ) : FlatOperation
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
+  | .yield nl => condition.yield offset nl
 
 def FlatOperation.singleLocalLength : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
+  | .yield _ => 0
 
 def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
+  | .yield nl :: ops => condition.yield offset nl ∧ forAll offset condition ops
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops } ops
