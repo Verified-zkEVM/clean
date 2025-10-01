@@ -82,9 +82,10 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
 
   have implied_by_completeness : ∀ env : Environment F,
       env.tape.ExtendsVector (FlatOperation.localWitnesses env.tape ops.toFlat) n →
+      FlatOperation.localYields env.tape ops.toFlat ⊆ env.yielded →
       circuit.Assumptions (eval env.tape input_var) → ConstraintsHoldFlat env ops.toFlat := by
     -- we are given that the assumptions are true
-    intro env h_env
+    intro env h_env h_yields
     let input := eval env.tape input_var
     intro (as : circuit.Assumptions input)
 
@@ -93,7 +94,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
       constructor
       · exact h_env
-      · sorry
+      · exact h_yields
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
@@ -115,9 +116,9 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     imply_soundness
     implied_by_completeness
     imply_usesLocalWitnesses := by
-      intro env h_env as
+      intro env h_env h_yields as
       -- by completeness, the constraints hold
-      have h_holds := implied_by_completeness env h_env as
+      have h_holds := implied_by_completeness env h_env h_yields as
       -- by soundness, this implies the spec
       exact imply_soundness env h_holds as
 
@@ -158,25 +159,22 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
 
     implied_by_completeness := by
       -- we are given that the assumptions and the spec are true
-      intro env h_env h_completeness
+      intro env h_env h_yields h_completeness
 
-      let input := eval env.tape input_var
-      have as : circuit.Assumptions input ∧ circuit.Spec input := h_completeness
-
-      have h_env : env.UsesLocalWitnesses n ops := by
+      have h_env' : env.UsesLocalWitnesses n ops := by
         guard_hyp h_env : env.tape.ExtendsVector (FlatOperation.localWitnesses env.tape ops.toFlat) n
         rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
         constructor
         · exact h_env
-        · sorry
-      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
+        · exact h_yields
+      have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env'
 
       -- by completeness of the circuit, this means we can make the constraints hold
-      have h_holds := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
+      have h_holds := circuit.completeness n env input_var h_env_completeness _ rfl h_completeness.left h_completeness.right
 
       -- so we just need to go from constraints to flattened constraints
       apply constraintsHold_toFlat_iff.mpr
-      exact can_replace_completeness h_consistent h_env h_holds
+      exact can_replace_completeness h_consistent h_env' h_holds
 
     imply_usesLocalWitnesses := by intros; exact trivial
 
@@ -203,14 +201,15 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
 
   have implied_by_completeness : ∀ env : Environment F,
       env.tape.ExtendsVector (FlatOperation.localWitnesses env.tape ops.toFlat) n →
+      FlatOperation.localYields env.tape ops.toFlat ⊆ env.yielded →
       circuit.Assumptions (eval env.tape input_var) → ConstraintsHoldFlat env ops.toFlat := by
-    intro env h_env assumptions
+    intro env h_env h_yields assumptions
     set input := eval env.tape input_var
     have h_env_full : env.UsesLocalWitnesses n ops := by
       rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
       constructor
       · exact h_env
-      · sorry
+      · exact h_yields
     rw [constraintsHold_toFlat_iff]
     apply can_replace_completeness h_consistent h_env_full
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env_full
@@ -226,9 +225,9 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
 
     imply_soundness
     implied_by_completeness
-    imply_usesLocalWitnesses env h_env assumptions :=
+    imply_usesLocalWitnesses env h_env h_yields assumptions :=
       -- constraints hold by completeness, which implies the spec by soundness
-      implied_by_completeness env h_env assumptions |> imply_soundness env
+      implied_by_completeness env h_env h_yields assumptions |> imply_soundness env
 
     localLength_eq := by
       rw [← circuit.localLength_eq input_var n, FlatOperation.localLength_toFlat]

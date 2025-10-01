@@ -111,10 +111,12 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.tape.ExtendsVector (localWitnesses env.tape ops) offset →
+    localYields env.tape ops ⊆ env.yielded →
     Completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
   imply_usesLocalWitnesses : ∀ env, env.tape.ExtendsVector (localWitnesses env.tape ops) offset →
+    localYields env.tape ops ⊆ env.yielded →
     UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations

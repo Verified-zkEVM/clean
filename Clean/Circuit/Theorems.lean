@@ -300,8 +300,10 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
     apply circuit.imply_usesLocalWitnesses
-    have := usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
-    exact this.mp h.left |>.left
+    · have := usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
+      exact this.mp h.left |>.left
+    · have := usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
+      exact this.mp h.left |>.right
 
 theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
@@ -371,9 +373,8 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env ?_ h_compl.left
-    have := Environment.usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
-    exact this.mp h_env.left |>.left
+    have this := Environment.usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
+    apply circuit.implied_by_completeness env (this.mp h_env.left |>.left) (this.mp h_env.left |>.right) h_compl.left
 end Circuit
 
 namespace Circuit
