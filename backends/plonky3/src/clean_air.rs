@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder, VirtualPairCol};
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PairBuilder};
 use p3_field::{Field, PrimeCharacteristicRing};
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
@@ -9,8 +9,7 @@ use p3_matrix::Matrix;
 use crate::clean_ast::{
     AstUtils, BoundaryRow, CircuitOp, CleanOp, CleanOps, LookupOp, LookupRow, VarLocation,
 };
-use crate::key::VK;
-use crate::{BaseMessageBuilder, ByteRangeAir, Lookup, StarkGenericConfig, VerifyingKey};
+use crate::{BaseMessageBuilder, ByteRangeAir, Lookup};
 
 #[derive(Clone)]
 pub struct MainAir<F>
