@@ -564,13 +564,10 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       · specialize ih init (by aesop)
         apply forAll_implies _ _ ih
         apply forAll_True
-        constructor
+        and_intros
         · intro _ _ _ h; exact h
-        constructor
         · intro _ _ _; trivial
-        constructor
         · intro _ _ _; trivial
-        constructor
         · intro _ _ h_in
           simp only [collectYielded, yieldSet, Set.mem_iUnion] at h_in ⊢
           obtain ⟨op, h_in_op⟩ := h_in
@@ -589,13 +586,10 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
         simp [FlatOperation.proverTape] at ih_applied ⊢
         apply forAll_implies _ _ ih_applied
         apply forAll_True
-        constructor
+        and_intros
         · intro _ _ _ h; exact h
-        constructor
         · intro _ _ _; trivial
-        constructor
         · intro _ _ _; trivial
-        constructor
         · intro _ _ h_in
           simp only [collectYielded, yieldSet, Set.mem_iUnion] at h_in ⊢
           obtain ⟨op, h_in_op⟩ := h_in
