@@ -49,6 +49,19 @@ def eval (tape : Tape F) : Expression F → F
   | add x y => eval tape x + eval tape y
   | mul x y => eval tape x * eval tape y
 
+end Expression
+
+namespace NamedList
+variable [Field F]
+
+def eval (nl : NamedList (Expression F)) (tape : Tape F) : NamedList F :=
+  { name := nl.name, value := nl.value.map (Expression.eval tape) }
+
+end NamedList
+
+namespace Expression
+variable [Field F]
+
 def toString [Repr F] : Expression F → String
   | var v => reprStr v
   | const c => reprStr c

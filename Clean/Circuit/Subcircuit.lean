@@ -49,7 +49,7 @@ theorem Circuit.constraintsHold_toFlat_iff : ∀ {ops : Operations F}, ∀ {env 
   induction ops using Operations.induct with
   | empty => trivial
   -- we can handle all non-empty cases at once
-  | witness | assert | lookup | subcircuit =>
+  | witness | assert | lookup | yield | subcircuit =>
     dsimp only [Operations.toFlat]
     try rw [constraintsHold_cons]
     try rw [constraintsHold_append]
@@ -91,7 +91,9 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     have h_env : env.UsesLocalWitnesses n ops := by
       guard_hyp h_env : env.tape.ExtendsVector (FlatOperation.localWitnesses env.tape ops.toFlat) n
       rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
-      exact h_env
+      constructor
+      · exact h_env
+      · sorry
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
     -- by completeness of the circuit, this means we can make the constraints hold
@@ -164,7 +166,9 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       have h_env : env.UsesLocalWitnesses n ops := by
         guard_hyp h_env : env.tape.ExtendsVector (FlatOperation.localWitnesses env.tape ops.toFlat) n
         rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
-        exact h_env
+        constructor
+        · exact h_env
+        · sorry
       have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
 
       -- by completeness of the circuit, this means we can make the constraints hold
@@ -202,10 +206,14 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
       circuit.Assumptions (eval env.tape input_var) → ConstraintsHoldFlat env ops.toFlat := by
     intro env h_env assumptions
     set input := eval env.tape input_var
-    rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
+    have h_env_full : env.UsesLocalWitnesses n ops := by
+      rw [env.usesLocalWitnesses_iff_flat, env.usesLocalWitnessesFlat_iff_extends]
+      constructor
+      · exact h_env
+      · sorry
     rw [constraintsHold_toFlat_iff]
-    apply can_replace_completeness h_consistent h_env
-    have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
+    apply can_replace_completeness h_consistent h_env_full
+    have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env_full
     apply circuit.completeness n env input_var h_env_completeness input rfl assumptions
 
   {
@@ -314,7 +322,8 @@ lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
   simp only [Condition.implies, Condition.ignoreSubcircuit, imp_self]
   induction ops using FlatOperation.induct generalizing n with
   | empty => trivial
-  | assert | lookup | yield => simp_all [FlatOperation.forAll]
+  | assert | lookup => simp_all [FlatOperation.forAll]
+  | yield => simp_all [FlatOperation.forAll]; sorry
   | witness m c ops ih =>
     simp_all only [FlatOperation.forAll, forall_const, implies_true, true_and]
     apply ih (m + n)

@@ -148,6 +148,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup { table, entry, .. } :: ops =>
     table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
+  | .yield _ :: ops => ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
 
@@ -161,6 +162,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .assert e :: ops => eval.tape e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup { table, entry } :: ops =>
     table.Soundness (entry.map eval.tape) ∧ ConstraintsHold.Soundness eval ops
+  | .yield _ :: ops => ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
 
@@ -174,6 +176,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
   | .assert e :: ops => eval.tape e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup { table, entry } :: ops =>
     table.Completeness (entry.map eval.tape) ∧ ConstraintsHold.Completeness eval ops
+  | .yield _ :: ops => ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
@@ -186,7 +189,10 @@ for all variables declared locally within the circuit.
 This is the condition needed to prove completeness of a circuit.
 -/
 def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
-  ops.forAllFlat offset { witness n _ compute := env.tape.ExtendsVector (compute env.tape) n }
+  ops.forAllFlat offset {
+    witness n _ compute := env.tape.ExtendsVector (compute env.tape) n,
+    yield _ nl := nl.eval env.tape ∈ env.yielded
+  }
 
 /--
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
@@ -197,11 +203,15 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : �
   | .witness m c :: ops => env.tape.ExtendsVector (c env.tape) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .yield nl :: ops => nl.eval env.tape ∈ env.yielded ∧ env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.tape.ExtendsVector (compute env.tape) n } ops
+  FlatOperation.forAll n {
+    witness n _ compute := env.tape.ExtendsVector (compute env.tape) n,
+    yield _ nl := nl.eval env.tape ∈ env.yielded
+  } ops
 
 section
 open Circuit (ConstraintsHold)
@@ -437,6 +447,27 @@ def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F
 def FlatOperation.proverTape (ops : List (FlatOperation F)) (init : List F) : Tape F :=
   Tape.fromList (FlatOperation.dynamicWitnesses ops init)
 
+/-- Helper: Extract the set from an operation -/
+def FlatOperation.yieldSet (op : FlatOperation F) (tape : Tape F) : Set (NamedList F) :=
+  match op with | .yield nl => {nl.eval tape} | _ => ∅
+
+/-- Collect all yielded values from flat operations -/
+def FlatOperation.collectYielded (ops : List (FlatOperation F)) (tape : Tape F) : Set (NamedList F) :=
+  ⋃ op ∈ ops, op.yieldSet tape
+
+lemma FlatOperation.collectYielded_cons_yield (nl : NamedList (Expression F)) (ops : List (FlatOperation F)) (tape : Tape F) :
+    collectYielded (yield nl :: ops) tape = {nl.eval tape} ∪ collectYielded ops tape := by
+  simp only [collectYielded, yieldSet]
+  ext x
+  simp [Set.mem_iUnion, List.mem_cons]
+
+lemma FlatOperation.collectYielded_subset_cons (op : FlatOperation F) (ops : List (FlatOperation F)) (tape : Tape F) :
+    collectYielded ops tape ⊆ collectYielded (op :: ops) tape := by
+  intro x h
+  simp only [collectYielded, Set.mem_iUnion] at h ⊢
+  obtain ⟨op', h_mem, h_in⟩ := h
+  exact ⟨op', List.mem_cons_of_mem op h_mem, h_in⟩
+
 def Tape.AgreesBelow (n : ℕ) (tape tape' : Tape F) :=
   ∀ i < n, tape.get i = tape'.get i
 
@@ -448,7 +479,10 @@ A circuit has _computable witnesses_ when witness generators only depend on the 
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (tape tape' : Tape F) : Prop :=
-  ops.forAllFlat n { witness n _ compute := tape.AgreesBelow n tape' → compute tape = compute tape' }
+  ops.forAllFlat n {
+    witness n _ compute := tape.AgreesBelow n tape' → compute tape = compute tape',
+    yield _ nl := nl.eval tape = nl.eval tape'
+  }
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
   ∀ tape tape', (circuit.operations n).ComputableWitnesses n tape tape'
@@ -462,14 +496,15 @@ def Circuit.proverTape (circuit : Circuit F α) (init : List F := []) : Tape F :
   Tape.fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
 
 -- Create a prover environment with the witness tape
--- TODO: instantiate yielded from operations that produce yielded values
 def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
-  { tape := circuit.proverTape init, yielded := {} }
+  let ops := (circuit.operations init.length).toFlat
+  let tape := circuit.proverTape init
+  { tape := tape, yielded := FlatOperation.collectYielded ops tape }
 
 -- Create a prover environment for flat operations
--- TODO: instantiate yielded from operations that produce yielded values
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
-  { tape := FlatOperation.proverTape ops init, yielded := {} }
+  let tape := FlatOperation.proverTape ops init
+  { tape := tape, yielded := FlatOperation.collectYielded ops tape }
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
@@ -486,6 +521,7 @@ def Operations.witnessGenerators : (ops : Operations F) → Vector (Tape F → F
   | .witness m c :: ops => Vector.mapFinRange m (fun i (tape : Tape F) => (c tape)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
 
 -- statements about constant length or output
