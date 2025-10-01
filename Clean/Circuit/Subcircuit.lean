@@ -322,8 +322,7 @@ lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
   simp only [Condition.implies, Condition.ignoreSubcircuit, imp_self]
   induction ops using FlatOperation.induct generalizing n with
   | empty => trivial
-  | assert | lookup => simp_all [FlatOperation.forAll]
-  | yield => simp_all [FlatOperation.forAll]; sorry
+  | assert | lookup | yield => simp_all [FlatOperation.forAll]
   | witness m c ops ih =>
     simp_all only [FlatOperation.forAll, forall_const, implies_true, true_and]
     apply ih (m + n)

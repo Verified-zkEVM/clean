@@ -546,8 +546,7 @@ Flat version of the final theorem in this section, `Circuit.proverEnvironment_us
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (init : List F) :
   (∀ (tape tape' : Tape F),
     forAll init.length {
-      witness n _ c := tape.AgreesBelow n tape' → c tape = c tape',
-      yield _ nl := nl.eval tape = nl.eval tape'
+      witness n _ c := tape.AgreesBelow n tape' → c tape = c tape'
     } ops) →
     (proverEnvironment ops init).UsesLocalWitnessesFlat init.length ops := by
   simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Tape.ExtendsVector]

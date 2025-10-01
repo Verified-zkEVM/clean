@@ -480,8 +480,7 @@ This allows us to compute a concrete environment from witnesses, by successively
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (tape tape' : Tape F) : Prop :=
   ops.forAllFlat n {
-    witness n _ compute := tape.AgreesBelow n tape' → compute tape = compute tape',
-    yield _ nl := nl.eval tape = nl.eval tape'
+    witness n _ compute := tape.AgreesBelow n tape' → compute tape = compute tape'
   }
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
