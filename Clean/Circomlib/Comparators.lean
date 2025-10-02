@@ -255,13 +255,12 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       have : 2 ^ n ≤ 2 ^ (n + 1) := by gcongr; repeat linarith
       exact lt_of_le_of_lt this hn
 
-    by_cases hlt : ZMod.val input.1 < ZMod.val input.2
     have heq: ZMod.val ((2: F p) ^ n) = 2 ^ n := by
       sorry
+    by_cases hlt : ZMod.val input.1 < ZMod.val input.2
+
     -- CASE input.1 < input.2
     simp [hlt]
-
-
 
     have hdiff_lt : ZMod.val (input.1 + 2 ^ n - input.2) < 2^n := by
       rw[ZMod.val_sub]
@@ -310,8 +309,23 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     -- CASE input.1 >= input.2
     simp [hlt]
     have hdiff_ge : ZMod.val (input.1 + 2 ^ n - input.2) >= 2^n := by
-      sorry
-
+      rw[ZMod.val_sub]
+      · rw [ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          calc
+            ZMod.val input.1 + 2 ^ n - ZMod.val input.2 ≥ ZMod.val input.1 + 2 ^ n - ZMod.val input.1 := by omega
+            _ = 2 ^ n := by omega
+        · have easy_lemma: 2 * 2 ^ n = 2 ^ (n + 1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          omega
+        · have easy_lemma: 2 * 2 ^ n = 2 ^ (n + 1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
 
     -- split h_holds to h1 h2 h3
     have h3 := h_holds.right
