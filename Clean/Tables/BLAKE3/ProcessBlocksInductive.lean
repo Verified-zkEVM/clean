@@ -261,16 +261,25 @@ private lemma step_process_block (env : Environment (F p))
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   rcases h_holds with ⟨ h_compress, h_holds ⟩
   specialize h_compress (by
-    simp only [acc_normalized, x_normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]
+    simp only [BLAKE3.ApplyRounds.circuit, circuit_norm]
+    simp only [BLAKE3.ApplyRounds.Assumptions]
     constructor
-    · linarith
-    · split at h_iszero
-      · norm_num at h_iszero ⊢
-        simp only [h_iszero, circuit_norm]
-        omega
-      · norm_num at h_iszero ⊢
-        simp only [h_iszero]
-        norm_num
+    · exact acc_normalized.1
+    constructor
+    · exact x_normalized.2
+    constructor
+    · simp only [circuit_norm]
+      decide
+    constructor
+    · exact acc_normalized.2.1
+    constructor
+    · simp only [circuit_norm]
+      decide
+    · constructor
+      · simp only [circuit_norm]
+        split at h_iszero <;> simp_all [circuit_norm, IsBool]
+      · simp only [circuit_norm]
+        decide
     )
   rcases h_holds with ⟨ h_addition, h_holds ⟩
   specialize h_addition (by
@@ -368,11 +377,10 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     constructor
     · simp_all
     constructor
-    · constructor
-      · simp_all
+    · intro idx
+      simp_all
       constructor
-      · simp only [h_assumptions]
-        trivial
+      · aesop
       simp_all only [circuit_norm]
       constructor
       · omega
@@ -402,20 +410,21 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
-        simp only [h_assumptions]
-        simp only [circuit_norm]
-        constructor
-        · omega
-        constructor
-        · omega
-        constructor
-        · split at h_witnesses_iszero
-          · simp only [h_witnesses_iszero]
-            simp only [circuit_norm]
-            omega
-          · simp only [h_witnesses_iszero]
-            norm_num
-        · norm_num)
+        intro idx
+        simp only [BLAKE3.ApplyRounds.circuit, BLAKE3.ApplyRounds.Assumptions, circuit_norm]
+        and_intros <;> try omega
+        · aesop
+        · aesop
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all only [Nat.reducePow, gt_iff_lt, implies_true, true_and, Fin.getElem_fin,
+          Nat.reduceMul, Nat.reduceAdd, mul_one, forall_const, and_self]
+          split
+          · simp only [ZMod.val_one]; omega
+          · simp only [ZMod.val_zero]; omega
+          )
       simp_all [circuit_norm]
     trivial
 

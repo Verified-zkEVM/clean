@@ -37,13 +37,13 @@ example (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
   = roundConstants.foldl keccakRound state := rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro n env initial_state_var initial_state h_input h_assumptions h_holds
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro n env initial_state_var initial_state h_input idx h_assumptions h_holds
 
   -- simplify
   simp only [main, circuit_norm, Spec,
     KeccakRound.circuit, KeccakRound.elaborated,
-    KeccakRound.Spec, KeccakRound.Assumptions] at h_holds ⊢
+    KeccakRound.Spec, KeccakRound.Assumptions, forall_const] at h_holds ⊢
   simp only [h_input] at h_holds
   obtain ⟨ h_init, h_succ ⟩ := h_holds
   specialize h_init h_assumptions
@@ -74,14 +74,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
       simp
   exact h_inductive 23 (by norm_num)
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
-  dsimp only [Assumptions] at h_assumptions
-  simp only [main, h_input, h_assumptions, circuit_norm, KeccakRound.circuit,
+  have h_assumptions' := h_assumptions ()
+  dsimp only [Assumptions] at h_assumptions'
+  simp only [main, h_input, h_assumptions', circuit_norm, KeccakRound.circuit,
     KeccakRound.elaborated, KeccakRound.Spec,
-    KeccakRound.Assumptions] at h_env ⊢
+    KeccakRound.Assumptions, forall_const] at h_env ⊢
 
   obtain ⟨ h_init, h_succ ⟩ := h_env
   replace h_init := h_init.left
@@ -110,9 +111,11 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState := {
+def circuit : FormalCircuit (F p) KeccakState KeccakState Unit := {
   elaborated with
-  Assumptions, Spec, soundness
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec
+  soundness
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]

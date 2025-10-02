@@ -40,8 +40,8 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   rw [List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro i0 env state_var state h_input idx state_norm h_holds
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -52,11 +52,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [Assumptions, KeccakState.Normalized] at state_norm
   simp only [h_input, state_norm, main, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated] at h_holds ⊢
+    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated, forall_const] at h_holds ⊢
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+  intro i0 env state_var h_env state h_input h_assumptions
+  have state_norm := h_assumptions ()
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
@@ -64,8 +65,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [main, circuit_norm,
-    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
+    Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, forall_const]
 
-def circuit : FormalCircuit (F p) KeccakState KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) KeccakState KeccakState Unit :=
+  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
 end Gadgets.Keccak256.RhoPi

@@ -80,8 +80,8 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   localLength _ := 1
   output _ i := var ⟨i⟩
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_assumptions h_xor
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.tape.get i
@@ -110,7 +110,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rw [two_mul_val, Nat.mul_left_cancel_iff (by linarith)] at two_and
   exact two_and
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -138,7 +138,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   rw [←sub_eq_add_neg, ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-def circuit : FormalCircuit (F p) Inputs field :=
-  { Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) Inputs field Unit :=
+  { Assumptions := fun _ => Assumptions,
+    Spec := fun _ => Spec,
+    soundness,
+    completeness }
 
 end Gadgets.And.And8

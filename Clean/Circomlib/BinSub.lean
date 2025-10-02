@@ -100,7 +100,7 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
 
 -- n: number of bits per operand
 def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout : 2^(n+1) < p) :
-    FormalCircuit (F p) (BinSubInput n) (fields n) where
+    FormalCircuit (F p) (BinSubInput n) (fields n) Unit where
   main input := main n input
 
   localLength _ := n
@@ -112,11 +112,11 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
 
   subcircuitsConsistent := by sorry
 
-  Assumptions input :=
+  Assumptions := fun _ input =>
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
 
-  Spec input output :=
+  Spec := fun _ input output =>
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     -- All output bits are binary

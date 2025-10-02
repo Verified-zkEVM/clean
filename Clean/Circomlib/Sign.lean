@@ -36,15 +36,16 @@ def main (input : Vector (Expression (F p)) 254) :=
   -- Use (p-1)/2 as the constant for comparison
   CompConstant.circuit ((p - 1) / 2) input
 
-def circuit : FormalCircuit (F p) (fields 254) field where
+def circuit : FormalCircuit (F p) (fields 254) field Unit where
   main
-  localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
+  localLength _ := 127 + 1 + 135 + 1
+  localLength_eq := by simp only [circuit_norm, main, CompConstant.circuit]
 
-  Assumptions input :=
+  Assumptions := fun _ input =>
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
 
-  Spec input output :=
+  Spec := fun _ input output =>
     -- The output is 1 if the input (as a number) is greater than (p-1)/2
     -- This effectively checks if the field element is in the "upper half" of the field
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
@@ -53,12 +54,13 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     circuit_proof_start
     -- Proof follows easily from the fact that Sign is a
     -- specialization of CompConstant
-    exact h_holds h_assumptions
+    exact h_holds () h_assumptions
 
   completeness := by
     circuit_proof_start
     -- We're just left to prove CompConstant's assumptions are met
     -- which is trivial by h_assumptions
+    intro _
     exact h_assumptions
 
 end Sign

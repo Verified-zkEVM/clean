@@ -16,11 +16,11 @@ The composite circuit:
 def FormalCircuit.concat
     {F : Type} [Field F]
     {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
-    (circuit1 : FormalCircuit F Input Mid)
-    (circuit2 : FormalCircuit F Mid Output)
-    (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
+    (circuit1 : FormalCircuit F Input Mid Unit)
+    (circuit2 : FormalCircuit F Mid Output Unit)
+    (h_compat : ∀ input mid, circuit1.Assumptions () input → circuit1.Spec () input mid → circuit2.Assumptions () mid)
     (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
-    FormalCircuit F Input Output := {
+    FormalCircuit F Input Output Unit := {
   elaborated := {
     main := (circuit1 · >>= circuit2)
     localLength input := circuit1.localLength input + circuit2.localLength (circuit1.output input 0)
@@ -37,8 +37,8 @@ def FormalCircuit.concat
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
   }
-  Assumptions := circuit1.Assumptions
-  Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
+  Assumptions := fun _ => circuit1.Assumptions ()
+  Spec := fun _ input output => ∃ mid, circuit1.Spec () input mid ∧ circuit2.Spec () mid output
   soundness := by
     simp only [Soundness]
     intros
@@ -72,20 +72,20 @@ The requirements are:
 def FormalCircuit.weakenSpec
     {F : Type} [Field F]
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : FormalCircuit F Input Output)
+    (circuit : FormalCircuit F Input Output Unit)
     (WeakerSpec : Input F → Output F → Prop)
     (h_spec_implication : ∀ input output,
-      circuit.Assumptions input →
-      circuit.Spec input output →
+      circuit.Assumptions () input →
+      circuit.Spec () input output →
       WeakerSpec input output) :
-    FormalCircuit F Input Output := {
+    FormalCircuit F Input Output Unit := {
   elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
-  Spec := WeakerSpec
+  Spec := fun _ => WeakerSpec
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
+    intro offset env input_var input h_eval idx h_assumptions h_holds
     -- Use the original circuit's soundness
-    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds
+    have h_strong_spec := circuit.soundness offset env input_var input h_eval () h_assumptions h_holds
     -- Apply the implication to get the weaker spec
     exact h_spec_implication input _ h_assumptions h_strong_spec
   completeness := by

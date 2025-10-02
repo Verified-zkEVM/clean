@@ -49,12 +49,12 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   main
   localLength _ := 0
 
-theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
+theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Unit (fun _ => Assumptions) (fun _ => Spec) := by
   circuit_proof_start
   rcases input
   simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
-  simp only at h_assumptions
+  simp only [Assumptions, IsBool] at h_assumptions
 
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
@@ -76,16 +76,16 @@ theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assum
     simp only [if_true]
     ring_nf
 
-theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Assumptions := by
+theorem completeness [DecidableEq F] : Completeness F (elaborated (F:=F) (M:=M)) Unit (fun _ => Assumptions) := by
   circuit_proof_start
 
 /--
 Conditional selection. Computes: selector * ifTrue + (1 - selector) * ifFalse
 -/
-def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
+def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M Unit where
   elaborated := elaborated
-  Assumptions
-  Spec
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec
   soundness
   completeness
 

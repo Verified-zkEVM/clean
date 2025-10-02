@@ -97,8 +97,8 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env.tape x = eval env.tape y) := by
+theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) (idx : Unit) :
+    ((circuit α).toSubcircuit n (x, y)).Soundness idx env = (eval env.tape x = eval env.tape y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]

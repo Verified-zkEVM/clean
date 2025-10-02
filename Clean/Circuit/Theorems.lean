@@ -139,7 +139,7 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    exact ⟨ fun idx => circuit.imply_soundness idx env h.left, ih h.right ⟩
 
 end Circuit
 
@@ -341,7 +341,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
     use _ nl := nl.eval env.tape ∈ env.yielded,
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := ∀ idx, s.Soundness idx env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
@@ -418,7 +418,7 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
     use _ nl := nl.eval env.tape ∈ env.yielded,
-    subcircuit _ _ s := s.Soundness env
+    subcircuit _ _ s := ∀ idx, s.Soundness idx env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
@@ -695,21 +695,21 @@ end FlatOperation
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
 def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
-    (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
+    {SoundnessIndex : Type} (orig : FormalCircuit F Input Output SoundnessIndex): GeneralFormalCircuit F Input Output := by
+  let Spec input output := ∀ idx, orig.Assumptions idx input → orig.Spec idx input output
   exact {
     elaborated := orig.elaborated,
-    Assumptions := orig.Assumptions,
+    Assumptions := fun input => ∀ idx, orig.Assumptions idx input,
     Spec,
     soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
+      intro offset env input_var input h_input h_holds
+      dsimp [Spec]
+      intro idx h_assumptions_idx
+      exact orig.soundness offset env input_var input h_input idx h_assumptions_idx h_holds
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      intros
-      apply orig.completeness <;> trivial
+      intro offset env input_var h_env input h_input h_assumptions
+      exact orig.completeness offset env input_var h_env input h_input h_assumptions
   }
 
 /--

@@ -63,7 +63,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
   -- simplify circuit further
@@ -103,7 +103,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -151,9 +151,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
-  Assumptions
-  Spec
+def circuit : FormalCircuit (F p) Inputs Outputs Unit where
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec
   soundness
   completeness
 end Gadgets.Addition32Full

@@ -61,8 +61,8 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
+theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Unit (fun _ => Assumptions) (fun _ => Spec off) := by
+  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs idx as h
 
   have h_x0 : x0_var.eval env.tape = x0 := by injections h_inputs
   have h_x1 : x1_var.eval env.tape = x1 := by injections h_inputs
@@ -83,15 +83,15 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
+theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Unit (fun _ => Assumptions) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [main, circuit_norm]
 
-def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
+def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 Unit := {
   elaborated off with
   main := main off
-  Assumptions
-  Spec := Spec off
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec off
   soundness := soundness off
   completeness := completeness off
 }

@@ -90,8 +90,8 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   localLength _ := 1
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.tape.get i
@@ -130,7 +130,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   show Nat.bitwise _ _ _ < 2 ^ 8
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -183,7 +183,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   · omega
   · omega
 
-def circuit : FormalCircuit (F p) Inputs field :=
-  { Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) Inputs field Unit :=
+  { Assumptions := fun _ => Assumptions,
+    Spec := fun _ => Spec,
+    soundness,
+    completeness }
 
 end Gadgets.Or.Or8

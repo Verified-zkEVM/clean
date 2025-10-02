@@ -97,13 +97,13 @@ A flat list of circuit operations, instantiated at a certain offset.
 To enable composition of formal proofs, subcircuits come with custom `Soundness` and `Completeness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
-structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
+structure Subcircuit (F : Type) [Field F] (offset : ℕ) (SoundnessIndex : Type := Unit) where
   ops : List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness : Environment F → Prop
+  Soundness : (idx : SoundnessIndex) → Environment F → Prop
   Completeness : Environment F → Prop
   UsesLocalWitnesses : Environment F → Prop
 
@@ -112,8 +112,8 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   localLength : ℕ
 
   -- `Soundness` needs to follow from the constraints for any witness
-  imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops → Soundness env
+  imply_soundness : ∀ idx env,
+    ConstraintsHoldFlat env ops → Soundness idx env
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
   implied_by_completeness : ∀ env, env.tape.ExtendsVector (localWitnesses env.tape ops) offset →

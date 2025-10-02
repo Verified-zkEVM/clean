@@ -37,19 +37,19 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a + b - 2*a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
+  Spec := fun _ input output =>
     output.val = input.1.val ^^^ input.2.val
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env idx ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only
@@ -79,19 +79,19 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
+  Spec := fun _ input output =>
     output.val = input.1.val &&& input.2.val
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env idx ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only
@@ -119,19 +119,19 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a + b - a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
+  Spec := fun _ input output =>
     output.val = input.1.val ||| input.2.val
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env idx ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only
@@ -159,19 +159,19 @@ def main (input : Expression (F p)) := do
   let out <== 1 + inp - 2*inp
   return out
 
-def circuit : FormalCircuit (F p) field field where
+def circuit : FormalCircuit (F p) field field Unit where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := IsBool input
-  Spec input output :=
+  Assumptions := fun _ input => IsBool input
+  Spec := fun _ input output =>
     output.val = 1 - input.val
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ _ _ h_env h_in h_hold
+    rintro _ _ _ _ h_env idx h_in h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rw [h_env] at h_hold
     simp_all only
@@ -201,19 +201,19 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== 1 - a*b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
+  Spec := fun _ input output =>
     output.val = 1 - (input.1.val &&& input.2.val)
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env idx ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only
@@ -243,19 +243,19 @@ def main (input : Expression (F p) × Expression (F p)) := do
   let out <== a*b + 1 - a - b
   return out
 
-def circuit : FormalCircuit (F p) fieldPair field where
+def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
+  Spec := fun _ input output =>
     output.val = 1 - (input.1.val ||| input.2.val)
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env idx ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only
@@ -655,7 +655,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
   have h_and_spec := AND.circuit.soundness offset env (input_var[0], input_var[1])
     (input[0], input[1])
     (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
-    ⟨h_input0, h_input1⟩ h_hold
+    () ⟨h_input0, h_input1⟩ h_hold
 
   rcases h_and_spec with ⟨h_val, h_binary⟩
   constructor
@@ -710,6 +710,7 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
   · subst h_env
     rfl
   · simp only [Assumptions] at h_assumptions
+    intro idx
     constructor
     · have h_eval0 : env input_var[0] = input[0] :=
         by simp[h_env, circuit_norm]
@@ -796,6 +797,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         (out1, out2)
         (env out1, env out2)
         (by simp only [ProvableType.eval_fieldPair])
+        ()
         ⟨by rcases h_spec1 with ⟨_, h_binary1⟩; exact h_binary1,
          by rcases h_spec2 with ⟨_, h_binary2⟩; exact h_binary2⟩
         h_hold'.2.2
@@ -1002,6 +1004,7 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_eval2
               · exact h_assumptions2
 
+            intro idx
             constructor
             · apply main_output_binary_from_completeness n1 offset env input_var1 input1
               · exact h_eval1
@@ -1017,21 +1020,21 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_rest.1
               · exact h_comp2
 
-def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
+def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field Unit where
   main
   localLength _ := n - 1
   localLength_eq := localLength_eq n
   subcircuitsConsistent := subcircuitsConsistent n
 
-  Assumptions := Assumptions n
-  Spec := Spec n
+  Assumptions := fun _ => Assumptions n
+  Spec := fun _ => Spec n
 
   soundness := by
-    intro offset env input_var input h_env h_assumptions h_hold
+    intro offset env input_var input h_env idx h_assumptions h_hold
     exact soundness n offset env input_var input h_env.symm h_assumptions h_hold
   completeness := by
     intro offset env input_var h_local_witnesses input h_env h_assumptions
-    exact completeness n offset env input_var input h_local_witnesses h_env.symm h_assumptions
+    exact completeness n offset env input_var input h_local_witnesses h_env.symm (h_assumptions ())
 
 end MultiAND
 

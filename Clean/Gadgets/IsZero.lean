@@ -44,8 +44,8 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     {env : Environment F} {i₀ : ℕ}
     (h_eval : Vector.map (Expression.eval env.tape) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env.tape vars[i]) →
-        IsZeroField.circuit.Spec (Expression.eval (F:=F) env.tape vars[i])
+      IsZeroField.circuit.Assumptions () (Expression.eval (F:=F) env.tape vars[i]) →
+        IsZeroField.circuit.Spec () (Expression.eval (F:=F) env.tape vars[i])
           (Expression.eval (F:=F) env.tape
             (IsZeroField.circuit.output vars[i]
               (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
@@ -99,7 +99,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · aesop
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Unit (fun _ => Assumptions) (fun _ => Spec) := by
   circuit_proof_start
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
@@ -109,13 +109,20 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff <;> assumption
+  apply foldl_isZero_eq_one_iff
+  · assumption
+  · intro i h_as
+    exact h_holds i () h_as
 
-theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
+theorem completeness : Completeness F (elaborated (M := M)) Unit (fun _ => Assumptions) := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
-def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit [DecidableEq (M F)] : FormalCircuit F M field Unit := {
+  elaborated with
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec
+  soundness
+  completeness
 }
 
 end Gadgets.IsZero

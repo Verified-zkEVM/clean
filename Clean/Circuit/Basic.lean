@@ -166,7 +166,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
   | .yield _ :: ops => ConstraintsHold.Soundness eval ops
   | .use nl :: ops => nl.eval eval.tape ∈ eval.yielded ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+    (∀ idx, s.Soundness idx eval) ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -254,28 +254,28 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 @[circuit_norm]
-def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
+def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (SoundnessIndex : Type := Unit)
+    (Assumptions : (idx : SoundnessIndex) → Input F → Prop) (Spec : (idx : SoundnessIndex) → Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env.tape input_var = input →
-  Assumptions input →
+  ∀ idx : SoundnessIndex, Assumptions idx input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env.tape (circuit.output input_var offset)
-  Spec input output
+  Spec idx input output
 
 @[circuit_norm]
-def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) :=
+def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (SoundnessIndex : Type := Unit)
+    (Assumptions : (idx : SoundnessIndex) → Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env : Environment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the assumptions
+  -- for all inputs that satisfy the assumptions (for ALL indices)
   ∀ input : Input F, eval env.tape input_var = input →
-  Assumptions input →
+  (∀ idx : SoundnessIndex, Assumptions idx input) →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
@@ -293,11 +293,12 @@ This means that, when viewed as a black box, the circuit acts similar to a funct
 preconditions, and the spec acts as the postcondition.
 -/
 structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+    (SoundnessIndex : Type := Unit)
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions (_ : Input F) : Prop := True
-  Spec : Input F → Output F → Prop
-  soundness : Soundness F elaborated Assumptions Spec
-  completeness : Completeness F elaborated Assumptions
+  Assumptions : (idx : SoundnessIndex) → Input F → Prop := fun _ _ => True
+  Spec : (idx : SoundnessIndex) → Input F → Output F → Prop
+  soundness : Soundness F elaborated SoundnessIndex Assumptions Spec
+  completeness : Completeness F elaborated SoundnessIndex Assumptions
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
@@ -306,9 +307,10 @@ Use this class when you want to formally guarantee that constraints uniquely det
 preventing ambiguity in deterministic circuits.
 -/
 structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
-    extends circuit : FormalCircuit F Input Output where
-  uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
-    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+    (SoundnessIndex : Type := Unit)
+    extends circuit : FormalCircuit F Input Output SoundnessIndex where
+  uniqueness : ∀ (idx : SoundnessIndex) (input : Input F) (out1 out2 : Output F),
+    circuit.Assumptions idx input → circuit.Spec idx input out1 → circuit.Spec idx input out2 → out1 = out2
 
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)

@@ -27,16 +27,15 @@ The spec follows the pattern from the applyRounds function:
 - Apply round to get new state
 - Permute the message
 -/
-def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
+def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs Unit where
   main := fun input => do
     let state ← subcircuit Round.circuit input
     let permuted_message ← subcircuit Permute.circuit input.message
     return ⟨state, permuted_message⟩
-  localLength := fun _ => Round.circuit.localLength _ + Permute.circuit.localLength _
+  localLength := fun input => Round.circuit.localLength input + Permute.circuit.localLength input.message
   localLength_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
-    rfl
   output := fun input offset =>
     let state_out := Round.circuit.output input offset
     let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
@@ -45,57 +44,55 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
 
-  Assumptions := Round.Assumptions
-  Spec := fun input output =>
+  Assumptions := fun _ => Round.Assumptions
+  Spec := fun _ input output =>
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
     output.state.Normalized ∧
     BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
     BLAKE3State.Normalized output.message
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
-    simp only [Round.Assumptions] at h_assumptions
-    decompose_provable_struct
+    rintro offset env ⟨ input_var1, input_var2 ⟩ ⟨ input1, input2 ⟩ h_eval idx h_assumptions h_holds
     simp only [circuit_norm] at h_holds
     simp only [Round.circuit] at h_holds
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
-    simp only [circuit_norm, h_eval] at h_holds
+    simp only [circuit_norm] at h_eval
+    simp only [Round.Inputs.mk.injEq] at h_eval
+    simp only [circuit_norm, h_eval, forall_const] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
+    simp only [Round.Assumptions] at h_assumptions
     specialize h_holds1 h_assumptions
-    simp only [Permute.circuit, Permute.Assumptions] at h_holds2
+    simp only [Permute.circuit, Permute.Assumptions, BLAKE3State.Normalized] at h_holds2
     rcases h_assumptions with ⟨ asm1, asm2 ⟩
     -- h_holds2 requires the message to be normalized
-    specialize h_holds2 asm2
-
-    -- Now we need to show the spec holds for the output
-    simp only
-    rw [ProvableStruct.eval_eq_eval]
-    simp only [ProvableStruct.eval]
+    specialize h_holds2 () asm2
     simp only [Round.Spec, Permute.Spec] at h_holds1 h_holds2
-
+    simp only [circuit_norm, Round.circuit]
     constructor
     · exact h_holds1.1
     constructor
     · exact h_holds1.2
-    · exact h_holds2
+    · simp [h_holds2]
 
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
-    simp only [Round.Assumptions] at h_assumptions
-    decompose_provable_struct
-    simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
+    rintro offset env ⟨ input_var1, input_var2 ⟩ h_env_uses_witnesses ⟨ input1, input2 ⟩ h_eval h_assumptions
+    simp only [circuit_norm] at h_eval
+    simp only [Round.Inputs.mk.injEq] at h_eval
 
     -- Unpack what we have
     simp only [circuit_norm] at h_env_uses_witnesses ⊢
     obtain ⟨h_round_uses, h_permute_uses⟩ := h_env_uses_witnesses
+    have h_assumptions' := h_assumptions ()
+    simp only [Round.Assumptions] at h_assumptions'
 
     constructor
     · simp only [Round.circuit, h_eval]
-      exact h_assumptions
+      intro _
+      exact h_assumptions'
 
     · -- Show Permute assumptions hold (message is normalized)
-      rcases h_assumptions with ⟨_, h_msg_norm⟩
-      dsimp only [Permute.circuit, Permute.Assumptions]
+      intro _
+      rcases h_assumptions' with ⟨_, h_msg_norm⟩
+      dsimp only [Permute.circuit, Permute.Assumptions, BLAKE3State.Normalized]
       simp only [h_eval]
       exact h_msg_norm
 
@@ -494,7 +491,7 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
   circuit_proof_start
 
   -- Equations for counter values
@@ -514,12 +511,15 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp
 
   -- Apply h_holds with the proven assumptions
-  have h_spec := h_holds (by
-    apply initial_state_and_messages_are_normalized
-    · simp only [circuit_norm, h_input]
-      rfl
-    · simp only [Assumptions]
-      aesop
+  have h_spec := h_holds () (by
+    simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, Round.Assumptions]
+    exact initial_state_and_messages_are_normalized env
+      { chaining_value := input_var_chaining_value, block_words := input_var_block_words,
+        counter_high := input_var_counter_high, counter_low := input_var_counter_low,
+        block_len := input_var_block_len, flags := input_var_flags }
+      input_block_words input_chaining_value input_counter_high input_counter_low input_block_len input_flags
+      (by simp only [h_input, circuit_norm])
+      (by simp only [Assumptions]; aesop)
   )
   clear h_holds
 
@@ -552,20 +552,26 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · -- Show out.Normalized
     exact h_normalized
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   circuit_proof_start
+  intro idx
 
   -- Use the helper lemma to prove normalization
-  apply initial_state_and_messages_are_normalized env
-  · simp only [h_input, circuit_norm]
-    rfl
-  · simp only [Assumptions]
-    aesop
+  have h_norm := initial_state_and_messages_are_normalized env
+    { chaining_value := input_var_chaining_value, block_words := input_var_block_words,
+      counter_high := input_var_counter_high, counter_low := input_var_counter_low,
+      block_len := input_var_block_len, flags := input_var_flags }
+    input_block_words input_chaining_value input_counter_high input_counter_low input_block_len input_flags
+    (by simp only [h_input, circuit_norm])
+    (by simp only [Assumptions]; aesop)
+
+  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, Round.Assumptions]
+  exact h_norm
 
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
-def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit : FormalCircuit (F p) Inputs BLAKE3State Unit := {
+  elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.ApplyRounds

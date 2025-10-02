@@ -55,16 +55,16 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) Inputs Outputs where
+def circuit : FormalCircuit (F p) Inputs Outputs Unit where
   main
-  Assumptions
-  Spec
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 
   soundness := by
     -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
+    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs idx h_assumptions h_holds
 
     -- characterize inputs
     replace h_inputs : x_var.eval env.tape = x ∧ y_var.eval env.tape = y ∧ carry_in_var.eval env.tape = carry_in := by

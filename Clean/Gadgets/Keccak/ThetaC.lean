@@ -37,8 +37,8 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro i0 env state_var state h_input idx state_norm h_holds
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
@@ -47,7 +47,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [circuit_norm, h_input,
-    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_holds
+    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec, forall_const] at h_holds
   simp only [Nat.reduceAdd] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), state[i].Normalized :=
     fun hi => state_norm ⟨ _, hi ⟩
@@ -57,15 +57,16 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   specialize h_holds i
   aesop
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+  intro i0 env state_var h_env state h_input h_assumptions
+  have state_norm := h_assumptions ()
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm,
-    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢
+    main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec, forall_const] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
-def circuit : FormalCircuit (F p) KeccakState KeccakRow :=
- { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) KeccakState KeccakRow Unit :=
+ { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaC

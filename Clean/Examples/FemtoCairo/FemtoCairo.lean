@@ -96,10 +96,10 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     }
   localLength _ := 8
 
-  Assumptions | instruction => True
+  Assumptions | _, instruction => True
 
   Spec
-  | instruction, output =>
+  | _, instruction, output =>
     match Spec.decodeInstruction instruction with
     | some (instr_type, addr1, addr2, addr3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
@@ -323,9 +323,9 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
-  Assumptions | pc => True
+  Assumptions | _, pc => True
   Spec
-  | pc, output =>
+  | _, pc, output =>
     match Spec.fetchInstruction program pc with
       | some claimed_output => output = claimed_output
       | none => False -- impossible, lookups ensure that memory accesses are valid
@@ -403,9 +403,9 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
-  Assumptions | {state, mode, offset} => DecodedAddressingMode.isEncodedCorrectly mode
+  Assumptions | _, {state, mode, offset} => DecodedAddressingMode.isEncodedCorrectly mode
   Spec
-  | {state, offset, mode}, output =>
+  | _, {state, offset, mode}, output =>
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
@@ -517,9 +517,9 @@ def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
     return nextState
 
   localLength _ := 3
-  Assumptions | {state, decoded, v1, v2, v3} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
+  Assumptions | _, {state, decoded, v1, v2, v3} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
   Spec
-  | {state, decoded, v1, v2, v3}, output =>
+  | _, {state, decoded, v1, v2, v3}, output =>
     match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
       | some nextState => output = nextState
       | none => False -- impossible, constraints ensure that the transition is valid
@@ -622,18 +622,18 @@ def femtoCairoStepElaboratedCircuit
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (state : State (F p)) (nextState : State (F p)) : Prop :=
+    (_idx : Unit) (state : State (F p)) (nextState : State (F p)) : Prop :=
   match Spec.femtoCairoMachineTransition program memory state with
     | some s => s = nextState
     | none => False -- impossible, constraints ensure that the transition is valid
 
-def femtoCairoAssumptions (_state : State (F p)) : Prop :=
+def femtoCairoAssumptions (_idx : Unit) (_state : State (F p)) : Prop :=
   True
 
 def femtoCairoStepCircuitSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
+    : Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) Unit femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
   circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
     Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemoryCircuit, nextStateCircuit, decodeInstructionCircuit]
 
@@ -717,7 +717,7 @@ def femtoCairoStepCircuitSoundness
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : FormalCircuit (F p) State State := {
+    : FormalCircuit (F p) State State Unit := {
       femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize with
       Assumptions := femtoCairoAssumptions,
       Spec := femtoCairoCircuitSpec program memory,

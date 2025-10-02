@@ -52,8 +52,8 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Unit (fun _ => Assumptions) (fun _ => Spec offset) := by
+  intro i0 env x_var x h_input idx x_normalized h_holds
 
   -- simplify statements
   dsimp only [circuit_norm, elaborated, main,
@@ -106,7 +106,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   rw [←U64.vals_valueNat, ←U64.vals_valueNat, h_rot_vector']
   exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Unit (fun _ => Assumptions) := by
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
@@ -114,13 +114,15 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
     ByteDecomposition.circuit, ByteDecomposition.Assumptions]
 
   -- we only have to prove the byte decomposition assumptions
-  rw [Assumptions, U64.ByteVector.normalized_iff] at x_normalized
+  have x_normalized' := x_normalized ()
+  dsimp only [Assumptions] at x_normalized'
+  rw [U64.ByteVector.normalized_iff] at x_normalized'
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 Unit := {
   elaborated offset with
-  Assumptions
-  Spec := Spec offset
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

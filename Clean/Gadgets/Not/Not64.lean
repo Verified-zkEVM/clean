@@ -52,16 +52,16 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
   exact ⟨ not_lt 256 hx0, not_lt 256 hx1, not_lt 256 hx2, not_lt 256 hx3,
       not_lt 256 hx4, not_lt 256 hx5, not_lt 256 hx6, not_lt 256 hx7 ⟩
 
-def circuit : FormalCircuit (F p) U64 U64 where
+def circuit : FormalCircuit (F p) U64 U64 Unit where
   main x := pure (not64_bytewise x)
-  Assumptions x := x.Normalized
-  Spec x z := z.value = not64 x.value ∧ z.Normalized
+  Assumptions _ x := x.Normalized
+  Spec _ x z := z.value = not64 x.value ∧ z.Normalized
 
   localLength _ := 0
   output x _ := not64_bytewise x
 
   soundness := by
-    intro i env x_var x h_input x_norm h_holds
+    intro i env x_var x h_input idx x_norm h_holds
     simp_all only [circuit_norm, eval_not]
     exact not_bytewise_value_spec x_norm
 

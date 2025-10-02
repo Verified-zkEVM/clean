@@ -46,8 +46,8 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Unit (fun _ => Assumptions) (fun _ => Spec offset) := by
+  intro i0 env x_var (x : F p) h_input idx (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
@@ -98,8 +98,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   use ⟨ low_eq, high_eq ⟩, h_lt_low
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Unit (fun _ => Assumptions) := by
+  rintro i0 env x_var henv (x : F p) h_input h_assumptions
+  have x_byte : x.val < 256 := h_assumptions ()
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]
@@ -123,11 +124,11 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs Unit := {
   elaborated offset with
   main := main offset
-  Assumptions
-  Spec := Spec offset
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec offset
   soundness := soundness offset
   completeness := completeness offset
 }

@@ -69,8 +69,8 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   repeat rw [and_xor_sum]
   repeat assumption
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env input_var ⟨ x, y ⟩ h_input h_assumptions h_holds
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro i env input_var ⟨ x, y ⟩ h_input idx h_assumptions h_holds
   cases x; cases y
   apply soundness_to_u64 h_assumptions.left h_assumptions.right
   simp only [circuit_norm, explicit_provable_type, Vector.mapRange,
@@ -78,7 +78,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     U64.Normalized] at h_assumptions h_holds h_input ⊢
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   intro i env input_var h_env ⟨ x, y ⟩ h_input h_assumptions
   cases x; cases y
   simp only [circuit_norm, explicit_provable_type,
@@ -86,9 +86,9 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
-def circuit : FormalCircuit (F p) Inputs U64 where
-  Assumptions
-  Spec
+def circuit : FormalCircuit (F p) Inputs U64 Unit where
+  Assumptions := fun _ => Assumptions
+  Spec := fun _ => Spec
   soundness
   completeness
 

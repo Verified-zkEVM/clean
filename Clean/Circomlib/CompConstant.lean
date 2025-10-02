@@ -94,7 +94,7 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let out <== bits[127]
   return out
 
-def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
+def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field Unit where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
@@ -102,10 +102,10 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
     simp only [circuit_norm, main, Num2Bits.circuit]
     and_intros <;> ac_rfl
 
-  Assumptions input :=
+  Assumptions := fun _ input =>
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec bits output :=
+  Spec := fun _ bits output =>
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by

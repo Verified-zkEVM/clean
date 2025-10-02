@@ -18,8 +18,8 @@ def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
   out.value = permute state.value ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input h_normalized h_holds
+theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+  intro i0 env state_var state h_input idx h_normalized h_holds
   simp only [Spec, BLAKE3State.value, Vector.map, ElaboratedCircuit.output, ↓Fin.getElem_fin,
     eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
     ↓Vector.getElem_toArray, Vector.mk_eq]
@@ -34,12 +34,12 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [Assumptions, BLAKE3State.Normalized] at h_normalized
     fin_cases i <;> simp only [msgPermutation, h_normalized]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
   rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
-    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
+    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1, forall_const]
 
-def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State Unit :=
+  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
 
 end Gadgets.BLAKE3.Permute
