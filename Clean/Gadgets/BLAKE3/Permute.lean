@@ -37,7 +37,7 @@ theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
 theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   rintro i0 env state_var henv state h_inputs h_normalized
   simp_all only [Circuit.operations, ElaboratedCircuit.main, main, pure, ↓Fin.getElem_fin,
-    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1, forall_const]
+    Environment.UsesLocalWitnessesCompleteness.eq_1, Circuit.ConstraintsHold.Completeness.eq_1]
 
 def circuit : FormalCircuit (F p) BLAKE3State BLAKE3State Unit :=
   { elaborated with Assumptions, Spec, soundness, completeness }

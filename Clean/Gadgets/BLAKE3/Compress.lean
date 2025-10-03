@@ -31,10 +31,10 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
 
-def Assumptions (idx : Unit) (input : ApplyRounds.Inputs (F p)) : Prop :=
+def Assumptions (_ : Unit) (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.circuit.Assumptions () input
 
-def Spec (idx : Unit) (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
+def Spec (_ : Unit) (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   output.value = compress
     (chaining_value.map U32.value)

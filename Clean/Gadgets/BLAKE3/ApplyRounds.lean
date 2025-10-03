@@ -57,7 +57,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs Unit where
     simp only [Round.circuit] at h_holds
     simp only [circuit_norm] at h_eval
     simp only [Round.Inputs.mk.injEq] at h_eval
-    simp only [circuit_norm, h_eval, forall_const] at h_holds
+    simp only [circuit_norm, h_eval] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     simp only [Round.Assumptions] at h_assumptions
     specialize h_holds1 () h_assumptions
