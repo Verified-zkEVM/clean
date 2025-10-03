@@ -102,10 +102,10 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field Unit where
     simp only [circuit_norm, main, Num2Bits.circuit]
     and_intros <;> ac_rfl
 
-  Assumptions := fun _ input =>
+  Assumptions _ input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec := fun _ bits output =>
+  Spec _ bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by

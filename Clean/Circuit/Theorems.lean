@@ -699,7 +699,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
   let Spec input output := ∀ idx, orig.Assumptions idx input → orig.Spec idx input output
   exact {
     elaborated := orig.elaborated,
-    Assumptions := fun input => ∀ idx, orig.Assumptions idx input,
+    Assumptions input := ∀ idx, orig.Assumptions idx input,
     Spec,
     soundness := by
       intro offset env input_var input h_input h_holds

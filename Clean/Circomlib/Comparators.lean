@@ -38,9 +38,9 @@ def circuit : FormalCircuit (F p) field field Unit where
   main
   localLength _ := 2
 
-  Assumptions := fun _ _ => True
+  Assumptions _ _ := True
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     output = (if input = 0 then 1 else 0)
 
   soundness := by
@@ -91,9 +91,9 @@ def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 2
 
-  Assumptions := fun _ _ => True
+  Assumptions _ _ := True
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     output = (if input.1 = input.2 then 1 else 0)
 
   completeness := by
@@ -156,11 +156,11 @@ def circuit : FormalAssertion (F p) Inputs where
   main
   localLength _ := 2
 
-  Assumptions := fun { enabled, inp } =>
-    enabled = 0 ∨ enabled = 1
+  Assumptions input :=
+    input.enabled = 0 ∨ input.enabled = 1
 
-  Spec := fun { enabled, inp } =>
-    enabled = 1 → inp.1 = inp.2
+  Spec input :=
+    input.enabled = 1 → input.inp.1 = input.inp.2
 
   soundness := by
     circuit_proof_start
@@ -232,10 +232,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field U
   output _ i := var ⟨ i + n + 1 ⟩
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
-  Assumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
+  Assumptions _ input := input.1.val < 2^n ∧ input.2.val < 2^n
 
-  Spec := fun _ (x, y) output =>
-    output = (if x.val < y.val then 1 else 0)
+  Spec _ input output :=
+    output = (if input.1.val < input.2.val then 1 else 0)
 
   soundness := by
     simp only [circuit_norm, main]
@@ -265,9 +265,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field U
 
   localLength _ := n + 2
 
-  Assumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
-  Spec := fun _ (x, y) output =>
-    output = (if x.val <= y.val then 1 else 0)
+  Assumptions _ input := input.1.val < 2^n ∧ input.2.val < 2^n
+  Spec _ input output :=
+    output = (if input.1.val <= input.2.val then 1 else 0)
 
   soundness := by
     intro i env input (x, y) h_input idx assumptions h_holds
@@ -309,10 +309,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field U
 
   localLength _ := n + 2
 
-  Assumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
+  Assumptions _ input := input.1.val < 2^n ∧ input.2.val < 2^n
 
-  Spec := fun _ (x, y) output =>
-    output = (if x.val > y.val then 1 else 0)
+  Spec _ input output :=
+    output = (if input.1.val > input.2.val then 1 else 0)
 
   soundness := by
     simp_all [circuit_norm, LessThan.circuit]
@@ -340,9 +340,9 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field U
 
   localLength _ := n + 2
 
-  Assumptions := fun _ (x, y) => x.val < 2^n ∧ y.val < 2^n
-  Spec := fun _ (x, y) output =>
-    output = (if x.val >= y.val then 1 else 0)
+  Assumptions _ input := input.1.val < 2^n ∧ input.2.val < 2^n
+  Spec _ input output :=
+    output = (if input.1.val >= input.2.val then 1 else 0)
 
   soundness := by
     simp only [circuit_norm]

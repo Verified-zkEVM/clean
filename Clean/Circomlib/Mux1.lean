@@ -66,11 +66,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) Unit where
 
   localLength _ := n
 
-  Assumptions := fun _ input =>
+  Assumptions _ input :=
     let ⟨c, s⟩ := input
     IsBool s
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
@@ -182,11 +182,11 @@ def circuit : FormalCircuit (F p) Inputs field Unit where
     intro input offset
     simp only [main, circuit_norm]
 
-  Assumptions := fun _ input =>
+  Assumptions _ input :=
     let ⟨_, s⟩ := input
     IsBool s
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 

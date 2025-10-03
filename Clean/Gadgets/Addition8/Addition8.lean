@@ -16,11 +16,11 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
 
-  Assumptions := fun _ { x, y, carryIn } =>
-    x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
+  Assumptions _ input :=
+    input.x.val < 256 ∧ input.y.val < 256 ∧ IsBool input.carryIn
 
-  Spec := fun _ { x, y, carryIn } z =>
-    z.val = (x.val + y.val + carryIn.val) % 256
+  Spec _ input z :=
+    z.val = (input.x.val + input.y.val + input.carryIn.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
   soundness := by simp_all [circuit_norm,
@@ -50,9 +50,9 @@ def circuit : FormalCircuit (F p) Inputs field Unit where
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
 
-  Assumptions := fun _ { x, y } => x.val < 256 ∧ y.val < 256
+  Assumptions _ input := input.x.val < 256 ∧ input.y.val < 256
 
-  Spec := fun _ { x, y } z => z.val = (x.val + y.val) % 256
+  Spec _ input z := z.val = (input.x.val + input.y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by

@@ -51,9 +51,9 @@ def circuit : FormalCircuit (F p) field (fields 254) Unit where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
-  Assumptions := fun _ _ => True
+  Assumptions _ _ := True
 
-  Spec := fun _ input bits =>
+  Spec _ input bits :=
     bits = fieldToBits 254 input
 
   soundness := by
@@ -131,9 +131,9 @@ def circuit : FormalCircuit (F p) (fields 254) field Unit where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions := fun _ input => ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  Assumptions _ input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
@@ -194,9 +194,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) Unit
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Assumptions := fun _ _ => True
+  Assumptions _ _ := True
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by

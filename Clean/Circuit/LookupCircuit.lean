@@ -73,8 +73,8 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   localLength n := size β
   output _ n := varFromOffset β n
 
-  Assumptions := fun _ => circuit.Assumptions ()
-  Spec := fun _ => circuit.Spec ()
+  Assumptions _ := circuit.Assumptions ()
+  Spec _ := circuit.Spec ()
 
   soundness := by
     intro n env input_var input h_input h_assumptions h_holds

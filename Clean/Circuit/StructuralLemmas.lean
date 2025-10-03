@@ -37,8 +37,8 @@ def FormalCircuit.concat
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
   }
-  Assumptions := fun _ => circuit1.Assumptions ()
-  Spec := fun _ input output => ∃ mid, circuit1.Spec () input mid ∧ circuit2.Spec () mid output
+  Assumptions _ := circuit1.Assumptions ()
+  Spec _ input output := ∃ mid, circuit1.Spec () input mid ∧ circuit2.Spec () mid output
   soundness := by
     simp only [Soundness]
     intros
@@ -81,7 +81,7 @@ def FormalCircuit.weakenSpec
     FormalCircuit F Input Output Unit := {
   elaborated := circuit.elaborated
   Assumptions := circuit.Assumptions
-  Spec := fun _ => WeakerSpec
+  Spec _ := WeakerSpec
   soundness := by
     intro offset env input_var input h_eval idx h_assumptions h_holds
     -- Use the original circuit's soundness

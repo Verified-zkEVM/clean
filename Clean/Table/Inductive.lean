@@ -62,8 +62,8 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     in the completeness proof, we therefore need to restrict the possible inputs and initial states a prover can provide.
     by design, completeness for the full table holds for any initial state and list of inputs that satisfy these assumptions.
   -/
-  InputAssumptions : ℕ → Input F → Prop := fun _ _ => True
-  InitialStateAssumptions : State F → Prop := fun _ => True
+  InputAssumptions _ _ : Prop := True
+  InitialStateAssumptions _ : Prop := True
 
   soundness : InductiveTable.Soundness F State Input Spec step
 

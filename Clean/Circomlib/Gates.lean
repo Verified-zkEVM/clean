@@ -43,8 +43,8 @@ def circuit : FormalCircuit (F p) fieldPair field Unit where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
-  Spec := fun _ input output =>
+  Assumptions _ input := IsBool input.1 ∧ IsBool input.2
+  Spec _ input output :=
     output.val = input.1.val ^^^ input.2.val
     ∧ IsBool output
 
@@ -85,8 +85,8 @@ def circuit : FormalCircuit (F p) fieldPair field Unit where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
-  Spec := fun _ input output =>
+  Assumptions _ input := IsBool input.1 ∧ IsBool input.2
+  Spec _ input output :=
     output.val = input.1.val &&& input.2.val
     ∧ IsBool output
 
@@ -125,8 +125,8 @@ def circuit : FormalCircuit (F p) fieldPair field Unit where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
-  Spec := fun _ input output =>
+  Assumptions _ input := IsBool input.1 ∧ IsBool input.2
+  Spec _ input output :=
     output.val = input.1.val ||| input.2.val
     ∧ IsBool output
 
@@ -165,8 +165,8 @@ def circuit : FormalCircuit (F p) field field Unit where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions := fun _ input => IsBool input
-  Spec := fun _ input output =>
+  Assumptions _ input := IsBool input
+  Spec _ input output :=
     output.val = 1 - input.val
     ∧ IsBool output
 
@@ -207,8 +207,8 @@ def circuit : FormalCircuit (F p) fieldPair field Unit where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
-  Spec := fun _ input output =>
+  Assumptions _ input := IsBool input.1 ∧ IsBool input.2
+  Spec _ input output :=
     output.val = 1 - (input.1.val &&& input.2.val)
     ∧ IsBool output
 
@@ -249,8 +249,8 @@ def circuit : FormalCircuit (F p) fieldPair field Unit where
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions := fun _ input => IsBool input.1 ∧ IsBool input.2
-  Spec := fun _ input output =>
+  Assumptions _ input := IsBool input.1 ∧ IsBool input.2
+  Spec _ input output :=
     output.val = 1 - (input.1.val ||| input.2.val)
     ∧ IsBool output
 

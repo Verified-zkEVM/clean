@@ -41,11 +41,11 @@ def circuit : FormalCircuit (F p) (fields 254) field Unit where
   localLength _ := 127 + 1 + 135 + 1
   localLength_eq := by simp only [circuit_norm, main, CompConstant.circuit]
 
-  Assumptions := fun _ input =>
+  Assumptions _ input :=
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
 
-  Spec := fun _ input output =>
+  Spec _ input output :=
     -- The output is 1 if the input (as a number) is greater than (p-1)/2
     -- This effectively checks if the field element is in the "upper half" of the field
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0
