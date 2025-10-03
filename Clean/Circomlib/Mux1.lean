@@ -53,7 +53,7 @@ lemma Vector.getElem_flatten_singleton {α : Type} {n : ℕ} (v : Vector (Vector
   congr
   omega
 
-lemma Vector.getElem_map_singleton_flatten {p : ℕ } {α β : Type} {n : ℕ} (v : Vector α n) (f : α → β) (i : ℕ) (hi : i < n) :
+lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector α n) (f : α → β) (i : ℕ) (hi : i < n) :
     (v.map (fun x => #v[f x])).flatten[i] = f (v[i]) := by
   rw [Vector.getElem_flatten_singleton (v.map (fun x => #v[f x])) i hi]
   simp only [Vector.getElem_map (fun x => #v[f x]) hi]
