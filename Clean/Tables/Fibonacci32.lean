@@ -138,9 +138,8 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   clear hcurr_x hcurr_y hnext_x hnext_y
   constructor
   · exact h_eq
-  rw [Gadgets.Addition32.Assumptions, Gadgets.Addition32.Spec] at h_add
   intro h_norm_x h_norm_y
-  specialize h_add ⟨ h_norm_x, h_norm_y ⟩
+  specialize h_add () ⟨ h_norm_x, h_norm_y ⟩
   obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
   exact ⟨h_add_mod, h_norm_next_y⟩
 

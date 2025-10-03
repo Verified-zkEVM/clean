@@ -44,7 +44,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs Unit where
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
 
-  Assumptions := fun _ => Round.Assumptions
+  Assumptions := Round.Assumptions
   Spec := fun _ input output =>
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
@@ -60,7 +60,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs Unit where
     simp only [circuit_norm, h_eval, forall_const] at h_holds
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     simp only [Round.Assumptions] at h_assumptions
-    specialize h_holds1 h_assumptions
+    specialize h_holds1 () h_assumptions
     simp only [Permute.circuit, Permute.Assumptions, BLAKE3State.Normalized] at h_holds2
     rcases h_assumptions with ⟨ asm1, asm2 ⟩
     -- h_holds2 requires the message to be normalized
@@ -438,13 +438,13 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
       Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   (∀ i : Fin 8, chaining_value[i].Normalized) ∧
   (∀ i : Fin 16, block_words[i].Normalized) ∧
   counter_high.Normalized ∧ counter_low.Normalized ∧ block_len.Normalized ∧ flags.Normalized
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   out.value = applyRounds
     (chaining_value.map U32.value)
@@ -461,7 +461,7 @@ lemma initial_state_and_messages_are_normalized
     (block_words : BLAKE3State (F p))
     (chaining_value counter_high counter_low block_len flags)
     (h_input : eval env.tape input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
-    (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
+    (h_normalized : Assumptions () { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env.tape (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
@@ -491,7 +491,7 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start
 
   -- Equations for counter values
@@ -552,7 +552,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
   · -- Show out.Normalized
     exact h_normalized
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start
   intro idx
 
@@ -571,7 +571,7 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State Unit := {
-  elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness
+  elaborated with Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.ApplyRounds

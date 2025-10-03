@@ -27,12 +27,12 @@ instance elaborated : ElaboratedCircuit F field field where
   main
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
 
-def Assumptions (_ : F) : Prop := True
+def Assumptions (_ : Unit) (_ : F) : Prop := True
 
-def Spec (x : F) (output : F) : Prop :=
+def Spec (_ : Unit) (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0
 
-theorem soundness : Soundness F elaborated Unit (fun _ => Assumptions) (fun _ => Spec (F:=F)) := by
+theorem soundness : Soundness F elaborated Unit Assumptions (Spec (F:=F)) := by
   circuit_proof_start
   split
   · rename_i h_input
@@ -41,14 +41,14 @@ theorem soundness : Soundness F elaborated Unit (fun _ => Assumptions) (fun _ =>
     assumption
   · aesop
 
-theorem completeness : Completeness F elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness F elaborated Unit Assumptions := by
   circuit_proof_start
   aesop
 
 def circuit : FormalCircuit F field field Unit := {
   elaborated with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec (F:=F)
+  Assumptions
+  Spec := Spec (F:=F)
   soundness
   completeness
 }

@@ -16,9 +16,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
     let state_and ← And.And64.circuit ⟨state_not, state[i + 10]⟩
     Xor64.circuit ⟨state[i], state_and⟩
 
-def Assumptions := KeccakState.Normalized (p:=p)
+def Assumptions (_ : Unit) := KeccakState.Normalized (p:=p)
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (_ : Unit) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
@@ -43,7 +43,7 @@ lemma chi_loop (state : Vector ℕ 25) :
   rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i0 env state_var state h_input idx state_norm h_holds
 
   -- simplify goal
@@ -58,7 +58,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
 
   simp_all
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   have state_norm := h_assumptions ()
 
@@ -71,5 +71,5 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec, Nat.reduceAdd, forall_const]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState Unit :=
-  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
+  { elaborated with Assumptions, Spec, soundness, completeness }
 end Gadgets.Keccak256.Chi

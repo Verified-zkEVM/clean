@@ -30,13 +30,13 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main
   localLength _ := 120
 
-def Assumptions (state : KeccakRow (F p)) := state.Normalized
+def Assumptions (_ : Unit) (state : KeccakRow (F p)) := state.Normalized
 
-def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
+def Spec (_ : Unit) (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaD row.value
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i0 env row_var row h_input idx row_norm h_holds
   simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
@@ -73,7 +73,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
 
   simp [Specs.Keccak256.thetaD, h_xor0, h_xor1, h_xor2, h_xor3, h_xor4, rotLeft64]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env row_var h_env row h_input h_assumptions_fn
   have h_assumptions := h_assumptions_fn ()
   simp only [Assumptions, KeccakRow.normalized_iff] at h_assumptions
@@ -83,6 +83,6 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
     add_assoc, seval, true_and, forall_const]
 
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow Unit :=
-  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
+  { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaD

@@ -40,15 +40,15 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, G.elaborated]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, message } := input
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start
 
   obtain ⟨h_state, h_message⟩ := h_assumptions
@@ -95,7 +95,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
   · rw [←c8.left]; rfl
   · exact c8.right
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start [G.circuit, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
     getElem_eval_vector, Fin.isValue, and_imp, and_true, forall_const]
 
@@ -120,7 +120,7 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   simp only [h_assumptions, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State Unit := {
-  elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness
+  elaborated with Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.Round

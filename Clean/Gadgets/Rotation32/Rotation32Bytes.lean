@@ -21,9 +21,9 @@ def main (offset : Fin 4) (input : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)
   else
     return ⟨ x3, x0, x1, x2 ⟩
 
-def Assumptions (input : U32 (F p)) := input.Normalized
+def Assumptions (_ : Unit) (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
+def Spec (_ : Unit) (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
@@ -50,7 +50,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Unit (fun _ => Assumptions) (fun _ => Spec off) := by
+theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Unit Assumptions (fun _ => Spec () off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs idx as h
 
   have h_x0 : x0_var.eval env.tape = x0 := by injections h_inputs
@@ -68,7 +68,7 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Unit (fun _ =
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight32, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Unit (fun _ => Assumptions) := by
+theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Unit Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
@@ -78,8 +78,8 @@ theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Unit (f
 def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 Unit := {
   elaborated off with
   main := main off
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec off
+  Assumptions
+  Spec _ := Spec () off
   soundness := soundness off
   completeness := completeness off
 }

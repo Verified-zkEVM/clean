@@ -30,9 +30,9 @@ def main (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 
 
   return U32.fromLimbs rotated
 
-def Assumptions (input : U32 (F p)) := input.Normalized
+def Assumptions (_ : Unit) (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
+def Spec (_ : Unit) (offset : Fin 8) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
@@ -55,7 +55,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp +arith only [circuit_norm, main,
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Unit (fun _ => Assumptions) (fun _ => Spec offset) := by
+theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Unit Assumptions (fun _ => Spec () offset) := by
   intro i0 env x_var x h_input idx x_normalized h_holds
 
   -- simplify statements
@@ -109,7 +109,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Unit (f
   rw [←U32.vals_valueNat, ←U32.vals_valueNat, h_rot_vector']
   exact ⟨ rotation32_bits_soundness offset.is_lt, y_norm ⟩
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Unit (fun _ => Assumptions) := by
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Unit Assumptions := by
   intro i0 env x_var _ x h_input x_normalized
 
   -- simplify goal
@@ -124,8 +124,8 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) U
 
 def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 Unit := {
   elaborated offset with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec offset
+  Assumptions
+  Spec _ := Spec () offset
   soundness := soundness offset
   completeness := completeness offset
 }

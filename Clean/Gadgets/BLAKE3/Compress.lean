@@ -46,21 +46,15 @@ def Spec (idx : Unit) (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (
 
 theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit,
-    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
-    ApplyRounds.Assumptions, FinalStateUpdate.Spec]
-
-lemma ApplyRounds.circuit_assumptions_is idx :
-  ApplyRounds.circuit.Assumptions (F := F p) idx = ApplyRounds.Assumptions := rfl
-
-lemma ApplyRouunds.circuit_spec_is idx :
-  ApplyRounds.circuit.Spec (F := F p) idx = ApplyRounds.Spec := rfl
+  simp_all only [circuit_norm, ApplyRounds.circuit, ApplyRounds.Assumptions, ApplyRounds.Spec,
+    FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
+    FinalStateUpdate.Spec]
 
 theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRouunds.circuit_spec_is,
-    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
-    ApplyRounds.Assumptions, FinalStateUpdate.Spec, forall_const]
+  simp_all only [circuit_norm, ApplyRounds.circuit, ApplyRounds.Assumptions, ApplyRounds.Spec,
+    FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
+    FinalStateUpdate.Spec, forall_const]
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

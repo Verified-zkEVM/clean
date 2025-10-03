@@ -26,11 +26,11 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   localLength_eq _ n := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
 
-def Assumptions (inputs : Inputs (F p)) : Prop :=
+def Assumptions (_ : Unit) (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   state.Normalized ∧ d.Normalized
 
-def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
+def Spec (_ : Unit) (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaXor state.value d.value
@@ -40,7 +40,7 @@ lemma thetaXor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
     Specs.Keccak256.thetaXor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
   simp [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input idx ⟨state_norm, d_norm⟩ h_holds
 
   -- rewrite goal
@@ -57,7 +57,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
   specialize h_holds i ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
   exact ⟨ h_holds.right, h_holds.left ⟩
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input h_assumptions
   have ⟨state_norm, d_norm⟩ := h_assumptions ()
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
@@ -66,6 +66,6 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
 def circuit : FormalCircuit (F p) Inputs KeccakState Unit :=
-  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
+  { elaborated with Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Keccak256.ThetaXor

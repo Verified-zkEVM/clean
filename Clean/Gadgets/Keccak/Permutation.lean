@@ -9,9 +9,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .foldl roundConstants state
     fun state rc => KeccakRound.circuit rc state
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (_ : Unit) (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (_ : Unit) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccakPermutation state.value
 
@@ -37,7 +37,7 @@ example (state : Vector ℕ 25) :
   Fin.foldl 24 (fun state j => keccakRound state roundConstants[j]) state
   = roundConstants.foldl keccakRound state := rfl
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro n env initial_state_var initial_state h_input idx h_assumptions h_holds
 
   -- simplify
@@ -74,7 +74,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
       simp
   exact h_inductive 23 (by norm_num)
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro n env initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
@@ -113,8 +113,8 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState Unit := {
   elaborated with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec
+  Assumptions
+  Spec
   soundness
   -- TODO why does this time out??
   -- completeness

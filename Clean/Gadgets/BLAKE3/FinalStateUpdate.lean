@@ -70,15 +70,15 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input idx h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
@@ -121,7 +121,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
     Fin.val_succ, List.getElem_cons_succ, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   rintro i0 env ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_assumptions
   have h_normalized := h_assumptions ()
   simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
@@ -137,7 +137,7 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   simp_all only [gt_iff_lt, forall_const, and_self]
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State Unit := {
-  elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness
+  elaborated with Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.BLAKE3.FinalStateUpdate

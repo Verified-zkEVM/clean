@@ -68,15 +68,15 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let { state, x, y } := input
   state.Normalized ∧ x.Normalized ∧ y.Normalized
 
-def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (_ : Unit) (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 
-theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Unit (fun _ => Assumptions) (fun _ => Spec a b c d) := by
+theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Unit Assumptions (fun _ => Spec () a b c d) := by
   circuit_proof_start [BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
     Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
@@ -116,7 +116,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (elaborated a b c d) Unit
     · exact c9.right
     · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
 
-theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Unit (fun _ => Assumptions) := by
+theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d) Unit Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
 
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated] at h_env ⊢
@@ -129,8 +129,8 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (elaborated a b c d
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State Unit := {
   elaborated a b c d with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec a b c d
+  Assumptions
+  Spec := fun _ => Spec () a b c d
   soundness := soundness a b c d
   completeness := completeness a b c d
 }

@@ -19,9 +19,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .map rhoPiConstants fun (i, s) =>
     Rotation64.circuit (-s) state[i.val]
 
-def Assumptions := KeccakState.Normalized (p:=p)
+def Assumptions (_ : Unit) := KeccakState.Normalized (p:=p)
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (_ : Unit) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
@@ -40,7 +40,7 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   rw [List.map_toArray]
   rfl
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i0 env state_var state h_input idx state_norm h_holds
 
   -- simplify goal
@@ -55,7 +55,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
     Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, Rotation64.elaborated, forall_const] at h_holds ⊢
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env state_var h_env state h_input h_assumptions
   have state_norm := h_assumptions ()
 
@@ -68,5 +68,5 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
     Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec, forall_const]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState Unit :=
-  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
+  { elaborated with Assumptions, Spec, soundness, completeness }
 end Gadgets.Keccak256.RhoPi

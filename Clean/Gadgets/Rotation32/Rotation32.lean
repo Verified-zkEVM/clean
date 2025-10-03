@@ -26,9 +26,9 @@ def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) :
   let byte_rotated ← Rotation32Bytes.circuit byte_offset x
   Rotation32Bits.circuit bit_offset byte_rotated
 
-def Assumptions (input : U32 (F p)) := input.Normalized
+def Assumptions (_ : Unit) (input : U32 (F p)) := input.Normalized
 
-def Spec (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
+def Spec (_ : Unit) (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
   ∧ y.Normalized
 
@@ -42,7 +42,7 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   localLength _ := 8
   output _inputs i0 := output off i0
 
-theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Unit (fun _ => Assumptions) (fun _ => Spec offset) := by
+theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Unit Assumptions (fun _ => Spec () offset) := by
   intro i0 env x_var x h_input idx x_normalized h_holds
 
   simp [circuit_norm, main, elaborated,
@@ -74,7 +74,7 @@ theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated off
   rw [rotRight32_composition _ _ _ (U32.value_lt_of_normalized x_normalized)] at hy
   rw [hy, Nat.div_add_mod']
 
-theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Unit (fun _ => Assumptions) := by
+theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) Unit Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
@@ -93,8 +93,8 @@ theorem completeness (offset : Fin 32) : Completeness (F p) (elaborated offset) 
 
 def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 Unit := {
   elaborated offset with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec offset
+  Assumptions
+  Spec _ := Spec () offset
   soundness := soundness offset
   completeness := completeness offset
 }

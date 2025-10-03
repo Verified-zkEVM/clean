@@ -42,11 +42,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
   return { z, carryOut }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   out.z.val = (x.val + y.val + carryIn.val) % 256 ∧
   out.carryOut.val = (x.val + y.val + carryIn.val) / 256
@@ -57,8 +57,8 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs Unit where
   main
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec
+  Assumptions
+  Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
 

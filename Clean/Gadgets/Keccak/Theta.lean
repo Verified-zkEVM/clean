@@ -17,23 +17,23 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 480
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (_ : Unit) (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
+def Spec (_ : Unit) (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   simp_all [circuit_norm, Spec, main, Assumptions,
     ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions,
     ThetaC.Spec, ThetaD.Spec, ThetaXor.Spec, Specs.Keccak256.theta, forall_const]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   simp_all [circuit_norm, main, Assumptions, ThetaC.circuit, ThetaD.circuit, ThetaXor.circuit,
     ThetaC.Assumptions, ThetaD.Assumptions, ThetaXor.Assumptions, ThetaC.Spec, ThetaD.Spec,
     ThetaXor.Spec, forall_const]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState Unit :=
- { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
+ { elaborated with Assumptions, Spec, soundness, completeness }
 end Gadgets.Keccak256.Theta

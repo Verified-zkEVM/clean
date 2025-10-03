@@ -29,9 +29,9 @@ def main (offset : Fin 8) (input : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)
   else
     return ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
 
-def Assumptions (input : U64 (F p)) := input.Normalized
+def Assumptions (_ : Unit) (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
+def Spec (_ : Unit) (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value (offset.val * 8) ∧ y.Normalized
 
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
@@ -61,7 +61,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     fin_cases off
     repeat rfl
 
-theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Unit (fun _ => Assumptions) (fun _ => Spec off) := by
+theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Unit Assumptions (fun _ => Spec () off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs idx as h
 
   have h_x0 : x0_var.eval env.tape = x0 := by injections h_inputs
@@ -83,15 +83,15 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Unit (fun _ =
   · fin_cases off <;> (simp_all [explicit_provable_type, rotRight64, circuit_norm, -Nat.reducePow]; omega)
   · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
 
-theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Unit (fun _ => Assumptions) := by
+theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Unit Assumptions := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [main, circuit_norm]
 
 def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 Unit := {
   elaborated off with
   main := main off
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec off
+  Assumptions
+  Spec _ := Spec () off
   soundness := soundness off
   completeness := completeness off
 }

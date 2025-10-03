@@ -16,11 +16,11 @@ instance : ProvableStruct Inputs where
   toComponents := fun { x, y } => .cons x (.cons y .nil)
   fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def Spec (input : Inputs (F p)) (z : F p) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 
@@ -90,7 +90,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   localLength _ := 1
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input _ h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -130,7 +130,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
   show Nat.bitwise _ _ _ < 2 ^ 8
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
@@ -184,8 +184,8 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   · omega
 
 def circuit : FormalCircuit (F p) Inputs field Unit :=
-  { Assumptions := fun _ => Assumptions,
-    Spec := fun _ => Spec,
+  { Assumptions,
+    Spec,
     soundness,
     completeness }
 

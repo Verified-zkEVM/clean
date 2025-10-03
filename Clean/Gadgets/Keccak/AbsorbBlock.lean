@@ -36,14 +36,14 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
-@[reducible] def Assumptions (input : Input (F p)) :=
+@[reducible] def Assumptions (_ : Unit) (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized
 
-@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) :=
+@[reducible] def Spec (_ : Unit) (input : Input (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions (fun _ => Spec ()) := by
   intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input idx h_assumptions h_holds
 
   -- simplify goal and constraints
@@ -78,7 +78,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
@@ -115,5 +115,5 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
     simp only [this, getElem_eval_vector, h_input, h_assumptions'.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
 def circuit : FormalCircuit (F p) Input KeccakState Unit :=
-  { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }
+  { elaborated with Assumptions, Spec _ := Spec (), soundness, completeness }
 end Gadgets.Keccak256.AbsorbBlock

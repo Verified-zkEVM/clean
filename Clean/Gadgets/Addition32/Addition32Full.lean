@@ -38,11 +38,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let { z := z3, carryOut := c3 } ← Addition8FullCarry.main ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carryOut := c3 }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
   z.value = (x.value + y.value + carryIn.val) % 2^32
@@ -63,7 +63,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
   -- simplify circuit further
@@ -103,7 +103,7 @@ theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun 
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -152,8 +152,8 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
 def circuit : FormalCircuit (F p) Inputs Outputs Unit where
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec
+  Assumptions
+  Spec
   soundness
   completeness
 end Gadgets.Addition32Full

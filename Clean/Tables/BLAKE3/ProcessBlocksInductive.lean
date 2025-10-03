@@ -282,14 +282,15 @@ private lemma step_process_block (env : Environment (F p))
         decide
     )
   rcases h_holds with ⟨ h_addition, h_holds ⟩
-  specialize h_addition (by
+  have h_add_assumptions : Addition32.Assumptions () { x := acc_blocks_compressed, y := { x0 := 1, x1 := 0, x2 := 0, x3 := 0 } } := by
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
-    simp [acc_normalized, circuit_norm])
+    simp [acc_normalized, circuit_norm]
+  specialize h_addition () h_add_assumptions
   dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
+  specialize h_vector_cond () (by simp only [circuit_norm])
+  specialize h_u32_cond () (by simp only [circuit_norm])
   dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
-  specialize h_vector_cond (by simp only [circuit_norm])
-  specialize h_u32_cond (by simp only [circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many

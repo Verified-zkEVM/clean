@@ -17,9 +17,9 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
   let s0 ← Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (_ : Unit) (state : KeccakState (F p)) := state.Normalized
 
-def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (_ : Unit) (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
@@ -32,7 +32,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
   output_eq state i0 := by
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 
-theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Unit (fun _ => Assumptions) (fun _ => Spec rc) := by
+theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Unit Assumptions (fun _ => Spec () rc) := by
   intro i0 env state_var state h_input idx state_norm h_holds
 
   -- simplify goal
@@ -78,7 +78,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Unit (fun _ =>
   ring_nf at chi_eq chi_norm ⊢
   exact ⟨ chi_norm, chi_eq ⟩
 
-theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Unit (fun _ => Assumptions) := by
+theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Unit Assumptions := by
   circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
     Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
     Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec, forall_const]
@@ -94,8 +94,8 @@ theorem completeness (rc : UInt64) : Completeness (F p) (elaborated rc) Unit (fu
 
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState Unit := {
   elaborated rc with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec rc
+  Assumptions
+  Spec _ := Spec () rc
   soundness := soundness rc
   completeness := completeness rc
 }

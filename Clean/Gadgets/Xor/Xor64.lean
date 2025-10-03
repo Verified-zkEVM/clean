@@ -47,11 +47,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   lookup ByteXorTable (x.x7, y.x7, z.x7)
   return z
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
@@ -71,7 +71,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
     z.x4.val = x.x4.val ^^^ y.x4.val ∧
     z.x5.val = x.x5.val ^^^ y.x5.val ∧
     z.x6.val = x.x6.val ^^^ y.x6.val ∧
-    z.x7.val = x.x7.val ^^^ y.x7.val) : Spec { x, y } z := by
+    z.x7.val = x.x7.val ^^^ y.x7.val) : Spec () { x, y } z := by
   simp only [Spec]
   have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm
@@ -87,7 +87,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
   simp only [U64.value_xor_horner, x_norm, y_norm, z_norm, h_eq, xor_mul_two_pow]
   ac_rfl
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   intro i0 env input_var input h_input idx h_as h_holds
 
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩,
@@ -113,7 +113,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   have h_byte : x.val ^^^ y.val < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
   linarith [p_large_enough.elim]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env input_var h_env input h_input as
   let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
@@ -124,8 +124,8 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   simp_all [xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U64 Unit where
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec
+  Assumptions
+  Spec
   soundness
   completeness
 end Gadgets.Xor64

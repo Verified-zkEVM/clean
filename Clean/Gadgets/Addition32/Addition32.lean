@@ -22,11 +22,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p)) := do
   let ⟨z, _⟩ ← Addition32Full.circuit {x, y, carryIn := 0}
   return z
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = (x.value + y.value) % 2^32 ∧ z.Normalized
 
@@ -38,20 +38,20 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   localLength _ := 8
   output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
 
-theorem soundness : Soundness (F p) elaborated Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs idx as h
   rw [←elaborated.output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
   simp_all [circuit_norm, Spec, main, Addition32Full.circuit,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, forall_const]
 
-theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool, forall_const]
 
 def circuit : FormalCircuit (F p) Inputs U32 Unit where
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec
+  Assumptions
+  Spec
   soundness
   completeness
 end Gadgets.Addition32

@@ -32,9 +32,9 @@ instance elaborated : ElaboratedCircuit F M field where
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 
-def Assumptions (_ : M F) : Prop := True
+def Assumptions (_ : Unit) (_ : M F) : Prop := True
 
-def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
+def Spec [DecidableEq (M F)] (_ : Unit) (input : M F) (output : F) : Prop :=
   output = if input = 0 then 1 else 0
 
 /--
@@ -99,7 +99,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · aesop
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Unit (fun _ => Assumptions) (fun _ => Spec) := by
+theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Unit Assumptions Spec := by
   circuit_proof_start
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
@@ -114,13 +114,13 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Unit (
   · intro i h_as
     exact h_holds i () h_as
 
-theorem completeness : Completeness F (elaborated (M := M)) Unit (fun _ => Assumptions) := by
+theorem completeness : Completeness F (elaborated (M := M)) Unit Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field Unit := {
   elaborated with
-  Assumptions := fun _ => Assumptions
-  Spec := fun _ => Spec
+  Assumptions
+  Spec
   soundness
   completeness
 }
