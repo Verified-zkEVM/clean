@@ -32,9 +32,9 @@ instance elaborated : ElaboratedCircuit F M field where
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 
-def Assumptions (_ : M F) : Prop := True
+def Assumptions (_ : Unit) (_ : M F) : Prop := True
 
-def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
+def Spec [DecidableEq (M F)] (_ : Unit) (input : M F) (output : F) : Prop :=
   output = if input = 0 then 1 else 0
 
 /--
@@ -42,14 +42,14 @@ lemma for soundness. Separate because the statement is optimized for induction.
 -/
 lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
     {env : Environment F} {i₀ : ℕ}
-    (h_eval : Vector.map (Expression.eval env) vars = vals)
+    (h_eval : Vector.map (Expression.eval env.tape) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
-        IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
-          (Expression.eval (F:=F) env
+      IsZeroField.circuit.Assumptions () (Expression.eval (F:=F) env.tape vars[i]) →
+        IsZeroField.circuit.Spec () (Expression.eval (F:=F) env.tape vars[i])
+          (Expression.eval (F:=F) env.tape
             (IsZeroField.circuit.output vars[i]
               (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
-    Expression.eval env
+    Expression.eval env.tape
       (Fin.foldl n
         (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))
         1) =
@@ -62,7 +62,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
     simp only [Fin.foldl_succ_last, Expression.eval]
     let vars_pre := vars.take pre |>.cast (by simp : min pre (pre + 1) = pre)
     let vals_pre := vals.take pre |>.cast (by simp : min pre (pre + 1) = pre)
-    have h_eval_pre : Vector.map (Expression.eval env) vars_pre = vals_pre := by
+    have h_eval_pre : Vector.map (Expression.eval env.tape) vars_pre = vals_pre := by
       simp only [Vector.take_eq_extract, add_tsub_cancel_right, Vector.extract_eq_pop,
         Nat.add_one_sub_one, Nat.sub_zero, Vector.cast_cast, Vector.cast_rfl, Vector.map_pop,
         vals_pre, vars_pre, h_eval]
@@ -99,7 +99,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
       aesop
     · aesop
 
-theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assumptions Spec := by
+theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Unit Assumptions Spec := by
   circuit_proof_start
   simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
@@ -109,13 +109,20 @@ theorem soundness [DecidableEq (M F)] : Soundness F (elaborated (M := M)) Assump
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff <;> assumption
+  apply foldl_isZero_eq_one_iff
+  · assumption
+  · intro i h_as
+    exact h_holds i () h_as
 
-theorem completeness : Completeness F (elaborated (M := M)) Assumptions := by
+theorem completeness : Completeness F (elaborated (M := M)) Unit Assumptions := by
   circuit_proof_start [IsZeroField.circuit, IsZeroField.Assumptions]
 
-def circuit [DecidableEq (M F)] : FormalCircuit F M field := {
-  elaborated with Assumptions, Spec, soundness, completeness
+def circuit [DecidableEq (M F)] : FormalCircuit F M field Unit := {
+  elaborated with
+  Assumptions
+  Spec
+  soundness
+  completeness
 }
 
 end Gadgets.IsZero

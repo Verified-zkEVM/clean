@@ -34,9 +34,9 @@ def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F
 
   return { low, high }
 
-def Assumptions (x : F p) := x.val < 256
+def Assumptions (_ : Unit) (x : F p) := x.val < 256
 
-def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
+def Spec (_ : Unit) (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))
@@ -46,15 +46,15 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
 
-theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
+theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Unit Assumptions (fun _ => Spec () offset) := by
+  intro i0 env x_var (x : F p) h_input idx (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
 
   obtain ⟨low_lt, high_lt, h_eq⟩ := h_holds
-  set low := env.get i0
-  set high := env.get (i0 + 1)
+  set low := env.tape.get i0
+  set high := env.tape.get (i0 + 1)
 
   have : 2^16 < p := by linarith [p_large_enough.elim]
   let n : ℕ := 8 - offset.val
@@ -98,8 +98,9 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   use ⟨ low_eq, high_eq ⟩, h_lt_low
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
-theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
+theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Unit Assumptions := by
+  rintro i0 env x_var henv (x : F p) h_input h_assumptions
+  have x_byte : x.val < 256 := h_assumptions ()
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]
@@ -123,11 +124,11 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) A
   · have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs Unit := {
   elaborated offset with
   main := main offset
   Assumptions
-  Spec := Spec offset
+  Spec := fun _ => Spec () offset
   soundness := soundness offset
   completeness := completeness offset
 }

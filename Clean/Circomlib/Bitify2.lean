@@ -43,7 +43,7 @@ def main (input : Expression (F p)) := do
 
 set_option linter.constructorNameAsVariable false
 
-def circuit : FormalCircuit (F p) field (fields 254) where
+def circuit : FormalCircuit (F p) field (fields 254) Unit where
   main
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -51,11 +51,11 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
-  Spec input bits :=
+  Spec _ input bits :=
     bits = fieldToBits 254 input
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
+    intro i0 env input_var input h_input idx assumptions h_holds
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
       Vector.map_mapRange]
@@ -83,9 +83,9 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
     rw [Vector.map_mapRange]
     simp only [Expression.eval]
-    have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
+    have h_bits i (hi : i < 254) : env.tape.get (i0 + i) = 0 ∨ env.tape.get (i0 + i) = 1 := by
       simp [h_env i hi, fieldToBits_bits]
-    set bits := Vector.mapRange 254 fun i => env.get (i0 + i)
+    set bits := Vector.mapRange 254 fun i => env.tape.get (i0 + i)
     have h_eq : bits = fieldToBits 254 input := by
       ext i hi; simp [bits, circuit_norm, h_env i hi]
     have input_lt : input.val < 2^254 := by
@@ -121,7 +121,7 @@ def main (input : Vector (Expression (F p)) 254) := do
   -- Convert bits to number
   Bits2Num.main 254 input
 
-def circuit : FormalCircuit (F p) (fields 254) field where
+def circuit : FormalCircuit (F p) (fields 254) field Unit where
   main
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
@@ -129,9 +129,9 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  Assumptions _ input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
+  Spec _ input output :=
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
@@ -169,8 +169,8 @@ template Num2BitsNeg(n) {
 -/
 def main (n : ℕ) (input : Expression (F p)) := do
   -- Witness the bits of 2^n - input (when n > 0)
-  let out ← witnessVector n fun env =>
-    fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval env)
+  let out ← witnessVector n fun tape =>
+    fieldToBits n (if n = 0 then 0 else (2^n : F p) - input.eval tape)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
   let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do
@@ -185,14 +185,14 @@ def main (n : ℕ) (input : Expression (F p)) := do
 
   return out
 
-def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) where
+def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) Unit where
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 
-  Spec input output :=
+  Spec _ input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
   soundness := by

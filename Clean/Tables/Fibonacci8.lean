@@ -84,10 +84,10 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)
   simp only [circuit_norm, table_norm, Nat.reduceAdd, Nat.reduceMod, zero_add, neg_eq_zero]
   intro ⟨ boundary1, boundary2 ⟩
 
-  have hx : first_row.x = env.get 0 := by rfl
-  have hy : first_row.y = env.get 1 := by rfl
-  replace boundary2 : env.get 1 = 1 := calc
-    _ = env.get 1 + (1 + -env.get 1) := by rw [boundary2]; ring
+  have hx : first_row.x = env.tape.get 0 := by rfl
+  have hy : first_row.y = env.tape.get 1 := by rfl
+  replace boundary2 : env.tape.get 1 = 1 := calc
+    _ = env.tape.get 1 + (1 + -env.tape.get 1) := by rw [boundary2]; ring
     _ = 1 := by ring
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
@@ -131,10 +131,10 @@ def formalFibTable : FormalTable (F p) RowType := {
           Gadgets.Addition8.circuit] at ConstraintsHold
       simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
 
-      have hx_curr : env.get 0 = curr.x := by rfl
-      have hy_curr : env.get 1 = curr.y := by rfl
-      have hx_next : env.get 2 = next.x := by rfl
-      have hy_next : env.get (2 + 1) = next.y := by rfl
+      have hx_curr : env.tape.get 0 = curr.x := by rfl
+      have hy_curr : env.tape.get 1 = curr.y := by rfl
+      have hx_next : env.tape.get 2 = next.x := by rfl
+      have hy_next : env.tape.get (2 + 1) = next.y := by rfl
       rw [hx_curr, hy_curr, hx_next, hy_next] at ConstraintsHold
       clear hx_curr hy_curr hx_next hy_next
 

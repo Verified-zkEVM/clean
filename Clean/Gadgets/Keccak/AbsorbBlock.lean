@@ -36,29 +36,29 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
-@[reducible] def Assumptions (input : Input (F p)) :=
+@[reducible] def Assumptions (_ : Unit) (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized
 
-@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) :=
+@[reducible] def Spec (_ : Unit) (input : Input (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
+theorem soundness : Soundness (F p) elaborated Unit Assumptions (fun _ => Spec ()) := by
+  intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input idx h_assumptions h_holds
 
   -- simplify goal and constraints
   simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
     Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
     Permutation.circuit, Permutation.Assumptions, Permutation.Spec,
-    Input.mk.injEq] at *
+    Input.mk.injEq, forall_const] at *
 
   -- reduce goal to characterizing absorb step
   set state_after_absorb : Var KeccakState (F p) :=
     (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
-  suffices goal : (eval env state_after_absorb).Normalized
-    ∧ (eval env state_after_absorb).value =
+  suffices goal : (eval env.tape state_after_absorb).Normalized
+    ∧ (eval env.tape state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all
   replace h_holds := h_holds.left
@@ -78,16 +78,17 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     have : 17 + (i - 17) = i := by omega
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
+  have h_assumptions' := h_assumptions ()
   simp only [circuit_norm, RATE, main, Assumptions, Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
-    Permutation.circuit, Permutation.Assumptions, Permutation.Spec, Input.mk.injEq] at *
+    Permutation.circuit, Permutation.Assumptions, Permutation.Spec, Input.mk.injEq, forall_const] at *
   simp only [getElem_eval_vector, h_input] at h_env ⊢
 
   have assumptions' (i : Fin 17) : state[i.val].Normalized ∧ block[i.val].Normalized := by
-    simp [h_assumptions.left ⟨i, by linarith [i.is_lt]⟩, h_assumptions.right i]
+    simp [h_assumptions'.left ⟨i, by linarith [i.is_lt]⟩, h_assumptions'.right i]
   simp only [assumptions', and_true, true_implies, implies_true, true_and] at h_env ⊢
 
   -- reduce goal to characterizing absorb step
@@ -95,8 +96,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     (Vector.mapFinRange 17 fun i => varFromOffset (F:=F p) U64 (i0 + i.val * 8)) ++
     (Vector.mapFinRange 8 fun i => state_var[17 + i.val])
 
-  suffices goal : (eval env state_after_absorb).Normalized
-    ∧ (eval env state_after_absorb).value =
+  suffices goal : (eval env.tape state_after_absorb).Normalized
+    ∧ (eval env.tape state_after_absorb).value =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
     simp_all
   replace h_env := h_env.left
@@ -111,8 +112,8 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
     exact ⟨ (h_env ⟨ i, hi'⟩).right, (h_env ⟨ i, hi'⟩).left ⟩
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
     have : 17 + (i - 17) = i := by omega
-    simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
+    simp only [this, getElem_eval_vector, h_input, h_assumptions'.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
-def circuit : FormalCircuit (F p) Input KeccakState :=
-  { elaborated with Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) Input KeccakState Unit :=
+  { elaborated with Assumptions, Spec _ := Spec (), soundness, completeness }
 end Gadgets.Keccak256.AbsorbBlock

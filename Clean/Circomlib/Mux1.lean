@@ -61,16 +61,16 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
 
 -- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
-def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
+def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) Unit where
   main := main n
 
   localLength _ := n
 
-  Assumptions input :=
+  Assumptions _ input :=
     let ⟨c, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
@@ -168,7 +168,7 @@ def main (input : Var Inputs (F p)) := do
   let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
   return mux_out[0]
 
-def circuit : FormalCircuit (F p) Inputs field where
+def circuit : FormalCircuit (F p) Inputs field Unit where
   main := main
 
   localLength _ := 1
@@ -182,33 +182,33 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro input offset
     simp only [main, circuit_norm]
 
-  Assumptions input :=
+  Assumptions _ input :=
     let ⟨_, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  Spec _ input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
-    simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
+    intro offset env input_var input h_input idx h_assumptions h_holds
+    simp only [circuit_norm, main] at h_holds ⊢
     rw[← h_input] at *
     clear input
     clear h_input
-    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
-    specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    rw [h_subcircuit_sound]
+    simp only [MultiMux1.circuit, circuit_norm, forall_const] at h_holds h_assumptions ⊢
+    specialize h_holds h_assumptions 0 (by omega)
+    rw [h_holds]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, circuit_norm]
+    intro offset env input_var h_env input h_input h_s
+    simp only [MultiMux1.circuit, circuit_norm, forall_const]
     rw [← h_input] at h_s
-    simp_all
+    exact h_s
 
 end Mux1
 

@@ -34,7 +34,7 @@ template Num2Bits(n) {
 }
 -/
 def main (n : ℕ) (inp : Expression (F p)) := do
-  let out ← witnessVector n fun env => fieldToBits n (inp.eval env)
+  let out ← witnessVector n fun tape => fieldToBits n (inp.eval tape)
 
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
@@ -46,13 +46,13 @@ def main (n : ℕ) (inp : Expression (F p)) := do
 
 -- helper for proofs below: the linear combination is equivalent to `fieldFromBits`
 omit [Fact (p > 2)] in
-lemma lc_eq {i0} {env} {n : ℕ} :
-  (Expression.eval env <| Prod.fst <|
+lemma lc_eq {i0} {env : Environment (F p)} {n : ℕ} :
+  (Expression.eval env.tape <| Prod.fst <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
-    = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
-  suffices (eval (α:=fieldPair) env <|
+    = fieldFromBits (Vector.mapRange n fun i => env.tape.get (i0 + i)) := by
+  suffices (eval (α:=fieldPair) env.tape <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
-    = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
+    = (fieldFromBits (Vector.mapRange n fun i => env.tape.get (i0 + i)), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map]
   induction n with
@@ -99,7 +99,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
   completeness := by
     circuit_proof_start
     simp only [lc_eq, Fin.forall_iff, id_eq, mul_eq_zero, add_neg_eq_zero] at h_env ⊢
-    let bits := Vector.mapRange n fun i => env.get (i₀ + i)
+    let bits := Vector.mapRange n fun i => env.tape.get (i₀ + i)
     constructor
     · intro i hi; simp [h_env i hi, fieldToBits, toBits, Vector.getElem_mapRange]
     show fieldFromBits bits = input
@@ -158,14 +158,14 @@ def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   return out
 
 omit [Fact (p > 2)] in
-lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
-  (Expression.eval env <| Prod.fst <|
+lemma lc_eq {env : Environment (F p)} {n : ℕ} {v : Vector (Expression (F p)) n} :
+  (Expression.eval env.tape <| Prod.fst <|
     Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
       (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
-    = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
-  suffices (eval (α:=fieldPair) env <|
+    = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env.tape) := by
+  suffices (eval (α:=fieldPair) env.tape <|
     Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
-    = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
+    = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env.tape), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map, Vector.getElem_mapFinRange]
   induction n with
@@ -178,29 +178,29 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
-def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
+def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field Unit where
   main := main n
   localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input :=
+  Assumptions _ input :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
+  Spec _ input output :=
     output = fieldFromBits input
     ∧ output.val < 2^n
 
   soundness := by
     circuit_proof_start
-    set output : (F p) := (env.get i₀)
+    set output : (F p) := (env.tape.get i₀)
 
-    change output = Expression.eval env (Fin.foldl n
+    change output = Expression.eval env.tape (Fin.foldl n
       (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1
     at h_holds
     rw [lc_eq] at h_holds
 
-    have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
+    have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env.tape) = input := by
       rw [← h_input]
       ext i hi
       rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]

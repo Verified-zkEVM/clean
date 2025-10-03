@@ -27,7 +27,7 @@ partial def circuitProofStartCore : TacticM Unit := do
       match headConst? with
       | some ``Soundness =>
         evalTactic (← `(tactic| unfold Soundness))
-        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        let names := [`i₀, `env, `input_var, `input, `h_input, `idx, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Soundness =>

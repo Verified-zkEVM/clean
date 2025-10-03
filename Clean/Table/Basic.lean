@@ -320,6 +320,8 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssig
   | .witness m _ :: ops => assignmentFromCircuit (as.pushVarsAux m) ops
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
+  | .yield _ :: ops => assignmentFromCircuit as ops
+  | .use _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
@@ -363,12 +365,13 @@ def OffsetConsistent (table : TableConstraint W S F α) : Prop :=
 def windowEnv (table : TableConstraint W S F Unit)
   (window : TraceOfLength F S W) (aux_env : Environment F) : Environment F :=
   let assignment := table.finalAssignment
-  .mk fun i =>
-    if hi : i < assignment.offset then
-      match assignment.vars[i] with
-      | .input ⟨i, j⟩ => window.get i j
-      | .aux k => aux_env.get k
-    else aux_env.get (i + assignment.aux_length)
+  { tape := .mk fun i =>
+      if hi : i < assignment.offset then
+        match assignment.vars[i] with
+        | .input ⟨i, j⟩ => window.get i j
+        | .aux k => aux_env.tape.get k
+      else aux_env.tape.get (i + assignment.aux_length),
+    yielded := ∅ }
 
 /--
   A table constraint holds on a window of rows if the constraints hold on a suitable environment.
@@ -392,7 +395,7 @@ def output {α : Type} (table : TableConstraint W S F α) : α :=
 def getRow (row : Fin W) : TableConstraint W S F (Var S F) :=
   modifyGet fun ctx =>
     let ctx' : TableContext W S F := {
-      circuit := ctx.circuit ++ [.witness (size S) fun env => .mapRange _ fun i => env.get (ctx.offset + i)],
+      circuit := ctx.circuit ++ [.witness (size S) fun tape => .mapRange _ fun i => tape.get (ctx.offset + i)],
       assignment := ctx.assignment.pushRow row
     }
     (varFromOffset S ctx.offset, ctx')

@@ -95,7 +95,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     simp only [ProcessBlocksState.Normalized] at h_spec
     constructor
     · rintro ⟨i, h_i⟩
-      have : (eval env input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
+      have : (eval env.tape input_var_chaining_value : ProvableVector _ 8 _)[i] = input_chaining_value[i] := by simp only [h_input]
       simp only [eval_vector] at this
       simp only [Vector.getElem_map] at this
       simp only [this]
@@ -239,18 +239,18 @@ Shows that the step correctly processes a block using processBlockWords.
 private lemma step_process_block (env : Environment (F p))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
-    (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
+    (h_eval : eval env.tape acc_var = acc ∧ eval env.tape x_var = x)
     (h_x : x.block_exists = 1)
     (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
-    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
+    (eval env.tape ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).toChunkState =
       processBlockWords acc.toChunkState (x.block_data.map (·.value)) ∧
-    (eval env ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
+    (eval env.tape ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
   simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
-    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds
+    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec] at ⊢ h_holds
   simp only [ProcessBlocksState.Normalized] at acc_normalized
   simp only [BlockInput.Normalized] at x_normalized
   simp only [circuit_norm] at acc_normalized x_normalized
@@ -261,26 +261,36 @@ private lemma step_process_block (env : Environment (F p))
   rcases h_holds with ⟨ h_iszero, h_holds ⟩
   rcases h_holds with ⟨ h_compress, h_holds ⟩
   specialize h_compress (by
-    simp only [acc_normalized, x_normalized, Nat.ofNat_pos, circuit_norm, explicit_provable_type]
+    simp only [BLAKE3.ApplyRounds.circuit, circuit_norm]
+    simp only [BLAKE3.ApplyRounds.Assumptions]
     constructor
-    · linarith
-    · split at h_iszero
-      · norm_num at h_iszero ⊢
-        simp only [h_iszero, circuit_norm]
-        omega
-      · norm_num at h_iszero ⊢
-        simp only [h_iszero]
-        norm_num
+    · exact acc_normalized.1
+    constructor
+    · exact x_normalized.2
+    constructor
+    · simp only [circuit_norm]
+      decide
+    constructor
+    · exact acc_normalized.2.1
+    constructor
+    · simp only [circuit_norm]
+      decide
+    · constructor
+      · simp only [circuit_norm]
+        split at h_iszero <;> simp_all [circuit_norm, IsBool]
+      · simp only [circuit_norm]
+        decide
     )
   rcases h_holds with ⟨ h_addition, h_holds ⟩
-  specialize h_addition (by
+  have h_add_assumptions : Addition32.Assumptions () { x := acc_blocks_compressed, y := { x0 := 1, x1 := 0, x2 := 0, x3 := 0 } } := by
     simp only [Addition32.Assumptions, circuit_norm, ZMod.val_one]
-    simp [acc_normalized, circuit_norm])
+    simp [acc_normalized, circuit_norm]
+  specialize h_addition () h_add_assumptions
   dsimp only [Addition32.Spec] at h_addition ⊢
   rcases h_holds with ⟨ h_vector_cond, h_u32_cond ⟩
+  specialize h_vector_cond () (by simp only [circuit_norm])
+  specialize h_u32_cond () (by simp only [circuit_norm])
   dsimp only [Conditional.Spec] at h_vector_cond h_u32_cond
-  specialize h_vector_cond (by simp only [circuit_norm])
-  specialize h_u32_cond (by simp only [circuit_norm])
   simp only [h_vector_cond, h_u32_cond] at h_addition ⊢
   simp only [ProcessBlocksState.Normalized] at ⊢ acc_normalized
   simp only [ProcessBlocksState.toChunkState] at ⊢ h_addition blocks_compressed_not_many
@@ -368,11 +378,10 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     constructor
     · simp_all
     constructor
-    · constructor
-      · simp_all
+    · intro idx
+      simp_all only
       constructor
-      · simp only [h_assumptions]
-        trivial
+      · aesop
       simp_all only [circuit_norm]
       constructor
       · omega
@@ -402,20 +411,21 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
       specialize h_witnesses_iszero (by simp_all)
       simp only [IsZero.Spec] at h_witnesses_iszero
       specialize h_compress (by
-        simp only [h_assumptions]
-        simp only [circuit_norm]
-        constructor
-        · omega
-        constructor
-        · omega
-        constructor
-        · split at h_witnesses_iszero
-          · simp only [h_witnesses_iszero]
-            simp only [circuit_norm]
-            omega
-          · simp only [h_witnesses_iszero]
-            norm_num
-        · norm_num)
+        intro idx
+        simp only [BLAKE3.ApplyRounds.circuit, BLAKE3.ApplyRounds.Assumptions, circuit_norm]
+        and_intros <;> try omega
+        · aesop
+        · aesop
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all [circuit_norm, ProcessBlocksState.Normalized, U32.Normalized]
+        · simp_all only [Nat.reducePow, gt_iff_lt, implies_true, true_and, Fin.getElem_fin,
+          Nat.reduceMul, Nat.reduceAdd, mul_one, forall_const, and_self]
+          split
+          · simp only [ZMod.val_one]; omega
+          · simp only [ZMod.val_zero]; omega
+          )
       simp_all [circuit_norm]
     trivial
 

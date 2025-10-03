@@ -17,25 +17,50 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-structure Environment (F : Type) where
+structure NamedList (F : Type) where
+  name : String
+  value : List F
+deriving DecidableEq
+
+instance [Repr F] : Repr (NamedList F) where
+  reprPrec nl _ := "⟨" ++ repr nl.name ++ ", " ++ repr nl.value ++ "⟩"
+
+structure Tape (F : Type) where
   get : ℕ → F
+
+structure Environment (F : Type) where
+  tape : Tape F
+  yielded : Set (NamedList F)
 
 namespace Expression
 variable [Field F]
 
 /--
-Evaluate expression given an external `environment` that determines the assignment
+Evaluate expression given an external `tape` that determines the assignment
 of all variables.
 
 This is needed when we want to make statements about a circuit in the adversarial
 situation where the prover can assign anything to variables.
 -/
 @[circuit_norm]
-def eval (env : Environment F) : Expression F → F
-  | var v => env.get v.index
+def eval (tape : Tape F) : Expression F → F
+  | var v => tape.get v.index
   | const c => c
-  | add x y => eval env x + eval env y
-  | mul x y => eval env x * eval env y
+  | add x y => eval tape x + eval tape y
+  | mul x y => eval tape x * eval tape y
+
+end Expression
+
+namespace NamedList
+variable [Field F]
+
+def eval (nl : NamedList (Expression F)) (tape : Tape F) : NamedList F :=
+  { name := nl.name, value := nl.value.map (Expression.eval tape) }
+
+end NamedList
+
+namespace Expression
+variable [Field F]
 
 def toString [Repr F] : Expression F → String
   | var v => reprStr v
@@ -85,8 +110,11 @@ instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
 end Expression
 
+instance [Field F] : CoeFun (Tape F) (fun _ => (Expression F) → F) where
+  coe tape x := x.eval tape
+
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where
-  coe env x := x.eval env
+  coe env x := x.eval env.tape
 
 instance [Field F] : Inhabited F where
   default := 0
@@ -102,28 +130,28 @@ variable [Field F]
 /-- Expression.eval distributes over multiplication -/
 @[circuit_norm]
 lemma eval_mul (env : Environment F) (a b : Expression F) :
-    Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
+    Expression.eval env.tape (Expression.mul a b) = (Expression.eval env.tape a) * (Expression.eval env.tape b) := by
   simp only [Expression.eval]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
 lemma eval_foldl (env : Environment F) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)
     (hf : ∀ (e : Expression F) (i : Fin n),
-      Expression.eval env (f e i) = Expression.eval env (f (Expression.const (Expression.eval env e)) i)) :
-    Expression.eval env (Fin.foldl n f init) =
-    Fin.foldl n (fun (acc : F) (i : Fin n) => Expression.eval env (f (Expression.const acc) i)) (Expression.eval env init) := by
+      Expression.eval env.tape (f e i) = Expression.eval env.tape (f (Expression.const (Expression.eval env.tape e)) i)) :
+    Expression.eval env.tape (Fin.foldl n f init) =
+    Fin.foldl n (fun (acc : F) (i : Fin n) => Expression.eval env.tape (f (Expression.const acc) i)) (Expression.eval env.tape init) := by
   induction n with
   | zero => simp [Fin.foldl_zero]
   | succ n' ih =>
     rw [Fin.foldl_succ_last, Fin.foldl_succ_last]
     -- Apply the inductive hypothesis with the appropriate function and assumption
     have hf' : ∀ (e : Expression F) (i : Fin n'),
-      Expression.eval env (f e i.castSucc) = Expression.eval env (f (Expression.const (Expression.eval env e)) i.castSucc) := by
+      Expression.eval env.tape (f e i.castSucc) = Expression.eval env.tape (f (Expression.const (Expression.eval env.tape e)) i.castSucc) := by
       intros e i
       exact hf e i.castSucc
 
-    have h1 : Expression.eval env (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) =
-              Fin.foldl n' (fun acc i => Expression.eval env (f (Expression.const acc) i.castSucc)) (Expression.eval env init) :=
+    have h1 : Expression.eval env.tape (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) =
+              Fin.foldl n' (fun acc i => Expression.eval env.tape (f (Expression.const acc) i.castSucc)) (Expression.eval env.tape init) :=
       ih (fun x i => f x i.castSucc) hf'
 
     -- Now apply the assumption to relate the two sides

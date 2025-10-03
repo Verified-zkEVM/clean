@@ -11,14 +11,14 @@ namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
 theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+    ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env.tape = 0 := by
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
 theorem allZero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
+    (∀ x ∈ xs, x.eval env.tape = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
@@ -97,13 +97,13 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
+theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) (idx : Unit) :
+    ((circuit α).toSubcircuit n (x, y)).Soundness idx env = (eval env.tape x = eval env.tape y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
 theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
+    ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env.tape x = eval env.tape y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
@@ -146,7 +146,7 @@ class HasAssignEq (β : Type) (F : outParam Type) [Field F] where
 
 instance {F : Type} [Field F] : HasAssignEq (Expression F) F where
   assignEq := fun rhs => do
-    let witness ← witnessField fun env => rhs.eval env
+    let witness ← witnessField fun tape => rhs.eval tape
     witness === rhs
     return witness
 

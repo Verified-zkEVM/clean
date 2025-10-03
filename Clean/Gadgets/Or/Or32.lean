@@ -28,11 +28,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
 
   return ⟨z0, z1, z2, z3⟩
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ||| y.value ∧ z.Normalized
 
@@ -40,7 +40,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start
   have l_components := U32.or_componentwise h_assumptions.1 h_assumptions.2
   rcases input_x
@@ -52,19 +52,19 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢ l_components
   simp only [Or8.circuit, Or8.Assumptions, Or8.Spec, h_input] at h_holds
   rcases h_holds with ⟨h_holds1, h_holds⟩
-  specialize h_holds1 (by omega)
+  have h_holds1 := h_holds1 () (by omega)
   rcases h_holds with ⟨h_holds2, h_holds⟩
-  specialize h_holds2 (by omega)
+  have h_holds2 := h_holds2 () (by omega)
   rcases h_holds with ⟨h_holds3, h_holds4⟩
-  specialize h_holds3 (by omega)
-  specialize h_holds4 (by omega)
+  have h_holds3 := h_holds3 () (by omega)
+  have h_holds4 := h_holds4 () (by omega)
   simp only [U32.value] at ⊢ l_components
   simp only [h_holds1.2, h_holds2.2, h_holds3.2, h_holds4.2] -- use the Normalized conditions
   simp only [h_holds1.1, h_holds2.1, h_holds3.1, h_holds4.1, l_components]
   ring_nf
   simp
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start
   rcases input_x
   rcases input_y
@@ -72,9 +72,10 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil, U32.mk.injEq] at h_input ⊢
   simp only [Or8.circuit, Or8.Assumptions, h_input]
   simp only [U32.Normalized] at h_assumptions
+  simp only [forall_const]
   omega
 
-def circuit : FormalCircuit (F p) Inputs U32 :=
+def circuit : FormalCircuit (F p) Inputs U32 Unit :=
   { Assumptions, Spec, soundness, completeness }
 
 end Gadgets.Or32

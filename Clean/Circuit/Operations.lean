@@ -13,9 +13,11 @@ It is needed because we already need to talk about operations in the `Subcircuit
 which in turn is needed to define `Operation`.
 -/
 inductive FlatOperation (F : Type) where
-  | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
+  | witness : (m : ℕ) → (Tape F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
+  | yield : NamedList (Expression F) → FlatOperation F
+  | use : NamedList (Expression F) → FlatOperation F
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
@@ -23,6 +25,8 @@ instance [Repr F] : Repr (FlatOperation F) where
   | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
   | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l, _ => reprStr l
+  | yield nl, _ => "(Yield " ++ reprStr nl ++ ")"
+  | use nl, _ => "(Use " ++ reprStr nl ++ ")"
 
 /--
 What it means that "constraints hold" on a list of flat operations:
@@ -35,19 +39,31 @@ def ConstraintsHoldFlat (eval : Environment F) : List (FlatOperation F) → Prop
     | assert e => (eval e = 0) ∧ ConstraintsHoldFlat eval ops
     | lookup { table, entry } =>
       table.Contains (entry.map eval) ∧ ConstraintsHoldFlat eval ops
+    | use nl => nl.eval eval.tape ∈ eval.yielded ∧ ConstraintsHoldFlat eval ops
     | _ => ConstraintsHoldFlat eval ops
 
 @[circuit_norm]
 def localLength : List (FlatOperation F) → ℕ
   | [] => 0
   | witness m _ :: ops => m + localLength ops
-  | assert _ :: ops | lookup _ :: ops => localLength ops
+  | assert _ :: ops | lookup _ :: ops | yield _ :: ops | use _ :: ops => localLength ops
 
 @[circuit_norm]
-def localWitnesses (env : Environment F) : (l : List (FlatOperation F)) → Vector F (localLength l)
+def localWitnesses (tape : Tape F) : (l : List (FlatOperation F)) → Vector F (localLength l)
   | [] => #v[]
-  | witness _ compute :: ops => compute env ++ localWitnesses env ops
-  | assert _ :: ops | lookup _ :: ops => localWitnesses env ops
+  | witness _ compute :: ops => compute tape ++ localWitnesses tape ops
+  | assert _ :: ops | lookup _ :: ops | yield _ :: ops | use _ :: ops => localWitnesses tape ops
+
+/--
+The set of values yielded by flat operations in the given environment.
+-/
+def localYields (tape : Tape F) : List (FlatOperation F) → Set (NamedList F)
+  | [] => ∅
+  | witness _ _ :: ops => localYields tape ops
+  | assert _ :: ops => localYields tape ops
+  | lookup _ :: ops => localYields tape ops
+  | yield nl :: ops => {nl.eval tape} ∪ localYields tape ops
+  | use _ :: ops => localYields tape ops
 
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
@@ -55,19 +71,23 @@ def induct {motive : List (FlatOperation F) → Sort*}
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
   (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
+  (yield : ∀ nl ops, motive ops → motive (.yield nl :: ops))
+  (use : ∀ nl ops, motive ops → motive (.use nl :: ops))
     (ops : List (FlatOperation F)) : motive ops :=
   match ops with
   | [] => empty
-  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup ops)
-  | .assert e :: ops => assert e ops (induct empty witness assert lookup ops)
-  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup ops)
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup yield use ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup yield use ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup yield use ops)
+  | .yield nl :: ops => yield nl ops (induct empty witness assert lookup yield use ops)
+  | .use nl :: ops => use nl ops (induct empty witness assert lookup yield use ops)
 end FlatOperation
 
 export FlatOperation (ConstraintsHoldFlat)
 
 @[circuit_norm]
-def Environment.ExtendsVector (env : Environment F) (wit : Vector F n) (offset : ℕ) : Prop :=
-  ∀ i : Fin n, env.get (offset + i.val) = wit[i.val]
+def Tape.ExtendsVector (tape : Tape F) (wit : Vector F n) (offset : ℕ) : Prop :=
+  ∀ i : Fin n, tape.get (offset + i.val) = wit[i.val]
 
 open FlatOperation in
 /--
@@ -77,13 +97,13 @@ A flat list of circuit operations, instantiated at a certain offset.
 To enable composition of formal proofs, subcircuits come with custom `Soundness` and `Completeness`
 statements, which have to be compatible with the subcircuit's actual constraints.
 -/
-structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
+structure Subcircuit (F : Type) [Field F] (offset : ℕ) (SoundnessIndex : Type := Unit) where
   ops : List (FlatOperation F)
 
   -- we have a low-level notion of "the constraints hold on these operations".
   -- for convenience, we allow the framework to transform that into custom `Soundness`,
   -- `Completeness` and `UsesLocalWitnesses` statements (which may involve inputs/outputs, assumptions on inputs, etc)
-  Soundness : Environment F → Prop
+  Soundness : (idx : SoundnessIndex) → Environment F → Prop
   Completeness : Environment F → Prop
   UsesLocalWitnesses : Environment F → Prop
 
@@ -92,23 +112,25 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   localLength : ℕ
 
   -- `Soundness` needs to follow from the constraints for any witness
-  imply_soundness : ∀ env,
-    ConstraintsHoldFlat env ops → Soundness env
+  imply_soundness : ∀ idx env,
+    ConstraintsHoldFlat env ops → Soundness idx env
 
   -- `Completeness` needs to imply the constraints, when using the locally declared witness generators of this circuit
-  implied_by_completeness : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
+  implied_by_completeness : ∀ env, env.tape.ExtendsVector (localWitnesses env.tape ops) offset →
+    localYields env.tape ops ⊆ env.yielded →
     Completeness env → ConstraintsHoldFlat env ops
 
   -- `UsesLocalWitnesses` needs to follow from the local witness generator condition
-  imply_usesLocalWitnesses : ∀ env, env.ExtendsVector (localWitnesses env ops) offset →
+  imply_usesLocalWitnesses : ∀ env, env.tape.ExtendsVector (localWitnesses env.tape ops) offset →
+    localYields env.tape ops ⊆ env.yielded →
     UsesLocalWitnesses env
 
   -- `localLength` must be consistent with the operations
   localLength_eq : localLength = FlatOperation.localLength ops
 
 @[reducible, circuit_norm]
-def Subcircuit.witnesses (sc : Subcircuit F n) env :=
-  (FlatOperation.localWitnesses env sc.ops).cast sc.localLength_eq.symm
+def Subcircuit.witnesses (sc : Subcircuit F n) tape :=
+  (FlatOperation.localWitnesses tape sc.ops).cast sc.localLength_eq.symm
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -117,9 +139,11 @@ In addition to `witness`, `assert` and `lookup`,
 `Operation` can also be a `subcircuit`, which itself is essentially a list of operations.
 -/
 inductive Operation (F : Type) [Field F] where
-  | witness : (m : ℕ) → (compute : Environment F → Vector F m) → Operation F
+  | witness : (m : ℕ) → (compute : Tape F → Vector F m) → Operation F
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
+  | yield : NamedList (Expression F) → Operation F
+  | use : NamedList (Expression F) → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
 
 namespace Operation
@@ -128,6 +152,8 @@ instance [Repr F] : Repr (Operation F) where
     | witness m _ => "(Witness " ++ reprStr m ++ ")"
     | assert e => "(Assert " ++ reprStr e ++ " == 0)"
     | lookup l => reprStr l
+    | yield nl => "(Yield " ++ reprStr nl ++ ")"
+    | use nl => "(Use " ++ reprStr nl ++ ")"
     | subcircuit { ops, .. } => "(Subcircuit " ++ reprStr ops ++ ")"
 
 /--
@@ -138,13 +164,17 @@ def localLength : Operation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
+  | .yield _ => 0
+  | .use _ => 0
   | .subcircuit s => s.localLength
 
-def localWitnesses (env : Environment F) : (op : Operation F) → Vector F op.localLength
-  | .witness _ c => c env
+def localWitnesses (tape : Tape F) : (op : Operation F) → Vector F op.localLength
+  | .witness _ c => c tape
   | .assert _ => #v[]
   | .lookup _ => #v[]
-  | .subcircuit s => s.witnesses env
+  | .yield _ => #v[]
+  | .use _ => #v[]
+  | .subcircuit s => s.witnesses tape
 end Operation
 
 /--
@@ -163,6 +193,8 @@ def toFlat : Operations F → List (FlatOperation F)
   | .witness m c :: ops => .witness m c :: toFlat ops
   | .assert e :: ops => .assert e :: toFlat ops
   | .lookup l :: ops => .lookup l :: toFlat ops
+  | .yield nl :: ops => .yield nl :: toFlat ops
+  | .use nl :: ops => .use nl :: toFlat ops
   | .subcircuit s :: ops => s.ops ++ toFlat ops
 
 /--
@@ -174,18 +206,34 @@ def localLength : Operations F → ℕ
   | .witness m _ :: ops => m + localLength ops
   | .assert _ :: ops => localLength ops
   | .lookup _ :: ops => localLength ops
+  | .yield _ :: ops => localLength ops
+  | .use _ :: ops => localLength ops
   | .subcircuit s :: ops => s.localLength + localLength ops
 
 /--
 The actual vector of witnesses created by these operations in the given environment.
 -/
 @[circuit_norm]
-def localWitnesses (env : Environment F) : (ops : Operations F) → Vector F ops.localLength
+def localWitnesses (tape : Tape F) : (ops : Operations F) → Vector F ops.localLength
   | [] => #v[]
-  | .witness _ c :: ops => c env ++ localWitnesses env ops
-  | .assert _ :: ops => localWitnesses env ops
-  | .lookup _ :: ops => localWitnesses env ops
-  | .subcircuit s :: ops => s.witnesses env ++ localWitnesses env ops
+  | .witness _ c :: ops => c tape ++ localWitnesses tape ops
+  | .assert _ :: ops => localWitnesses tape ops
+  | .lookup _ :: ops => localWitnesses tape ops
+  | .yield _ :: ops => localWitnesses tape ops
+  | .use _ :: ops => localWitnesses tape ops
+  | .subcircuit s :: ops => s.witnesses tape ++ localWitnesses tape ops
+
+/--
+The set of values yielded by these operations in the given environment.
+-/
+def localYields (tape : Tape F) : Operations F → Set (NamedList F)
+  | [] => ∅
+  | .witness _ _ :: ops => localYields tape ops
+  | .assert _ :: ops => localYields tape ops
+  | .lookup _ :: ops => localYields tape ops
+  | .yield nl :: ops => {nl.eval tape} ∪ localYields tape ops
+  | .use _ :: ops => localYields tape ops
+  | .subcircuit _ :: ops => localYields tape ops  -- subcircuits don't yield to parent
 
 /-- Induction principle for `Operations`. -/
 def induct {motive : Operations F → Sort*}
@@ -193,14 +241,18 @@ def induct {motive : Operations F → Sort*}
   (witness : ∀ m c ops, motive ops → motive (.witness m c :: ops))
   (assert : ∀ e ops, motive ops → motive (.assert e :: ops))
   (lookup : ∀ l ops, motive ops → motive (.lookup l :: ops))
+  (yield : ∀ nl ops, motive ops → motive (.yield nl :: ops))
+  (use : ∀ nl ops, motive ops → motive (.use nl :: ops))
   (subcircuit : ∀ {n} (s : Subcircuit F n) ops, motive ops → motive (.subcircuit s :: ops))
     (ops : Operations F) : motive ops :=
   match ops with
   | [] => empty
-  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup subcircuit ops)
-  | .assert e :: ops => assert e ops (induct empty witness assert lookup subcircuit ops)
-  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit ops)
-  | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit ops)
+  | .witness m c :: ops => witness m c ops (induct empty witness assert lookup yield use subcircuit ops)
+  | .assert e :: ops => assert e ops (induct empty witness assert lookup yield use subcircuit ops)
+  | .lookup l :: ops => lookup l ops (induct empty witness assert lookup yield use subcircuit ops)
+  | .yield nl :: ops => yield nl ops (induct empty witness assert lookup yield use subcircuit ops)
+  | .use nl :: ops => use nl ops (induct empty witness assert lookup yield use subcircuit ops)
+  | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup yield use subcircuit ops)
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition
@@ -210,9 +262,11 @@ A `Condition` lets you define a predicate on operations, given the type and cont
 current operation as well as the current offset.
 -/
 structure Condition (F : Type) [Field F] where
-  witness (offset : ℕ) : (m : ℕ) → (Environment F → Vector F m) → Prop := fun _ _ => True
+  witness (offset : ℕ) : (m : ℕ) → (Tape F → Vector F m) → Prop := fun _ _ => True
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
+  yield (offset : ℕ) (_ : NamedList (Expression F)) : Prop := True
+  use (offset : ℕ) (_ : NamedList (Expression F)) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
 
 @[circuit_norm]
@@ -220,13 +274,25 @@ def Condition.apply (condition : Condition F) (offset : ℕ) : Operation F → P
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
+  | .yield nl => condition.yield offset nl
+  | .use nl => condition.use offset nl
   | .subcircuit s => condition.subcircuit offset s
 
 def Condition.implies (c c': Condition F) : Condition F where
   witness n m compute := c.witness n m compute → c'.witness n m compute
   assert offset e := c.assert offset e → c'.assert offset e
   lookup offset l := c.lookup offset l → c'.lookup offset l
+  yield offset nl := c.yield offset nl → c'.yield offset nl
+  use offset nl := c.use offset nl → c'.use offset nl
   subcircuit offset _ s := c.subcircuit offset s → c'.subcircuit offset s
+
+def Condition.isTrue {F : Type} [Field F] (c : Condition F) :=
+  (∀ n m compute, c.witness n m compute) ∧
+  (∀ n e, c.assert n e) ∧
+  (∀ n l, c.lookup n l) ∧
+  (∀ n nl, c.yield n nl) ∧
+  (∀ n nl, c.use n nl) ∧
+  (∀ n {m} s, c.subcircuit n (m := m) s)
 
 namespace Operations
 /--
@@ -239,6 +305,8 @@ def forAll (offset : ℕ) (condition : Condition F) : Operations F → Prop
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
+  | .yield nl :: ops => condition.yield offset nl ∧ forAll offset condition ops
+  | .use nl :: ops => condition.use offset nl ∧ forAll offset condition ops
   | .subcircuit s :: ops => condition.subcircuit offset s ∧ forAll (s.localLength + offset) condition ops
 
 /--
@@ -265,18 +333,24 @@ def inductConsistent {motive : (ops : Operations F) → (n : ℕ) → ops.Subcir
     motive (.assert e :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (lookup : ∀ n l ops {h}, motive ops n h →
     motive (.lookup l :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
+  (yield : ∀ n nl ops {h}, motive ops n h →
+    motive (.yield nl :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
+  (use : ∀ n nl ops {h}, motive ops n h →
+    motive (.use nl :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
   (subcircuit : ∀ n (s : Subcircuit F n) ops {h}, motive ops (s.localLength + n) h →
     motive (.subcircuit s :: ops) n (by simp_all [SubcircuitsConsistent, forAll]))
     (ops : Operations F) (n : ℕ) (h : ops.SubcircuitsConsistent n) : motive ops n h :=
   motive' ops n h
 where motive' : (ops : Operations F) → (n : ℕ) → (h : ops.SubcircuitsConsistent n) → motive ops n h
   | [], n, _ => empty n
-  | .witness m c :: ops, n, h | .assert e :: ops, n, h | .lookup e :: ops, n, h => by
+  | .witness m c :: ops, n, h | .assert e :: ops, n, h | .lookup e :: ops, n, h | .yield nl :: ops, n, h | .use nl :: ops, n, h => by
     rw [SubcircuitsConsistent, forAll] at h
     first
     | exact witness _ _ _ _ (motive' ops _ h.right)
     | exact assert _ _ _ (motive' ops _ h.right)
     | exact lookup _ _ _ (motive' ops _ h.right)
+    | exact yield _ _ _ (motive' ops _ h.right)
+    | exact use _ _ _ (motive' ops _ h.right)
   | .subcircuit s :: ops, n', h => by
     rename_i n
     rw [SubcircuitsConsistent, forAll] at h
@@ -292,17 +366,23 @@ def Condition.applyFlat (condition : Condition F) (offset : ℕ) : FlatOperation
   | .witness m c => condition.witness offset m c
   | .assert e => condition.assert offset e
   | .lookup l => condition.lookup offset l
+  | .yield nl => condition.yield offset nl
+  | .use nl => condition.use offset nl
 
 def FlatOperation.singleLocalLength : FlatOperation F → ℕ
   | .witness m _ => m
   | .assert _ => 0
   | .lookup _ => 0
+  | .yield _ => 0
+  | .use _ => 0
 
 def FlatOperation.forAll (offset : ℕ) (condition : Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
   | .lookup l :: ops => condition.lookup offset l ∧ forAll offset condition ops
+  | .yield nl :: ops => condition.yield offset nl ∧ forAll offset condition ops
+  | .use nl :: ops => condition.use offset nl ∧ forAll offset condition ops
 
 def Operations.forAllFlat (n : ℕ) (condition : Condition F) (ops : Operations F) : Prop :=
   forAll n { condition with subcircuit n _ s := FlatOperation.forAll n condition s.ops } ops

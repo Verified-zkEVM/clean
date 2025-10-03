@@ -15,19 +15,18 @@ theorem append_localLength {a b: Operations F} :
     (a ++ b).localLength = a.localLength + b.localLength := by
   induction a using induct with
   | empty => ac_rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp_all +arith [localLength]
 
 theorem localLength_cons {a : Operation F} {as : Operations F} :
     localLength (a :: as) = a.localLength + as.localLength := by
   cases a <;> simp_all [localLength, Operation.localLength]
 
-theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (env : Environment F) :
-  localWitnesses env (op :: ops) =
-    (op.localWitnesses env ++ ops.localWitnesses env).cast (localLength_cons.symm) := by
+theorem localWitnesses_cons (op : Operation F) (ops : Operations F) (tape : Tape F) :
+  localWitnesses tape (op :: ops) =
+    (op.localWitnesses tape ++ ops.localWitnesses tape).cast (localLength_cons.symm) := by
   cases op <;> simp only [localWitnesses, Operation.localWitnesses, Vector.cast_rfl]
-  rw [Vector.empty_append]; simp
-  rw [Vector.empty_append]; simp
+  all_goals (rw [Vector.empty_append]; simp)
 
 @[circuit_norm]
 theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
@@ -44,7 +43,7 @@ theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operation
     forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
   induction as using induct generalizing offset with
   | empty => simp [forAll_empty, localLength]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
 end Operations
 
@@ -135,12 +134,12 @@ theorem can_replace_soundness {ops : Operations F} {env} :
   intro h
   induction ops using Operations.induct with
   | empty => trivial
-  | witness | assert | lookup =>
+  | witness | assert | lookup | yield | use =>
     simp_all [ConstraintsHold.Soundness, ConstraintsHold, RawTable.imply_soundness]
   | subcircuit circuit ops ih =>
     dsimp only [ConstraintsHold.Soundness]
     dsimp only [ConstraintsHold] at h
-    exact ⟨ circuit.imply_soundness env h.left, ih h.right ⟩
+    exact ⟨ fun idx => circuit.imply_soundness idx env h.left, ih h.right ⟩
 
 end Circuit
 
@@ -157,7 +156,7 @@ lemma localLength_append {F} {a b: List (FlatOperation F)} :
   | case1 => simp only [List.nil_append, localLength]; ac_rfl
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, ih]; ac_rfl
-  | case3 _ _ ih | case4 _ _ ih =>
+  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih | case6 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
 theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
@@ -176,13 +175,15 @@ lemma forAll_append {condition : Condition F} {ops ops' : List (FlatOperation F)
     specialize ih (n + op.singleLocalLength)
     simp_all +arith [forAll_cons, localLength_cons, and_assoc]
 
-lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {env} :
-    (localWitnesses env (a ++ b)).toArray = (localWitnesses env a).toArray ++ (localWitnesses env b).toArray := by
+lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {tape : Tape F} :
+    (localWitnesses tape (a ++ b)).toArray = (localWitnesses tape a).toArray ++ (localWitnesses tape b).toArray := by
   induction a using FlatOperation.localLength.induct with
   | case1 => simp only [List.nil_append, localLength, localWitnesses, Vector.toArray_empty,
     Array.empty_append]
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, Vector.toArray_append, ih, Array.append_assoc]
+  | case5 _ _ ih | case6 _ _ ih =>
+    simp only [List.cons_append, localLength, localWitnesses, ih]
   | case3 _ _ ih | case4 _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, ih]
 
@@ -193,7 +194,7 @@ lemma localLength_toFlat {ops : Operations F} :
     localLength ops.toFlat = ops.localLength := by
   induction ops using Operations.induct with
   | empty => trivial
-  | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih  | subcircuit _ ops ih =>
+  | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih | yield _ ops ih | use _ ops ih | subcircuit _ ops ih =>
     dsimp only [Operations.toFlat, Operations.localLength]
     generalize ops.toFlat = flat_ops at *
     generalize Operations.localLength ops = n at *
@@ -204,17 +205,17 @@ lemma localLength_toFlat {ops : Operations F} :
       specialize ih' (n - m') (by rw [←ih]; omega)
       simp_all +arith only [localLength_append, localLength]
       try omega
-    | case3 ops _ ih' | case4 ops _ ih' =>
+    | case3 ops _ ih' | case4 ops _ ih' | case5 ops _ ih' | case6 ops _ ih' =>
       simp_all only [localLength_append, forall_eq', localLength]
 
 /--
 The witnesses created from flat and nested operations are the same
 -/
-lemma localWitnesses_toFlat {ops : Operations F} {env} :
-  (localWitnesses env ops.toFlat).toArray = (ops.localWitnesses env).toArray := by
+lemma localWitnesses_toFlat {ops : Operations F} {tape : Tape F} :
+  (localWitnesses tape ops.toFlat).toArray = (ops.localWitnesses tape).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp only [Operations.toFlat, Operations.localLength, Operations.localWitnesses, Vector.toArray_append]
     rw [←ih]
     try rw [localWitnesses_append]
@@ -222,49 +223,82 @@ lemma localWitnesses_toFlat {ops : Operations F} {env} :
 end FlatOperation
 
 namespace Environment
-open FlatOperation (localLength localWitnesses)
+open FlatOperation (localLength localWitnesses localYields)
 /-
 what follows are relationships between different versions of `Environment.UsesLocalWitnesses`
 -/
 
-lemma env_extends_witness {F} {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {m c} :
-    env.ExtendsVector (localWitnesses env (.witness m c :: ops)) n ↔
-      (env.ExtendsVector (c env) n ∧ env.ExtendsVector (localWitnesses env ops) (m + n)) := by
-  simp_all only [ExtendsVector, localLength, localWitnesses, Vector.getElem_append]
+lemma tape_extends_append {F} [Field F] {m n : ℕ} {tape : Tape F} {v1 : Vector F m} {v2 : Vector F n} {offset : ℕ} :
+    tape.ExtendsVector (v1 ++ v2) offset ↔
+      tape.ExtendsVector v1 offset ∧ tape.ExtendsVector v2 (m + offset) := by
+  simp only [Tape.ExtendsVector]
   constructor
   · intro h
     constructor
     · intro i
-      specialize h ⟨ i, by omega ⟩
-      simp [h]
+      have := h ⟨i, by omega⟩
+      simp [i.isLt] at this
+      exact this
     · intro i
-      specialize h ⟨ m + i, by omega ⟩
-      ring_nf at *
-      simp [h]
-  · intro ⟨ h_inner, h_outer ⟩ ⟨ i, hi ⟩
-    by_cases hi' : i < m <;> simp only [hi', reduceDIte]
-    · exact h_inner ⟨ i, hi' ⟩
-    · specialize h_outer ⟨ i - m, by omega ⟩
-      simp only [←h_outer]
-      congr 1
+      have := h ⟨m + i, by omega⟩
+      simp at this
+      ring_nf at this ⊢
+      exact this
+  · intro ⟨h1, h2⟩ ⟨i, hi⟩
+    simp [Vector.getElem_append]
+    by_cases hi' : i < m
+    · simp [hi']; exact h1 ⟨i, hi'⟩
+    · simp [hi']
+      have := h2 ⟨i - m, by omega⟩
+      ring_nf at this ⊢
+      convert this using 2
       omega
 
+lemma env_extends_witness {F} [Field F] {n : ℕ} {ops : List (FlatOperation F)} {env : Environment F} {m c} :
+    env.tape.ExtendsVector (localWitnesses env.tape (.witness m c :: ops)) n ↔
+      (env.tape.ExtendsVector (c env.tape) n ∧ env.tape.ExtendsVector (localWitnesses env.tape ops) (m + n)) := by
+  simp only [localWitnesses]
+  rw [tape_extends_append]
+
 theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops : List (FlatOperation F)}  :
-    env.UsesLocalWitnessesFlat n ops ↔ env.ExtendsVector (localWitnesses env ops) n := by
+    env.UsesLocalWitnessesFlat n ops ↔
+      env.tape.ExtendsVector (localWitnesses env.tape ops) n ∧ localYields env.tape ops ⊆ env.yielded := by
   induction ops using FlatOperation.induct generalizing n with
-  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, ExtendsVector, localLength]
-  | witness m _ _ ih =>
-    rw [UsesLocalWitnessesFlat, FlatOperation.forAll, env_extends_witness,←ih (m + n)]
-    trivial
+  | empty => simp [UsesLocalWitnessesFlat, FlatOperation.forAll_empty, Tape.ExtendsVector, localLength, localYields]
+  | witness m c _ ih =>
+    simp only [UsesLocalWitnessesFlat, FlatOperation.forAll, localWitnesses, localYields]
+    rw [tape_extends_append]
+    have ih_applied := ih (m + n)
+    simp only [UsesLocalWitnessesFlat] at ih_applied
+    rw [ih_applied]
+    simp [and_assoc]
+  | yield nl _ ih =>
+    simp only [UsesLocalWitnessesFlat, FlatOperation.forAll, localWitnesses, localYields]
+    have ih_applied := ih n
+    simp only [UsesLocalWitnessesFlat] at ih_applied
+    rw [ih_applied]
+    constructor
+    · intro ⟨h_mem, h_ext, h_subset⟩
+      exact ⟨h_ext, Set.union_subset (Set.singleton_subset_iff.mpr h_mem) h_subset⟩
+    · intro ⟨h_ext, h_union_subset⟩
+      refine ⟨?_, h_ext, ?_⟩
+      · exact Set.mem_of_subset_of_mem h_union_subset (Set.mem_union_left _ (Set.mem_singleton _))
+      · exact Set.Subset.trans Set.subset_union_right h_union_subset
+  | use nl _ ih =>
+    simp only [UsesLocalWitnessesFlat, FlatOperation.forAll, localWitnesses, localYields]
+    have ih_applied := ih n
+    simp only [UsesLocalWitnessesFlat] at ih_applied
+    rw [ih_applied]
+    simp
   | assert | lookup =>
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
-      FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength]
+      FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength, localYields]
 
 theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F} {n : ℕ} (h : ops.SubcircuitsConsistent n) :
   env.UsesLocalWitnesses n ops → env.UsesLocalWitnessesCompleteness n ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; trivial
-  | witness | assert | lookup =>
+  | witness | assert | lookup | yield | use =>
     simp_all +arith [UsesLocalWitnesses, UsesLocalWitnessesCompleteness, Operations.forAllFlat, Operations.forAll]
   | subcircuit n circuit ops ih =>
     simp only [UsesLocalWitnesses, UsesLocalWitnessesCompleteness, Operations.forAllFlat, Operations.forAll_cons, Condition.apply]
@@ -272,23 +306,30 @@ theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : 
     rw [add_comm]
     apply And.intro ?_ (ih h.right)
     apply circuit.imply_usesLocalWitnesses
-    rw [← usesLocalWitnessesFlat_iff_extends]
-    exact h.left
+    · have := usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
+      exact this.mp h.left |>.left
+    · have := usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
+      exact this.mp h.left |>.right
 
 theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
   env.UsesLocalWitnessesCompleteness n ops ↔ ops.forAll n {
-    witness m _ c := env.ExtendsVector (c env) m,
+    witness m _ c := env.tape.ExtendsVector (c env.tape) m,
+    yield _ nl := nl.eval env.tape ∈ env.yielded,
     subcircuit _ _ s := s.UsesLocalWitnesses env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | assert | lookup | witness | subcircuit =>
+  | assert | lookup | witness | yield | use | subcircuit =>
     simp_all +arith [UsesLocalWitnessesCompleteness, Operations.forAll]
 
 theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F} {ops : Operations F} :
   env.UsesLocalWitnesses n ops ↔ ops.forAll n {
-    witness n _ c := env.ExtendsVector (c env) n,
-    subcircuit n _ s := FlatOperation.forAll n { witness n _ c := env.ExtendsVector (c env) n} s.ops
+    witness n _ c := env.tape.ExtendsVector (c env.tape) n,
+    yield _ nl := nl.eval env.tape ∈ env.yielded,
+    subcircuit n _ s := FlatOperation.forAll n {
+      witness n _ c := env.tape.ExtendsVector (c env.tape) n,
+      yield _ nl := nl.eval env.tape ∈ env.yielded
+    } s.ops
   } := by
   simp only [UsesLocalWitnesses, Operations.forAllFlat]
 end Environment
@@ -299,11 +340,12 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (op
   ConstraintsHold.Soundness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
-    subcircuit _ _ s := s.Soundness env
+    use _ nl := nl.eval env.tape ∈ env.yielded,
+    subcircuit _ _ s := ∀ idx, s.Soundness idx env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
@@ -312,11 +354,12 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   ConstraintsHold.Completeness env ops ↔ ops.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
+    use _ nl := nl.eval env.tape ∈ env.yielded,
     subcircuit _ _ s := s.Completeness env
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | yield _ _ ih | use _ _ ih | subcircuit _ _ ih =>
     simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
@@ -333,14 +376,13 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} (h : ops.S
     ConstraintsHold.Completeness env ops → ConstraintsHold env ops := by
   induction ops, n, h using Operations.inductConsistent with
   | empty => intros; exact trivial
-  | witness | assert | lookup =>
+  | witness | assert | lookup | yield | use =>
     simp_all [circuit_norm, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, RawTable.implied_by_completeness]
   | subcircuit n circuit ops ih =>
     simp_all only [ConstraintsHold, ConstraintsHold.Completeness, Environment.UsesLocalWitnesses, Operations.forAllFlat, Operations.forAll, and_true]
     intro h_env h_compl
-    apply circuit.implied_by_completeness env ?_ h_compl.left
-    rw [←Environment.usesLocalWitnessesFlat_iff_extends]
-    exact h_env.left
+    have this := Environment.usesLocalWitnessesFlat_iff_extends (env := env) n (ops := circuit.ops)
+    apply circuit.implied_by_completeness env (this.mp h_env.left |>.left) (this.mp h_env.left |>.right) h_compl.left
 end Circuit
 
 namespace Circuit
@@ -375,7 +417,8 @@ theorem ConstraintsHold.soundness_iff_forAll' {env : Environment F} {circuit : C
   ConstraintsHold.Soundness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Soundness (l.entry.map env),
-    subcircuit _ _ s := s.Soundness env
+    use _ nl := nl.eval env.tape ∈ env.yielded,
+    subcircuit _ _ s := ∀ idx, s.Soundness idx env
   } := by
   rw [forAll_def, ConstraintsHold.soundness_iff_forAll n]
 
@@ -383,6 +426,7 @@ theorem ConstraintsHold.completeness_iff_forAll' {env : Environment F} {circuit 
   ConstraintsHold.Completeness env (circuit.operations n) ↔ circuit.forAll n {
     assert _ e := env e = 0,
     lookup _ l := l.table.Completeness (l.entry.map env),
+    use _ nl := nl.eval env.tape ∈ env.yielded,
     subcircuit _ _ s := s.Completeness env
   } := by
   rw [forAll_def, ConstraintsHold.completeness_iff_forAll n]
@@ -440,7 +484,18 @@ theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : List (FlatOperation
   | nil => simp [forAll_empty]
   | cons op ops ih =>
     specialize ih (op.singleLocalLength + n)
-    cases op <;> simp_all [forAll_cons, Condition.applyFlat]
+    cases op <;> simp_all [forAll_cons, Condition.applyFlat, singleLocalLength]
+
+theorem forAll_True {c : Condition F} {n : ℕ} {ops : List (FlatOperation F)} :
+    c.isTrue → forAll n c ops := by
+  intro ⟨h_wit, h_assert, h_lookup, h_yield, h_use, h_sub⟩
+  induction ops generalizing n with
+  | nil => simp [forAll]
+  | cons op ops ih =>
+    rw [forAll_cons]
+    constructor
+    · cases op <;> simp [Condition.applyFlat, h_wit, h_assert, h_lookup, h_yield, h_use]
+    · exact ih
 end FlatOperation
 
 namespace Operations
@@ -448,7 +503,7 @@ lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F)
     FlatOperation.forAll n condition ops.toFlat ↔ ops.forAllFlat n condition := by
   induction ops using Operations.induct generalizing n with
   | empty => simp only [forAllFlat, forAll, toFlat, FlatOperation.forAll]
-  | witness | assert | lookup =>
+  | witness | assert | lookup | yield | use =>
     simp_all [forAllFlat, forAll, toFlat, FlatOperation.forAll]
   | subcircuit s ops ih =>
     simp_all only [forAllFlat, forAll, toFlat]
@@ -500,36 +555,86 @@ lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F} {ops : List (F
 Flat version of the final theorem in this section, `Circuit.proverEnvironment_usesLocalWitnesses`.
 -/
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (init : List F) :
-  (∀ (env env' : Environment F),
-    forAll init.length { witness n _ c := env.AgreesBelow n env' → c env = c env' } ops) →
+  (∀ (tape tape' : Tape F),
+    forAll init.length {
+      witness n _ c := tape.AgreesBelow n tape' → c tape = c tape'
+    } ops) →
     (proverEnvironment ops init).UsesLocalWitnessesFlat init.length ops := by
-  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Environment.ExtendsVector]
+  simp only [proverEnvironment, Environment.UsesLocalWitnessesFlat, Tape.ExtendsVector]
   intro h_computable
   induction ops generalizing init with
   | nil => trivial
   | cons op ops ih =>
     simp only [forAll_cons] at h_computable ⊢
     cases op with
-    | assert | lookup  =>
-      simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness]
+    | assert | lookup | use _ =>
+      simp only [dynamicWitnesses_cons, dynamicWitness, List.append_nil, Condition.applyFlat,
+        singleLocalLength, FlatOperation.proverTape, Tape.fromList, zero_add] at h_computable ⊢ ih
+      constructor
+      · trivial
+      · specialize ih init (by aesop)
+        apply forAll_implies _ _ ih
+        apply forAll_True
+        and_intros
+        · intro _ _ _ h; exact h
+        · intro _ _ _; trivial
+        · intro _ _ _; trivial
+        · intro _ _ h_in
+          simp only [collectYielded, yieldSet, Set.mem_iUnion] at h_in ⊢
+          obtain ⟨op, h_in_op⟩ := h_in
+          obtain ⟨h_mem, h_in_set⟩ := h_in_op
+          refine ⟨op, ?_, h_in_set⟩
+          exact List.mem_cons_of_mem _ h_mem
+        · intro _ _ _; trivial
+        · simp [Condition.ignoreSubcircuit]
+    | yield nl =>
+      simp only [dynamicWitnesses_cons, dynamicWitness, List.append_nil, Condition.applyFlat,
+        singleLocalLength, FlatOperation.proverTape, Tape.fromList, zero_add] at h_computable ⊢
+      constructor
+      · rw [FlatOperation.collectYielded_cons_yield]
+        left
+        rfl
+      · have ih_applied := ih init (fun tape tape' => (h_computable tape tape').right)
+        simp [FlatOperation.proverTape] at ih_applied ⊢
+        apply forAll_implies _ _ ih_applied
+        apply forAll_True
+        and_intros
+        · intro _ _ _ h; exact h
+        · intro _ _ _; trivial
+        · intro _ _ _; trivial
+        · intro _ _ h_in
+          simp only [collectYielded, yieldSet, Set.mem_iUnion] at h_in ⊢
+          obtain ⟨op, h_in_op⟩ := h_in
+          obtain ⟨h_mem, h_in_set⟩ := h_in_op
+          refine ⟨op, ?_, h_in_set⟩
+          exact List.mem_cons_of_mem _ h_mem
+        · intro _ _ _; trivial
+        · simp [Condition.ignoreSubcircuit]
     | witness m compute =>
-      simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
+      simp_all only [Condition.applyFlat, singleLocalLength, Tape.AgreesBelow]
       -- get rid of ih first
       constructor; case right =>
         specialize ih (init ++ (compute (.fromList init)).toList)
         simp only [List.length_append, Vector.length_toList] at ih
         ring_nf at *
+        have h_tape_eq : proverTape (witness m compute :: ops) init = proverTape ops (init ++ (compute (.fromList init)).toList) := by
+          simp [proverTape, dynamicWitnesses_cons, dynamicWitness]
+        simp only [h_tape_eq]
+        have h_collect : collectYielded (witness m compute :: ops) (proverTape ops (init ++ (compute (.fromList init)).toList)) =
+                         collectYielded ops (proverTape ops (init ++ (compute (.fromList init)).toList)) := by
+          simp [collectYielded, yieldSet]
+        simp only [h_collect]
         exact ih fun _ _ => (h_computable ..).right
       clear ih
-      replace h_computable := fun env env' => (h_computable env env').left
+      replace h_computable := fun tape tape' => (h_computable tape tape').left
       intro i
-      simp only [Environment.fromList]
+      simp only [proverTape, Tape.fromList]
       rw [getElem?_dynamicWitnesses_cons_right i.is_lt]
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
       intro j hj
-      simp [Environment.fromList, hj, getElem?_dynamicWitnesses_of_lt]
+      simp [Tape.fromList, hj, getElem?_dynamicWitnesses_of_lt]
 end FlatOperation
 
 /--
@@ -544,8 +649,8 @@ theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (i
     ←Operations.forAll_toFlat_iff, Environment.UsesLocalWitnesses]
   exact FlatOperation.proverEnvironment_usesLocalWitnesses init h_computable
 
-lemma Environment.agreesBelow_of_le {F} {n m : ℕ} {env env' : Environment F} :
-    env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
+lemma Tape.agreesBelow_of_le {F} {n m : ℕ} {tape tape' : Tape F} :
+    tape.AgreesBelow n tape' → m ≤ n → tape.AgreesBelow m tape' :=
   fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
 
 namespace FlatOperation
@@ -556,9 +661,9 @@ the entire circuit only accesses the environment below `n + localLength`.
 This is not currently used, but seemed like a nice result to have.
 -/
 theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
-  forAll n { witness n _ := Environment.OnlyAccessedBelow n } ops →
-    Environment.OnlyAccessedBelow (n + localLength ops) (localWitnesses · ops) := by
-  intro h_comp env env' h_env
+  forAll n { witness n _ := Tape.OnlyAccessedBelow n } ops →
+    Tape.OnlyAccessedBelow (n + localLength ops) (fun tape => localWitnesses tape ops) := by
+  intro h_comp tape tape' h_tape
   simp only
   induction ops generalizing n with
   | nil => simp [localWitnesses]
@@ -568,18 +673,18 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
     replace h_comp := h_comp.left
     replace h_ih := ih (op.singleLocalLength + n) h_ih
     ring_nf at *
-    specialize h_ih h_env
+    specialize h_ih h_tape
     clear ih
     cases op with
-    | assert | lookup =>
+    | assert | lookup | yield | use =>
       simp_all only [Condition.applyFlat, localWitnesses]
     | witness m c =>
       simp_all only [Condition.applyFlat, localWitnesses,
-        Environment.OnlyAccessedBelow, Environment.AgreesBelow]
+        Tape.OnlyAccessedBelow, Tape.AgreesBelow]
       congr 1
-      apply h_comp env env'
+      apply h_comp tape tape'
       intro i hi
-      exact h_env i (by linarith)
+      exact h_tape i (by linarith)
 end FlatOperation
 
 -- theorem about relationship between FormalCircuit and GeneralFormalCircuit
@@ -590,21 +695,21 @@ end FlatOperation
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
 def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
-    (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
+    {SoundnessIndex : Type} (orig : FormalCircuit F Input Output SoundnessIndex): GeneralFormalCircuit F Input Output := by
+  let Spec input output := ∀ idx, orig.Assumptions idx input → orig.Spec idx input output
   exact {
     elaborated := orig.elaborated,
-    Assumptions := orig.Assumptions,
+    Assumptions input := ∀ idx, orig.Assumptions idx input,
     Spec,
     soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intros
-      apply orig.soundness <;> trivial
+      intro offset env input_var input h_input h_holds
+      dsimp [Spec]
+      intro idx h_assumptions_idx
+      exact orig.soundness offset env input_var input h_input idx h_assumptions_idx h_holds
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      intros
-      apply orig.completeness <;> trivial
+      intro offset env input_var h_env input h_input h_assumptions
+      exact orig.completeness offset env input_var h_env input h_input h_assumptions
   }
 
 /--

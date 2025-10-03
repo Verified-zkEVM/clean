@@ -38,11 +38,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let { z := z3, carryOut := c3 } ← Addition8FullCarry.main ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carryOut := c3 }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
   z.value = (x.value + y.value + carryIn.val) % 2^32
@@ -63,7 +63,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.value, U32.Normalized]
 
   -- simplify circuit further
@@ -76,14 +76,14 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit
-  set z0 := env.get i₀
-  set c0 := env.get (i₀ + 1)
-  set z1 := env.get (i₀ + 2)
-  set c1 := env.get (i₀ + 3)
-  set z2 := env.get (i₀ + 4)
-  set c2 := env.get (i₀ + 5)
-  set z3 := env.get (i₀ + 6)
-  set c3 := env.get (i₀ + 7)
+  set z0 := env.tape.get i₀
+  set c0 := env.tape.get (i₀ + 1)
+  set z1 := env.tape.get (i₀ + 2)
+  set c1 := env.tape.get (i₀ + 3)
+  set z2 := env.tape.get (i₀ + 4)
+  set c2 := env.tape.get (i₀ + 5)
+  set z3 := env.tape.get (i₀ + 6)
+  set c3 := env.tape.get (i₀ + 7)
 
   -- get rid of the boolean carry_out and normalized output
   simp only [h_holds, and_self, and_true]
@@ -103,7 +103,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     carry_in_bool c0_bool c1_bool c2_bool c3_bool
     h0 h1 h2 h3
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
@@ -115,14 +115,14 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit
-  set z0 := env.get i₀
-  set c0 := env.get (i₀ + 1)
-  set z1 := env.get (i₀ + 2)
-  set c1 := env.get (i₀ + 3)
-  set z2 := env.get (i₀ + 4)
-  set c2 := env.get (i₀ + 5)
-  set z3 := env.get (i₀ + 6)
-  set c3 := env.get (i₀ + 7)
+  set z0 := env.tape.get i₀
+  set c0 := env.tape.get (i₀ + 1)
+  set z1 := env.tape.get (i₀ + 2)
+  set c1 := env.tape.get (i₀ + 3)
+  set z2 := env.tape.get (i₀ + 4)
+  set c2 := env.tape.get (i₀ + 5)
+  set z3 := env.tape.get (i₀ + 6)
+  set c3 := env.tape.get (i₀ + 7)
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := h_env
 
   -- the add8 completeness proof, four times
@@ -151,7 +151,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
-def circuit : FormalCircuit (F p) Inputs Outputs where
+def circuit : FormalCircuit (F p) Inputs Outputs Unit where
   Assumptions
   Spec
   soundness

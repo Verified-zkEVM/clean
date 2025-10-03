@@ -40,15 +40,15 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, G.elaborated]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, message } := input
   out.value = round state.value (message.map U32.value) ∧ out.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start
 
   obtain ⟨h_state, h_message⟩ := h_assumptions
@@ -61,7 +61,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     Nat.add_zero, Circuit.ConstraintsHold.Soundness.eq_5,
     Circuit.ConstraintsHold.Soundness.eq_1] at h_holds
   simp only [G.Assumptions, h_input, getElem_eval_vector, G.Spec, Fin.isValue,
-    and_imp] at h_holds
+    and_imp, forall_const] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
   simp_all only [forall_const]
 
@@ -95,9 +95,9 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   · rw [←c8.left]; rfl
   · exact c8.right
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start [G.circuit, G.Assumptions, G.Spec, Environment.UsesLocalWitnessesCompleteness,
-    getElem_eval_vector, Fin.isValue, and_imp, and_true]
+    getElem_eval_vector, Fin.isValue, and_imp, and_true, forall_const]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_env
 
@@ -119,7 +119,7 @@ theorem completeness : Completeness (F p) elaborated Assumptions := by
 
   simp only [h_assumptions, and_self]
 
-def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
+def circuit : FormalCircuit (F p) Inputs BLAKE3State Unit := {
   elaborated with Assumptions, Spec, soundness, completeness
 }
 

@@ -185,7 +185,7 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (compute : Environment (F p) → F p) := do
+def witness (compute : Tape (F p) → F p) := do
   let x ← witnessVar compute
   assertZero (var x * (var x - 1))
   return Boolean.mk x

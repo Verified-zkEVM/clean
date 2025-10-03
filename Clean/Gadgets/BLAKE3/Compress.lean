@@ -31,10 +31,10 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
 
-def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
-  ApplyRounds.Assumptions input
+def Assumptions (_ : Unit) (input : ApplyRounds.Inputs (F p)) : Prop :=
+  ApplyRounds.circuit.Assumptions () input
 
-def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
+def Spec (_ : Unit) (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   output.value = compress
     (chaining_value.map U32.value)
@@ -44,23 +44,17 @@ def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop 
     flags.value ∧
   output.Normalized
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Unit Assumptions Spec := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit,
-    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
-    ApplyRounds.Assumptions, FinalStateUpdate.Spec]
+  simp_all only [circuit_norm, ApplyRounds.circuit, ApplyRounds.Assumptions, ApplyRounds.Spec,
+    FinalStateUpdate.circuit, FinalStateUpdate.Assumptions, compress,
+    FinalStateUpdate.Spec]
 
-lemma ApplyRounds.circuit_assumptions_is :
-  ApplyRounds.circuit.Assumptions (F := F p) = ApplyRounds.Assumptions := rfl
-
-lemma ApplyRouunds.circuit_spec_is :
-  ApplyRounds.circuit.Spec (F := F p) = ApplyRounds.Spec := rfl
-
-theorem completeness : Completeness (F p) elaborated Assumptions := by
+theorem completeness : Completeness (F p) elaborated Unit Assumptions := by
   circuit_proof_start
-  simp_all only [circuit_norm, ApplyRounds.circuit_assumptions_is, ApplyRouunds.circuit_spec_is,
-    ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
-    ApplyRounds.Assumptions, FinalStateUpdate.Spec]
+  simp_all only [circuit_norm, ApplyRounds.circuit, ApplyRounds.Assumptions, ApplyRounds.Spec,
+    FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
+    FinalStateUpdate.Spec, forall_const]
 
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   elaborated with Assumptions, Spec, soundness, completeness

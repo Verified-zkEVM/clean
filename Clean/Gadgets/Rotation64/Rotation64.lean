@@ -27,9 +27,9 @@ def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :
   let byte_rotated ← Rotation64Bytes.circuit byte_offset x
   Rotation64Bits.circuit bit_offset byte_rotated
 
-def Assumptions (input : U64 (F p)) := input.Normalized
+def Assumptions (_ : Unit) (input : U64 (F p)) := input.Normalized
 
-def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
+def Spec (_ : Unit) (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
@@ -43,8 +43,8 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   localLength _ := 16
   output _ i0 := output off i0
 
-theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Unit Assumptions (fun _ => Spec () offset) := by
+  intro i0 env x_var x h_input idx x_normalized h_holds
 
   simp [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
@@ -52,12 +52,12 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   -- abstract away intermediate U64
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
-  set byte_rotated := eval env (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
+  set byte_rotated := eval env.tape (ElaboratedCircuit.output (self:=Rotation64Bytes.elaborated byte_offset) (x_var : Var U64 _) i0)
 
   simp only [Rotation64Bytes.circuit, Rotation64Bytes.elaborated, Rotation64Bytes.Assumptions,
-    Rotation64Bytes.Spec, Rotation64Bits.Assumptions, Rotation64Bits.Spec, add_zero] at h_holds
+    Rotation64Bytes.Spec, Rotation64Bits.Assumptions, Rotation64Bits.Spec, add_zero, forall_const] at h_holds
   simp only [Spec, elaborated, output, ElaboratedCircuit.output]
-  set y := eval env (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
+  set y := eval env.tape (Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0)
 
   simp [Assumptions] at x_normalized
   rw [←h_input] at x_normalized
@@ -74,26 +74,27 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [rotRight64_composition _ _ _ (U64.value_lt_of_normalized x_normalized)] at hy
   rw [hy, Nat.div_add_mod']
 
-theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
+theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Unit Assumptions := by
   intro i0 env x_var h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,
-    Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec] at h_env ⊢
+    Rotation64Bytes.circuit, Rotation64Bytes.Assumptions, Rotation64Bytes.Spec, forall_const] at h_env ⊢
 
+  have x_normalized' := x_normalized ()
   obtain ⟨h0, _⟩ := h_env
   rw [h_eval] at h0
-  specialize h0 x_normalized
+  specialize h0 x_normalized'
   obtain ⟨h_rot, h_norm⟩ := h0
 
-  simp only [Assumptions] at x_normalized
+  simp only [Assumptions] at x_normalized'
   rw [h_eval]
-  simp only [x_normalized, true_and, h_norm]
+  simp only [x_normalized', true_and, h_norm]
 
-def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 := {
+def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 Unit := {
   elaborated offset with
   Assumptions
-  Spec := Spec offset
+  Spec _ := Spec () offset
   soundness := soundness offset
   completeness := completeness offset
 }

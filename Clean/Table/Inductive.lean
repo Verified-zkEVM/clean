@@ -16,13 +16,13 @@ def InductiveTable.Soundness (F : Type) [Field F] (State Input : Type → Type) 
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
-      (eval env acc_var = acc) ∧ (eval env x_var = x) →
+      (eval env.tape acc_var = acc) ∧ (eval env.tape x_var = x) →
     -- if the constraints hold
     Circuit.ConstraintsHold.Soundness env (step acc_var x_var |>.operations ((size State) + (size Input))) →
     -- and assuming the spec on the current row and previous inputs
     Spec initialState xs row_index xs_len acc →
     -- we can conclude the spec on the next row and inputs including the current input
-    Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat) (eval env (step acc_var x_var |>.output ((size State) + (size Input))))
+    Spec initialState (xs.concat x) (row_index + 1) (xs_len ▸ List.length_concat) (eval env.tape (step acc_var x_var |>.output ((size State) + (size Input))))
 
 def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (InputAssumptions : ℕ → Input F → Prop) (InitialStateAssumptions : State F → Prop)
@@ -32,7 +32,7 @@ def InductiveTable.Completeness (F : Type) [Field F] (State Input : Type → Typ
   -- for all rows and inputs
   ∀ (acc_var : Var State F) (x_var : Var Input F)
     (acc : State F) (x : Input F) (xs : List (Input F)) (xs_len : xs.length = row_index),
-    (eval env acc_var = acc) ∧ (eval env x_var = x) →
+    (eval env.tape acc_var = acc) ∧ (eval env.tape x_var = x) →
   -- when using honest-prover witnesses
   env.UsesLocalWitnessesCompleteness ((size State) + (size Input)) (step acc_var x_var |>.operations ((size State) + (size Input))) →
   -- assuming the spec on the current row, the input_spec on the input, and initial state assumptions
@@ -62,8 +62,8 @@ structure InductiveTable (F : Type) [Field F] (State Input : Type → Type) [Pro
     in the completeness proof, we therefore need to restrict the possible inputs and initial states a prover can provide.
     by design, completeness for the full table holds for any initial state and list of inputs that satisfy these assumptions.
   -/
-  InputAssumptions : ℕ → Input F → Prop := fun _ _ => True
-  InitialStateAssumptions : State F → Prop := fun _ => True
+  InputAssumptions _ _ : Prop := True
+  InitialStateAssumptions _ : Prop := True
 
   soundness : InductiveTable.Soundness F State Input Spec step
 
@@ -112,14 +112,14 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
   simp only [equalityConstraint, circuit_norm, table_norm]
 
-  have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
+  have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.tape.get i := by
     have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
     simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm] at h_env'
     have hi' : i < size State + size Input := by linarith
     simp [h_env', hi, hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get,
       Vector.mapRange_zero, Vector.append_empty, ProvablePair.instance]
 
-  have h_env : eval env' (varFromOffset State 0) = row.1 := by
+  have h_env : eval env'.tape (varFromOffset State 0) = row.1 := by
     rw [ProvableType.ext_iff]
     intro i hi
     rw [h_env_in i hi, ProvableType.eval_varFromOffset,
@@ -203,7 +203,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     set main_ops : Operations F := (table.step (varFromOffset State 0) (varFromOffset Input s) (s + x)).2
     set t := main_ops.localLength
 
-    have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.get i := by
+    have h_env_input_1 i (hi : i < s) : (toElements curr.1)[i] = env'.tape.get i := by
       have hi' : i < s + x + t + (s + x) := by linarith
       have hi'' : i < 0 + (s + x) := by linarith
       have hi''' : i < 0 + (s + x) + t := by linarith
@@ -212,7 +212,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
         CellAssignment.assignmentFromCircuit_offset,
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
 
-    have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.get (i + s) := by
+    have h_env_input_2 i (hi : i < x) : (toElements curr.2)[i] = env'.tape.get (i + s) := by
       have hi' : i + s < s + x + t + (s + x) := by linarith
       have hi'' : i + s < 0 + (s + x) := by linarith
       have hi''' : i + s < 0 + (s + x) + t := by linarith
@@ -222,7 +222,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
         Vector.mapRange_zero, Vector.empty_append, Vector.append_empty, Vector.getElem_append]
       congr; omega
 
-    have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.get (i + (s + x) + t) := by
+    have h_env_output i (hi : i < s) : (toElements next.1)[i] = env'.tape.get (i + (s + x) + t) := by
       have hi' : i + (s + x) + t < s + x + t + (s + x) := by linarith
       have hi'' : ¬(i + (s + x) + t < 0 + (s + x)) := by linarith
       have hi''' : ¬(i + (s + x) + t < 0 + (s + x) + t) := by linarith
@@ -233,7 +233,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp +arith [hi, s, add_assoc]
     clear h_env'
 
-    have input_eq_1 : eval env' curr_var.1 = curr.1 := by
+    have input_eq_1 : eval env'.tape curr_var.1 = curr.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
       simp only [curr_var, varFromOffset_pair]
@@ -241,7 +241,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       simp only [ProvableType.eval_varFromOffset,
         ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
 
-    have input_eq_2 : eval env' curr_var.2 = curr.2 := by
+    have input_eq_2 : eval env'.tape curr_var.2 = curr.2 := by
       rw [ProvableType.ext_iff]
       intro i hi
       simp only [curr_var, varFromOffset_pair]
@@ -250,7 +250,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
         ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
       ac_rfl
 
-    have next_eq : eval env' (varFromOffset State (size State + size Input + main_ops.localLength)) = next.1 := by
+    have next_eq : eval env'.tape (varFromOffset State (size State + size Input + main_ops.localLength)) = next.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
       rw [h_env_output i hi, ProvableType.eval_varFromOffset,

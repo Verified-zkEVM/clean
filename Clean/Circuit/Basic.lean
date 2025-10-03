@@ -82,27 +82,27 @@ def localLength (circuit : Circuit F α) (offset := 0) : ℕ :=
 
 /-- Create a new variable. -/
 @[circuit_norm]
-def witnessVar (compute : Environment F → F) : Circuit F (Variable F) :=
+def witnessVar (compute : Tape F → F) : Circuit F (Variable F) :=
   fun (offset : ℕ) =>
     let var : Variable F := ⟨ offset ⟩
-    (var, [.witness 1 fun env => #v[compute env]])
+    (var, [.witness 1 fun tape => #v[compute tape]])
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (compute : Environment F → F) := do
+def witnessField (compute : Tape F → F) := do
   let v ← witnessVar compute
   return var v
 
 /-- Create a vector of variables. -/
 @[circuit_norm]
-def witnessVars (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Variable F) m) :=
+def witnessVars (m : ℕ) (compute : Tape F → Vector F m) : Circuit F (Vector (Variable F) m) :=
   fun (offset : ℕ) =>
     let vars := .mapRange m fun i => ⟨offset + i⟩
     (vars, [.witness m compute])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (compute : Environment F → Vector F m) : Circuit F (Vector (Expression F) m) :=
+def witnessVector (m : ℕ) (compute : Tape F → Vector F m) : Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     let vars := varFromOffset (fields m) offset
     (vars, [.witness m compute])
@@ -121,14 +121,14 @@ end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
 @[circuit_norm]
-def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Environment F → α F) : Circuit F (α (Expression F)) :=
+def ProvableType.witness {α : TypeMap} [ProvableType α] (compute : Tape F → α F) : Circuit F (α (Expression F)) :=
   fun (offset : ℕ) =>
     let var := varFromOffset α offset
     (var, [.witness (size α) (fun env => compute env |> toElements)])
 
 @[circuit_norm]
 def ProvableVector.witness {α : TypeMap} [NonEmptyProvableType α] (m : ℕ)
-    (compute : Environment F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
+    (compute : Tape F → Vector (α F) m) : Circuit F (Vector (α (Expression F)) m) :=
   ProvableType.witness (α:=ProvableVector α m) compute
 
 namespace Circuit
@@ -148,6 +148,8 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
   | .assert e :: ops => eval e = 0 ∧ ConstraintsHold eval ops
   | .lookup { table, entry, .. } :: ops =>
     table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
+  | .yield _ :: ops => ConstraintsHold eval ops
+  | .use nl :: ops => nl.eval eval.tape ∈ eval.yielded ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
 
@@ -158,11 +160,13 @@ Version of `ConstraintsHold` that replaces the statement of subcircuits with the
 def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Soundness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Soundness eval ops
+  | .assert e :: ops => eval.tape e = 0 ∧ ConstraintsHold.Soundness eval ops
   | .lookup { table, entry } :: ops =>
-    table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
+    table.Soundness (entry.map eval.tape) ∧ ConstraintsHold.Soundness eval ops
+  | .yield _ :: ops => ConstraintsHold.Soundness eval ops
+  | .use nl :: ops => nl.eval eval.tape ∈ eval.yielded ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
-    s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+    (∀ idx, s.Soundness idx eval) ∧ ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -171,9 +175,11 @@ Version of `ConstraintsHold` that replaces the statement of subcircuits with the
 def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) → Prop
   | [] => True
   | .witness _ _ :: ops => ConstraintsHold.Completeness eval ops
-  | .assert e :: ops => eval e = 0 ∧ ConstraintsHold.Completeness eval ops
+  | .assert e :: ops => eval.tape e = 0 ∧ ConstraintsHold.Completeness eval ops
   | .lookup { table, entry } :: ops =>
-    table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
+    table.Completeness (entry.map eval.tape) ∧ ConstraintsHold.Completeness eval ops
+  | .yield _ :: ops => ConstraintsHold.Completeness eval ops
+  | .use nl :: ops => nl.eval eval.tape ∈ eval.yielded ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
 end Circuit
@@ -186,7 +192,10 @@ for all variables declared locally within the circuit.
 This is the condition needed to prove completeness of a circuit.
 -/
 def Environment.UsesLocalWitnesses (env : Environment F) (offset : ℕ) (ops : Operations F) : Prop :=
-  ops.forAllFlat offset { witness n _ compute := env.ExtendsVector (compute env) n }
+  ops.forAllFlat offset {
+    witness n _ compute := env.tape.ExtendsVector (compute env.tape) n,
+    yield _ nl := nl.eval env.tape ∈ env.yielded
+  }
 
 /--
 Modification of `UsesLocalWitnesses` where subcircuits replace the condition with a custom statement.
@@ -194,14 +203,19 @@ Modification of `UsesLocalWitnesses` where subcircuits replace the condition wit
 @[circuit_norm]
 def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : ℕ) : List (Operation F) → Prop
   | [] => True
-  | .witness m c :: ops => env.ExtendsVector (c env) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
+  | .witness m c :: ops => env.tape.ExtendsVector (c env.tape) offset ∧ env.UsesLocalWitnessesCompleteness (offset + m) ops
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
+  | .yield nl :: ops => nl.eval env.tape ∈ env.yielded ∧ env.UsesLocalWitnessesCompleteness offset ops
+  | .use _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
-  FlatOperation.forAll n { witness n _ compute := env.ExtendsVector (compute env) n } ops
+  FlatOperation.forAll n {
+    witness n _ compute := env.tape.ExtendsVector (compute env.tape) n,
+    yield _ nl := nl.eval env.tape ∈ env.yielded
+  } ops
 
 section
 open Circuit (ConstraintsHold)
@@ -240,28 +254,28 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
 attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
 
 @[circuit_norm]
-def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
+def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (SoundnessIndex : Type := Unit)
+    (Assumptions : (idx : SoundnessIndex) → Input F → Prop) (Spec : (idx : SoundnessIndex) → Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
-  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env.tape input_var = input →
+  ∀ idx : SoundnessIndex, Assumptions idx input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
-  let output := eval env (circuit.output input_var offset)
-  Spec input output
+  let output := eval env.tape (circuit.output input_var offset)
+  Spec idx input output
 
 @[circuit_norm]
-def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) :=
+def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (SoundnessIndex : Type := Unit)
+    (Assumptions : (idx : SoundnessIndex) → Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  ∀ offset : ℕ, ∀ env : Environment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
-  -- for all inputs that satisfy the assumptions
-  ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  -- for all inputs that satisfy the assumptions (for ALL indices)
+  ∀ input : Input F, eval env.tape input_var = input →
+  (∀ idx : SoundnessIndex, Assumptions idx input) →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
 
@@ -279,11 +293,12 @@ This means that, when viewed as a black box, the circuit acts similar to a funct
 preconditions, and the spec acts as the postcondition.
 -/
 structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+    (SoundnessIndex : Type := Unit)
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions (_ : Input F) : Prop := True
-  Spec : Input F → Output F → Prop
-  soundness : Soundness F elaborated Assumptions Spec
-  completeness : Completeness F elaborated Assumptions
+  Assumptions : (idx : SoundnessIndex) → Input F → Prop := fun _ _ => True
+  Spec : (idx : SoundnessIndex) → Input F → Output F → Prop
+  soundness : Soundness F elaborated SoundnessIndex Assumptions Spec
+  completeness : Completeness F elaborated SoundnessIndex Assumptions
 
 /--
 `DeterministicFormalCircuit` extends `FormalCircuit` with an explicit uniqueness constraint.
@@ -292,17 +307,18 @@ Use this class when you want to formally guarantee that constraints uniquely det
 preventing ambiguity in deterministic circuits.
 -/
 structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
-    extends circuit : FormalCircuit F Input Output where
-  uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
-    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+    (SoundnessIndex : Type := Unit)
+    extends circuit : FormalCircuit F Input Output SoundnessIndex where
+  uniqueness : ∀ (idx : SoundnessIndex) (input : Input F) (out1 out2 : Output F),
+    circuit.Assumptions idx input → circuit.Spec idx input out1 → circuit.Spec idx input out2 → out1 = out2
 
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs that satisfy the assumptions
-  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env.tape input_var = input →
   Assumptions input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
@@ -313,10 +329,10 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
 def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
     (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset, ∀ env, ∀ input_var : Var Input F,
+  ∀ offset, ∀ env : Environment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
-  ∀ input : Input F, eval env input_var = input →
+  ∀ input : Input F, eval env.tape input_var = input →
   Assumptions input → Spec input →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
@@ -350,22 +366,22 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
 @[circuit_norm]
 def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
-  ∀ offset : ℕ, ∀ env,
+  ∀ offset : ℕ, ∀ env : Environment F,
   -- for all inputs
-  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env.tape input_var = input →
   -- if the constraints hold
   ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
-  let output := eval env (circuit.output input_var offset)
+  let output := eval env.tape (circuit.output input_var offset)
   Spec input output
 
 @[circuit_norm]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
-  ∀ offset : ℕ, ∀ env, ∀ input_var : Var Input F,
+  ∀ offset : ℕ, ∀ env : Environment F, ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
-  ∀ input : Input F, eval env input_var = input →
+  ∀ input : Input F, eval env.tape input_var = input →
   Assumptions input →
   -- the constraints hold
   ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
@@ -398,9 +414,9 @@ export Circuit (witnessVar witnessField witnessVars witnessVector assertZero loo
 -- general `witness` method
 
 class Witnessable (F : Type) [Field F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
-  witness : ((Environment F) → value F) → Circuit F (var F)
+  witness : ((Tape F) → value F) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
-  witness_eq (compute : Environment F → value F) :
+  witness_eq (compute : Tape F → value F) :
     witness compute = var_eq ▸ ProvableType.witness compute := by intros; rfl
 
 export Witnessable (witness)
@@ -420,59 +436,100 @@ instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
 
 -- witness generation
 
-def Environment.fromList (witnesses : List F) : Environment F :=
+def Tape.fromList (witnesses : List F) : Tape F :=
   .mk fun i => witnesses[i]?.getD 0
 
 def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ compute => (compute (.fromList acc)).toList
+  | .witness _ compute => (compute (Tape.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .yield _ => []
+  | .use _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
     acc ++ op.dynamicWitness acc
   ) init
 
-def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
-  .fromList (FlatOperation.dynamicWitnesses ops init)
+def FlatOperation.proverTape (ops : List (FlatOperation F)) (init : List F) : Tape F :=
+  Tape.fromList (FlatOperation.dynamicWitnesses ops init)
 
-def Environment.AgreesBelow (n : ℕ) (env env' : Environment F) :=
-  ∀ i < n, env.get i = env'.get i
+/-- Helper: Extract the set from an operation -/
+def FlatOperation.yieldSet (op : FlatOperation F) (tape : Tape F) : Set (NamedList F) :=
+  match op with | .yield nl => {nl.eval tape} | _ => ∅
 
-def Environment.OnlyAccessedBelow (n : ℕ) (f : Environment F → α) :=
-  ∀ env env', env.AgreesBelow n env' → f env = f env'
+/-- Collect all yielded values from flat operations -/
+def FlatOperation.collectYielded (ops : List (FlatOperation F)) (tape : Tape F) : Set (NamedList F) :=
+  ⋃ op ∈ ops, op.yieldSet tape
+
+lemma FlatOperation.collectYielded_cons_yield (nl : NamedList (Expression F)) (ops : List (FlatOperation F)) (tape : Tape F) :
+    collectYielded (yield nl :: ops) tape = {nl.eval tape} ∪ collectYielded ops tape := by
+  simp only [collectYielded, yieldSet]
+  ext x
+  simp [Set.mem_iUnion, List.mem_cons]
+
+lemma FlatOperation.collectYielded_subset_cons (op : FlatOperation F) (ops : List (FlatOperation F)) (tape : Tape F) :
+    collectYielded ops tape ⊆ collectYielded (op :: ops) tape := by
+  intro x h
+  simp only [collectYielded, Set.mem_iUnion] at h ⊢
+  obtain ⟨op', h_mem, h_in⟩ := h
+  exact ⟨op', List.mem_cons_of_mem op h_mem, h_in⟩
+
+def Tape.AgreesBelow (n : ℕ) (tape tape' : Tape F) :=
+  ∀ i < n, tape.get i = tape'.get i
+
+def Tape.OnlyAccessedBelow (n : ℕ) (f : Tape F → α) :=
+  ∀ tape tape', tape.AgreesBelow n tape' → f tape = f tape'
 
 /--
 A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : Environment F) : Prop :=
-  ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute env = compute env' }
+def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (tape tape' : Tape F) : Prop :=
+  ops.forAllFlat n {
+    witness n _ compute := tape.AgreesBelow n tape' → compute tape = compute tape'
+  }
 
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
-  ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
+  ∀ tape tape', (circuit.operations n).ComputableWitnesses n tape tape'
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
 that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
+-- Generate the tape containing all witness values for the circuit
+def Circuit.proverTape (circuit : Circuit F α) (init : List F := []) : Tape F :=
+  Tape.fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
+
+-- Create a prover environment with the witness tape
 def Circuit.proverEnvironment (circuit : Circuit F α) (init : List F := []) : Environment F :=
-  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat init)
+  let ops := (circuit.operations init.length).toFlat
+  let tape := circuit.proverTape init
+  { tape := tape, yielded := FlatOperation.collectYielded ops tape }
+
+-- Create a prover environment for flat operations
+def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (init : List F) : Environment F :=
+  let tape := FlatOperation.proverTape ops init
+  { tape := tape, yielded := FlatOperation.collectYielded ops tape }
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
 
-def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (Environment F → F) (localLength l)
+def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (Tape F → F) (localLength l)
   | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i (tape : Tape F) => (c tape)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
+  | .use _ :: ops => witnessGenerators ops
 
-def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
+def Operations.witnessGenerators : (ops : Operations F) → Vector (Tape F → F) ops.localLength
   | [] => #v[]
-  | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
+  | .witness m c :: ops => Vector.mapFinRange m (fun i (tape : Tape F) => (c tape)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .yield _ :: ops => witnessGenerators ops
+  | .use _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
 
 -- statements about constant length or output

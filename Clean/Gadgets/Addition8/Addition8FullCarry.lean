@@ -42,11 +42,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
   return { z, carryOut }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (_ : Unit) (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (_ : Unit) (input : Inputs (F p)) (out : Outputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input
   out.z.val = (x.val + y.val + carryIn.val) % 256 ∧
   out.carryOut.val = (x.val + y.val + carryIn.val) / 256
@@ -55,7 +55,7 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
-def circuit : FormalCircuit (F p) Inputs Outputs where
+def circuit : FormalCircuit (F p) Inputs Outputs Unit where
   main
   Assumptions
   Spec
@@ -64,17 +64,17 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   soundness := by
     -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
+    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs idx h_assumptions h_holds
 
     -- characterize inputs
-    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
+    replace h_inputs : x_var.eval env.tape = x ∧ y_var.eval env.tape = y ∧ carry_in_var.eval env.tape = carry_in := by
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
     simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable]
 
-    set z := env.get i0
-    set carry_out := env.get (i0 + 1)
+    set z := env.tape.get i0
+    set carry_out := env.tape.get (i0 + 1)
     obtain ⟨ h_byte, h_bool_carry, h_add ⟩ := h_holds
 
     -- now it's just mathematics!
@@ -92,15 +92,15 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
-    replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
+    replace h_inputs : x_var.eval env.tape = x ∧ y_var.eval env.tape = y ∧ carry_in_var.eval env.tape = carry_in := by
       simpa [circuit_norm] using h_inputs
 
     -- simplify assumptions and goal
     simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
 
     obtain ⟨hz, hcarry_out⟩ := h_env
-    set z := env.get i0
-    set carry_out := env.get (i0 + 1)
+    set z := env.tape.get i0
+    set carry_out := env.tape.get (i0 + 1)
 
     -- now it's just mathematics!
     guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
