@@ -96,8 +96,6 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     }
   localLength _ := 8
 
-  Assumptions | instruction => True
-
   Spec
   | instruction, output =>
     match Spec.decodeInstruction instruction with
@@ -323,7 +321,6 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
-  Assumptions | pc => True
   Spec
   | pc, output =>
     match Spec.fetchInstruction program pc with
