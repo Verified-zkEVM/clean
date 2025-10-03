@@ -51,8 +51,6 @@ def circuit : FormalCircuit (F p) field (fields 254) Unit where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
-  Assumptions _ _ := True
-
   Spec _ input bits :=
     bits = fieldToBits 254 input
 
@@ -193,8 +191,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) Unit
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
-
-  Assumptions _ _ := True
 
   Spec _ input output :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)

@@ -81,7 +81,6 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Input (Expression F) := input_var
   have : Input F := input
   have : eval env.tape input_var = input := h_input
-  have : Unit := idx
   have : Assumptions input := h_assumptions
   have : ConstraintsHold.Soundness env (circuit.main input_var i₀).2 := h_holds
   sorry

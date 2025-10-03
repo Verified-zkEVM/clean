@@ -38,8 +38,6 @@ def circuit : FormalCircuit (F p) field field Unit where
   main
   localLength _ := 2
 
-  Assumptions _ _ := True
-
   Spec _ input output :=
     output = (if input = 0 then 1 else 0)
 
@@ -90,8 +88,6 @@ def main (input : Expression (F p) × Expression (F p)) := do
 def circuit : FormalCircuit (F p) fieldPair field Unit where
   main
   localLength _ := 2
-
-  Assumptions _ _ := True
 
   Spec _ input output :=
     output = (if input.1 = input.2 then 1 else 0)
