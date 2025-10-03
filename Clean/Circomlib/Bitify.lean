@@ -122,7 +122,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   soundness := by
     circuit_proof_start [arbitraryBitLengthCircuit]
-    simp_all only [true_and, forall_const]
+    simp_all only [true_and]
     rcases h_holds with ⟨ _, h_bits, h_holds ⟩
     rw [← h_holds, fieldToBits_fieldFromBits hn]
     simpa [circuit_norm] using h_bits

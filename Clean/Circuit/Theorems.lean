@@ -237,11 +237,11 @@ lemma tape_extends_append {F} [Field F] {m n : ℕ} {tape : Tape F} {v1 : Vector
     constructor
     · intro i
       have := h ⟨i, by omega⟩
-      simp [Vector.getElem_append, i.isLt] at this
+      simp [i.isLt] at this
       exact this
     · intro i
       have := h ⟨m + i, by omega⟩
-      simp [Vector.getElem_append] at this
+      simp at this
       ring_nf at this ⊢
       exact this
   · intro ⟨h1, h2⟩ ⟨i, hi⟩
@@ -269,7 +269,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops 
     simp only [UsesLocalWitnessesFlat, FlatOperation.forAll, localWitnesses, localYields]
     rw [tape_extends_append]
     have ih_applied := ih (m + n)
-    simp only [UsesLocalWitnessesFlat, FlatOperation.forAll] at ih_applied
+    simp only [UsesLocalWitnessesFlat] at ih_applied
     rw [ih_applied]
     simp [and_assoc]
   | yield nl _ ih =>
@@ -289,7 +289,7 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} (n : ℕ) {ops 
     have ih_applied := ih n
     simp only [UsesLocalWitnessesFlat] at ih_applied
     rw [ih_applied]
-    simp [and_assoc]
+    simp
   | assert | lookup =>
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength, localYields]
@@ -494,7 +494,7 @@ theorem forAll_True {c : Condition F} {n : ℕ} {ops : List (FlatOperation F)} :
   | cons op ops ih =>
     rw [forAll_cons]
     constructor
-    · cases op <;> simp [Condition.applyFlat, h_wit, h_assert, h_lookup, h_yield, h_use, h_sub]
+    · cases op <;> simp [Condition.applyFlat, h_wit, h_assert, h_lookup, h_yield, h_use]
     · exact ih
 end FlatOperation
 
@@ -589,7 +589,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
         · simp [Condition.ignoreSubcircuit]
     | yield nl =>
       simp only [dynamicWitnesses_cons, dynamicWitness, List.append_nil, Condition.applyFlat,
-        singleLocalLength, FlatOperation.proverTape, Tape.fromList, zero_add, forAll_cons] at h_computable ⊢
+        singleLocalLength, FlatOperation.proverTape, Tape.fromList, zero_add] at h_computable ⊢
       constructor
       · rw [FlatOperation.collectYielded_cons_yield]
         left

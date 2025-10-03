@@ -80,7 +80,7 @@ theorem completeness : Completeness (F p) elaborated Unit (fun _ => Assumptions)
   dsimp only [circuit_norm, main, Xor64.circuit, Rotation64.circuit, Rotation64.elaborated] at h_env ⊢
   simp_all only [circuit_norm, getElem_eval_vector,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
-    add_assoc, seval, true_and, true_implies, forall_const]
+    add_assoc, seval, true_and, forall_const]
 
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow Unit :=
   { elaborated with Assumptions := fun _ => Assumptions, Spec := fun _ => Spec, soundness, completeness }

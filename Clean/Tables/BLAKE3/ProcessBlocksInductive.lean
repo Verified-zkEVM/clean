@@ -250,7 +250,7 @@ private lemma step_process_block (env : Environment (F p))
     (eval env.tape ((step acc_var x_var).output (size ProcessBlocksState + size BlockInput))).Normalized := by
   have := p_large.elim
   simp only [step, circuit_norm, BLAKE3.Compress.circuit, BLAKE3BlockInputNormalized.circuit, Addition32.circuit, IsZero.circuit, Conditional.circuit,
-    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec, BLAKE3.ApplyRounds.Assumptions] at ⊢ h_holds
+    Conditional.Assumptions, IsZero.Assumptions, IsZero.Spec, BLAKE3.Compress.Assumptions, BLAKE3.Compress.Spec] at ⊢ h_holds
   simp only [ProcessBlocksState.Normalized] at acc_normalized
   simp only [BlockInput.Normalized] at x_normalized
   simp only [circuit_norm] at acc_normalized x_normalized

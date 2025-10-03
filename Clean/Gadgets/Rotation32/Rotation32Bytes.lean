@@ -73,7 +73,7 @@ theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Unit (f
   fin_cases off
   repeat
     intro Assumptions
-    simp [main, circuit_norm, forall_const]
+    simp [main, circuit_norm]
 
 def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 Unit := {
   elaborated off with
