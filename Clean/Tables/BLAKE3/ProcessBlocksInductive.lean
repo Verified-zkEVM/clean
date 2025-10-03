@@ -379,7 +379,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     · simp_all
     constructor
     · intro idx
-      simp_all
+      simp_all only
       constructor
       · aesop
       simp_all only [circuit_norm]
