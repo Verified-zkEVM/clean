@@ -256,7 +256,11 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       exact lt_of_le_of_lt this hn
 
     have heq: ZMod.val ((2: F p) ^ n) = 2 ^ n := by
+      rw [ZMod.val_natCast]
+
+
       sorry
+
     by_cases hlt : ZMod.val input.1 < ZMod.val input.2
 
     -- CASE input.1 < input.2
@@ -366,8 +370,51 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp only [circuit_norm, Num2Bits.circuit] at *
+    rcases h_assumptions with ⟨hx, hy⟩
+    have hx_eval : Expression.eval env input_var.1 = input.1 := by
+      simpa using congrArg Prod.fst h_input
+    have hy_eval : Expression.eval env input_var.2 = input.2 := by
+      simpa using congrArg Prod.snd h_input
+    simp [hx_eval, hy_eval] at *
+    set out := env.get (i₀ + n + 1) with hout
+    have two_exp_n_small : 2 ^ n < p := by
+      have : 2 ^ n ≤ 2 ^ (n + 1) := by gcongr; repeat linarith
+      exact lt_of_le_of_lt this hn
+
+    have heq: ZMod.val ((2: F p) ^ n) = 2 ^ n := by
+      have : ((2: F p) ^ n) = OfNat.ofNat (2 ^ n) := by
+        sorry
+      rw [this]
+      change (OfNat.ofNat (2 ^ n) : ZMod p).val = 2 ^ n
+      rw [ZMod.val_ofNat_of_lt]
+      sorry
+
+    have hdiff_lt_basic : ZMod.val (input.1 + 2 ^ n - input.2) < 2^ (n+1) := by
+      rw[ZMod.val_sub]
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          calc
+            ZMod.val input.1 + 2 ^ n - ZMod.val input.2 <  2^n + 2 ^ n := by omega
+            _ = 2 ^ (n + 1) := by rw[pow_succ, mul_two]
+        · have easy_lemma: 2 * 2 ^ n = 2 ^ (n + 1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          omega
+        · have easy_lemma: 2 * 2 ^ n = 2 ^ (n + 1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+
+    have h2 := h_env.right
+    refine And.intro ?_ ?_
+    · simpa [sub_eq_add_neg] using hdiff_lt_basic
+    · exact h2
+
 end LessThan
 
 namespace LessEqThan
