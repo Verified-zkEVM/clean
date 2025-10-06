@@ -256,10 +256,14 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       exact lt_of_le_of_lt this hn
 
     have heq: ZMod.val ((2: F p) ^ n) = 2 ^ n := by
-      rw [ZMod.val_natCast]
-
-
-      sorry
+      rw [ZMod.val_pow]
+      rw [ZMod.val_ofNat_of_lt]
+      · simp_all
+        exact Fact.out
+      convert two_exp_n_small
+      rw [ZMod.val_ofNat_of_lt]
+      simp_all
+      exact Fact.out
 
     by_cases hlt : ZMod.val input.1 < ZMod.val input.2
 
@@ -384,12 +388,14 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       exact lt_of_le_of_lt this hn
 
     have heq: ZMod.val ((2: F p) ^ n) = 2 ^ n := by
-      have : ((2: F p) ^ n) = OfNat.ofNat (2 ^ n) := by
-        sorry
-      rw [this]
-      change (OfNat.ofNat (2 ^ n) : ZMod p).val = 2 ^ n
+      rw [ZMod.val_pow]
       rw [ZMod.val_ofNat_of_lt]
-      sorry
+      · simp_all
+        exact Fact.out
+      convert two_exp_n_small
+      rw [ZMod.val_ofNat_of_lt]
+      simp_all
+      exact Fact.out
 
     have hdiff_lt_basic : ZMod.val (input.1 + 2 ^ n - input.2) < 2^ (n+1) := by
       rw[ZMod.val_sub]
