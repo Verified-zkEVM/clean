@@ -297,7 +297,6 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     rw[h3]
     --simp the goal basic math
 
-
     unfold fieldToBits at h2
     unfold toBits at h2
     --now I need to use that On Nat, shift is equivalent to a / 2 ^ b.
@@ -305,7 +304,6 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     apply congrArg (fun v => v[n]) at h2
     simp only [Vector.getElem_map, Vector.getElem_mapRange,
       Nat.cast_ite, Nat.cast_one, Nat.cast_zero, circuit_norm] at h2
-
 
     simp only [← sub_eq_add_neg, Nat.testBit_eq_false_of_lt hdiff_lt, Bool.false_eq_true,
       ↓reduceIte] at h2
