@@ -1019,10 +1019,24 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
               · exact h_rest.1
               · exact h_comp2
 
+theorem yields_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environment (F p)) (offset : ℕ) :
+    Operations.localYields env ((main input).operations offset) = ∅ := by
+  induction n using Nat.strong_induction_on generalizing offset with
+  | _ n IH =>
+    match n with
+    | 0 => simp [main, circuit_norm]
+    | 1 => simp [main, circuit_norm]
+    | 2 => simp [main, circuit_norm, AND.main, AND.circuit]
+    | n + 3 =>
+      simp only [main, circuit_norm, AND.main, AND.circuit]
+      rw [IH _ (by omega), IH _ (by omega)]
+      simp
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
   localLength _ := n - 1
   localLength_eq := localLength_eq n
+  yields_eq := yields_eq n
   subcircuitsConsistent := subcircuitsConsistent n
 
   Assumptions := Assumptions n

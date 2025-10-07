@@ -68,6 +68,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
   main := main n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
+  yields_eq := by intros; simp [circuit_norm, main]
   output _ i := varFromOffset (fields n) i
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]

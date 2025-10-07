@@ -36,6 +36,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   output _ _ := ()
 
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
+  yields_eq _ _ _ := by simp [main, circuit_norm]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]

@@ -440,6 +440,25 @@ lemma forEach.usesLocalWitnesses :
   conv_lhs => rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
   conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+
+@[circuit_norm ↓]
+lemma forEach.localYields :
+  Operations.localYields env ((forEach xs body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body xs[i.val]).operations (n + i*(body default).localLength)) := by
+  simp only [forEach]
+  rw [ForM.operations_eq xs constant n, Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    rw [← hi] at h
+    convert h using 2
+    rw [constant.localLength_eq]
+  · intro ⟨i, h⟩
+    refine ⟨(body xs[i.val]).operations (n + i * (body default).localLength), ⟨i, ?_⟩, ?_⟩
+    · simp only [constant.localLength_eq]
+    · exact h
 end forEach
 
 section map
@@ -486,6 +505,28 @@ lemma map.usesLocalWitnesses :
   conv_lhs => rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
   conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+
+@[circuit_norm ↓]
+lemma map.localYields :
+  Operations.localYields env ((map xs body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body xs[i.val]).operations (n + i*(body default).localLength)) := by
+  simp only [map]
+  rw [MapM.operations_eq, Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    rw [← hi] at h
+    convert h using 2
+    congr 1
+    rw [constant.localLength_eq]
+  · intro ⟨i, h⟩
+    refine ⟨(body xs[i.val]).operations (n + i*(body default).localLength), ⟨i, ?_⟩, ?_⟩
+    · congr 1
+      rw [constant.localLength_eq]
+    · exact h
+
 end map
 
 section mapFinRange
@@ -534,6 +575,28 @@ lemma mapFinRange.usesLocalWitnesses :
   conv_lhs => rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
   conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+
+@[circuit_norm ↓]
+lemma mapFinRange.localYields :
+  Operations.localYields env ((mapFinRange m body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body i).operations (n + i*(body 0).localLength)) := by
+  simp only [mapFinRange, Vector.mapFinRangeM]
+  rw [MapM.operations_eq, Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop, Vector.getElem_finRange]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    rw [← hi] at h
+    convert h using 2
+    congr 1
+    rw [constant.localLength_eq]
+  · intro ⟨i, h⟩
+    refine ⟨(body i).operations (n + i*(body 0).localLength), ⟨i, ?_⟩, ?_⟩
+    · congr 1
+      rw [constant.localLength_eq]
+    · exact h
+
 end mapFinRange
 
 section foldl
@@ -609,6 +672,22 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
     rw [env.usesLocalWitnessesCompleteness_iff_forAll]
   simp only [←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
+
+@[circuit_norm ↓]
+lemma foldl.localYields_empty
+    (h : ∀ (acc : β) (x : α) (offset : ℕ), Operations.localYields env ((body acc x).operations offset) = ∅) :
+    Operations.localYields env ((foldl xs init body const_out constant).operations n) = ∅ := by
+  simp only [foldl]
+  have h_const : ConstantLength (FoldlM.prod body) := constant
+  rw [FoldlM.operations_eq (constant := h_const), Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_empty_iff_false, Set.mem_iUnion, List.mem_ofFn, iff_false, not_exists]
+  intro ops ⟨i, hi⟩
+  rw [← hi]
+  specialize h (FoldlM.foldlAcc n xs body init i) xs[i.val] (n + i * ConstantLength.localLength (FoldlM.prod body))
+  rw [h]
+  simp
+
 end foldl
 
 section foldlRange
@@ -672,6 +751,28 @@ lemma foldlRange.usesLocalWitnesses :
     arg 2
     rw [env.usesLocalWitnessesCompleteness_iff_forAll]
   simp only [foldlRange.forAll]
+
+@[circuit_norm ↓]
+lemma foldlRange.localYields :
+  Operations.localYields env ((foldlRange m init body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations (n + i * (body default i).localLength)) := by
+  simp only [foldlRange]
+  rw [FoldlM.operations_eq (constant := constant), Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop, Vector.getElem_finRange]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    rw [← hi] at h
+    convert h using 2
+    congr 1
+    unfold FoldlM.prod
+    rw [constant.localLength_eq (default, i)]
+  · intro ⟨i, h⟩
+    refine ⟨(body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations (n + i * (body default i).localLength), ⟨i, ?_⟩, ?_⟩
+    · unfold FoldlM.prod
+      simp only [constant.localLength_eq (default, i)]
+    · exact h
 
 end foldlRange
 

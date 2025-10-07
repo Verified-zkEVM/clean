@@ -246,6 +246,13 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
   output_eq : ∀ input offset, (main input).output offset = output input offset
     := by intros; rfl
 
+  /-- the set of named lists yielded locally by this circuit -/
+  yields : Var Input F → Environment F → ℕ → Set (NamedList F) := fun _ _ _ => ∅
+
+  /-- correctness of `yields` -/
+  yields_eq : ∀ input env offset, ((main input).operations offset).localYields env = yields input env offset
+    := by intros; rfl
+
   /-- technical condition: all subcircuits must be consistent with the current offset -/
   subcircuitsConsistent : ∀ input offset, ((main input).operations offset).SubcircuitsConsistent offset
     := by intros; and_intros <;> (
@@ -253,7 +260,7 @@ class ElaboratedCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableT
       try first | ac_rfl | trivial
     )
 
-attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output
+attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength ElaboratedCircuit.output ElaboratedCircuit.yields
 
 @[circuit_norm]
 def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)

@@ -44,6 +44,9 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   output _ i0 := output off i0
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
+  yields_eq := by
+    intros
+    simp [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.fromLimbs

@@ -105,6 +105,7 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
 
   localLength _ := n
   localLength_eq := by sorry
+  yields_eq := by intros; simp [circuit_norm, main]
 
   output _ i := varFromOffset (fields n) i
 

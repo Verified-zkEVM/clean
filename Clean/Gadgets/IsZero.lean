@@ -29,6 +29,8 @@ instance elaborated : ElaboratedCircuit F M field where
   localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
+  yields_eq := by
+    intros; simp [circuit_norm, main, IsZeroField.circuit]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 

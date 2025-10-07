@@ -26,6 +26,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   output _ i := varFromOffset (fields n) i
 
   localLength_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
+  yields_eq := by intros; simp [circuit_norm, main]
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 

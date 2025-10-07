@@ -240,6 +240,7 @@ def localWitnesses (env : Environment F) : (ops : Operations F) → Vector F ops
   | .yield _ :: ops => localWitnesses env ops
   | .use _ :: ops => localWitnesses env ops
 
+@[circuit_norm]
 def localYields (env : Environment F) : Operations F → Set (NamedList F)
   | [] => ∅
   | .witness _ _ :: ops => localYields env ops
@@ -248,6 +249,24 @@ def localYields (env : Environment F) : Operations F → Set (NamedList F)
   | .yield nl :: ops => {nl.eval env} ∪ localYields env ops
   | .use _ :: ops => localYields env ops
   | .subcircuit _ :: ops => localYields env ops  -- subcircuits don't yield to parent
+
+@[circuit_norm]
+theorem localYields_append (env : Environment F) (ops1 ops2 : Operations F) :
+    localYields env (ops1 ++ ops2) = localYields env ops1 ∪ localYields env ops2 := by
+  induction ops1 with
+  | nil => simp [localYields]
+  | cons op ops1 ih =>
+    cases op <;> simp [localYields, ih]
+    case yield nl =>
+      rw [Set.insert_union]
+
+@[circuit_norm]
+theorem localYields_flatten (env : Environment F) (opss : List (Operations F)) :
+    localYields env (List.flatten opss) = ⋃ ops ∈ opss, localYields env ops := by
+  induction opss with
+  | nil => simp [localYields]
+  | cons ops opss ih =>
+    simp [List.flatten, localYields_append, ih]
 
 /-- Induction principle for `Operations`. -/
 def induct {motive : Operations F → Sort*}

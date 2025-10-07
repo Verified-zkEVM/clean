@@ -29,6 +29,7 @@ def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
 instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 0
+  yields_eq := by intros; simp [circuit_norm, main]; split_ifs <;> rfl
   output input i0 :=
     let ⟨x0, x1, x2, x3⟩ := input
     match off with

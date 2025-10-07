@@ -27,6 +27,7 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
   localLength _ := 160
+  yields_eq := by intros; simp [circuit_norm, main]
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 

@@ -77,6 +77,8 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   localLength n := size β
   output _ n := varFromOffset β n
 
+  yields_eq := by intro; simp [circuit_norm]
+
   Assumptions := circuit.Assumptions
   Spec := circuit.Spec
 
