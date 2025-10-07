@@ -27,17 +27,17 @@ partial def circuitProofStartCore : TacticM Unit := do
       match headConst? with
       | some ``Soundness =>
         evalTactic (← `(tactic| unfold Soundness))
-        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Soundness =>
         evalTactic (← `(tactic| unfold FormalAssertion.Soundness))
-        let names := [`i₀, `env, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Soundness =>
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Soundness))
-        let names := [`i₀, `env, `input_var, `input, `h_input, `h_holds]
+        let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
@@ -47,17 +47,17 @@ partial def circuitProofStartCore : TacticM Unit := do
       match headConst? with
       | some ``Completeness =>
         evalTactic (← `(tactic| unfold Completeness))
-        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Completeness =>
         evalTactic (← `(tactic| unfold FormalAssertion.Completeness))
-        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Completeness =>
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Completeness))
-        let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()

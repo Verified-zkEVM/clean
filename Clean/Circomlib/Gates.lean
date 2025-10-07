@@ -49,9 +49,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
-    rcases h_env.symm with ⟨ _, _ ⟩
+    rcases h_env with ⟨ _, _ ⟩
     simp_all only
     constructor
     · convert xor_eq_val_xor h_a h_b using 1
@@ -91,9 +91,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
-    rcases h_env.symm with ⟨ _, _ ⟩
+    rcases h_env with ⟨ _, _ ⟩
     simp_all only
     constructor
     · exact and_eq_val_and h_a h_b
@@ -131,9 +131,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
-    rcases h_env.symm with ⟨ _, _ ⟩
+    rcases h_env with ⟨ _, _ ⟩
     simp_all only
     constructor
     · convert or_eq_val_or h_a h_b using 1
@@ -171,9 +171,9 @@ def circuit : FormalCircuit (F p) field field where
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ _ _ h_env h_in h_hold
+    rintro _ _ _ _ _ h_env h_in h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
-    rw [h_env] at h_hold
+    rcases h_env with ⟨ _, _ ⟩
     simp_all only
     constructor
     · convert not_eq_val_not h_in using 1
@@ -213,9 +213,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
-    rcases h_env.symm with ⟨ _, _ ⟩
+    rcases h_env with ⟨ _, _ ⟩
     simp_all only
     constructor
     · convert nand_eq_val_nand h_a h_b using 1
@@ -255,9 +255,9 @@ def circuit : FormalCircuit (F p) fieldPair field where
     ∧ IsBool output
 
   soundness := by
-    rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
+    rintro _ _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
-    rcases h_env.symm with ⟨ _, _ ⟩
+    rcases h_env with ⟨ _, _ ⟩
     simp_all only
     constructor
     · convert nor_eq_val_nor h_a h_b using 1
@@ -406,10 +406,10 @@ theorem subcircuitsConsistent (n : ℕ) (input : Var (fields n) (F p)) (offset :
         · apply AND.circuit.subcircuitsConsistent
 
 -- Helper lemma: UsesLocalWitnesses and UsesLocalWitnessesCompleteness are equivalent for MultiAND.main
-lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : Environment (F p)) :
+lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n) (F p)) (offset1 offset2 : ℕ) (env : Environment (F p)) (yielded : Set (NamedList (F p))) :
     offset1 = offset2 ->
-    (env.UsesLocalWitnesses offset1 ((main input).operations offset2) ↔
-     env.UsesLocalWitnessesCompleteness offset1 ((main input).operations offset2)) := by
+    (env.UsesLocalWitnesses yielded offset1 ((main input).operations offset2) ↔
+     env.UsesLocalWitnessesCompleteness yielded offset1 ((main input).operations offset2)) := by
   induction n using Nat.strong_induction_on generalizing offset1 offset2 with
   | _ n IH =>
     match n with
@@ -597,10 +597,10 @@ lemma Vector.foldl_and_split {n1 n2 n3 : ℕ} (v : Vector ℕ n3)
 
 /-- Soundness for n = 0 case -/
 lemma soundness_zero {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
+    (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p)) (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input)
-    (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    (_h_hold : Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset)) :
     Spec 0 input (env ((main input_var).output offset)) := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
@@ -611,10 +611,10 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
 
 /-- Soundness for n = 1 case -/
 lemma soundness_one {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
+    (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 1 input)
-    (_h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    (_h_hold : Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset)) :
     Spec 1 input (env ((main input_var).output offset)) := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
@@ -641,10 +641,10 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
 
 /-- Soundness for n = 2 case -/
 lemma soundness_two {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
+    (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input)
-    (h_hold : Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset)) :
+    (h_hold : Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset)) :
     Spec 2 input (env ((main input_var).output offset)) := by
   simp only [main] at h_hold ⊢
   simp only [Spec]
@@ -652,7 +652,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
   have h_input1 := h_assumptions 1 (by norm_num : 1 < 2)
   have h_eval0 : env input_var[0] = input[0] := by simp [h_env, circuit_norm]
   have h_eval1 : env input_var[1] = input[1] := by simp [h_env, circuit_norm]
-  have h_and_spec := AND.circuit.soundness offset env (input_var[0], input_var[1])
+  have h_and_spec := AND.circuit.soundness offset env yielded (input_var[0], input_var[1])
     (input[0], input[1])
     (by simp only [ProvableType.eval_fieldPair, h_eval0, h_eval1])
     ⟨h_input0, h_input1⟩ h_hold
@@ -674,32 +674,32 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
 
 /-- Completeness for n = 0 case -/
 lemma completeness_zero {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 0) (F p))
+    (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields 0) (F p))
     (input : fields 0 (F p))
-    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness yielded offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input) :
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env yielded ((main input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
 /-- Completeness for n = 1 case -/
 lemma completeness_one {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 1) (F p))
+    (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields 1) (F p))
     (input : fields 1 (F p))
-    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (_h_local_witnesses : env.UsesLocalWitnessesCompleteness yielded offset ((main input_var).operations offset))
     (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 1 input) :
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env yielded ((main input_var).operations offset) := by
   simp [main, Circuit.ConstraintsHold.Completeness]
 
 /-- Completeness for n = 2 case -/
 lemma completeness_two {p : ℕ} [Fact p.Prime]
-    (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields 2) (F p))
+    (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields 2) (F p))
     (input : fields 2 (F p))
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
+    (h_local_witnesses : env.UsesLocalWitnessesCompleteness yielded offset ((main input_var).operations offset))
     (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input) :
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env yielded ((main input_var).operations offset) := by
   simp only [main, circuit_norm] at h_local_witnesses ⊢
 
   have h_binary0 : IsBool input[0] := h_assumptions 0 (by norm_num)
@@ -723,15 +723,15 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
       exact h_binary1
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
-    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
+    ∀ (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
     input = eval env input_var →
     Assumptions n input →
-    Circuit.ConstraintsHold.Soundness env ((main input_var).operations offset) →
+    Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset) →
     Spec n input (env ((main input_var).output offset)) := by
   induction n using Nat.strong_induction_on with
   | _ n IH =>
-    intro offset env input_var input h_env h_assumptions h_hold
+    intro offset env yielded input_var input h_env h_assumptions h_hold
     match n with
     | 0 => exact soundness_zero offset env input_var input h_env h_assumptions h_hold
     | 1 => exact soundness_one offset env input_var input h_env h_assumptions h_hold
@@ -793,6 +793,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
       have h_and_spec := AND.circuit.soundness
         (offset + (main input_var1).localLength offset + (main input_var2).localLength (offset + (main input_var1).localLength offset))
         env
+        yielded
         (out1, out2)
         (env out1, env out2)
         (by simp only [ProvableType.eval_fieldPair])
@@ -852,22 +853,22 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
 
       · exact h_and_binary
 
-lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p))
+lemma main_output_binary (n : ℕ) (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))}
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
-    (h_constraints : Circuit.ConstraintsHold env ((main input_var).operations offset)) :
+    (h_constraints : Circuit.ConstraintsHold env yielded ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     IsBool output := by
   exact (soundness n offset env input_var input h_eval h_assumptions
     (Circuit.can_replace_soundness h_constraints)).2
 
-lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p))
+lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))}
     (input_var : Var (fields n) (F p)) (input : fields n (F p))
     (h_eval : input = eval env input_var)
     (h_assumptions : Assumptions n input)
-    (h_local_witnesses : env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset))
-    (h_completeness : Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset)) :
+    (h_local_witnesses : env.UsesLocalWitnessesCompleteness yielded offset ((main input_var).operations offset))
+    (h_completeness : Circuit.ConstraintsHold.Completeness env yielded ((main input_var).operations offset)) :
     let output := env ((main input_var).output offset)
     IsBool output := by
   apply main_output_binary
@@ -881,15 +882,15 @@ lemma main_output_binary_from_completeness (n : ℕ) (offset : ℕ) (env : Envir
   · exact h_completeness
 
 theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
-    ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))
+    ∀ (offset : ℕ) (env : Environment (F p)) {yielded : Set (NamedList (F p))} (input_var : Var (fields n) (F p))
       (input : fields n (F p)),
-    env.UsesLocalWitnessesCompleteness offset ((main input_var).operations offset) →
+    env.UsesLocalWitnessesCompleteness yielded offset ((main input_var).operations offset) →
     input = eval env input_var →
     Assumptions n input →
-    Circuit.ConstraintsHold.Completeness env ((main input_var).operations offset) := by
+    Circuit.ConstraintsHold.Completeness env yielded ((main input_var).operations offset) := by
   induction n using Nat.strong_induction_on with
   | _ n IH =>
-    intro offset env input_var input h_local_witnesses h_env h_assumptions
+    intro offset env yielded input_var input h_local_witnesses h_env h_assumptions
     match n with
     | 0 => exact completeness_zero offset env input_var input h_local_witnesses h_env h_assumptions
     | 1 => exact completeness_one offset env input_var input h_local_witnesses h_env h_assumptions
@@ -955,11 +956,12 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
         simp only [input_var2, Vector.drop_eq_cast_extract, n1]
         rfl
 
-      suffices Circuit.ConstraintsHold.Completeness env
+      suffices Circuit.ConstraintsHold.Completeness env yielded
         ((main input_var1 >>= fun out1 =>
           main input_var2 >>= fun out2 =>
           AND.circuit.main (out1, out2)).operations offset) by
-        convert this
+        simp only [h_extract_eq_var1, h_extract_eq_var2]
+        exact this
 
       rw [h_main_eq] at h_local_witnesses
       rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_local_witnesses
@@ -988,13 +990,13 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
             exact h_rest.2
           · rfl
-          · have h_comp1 : Circuit.ConstraintsHold.Completeness env ((main input_var1).operations offset) := by
+          · have h_comp1 : Circuit.ConstraintsHold.Completeness env yielded ((main input_var1).operations offset) := by
               apply IH n1 h_n1_lt offset env input_var1
               · exact h_local_witnesses.1
               · exact h_eval1
               · exact h_assumptions1
 
-            have h_comp2 : Circuit.ConstraintsHold.Completeness env ((main input_var2).operations (offset + (main input_var1).localLength offset)) := by
+            have h_comp2 : Circuit.ConstraintsHold.Completeness env yielded ((main input_var2).operations (offset + (main input_var1).localLength offset)) := by
               apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2
               · have h_rest := h_local_witnesses.2
                 rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_rest
@@ -1027,10 +1029,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   Spec := Spec n
 
   soundness := by
-    intro offset env input_var input h_env h_assumptions h_hold
+    intro offset env yielded input_var input h_env h_assumptions h_hold
     exact soundness n offset env input_var input h_env.symm h_assumptions h_hold
   completeness := by
-    intro offset env input_var h_local_witnesses input h_env h_assumptions
+    intro offset env yielded input_var h_local_witnesses input h_env h_assumptions
     exact completeness n offset env input_var input h_local_witnesses h_env.symm h_assumptions
 
 end MultiAND

@@ -19,60 +19,60 @@ open Circuit (ConstraintsHold)
   in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
-    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (yielded : Set (NamedList F)) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
-    ConstraintsHold env (circuit.main b_var |>.operations offset) →
+    ConstraintsHold env yielded (circuit.main b_var |>.operations offset) →
     -- the spec holds
     let a := eval env (circuit.output b_var offset)
     circuit.Spec b a := by
 
-  intro offset env b_var b h_input h_assumptions h_holds
+  intro offset env yielded b_var b h_input h_assumptions h_holds
   have h_holds' := Circuit.can_replace_soundness h_holds
-  exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+  exact circuit.soundness offset env yielded b_var b h_input h_assumptions h_holds'
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalCircuit` definition.
 -/
 theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
-    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (yielded : Set (NamedList F)) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
-    env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
+    env.UsesLocalWitnesses yielded offset (circuit.main b_var |>.operations offset) →
     -- the constraints hold (original definition)
-    ConstraintsHold env (circuit.main b_var |>.operations offset) := by
+    ConstraintsHold env yielded (circuit.main b_var |>.operations offset) := by
 
-  intro offset env b_var b h_input h_assumptions h_env
+  intro offset env yielded b_var b h_input h_assumptions h_env
   apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
-  exact circuit.completeness offset env b_var h_env' b h_input h_assumptions
+  exact circuit.completeness offset env yielded b_var h_env' b h_input h_assumptions
 
 /--
   Justification for using a modified statement for `ConstraintsHold`
   in the `FormalAssertion` definition.
 -/
 theorem FormalAssertion.original_soundness (circuit : FormalAssertion F β) :
-    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (yielded : Set (NamedList F)) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the constraints hold (original definition)
-    ConstraintsHold env (circuit.main b_var |>.operations offset) →
+    ConstraintsHold env yielded (circuit.main b_var |>.operations offset) →
     -- the spec holds
     circuit.Spec b := by
 
-  intro offset env b_var b h_input h_assumptions h_holds
+  intro offset env yielded b_var b h_input h_assumptions h_holds
   have h_holds' := Circuit.can_replace_soundness h_holds
-  exact circuit.soundness offset env b_var b h_input h_assumptions h_holds'
+  exact circuit.soundness offset env yielded b_var b h_input h_assumptions h_holds'
 
 /--
   Justification for using modified statements for `UsesLocalWitnesses`
   and `ConstraintsHold` in the `FormalAssertion` definition.
 -/
 theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
-    ∀ (offset : ℕ) env (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
+    ∀ (offset : ℕ) env (yielded : Set (NamedList F)) (b_var : Var β F) (b : β F), eval env b_var = b → circuit.Assumptions b →
     -- if the environment uses default witness generators (original definition)
-    env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
+    env.UsesLocalWitnesses yielded offset (circuit.main b_var |>.operations offset) →
     -- the spec implies that the constraints hold (original definition)
-    circuit.Spec b → ConstraintsHold env (circuit.main b_var |>.operations offset) := by
+    circuit.Spec b → ConstraintsHold env yielded (circuit.main b_var |>.operations offset) := by
 
-  intro offset env b_var b h_input h_assumptions h_env h_spec
+  intro offset env yielded b_var b h_input h_assumptions h_env h_spec
   apply Circuit.can_replace_completeness (circuit.subcircuitsConsistent ..) h_env
   have h_env' := Environment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
-  exact circuit.completeness offset env b_var h_env' b h_input h_assumptions h_spec
+  exact circuit.completeness offset env yielded b_var h_env' b h_input h_assumptions h_spec

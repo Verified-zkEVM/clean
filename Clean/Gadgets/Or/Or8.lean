@@ -91,7 +91,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   localLength _ := 1
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
+  intro i env yielded ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint
   simp_all only [circuit_norm, main, Assumptions, Spec, ByteXorTable, Inputs.mk.injEq]
   have ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w := env.get i
@@ -131,7 +131,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact Nat.bitwise_lt_two_pow hx_byte hy_byte
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
+  intro i env yielded ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
   simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x ||| ZMod.val y

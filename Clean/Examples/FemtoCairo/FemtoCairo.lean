@@ -748,7 +748,7 @@ def femtoCairoTable
     | none => False -- impossible, constraints ensure that every transition is valid
 
   soundness := by
-    intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
+    intros initial_state i env yielded state_var input_var state input h1 h2 h_inputs h_hold
     simp [Spec.femtoCairoMachineBoundedExecution, femtoCairoStepCircuit,
       femtoCairoCircuitSpec, femtoCairoAssumptions, circuit_norm] at ⊢ h_hold
     split at h_hold

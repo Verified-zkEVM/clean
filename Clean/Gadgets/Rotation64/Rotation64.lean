@@ -44,7 +44,7 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   output _ i0 := output off i0
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+  intro i0 env yielded x_var x h_input x_normalized h_holds
 
   simp [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated] at h_holds
@@ -75,7 +75,7 @@ theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated off
   rw [hy, Nat.div_add_mod']
 
 theorem completeness (offset : Fin 64) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var h_env x h_eval x_normalized
+  intro i0 env yielded x_var h_env x h_eval x_normalized
 
   simp only [circuit_norm, main, elaborated,
     Rotation64Bits.circuit, Rotation64Bits.elaborated, Rotation64Bits.Assumptions,

@@ -41,7 +41,7 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  intro i0 env yielded state_var state h_input state_norm h_holds
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -56,7 +56,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+  intro i0 env yielded state_var h_env state h_input state_norm
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

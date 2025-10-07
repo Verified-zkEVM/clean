@@ -120,8 +120,8 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : Environment (F p)) :
   Main lemma that shows that if the constraints hold over the two-row window,
   then the Spec of add32 and equality are satisfied
 -/
-lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p))
-  : recursiveRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env →
+lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F p)) (yielded : Set (NamedList (F p)))
+  : recursiveRelation.ConstraintsHoldOnWindow ⟨<+> +> curr +> next, rfl⟩ aux_env yielded →
   curr.y = next.x ∧
   (curr.x.Normalized → curr.y.Normalized → next.y.value = (curr.x.value + curr.y.value) % 2^32 ∧ next.y.Normalized)
    := by
@@ -144,8 +144,8 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : Environment (F 
   obtain ⟨ h_add_mod, h_norm_next_y ⟩ := h_add
   exact ⟨h_add_mod, h_norm_next_y⟩
 
-lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
+lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : Environment (F p)) (yielded : Set (NamedList (F p))) :
+  Circuit.ConstraintsHold.Soundness (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) yielded boundary.operations →
   first_row.x.value = fib32 0 ∧ first_row.y.value = fib32 1 ∧ first_row.x.Normalized ∧ first_row.y.Normalized
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
@@ -181,7 +181,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
 
     -- base case 2
     · simp [table_norm]
-      apply boundary_constraints first_row (envs 0 0)
+      apply boundary_constraints first_row (envs 0 0) _
 
     -- inductive step
     · simp [table_norm] at ih2 ⊢
@@ -194,7 +194,7 @@ def formalFib32Table : FormalTable (F p) RowType := {
       let ⟨curr_fib0, curr_fib1, curr_normalized_x, curr_normalized_y⟩ := ih2.left
 
       -- simplfy constraints
-      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) ConstraintsHold
+      have ⟨ eq_spec, add_spec ⟩ := fib_constraints curr next (envs 1 _) _ ConstraintsHold
 
       -- finish induction
       specialize add_spec curr_normalized_x curr_normalized_y

@@ -10,15 +10,15 @@ open Circuit (ConstraintsHold)
 namespace Gadgets
 def allZero {n} (xs : Vector (Expression F) n) : Circuit F Unit := .forEach xs assertZero
 
-theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    ConstraintsHold.Soundness env ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
+theorem allZero.soundness {offset : ℕ} {env : Environment F} {yielded : Set (NamedList F)} {n} {xs : Vector (Expression F) n} :
+    ConstraintsHold.Soundness env yielded ((allZero xs).operations offset) → ∀ x ∈ xs, x.eval env = 0 := by
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
   exact h_holds ⟨i, hi⟩
 
-theorem allZero.completeness {offset : ℕ} {env : Environment F} {n} {xs : Vector (Expression F) n} :
-    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
+theorem allZero.completeness {offset : ℕ} {env : Environment F} {yielded : Set (NamedList F)} {n} {xs : Vector (Expression F) n} :
+    (∀ x ∈ xs, x.eval env = 0) → ConstraintsHold.Completeness env yielded ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
@@ -46,7 +46,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
   | (x, y) => x = y
 
   soundness := by
-    intro offset env input_var input h_input _ h_holds
+    intro offset env yielded input_var input h_input _ h_holds
     replace h_holds := allZero.soundness h_holds
     simp only at h_holds
 
@@ -68,7 +68,7 @@ def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair �
     exact eq_of_add_neg_eq_zero h_holds
 
   completeness := by
-    intro offset env input_var h_env input  h_input _ h_spec
+    intro offset env yielded input_var h_env input  h_input _ h_spec
     apply allZero.completeness
     simp only
 
@@ -97,18 +97,18 @@ lemma elaborated_eq (α : TypeMap) [ProvableType α] : (circuit α (F:=F)).elabo
 -- rewrite soundness/completeness directly
 
 @[circuit_norm]
-theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Soundness env = (eval env x = eval env y) := by
+theorem soundness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (yielded : Set (NamedList F)) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).Soundness env yielded = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).Completeness env = (eval env x = eval env y) := by
+theorem completeness (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (yielded : Set (NamedList F)) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).Completeness env yielded = (eval env x = eval env y) := by
   simp only [circuit_norm, circuit]
 
 @[circuit_norm]
-theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (x y : Var α F) :
-    ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env = True := by
+theorem usesLocalWitnesses (α : TypeMap) [ProvableType α] (n : ℕ) (env : Environment F) (yielded : Set (NamedList F)) (x y : Var α F) :
+    ((circuit α).toSubcircuit n (x, y)).UsesLocalWitnesses env yielded = True := by
   simp only [FormalAssertion.toSubcircuit, circuit]
 
 end Equality

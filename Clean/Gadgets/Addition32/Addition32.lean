@@ -39,13 +39,13 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
+  rintro i0 env yielded ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
   rw [←elaborated.output_eq] -- replace explicit output with internal output, which is derived from the subcircuit
   simp_all [circuit_norm, Spec, main, Addition32Full.circuit,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
+  rintro i0 env yielded ⟨ x_var, y_var, carry_in_var ⟩ henv  ⟨ x, y, carry_in ⟩ h_inputs as
   simp_all [circuit_norm, main, Addition32Full.circuit, Addition32Full.elaborated,
   Addition32Full.Assumptions, Addition32Full.Spec, Assumptions, IsBool]
 

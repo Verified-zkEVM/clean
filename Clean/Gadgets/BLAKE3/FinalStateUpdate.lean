@@ -79,7 +79,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
+  intro i0 env yielded ⟨state_var, chaining_value_var⟩ ⟨state, chaining_value⟩ h_input h_normalized h_holds
   simp only [circuit_norm, Inputs.mk.injEq] at h_input
 
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_holds
@@ -122,7 +122,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     c14, Fin.val_eq_zero, zero_add, c15, implies_true, and_self]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  rintro i0 env ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_normalized
+  rintro i0 env yielded ⟨state_var, chaining_value_var⟩ henv ⟨state, chaining_value⟩ h_input h_normalized
   simp only [ProvableStruct.eval_eq_eval, ProvableStruct.eval, fromComponents,
     ProvableStruct.eval.go, Inputs.mk.injEq] at h_input
   dsimp only [Assumptions, BLAKE3State.Normalized] at h_normalized

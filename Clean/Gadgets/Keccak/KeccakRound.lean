@@ -33,7 +33,7 @@ instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakSt
     simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit, Vector.mapRange]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (elaborated rc) Assumptions (Spec rc) := by
-  intro i0 env state_var state h_input state_norm h_holds
+  intro i0 env yielded state_var state h_input state_norm h_holds
 
   -- simplify goal
   apply KeccakState.normalized_value_ext

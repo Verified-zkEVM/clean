@@ -74,7 +74,7 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
   ac_rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env input_var input h_input h_as h_holds
+  intro i0 env yielded input_var input h_input h_as h_holds
 
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
@@ -100,7 +100,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   linarith [p_large_enough.elim]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env input_var h_env input h_input as
+  intro i0 env yielded input_var h_env input h_input as
   let ⟨⟨ x0_var, x1_var, x2_var, x3_var ⟩,
        ⟨ y0_var, y1_var, y2_var, y3_var ⟩⟩ := input_var
   let ⟨⟨ x0, x1, x2, x3 ⟩,

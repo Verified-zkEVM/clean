@@ -64,7 +64,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   soundness := by
     -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
+    rintro i0 env yielded ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
@@ -89,7 +89,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   completeness := by
    -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
+    rintro i0 env yielded ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by

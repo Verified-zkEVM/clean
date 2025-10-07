@@ -38,7 +38,7 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  intro i0 env yielded state_var state h_input state_norm h_holds
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
@@ -58,7 +58,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   aesop
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+  intro i0 env yielded state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢

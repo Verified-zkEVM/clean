@@ -83,9 +83,9 @@ def FormalCircuit.weakenSpec
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
+    intro offset env yielded input_var input h_eval h_assumptions h_holds
     -- Use the original circuit's soundness
-    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds
+    have h_strong_spec := circuit.soundness offset env yielded input_var input h_eval h_assumptions h_holds
     -- Apply the implication to get the weaker spec
     exact h_spec_implication input _ h_assumptions h_strong_spec
   completeness := by

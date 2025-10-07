@@ -47,7 +47,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   output _ i0 := varFromOffset Outputs i0
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
+  intro i0 env yielded x_var (x : F p) h_input (x_byte : x.val < 256) h_holds
   simp only [id_eq, circuit_norm] at h_input
   simp only [circuit_norm, elaborated, main, Spec, ByteTable, h_input] at h_holds ⊢
   clear h_input
@@ -99,7 +99,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offs
   rwa [high_eq, Nat.div_lt_iff_lt_mul (by simp), pow_8_nat]
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
+  rintro i0 env yielded x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [ProvableType.eval_field] at h_input
   simp only [circuit_norm, main, elaborated, h_input, ByteTable] at henv ⊢
   simp only [henv]

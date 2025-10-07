@@ -236,12 +236,12 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
 Lemma that handles the case when block_exists = 1 in the step function.
 Shows that the step correctly processes a block using processBlockWords.
 -/
-private lemma step_process_block (env : Environment (F p))
+private lemma step_process_block (env : Environment (F p)) (yielded : Set (NamedList (F p)))
     (acc_var : Var ProcessBlocksState (F p)) (x_var : Var BlockInput (F p))
     (acc : ProcessBlocksState (F p)) (x : BlockInput (F p))
     (h_eval : eval env acc_var = acc ∧ eval env x_var = x)
     (h_x : x.block_exists = 1)
-    (h_holds : Circuit.ConstraintsHold.Soundness env ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
+    (h_holds : Circuit.ConstraintsHold.Soundness env yielded ((step acc_var x_var).operations (size ProcessBlocksState + size BlockInput)))
     (acc_normalized : acc.Normalized)
     (x_normalized : x.Normalized)
     (blocks_compressed_not_many : acc.toChunkState.blocks_compressed < 2^32 - 1) :
@@ -306,7 +306,7 @@ private lemma step_process_block (env : Environment (F p))
     · simp_all
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
-  intro _ _ env acc_var x_var acc x _ _ h_eval h_holds spec_previous inputs_short
+  intro _ _ env yielded acc_var x_var acc x _ _ h_eval h_holds spec_previous inputs_short
   simp only [circuit_norm] at inputs_short
   specialize spec_previous (by omega)
   simp only [circuit_norm]
@@ -321,7 +321,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     rintro (_ | _) <;> simp_all
   by_cases h_x : x.block_exists = 1
   · simp only [h_x, decide_true, cond_true]
-    have one_op := step_process_block env acc_var x_var acc x h_eval h_x h_holds
+    have one_op := step_process_block env _ acc_var x_var acc x h_eval h_x h_holds
       spec_previous.2.2.2.2 input_normalized (by omega)
     simp only [circuit_norm] at one_op
     simp only [one_op]
@@ -351,7 +351,7 @@ def InputAssumptions (i : ℕ) (input : BlockInput (F p)) :=
 
 lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockInput InputAssumptions InitialStateAssumptions Spec step := by
     have := p_large.elim
-    intro _ _ _ _ _ _ _ _ _ h_eval h_witnesses h_assumptions
+    intro _ _ _ yielded _ _ _ _ _ _ h_eval h_witnesses h_assumptions
     dsimp only [InitialStateAssumptions, InputAssumptions, Addition32.Assumptions] at *
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)

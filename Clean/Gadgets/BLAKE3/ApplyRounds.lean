@@ -53,7 +53,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
     BLAKE3State.Normalized output.message
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
+    intro offset env yielded input_var input h_eval h_assumptions h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
@@ -80,7 +80,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     · exact h_holds2
 
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+    intro offset env yielded input_var h_env_uses_witnesses input h_eval h_assumptions
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
