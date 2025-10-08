@@ -29,9 +29,20 @@ template LessThan(n) {
 }
 -/
 
+lemma a_ge_b_eq_sum_ge_2n_nat {p : ℕ} [Fact p.Prime]
+    (n : ℕ) (a b : F p) (hn : ZMod.val a ≥ ZMod.val b) :
+    /- (n : ℕ) (a b : F p) (hn : ¬(ZMod.val a < ZMod.val b)) : -/
+    ZMod.val a + 2^n - ZMod.val b ≥ 2^n := by
+
+      have hab' : ZMod.val a ≥ ZMod.val b := by
+        simp_all only [not_lt, ge_iff_le]
+
+      sorry
+
 lemma a_lt_b_eq_sum_lt_2n_nat {p : ℕ} [Fact p.Prime]
     (n : ℕ) (a b : F p) (hn : ZMod.val a < ZMod.val b) :
     ZMod.val a + 2^n - ZMod.val b < 2^n := by
+
   have h_diff_pos : ZMod.val b - ZMod.val a > 0 := Nat.sub_pos_of_lt hn
   have h_eq : ZMod.val a + 2 ^ n - ZMod.val b = 2 ^ n - (ZMod.val b - ZMod.val a) := by
     -- rewrite b as a + (b - a), then cancel the common +a on both sides of the subtraction
@@ -158,7 +169,7 @@ private lemma sub_no_wrap_val (n : ℕ) (a b : ZMod p)
 /- set_option maxHeartbeats 400_000 -/
 /- set_option diagnostics true -/
 
-lemma test_lemma_nocast {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
+lemma val_sum_eq_sum_val_lt {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
     (n : ℕ) (a b : F p)
     (ha : ZMod.val a < 2^n)
     (hb : ZMod.val b < 2^n)
@@ -167,6 +178,8 @@ lemma test_lemma_nocast {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
     /- (hab : ZMod.val a < ZMod.val b) -/
     (h_val: (ZMod.val a + 2^n - ZMod.val b) < 2^n) :
     (a + 2 ^ n - b).val < 2 ^ n := by
+
+
       have h2n : ((2^n : ℕ) : ZMod p).val = 2^n := by
         change (((2^n : ℕ) : ZMod p).val) = 2^n
         simp only [ZMod.val_natCast]
@@ -180,11 +193,30 @@ lemma test_lemma_nocast {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
       exact h_val
 
-lemma solve_if {p : ℕ} [Fact p.Prime]
+-- TODO: Remove duplicated code. They look the exact same
+lemma val_sum_eq_sum_val_ge {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
     (n : ℕ) (a b : F p)
-  :
-  (1 + -if (ZMod.val (a + 2 ^ n + -b)).testBit n = true then 1 else 0) = if ZMod.val a < ZMod.val b then 1 else 0 := by
-    sorry
+    (ha : ZMod.val a < 2^n)
+    (hb : ZMod.val b < 2^n)
+    (hp : 2^n < p)
+    (hp' : 2^(n+1) < p)
+    /- (hab : ZMod.val a < ZMod.val b) -/
+    (h_val: (ZMod.val a + 2^n - ZMod.val b) ≥ 2^n) :
+    (a + 2 ^ n - b).val ≥ 2 ^ n := by
+
+
+      have h2n : ((2^n : ℕ) : ZMod p).val = 2^n := by
+        change (((2^n : ℕ) : ZMod p).val) = 2^n
+        simp only [ZMod.val_natCast]
+        simp only [Nat.mod_eq_of_lt hp]
+
+      symm at h2n
+      simp only [ZMod.val_natCast] at h2n
+
+
+      rw [sub_no_wrap_val n a b ha hb hp hp']
+
+      exact h_val
 
 
 lemma zmod_def {p : ℕ} [Fact p.Prime] (x : ZMod p) :
@@ -213,7 +245,7 @@ lemma bit_is_set {p : ℕ} [Fact p.Prime]
   /- (n : ℕ) (a b : ℕ)  -/
   (n : ℕ) (x : F p)
   (hlt: ZMod.val x < 2^(n+1))
-  (hge: ZMod.val x > 2^n) :
+  (hge: ZMod.val x ≥ 2^n) :
     (ZMod.val x).testBit n = true := by
       rw [Nat.testBit_eq_decide_div_mod_eq ]
 
@@ -224,7 +256,7 @@ lemma bit_is_set {p : ℕ} [Fact p.Prime]
       have hbpos : 0 < 2^n := pow_pos (by decide) n
       have h1 : 1 ≤ x / 2^n := by
         simp only [Nat.le_div_iff_mul_le hbpos, one_mul]
-        apply Nat.le_of_lt at hge
+        /- apply Nat.le_of_lt at hge -/
         exact hge
 
         -- upper bound: x / 2^n < 2
@@ -297,7 +329,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
         a_lt_b_eq_sum_lt_2n_nat n a b hab
       have h_val_lt : ZMod.val (a + (2 ^ n : F p) - b) < 2 ^ n := by
         /- simp only [ZMod.val_natCast] at h_lt -/
-        exact test_lemma_nocast n a b h_assumptions.left h_assumptions.right hn' hn h_lt
+        exact val_sum_eq_sum_val_lt n a b h_assumptions.left h_assumptions.right hn' hn h_lt
       have h_bit_clear : (ZMod.val (a + (2 ^ n : F p) - b)).testBit n = false :=
         bit_is_clear n (a + (2 ^ n : F p) - b) h_val_lt
       have h_bit_clear' : (ZMod.val (a + 2 ^ n + -b)).testBit n = false := by
@@ -305,11 +337,31 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       simp [h_bit_clear', hab]
     .
 
-      have h_assumptions_b' : ZMod.val b < 2 ^ (n+1) :=
-        lt_trans h_assumptions.right (Nat.pow_lt_pow_succ (a:=2) (by decide : 1 < 2) )
-      have hn := a_lt_b_eq_sum_lt_2n n a b hab
+      have hab' : ZMod.val a ≥ ZMod.val b := by
+        simp_all only [not_lt, ge_iff_le]
 
-      sorry
+      have h_ge : ZMod.val a + 2 ^ n - ZMod.val b ≥ 2 ^ n :=
+        a_ge_b_eq_sum_ge_2n_nat n a b hab'
+
+      have h_val_ge : ZMod.val (a + (2 ^ n : F p) - b) ≥ 2 ^ n := by
+        /- simp only [ZMod.val_natCast] at h_lt -/
+        exact val_sum_eq_sum_val_ge n a b h_assumptions.left h_assumptions.right hn' hn h_ge
+
+      have h_holds1' : ZMod.val (a + 2 ^ n - b) < 2 ^ (n + 1) := by
+        -- h_holds1 : ZMod.val (a + 2 ^ n + -b) < 2 ^ (n + 1)
+        rw [← sub_eq_add_neg] at h_holds1
+        -- now: h_holds1 : ZMod.val (a + 2 ^ n - b) < 2 ^ (n + 1)
+        exact h_holds1
+
+
+      have h_bit_set : (ZMod.val (a + (2 ^ n : F p) - b)).testBit n = true :=
+        bit_is_set n (a + (2 ^ n : F p) - b) h_holds1' h_val_ge
+      /- have hn := a_lt_b_eq_sum_lt_2n n a b hab -/
+
+      have h_bit_set' : (ZMod.val (a + 2 ^ n + -b)).testBit n = true := by
+        simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using h_bit_set
+        
+      simp [h_bit_set', hab]
 
   completeness := by
     simp only [circuit_norm, main]
