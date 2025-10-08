@@ -60,6 +60,8 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
+set_option maxHeartbeats 2000000
+
 /--
   Circuit that decodes a femtoCairo instruction into a one-hot representation.
   It returns a `DecodedInstruction` struct containing the decoded fields.
@@ -95,8 +97,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
       }
     }
   localLength _ := 8
+  yields_eq := by intros; simp only [circuit_norm, Gadgets.ToBits.toBits, Set.empty_union]
 
-  Assumptions | instruction => True
+  Assumptions | instruction, _ => True
 
   Spec
   | instruction, output =>
@@ -323,7 +326,8 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
-  Assumptions | pc => True
+  yields_eq := by intros; simp only [circuit_norm, Set.empty_union]
+  Assumptions | pc, _ => True
   Spec
   | pc, output =>
     match Spec.fetchInstruction program pc with
@@ -403,7 +407,8 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
-  Assumptions | {state, mode, offset} => DecodedAddressingMode.isEncodedCorrectly mode
+  yields_eq _ _ _ := by simp [circuit_norm]
+  Assumptions | {state, mode, offset}, _ => DecodedAddressingMode.isEncodedCorrectly mode
   Spec
   | {state, offset, mode}, output =>
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
@@ -517,7 +522,7 @@ def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
     return nextState
 
   localLength _ := 3
-  Assumptions | {state, decoded, v1, v2, v3} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
+  Assumptions | {state, decoded, v1, v2, v3}, _ => DecodedInstructionType.isEncodedCorrectly decoded.instrType
   Spec
   | {state, decoded, v1, v2, v3}, output =>
     match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
@@ -618,6 +623,7 @@ def femtoCairoStepElaboratedCircuit
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
     localLength := 30
+    yields_eq := by simp [circuit_norm, readFromMemoryCircuit, fetchInstructionCircuit, decodeInstructionCircuit, nextStateCircuit]
 
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
@@ -627,7 +633,7 @@ def femtoCairoCircuitSpec
     | some s => s = nextState
     | none => False -- impossible, constraints ensure that the transition is valid
 
-def femtoCairoAssumptions (_state : State (F p)) : Prop :=
+def femtoCairoAssumptions (_state : State (F p)) (_ : Set (NamedList (F p))) : Prop :=
   True
 
 def femtoCairoStepCircuitSoundness

@@ -26,8 +26,9 @@ def main (x : Var field F) : Circuit F (Var field F) := do
 instance elaborated : ElaboratedCircuit F field field where
   main
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
+  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
 
-def Assumptions (_ : F) : Prop := True
+def Assumptions (_ : F) (_ : Set (NamedList F)) : Prop := True
 
 def Spec (x : F) (output : F) : Prop :=
   output = if x = 0 then 1 else 0

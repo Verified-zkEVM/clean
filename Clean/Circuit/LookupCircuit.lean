@@ -13,6 +13,7 @@ structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α]
     extends circuit : FormalCircuit F α β where
   name : String
   computableWitnesses : circuit.ComputableWitnesses
+  noYields : ∀ input env n, circuit.yields (const input) env n = ∅
 
 namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
@@ -44,22 +45,29 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
-  Soundness := fun (input, output) => circuit.Assumptions input → circuit.Spec input output
-  Completeness := fun (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input
+  Soundness := fun (input, output) => circuit.Assumptions input ∅ → circuit.Spec input output
+  Completeness := fun (input, output) => circuit.Assumptions input ∅ ∧ output = circuit.constantOutput input
 
   imply_soundness := by
     intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
     simp only [h_output]
     let ops := (circuit.main (const input) |>.operations n)
-    exact circuit.original_soundness n env (FlatOperation.localYields env ops.toFlat) (const input) input ProvableType.eval_const h_assumptions h_holds
+    have h_yields : FlatOperation.localYields env ops.toFlat = ∅ := by
+      rw [FlatOperation.localYields_toFlat, circuit.yields_eq, circuit.noYields]
+    rw [h_yields] at h_holds
+    exact circuit.original_soundness n env ∅ (const input) input ProvableType.eval_const h_assumptions h_holds
 
   implied_by_completeness := by
-    intro (input, output) ⟨h_assumptions, h_output⟩
+    intro (input, output) ⟨h_assump, h_output⟩
     use 0, circuit.proverEnvironment input
     simp only [h_output, LookupCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
     let ops := (circuit.main (const input) |>.operations 0)
-    apply circuit.original_completeness 0 env (FlatOperation.localYields env ops.toFlat) (const input) input ProvableType.eval_const h_assumptions
+    have h_yields : FlatOperation.localYields env ops.toFlat = ∅ := by
+      rw [FlatOperation.localYields_toFlat, circuit.yields_eq, circuit.noYields]
+    rw [h_yields]
+    apply circuit.original_completeness 0 env ∅ (const input) input ProvableType.eval_const h_assump
+    rw [←h_yields]
     exact circuit.proverEnvironment_usesLocalWitnesses input
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
@@ -79,7 +87,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
 
   yields_eq := by intro; simp [circuit_norm]
 
-  Assumptions := circuit.Assumptions
+  Assumptions input _ := circuit.Assumptions input ∅
   Spec := circuit.Spec
 
   soundness := by

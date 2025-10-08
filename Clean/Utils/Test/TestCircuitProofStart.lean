@@ -15,7 +15,7 @@ section BasicTests
 
 -- Test that the tactic works for simple soundness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop)
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Set (NamedList F) → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
   circuit_proof_start
@@ -27,7 +27,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 
 -- Test that the tactic works for simple completeness proofs
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :
+    (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Set (NamedList F) → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point:
@@ -39,7 +39,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 -- Test parametrized soundness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
+    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : Fin 8 → Input F → Output F → Prop) :
     Soundness F (circuit offset) Assumptions (Spec offset) := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
@@ -48,7 +48,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 -- Test parametrized completeness
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (offset : Fin 8) (circuit : Fin 8 → ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) :
+    (Assumptions : Input F → Set (NamedList F) → Prop) :
     Completeness F (circuit offset) Assumptions := by
   circuit_proof_start
   -- offset is introduced first, then standard parameters
@@ -57,7 +57,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
 -- Test multiple parameters
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (n : ℕ) (k : Fin n) (circuit : ℕ → Fin n → ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
+    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : ℕ → Fin n → Input F → Output F → Prop) :
     Soundness F (circuit n k) Assumptions (Spec n k) := by
   circuit_proof_start
   -- n and k are introduced first, then standard parameters
@@ -70,7 +70,7 @@ section NamePreservationTests
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop)
+    (Assumptions : Input F → Set (NamedList F) → Prop)
     (Spec : Input F → Output F → Prop) :
     Soundness F circuit Assumptions Spec := by
   circuit_proof_start
@@ -81,13 +81,13 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Input (Expression F) := input_var
   have : Input F := input
   have : eval env input_var = input := h_input
-  have : Assumptions input := h_assumptions
+  have : Assumptions input yielded := h_assumptions
   have : ConstraintsHold.Soundness env yielded (circuit.main input_var i₀).2 := h_holds
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) :
+    (Assumptions : Input F → Set (NamedList F) → Prop) :
     Completeness F circuit Assumptions := by
   circuit_proof_start
   -- At this point we should have: i₀, env, input_var, h_env
@@ -110,11 +110,11 @@ variable {p : ℕ} [Fact p.Prime]
 
 namespace UnfoldTest1
 -- Simple local definitions
-def TestAssumptions (_ : unit (F p)) : Prop := True
+def TestAssumptions (_ : unit (F p)) (_ : Set (NamedList (F p))) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
-def Assumptions (input : unit (F p)) : Prop :=
-  TestAssumptions input
+def Assumptions (input : unit (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+  TestAssumptions input yielded
 
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
@@ -126,18 +126,18 @@ example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Assumptions and Spec should be unfolded to TestAssumptions and TestSpec
   -- Check that Assumptions was unfolded by pattern matching on h_assumptions
-  guard_hyp h_assumptions : TestAssumptions input
+  guard_hyp h_assumptions : TestAssumptions input yielded
   sorry
 end UnfoldTest1
 
 namespace UnfoldTest2
 -- Local definitions that reference module definitions (like in Compress.lean)
-def TestAssumptions (_ : unit (F p)) : Prop := True
+def TestAssumptions (_ : unit (F p)) (_ : Set (NamedList (F p))) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
-def Assumptions (input : unit (F p)) : Prop :=
-  TestAssumptions input ∧
-  TestAssumptions input
+def Assumptions (input : unit (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+  TestAssumptions input yielded ∧
+  TestAssumptions input yielded
 
 def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output ∧
@@ -150,7 +150,7 @@ example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
   -- Should unfold nested references
   -- Check that Assumptions was unfolded to reveal TestAssumptions
-  guard_hyp h_assumptions : TestAssumptions input ∧ TestAssumptions input
+  guard_hyp h_assumptions : TestAssumptions input yielded ∧ TestAssumptions input yielded
   sorry
 end UnfoldTest2
 
@@ -162,7 +162,7 @@ def testCircuit : ElaboratedCircuit (F p) unit unit :=
 def elaborated : ElaboratedCircuit (F p) unit unit :=
   testCircuit
 
-def TestAssumptions (_ : unit (F p)) : Prop := True
+def TestAssumptions (_ : unit (F p)) (_ : Set (NamedList (F p))) : Prop := True
 def TestSpec (_ : unit (F p)) (_ : unit (F p)) : Prop := True
 
 example : Soundness (F p) elaborated TestAssumptions TestSpec := by

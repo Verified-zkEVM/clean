@@ -79,6 +79,15 @@ def localYields (env : Environment F) : List (FlatOperation F) → Set (NamedLis
   | yield nl :: ops => {nl.eval env} ∪ localYields env ops
   | use _ :: ops => localYields env ops
 
+theorem localYields_append (env : Environment F) (ops1 ops2 : List (FlatOperation F)) :
+    localYields env (ops1 ++ ops2) = localYields env ops1 ∪ localYields env ops2 := by
+  induction ops1 with
+  | nil => simp [localYields]
+  | cons op ops1 ih =>
+    cases op <;> simp [localYields, ih]
+    case yield nl =>
+      rw [Set.insert_union]
+
 /-- Induction principle for `FlatOperation`s. -/
 def induct {motive : List (FlatOperation F) → Sort*}
   (empty : motive [])
@@ -147,6 +156,10 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
   (FlatOperation.localWitnesses env sc.ops).cast sc.localLength_eq.symm
+
+@[reducible, circuit_norm]
+def Subcircuit.yields (sc : Subcircuit F n) env :=
+  FlatOperation.localYields env sc.ops
 
 /--
 Core type representing the result of a circuit: a sequence of operations.
@@ -248,7 +261,7 @@ def localYields (env : Environment F) : Operations F → Set (NamedList F)
   | .lookup _ :: ops => localYields env ops
   | .yield nl :: ops => {nl.eval env} ∪ localYields env ops
   | .use _ :: ops => localYields env ops
-  | .subcircuit _ :: ops => localYields env ops  -- subcircuits don't yield to parent
+  | .subcircuit s :: ops => s.yields env ∪ localYields env ops
 
 @[circuit_norm]
 theorem localYields_append (env : Environment F) (ops1 ops2 : Operations F) :
@@ -259,6 +272,8 @@ theorem localYields_append (env : Environment F) (ops1 ops2 : Operations F) :
     cases op <;> simp [localYields, ih]
     case yield nl =>
       rw [Set.insert_union]
+    case subcircuit s =>
+      rw [Set.union_assoc]
 
 @[circuit_norm]
 theorem localYields_flatten (env : Environment F) (opss : List (Operations F)) :

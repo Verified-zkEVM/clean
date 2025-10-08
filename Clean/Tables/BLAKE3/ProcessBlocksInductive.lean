@@ -84,7 +84,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
     omega
-  Assumptions _ := True
+  Assumptions _ _ := True
   Spec x := x.Normalized
 
   soundness := by
@@ -143,7 +143,7 @@ def circuit : FormalAssertion (F p) BlockInput where
   yields_eq := by intros; simp [circuit_norm, main, U32.AssertNormalized.circuit]
   subcircuitsConsistent := by
     simp only [circuit_norm, main, U32.AssertNormalized.circuit]
-  Assumptions _ := True
+  Assumptions _ _ := True
   Spec x := x.Normalized
 
   soundness := by

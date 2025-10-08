@@ -37,10 +37,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 768
+  yields_eq := by intros; simp [circuit_norm, main, G.circuit, G.elaborated]
   localLength_eq input i0 := by
     simp only [main, circuit_norm, G.circuit, G.elaborated]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let { state, message } := input
   state.Normalized ∧ (∀ i : Fin 16, message[i].Normalized)
 

@@ -42,7 +42,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
 
   return { z, carryOut }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y, carryIn⟩ := input
   x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
@@ -61,6 +61,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
+  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
 
   soundness := by
     -- introductions
@@ -132,6 +133,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
   name := "Addition8FullCarry"
+
+  noYields := by intros; simp only [circuit_norm, circuit]
 
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,

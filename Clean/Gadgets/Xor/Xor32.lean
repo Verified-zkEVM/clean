@@ -39,7 +39,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   lookup ByteXorTable (x.x3, y.x3, z.x3)
   return z
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 

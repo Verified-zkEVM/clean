@@ -39,8 +39,9 @@ def main (input : Vector (Expression (F p)) 254) :=
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
+  yields_eq := by intros; simp only [circuit_norm, main, CompConstant.circuit, Set.empty_union]
 
-  Assumptions input :=
+  Assumptions input _ :=
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
 

@@ -18,7 +18,7 @@ def FormalCircuit.concat
     {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
-    (h_compat : ∀ input mid, circuit1.Assumptions input → circuit1.Spec input mid → circuit2.Assumptions mid)
+    (h_compat : ∀ input mid yielded, circuit1.Assumptions input yielded → circuit1.Spec input mid → circuit2.Assumptions mid yielded)
     (h_localLength_stable : ∀ mid mid', circuit2.localLength mid = circuit2.localLength mid') :
     FormalCircuit F Input Output := {
   elaborated := {
@@ -36,9 +36,15 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    yields input env offset :=
+      circuit1.yields input env offset ∪
+      circuit2.yields (circuit1.output input offset) env (offset + circuit1.localLength input)
     yields_eq := by
       intro input env offset
-      simp [circuit_norm]
+      simp only [Circuit.bind_def, circuit_norm]
+      -- Use yields_eq from each circuit to relate FlatOperation.localYields to circuit.yields
+      rw [←circuit1.yields_eq, ←circuit2.yields_eq]
+      simp only [Set.union_empty]
   }
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
@@ -77,8 +83,8 @@ def FormalCircuit.weakenSpec
     {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output)
     (WeakerSpec : Input F → Output F → Prop)
-    (h_spec_implication : ∀ input output,
-      circuit.Assumptions input →
+    (h_spec_implication : ∀ input output yielded,
+      circuit.Assumptions input yielded →
       circuit.Spec input output →
       WeakerSpec input output) :
     FormalCircuit F Input Output := {
@@ -90,7 +96,7 @@ def FormalCircuit.weakenSpec
     -- Use the original circuit's soundness
     have h_strong_spec := circuit.soundness offset env yielded input_var input h_eval h_assumptions h_holds
     -- Apply the implication to get the weaker spec
-    exact h_spec_implication input _ h_assumptions h_strong_spec
+    exact h_spec_implication input _ yielded h_assumptions h_strong_spec
   completeness := by
     -- Completeness is preserved since we use the same elaborated circuit
     -- and the same assumptions

@@ -17,7 +17,7 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
   let s0 ← Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
 def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
@@ -26,6 +26,7 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState where
   main := main rc
   localLength _ := 1288
+  yields_eq := by intros; simp [circuit_norm, main, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated]
   output _ i0 := (Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 888) ).set 0 (varFromOffset U64 (i0 + 1280))
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit]

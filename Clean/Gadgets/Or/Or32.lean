@@ -28,7 +28,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
 
   return ⟨z0, z1, z2, z3⟩
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
@@ -39,6 +39,7 @@ def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main
   localLength _ := 4
+  yields_eq := by intros; simp only [circuit_norm, main, Or8.circuit, Set.empty_union]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start

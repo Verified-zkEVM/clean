@@ -29,8 +29,9 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main
   localLength _ := 120
+  yields_eq := by intros; simp [circuit_norm, main, Rotation64.circuit, Rotation64.elaborated, Xor64.circuit, Xor64.elaborated]
 
-def Assumptions (state : KeccakRow (F p)) := state.Normalized
+def Assumptions (state : KeccakRow (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
 def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized

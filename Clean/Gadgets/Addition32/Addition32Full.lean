@@ -38,7 +38,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let { z := z3, carryOut := c3 } ← Addition8FullCarry.main ⟨ x.x3, y.x3, c2 ⟩
   return { z := U32.mk z0 z1 z2 z3, carryOut := c3 }
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
@@ -59,6 +59,7 @@ Elaborated circuit data can be found as follows:
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main
   localLength _ := 8
+  yields_eq := by intros; simp only [circuit_norm, main, Addition8FullCarry.main, Set.empty_union]
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]

@@ -27,7 +27,7 @@ def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :
   let byte_rotated ← Rotation64Bytes.circuit byte_offset x
   Rotation64Bits.circuit bit_offset byte_rotated
 
-def Assumptions (input : U64 (F p)) := input.Normalized
+def Assumptions (input : U64 (F p)) (_ : Set (NamedList (F p))) := input.Normalized
 
 def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
@@ -42,6 +42,9 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := main off
   localLength _ := 16
   output _ i0 := output off i0
+  yields_eq := by
+    intros
+    simp [circuit_norm, main, Rotation64Bytes.circuit, Rotation64Bits.elaborated, Rotation64Bits.circuit]
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env yielded x_var x h_input x_normalized h_holds

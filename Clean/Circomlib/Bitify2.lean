@@ -131,7 +131,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
-  Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  Assumptions input _ := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
   Spec input output :=
     output.val = fromBits (input.map ZMod.val)

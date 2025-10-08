@@ -26,7 +26,7 @@ def main (offset : Fin 32) (x : Var U32 (F p)) : Circuit (F p) (Var U32 (F p)) :
   let byte_rotated ← Rotation32Bytes.circuit byte_offset x
   Rotation32Bits.circuit bit_offset byte_rotated
 
-def Assumptions (input : U32 (F p)) := input.Normalized
+def Assumptions (input : U32 (F p)) (_ : Set (NamedList (F p))) := input.Normalized
 
 def Spec (offset : Fin 32) (x : U32 (F p)) (y : U32 (F p)) :=
   y.value = rotRight32 x.value offset.val
@@ -41,6 +41,9 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 8
   output _inputs i0 := output off i0
+  yields_eq := by
+    intros
+    simp [circuit_norm, main, Rotation32Bytes.circuit, Rotation32Bits.elaborated, Rotation32Bits.circuit]
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env yielded x_var x h_input x_normalized h_holds

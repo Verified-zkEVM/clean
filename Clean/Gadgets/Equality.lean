@@ -41,7 +41,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
 
 @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
-  Assumptions _ := True
+  Assumptions _ _ := True
 
   Spec : α F × α F → Prop
   | (x, y) => x = y

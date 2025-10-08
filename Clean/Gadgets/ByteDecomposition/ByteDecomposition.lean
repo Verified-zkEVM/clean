@@ -34,7 +34,7 @@ def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F
 
   return { low, high }
 
-def Assumptions (x : F p) := x.val < 256
+def Assumptions (x : F p) (_ : Set (NamedList (F p))) := x.val < 256
 
 def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
@@ -45,6 +45,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := main offset
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
+  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env yielded x_var (x : F p) h_input (x_byte : x.val < 256) h_holds

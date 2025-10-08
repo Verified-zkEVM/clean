@@ -36,7 +36,7 @@ def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
 
   return fromVars resultVars
 
-def Assumptions (input : Inputs M F) : Prop :=
+def Assumptions (input : Inputs M F) (_ : Set (NamedList F)) : Prop :=
   IsBool input.selector
 
 /--

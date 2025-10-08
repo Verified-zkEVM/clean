@@ -221,6 +221,20 @@ lemma localWitnesses_toFlat {ops : Operations F} {env} :
     rw [←ih]
     try rw [localWitnesses_append]
     try simp only [localLength, localWitnesses, Vector.toArray_append, Subcircuit.witnesses, Vector.toArray_cast]
+
+lemma localYields_toFlat {ops : Operations F} {env} :
+    localYields env ops.toFlat = ops.localYields env := by
+  induction ops using Operations.induct with
+  | empty => rfl
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | use _ _ ih =>
+    simp only [Operations.toFlat, Operations.localYields, localYields]
+    exact ih
+  | yield _ _ ih =>
+    simp only [Operations.toFlat, Operations.localYields, localYields]
+    rw [ih]
+  | subcircuit s _ ih =>
+    simp only [Operations.toFlat, Operations.localYields, Subcircuit.yields]
+    rw [localYields_append, ih]
 end FlatOperation
 
 namespace Environment
@@ -655,21 +669,19 @@ end FlatOperation
 by assuming it within `GeneralFormalCircuit.Spec`.
 -/
 def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Output] [ProvableType Input]
-    (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := by
-  let Spec input output := orig.Assumptions input → orig.Spec input output
-  exact {
+    (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := {
     elaborated := orig.elaborated,
     Assumptions := orig.Assumptions,
-    Spec,
+    Spec := fun input yielded output => orig.Assumptions input yielded → orig.Spec input output,
     soundness := by
-      simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
+      simp only [GeneralFormalCircuit.Soundness]
       intros
       apply orig.soundness <;> trivial
     ,
     completeness := by
-      simp only [GeneralFormalCircuit.Completeness, forall_eq']
+      simp only [GeneralFormalCircuit.Completeness]
       intros
-      apply orig.completeness <;> trivial
+      apply orig.completeness <;> assumption
   }
 
 /--
@@ -679,10 +691,10 @@ by putting it within `GeneralFormalCircuit.Assumption`.
 -/
 def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit := by
-  let Spec input (_ : Unit) := orig.Assumptions input → orig.Spec input
+  let Spec input yielded (_ : Unit) := orig.Assumptions input yielded → orig.Spec input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input := orig.Assumptions input ∧ orig.Spec input,
+    Assumptions input yielded := orig.Assumptions input yielded ∧ orig.Spec input,
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]

@@ -48,6 +48,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 64
+  yields_eq := by intros; simp only [circuit_norm, main, Xor32.circuit, Set.empty_union]
   output inputs i0 := #v[
     varFromOffset U32 (i0 + 0),
     varFromOffset U32 (i0 + 4),
@@ -70,7 +71,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   localLength_eq _ n := by
     dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 

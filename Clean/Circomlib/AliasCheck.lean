@@ -33,8 +33,9 @@ def main (input : Vector (Expression (F p)) 254) := do
 def circuit : FormalAssertion (F p) (fields 254) where
   main
   localLength _ := 127 + 1 + 135 + 1
+  yields_eq := by intros; simp only [circuit_norm, main, CompConstant.circuit, Set.empty_union]
 
-  Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
+  Assumptions input _ := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
   Spec bits := fromBits (bits.map ZMod.val) < p
 

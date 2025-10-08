@@ -16,7 +16,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
     let state_and ← And.And64.circuit ⟨state_not, state[i + 10]⟩
     Xor64.circuit ⟨state[i], state_and⟩
 
-def Assumptions := KeccakState.Normalized (p:=p)
+def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
 def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
@@ -28,7 +28,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 400
   output _ i0 := Vector.mapRange 25 fun i => varFromOffset U64 (i0 + i*16 + 8)
-  yields_eq := by intros; simp [circuit_norm, main]
+  yields_eq := by intros; simp [circuit_norm, main, Xor64.circuit, Xor64.elaborated, And.And64.circuit, And.And64.elaborated, Not.circuit]
 
   localLength_eq state i0 := by simp only [main, circuit_norm, Xor64.circuit, And.And64.circuit, Not.circuit]
   subcircuitsConsistent state i0 := by

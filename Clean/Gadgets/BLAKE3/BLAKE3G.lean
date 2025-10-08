@@ -54,6 +54,7 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
   localLength _ := 96
+  yields_eq := by intros; simp [circuit_norm, main, Addition32.circuit, Addition32.elaborated, Rotation32.circuit, Rotation32.elaborated, Xor32.circuit, Xor32.elaborated]
   output inputs i0 := (inputs.state : Vector (U32 (Expression (F p))) 16)
     |>.set a (⟨var ⟨i0 + 56⟩, var ⟨i0 + 58⟩, var ⟨i0 + 60⟩, var ⟨i0 + 62⟩⟩) a.is_lt
     |>.set b (Rotation32.output 7 (i0 + 88)) b.is_lt
@@ -68,7 +69,7 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let { state, x, y } := input
   state.Normalized ∧ x.Normalized ∧ y.Normalized
 

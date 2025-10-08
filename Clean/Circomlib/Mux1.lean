@@ -65,8 +65,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
+  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
 
-  Assumptions input :=
+  Assumptions input _ :=
     let ⟨c, s⟩ := input
     IsBool s
 
@@ -178,11 +179,12 @@ def circuit : FormalCircuit (F p) Inputs field where
     -- The goal is about MultiMux1.circuit's localLength with n=1
     -- which is defined as n = 1
     rfl
+  yields_eq := by intros; simp only [circuit_norm, main, MultiMux1.circuit, Set.empty_union]
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]
 
-  Assumptions input :=
+  Assumptions input _ :=
     let ⟨_, s⟩ := input
     IsBool s
 
@@ -192,23 +194,19 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
-    rw[← h_input] at *
-    clear input
-    clear h_input
-    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
-    specialize h_subcircuit_sound h_assumptions 0 (by omega)
+    intro _ env yielded input_var input h_input h_assumptions h_subcircuit_sound
+    have h_assumptions' : IsBool (Expression.eval env input_var.s) := by
+      have : Expression.eval env input_var.s = input.s := by rw [← h_input]
+      rw [this]; exact h_assumptions
+    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound ⊢
+    specialize h_subcircuit_sound h_assumptions' 0 (by omega)
     rw [h_subcircuit_sound]
-    -- Now we need to show the RHS equals our spec
-    -- First, simplify the evaluation of the vector
+    rw [← h_input]
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, circuit_norm]
-    rw [← h_input] at h_s
-    simp_all
+    aesop
 
 end Mux1
 

@@ -264,12 +264,12 @@ attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength El
 
 @[circuit_norm]
 def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
+    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : Input F → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F),
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions input yielded →
   -- if the constraints hold
   ConstraintsHold.Soundness env yielded (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
@@ -278,13 +278,13 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
 
 @[circuit_norm]
 def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Prop) :=
+    (Assumptions : Input F → Set (NamedList F) → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F), ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness yielded offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions input yielded →
   -- the constraints hold
   ConstraintsHold.Completeness env yielded (circuit.main input_var |>.operations offset)
 
@@ -303,7 +303,7 @@ preconditions, and the spec acts as the postcondition.
 -/
 structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions (_ : Input F) : Prop := True
+  Assumptions (_ : Input F) (_ : Set (NamedList F)) : Prop := True
   Spec : Input F → Output F → Prop
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
@@ -316,17 +316,17 @@ preventing ambiguity in deterministic circuits.
 -/
 structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends circuit : FormalCircuit F Input Output where
-  uniqueness : ∀ (input : Input F) (out1 out2 : Output F),
-    circuit.Assumptions input → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+  uniqueness : ∀ (input : Input F) (yielded : Set (NamedList F)) (out1 out2 : Output F),
+    circuit.Assumptions input yielded → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
 
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
-    (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
+    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : Input F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F),
   -- for all inputs that satisfy the assumptions
   ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions input yielded →
   -- if the constraints hold
   ConstraintsHold.Soundness env yielded (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input
@@ -334,13 +334,13 @@ def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit 
 
 @[circuit_norm]
 def FormalAssertion.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
-    (Assumptions : Input F → Prop) (Spec : Input F → Prop) :=
+    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : Input F → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset, ∀ env, ∀ yielded : Set (NamedList F), ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness yielded offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the assumptions AND the spec
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input → Spec input →
+  Assumptions input yielded → Spec input →
   -- the constraints hold
   ConstraintsHold.Completeness env yielded (circuit.main input_var |>.operations offset)
 
@@ -360,7 +360,7 @@ strictly weaker than the constraints.)
 -/
 structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     extends elaborated : ElaboratedCircuit F Input unit where
-  Assumptions : Input F → Prop
+  Assumptions : Input F → Set (NamedList F) → Prop
   Spec : Input F → Prop
   soundness : FormalAssertion.Soundness F elaborated Assumptions Spec
   completeness : FormalAssertion.Completeness F elaborated Assumptions Spec
@@ -371,7 +371,7 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Output F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Set (NamedList F) → Output F → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F),
   -- for all inputs
@@ -380,16 +380,16 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
   ConstraintsHold.Soundness env yielded (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  Spec input yielded output
 
 @[circuit_norm]
-def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Prop) :=
+def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Set (NamedList F) → Prop) :=
   -- for all environments which _use the default witness generators for local variables_
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F), ∀ input_var : Var Input F,
   env.UsesLocalWitnessesCompleteness yielded offset (circuit.main input_var |>.operations offset) →
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
-  Assumptions input →
+  Assumptions input yielded →
   -- the constraints hold
   ConstraintsHold.Completeness env yielded (circuit.main input_var |>.operations offset)
 
@@ -410,8 +410,8 @@ add the range assumption to the soundness statement, thus making the circuit har
 -/
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
-  Assumptions : Input F → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
+  Assumptions : Input F → Set (NamedList F) → Prop -- the statement to be assumed for completeness
+  Spec : Input F → Set (NamedList F) → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end

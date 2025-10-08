@@ -28,7 +28,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let z7 ← And8.circuit ⟨ x.x7, y.x7 ⟩
   return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
@@ -40,6 +40,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U64 where
   main
   localLength _ := 8
   output _ i := varFromOffset U64 i
+  yields_eq := by intros; simp only [circuit_norm, main, And8.circuit, Set.empty_union]
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem soundness_to_u64 {x y z : U64 (F p)}

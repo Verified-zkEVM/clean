@@ -16,8 +16,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 480
+  yields_eq := by intros; simp [circuit_norm, main, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated, ThetaXor.circuit, ThetaXor.elaborated]
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
 def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   out_state.Normalized

@@ -113,7 +113,7 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
 
   subcircuitsConsistent := by sorry
 
-  Assumptions input :=
+  Assumptions input _ :=
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
 
