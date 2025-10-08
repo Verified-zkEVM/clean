@@ -59,20 +59,58 @@ lemma a_lt_b_eq_sum_lt_2n {p : ℕ} [Fact p.Prime]
 
   linarith [Int.ofNat_lt.mpr hn]
 
-lemma val_pow_of_lt {p n : ℕ} [NeZero p] (h : 2^n < p) :
-    (2^n: ZMod p).val = 2^n := by
+/- lemma val_pow_of_lt {p n : ℕ} [NeZero p] (h : 2^n < p) : -/
+/-     (2^n: ZMod p).val = 2^n := by -/
+/-   rw [Nat.cast_pow, Nat.cast_ofNat] -/
+/-   rw [ZMod.val_natCast_of_lt (a := 2^n) (n := p)] -/
+/-   exact h -/
 
-  rw [ZMod.val_natCast_of_lt (a := 2^n) (n := p)]
-  exact h
+
+@[simp]
+lemma val_pow_of_lt' {p n : ℕ} [NeZero p] (h : 2 ^ n < p) :
+    (((2 ^ n: ℕ) : ZMod p).val) = 2 ^ n :=
+  ZMod.val_natCast_of_lt h
+
+
+lemma val_pow_of_lt_nat {p n : ℕ} [NeZero p] [Fact p.Prime] (h : 2 ^ n < p) (hp : p > 2):
+    (2 ^ n : ZMod p).val = 2 ^ n := by
+
+  have p_ne_zero := NeZero.ne p
+  rw [ZMod.val_pow] at *
+  rw [← Nat.cast_ofNat]
+  rw [ZMod.val_natCast]
+  . -- (2 % p) ^ n = 2 ^ n
+    have h_mod := Nat.mod_eq_iff_lt (m := 2) (n := p) p_ne_zero
+
+    have h_mod' : 2 % p = 2 := by
+      simp_all only [gt_iff_lt, ne_eq, iff_true]
+
+    rw [h_mod']
+    
+  . 
+    rw [← Nat.cast_ofNat]
+    rw [ZMod.val_natCast]
+
+    have h_mod := Nat.mod_eq_iff_lt (m := 2) (n := p) p_ne_zero
+    have h_mod' : 2 % p = 2 := by
+      simp_all only [gt_iff_lt, ne_eq, iff_true]
+    rw [h_mod']
+    exact h
 
 -- Helper: no wrap on a + 2^n
-omit [Fact (p > 2)]
-private lemma add_twoPow_val (a : ZMod p) (n : ℕ)
+/- omit [Fact (p > 2)] -/
+private lemma add_twoPow_val {p : ℕ} [Fact (p > 2)] [Fact p.Prime] (a : ZMod p) (n : ℕ)
   (ha : a.val < 2 ^ n) (hp : 2 ^ n < p) (hp' : 2 ^ (n+1) < p) :
   (a + 2 ^ n).val = a.val + 2 ^ n := by
 
+
+
+  /- have h2n : ((↑(2 ^ n) : ZMod p).val) = 2 ^ n := val_pow_of_lt' hp -/
+  have hp2 := Fact.out (p := p > 2)
+
   have h2n : (2^n: ZMod p).val = 2^n := by
-    exact val_pow_of_lt hp
+    /- rw [← Nat.cast_pow]  -- turns (2 ^ n) into (↑2 ^ n : ZMod p) -/
+    exact val_pow_of_lt_nat hp hp2
 
   -- symm at h2n
 
@@ -120,7 +158,7 @@ private lemma sub_no_wrap_val (n : ℕ) (a b : ZMod p)
 /- set_option maxHeartbeats 400_000 -/
 /- set_option diagnostics true -/
 
-lemma test_lemma_nocast {p : ℕ} [Fact p.Prime]
+lemma test_lemma_nocast {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
     (n : ℕ) (a b : F p)
     (ha : ZMod.val a < 2^n)
     (hb : ZMod.val b < 2^n)
