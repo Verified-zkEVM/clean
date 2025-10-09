@@ -117,6 +117,16 @@ def assertZero (e : Expression F) : Circuit F Unit := fun _ =>
 def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Row (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.lookup { table := table.toRaw, entry := toElements entry }])
 
+/-- Yield a named list of values to be used by other circuits. -/
+@[circuit_norm]
+def yield (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.yield nl])
+
+/-- Use a named list of values that was yielded by another circuit. -/
+@[circuit_norm]
+def use (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.use nl])
+
 end Circuit
 
 /-- Create a new variable of an arbitrary "provable type". -/
@@ -418,7 +428,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup yield use)
 
 -- general `witness` method
 
