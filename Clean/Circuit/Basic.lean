@@ -402,6 +402,8 @@ def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : Elaborated
   -- for all inputs that satisfy the "honest prover" assumptions
   ∀ input : Input F, eval env input_var = input →
   Assumptions input yielded →
+  -- if the global yielded set contains the local yields
+  circuit.yields input_var env offset ⊆ yielded →
   -- the constraints hold
   ConstraintsHold.Completeness env yielded (circuit.main input_var |>.operations offset)
 

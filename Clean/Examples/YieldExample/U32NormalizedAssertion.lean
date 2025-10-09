@@ -112,7 +112,7 @@ theorem completeness : FormalAssertion.Completeness (F p) elaborated Assumptions
     apply h_complete
     exact h3
 
-def assertion : FormalAssertion (F p) U32 := {
+def circuit : FormalAssertion (F p) U32 := {
   elaborated with
   Assumptions, Spec, soundness, completeness
 }

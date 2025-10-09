@@ -704,6 +704,6 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
     ,
     completeness := by
       simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      rintro _ _ _ _ _ ⟨ _, _ ⟩
+      rintro _ _ _ _ _ ⟨ _, _ ⟩ _
       apply orig.completeness <;> trivial
   }
