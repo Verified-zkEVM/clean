@@ -341,6 +341,26 @@ lemma val_add_two_pow_sub_ge_of_val_ge
   have h := add_two_pow_sub_eq_add_diff (n := n) (a := a.val) (b := b.val) hb_le_a
   -- `a.val + 2^n - b.val = 2^n + (a.val - b.val)` ≥ `2^n`
   simp [h] 
+  
+lemma num2bits_bit_eq_testBit
+    {p n i₀ : ℕ} [Fact p.Prime] [Fact (p > 2)]
+    {env : Environment (F p)}
+    {a b : F p}
+    (h_holds :
+      Vector.map (Expression.eval env)
+        (Vector.mapRange (n + 1) (fun i ↦ var { index := i₀ + i }))
+      = fieldToBits (n + 1) (a + 2 ^ n + -b)) :
+    (Vector.map (Expression.eval env)
+       (Vector.mapRange (n + 1) (fun i ↦ var { index := i₀ + i })))[n]'(Nat.lt_succ_self n)
+      =
+    (if (ZMod.val (a + 2 ^ n + -b)).testBit n then (1 : F p) else 0) := by
+  simp only [Vector.ext_iff] at h_holds
+  specialize h_holds n (Nat.lt_succ_self n)
+  simp only [Vector.getElem_map, Vector.getElem_mapRange,
+        fieldToBits, toBits, Nat.cast_ite, Nat.cast_one, Nat.cast_zero] at h_holds
+
+  simp only [Vector.getElem_map, Vector.getElem_mapRange]
+  exact h_holds
 
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
@@ -368,7 +388,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 --
     rw [← h_input]
 
-
+    -- ① evaluate inputs
     have h1 : Expression.eval env input_var.1 = input.1 := by
       rw [← h_input]
     have h2 : Expression.eval env input_var.2 = input.2 := by
@@ -376,29 +396,25 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     set a := input.1
     set b := input.2
     set hp := hn
+    rw [h1, h2] at h_holds
+    rw [h1, h2]
+    simp only [id_eq]
     
+    -- ② prepare bounds
     have hp' : 2 ^ n < p := pow_lt_of_succ hp
 
     have h_bounds : Bounds p n a b := Bounds.of_assumptions h_assumptions.left h_assumptions.right hp 
 
-
-    rw [h1, h2] at h_holds
-    rw [h1, h2]
-    simp only [id_eq]
-    set summation := ((ZMod.val a : ℤ) + 2 ^ n + -(ZMod.val b : ℤ))
+    -- ③ extract nth bit
     rw [← Nat.add_assoc] at h_holds
-    rw [h_holds.right]
     obtain ⟨⟨h_holds1, h_holds2⟩, h_holds3⟩ := h_holds
-    simp only [Vector.ext_iff] at h_holds2
 
-    specialize h_holds2 n (Nat.lt_succ_self n)
+    rw [h_holds3]
 
-    rw [Vector.getElem_map, Vector.getElem_mapRange] at h_holds2
-    simp only [circuit_norm] at h_holds2
-    simp only [fieldToBits, toBits] at h_holds2
-    rw [Vector.getElem_map, Vector.getElem_mapRange] at h_holds2
-    simp only [Nat.cast_ite, Nat.cast_one, Nat.cast_zero] at h_holds2
-    rw [h_holds2]
+    have h_nbit := num2bits_bit_eq_testBit h_holds2
+    simp only [circuit_norm] at h_nbit
+    rw [h_nbit]
+    
     by_cases hab : ZMod.val a < ZMod.val b
     .
       -- sum is < 2^n, so nth bit is 0
@@ -411,6 +427,8 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
       simp [h_bit_clear', hab]
     .
       -- sum is ≥ 2^n, so nth bit is 1
+      have hab' : ZMod.val a ≥ ZMod.val b := by
+        simpa [not_lt, ge_iff_le] using hab
       have h_holds1' : ZMod.val (a + 2 ^ n - b) < 2 ^ (n + 1) := by
         rw [← sub_eq_add_neg] at h_holds1
         exact h_holds1
