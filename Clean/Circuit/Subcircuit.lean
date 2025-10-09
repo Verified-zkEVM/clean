@@ -66,10 +66,11 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   have imply_soundness : ∀ env : Environment F, ∀ yielded : Set (NamedList F),
     let input := eval env input_var
     let output := eval env (circuit.output input_var n)
-    ConstraintsHoldFlat env yielded ops.toFlat → circuit.Assumptions input yielded → circuit.Spec input output := by
+    let localYields := circuit.yields input_var env n
+    ConstraintsHoldFlat env yielded ops.toFlat → circuit.Assumptions input yielded → circuit.Spec input output localYields := by
     -- we are given an environment where the constraints hold, and can assume the assumptions are true
-    intro env yielded input output h_holds (as : circuit.Assumptions input yielded)
-    show circuit.Spec input output
+    intro env yielded input output localYields h_holds (as : circuit.Assumptions input yielded)
+    show circuit.Spec input output localYields
 
     -- by soundness of the circuit, the spec is satisfied if only the constraints hold
     suffices h: ConstraintsHold.Soundness env yielded ops by
@@ -105,10 +106,10 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   {
     ops := ops.toFlat,
     Soundness env yielded := circuit.Assumptions (eval env input_var) yielded →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) (circuit.yields input_var env n),
     Completeness env yielded := circuit.Assumptions (eval env input_var) yielded,
     UsesLocalWitnesses env yielded := circuit.Assumptions (eval env input_var) yielded →
-      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)),
+      circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) (circuit.yields input_var env n),
     localLength := circuit.localLength input_var
 
     imply_soundness
@@ -206,8 +207,9 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
   have imply_soundness : ∀ env : Environment F, ∀ yielded : Set (NamedList F),
       let input := eval env input_var
       let output := eval env (circuit.output input_var n)
-      ConstraintsHoldFlat env yielded ops.toFlat → circuit.Spec input yielded output := by
-    intro env yielded input output h_holds
+      let localYields := circuit.yields input_var env n
+      ConstraintsHoldFlat env yielded ops.toFlat → circuit.Spec input yielded output localYields := by
+    intro env yielded input output localYields h_holds
     apply circuit.soundness n env yielded input_var input rfl
     apply can_replace_soundness
     exact constraintsHold_toFlat_iff.mp h_holds
@@ -228,10 +230,10 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
 
   {
     ops := ops.toFlat,
-    Soundness env yielded := circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)),
+    Soundness env yielded := circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)) (circuit.yields input_var env n),
     Completeness env yielded := circuit.Assumptions (eval env input_var) yielded,
     UsesLocalWitnesses env yielded := circuit.Assumptions (eval env input_var) yielded →
-      circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)),
+      circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)) (circuit.yields input_var env n),
     localLength := circuit.localLength input_var
 
     imply_soundness
@@ -384,7 +386,7 @@ theorem FormalCircuit.toSubcircuit_usesLocalWitnesses
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yielded : Set (NamedList F)) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnesses env yielded =
-    (circuit.Assumptions (eval env input_var) yielded → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
+    (circuit.Assumptions (eval env input_var) yielded → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) (circuit.yields input_var env n)) := by
   rfl
 
 /--
@@ -395,7 +397,7 @@ theorem GeneralFormalCircuit.toSubcircuit_usesLocalWitnesses
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yielded : Set (NamedList F)) :
     (circuit.toSubcircuit n input_var).UsesLocalWitnesses env yielded =
-    (circuit.Assumptions (eval env input_var) yielded → circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n))) := by
+    (circuit.Assumptions (eval env input_var) yielded → circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)) (circuit.yields input_var env n)) := by
   rfl
 
 /--
@@ -450,7 +452,7 @@ theorem FormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yielded : Set (NamedList F)) :
     (circuit.toSubcircuit n input_var).Soundness env yielded =
-    (circuit.Assumptions (eval env input_var) yielded → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n))) := by
+    (circuit.Assumptions (eval env input_var) yielded → circuit.Spec (eval env input_var) (eval env (circuit.output input_var n)) (circuit.yields input_var env n)) := by
   rfl
 
 /--
@@ -461,7 +463,7 @@ theorem GeneralFormalCircuit.toSubcircuit_soundness
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) (yielded : Set (NamedList F)) :
     (circuit.toSubcircuit n input_var).Soundness env yielded =
-    circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)) := by
+    circuit.Spec (eval env input_var) yielded (eval env (circuit.output input_var n)) (circuit.yields input_var env n) := by
   rfl
 
 /--

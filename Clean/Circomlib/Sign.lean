@@ -45,7 +45,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
     -- Input should be binary representation of a field element
     ∀ i (_ : i < 254), IsBool input[i]
 
-  Spec input output :=
+  Spec input output _ :=
     -- The output is 1 if the input (as a number) is greater than (p-1)/2
     -- This effectively checks if the field element is in the "upper half" of the field
     output = if Utils.Bits.fromBits (input.map ZMod.val) > (p - 1) / 2 then 1 else 0

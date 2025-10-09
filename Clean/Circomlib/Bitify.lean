@@ -77,7 +77,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
-  Spec input _ bits :=
+  Spec input _ bits _ :=
     input.val < 2^n
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
@@ -120,7 +120,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   Assumptions input _ := input.val < 2^n
 
-  Spec input _ output :=
+  Spec input _ output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
@@ -192,7 +192,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   Assumptions input _ :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
+  Spec input output _ :=
     output = fieldFromBits input
     ∧ output.val < 2^n
 

@@ -41,7 +41,7 @@ def circuit : FormalCircuit (F p) field field where
 
   Assumptions _ _ := True
 
-  Spec input output :=
+  Spec input output _ :=
     output = (if input = 0 then 1 else 0)
 
   soundness := by
@@ -95,7 +95,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   Assumptions _ _ := True
 
-  Spec input output :=
+  Spec input output _ :=
     output = (if input.1 = input.2 then 1 else 0)
 
   completeness := by
@@ -238,7 +238,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   Assumptions := fun (x, y) _ => x.val < 2^n ∧ y.val < 2^n
 
-  Spec := fun (x, y) output =>
+  Spec := fun (x, y) output _ =>
     output = (if x.val < y.val then 1 else 0)
 
   soundness := by
@@ -271,7 +271,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   yields_eq := by intros; simp only [circuit_norm, LessThan.circuit, Set.empty_union]
 
   Assumptions := fun (x, y) _ => x.val < 2^n ∧ y.val < 2^n
-  Spec := fun (x, y) output =>
+  Spec := fun (x, y) output _ =>
     output = (if x.val <= y.val then 1 else 0)
 
   soundness := by
@@ -317,7 +317,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   Assumptions := fun (x, y) _ => x.val < 2^n ∧ y.val < 2^n
 
-  Spec := fun (x, y) output =>
+  Spec := fun (x, y) output _ =>
     output = (if x.val > y.val then 1 else 0)
 
   soundness := by
@@ -348,7 +348,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   yields_eq := by intros; simp only [circuit_norm, LessThan.circuit, Set.empty_union]
 
   Assumptions := fun (x, y) _ => x.val < 2^n ∧ y.val < 2^n
-  Spec := fun (x, y) output =>
+  Spec := fun (x, y) output _ =>
     output = (if x.val >= y.val then 1 else 0)
 
   soundness := by

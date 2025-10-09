@@ -55,7 +55,7 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
 def circuit : FormalCircuit (F p) U64 U64 where
   main x := pure (not64_bytewise x)
   Assumptions x _ := x.Normalized
-  Spec x z := z.value = not64 x.value ∧ z.Normalized
+  Spec x z _ := z.value = not64 x.value ∧ z.Normalized
 
   localLength _ := 0
   output x _ := not64_bytewise x

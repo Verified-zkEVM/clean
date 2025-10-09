@@ -20,7 +20,7 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
   Assumptions := fun { x, y, carryIn } _ =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-  Spec := fun { x, y, carryIn } z =>
+  Spec := fun { x, y, carryIn } z _ =>
     z.val = (x.val + y.val + carryIn.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8FullCarry`
@@ -54,7 +54,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   Assumptions | { x, y }, _ => x.val < 256 ∧ y.val < 256
 
-  Spec | { x, y }, z => z.val = (x.val + y.val) % 256
+  Spec | { x, y }, z, _ => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by

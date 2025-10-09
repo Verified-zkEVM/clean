@@ -46,7 +46,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Spec input output _ :=
     output.val = input.1.val ^^^ input.2.val
     ∧ IsBool output
 
@@ -90,7 +90,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Spec input output _ :=
     output.val = input.1.val &&& input.2.val
     ∧ IsBool output
 
@@ -132,7 +132,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Spec input output _ :=
     output.val = input.1.val ||| input.2.val
     ∧ IsBool output
 
@@ -174,7 +174,7 @@ def circuit : FormalCircuit (F p) field field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input
-  Spec input output :=
+  Spec input output _ :=
     output.val = 1 - input.val
     ∧ IsBool output
 
@@ -218,7 +218,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Spec input output _ :=
     output.val = 1 - (input.1.val &&& input.2.val)
     ∧ IsBool output
 
@@ -262,7 +262,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
-  Spec input output :=
+  Spec input output _ :=
     output.val = 1 - (input.1.val ||| input.2.val)
     ∧ IsBool output
 
@@ -501,7 +501,7 @@ lemma main_usesLocalWitnesses_iff_completeness (n : ℕ) (input : Var (fields n)
 def Assumptions (n : ℕ) (input : fields n (F p)) (_ : Set (NamedList (F p))) : Prop :=
   ∀ (i : ℕ) (h : i < n), IsBool input[i]
 
-def Spec (n : ℕ) (input : fields n (F p)) (output : F p) : Prop :=
+def Spec (n : ℕ) (input : fields n (F p)) (output : F p)  (_ : Set (NamedList (F p))) : Prop :=
   output.val = (input.map (·.val)).foldl (· &&& ·) 1 ∧ IsBool output
 
 /-- If eval env v = w for vectors v and w, then evaluating extracted subvectors preserves equality -/
@@ -613,7 +613,7 @@ lemma soundness_zero {p : ℕ} [Fact p.Prime]
     (input : fields 0 (F p)) (_h_env : input = eval env input_var)
     (_h_assumptions : Assumptions 0 input yielded)
     (_h_hold : Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset)) :
-    Spec 0 input (env ((main input_var).output offset)) := by
+    Spec 0 input (env ((main input_var).output offset)) ∅ := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
   constructor
@@ -627,7 +627,7 @@ lemma soundness_one {p : ℕ} [Fact p.Prime]
     (input : fields 1 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 1 input yielded)
     (_h_hold : Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset)) :
-    Spec 1 input (env ((main input_var).output offset)) := by
+    Spec 1 input (env ((main input_var).output offset)) ∅ := by
   simp only [main, Circuit.output, Circuit.pure_def] at _h_hold ⊢
   simp only [Spec]
   have h_input0 := h_assumptions 0 (by norm_num : 0 < 1)
@@ -657,7 +657,7 @@ lemma soundness_two {p : ℕ} [Fact p.Prime]
     (input : fields 2 (F p)) (h_env : input = eval env input_var)
     (h_assumptions : Assumptions 2 input yielded)
     (h_hold : Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset)) :
-    Spec 2 input (env ((main input_var).output offset)) := by
+    Spec 2 input (env ((main input_var).output offset)) ∅ := by
   simp only [main] at h_hold ⊢
   simp only [Spec]
   have h_input0 := h_assumptions 0 (by norm_num : 0 < 2)
@@ -740,7 +740,7 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     input = eval env input_var →
     Assumptions n input yielded →
     Circuit.ConstraintsHold.Soundness env yielded ((main input_var).operations offset) →
-    Spec n input (env ((main input_var).output offset)) := by
+    Spec n input (env ((main input_var).output offset)) ∅ := by
   induction n using Nat.strong_induction_on with
   | _ n IH =>
     intro offset env yielded input_var input h_env h_assumptions h_hold
@@ -788,11 +788,11 @@ theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           rw [Vector.getElem_cast, Vector.getElem_drop]
         rw [this]
         apply h_assumptions (n1 + i) (by omega)
-      have h_spec1 : Spec n1 input1 (env ((main input_var1).output offset)) := by
+      have h_spec1 : Spec n1 input1 (env ((main input_var1).output offset)) ∅ := by
         apply IH n1 h_n1_lt offset env input_var1 input1 h_eval1 h_assumptions1
         rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
         exact h_hold.1
-      have h_spec2 : Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) := by
+      have h_spec2 : Spec n2 input2 (env ((main input_var2).output (offset + (main input_var1).localLength offset))) ∅ := by
         apply IH n2 h_n2_lt (offset + (main input_var1).localLength offset) env input_var2 input2 h_eval2 h_assumptions2
         rw [Circuit.ConstraintsHold.bind_soundness] at h_hold
         rw [Circuit.ConstraintsHold.bind_soundness] at h_hold

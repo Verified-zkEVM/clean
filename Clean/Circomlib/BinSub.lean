@@ -117,7 +117,7 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
 
-  Spec input output :=
+  Spec input output _ :=
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     -- All output bits are binary

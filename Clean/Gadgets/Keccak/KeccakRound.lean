@@ -19,7 +19,7 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
 
 def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
-def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) (_ : Set (NamedList (F p))) :=
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 

@@ -71,7 +71,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     let ⟨c, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  Spec input output _ :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
@@ -188,7 +188,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     let ⟨_, s⟩ := input
     IsBool s
 
-  Spec input output :=
+  Spec input output _ :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 

@@ -75,7 +75,7 @@ def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let { state, chaining_value } := input
   state.Normalized ∧ (∀ i : Fin 8, chaining_value[i].Normalized)
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) (_ : Set (NamedList (F p))) :=
   let { state, chaining_value } := input
   out.value = finalStateUpdate state.value (chaining_value.map U32.value) ∧ out.Normalized
 

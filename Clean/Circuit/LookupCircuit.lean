@@ -45,7 +45,7 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
-  Soundness := fun (input, output) => circuit.Assumptions input ∅ → circuit.Spec input output
+  Soundness := fun (input, output) => circuit.Assumptions input ∅ → circuit.Spec input output ∅
   Completeness := fun (input, output) => circuit.Assumptions input ∅ ∧ output = circuit.constantOutput input
 
   imply_soundness := by
@@ -55,7 +55,9 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     have h_yields : FlatOperation.localYields env ops.toFlat = ∅ := by
       rw [FlatOperation.localYields_toFlat, circuit.yields_eq, circuit.noYields]
     rw [h_yields] at h_holds
-    exact circuit.original_soundness n env ∅ (const input) input ProvableType.eval_const h_assumptions h_holds
+    have h_spec := circuit.original_soundness n env ∅ (const input) input ProvableType.eval_const h_assumptions h_holds
+    rw [circuit.noYields] at h_spec
+    exact h_spec
 
   implied_by_completeness := by
     intro (input, output) ⟨h_assump, h_output⟩
@@ -88,7 +90,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   yields_eq := by intro; simp [circuit_norm]
 
   Assumptions input _ := circuit.Assumptions input ∅
-  Spec := circuit.Spec
+  Spec input output _ := circuit.Spec input output ∅
 
   soundness := by
     intro n env yielded input_var input h_input h_assumptions h_holds

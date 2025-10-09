@@ -35,7 +35,7 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
 def Assumptions (input : ApplyRounds.Inputs (F p)) (yielded : Set (NamedList (F p))) : Prop :=
   ApplyRounds.Assumptions input yielded
 
-def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
+def Spec (input : ApplyRounds.Inputs (F p)) (output : BLAKE3State (F p))  (_ : Set (NamedList (F p))) : Prop :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   output.value = compress
     (chaining_value.map U32.value)

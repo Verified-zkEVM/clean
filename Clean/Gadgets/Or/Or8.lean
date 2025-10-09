@@ -20,7 +20,7 @@ def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def Spec (input : Inputs (F p)) (z : F p) :=
+def Spec (input : Inputs (F p)) (z : F p) (_ : Set (NamedList (F p))) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 

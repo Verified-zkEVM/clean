@@ -184,7 +184,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
     -- All inputs are binary
     ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
 
-  Spec input output :=
+  Spec input output _ :=
     let nout := nbits ((2^n - 1) * ops)
     -- All outputs are binary
     (∀ i (hi : i < nout), IsBool output[i])

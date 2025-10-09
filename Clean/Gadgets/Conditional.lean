@@ -42,7 +42,7 @@ def Assumptions (input : Inputs M F) (_ : Set (NamedList F)) : Prop :=
 /--
 Specification: Output is selected based on selector value using if-then-else.
 -/
-def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
+def Spec [DecidableEq F] (input : Inputs M F) (output : M F) (_ : Set (NamedList F)) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
 instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where

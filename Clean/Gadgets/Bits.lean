@@ -33,7 +33,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
   Assumptions (x : F p) (_ : Set (NamedList (F p))) := x.val < 2^n
 
-  Spec (x : F p) (_ : Set (NamedList (F p))) (bits : Vector (F p) n) :=
+  Spec (x : F p) (_ : Set (NamedList (F p))) (bits : Vector (F p) n) (_ : Set (NamedList (F p))) :=
     x.val < 2^n ∧ bits = fieldToBits n x
 
   soundness := by

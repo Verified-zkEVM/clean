@@ -264,7 +264,7 @@ attribute [circuit_norm] ElaboratedCircuit.main ElaboratedCircuit.localLength El
 
 @[circuit_norm]
 def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
-    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : Input F → Output F → Prop) :=
+    (Assumptions : Input F → Set (NamedList F) → Prop) (Spec : Input F → Output F → Set (NamedList F) → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F),
   -- for all inputs that satisfy the assumptions
@@ -274,7 +274,8 @@ def Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
   ConstraintsHold.Soundness env yielded (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input output
+  let localYields := circuit.yields input_var env offset
+  Spec input output localYields
 
 @[circuit_norm]
 def Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
@@ -304,7 +305,7 @@ preconditions, and the spec acts as the postcondition.
 structure FormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions (_ : Input F) (_ : Set (NamedList F)) : Prop := True
-  Spec : Input F → Output F → Prop
+  Spec : Input F → Output F → Set (NamedList F) → Prop
   soundness : Soundness F elaborated Assumptions Spec
   completeness : Completeness F elaborated Assumptions
 
@@ -316,8 +317,8 @@ preventing ambiguity in deterministic circuits.
 -/
 structure DeterministicFormalCircuit (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
     extends circuit : FormalCircuit F Input Output where
-  uniqueness : ∀ (input : Input F) (yielded : Set (NamedList F)) (out1 out2 : Output F),
-    circuit.Assumptions input yielded → circuit.Spec input out1 → circuit.Spec input out2 → out1 = out2
+  uniqueness : ∀ (input : Input F) (yielded : Set (NamedList F)) (out1 out2 : Output F) (localYields1 localYields2 : Set (NamedList F)),
+    circuit.Assumptions input yielded → circuit.Spec input out1 localYields1 → circuit.Spec input out2 localYields2 → out1 = out2
 
 @[circuit_norm]
 def FormalAssertion.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
@@ -371,7 +372,7 @@ structure FormalAssertion (F : Type) (Input : TypeMap) [Field F] [ProvableType I
   output _ _ := ()
 
 @[circuit_norm]
-def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Set (NamedList F) → Output F → Prop) :=
+def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Spec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop) :=
   -- for all environments that determine witness generation
   ∀ offset : ℕ, ∀ env, ∀ yielded : Set (NamedList F),
   -- for all inputs
@@ -380,7 +381,8 @@ def GeneralFormalCircuit.Soundness (F : Type) [Field F] (circuit : ElaboratedCir
   ConstraintsHold.Soundness env yielded (circuit.main input_var |>.operations offset) →
   -- the spec holds on the input and output
   let output := eval env (circuit.output input_var offset)
-  Spec input yielded output
+  let localYields := circuit.yields input_var env offset
+  Spec input yielded output localYields
 
 @[circuit_norm]
 def GeneralFormalCircuit.Completeness (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output) (Assumptions : Input F → Set (NamedList F) → Prop) :=
@@ -411,7 +413,7 @@ add the range assumption to the soundness statement, thus making the circuit har
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → Set (NamedList F) → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Set (NamedList F) → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
+  Spec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop -- the statement to be proved for soundness.
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end

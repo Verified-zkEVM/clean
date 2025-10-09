@@ -24,7 +24,8 @@ theorem FormalCircuit.original_soundness (circuit : FormalCircuit F β α) :
     ConstraintsHold env yielded (circuit.main b_var |>.operations offset) →
     -- the spec holds
     let a := eval env (circuit.output b_var offset)
-    circuit.Spec b a := by
+    let localYields := circuit.yields b_var env offset
+    circuit.Spec b a localYields := by
 
   intro offset env yielded b_var b h_input h_assumptions h_holds
   have h_holds' := Circuit.can_replace_soundness h_holds

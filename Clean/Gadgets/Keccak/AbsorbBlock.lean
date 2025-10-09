@@ -40,7 +40,7 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
 @[reducible] def Assumptions (input : Input (F p)) (_ : Set (NamedList (F p))) :=
   input.state.Normalized ∧ input.block.Normalized
 
-@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) :=
+@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) (_ : Set (NamedList (F p))) :=
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 

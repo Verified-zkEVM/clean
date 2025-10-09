@@ -36,7 +36,7 @@ instance elaborated : ElaboratedCircuit F M field where
 
 def Assumptions (_ : M F) (_ : Set (NamedList F)) : Prop := True
 
-def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
+def Spec [DecidableEq (M F)] (input : M F) (output : F) (_ : Set (NamedList F)) : Prop :=
   output = if input = 0 then 1 else 0
 
 /--
@@ -50,7 +50,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
         IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
             (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+              (i₀ + i * IsZeroField.circuit.localLength vars[i]))) ∅) :
     Expression.eval env
       (Fin.foldl n
         (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))

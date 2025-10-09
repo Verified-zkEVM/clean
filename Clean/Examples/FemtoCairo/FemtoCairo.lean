@@ -102,7 +102,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
   Assumptions | instruction, _ => True
 
   Spec
-  | instruction, output =>
+  | instruction, output, _ =>
     match Spec.decodeInstruction instruction with
     | some (instr_type, addr1, addr2, addr3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
@@ -329,7 +329,7 @@ def fetchInstructionCircuit
   yields_eq := by intros; simp only [circuit_norm, Set.empty_union]
   Assumptions | pc, _ => True
   Spec
-  | pc, output =>
+  | pc, output, _ =>
     match Spec.fetchInstruction program pc with
       | some claimed_output => output = claimed_output
       | none => False -- impossible, lookups ensure that memory accesses are valid
@@ -410,7 +410,7 @@ def readFromMemoryCircuit
   yields_eq _ _ _ := by simp [circuit_norm]
   Assumptions | {state, mode, offset}, _ => DecodedAddressingMode.isEncodedCorrectly mode
   Spec
-  | {state, offset, mode}, output =>
+  | {state, offset, mode}, output, _ =>
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
@@ -524,7 +524,7 @@ def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
   localLength _ := 3
   Assumptions | {state, decoded, v1, v2, v3}, _ => DecodedInstructionType.isEncodedCorrectly decoded.instrType
   Spec
-  | {state, decoded, v1, v2, v3}, output =>
+  | {state, decoded, v1, v2, v3}, output, _ =>
     match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
       | some nextState => output = nextState
       | none => False -- impossible, constraints ensure that the transition is valid
@@ -628,7 +628,7 @@ def femtoCairoStepElaboratedCircuit
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (state : State (F p)) (nextState : State (F p)) : Prop :=
+    (state : State (F p)) (nextState : State (F p)) (_ : Set (NamedList (F p))) : Prop :=
   match Spec.femtoCairoMachineTransition program memory state with
     | some s => s = nextState
     | none => False -- impossible, constraints ensure that the transition is valid

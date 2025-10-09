@@ -29,7 +29,7 @@ def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :
 
 def Assumptions (input : U64 (F p)) (_ : Set (NamedList (F p))) := input.Normalized
 
-def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
+def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) (_ : Set (NamedList (F p))) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 

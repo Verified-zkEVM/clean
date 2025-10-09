@@ -42,7 +42,7 @@ def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y, carryIn⟩ := input
   x.Normalized ∧ y.Normalized ∧ IsBool carryIn
 
-def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
+def Spec (input : Inputs (F p)) (out : Outputs (F p)) (_ : Set (NamedList (F p))) :=
   let ⟨x, y, carryIn⟩ := input
   let ⟨z, carryOut⟩ := out
   z.value = (x.value + y.value + carryIn.val) % 2^32

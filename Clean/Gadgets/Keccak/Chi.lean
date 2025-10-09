@@ -18,7 +18,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
 
 def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) (_ : Set (NamedList (F p))) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
