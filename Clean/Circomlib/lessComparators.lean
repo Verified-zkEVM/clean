@@ -56,8 +56,6 @@ lemma testBit_sum_sub_eq_sum_addNeg
     (ZMod.val (a + 2^n - b)).testBit k
   = (ZMod.val (a + 2^n + -b)).testBit k := by
   simp [sub_eq_add_neg, add_comm, add_left_comm]
-  /- using -/
-  /-   (testBit_sub_eq_addNeg (a + 2^n) b k) -/
 
 /-- Pack the repeated bounds (`ha hb hp hp'`) into your structure in one shot. -/
 def Bounds.of_assumptions
@@ -283,6 +281,66 @@ lemma testBit_n_of_add_two_pow_sub
       bit_is_set n (a + (2 ^ n : F p) - b) h_sum_lt hx_ge
     simpa [hlt, sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using h_set
 
+/-- From `<` on naturals to `<` on `.val (a + 2^n - b)` using `Bounds`. -/
+lemma zval_lt_of_nat_lt
+    {p n : ℕ} [Fact p.Prime] [Fact (p > 2)]
+    {a b : ZMod p}
+    (bd : Bounds p n a b)
+    (h : a.val + 2^n - b.val < 2^n) :
+    (a + 2^n - b).val < 2^n :=
+  ZMod.val_sub_add_two_pow_lt bd h
+
+/-- From `≥` on naturals to `≥` on `.val (a + 2^n - b)` using `Bounds`. -/
+lemma zval_ge_of_nat_ge
+    {p n : ℕ} [Fact p.Prime] [Fact (p > 2)]
+    {a b : ZMod p}
+    (bd : Bounds p n a b)
+    (h : a.val + 2^n - b.val ≥ 2^n) :
+    (a + 2^n - b).val ≥ 2^n :=
+  ZMod.val_sub_add_two_pow_ge bd h
+  
+/-- If `a.val < b.val`, the nth bit of `ZMod.val (a + 2^n - b)` is `false`. -/
+lemma nth_bit_clear_of_val_lt
+    {p n : ℕ} [Fact p.Prime] [Fact (p > 2)]
+    {a b : F p}
+    (bd : Bounds p n a b)
+    (hab : a.val < b.val) :
+    (ZMod.val (a + 2^n - b)).testBit n = false := by
+  -- nat-level bound
+  have hnlt := ZMod.val_add_two_pow_sub_rel n a b
+  simp [hab] at hnlt
+  have h_lt := hnlt
+  -- lift through no-wrap
+  have hzlt := zval_lt_of_nat_lt bd hnlt
+  exact bit_is_clear n (a + 2^n - b) hzlt
+
+/-- If `a.val ≥ b.val` and the sum is `< 2^(n+1)`, the nth bit is `true`. -/
+lemma nth_bit_set_of_val_ge
+    {p n : ℕ} [Fact p.Prime] [Fact (p > 2)]
+    {a b : F p}
+    (bd : Bounds p n a b)
+    (h_sum_lt : (a + 2^n - b).val < 2^(n+1))
+    /- (hab : a.val ≥ b.val) : -/
+    (hab : ¬(a.val < b.val)) :
+    (ZMod.val (a + 2^n - b)).testBit n = true := by
+  -- nat-level bound
+  have h_rel := ZMod.val_add_two_pow_sub_rel n a b
+  simp [hab] at h_rel
+  have h_ge := h_rel
+  -- lift through no-wrap
+  have hzge := zval_ge_of_nat_ge bd h_ge
+  exact bit_is_set n (a + 2^n - b) h_sum_lt hzge
+
+/-- If `a.val ≥ b.val` then `a.val + 2^n - b.val ≥ 2^n`. -/
+lemma val_add_two_pow_sub_ge_of_val_ge
+    {p : ℕ} [Fact p.Prime] (n : ℕ) (a b : ZMod p)
+    (hge : a.val ≥ b.val) :
+    a.val + 2^n - b.val ≥ 2^n := by
+  have hb_le_a : b.val ≤ a.val := hge
+  -- reuse the ≥ arithmetic lemma
+  have h := add_two_pow_sub_eq_add_diff (n := n) (a := a.val) (b := b.val) hb_le_a
+  -- `a.val + 2^n - b.val = 2^n + (a.val - b.val)` ≥ `2^n`
+  simp [h] 
 
 def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F p)) := do
   let diff := input.1 + (2^n : F p) - input.2
@@ -344,36 +402,24 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     by_cases hab : ZMod.val a < ZMod.val b
     .
       -- sum is < 2^n, so nth bit is 0
-      have h_rel := ZMod.val_add_two_pow_sub_rel n a b
-      simp [hab] at h_rel
-      have h_lt := h_rel
-
-      have h_val_lt : ZMod.val (a + (2 ^ n : F p) - b) < 2 ^ n := by
-        exact ZMod.val_sub_add_two_pow_lt h_bounds h_lt
-      have h_bit_clear : (ZMod.val (a + (2 ^ n : F p) - b)).testBit n = false :=
-        bit_is_clear n (a + (2 ^ n : F p) - b) h_val_lt
-      have h_bit_clear' : (ZMod.val (a + 2 ^ n + -b)).testBit n = false := by
-        simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using h_bit_clear
+      have h_bit_clear' :
+          (ZMod.val (a + 2 ^ n + -b)).testBit n = false := by 
+        have h_bit := nth_bit_clear_of_val_lt (p:=p) (n:=n) (a:=a) (b:=b) h_bounds hab
+        rw [sub_eq_add_neg] at h_bit
+        exact h_bit
+        
       simp [h_bit_clear', hab]
     .
       -- sum is ≥ 2^n, so nth bit is 1
-
-      have hab' : ZMod.val a ≥ ZMod.val b := by
-        simp_all only [not_lt, ge_iff_le]
       have h_holds1' : ZMod.val (a + 2 ^ n - b) < 2 ^ (n + 1) := by
         rw [← sub_eq_add_neg] at h_holds1
         exact h_holds1
 
-      have h_rel := ZMod.val_add_two_pow_sub_rel n a b
-      simp [hab] at h_rel
-      have h_ge := h_rel
-      have h_val_ge : ZMod.val (a + (2 ^ n : F p) - b) ≥ 2 ^ n := by
-        exact ZMod.val_sub_add_two_pow_ge h_bounds h_ge
-      have h_bit_set : (ZMod.val (a + (2 ^ n : F p) - b)).testBit n = true :=
-        bit_is_set n (a + (2 ^ n : F p) - b) h_holds1' h_val_ge
-      have h_bit_set' : (ZMod.val (a + 2 ^ n + -b)).testBit n = true := by
-        simpa [sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using h_bit_set
-        
+      have h_bit_set' :
+          (ZMod.val (a + 2 ^ n + -b)).testBit n = true := by
+        have h_bit := nth_bit_set_of_val_ge (p:=p) (n:=n) (a:=a) (b:=b) h_bounds h_holds1' hab
+        rw [sub_eq_add_neg] at h_bit
+        exact h_bit
       simp [h_bit_set', hab]
 
   completeness := by
