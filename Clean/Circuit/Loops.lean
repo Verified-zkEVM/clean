@@ -581,15 +581,11 @@ lemma mapFinRange.localYields :
   constructor
   · intro ⟨ops, ⟨i, hi⟩, h⟩
     use i
-    rw [← hi] at h
-    convert h using 2
-    congr 1
-    rw [constant.localLength_eq]
+    simp_all [constant.localLength_eq]
   · intro ⟨i, h⟩
-    refine ⟨(body i).operations (n + i*(body 0).localLength), ⟨i, ?_⟩, ?_⟩
-    · congr 1
-      rw [constant.localLength_eq]
-    · exact h
+    simp only [Fin.eta, exists_exists_eq_and]
+    use i
+    simp_all [constant.localLength_eq]
 
 end mapFinRange
 
