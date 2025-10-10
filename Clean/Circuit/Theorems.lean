@@ -583,11 +583,13 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       have ih_applied := ih _ fun _ _ => h_computable ..
       apply forAll_implies _ _ ih_applied
       apply forAll_True
-      constructor; · intro _ _ _ h; exact h
-      constructor; · intro _ _ _; trivial
-      constructor; · intro _ _ _; trivial
-      constructor; · intro _ _ h_in; right; exact h_in
-      constructor; · intro _ _ _; trivial
+      simp only [Condition.isTrue]
+      and_intros
+      · intro _ _ _ h; exact h
+      · intro _ _ _; trivial
+      · intro _ _ _; trivial
+      · intro _ _ h_in; right; exact h_in
+      · intro _ _ _; trivial
       · intro _ _ _; trivial
     | witness m compute =>
       simp_all only [Condition.applyFlat, singleLocalLength, Environment.AgreesBelow]
