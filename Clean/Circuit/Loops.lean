@@ -566,7 +566,7 @@ lemma mapFinRange.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness yielded n (mapFinRange m body constant |>.operations n) ↔
     ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yielded (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange]
-  conv_lhs => rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+  rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
   conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
 
