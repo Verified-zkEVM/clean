@@ -14,8 +14,6 @@ open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-set_option maxHeartbeats 110000
-
 /--
   Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
   - The **program table** it is OK, as it a fixed and public,
