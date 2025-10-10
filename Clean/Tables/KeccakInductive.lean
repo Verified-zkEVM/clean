@@ -21,7 +21,7 @@ def table : InductiveTable (F p) KeccakState KeccakBlock where
   InputAssumptions i block := block.Normalized
 
   soundness := by
-    intro initialState i env state_var block_var state block blocks _ h_input h_holds spec_previous
+    intro initialState i env yielded state_var block_var state block blocks _ h_input h_holds spec_previous
     simp_all only [circuit_norm,
       AbsorbBlock.circuit, AbsorbBlock.Assumptions, AbsorbBlock.Spec,
       KeccakBlock.normalized, absorbBlocks]

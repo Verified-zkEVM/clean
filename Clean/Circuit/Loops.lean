@@ -390,7 +390,7 @@ def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Cir
   (Vector.finRange m).foldlM body init
 
 section forEach
-variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : Environment F} {yielded : Set (NamedList F)} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F Unit} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -411,15 +411,15 @@ lemma forEach.forAll :
 
 @[circuit_norm ↓]
 lemma forEach.soundness :
-  ConstraintsHold.Soundness env ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Soundness env yielded ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env yielded (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach, ConstraintsHold.soundness_iff_forAll']
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 
 /-- variant of `forEach.soundness`, for when the constraints don't depend on the input offset -/
 lemma forEach.soundness' :
-  ConstraintsHold.Soundness env (forEach xs body constant |>.operations n) →
-    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env (body x |>.operations k) := by
+  ConstraintsHold.Soundness env yielded (forEach xs body constant |>.operations n) →
+    ∀ x ∈ xs, ∃ k : ℕ, ConstraintsHold.Soundness env yielded (body x |>.operations k) := by
   simp only [forEach, ConstraintsHold.soundness_iff_forAll', ForM.forAll_iff]
   intro h x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
@@ -427,21 +427,40 @@ lemma forEach.soundness' :
 
 @[circuit_norm ↓]
 lemma forEach.completeness :
-  ConstraintsHold.Completeness env ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Completeness env yielded ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Completeness env yielded (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach, ConstraintsHold.completeness_iff_forAll']
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma forEach.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness n ((forEach xs body constant).operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [forEach, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+  env.UsesLocalWitnessesCompleteness yielded n ((forEach xs body constant).operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yielded (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  simp only [forEach]
+  rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
+  conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+
+@[circuit_norm ↓]
+lemma forEach.localYields :
+  Operations.localYields env ((forEach xs body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body xs[i.val]).operations (n + i*(body default).localLength)) := by
+  simp only [forEach]
+  rw [ForM.operations_eq xs constant n, Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    simp_all [constant.localLength_eq]
+  · intro ⟨i, h⟩
+    simp only [exists_exists_eq_and]
+    use i
+    simp_all [constant.localLength_eq]
 end forEach
 
 section map
-variable {env : Environment F} {m n : ℕ} [Inhabited α] {xs : Vector α m}
+variable {env : Environment F} {yielded : Set (NamedList F)} {m n : ℕ} [Inhabited α] {xs : Vector α m}
   {body : α → Circuit F β} {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -464,28 +483,48 @@ lemma map.forAll :
 
 @[circuit_norm ↓]
 lemma map.soundness :
-  ConstraintsHold.Soundness env (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Soundness env yielded (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env yielded (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, ConstraintsHold.soundness_iff_forAll']
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma map.completeness :
-  ConstraintsHold.Completeness env (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  ConstraintsHold.Completeness env yielded (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Completeness env yielded (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [map, ConstraintsHold.completeness_iff_forAll']
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma map.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness n (map xs body constant |>.operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
-  simp only [map, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+  env.UsesLocalWitnessesCompleteness yielded n (map xs body constant |>.operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yielded (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
+  simp only [map]
+  rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.forAll_iff, ConstantLength.localLength_eq]
+  conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+
+@[circuit_norm ↓]
+lemma map.localYields :
+  Operations.localYields env ((map xs body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body xs[i.val]).operations (n + i*(body default).localLength)) := by
+  simp only [map]
+  rw [MapM.operations_eq, Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    simp_all only [constant.localLength_eq]
+  · intro ⟨i, h⟩
+    simp only [exists_exists_eq_and]
+    use i
+    simp_all [constant.localLength_eq]
+
 end map
 
 section mapFinRange
-variable {env : Environment F} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+variable {env : Environment F} {yielded : Set (NamedList F)} {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
   {constant : ConstantLength body} {prop : Condition F}
 
 @[circuit_norm ↓]
@@ -510,28 +549,48 @@ lemma mapFinRange.forAll :
 
 @[circuit_norm ↓]
 lemma mapFinRange.soundness :
-  ConstraintsHold.Soundness env (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Soundness env (body i |>.operations (n + i*(body 0).localLength)) := by
+  ConstraintsHold.Soundness env yielded (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Soundness env yielded (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, ConstraintsHold.soundness_iff_forAll']
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma mapFinRange.completeness :
-  ConstraintsHold.Completeness env (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, ConstraintsHold.Completeness env (body i |>.operations (n + i*(body 0).localLength)) := by
+  ConstraintsHold.Completeness env yielded (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, ConstraintsHold.Completeness env yielded (body i |>.operations (n + i*(body 0).localLength)) := by
   simp only [mapFinRange, ConstraintsHold.completeness_iff_forAll']
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
 
 @[circuit_norm ↓]
 lemma mapFinRange.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness n (mapFinRange m body constant |>.operations n) ↔
-    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
-  simp only [mapFinRange, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+  env.UsesLocalWitnessesCompleteness yielded n (mapFinRange m body constant |>.operations n) ↔
+    ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yielded (n + i*(body 0).localLength) (body i |>.operations (n + i*(body 0).localLength)) := by
+  simp only [mapFinRange]
+  rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [MapM.mapFinRangeM_forAll_iff, ConstantLength.localLength_eq]
+  conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+
+@[circuit_norm ↓]
+lemma mapFinRange.localYields :
+  Operations.localYields env ((mapFinRange m body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body i).operations (n + i*(body 0).localLength)) := by
+  simp only [mapFinRange, Vector.mapFinRangeM]
+  rw [MapM.operations_eq, Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop, Vector.getElem_finRange]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    simp_all [constant.localLength_eq]
+  · intro ⟨i, h⟩
+    simp only [Fin.eta, exists_exists_eq_and]
+    use i
+    simp_all [constant.localLength_eq]
+
 end mapFinRange
 
 section foldl
-variable {env : Environment F} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
+variable {env : Environment F} {yielded : Set (NamedList F)} {m n : ℕ} [Inhabited β] [Inhabited α] {xs : Vector α m}
   {body : β → α → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
   {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)}
 
@@ -568,38 +627,61 @@ lemma foldl.forAll [NeZero m] :
 
 @[circuit_norm ↓]
 lemma foldl.soundness [NeZero m] :
-  ConstraintsHold.Soundness env (foldl xs init body const_out constant |>.operations n) ↔
-    ConstraintsHold.Soundness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+  ConstraintsHold.Soundness env yielded (foldl xs init body const_out constant |>.operations n) ↔
+    ConstraintsHold.Soundness env yielded (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Soundness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
+      ConstraintsHold.Soundness env yielded (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
   simp only [foldl, ConstraintsHold.soundness_iff_forAll']
   rw [FoldlM.forAll_iff_const constant const_out]
 
 @[circuit_norm ↓]
 lemma foldl.completeness [NeZero m] :
-  ConstraintsHold.Completeness env (foldl xs init body const_out constant |>.operations n) ↔
-    ConstraintsHold.Completeness env (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+  ConstraintsHold.Completeness env yielded (foldl xs init body const_out constant |>.operations n) ↔
+    ConstraintsHold.Completeness env yielded (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let acc := (body default xs[i]).output (n + i*(body default default).localLength);
-      ConstraintsHold.Completeness env (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
+      ConstraintsHold.Completeness env yielded (body acc xs[i + 1] |>.operations (n + (i + 1)*(body default default).localLength)) := by
   simp only [foldl, ConstraintsHold.completeness_iff_forAll']
   rw [FoldlM.forAll_iff_const constant const_out]
 
 @[circuit_norm ↓]
 lemma foldl.usesLocalWitnesses [NeZero m] :
-  env.UsesLocalWitnessesCompleteness n (foldl xs init body const_out constant |>.operations n) ↔
-    env.UsesLocalWitnessesCompleteness n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
+  env.UsesLocalWitnessesCompleteness yielded n (foldl xs init body const_out constant |>.operations n) ↔
+    env.UsesLocalWitnessesCompleteness yielded n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).localLength;
       let acc := (body default xs[i]).output (n + i*k);
-      env.UsesLocalWitnessesCompleteness (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
-  simp only [foldl, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+      env.UsesLocalWitnessesCompleteness yielded (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
+  simp only [foldl]
+  repeat rw [env.usesLocalWitnessesCompleteness_iff_forAll]
+  conv_rhs => -- strange why need to focus before rewrite
+    arg 2
+    arg 2
+    arg 2
+    rw [env.usesLocalWitnessesCompleteness_iff_forAll]
+  simp only [←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
+
+@[circuit_norm ↓]
+lemma foldl.localYields_empty
+    (h : ∀ (acc : β) (x : α) (offset : ℕ), Operations.localYields env ((body acc x).operations offset) = ∅) :
+    Operations.localYields env ((foldl xs init body const_out constant).operations n) = ∅ := by
+  simp only [foldl]
+  have h_const : ConstantLength (FoldlM.prod body) := constant
+  rw [FoldlM.operations_eq (constant := h_const), Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_empty_iff_false, Set.mem_iUnion, List.mem_ofFn, iff_false, not_exists]
+  intro ops ⟨i, hi⟩
+  rw [← hi]
+  specialize h (FoldlM.foldlAcc n xs body init i) xs[i.val] (n + i * ConstantLength.localLength (FoldlM.prod body))
+  rw [h]
+  simp
+
 end foldl
 
 section foldlRange
-variable {env : Environment F} {m n : ℕ} [Inhabited β]
+variable {env : Environment F} {yielded : Set (NamedList F)} {m n : ℕ} [Inhabited β]
   {body : β → Fin m → Circuit F β} {init : β} {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
 
 @[circuit_norm ↓]
@@ -634,27 +716,53 @@ lemma foldlRange.forAll :
 
 @[circuit_norm ↓]
 lemma foldlRange.soundness :
-  ConstraintsHold.Soundness env (foldlRange m init body constant |>.operations n) ↔
+  ConstraintsHold.Soundness env yielded (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-    ConstraintsHold.Soundness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+    ConstraintsHold.Soundness env yielded (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
     |>.operations (n + i * (body default i).localLength)) := by
   simp only [ConstraintsHold.soundness_iff_forAll', foldlRange.forAll]
 
 @[circuit_norm ↓]
 lemma foldlRange.completeness :
-  ConstraintsHold.Completeness env (foldlRange m init body constant |>.operations n) ↔
+  ConstraintsHold.Completeness env yielded (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-    ConstraintsHold.Completeness env (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+    ConstraintsHold.Completeness env yielded (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
     |>.operations (n + i * (body default i).localLength)) := by
   simp only [ConstraintsHold.completeness_iff_forAll', foldlRange.forAll]
 
 @[circuit_norm ↓]
 lemma foldlRange.usesLocalWitnesses :
-  env.UsesLocalWitnessesCompleteness n (foldlRange m init body constant |>.operations n) ↔
+  env.UsesLocalWitnessesCompleteness yielded n (foldlRange m init body constant |>.operations n) ↔
     ∀ i : Fin m,
-      env.UsesLocalWitnessesCompleteness (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
+      env.UsesLocalWitnessesCompleteness yielded (n + i * (body default i).localLength) (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i
       |>.operations (n + i * (body default i).localLength)) := by
-  simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
+  rw [env.usesLocalWitnessesCompleteness_iff_forAll]
+  conv_rhs =>
+    arg 2
+    rw [env.usesLocalWitnessesCompleteness_iff_forAll]
+  simp only [foldlRange.forAll]
+
+@[circuit_norm ↓]
+lemma foldlRange.localYields :
+  Operations.localYields env ((foldlRange m init body constant).operations n) =
+    ⋃ i : Fin m, Operations.localYields env ((body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations (n + i * (body default i).localLength)) := by
+  simp only [foldlRange]
+  rw [FoldlM.operations_eq (constant:=constant), Operations.localYields_flatten]
+  ext nl
+  simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop, Vector.getElem_finRange]
+  constructor
+  · intro ⟨ops, ⟨i, hi⟩, h⟩
+    use i
+    rw [← hi] at h
+    convert h using 2
+    congr 1
+    unfold FoldlM.prod
+    rw [constant.localLength_eq (default, i)]
+  · intro ⟨i, h⟩
+    refine ⟨(body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations (n + i * (body default i).localLength), ⟨i, ?_⟩, ?_⟩
+    · unfold FoldlM.prod
+      simp only [constant.localLength_eq (default, i)]
+    · exact h
 
 end foldlRange
 

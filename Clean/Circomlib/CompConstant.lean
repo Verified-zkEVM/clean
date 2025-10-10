@@ -98,14 +98,15 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
   localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
+  yields_eq := by intros; simp only [circuit_norm, main, Num2Bits.circuit]
   subcircuitsConsistent input n := by
     simp only [circuit_norm, main, Num2Bits.circuit]
     and_intros <;> ac_rfl
 
-  Assumptions input :=
+  Assumptions input _ :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
-  Spec bits output :=
+  Spec bits output _ :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
   soundness := by

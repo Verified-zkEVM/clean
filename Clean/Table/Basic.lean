@@ -321,6 +321,8 @@ def assignmentFromCircuit (as : CellAssignment W S) : Operations F → CellAssig
   | .assert _ :: ops => assignmentFromCircuit as ops
   | .lookup _ :: ops => assignmentFromCircuit as ops
   | .subcircuit s :: ops => assignmentFromCircuit (as.pushVarsAux s.localLength) ops
+  | .yield _ :: ops => assignmentFromCircuit as ops
+  | .use _ :: ops => assignmentFromCircuit as ops
 
 -- alternative, simpler definition, but makes it harder for lean to check defeq `(windowEnv ..).get i = ..`
 def assignmentFromCircuit' (as : CellAssignment W S) (ops : Operations F) : CellAssignment W S where
@@ -377,9 +379,9 @@ def windowEnv (table : TableConstraint W S F Unit)
 -/
 @[table_norm]
 def ConstraintsHoldOnWindow (table : TableConstraint W S F Unit)
-  (window : TraceOfLength F S W) (aux_env : Environment F) : Prop :=
+  (window : TraceOfLength F S W) (aux_env : Environment F) (yielded : Set (NamedList F)) : Prop :=
   let env := windowEnv table window aux_env
-  Circuit.ConstraintsHold.Soundness env table.operations
+  Circuit.ConstraintsHold.Soundness env yielded table.operations
 
 @[table_norm]
 def output {α : Type} (table : TableConstraint W S F α) : α :=
@@ -491,9 +493,9 @@ export TableOperation (boundary everyRow everyRowExceptLast)
 -/
 @[table_norm]
 def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
-  (trace : TraceOfLength F S N) (env : ℕ → ℕ → Environment F) : Prop :=
+  (trace : TraceOfLength F S N) (env : ℕ → ℕ → Environment F) (yielded : Set (NamedList F)) : Prop :=
   let constraints_and_envs := constraints.mapIdx (fun i cs => (cs, env i))
-  foldl N constraints_and_envs trace.val constraints_and_envs
+  foldl N constraints_and_envs yielded trace.val constraints_and_envs
   where
   /--
     The foldl function applies the constraints to the trace inductively on the trace
@@ -513,37 +515,37 @@ def TableConstraintsHold {N : ℕ} (constraints : List (TableOperation S F))
     Once the `cs_iterator` is empty, we start again on the rest of the trace with the initial constraints `cs`
   -/
   @[table_norm]
-  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) :
+  foldl (N : ℕ) (cs : List (TableOperation S F × (ℕ → (Environment F)))) (yielded : Set (NamedList F)) :
     Trace F S → (cs_iterator : List (TableOperation S F × (ℕ → (Environment F)))) → Prop
     -- if the trace has at least two rows and the constraint is a "every row except last" constraint, we apply the constraint
     | trace +> curr +> next, (⟨.everyRowExceptLast constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> curr +> next) rest
+        let others := foldl N cs yielded (trace +> curr +> next) rest
         let window : TraceOfLength F S 2 := ⟨<+> +> curr +> next, rfl ⟩
-        constraint.ConstraintsHoldOnWindow window (env (trace.len + 1)) ∧ others
+        constraint.ConstraintsHoldOnWindow window (env (trace.len + 1)) yielded ∧ others
 
     -- if the trace has at least one row and the constraint is a boundary constraint, we apply the constraint if the
     -- index is the same as the length of the remaining trace
     | trace +> row, (⟨.boundary idx constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
+        let others := foldl N cs yielded (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
         let targetIdx := match idx with
           | .fromStart i => i
           | .fromEnd i => N - 1 - i
-        (if trace.len = targetIdx then constraint.ConstraintsHoldOnWindow window (env trace.len) else True) ∧ others
+        (if trace.len = targetIdx then constraint.ConstraintsHoldOnWindow window (env trace.len) yielded else True) ∧ others
 
     -- if the trace has at least one row and the constraint is a "every row" constraint, we apply the constraint
     | trace +> row, (⟨.everyRow constraint, env⟩) :: rest =>
-        let others := foldl N cs (trace +> row) rest
+        let others := foldl N cs yielded (trace +> row) rest
         let window : TraceOfLength F S 1 := ⟨<+> +> row, rfl⟩
-        constraint.ConstraintsHoldOnWindow window (env trace.len) ∧ others
+        constraint.ConstraintsHoldOnWindow window (env trace.len) yielded ∧ others
 
     -- if the trace has not enough rows for the "every row except last" constraint, we skip the constraint
     | trace, (⟨.everyRowExceptLast _, _⟩) :: rest =>
-        foldl N cs trace rest
+        foldl N cs yielded trace rest
 
     -- if the cs_iterator is empty, we start again with the initial constraints on the next row
     | trace +> _, [] =>
-        foldl N cs trace cs
+        foldl N cs yielded trace cs
 
     -- if the trace is empty, we are done
     | <+>, _ => True
@@ -561,9 +563,9 @@ structure FormalTable (F : Type) [Field F] (S : Type → Type) [ProvableType S] 
   /-- the soundness states that if the assumptions hold, then
       the constraints hold implies that the spec holds. -/
   soundness :
-    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : ℕ → ℕ → Environment F),
+    ∀ (N : ℕ) (trace : TraceOfLength F S N) (env : ℕ → ℕ → Environment F) (yielded : Set (NamedList F)),
     Assumption N →
-    TableConstraintsHold constraints trace env →
+    TableConstraintsHold constraints trace env yielded →
     Spec trace
 
   /-- this property tells us that that the number of variables contained in the `assignment` of each

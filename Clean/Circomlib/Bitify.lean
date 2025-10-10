@@ -68,15 +68,16 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
   main := main n
   localLength _ := n
   localLength_eq := by simp +arith [circuit_norm, main]
+  yields_eq := by intros; simp [circuit_norm, main]
   output _ i := varFromOffset (fields n) i
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input := input.val < 2^n
+  Assumptions input _ := input.val < 2^n
 
   /- without further assumptions on n, this circuit just tells us that the output bits represent
     _some_ number congruent to the input modulo p -/
-  Spec input bits :=
+  Spec input _ bits _ :=
     input.val < 2^n
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
@@ -114,10 +115,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   main input := arbitraryBitLengthCircuit n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
+  yields_eq := by intros; simp only [circuit_norm, arbitraryBitLengthCircuit]
 
-  Assumptions input := input.val < 2^n
+  Assumptions input _ := input.val < 2^n
 
-  Spec input output :=
+  Spec input _ output _ :=
     input.val < 2^n ∧ output = fieldToBits n input
 
   soundness := by
@@ -182,12 +184,13 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input :=
+  Assumptions input _ :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
 
-  Spec input output :=
+  Spec input output _ :=
     output = fieldFromBits input
     ∧ output.val < 2^n
 

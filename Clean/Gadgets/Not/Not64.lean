@@ -54,14 +54,14 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
 
 def circuit : FormalCircuit (F p) U64 U64 where
   main x := pure (not64_bytewise x)
-  Assumptions x := x.Normalized
-  Spec x z := z.value = not64 x.value ∧ z.Normalized
+  Assumptions x _ := x.Normalized
+  Spec x z _ := z.value = not64 x.value ∧ z.Normalized
 
   localLength _ := 0
   output x _ := not64_bytewise x
 
   soundness := by
-    intro i env x_var x h_input x_norm h_holds
+    intro i env yielded x_var x h_input x_norm h_holds
     simp_all only [circuit_norm, eval_not]
     exact not_bytewise_value_spec x_norm
 

@@ -276,15 +276,15 @@ def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
 
 def circuit : FormalAssertion (F p) U32 where
   main
-  Assumptions _ := True
+  Assumptions _ _ := True
   Spec inputs := inputs.Normalized
 
   soundness := by
-    rintro i0 env x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    rintro i0 env _ x_var ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
+    rintro i0 env _ x_var _ ⟨ x0, x1, x2, x3 ⟩ h_eval _as
     simp_all [main, circuit_norm, ByteTable, Normalized, explicit_provable_type]
 
 end U32.AssertNormalized

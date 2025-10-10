@@ -44,16 +44,19 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   output_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+  yields_eq := by
+    intro input env offset
+    simp [Circuit.bind_def, circuit_norm, Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated]
 
   Assumptions := Round.Assumptions
-  Spec := fun input output =>
+  Spec := fun input output _ =>
     let state' := round input.state.value (BLAKE3State.value input.message)
     output.state.value = state' ∧
     output.state.Normalized ∧
     BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
     BLAKE3State.Normalized output.message
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
+    intro offset env yielded input_var input h_eval h_assumptions h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
@@ -80,7 +83,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     · exact h_holds2
 
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+    intro offset env yielded input_var h_env_uses_witnesses input h_eval h_assumptions
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
@@ -129,7 +132,7 @@ def applyTwoRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector �
 /--
 Specification for two rounds that matches the pattern of the full ApplyRounds.Spec.
 -/
-def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : Prop :=
+def TwoRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) (_ : Set (NamedList (F p))) : Prop :=
   let (final_state, final_message) := applyTwoRounds input.state.value (input.message.map U32.value)
   output.state.value = final_state ∧
   output.message.map U32.value = final_message ∧
@@ -142,9 +145,9 @@ Two rounds with permute, but with a spec matching the applyRounds pattern.
 def twoRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.weakenSpec TwoRoundsSpec (by
     -- Prove that twoRoundsWithPermute's spec implies our TwoRoundsSpec
-    intro input output h_assumptions h_spec
-    -- twoRoundsWithPermute.Spec says ∃ mid, roundWithPermute.Spec input mid ∧ roundWithPermute.Spec mid output
-    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    intro input output yielded localYields h_assumptions h_spec
+    -- twoRoundsWithPermute.Spec says ∃ mid localYields1 localYields2, roundWithPermute.Spec input mid localYields1 ∧ roundWithPermute.Spec mid output localYields2 ∧ localYields = localYields1 ∪ localYields2
+    obtain ⟨mid, localYields1, localYields2, h_spec1, h_spec2, h_yields_eq⟩ := h_spec
     -- Unpack what each roundWithPermute spec gives us
     simp_all only [roundWithPermute, TwoRoundsSpec, applyTwoRounds]
 
@@ -161,9 +164,9 @@ def fourRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   twoRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if first twoRoundsWithPermute assumptions and spec hold,
     -- then second twoRoundsWithPermute assumptions hold
-    intro input mid h_assumptions h_spec
-    -- twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec input mid' ∧ roundWithPermute.Spec mid' mid
-    obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
+    intro input mid yielded localYields h_assumptions h_spec
+    -- twoRoundsWithPermute.Spec says ∃ mid' localYields1 localYields2, roundWithPermute.Spec input mid' localYields1 ∧ roundWithPermute.Spec mid' mid localYields2 ∧ localYields = localYields1 ∪ localYields2
+    obtain ⟨mid', localYields1, localYields2, h_spec1, h_spec2, h_yields_eq⟩ := h_spec
     -- We need to show twoRoundsWithPermute.Assumptions mid
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2 ⊢
@@ -193,7 +196,7 @@ def applyFourRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector �
 /--
 Specification for four rounds that matches the pattern of the full ApplyRounds.Spec.
 -/
-def FourRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : Prop :=
+def FourRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) (_ : Set (NamedList (F p))) : Prop :=
   let (final_state, final_message) := applyFourRounds input.state.value (input.message.map U32.value)
   output.state.value = final_state ∧
   output.message.map U32.value = final_message ∧
@@ -206,12 +209,12 @@ Four rounds with permute, but with a spec matching the applyRounds pattern.
 def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.weakenSpec FourRoundsSpec (by
     -- Prove that fourRoundsWithPermute's spec implies our FourRoundsSpec
-    intro input output h_assumptions h_spec
-    -- fourRoundsWithPermute.Spec says ∃ mid, twoRoundsWithPermute.Spec input mid ∧ twoRoundsWithPermute.Spec mid output
-    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
-    -- Each twoRoundsWithPermute.Spec says ∃ mid', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
-    obtain ⟨mid1, h_spec1_1, h_spec1_2⟩ := h_spec1
-    obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
+    intro input output yielded localYields h_assumptions h_spec
+    -- fourRoundsWithPermute.Spec says ∃ mid localYields1 localYields2, twoRoundsWithPermute.Spec input mid localYields1 ∧ twoRoundsWithPermute.Spec mid output localYields2 ∧ localYields = localYields1 ∪ localYields2
+    obtain ⟨mid, localYields1, localYields2, h_spec1, h_spec2, h_yields_eq⟩ := h_spec
+    -- Each twoRoundsWithPermute.Spec says ∃ mid' localYields' localYields'', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ... ∧ ...
+    obtain ⟨mid1, localYields1_1, localYields1_2, h_spec1_1, h_spec1_2, h_yields1_eq⟩ := h_spec1
+    obtain ⟨mid2, localYields2_1, localYields2_2, h_spec2_1, h_spec2_2, h_yields2_eq⟩ := h_spec2
 
     simp only [roundWithPermute] at h_spec1_1 h_spec1_2 h_spec2_1 h_spec2_2
     simp only [FourRoundsSpec, applyFourRounds]
@@ -228,11 +231,11 @@ def sixRoundsWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   fourRoundsWithPermute.concat twoRoundsWithPermute (by
     -- Prove compatibility: if fourRoundsWithPermute assumptions and spec hold,
     -- then twoRoundsWithPermute assumptions hold
-    intro input mid h_assumptions h_spec
-    -- fourRoundsWithPermute.Spec says ∃ mid', twoRoundsWithPermute.Spec ... ∧ twoRoundsWithPermute.Spec ...
-    obtain ⟨mid', h_spec1, h_spec2⟩ := h_spec
-    -- Each twoRoundsWithPermute.Spec says ∃ mid'', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ...
-    obtain ⟨mid'', h_spec2_1, h_spec2_2⟩ := h_spec2
+    intro input mid yielded localYields h_assumptions h_spec
+    -- fourRoundsWithPermute.Spec says ∃ mid' localYields1 localYields2, twoRoundsWithPermute.Spec ... localYields1 ∧ twoRoundsWithPermute.Spec ... localYields2 ∧ localYields = localYields1 ∪ localYields2
+    obtain ⟨mid', localYields1, localYields2, h_spec1, h_spec2, h_yields_eq⟩ := h_spec
+    -- Each twoRoundsWithPermute.Spec says ∃ mid'' localYields'' localYields''', roundWithPermute.Spec ... ∧ roundWithPermute.Spec ... ∧ ...
+    obtain ⟨mid'', localYields2_1, localYields2_2, h_spec2_1, h_spec2_2, h_yields2_eq⟩ := h_spec2
     -- We need to show twoRoundsWithPermute.Assumptions mid
     -- which is the same as roundWithPermute.Assumptions mid, which is Round.Assumptions mid
     simp only [twoRoundsWithPermute, roundWithPermute] at h_spec2_2 ⊢
@@ -263,7 +266,7 @@ def applySixRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector �
 /--
 Specification for six rounds that matches the pattern of the full ApplyRounds.Spec.
 -/
-def SixRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) : Prop :=
+def SixRoundsSpec (input : Round.Inputs (F p)) (output : Round.Inputs (F p)) (_ : Set (NamedList (F p))) : Prop :=
   let (final_state, final_message) := applySixRounds input.state.value (input.message.map U32.value)
   output.state.value = final_state ∧
   output.message.map U32.value = final_message ∧
@@ -276,15 +279,15 @@ Six rounds with permute, but with a spec matching the applyRounds pattern.
 def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
   sixRoundsWithPermute.weakenSpec SixRoundsSpec (by
     -- Prove that sixRoundsWithPermute's spec implies our SixRoundsSpec
-    intro input output h_assumptions h_spec
-    -- sixRoundsWithPermute.Spec says ∃ mid, fourRoundsWithPermute.Spec input mid ∧ twoRoundsWithPermute.Spec mid output
-    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
+    intro input output yielded localYields h_assumptions h_spec
+    -- sixRoundsWithPermute.Spec says ∃ mid localYields1 localYields2, fourRoundsWithPermute.Spec input mid localYields1 ∧ twoRoundsWithPermute.Spec mid output localYields2 ∧ localYields = localYields1 ∪ localYields2
+    obtain ⟨mid, localYields1, localYields2, h_spec1, h_spec2, h_yields_eq⟩ := h_spec
     -- Break down fourRoundsWithPermute.Spec
-    obtain ⟨mid1, h_spec1_1, h_spec1_2⟩ := h_spec1
-    obtain ⟨mid1_1, h_spec1_1_1, h_spec1_1_2⟩ := h_spec1_1
-    obtain ⟨mid1_2, h_spec1_2_1, h_spec1_2_2⟩ := h_spec1_2
+    obtain ⟨mid1, localYields1_1, localYields1_2, h_spec1_1, h_spec1_2, h_yields1_eq⟩ := h_spec1
+    obtain ⟨mid1_1, localYields1_1_1, localYields1_1_2, h_spec1_1_1, h_spec1_1_2, h_yields1_1_eq⟩ := h_spec1_1
+    obtain ⟨mid1_2, localYields1_2_1, localYields1_2_2, h_spec1_2_1, h_spec1_2_2, h_yields1_2_eq⟩ := h_spec1_2
     -- Break down twoRoundsWithPermute.Spec
-    obtain ⟨mid2, h_spec2_1, h_spec2_2⟩ := h_spec2
+    obtain ⟨mid2, localYields2_1, localYields2_2, h_spec2_1, h_spec2_2, h_yields2_eq⟩ := h_spec2
 
     simp only [roundWithPermute] at h_spec1_1_1 h_spec1_1_2 h_spec1_2_1 h_spec1_2_2 h_spec2_1 h_spec2_2
     simp only [SixRoundsSpec, applySixRounds]
@@ -298,7 +301,7 @@ This represents the complete 7-round BLAKE3 compression function.
 def sevenRoundsFinal : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sixRoundsApplyStyle.concat Round.circuit (by
     -- Prove compatibility: sixRoundsApplyStyle output satisfies Round.circuit assumptions
-    intro input mid h_assumptions h_spec
+    intro input mid yielded localYields h_assumptions h_spec
     -- sixRoundsApplyStyle.Spec gives us normalized outputs
     simp_all [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Assumptions]
   ) (by aesop)
@@ -329,7 +332,7 @@ def applySevenRounds (state : Vector ℕ 16) (message : Vector ℕ 16) : Vector 
 /--
 Specification for seven rounds that matches the pattern of the full ApplyRounds.Spec.
 -/
-def SevenRoundsSpec (input : Round.Inputs (F p)) (output : BLAKE3State (F p)) : Prop :=
+def SevenRoundsSpec (input : Round.Inputs (F p)) (output : BLAKE3State (F p)) (_ : Set (NamedList (F p))) : Prop :=
   let final_state := applySevenRounds input.state.value (input.message.map U32.value)
   output.value = final_state ∧
   output.Normalized
@@ -340,7 +343,9 @@ Seven rounds with spec matching the applyRounds pattern.
 def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sevenRoundsFinal.weakenSpec SevenRoundsSpec (by
     -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
-    rintro input output h_assumptions ⟨mid, h_spec1, h_spec2⟩
+    intro input output yielded localYields h_assumptions h_spec
+    -- sevenRoundsFinal.Spec says ∃ mid localYields1 localYields2, sixRoundsApplyStyle.Spec input mid localYields1 ∧ Round.circuit.Spec mid output localYields2 ∧ localYields = localYields1 ∪ localYields2
+    obtain ⟨mid, localYields1, localYields2, h_spec1, h_spec2, h_yields_eq⟩ := h_spec
     -- Break down the specs similar to previous proofs
     simp_all only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Spec, SevenRoundsSpec, applySevenRounds, applySixRounds]
     aesop
@@ -431,6 +436,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376
+  yields_eq := by intros; simp [circuit_norm, main, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, FormalCircuit.weakenSpec, FormalCircuit.concat]
   localLength_eq input i0 := by
     dsimp only [main, Round.circuit, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
       fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,
@@ -441,13 +447,13 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
       Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
 
-def Assumptions (input : Inputs (F p)) :=
+def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   (∀ i : Fin 8, chaining_value[i].Normalized) ∧
   (∀ i : Fin 16, block_words[i].Normalized) ∧
   counter_high.Normalized ∧ counter_low.Normalized ∧ block_len.Normalized ∧ flags.Normalized
 
-def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
+def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) (_ : Set (NamedList (F p))) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
   out.value = applyRounds
     (chaining_value.map U32.value)
@@ -464,7 +470,7 @@ lemma initial_state_and_messages_are_normalized
     (block_words : BLAKE3State (F p))
     (chaining_value counter_high counter_low block_len flags)
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
-    (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
+    (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags } ∅) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
   set state_vec := initializeStateVector input_var
   simp only [Assumptions] at h_normalized

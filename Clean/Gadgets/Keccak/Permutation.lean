@@ -9,9 +9,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .foldl roundConstants state
     fun state rc => KeccakRound.circuit rc state
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
+def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) (_ : Set (NamedList (F p))) :=
   out_state.Normalized
   ∧ out_state.value = keccakPermutation state.value
 
@@ -29,6 +29,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := stateVar i0 23
 
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
+  yields_eq := by intros; simp [circuit_norm, main, KeccakRound.circuit, KeccakRound.elaborated]
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 
@@ -38,7 +39,7 @@ example (state : Vector ℕ 25) :
   = roundConstants.foldl keccakRound state := rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro n env initial_state_var initial_state h_input h_assumptions h_holds
+  intro n env yielded initial_state_var initial_state h_input h_assumptions h_holds
 
   -- simplify
   simp only [main, circuit_norm, Spec,
@@ -75,7 +76,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact h_inductive 23 (by norm_num)
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro n env initial_state_var h_env initial_state h_input h_assumptions
+  intro n env yielded initial_state_var h_env initial_state h_input h_assumptions
 
   -- simplify
   dsimp only [Assumptions] at h_assumptions

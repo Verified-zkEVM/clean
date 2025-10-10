@@ -73,7 +73,7 @@ lemma boundaryFib_eq : boundaryFib (p:=p) = (do
 
 omit p_large_enough in
 lemma boundary_step (first_row : Row (F p) RowType) (aux_env : Environment (F p)) :
-  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations
+  Circuit.ConstraintsHold.Soundness (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) (FlatOperation.localYields (boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env) boundaryFib.operations.toFlat) boundaryFib.operations
     → ZMod.val first_row.x = fib8 0 ∧ ZMod.val first_row.y = fib8 1 := by
   -- abstract away `env`
   set env := boundaryFib.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
@@ -108,7 +108,7 @@ def formalFibTable : FormalTable (F p) RowType := {
     · -- first, we prove the inductive part of the Spec
       -- TODO this should be easier, or there should be a custom induction for it
       unfold Trace.ForAllRowsOfTraceWithIndex.inner
-      intros ConstraintsHold
+      intros _ ConstraintsHold
 
       simp only [table_norm] at ConstraintsHold
       simp at ConstraintsHold
@@ -116,7 +116,7 @@ def formalFibTable : FormalTable (F p) RowType := {
       unfold TableConstraintsHold.foldl at ConstraintsHold
       unfold TableConstraintsHold.foldl at ConstraintsHold
       simp [Trace.len] at ConstraintsHold
-      specialize ih2 ConstraintsHold.right
+      specialize ih2 trivial ConstraintsHold.right
       simp only [ih2, and_true, Trace.len]
 
       let ⟨curr_fib0, curr_fib1⟩ := ih2.left
