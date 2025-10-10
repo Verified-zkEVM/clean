@@ -747,7 +747,7 @@ lemma foldlRange.localYields :
   Operations.localYields env ((foldlRange m init body constant).operations n) =
     ⋃ i : Fin m, Operations.localYields env ((body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations (n + i * (body default i).localLength)) := by
   simp only [foldlRange]
-  rw [FoldlM.operations_eq (constant := constant), Operations.localYields_flatten]
+  rw [FoldlM.operations_eq (constant:=constant), Operations.localYields_flatten]
   ext nl
   simp only [Set.mem_iUnion, List.mem_ofFn, exists_prop, Vector.getElem_finRange]
   constructor
