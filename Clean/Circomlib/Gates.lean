@@ -42,7 +42,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   yields _ _ _ := ∅
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
@@ -86,7 +86,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   yields _ _ _ := ∅
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
@@ -128,7 +128,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   yields _ _ _ := ∅
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
@@ -170,7 +170,7 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   yields _ _ _ := ∅
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input
@@ -214,7 +214,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   yields _ _ _ := ∅
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2
@@ -258,7 +258,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
   yields _ _ _ := ∅
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
   Assumptions input _ := IsBool input.1 ∧ IsBool input.2

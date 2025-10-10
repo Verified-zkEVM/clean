@@ -48,7 +48,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 64
-  yields_eq := by intros; simp only [circuit_norm, main, Xor32.circuit, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main, Xor32.circuit]
   output inputs i0 := #v[
     varFromOffset U32 (i0 + 0),
     varFromOffset U32 (i0 + 4),

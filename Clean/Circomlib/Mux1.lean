@@ -65,7 +65,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
 
   Assumptions input _ :=
     let ⟨c, s⟩ := input
@@ -179,7 +179,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     -- The goal is about MultiMux1.circuit's localLength with n=1
     -- which is defined as n = 1
     rfl
-  yields_eq := by intros; simp only [circuit_norm, main, MultiMux1.circuit, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main, MultiMux1.circuit]
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]

@@ -176,7 +176,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
   yields _ _ _ := ∅
   yields_eq := by
     intros
-    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit, Set.empty_union]
+    simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 

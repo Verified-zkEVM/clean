@@ -15,7 +15,7 @@ def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field 
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
-  yields_eq := by intros; simp only [circuit_norm, Addition8FullCarry.circuit, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, Addition8FullCarry.circuit]
 
   Assumptions := fun { x, y, carryIn } _ =>
     x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
@@ -50,7 +50,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   localLength _ := 2
   output _ i0 := var ⟨i0⟩
-  yields_eq := by intros; simp only [circuit_norm, Addition8Full.circuit, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, Addition8Full.circuit]
 
   Assumptions | { x, y }, _ => x.val < 256 ∧ y.val < 256
 

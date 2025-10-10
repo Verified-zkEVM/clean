@@ -101,7 +101,7 @@ def decodeInstructionSpec (instruction : field (F p)) (output : DecodedInstructi
 def decodeInstructionElaborated : ElaboratedCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   localLength _ := 8
-  yields_eq := by intros; simp only [circuit_norm, decodeInstructionMain, Gadgets.ToBits.toBits, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, decodeInstructionMain, Gadgets.ToBits.toBits]
 
 /--
   Circuit that decodes a femtoCairo instruction into a one-hot representation.

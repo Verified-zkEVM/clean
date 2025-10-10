@@ -61,7 +61,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
-  yields_eq := by intros; simp only [circuit_norm, main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main]
 
   soundness := by
     -- introductions

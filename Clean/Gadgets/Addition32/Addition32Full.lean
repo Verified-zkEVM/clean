@@ -59,7 +59,7 @@ Elaborated circuit data can be found as follows:
 instance elaborated : ElaboratedCircuit (F p) Inputs Outputs where
   main
   localLength _ := 8
-  yields_eq := by intros; simp only [circuit_norm, main, Addition8FullCarry.main, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, main, Addition8FullCarry.main]
   -- unfortunately, `rfl` in default tactic times out here
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, Addition8FullCarry.main]
