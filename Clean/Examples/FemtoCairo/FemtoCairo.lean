@@ -138,8 +138,10 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
 
     -- the bit decomposition also implies that the input is < 256
     -- therefore, Spec.decodeInstruction never returns none
-    case h_2 => simp_all only [gt_iff_lt, id_eq, not_le, ite_eq_left_iff, reduceCtorEq, imp_false,
-      not_true_eq_false]
+    case h_2 =>
+      rename_i h_eq2
+      simp only [not_le, ite_eq_left_iff, reduceCtorEq, imp_false] at h_eq2
+      contradiction
     case _ x instr_type addr1 addr2 addr3 h_eq =>
       have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
       have h_bits0 := h_bits_are_binary 0 (by linarith)
@@ -235,21 +237,18 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             or_false, false_and, and_false, and_self, false_or, neg_zero,
             add_zero]
         · subst h0
-          cases' h_bits3 with h1 h1
-          · subst h1
-            simp only [
+          cases' h_bits3 with h1 h1 <;> subst h1
+          · simp only [
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
-            and_true, and_false, or_self, or_false]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
-            and_self, and_false, or_true]
+            and_true, true_or]
+          · simp only [mul_one,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero,
+            and_self, or_true]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
         simp only [DecodedAddressingMode.val]
-        cases' h_bits4 with h0 h0
-        · subst h0
-          cases' h_bits5 with h1 h1
+        cases' h_bits4 with h0 h0 <;> subst h0
+        · cases' h_bits5 with h1 h1
           · subst h1
             simp only [ZMod.val_zero, mul_zero,
             add_zero] at h_eq
@@ -258,13 +257,14 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             simp only [ZMod.val_zero, ZMod.val_one,
             mul_one, zero_add] at h_eq
             simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
-        · cases' h_bits5 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero,
-            add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
+        · cases' h_bits5 with h1 h1 <;> subst h1
+          · simp only [ZMod.val_one, ZMod.val_zero,
+            mul_zero, add_zero] at h_eq
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · simp only [ZMod.val_one, mul_one,
+            Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte,
+              h_eq]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
         simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
         cases' h_bits4 with h0 h0 <;> subst h0
@@ -296,16 +296,16 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             simp only [
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte, h_eq]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
+          · simp only [ZMod.val_one, mul_one, Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte,
+              h_eq]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
         simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
         cases' h_bits6 with h0 h0 <;> subst h0
         · cases' h_bits7 with h1 h1 <;> subst h1
           · simp only [mul_zero,
             add_zero,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, true_or]
+            neg_zero, and_self, one_ne_zero, zero_ne_one, and_true, true_or]
           · simp only [
             mul_one,
             neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, true_or,
@@ -314,9 +314,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
           · simp only [
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
-            and_true, and_false, or_self, true_or]
+            and_true, true_or]
           · simp only [mul_one,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self,
             and_self, or_true]
 
   completeness := by
