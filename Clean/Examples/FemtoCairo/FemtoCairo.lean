@@ -353,7 +353,7 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
-  yields_eq := by intros; simp only [circuit_norm, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm]
   Assumptions | pc, _ => True
   Spec
   | pc, output, _ =>
@@ -652,7 +652,6 @@ def femtoCairoStepElaboratedCircuit
     localLength := 30
     yields_eq := by
       simp only [circuit_norm, readFromMemoryCircuit, fetchInstructionCircuit, nextStateCircuit, decodeInstructionCircuit, decodeInstructionElaborated]
-      simp only [Set.union_self, implies_true]
 
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))

@@ -42,9 +42,6 @@ def FormalCircuit.concat
     yields_eq := by
       intro input env offset
       simp only [Circuit.bind_def, circuit_norm]
-      -- Use yields_eq from each circuit to relate FlatOperation.localYields to circuit.yields
-      rw [←circuit1.yields_eq, ←circuit2.yields_eq]
-      simp only [Set.union_empty]
   }
   Assumptions := circuit1.Assumptions
   Spec input output localYields := ∃ mid localYields1 localYields2,

@@ -604,3 +604,6 @@ attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isVal
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero
+
+-- simplify set ops
+attribute [circuit_norm] Set.empty_union Set.union_empty
