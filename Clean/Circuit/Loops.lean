@@ -437,7 +437,7 @@ lemma forEach.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness yielded n ((forEach xs body constant).operations n) ↔
     ∀ i : Fin m, env.UsesLocalWitnessesCompleteness yielded (n + i*(body default).localLength) (body xs[i.val] |>.operations (n + i*(body default).localLength)) := by
   simp only [forEach]
-  conv_lhs => rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
+  rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [ForM.forAll_iff, ConstantLength.localLength_eq]
   conv_rhs => ext i; rw [env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
 
@@ -452,13 +452,11 @@ lemma forEach.localYields :
   constructor
   · intro ⟨ops, ⟨i, hi⟩, h⟩
     use i
-    rw [← hi] at h
-    convert h using 2
-    rw [constant.localLength_eq]
+    simp_all [constant.localLength_eq]
   · intro ⟨i, h⟩
-    refine ⟨(body xs[i.val]).operations (n + i * (body default).localLength), ⟨i, ?_⟩, ?_⟩
-    · simp only [constant.localLength_eq]
-    · exact h
+    simp only [exists_exists_eq_and]
+    use i
+    simp_all [constant.localLength_eq]
 end forEach
 
 section map
