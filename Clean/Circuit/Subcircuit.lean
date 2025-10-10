@@ -227,9 +227,6 @@ def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     apply can_replace_completeness h_consistent h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
     apply circuit.completeness n env yielded input_var h_env_completeness input rfl assumptions
-    -- We need to prove that circuit.yields input_var env n ⊆ yielded
-    -- We have h_subset : FlatOperation.localYields env ops.toFlat ⊆ yielded
-    -- And FlatOperation.localYields env ops.toFlat = Operations.localYields env ops = circuit.yields input_var env n
     calc circuit.yields input_var env n
       = Operations.localYields env ops := (circuit.yields_eq input_var env n).symm
       _ = FlatOperation.localYields env ops.toFlat := FlatOperation.localYields_toFlat.symm
