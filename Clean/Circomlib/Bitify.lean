@@ -115,7 +115,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   main input := arbitraryBitLengthCircuit n input
   localLength _ := n
   output _ i := varFromOffset (fields n) i
-  yields_eq := by intros; simp only [circuit_norm, arbitraryBitLengthCircuit, Set.empty_union]
+  yields_eq := by intros; simp only [circuit_norm, arbitraryBitLengthCircuit]
 
   Assumptions input _ := input.val < 2^n
 
