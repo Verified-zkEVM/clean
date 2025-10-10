@@ -425,7 +425,7 @@ add the range assumption to the soundness statement, thus making the circuit har
 structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
     extends elaborated : ElaboratedCircuit F Input Output where
   Assumptions : Input F → Set (NamedList F) → Prop -- the statement to be assumed for completeness
-  Spec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop -- the statement to be proved for soundness.
+  Spec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
