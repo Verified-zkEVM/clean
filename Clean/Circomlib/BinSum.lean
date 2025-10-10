@@ -173,7 +173,6 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
     simp only [Num2Bits.arbitraryBitLengthCircuit]
     rfl
 
-  yields _ _ _ := ∅
   yields_eq := by
     intros
     simp only [circuit_norm, main, Num2Bits.arbitraryBitLengthCircuit]
