@@ -14,7 +14,7 @@ open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-set_option maxHeartbeats 140000
+set_option maxHeartbeats 130000
 
 /--
   Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
@@ -131,6 +131,8 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     have h_bits_eval7 := h_eq 7 (by linarith) (by linarith)
     simp only [List.getElem_cons_zero,
       List.getElem_cons_succ] at h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
+    simp only [h_bits_eval0, h_bits_eval1, h_bits_eval2, h_bits_eval3, h_bits_eval4, h_bits_eval5, h_bits_eval6, h_bits_eval7]
+    clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
 
     split
 
@@ -153,7 +155,6 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
         Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq] at *
       repeat' apply And.intro
       · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
-        clear h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
         simp [DecodedInstructionType.val]
         cases' h_bits0 with h0 h0
         · cases' h_bits1 with h1 h1
@@ -166,13 +167,12 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
         · cases' h_bits1 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
             mul_zero, add_zero,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte,
-            add_eq_left, neg_eq_zero, ite_eq_left_iff, not_true_eq_false, IsEmpty.forall_iff]
+            add_neg_cancel, zero_ne_one, ↓reduceIte,
+            add_eq_left, neg_eq_zero]
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
       · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
-        clear h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
         simp [DecodedInstructionType.isEncodedCorrectly]
         cases' h_bits0 with h0 h0
         · cases' h_bits1 with h1 h1
@@ -186,14 +186,13 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
         · cases' h_bits1 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
             mul_zero, add_zero,
-            true_and, add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero,
-            false_or, false_and, add_eq_left, neg_eq_zero, and_self, and_false, neg_zero, or_false]
+            add_neg_cancel, zero_ne_one, one_ne_zero,
+            false_or, false_and, and_self, and_false, neg_zero, or_false]
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
             and_self, or_true]
       · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
-        clear h_bits_eval0 h_bits_eval1 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
         simp [DecodedAddressingMode.val]
         cases' h_bits2 with h0 h0
         · cases' h_bits3 with h1 h1
@@ -203,17 +202,16 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
           · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
             mul_one, zero_add,
             add_neg_cancel_comm, neg_add_cancel, zero_ne_one, ↓reduceIte, add_neg_cancel,
-            add_eq_left, neg_eq_zero, ite_eq_left_iff, not_true_eq_false, IsEmpty.forall_iff]
+            add_eq_left, neg_eq_zero]
         · cases' h_bits3 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte, add_eq_left,
-            neg_eq_zero, ite_eq_right_iff, one_ne_zero, IsEmpty.forall_iff]
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte,
+            ]
       · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
-        clear h_bits_eval0 h_bits_eval1 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
         simp [DecodedAddressingMode.isEncodedCorrectly]
         cases' h_bits2 with h0 h0
         · cases' h_bits3 with h1 h1
@@ -222,8 +220,8 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
           · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
             mul_one, zero_add,
-            true_and, add_neg_cancel_comm, neg_add_cancel, zero_ne_one, add_neg_cancel, one_ne_zero,
-            or_false, false_and, and_false, add_eq_left, neg_eq_zero, and_self, false_or, neg_zero,
+            zero_ne_one, add_neg_cancel, one_ne_zero,
+            or_false, false_and, and_false, and_self, false_or, neg_zero,
             add_zero]
         · cases' h_bits3 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
@@ -231,11 +229,10 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
             and_true, and_false, or_self, or_false]
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, true_and,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
-            false_and, add_eq_left, neg_eq_zero, and_self, and_false, or_true]
+            Nat.reduceAdd,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
+            and_self, and_false, or_true]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
-        clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval6 h_bits_eval7
         simp [DecodedAddressingMode.val]
         cases' h_bits4 with h0 h0
         · cases' h_bits5 with h1 h1
@@ -254,7 +251,6 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
-        clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval6 h_bits_eval7
         simp [DecodedAddressingMode.isEncodedCorrectly]
         cases' h_bits4 with h0 h0
         · cases' h_bits5 with h1 h1
@@ -276,7 +272,6 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
             and_self, and_false, or_true]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
-        clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5
         simp [DecodedAddressingMode.val]
         cases' h_bits6 with h0 h0
         · simp only at *
@@ -296,7 +291,6 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
       · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
-        clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5
         simp [DecodedAddressingMode.isEncodedCorrectly]
         cases' h_bits6 with h0 h0
         · simp only at *
