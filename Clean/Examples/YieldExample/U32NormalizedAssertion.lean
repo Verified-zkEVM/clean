@@ -42,15 +42,9 @@ def Spec (input : U32 (F p)) : Prop :=
 
 theorem soundness : FormalAssertion.Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  -- After circuit_proof_start, we need to prove Spec input
-  -- The constraints from `use` ensure each limb is in the yielded set
-  -- The first part of Assumptions ensures all yielded bytes have value < 256
-  -- Therefore all limbs have value < 256, so U32 is normalized
   simp only [U32.Normalized]
   obtain ⟨h_sound, h_complete⟩ := h_assumptions
   obtain ⟨h_use0, h_use1, h_use2, h_use3⟩ := h_holds
-  -- Each h_use says the corresponding limb's NamedList is in yielded
-  -- Apply h_sound to get that each limb < 256
   have h0 := h_sound input.x0 (by aesop)
   have h1 := h_sound input.x1 (by aesop)
   have h2 := h_sound input.x2 (by aesop)
@@ -59,15 +53,10 @@ theorem soundness : FormalAssertion.Soundness (F p) elaborated Assumptions Spec 
 
 theorem completeness : FormalAssertion.Completeness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
-  -- We need to prove the constraints hold given Assumptions AND Spec
   obtain ⟨h_sound, h_complete⟩ := h_assumptions
   simp only [U32.Normalized] at h_spec
   obtain ⟨h0, h1, h2, h3⟩ := h_spec
-  -- The use constraints require each limb's NamedList to be in yielded
-  -- We need to simplify NamedList.eval env { name := "byte", values := [input_var.xi] }
   simp only [NamedList.eval, List.map]
-  -- Now we need to use h_input: eval env input_var = input
-  -- This means Expression.eval env input_var.xi = input.xi
   have h_x0 : Expression.eval env input_var.x0 = input.x0 := by
     simp only [← h_input]
     rfl
@@ -112,9 +101,11 @@ theorem completeness : FormalAssertion.Completeness (F p) elaborated Assumptions
     apply h_complete
     exact h3
 
-def circuit : FormalAssertion (F p) U32 := {
-  elaborated with
-  Assumptions, Spec, soundness, completeness
-}
+def circuit : FormalAssertion (F p) U32 where
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Examples.YieldExample.U32NormalizedAssertion
