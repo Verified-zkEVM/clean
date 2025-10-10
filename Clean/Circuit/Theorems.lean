@@ -389,12 +389,9 @@ theorem can_replace_completeness {env} {ops : Operations F} {n : ℕ} {yielded :
     intro h_env h_compl
     constructor
     · have := Environment.usesLocalWitnessesFlat_iff_extends (env := env) (yielded := yielded) n (ops := circuit.ops)
-      have ⟨h_ext, h_subset⟩ := this.mp h_env.1
-      apply circuit.implied_by_completeness env yielded
-      exact h_ext
-      exact h_subset
-      exact h_compl.1
-    · exact ih h_env.2 h_compl.2
+      have ⟨_, _⟩ := this.mp h_env.1
+      apply circuit.implied_by_completeness env yielded <;> aesop
+    · aesop
 end Circuit
 
 namespace Circuit
