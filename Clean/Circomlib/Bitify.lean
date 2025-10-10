@@ -184,7 +184,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   localLength _  := 1
   localLength_eq := by simp [circuit_norm, main]
-  yields _ _ _ := ∅
   yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
