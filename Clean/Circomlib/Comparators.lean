@@ -242,12 +242,181 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
     output = (if x.val < y.val then 1 else 0)
 
   soundness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp only [circuit_norm, Num2Bits.circuit] at h_holds ⊢
+    rcases h_assumptions with ⟨hx, hy⟩
+    have hx_eval : Expression.eval env input_var.1 = input.1 := by
+      simpa using congrArg Prod.fst h_input
+    have hy_eval : Expression.eval env input_var.2 = input.2 := by
+      simpa using congrArg Prod.snd h_input
+
+    simp [hx_eval, hy_eval] at h_holds
+
+    set out := env.get (i₀ + n + 1) with hout
+    have two_exp_n_small : 2^n < p := by
+      have : 2^n ≤ 2^(n+1) := by gcongr; repeat linarith
+      exact lt_of_le_of_lt this hn
+
+    have heq: ZMod.val ((2 : F p)^n) = 2^n := by
+      rw [ZMod.val_pow]
+      rw [ZMod.val_ofNat_of_lt]
+      · simp_all
+        exact Fact.out
+      convert two_exp_n_small
+      rw [ZMod.val_ofNat_of_lt]
+      simp_all
+      exact Fact.out
+
+    by_cases hlt : ZMod.val input.1 < ZMod.val input.2
+
+    -- CASE input.1 < input.2
+    simp [hlt]
+
+    have hdiff_lt : ZMod.val (input.1 + 2^n - input.2) < 2^n := by
+      rw[ZMod.val_sub]
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          calc
+            ZMod.val input.1 + 2^n - ZMod.val input.2 <  ZMod.val input.2 + 2^n - ZMod.val input.2 := by omega
+            _ = 2^n := by omega
+        · have easy_lemma: 2 * 2^n = 2^(n+1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          omega
+        · have easy_lemma: 2 * 2^n = 2^(n+1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+
+    -- split h_holds to h1 h2 h3
+    have h3 := h_holds.right
+    have h2 := h_holds.left.right
+    have h1 := h_holds.left.left
+
+    rw[add_assoc] at hout
+    rw[← hout] at h3
+    rw[h3]
+    --simp the goal basic math
+
+    unfold fieldToBits at h2
+    unfold toBits at h2
+    --now I need to use that On Nat, shift is equivalent to a / 2 ^ b.
+
+    apply congrArg (fun v => v[n]) at h2
+    simp only [Vector.getElem_map, Vector.getElem_mapRange,
+      Nat.cast_ite, Nat.cast_one, Nat.cast_zero, circuit_norm] at h2
+
+    simp only [← sub_eq_add_neg, Nat.testBit_eq_false_of_lt hdiff_lt, Bool.false_eq_true,
+      ↓reduceIte] at h2
+    rw[h2]
+    simp only [neg_zero, add_zero]
+
+    -- CASE input.1 >= input.2
+    simp [hlt]
+    have hdiff_ge : ZMod.val (input.1 + 2^n - input.2) >= 2^n := by
+      rw[ZMod.val_sub]
+      · rw [ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          calc
+            ZMod.val input.1 + 2^n - ZMod.val input.2 ≥ ZMod.val input.1 + 2^n - ZMod.val input.1 := by omega
+            _ = 2^n := by omega
+        · have easy_lemma: 2 * 2^n = 2^(n+1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          omega
+        · have easy_lemma: 2 * 2^n = 2^(n+1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+
+    -- split h_holds to h1 h2 h3
+    have h3 := h_holds.right
+    have h2 := h_holds.left.right
+    have h1 := h_holds.left.left
+
+    rw[add_assoc] at hout
+    rw[← hout] at h3
+    rw[h3]
+    --simp the goal basic math
+    unfold fieldToBits at h2
+    unfold toBits at h2
+    --now I need to use that On Nat, shift is equivalent to a / 2 ^ b.
+
+    apply congrArg (fun v => v[n]) at h2
+    simp only [Vector.getElem_map, Vector.getElem_mapRange,
+      Nat.cast_ite, Nat.cast_one, Nat.cast_zero, circuit_norm] at h2
+
+    have hf: (ZMod.val (input.1 + 2^n + -input.2)).testBit n = true := by
+      have hpos : 0 < 2^n := pow_pos (by decide) n
+      have hlt2 : (ZMod.val (input.1 + 2^n + -input.2)) / 2^n < 2 := by
+        have : (ZMod.val (input.1 + 2^n + -input.2)) < 2^n * 2 := by simpa [pow_succ, two_mul, mul_two] using h1
+        exact Nat.div_lt_of_lt_mul this
+
+      have hge1 : 1 ≤ (ZMod.val (input.1 + 2^n + -input.2)) / 2^n :=
+        (Nat.le_div_iff_mul_le hpos).mpr (by simpa [one_mul, sub_eq_add_neg] using hdiff_ge)
+
+      have hxdiv : (ZMod.val (input.1 + 2^n + -input.2)) / 2^n = 1 :=
+        le_antisymm (Nat.lt_succ_iff.mp hlt2) hge1
+
+      simp [Nat.testBit, Nat.shiftRight_eq_div_pow, hxdiv]
+
+    simp only [hf, ↓reduceIte] at h2
+    simp only [h2, add_neg_cancel]
 
   completeness := by
-    simp only [circuit_norm, main]
-    sorry
+    circuit_proof_start
+    simp only [circuit_norm, Num2Bits.circuit] at *
+    rcases h_assumptions with ⟨hx, hy⟩
+    have hx_eval : Expression.eval env input_var.1 = input.1 := by
+      simpa using congrArg Prod.fst h_input
+    have hy_eval : Expression.eval env input_var.2 = input.2 := by
+      simpa using congrArg Prod.snd h_input
+    simp [hx_eval, hy_eval] at *
+    set out := env.get (i₀ + n + 1) with hout
+    have two_exp_n_small : 2^n < p := by
+      have : 2^n ≤ 2^(n+1) := by gcongr; repeat linarith
+      exact lt_of_le_of_lt this hn
+
+    have heq: ZMod.val ((2 : F p) ^ n) = 2^n := by
+      rw [ZMod.val_pow]
+      rw [ZMod.val_ofNat_of_lt]
+      · simp_all
+        exact Fact.out
+      convert two_exp_n_small
+      rw [ZMod.val_ofNat_of_lt]
+      simp_all
+      exact Fact.out
+
+    have hdiff_lt_basic : ZMod.val (input.1 + 2^n - input.2) < 2^(n+1) := by
+      rw[ZMod.val_sub]
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          calc
+            ZMod.val input.1 + 2^n - ZMod.val input.2 <  2^n + 2^n := by omega
+            _ = 2^(n + 1) := by rw[pow_succ, mul_two]
+        · have easy_lemma: 2 * 2^n = 2^(n + 1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+      · rw[ZMod.val_add_of_lt]
+        · simp only [heq] at *
+          omega
+        · have easy_lemma: 2 * 2^n = 2^(n + 1) := by
+            rw[pow_succ, two_mul]
+            omega
+          omega
+
+    have h2 := h_env.right
+    refine And.intro ?_ ?_
+    · simpa [sub_eq_add_neg] using hdiff_lt_basic
+    · exact h2
+
 end LessThan
 
 namespace LessEqThan
