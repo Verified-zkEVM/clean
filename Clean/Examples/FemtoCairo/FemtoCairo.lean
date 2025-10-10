@@ -60,15 +60,7 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
-set_option maxHeartbeats 2000000
-
-/--
-  Circuit that decodes a femtoCairo instruction into a one-hot representation.
-  It returns a `DecodedInstruction` struct containing the decoded fields.
-  This circuit is not satisfiable if the input instruction is not correctly encoded.
--/
-def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
-  main := fun instruction => do
+def decodeInstructionMain (instruction : Var field (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
     let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
     return {
       instrType := {
@@ -96,13 +88,8 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
         isImmediate := bits[6] * bits[7]
       }
     }
-  localLength _ := 8
-  yields_eq := by intros; simp only [circuit_norm, Gadgets.ToBits.toBits, Set.empty_union]
 
-  Assumptions | instruction, _ => True
-
-  Spec
-  | instruction, output, _ =>
+def decodeInstructionSpec (instruction : field (F p)) (output : DecodedInstruction (F p)) (_ : Set (NamedList (F p))) : Prop :=
     match Spec.decodeInstruction instruction with
     | some (instr_type, addr1, addr2, addr3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
@@ -111,8 +98,24 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
       output.addr3.val = addr3 ∧ output.addr3.isEncodedCorrectly
     | none => False -- impossible, constraints ensure that input < 256
 
+def decodeInstructionElaborated : ElaboratedCircuit (F p) field DecodedInstruction where
+  main := decodeInstructionMain
+  localLength _ := 8
+  yields_eq := by intros; simp only [circuit_norm, decodeInstructionMain, Gadgets.ToBits.toBits, Set.empty_union]
+
+/--
+  Circuit that decodes a femtoCairo instruction into a one-hot representation.
+  It returns a `DecodedInstruction` struct containing the decoded fields.
+  This circuit is not satisfiable if the input instruction is not correctly encoded.
+-/
+def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
+  elaborated := decodeInstructionElaborated
+
+  Spec := decodeInstructionSpec
+
   soundness := by
-    circuit_proof_start [Gadgets.toBits]
+    circuit_proof_start [Gadgets.toBits, decodeInstructionMain, decodeInstructionSpec, decodeInstructionElaborated]
+    clear yielded
     simp only [Nat.reducePow] at h_holds
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
     have h : ¬ 256 ≤ input.val := by linarith
@@ -130,6 +133,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     have h_bits_eval5 := h_eq 5 (by linarith) (by linarith)
     have h_bits_eval6 := h_eq 6 (by linarith) (by linarith)
     have h_bits_eval7 := h_eq 7 (by linarith) (by linarith)
+    clear h_eq
     simp only [List.getElem_cons_zero,
       List.getElem_cons_succ] at h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
     simp only [h_bits_eval0, h_bits_eval1, h_bits_eval2, h_bits_eval3, h_bits_eval4, h_bits_eval5, h_bits_eval6, h_bits_eval7]
@@ -646,7 +650,9 @@ def femtoCairoStepElaboratedCircuit
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
     localLength := 30
-    yields_eq := by simp [circuit_norm, readFromMemoryCircuit, fetchInstructionCircuit, decodeInstructionCircuit, nextStateCircuit]
+    yields_eq := by
+      simp only [circuit_norm, readFromMemoryCircuit, fetchInstructionCircuit, nextStateCircuit, decodeInstructionCircuit, decodeInstructionElaborated]
+      simp only [Set.union_self, implies_true]
 
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
@@ -682,6 +688,7 @@ def femtoCairoStepCircuitSoundness
     rw [h_input_pc] at h_eq
     rw [h_eq, ←c_fetch]
     simp [circuit_norm, explicit_provable_type]
+    simp only [decodeInstructionSpec] at c_decode
 
     split at c_decode
     case h_2 =>
@@ -740,6 +747,8 @@ def femtoCairoStepCircuitSoundness
               -- state transition is always successful
               contradiction
             case h_1 next_state h_eq_next =>
+              simp only [decodeInstructionElaborated] at c_next ⊢ h_eq_next
+              simp only [h_eq_next]
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
