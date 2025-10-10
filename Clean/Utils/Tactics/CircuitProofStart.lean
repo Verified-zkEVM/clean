@@ -111,6 +111,7 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
   try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
   try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
+  
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
