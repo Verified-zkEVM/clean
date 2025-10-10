@@ -56,7 +56,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     bits = fieldToBits 254 input
 
   soundness := by
-    intro i0 env yielded input_var input h_input assumptions h_holds
+    intro i0 env _ input_var input h_input assumptions h_holds
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
       Vector.map_mapRange]
@@ -76,7 +76,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       <;> simp [h_bits, ZMod.val_one]
 
   completeness := by
-    intro i0 env yielded input_var h_env input h_input assumptions
+    intro i0 env _ input_var h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
