@@ -171,9 +171,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedInstructionType.isEncodedCorrectly]
-        clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
+      · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
         clear h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
+        simp [DecodedInstructionType.isEncodedCorrectly]
         cases' h_bits0 with h0 h0
         · cases' h_bits1 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
@@ -212,9 +212,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             Nat.reduceAdd,
             add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte, add_eq_left,
             neg_eq_zero, ite_eq_right_iff, one_ne_zero, IsEmpty.forall_iff]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
+      · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
         clear h_bits_eval0 h_bits_eval1 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
+        simp [DecodedAddressingMode.isEncodedCorrectly]
         cases' h_bits2 with h0 h0
         · cases' h_bits3 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
@@ -234,9 +234,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             Nat.reduceAdd, true_and,
             add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
             false_and, add_eq_left, neg_eq_zero, and_self, and_false, or_true]
-      · simp [DecodedAddressingMode.val]
-        clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
         clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval6 h_bits_eval7
+        simp [DecodedAddressingMode.val]
         cases' h_bits4 with h0 h0
         · cases' h_bits5 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
@@ -253,9 +253,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
         clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval6 h_bits_eval7
+        simp [DecodedAddressingMode.isEncodedCorrectly]
         cases' h_bits4 with h0 h0
         · cases' h_bits5 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
@@ -275,9 +275,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
             and_self, and_false, or_true]
-      · simp [DecodedAddressingMode.val]
-        clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
         clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5
+        simp [DecodedAddressingMode.val]
         cases' h_bits6 with h0 h0
         · simp only at *
           cases' h_bits7 with h1 h1
@@ -295,9 +295,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
         clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5
+        simp [DecodedAddressingMode.isEncodedCorrectly]
         cases' h_bits6 with h0 h0
         · simp only at *
           cases' h_bits7 with h1 h1
