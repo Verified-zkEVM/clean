@@ -107,11 +107,10 @@ elab_rules : tactic
   circuitProofStartCore
 
   -- try to unfold main, Assumptions and Spec as local definitions
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `Assumptions):ident] at *))
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `Spec):ident] at *))
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
-  evalTactic (← `(tactic| try dsimp only [$(mkIdent `main):ident] at *))
-
+  try (evalTactic (← `(tactic| unfold $(mkIdent `Assumptions):ident at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold $(mkIdent `Spec):ident at *))) catch _ => pure ()
+  try (evalTactic (← `(tactic| unfold $(mkIdent `elaborated):ident at *))) catch _ => pure () -- sometimes `main` is hidden behind `elaborated`
+  try (evalTactic (← `(tactic| unfold $(mkIdent `main):ident at *))) catch _ => pure ()
   -- simplify structs / eval first
   try (evalTactic (← `(tactic| provable_struct_simp))) catch _ => pure ()
 
