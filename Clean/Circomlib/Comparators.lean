@@ -194,6 +194,7 @@ end ForceEqualIfEnabled
 namespace LessThan
 /-
 template LessThan(n) {
+    assert(n <= 252);
     signal input in[2];
     signal output out;
 
@@ -514,7 +515,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   output _ i := var ⟨ i + n + 1 ⟩
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
-  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n -- TODO: ∧ n <= 252
+  Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
   Spec := fun (x, y) output =>
     output = (if x.val < y.val then 1 else 0)
