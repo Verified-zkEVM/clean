@@ -14,7 +14,7 @@ open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
-set_option maxHeartbeats 150000
+set_option maxHeartbeats 110000
 
 /--
   Construct a table that represents a read-only memory containing all pairs (i, f(i)) for i in [0, length).
@@ -134,6 +134,8 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
     have h_bits_eval7 := h_eq 7 (by linarith) (by linarith)
     simp only [List.getElem_cons_zero,
       List.getElem_cons_succ] at h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
+    simp only [h_bits_eval0, h_bits_eval1, h_bits_eval2, h_bits_eval3, h_bits_eval4, h_bits_eval5, h_bits_eval6, h_bits_eval7]
+    clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
 
     split
 
@@ -151,114 +153,94 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
       have h_bits5 := h_bits_are_binary 5 (by linarith)
       have h_bits6 := h_bits_are_binary 6 (by linarith)
       have h_bits7 := h_bits_are_binary 7 (by linarith)
+      generalize (fieldToBits 8 input)[0] = f0 at *
+      generalize (fieldToBits 8 input)[1] = f1 at *
+      generalize (fieldToBits 8 input)[2] = f2 at *
+      generalize (fieldToBits 8 input)[3] = f3 at *
+      generalize (fieldToBits 8 input)[4] = f4 at *
+      generalize (fieldToBits 8 input)[5] = f5 at *
+      generalize (fieldToBits 8 input)[6] = f6 at *
+      generalize (fieldToBits 8 input)[7] = f7 at *
 
       simp only [gt_iff_lt, id_eq, not_le,
         Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq] at *
       repeat' apply And.intro
-      · simp [DecodedInstructionType.val]
+      · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedInstructionType.val]
         cases' h_bits0 with h0 h0
-        · cases' h_bits1 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            neg_zero, add_zero, add_neg_cancel, zero_ne_one, ↓reduceIte]
-        · cases' h_bits1 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte,
-            add_eq_left, neg_eq_zero, ite_eq_left_iff, not_true_eq_false, IsEmpty.forall_iff]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedInstructionType.isEncodedCorrectly]
+        · subst h0
+          cases' h_bits1 with h1 h1
+          · subst h1
+            simp only [ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [neg_zero, add_zero, mul_zero, ↓reduceIte, h_eq]
+          · simp only [h1] at h_eq ⊢
+            simp only [ZMod.val_zero, ZMod.val_one, mul_one, zero_add] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · subst h0
+          cases' h_bits1 with h1 h1
+          · subst h1
+            simp only [ZMod.val_one, ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_one, mul_one, Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte, h_eq]
+      · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedInstructionType.isEncodedCorrectly, mul_eq_zero]
         cases' h_bits0 with h0 h0
-        · cases' h_bits1 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, or_false,
-            and_true, and_false, and_self, or_true]
-        · cases' h_bits1 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero,
-            true_and, add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero,
-            false_or, false_and, add_eq_left, neg_eq_zero, and_self, and_false, neg_zero, or_false]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
-            and_self, or_true]
-      · simp [DecodedAddressingMode.val]
+        · subst h0
+          cases' h_bits1 with h1 h1
+          · subst h1
+            simp only [neg_zero, add_zero, mul_zero, or_self, and_self, one_ne_zero,
+              zero_ne_one, and_true, and_false, or_false]
+          · subst h1
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, one_ne_zero,
+              or_false, and_true, and_false, and_self, or_true]
+        · subst h0
+          cases' h_bits1 with h1 h1
+          · subst h1
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, one_ne_zero,
+              or_true, and_self, and_true, and_false, or_self, or_false]
+          · subst h1
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, one_ne_zero,
+              or_self, and_false, and_self, or_true]
+      · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.val]
         cases' h_bits2 with h0 h0
-        · cases' h_bits3 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            add_neg_cancel_comm, neg_add_cancel, zero_ne_one, ↓reduceIte, add_neg_cancel,
-            add_eq_left, neg_eq_zero, ite_eq_left_iff, not_true_eq_false, IsEmpty.forall_iff]
-        · cases' h_bits3 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero,
-            add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte, add_eq_left,
-            neg_eq_zero, ite_eq_right_iff, one_ne_zero, IsEmpty.forall_iff]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
+        · subst h0
+          cases' h_bits3 with h1 h1
+          · subst h1
+            simp only [ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [neg_zero, add_zero, mul_zero, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_zero, zero_add, ZMod.val_one, mul_one] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · subst h0
+          cases' h_bits3 with h1 h1
+          · subst h1
+            simp only [ZMod.val_one, ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_one, mul_one, Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte, h_eq]
+      · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
         cases' h_bits2 with h0 h0
-        · cases' h_bits3 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
+        · subst h0
+          cases' h_bits3 with h1 h1
+          · subst h1
+            simp only [mul_zero,
             add_zero,
             neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            true_and, add_neg_cancel_comm, neg_add_cancel, zero_ne_one, add_neg_cancel, one_ne_zero,
-            or_false, false_and, and_false, add_eq_left, neg_eq_zero, and_self, false_or, neg_zero,
-            add_zero]
-        · cases' h_bits3 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero,
-            add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
-            and_true, and_false, or_self, or_false]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, true_and,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
-            false_and, add_eq_left, neg_eq_zero, and_self, and_false, or_true]
-      · simp [DecodedAddressingMode.val]
-        cases' h_bits4 with h0 h0
-        · cases' h_bits5 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            add_neg_cancel_comm, neg_add_cancel, zero_ne_one, ↓reduceIte, add_neg_cancel,
-            add_eq_left, neg_eq_zero,]
-        · cases' h_bits5 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero,
-            add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        cases' h_bits4 with h0 h0
-        · cases' h_bits5 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
+          · subst h1
+            simp only [
+            mul_one,
             zero_ne_one, add_neg_cancel, one_ne_zero,
             or_false, false_and, and_false, and_self, false_or, neg_zero,
             add_zero]
-        · cases' h_bits5 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
+        · subst h0
+          cases' h_bits3 with h1 h1
+          · subst h1
+            simp only [
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
             and_true, and_false, or_self, or_false]
@@ -266,43 +248,77 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
             and_self, and_false, or_true]
-      · simp [DecodedAddressingMode.val]
-        cases' h_bits6 with h0 h0
-        · simp only at *
-          cases' h_bits7 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, ↓reduceIte]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            neg_zero, add_zero, add_neg_cancel, zero_ne_one, ↓reduceIte]
-        · simp only at *
-          cases' h_bits7 with h1 h1
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.val]
+        cases' h_bits4 with h0 h0
+        · subst h0
+          cases' h_bits5 with h1 h1
+          · subst h1
+            simp only [ZMod.val_zero, mul_zero,
+            add_zero] at h_eq
+            simp only [neg_zero, add_zero, mul_zero, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_zero, ZMod.val_one,
+            mul_one, zero_add] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · cases' h_bits5 with h1 h1
           · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        cases' h_bits6 with h0 h0
-        · simp only at *
-          cases' h_bits7 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add,
-            neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, or_false,
-            and_true, and_false, and_self, or_true]
-        · simp only at *
-          cases' h_bits7 with h1 h1
-          · simp_all only [forall_true_left, ZMod.val_one, ZMod.val_zero,
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
+        cases' h_bits4 with h0 h0 <;> subst h0
+        · cases' h_bits5 with h1 h1 <;> subst h1
+          · simp only [neg_zero, add_zero, mul_zero, or_self, and_self, one_ne_zero, zero_ne_one,
+            and_true, and_false, or_false]
+          · simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, one_ne_zero,
+            or_false, and_true, and_false, and_self, or_true]
+        · cases' h_bits5 with h1 h1 <;> subst h1
+          · simp only [
             mul_zero, add_zero,
             add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
             and_true, and_false, or_self, or_false]
+          · simp only [mul_one,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
+            and_self, and_false, or_true]
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
+        simp only [DecodedAddressingMode.val]
+        cases' h_bits6 with h0 h0 <;> subst h0
+        · cases' h_bits7 with h1 h1 <;> subst h1
+          · simp only [ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [mul_zero,
+            add_zero,
+            neg_zero, ↓reduceIte, h_eq]
+          · simp only [ZMod.val_zero, zero_add, ZMod.val_one, mul_one] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · cases' h_bits7 with h1 h1 <;> subst h1
+          · simp only [ZMod.val_zero, mul_zero, add_zero, ZMod.val_one] at h_eq
+            simp only [
+            mul_zero, add_zero,
+            add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte, h_eq]
           · simp_all only [forall_true_left, ZMod.val_one, mul_one,
             Nat.reduceAdd,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
+        simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
+        cases' h_bits6 with h0 h0 <;> subst h0
+        · cases' h_bits7 with h1 h1 <;> subst h1
+          · simp only [mul_zero,
+            add_zero,
+            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, true_or]
+          · simp only [
+            mul_one,
+            neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, true_or,
+            and_true, and_self, or_true]
+        · cases' h_bits7 with h1 h1 <;> subst h1
+          · simp only [
+            mul_zero, add_zero,
+            add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
+            and_true, and_false, or_self, true_or]
+          · simp only [mul_one,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
             and_self, or_true]
 
