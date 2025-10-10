@@ -291,11 +291,14 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} {yielded : Set 
     constructor
     · intro ⟨h_yield, h_rest⟩
       have h_rest' := (ih n).mp h_rest
-      exact ⟨h_rest'.1, Set.union_subset (Set.singleton_subset_iff.mpr h_yield) h_rest'.2⟩
-    · intro ⟨h_ext, h_yields⟩
+      simp only [Set.union_subset_iff]
+      aesop
+    · intro ⟨_, h_yields⟩
       constructor
-      · exact Set.union_subset_iff.mp h_yields |>.1 rfl
-      · exact (ih n).mpr ⟨h_ext, Set.union_subset_iff.mp h_yields |>.2⟩
+      · aesop
+      · apply (ih n).mpr
+        simp only [Set.union_subset_iff] at h_yields
+        aesop
 
 theorem can_replace_usesLocalWitnessesCompleteness {env : Environment F} {ops : Operations F} {n : ℕ} {yielded : Set (NamedList F)} (h : ops.SubcircuitsConsistent n) :
   env.UsesLocalWitnesses yielded n ops → env.UsesLocalWitnessesCompleteness yielded n ops := by
