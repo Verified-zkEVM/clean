@@ -103,13 +103,9 @@ theorem soundness : GeneralFormalCircuit.Soundness (F p) elaborated Spec := by
   intro h_yielded_eq
   -- We have h_holds which contains the constraints from both circuits
   obtain ⟨h_byte_range, h_normalized⟩ := h_holds
-  -- h_yielded_eq tells us yielded = localYields (which is elaborated.yields)
-  -- Since yielded = elaborated.yields, we know U32NormalizedAssertion.Assumptions holds
-  have h_u32_assumptions : U32NormalizedAssertion.Assumptions input yielded := by
-    rw [h_yielded_eq]
-    exact yielded_equals_local_satisfies_assumptions input env i₀ input_var
-  -- Apply h_normalized with the assumptions to get the spec
-  exact h_normalized h_u32_assumptions
+  apply h_normalized
+  rw [h_yielded_eq]
+  exact yielded_equals_local_satisfies_assumptions input env i₀ input_var
 
 theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assumptions := by
   circuit_proof_start
@@ -118,7 +114,6 @@ theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assump
   obtain ⟨h_normalized, h_yielded_eq⟩ := h_assumptions
   -- Apply h_yielded_eq to get that yielded = elaborated.yields input_var env i₀
   have h_eq := h_yielded_eq env i₀ input_var h_input
-  -- Now we can proceed with the proof
   constructor
   · exact trivial  -- ByteRangeYielder.Assumptions is True
   specialize h_env trivial
@@ -129,13 +124,9 @@ theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assump
     constructor
     · -- All values in yielded are < 256
       intro v hv
-      -- Since yielded = elaborated.yields by h_eq, and elaborated.yields is the union of
-      -- ByteRangeYielder.yields (which only has bytes 0-255) and U32NormalizedAssertion.yields (which is empty),
-      -- all values in yielded must be < 256
       simp only [h_eq, U32NormalizedAssertion.elaborated, ByteRangeYielder.elaborated] at hv
       cases hv with
       | inl h =>
-        -- h says the NamedList is in ByteRangeYielder's yields, which are exactly bytes 0-255
         simp only [Set.mem_setOf_eq] at h
         obtain ⟨n, hn, h_eq⟩ := h
         injection h_eq with _ h_list
@@ -151,15 +142,11 @@ theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assump
         simp at h
     · -- All bytes 0-255 are in yielded
       intro n hn
-      -- Since yielded = elaborated.yields by h_eq, we just need to show the byte is in elaborated.yields
       rw [h_eq]
       left
-      -- The byte is in ByteRangeYielder.elaborated.yields
       simp only [ByteRangeYielder.elaborated, Set.mem_setOf_eq]
       use n, hn
-  · -- U32NormalizedAssertion.circuit.Spec
-    -- This follows from h_normalized which says input.Normalized
-    exact h_normalized
+  · exact h_normalized
 
 def circuit : GeneralFormalCircuit (F p) U32 unit where
   elaborated
