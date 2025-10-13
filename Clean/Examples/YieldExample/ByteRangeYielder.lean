@@ -1,54 +1,59 @@
 import Clean.Circuit.Basic
 import Clean.Circuit.Loops
 import Clean.Utils.Tactics
+import Clean.Utils.Field
 
 namespace Examples.YieldExample.ByteRangeYielder
 
-variable {F : Type} [Field F]
+variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
 /--
 Main circuit that yields all byte values from 0 to 255
 -/
-def main (_ : Var unit F) : Circuit F Unit := do
+def main (_ : Var unit (F p)) : Circuit (F p) Unit := do
   -- Yield all byte values as constants
   -- We use foldlRange to iterate and yield each byte value
   Circuit.foldlRange 256 () fun _ i => do
-    yield (NamedList.mk "byte" [(i.val : F)])
+    yield ⟨"byte", [(i.val : F p)]⟩
     return ()
 
-def elaborated : ElaboratedCircuit F unit unit where
+def elaborated : ElaboratedCircuit (F p) unit unit where
   main
   localLength _ := 0
   localLength_eq := by simp [circuit_norm, main]
   yields input env offset :=
-    { nl | ∃ (n : Nat) (h : n < 256), nl = NamedList.mk "byte" [↑n] }
+    { nl | ∃ (n : F p) (h : n.val < 256), nl = ⟨"byte", [n]⟩ }
   yields_eq := by
     intro input env offset
     simp [main, circuit_norm]
     ext nl
-    simp only [Set.mem_setOf_eq]
+    simp only [Set.mem_setOf_eq, Set.mem_range]
     constructor
-    · rintro ⟨n, hn⟩
+    · rintro ⟨⟨n, nlt⟩, hn⟩
       use n
-      aesop
+      simp_all only [NamedList.eval, circuit_norm]
+      rwa [ZMod.val_cast_of_lt]
+      linarith [‹Fact (p > 512)›.elim]
     · rintro ⟨n, hn, nl_eq⟩
-      simp only [nl_eq, Set.mem_range]
-      use ⟨ n, hn ⟩
-      aesop
+      use ⟨ n.val, hn ⟩
+      simp_all only [NamedList.eval, circuit_norm, ZMod.natCast_val]
+      congr
+      rw [FieldUtils.ext_iff, ZMod.val_cast_eq_val_of_lt]
+      linarith [‹Fact (p > 512)›.elim]
   subcircuitsConsistent := by simp [circuit_norm, main]
 
 /--
 ByteRangeYielder has no assumptions
 -/
-def Assumptions (_ : unit F) (_ : Set (NamedList F)) : Prop := True
+def Assumptions (_ : unit (F p)) (_ : Set (NamedList (F p))) : Prop := True
 
 /--
 Spec: If a NamedList "byte" [i] is in localYields, then i represents a byte value
 -/
-def Spec (_ : unit F) (_ : unit F) (localYields : Set (NamedList F)) : Prop :=
-  ∀ (i : F), NamedList.mk "byte" [i] ∈ localYields → ∃ (n : Nat), n < 256 ∧ i = n
+def Spec (_ : unit (F p)) (_ : unit (F p)) (localYields : Set (NamedList (F p))) : Prop :=
+  ∀ (v : (F p)), ⟨"byte", [v]⟩ ∈ localYields → v.val < 256
 
-theorem soundness : Soundness F elaborated Assumptions Spec := by
+theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   -- After circuit_proof_start, the goal is Spec input output localYields
   -- where localYields is the yields from elaborated
@@ -62,9 +67,10 @@ theorem soundness : Soundness F elaborated Assumptions Spec := by
   -- Therefore [i] = [↑n], so i = ↑n
   injection h_eq with _ h_list
   injection h_list with h_i
-  use n
+  rw [h_i]
+  exact hn
 
-def circuit : FormalCircuit F unit unit where
+def circuit : FormalCircuit (F p) unit unit where
   elaborated
   Assumptions
   Spec

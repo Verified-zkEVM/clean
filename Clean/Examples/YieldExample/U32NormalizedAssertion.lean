@@ -11,10 +11,10 @@ Main circuit that uses yielded byte values to check U32 normalization
 -/
 def main (input : Var U32 (F p)) : Circuit (F p) Unit := do
   -- Use the yielded byte values for each limb
-  use (NamedList.mk "byte" [input.x0])
-  use (NamedList.mk "byte" [input.x1])
-  use (NamedList.mk "byte" [input.x2])
-  use (NamedList.mk "byte" [input.x3])
+  use ⟨"byte", [input.x0]⟩
+  use ⟨"byte", [input.x1]⟩
+  use ⟨"byte", [input.x2]⟩
+  use ⟨"byte", [input.x3]⟩
   return ()
 
 def elaborated : ElaboratedCircuit (F p) U32 unit where
@@ -31,8 +31,7 @@ Assumptions:
 2. All bytes [0..255] are in the yielded set (for completeness)
 -/
 def Assumptions (_ : U32 (F p)) (yielded : Set (NamedList (F p))) : Prop :=
-  (∀ (v : F p), NamedList.mk "byte" [v] ∈ yielded → v.val < 256) ∧
-  (∀ (n : Nat), n < 256 → NamedList.mk "byte" [(n : F p)] ∈ yielded)
+  ∀ (v : F p), ⟨"byte", [v]⟩ ∈ yielded ↔ v.val < 256
 
 /--
 Spec: The U32 input is normalized
@@ -41,65 +40,14 @@ def Spec (input : U32 (F p)) : Prop :=
   input.Normalized
 
 theorem soundness : FormalAssertion.Soundness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
-  simp only [U32.Normalized]
-  obtain ⟨h_sound, h_complete⟩ := h_assumptions
-  obtain ⟨h_use0, h_use1, h_use2, h_use3⟩ := h_holds
-  have h0 := h_sound input.x0 (by aesop)
-  have h1 := h_sound input.x1 (by aesop)
-  have h2 := h_sound input.x2 (by aesop)
-  have h3 := h_sound input.x3 (by aesop)
-  exact ⟨h0, h1, h2, h3⟩
+  circuit_proof_start [NamedList.eval, U32.Normalized]
+  obtain ⟨ x0, x1, x2, x3 ⟩ := input
+  simp_all only [explicit_provable_type, circuit_norm, U32.mk.injEq]
 
 theorem completeness : FormalAssertion.Completeness (F p) elaborated Assumptions Spec := by
-  circuit_proof_start
-  obtain ⟨h_sound, h_complete⟩ := h_assumptions
-  simp only [U32.Normalized] at h_spec
-  obtain ⟨h0, h1, h2, h3⟩ := h_spec
-  simp only [NamedList.eval, List.map]
-  have h_x0 : Expression.eval env input_var.x0 = input.x0 := by
-    simp only [← h_input]
-    rfl
-  have h_x1 : Expression.eval env input_var.x1 = input.x1 := by
-    simp only [← h_input]
-    rfl
-  have h_x2 : Expression.eval env input_var.x2 = input.x2 := by
-    simp only [← h_input]
-    rfl
-  have h_x3 : Expression.eval env input_var.x3 = input.x3 := by
-    simp only [← h_input]
-    rfl
-  simp only [h_x0, h_x1, h_x2, h_x3]
-  constructor
-  · -- First use constraint for x0
-    -- We need { name := "byte", values := [input.x0] } ∈ yielded
-    -- Since input.x0.val < 256 (from h0), we can apply h_complete
-    -- We need to show input.x0 = ↑(input.x0.val)
-    have : input.x0 = (input.x0.val : F p) := by
-      conv_lhs => rw [← ZMod.natCast_zmod_val input.x0]
-    rw [this]
-    apply h_complete
-    exact h0
-  constructor
-  · -- Second use constraint for x1
-    have : input.x1 = (input.x1.val : F p) := by
-      conv_lhs => rw [← ZMod.natCast_zmod_val input.x1]
-    rw [this]
-    apply h_complete
-    exact h1
-  constructor
-  · -- Third use constraint for x2
-    have : input.x2 = (input.x2.val : F p) := by
-      conv_lhs => rw [← ZMod.natCast_zmod_val input.x2]
-    rw [this]
-    apply h_complete
-    exact h2
-  · -- Fourth use constraint for x3
-    have : input.x3 = (input.x3.val : F p) := by
-      conv_lhs => rw [← ZMod.natCast_zmod_val input.x3]
-    rw [this]
-    apply h_complete
-    exact h3
+  circuit_proof_start [NamedList.eval, U32.Normalized]
+  obtain ⟨ x0, x1, x2, x3 ⟩ := input
+  simp_all only [explicit_provable_type, circuit_norm, U32.mk.injEq]
 
 def circuit : FormalAssertion (F p) U32 where
   elaborated

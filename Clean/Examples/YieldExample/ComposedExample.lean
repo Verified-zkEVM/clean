@@ -51,102 +51,20 @@ def Spec (input : U32 (F p)) (yielded : Set (NamedList (F p)))
          (_ : unit (F p)) (localYields : Set (NamedList (F p))) : Prop :=
   yielded = localYields → input.Normalized
 
-omit [Fact (p > 512)] in
-/--
-Helper lemma: ByteRangeYielder yields exactly the bytes 0-255
--/
-lemma byteRangeYielder_yields_exactly (env : Environment (F p)) (offset : ℕ) :
-    ByteRangeYielder.elaborated.yields () env offset =
-    { nl | ∃ (n : Nat), n < 256 ∧ nl = NamedList.mk "byte" [(n : F p)] } := by
-  simp [ByteRangeYielder.elaborated]
-
-/--
-Key lemma: If yielded equals the localYields from our composed circuit,
-then U32NormalizedAssertion.Assumptions is satisfied.
--/
-lemma yielded_equals_local_satisfies_assumptions
-    (input : U32 (F p)) (env : Environment (F p)) (offset : ℕ)
-    (input_var : Var U32 (F p)) :
-  U32NormalizedAssertion.Assumptions input (elaborated.yields input_var env offset) := by
-  simp only [elaborated, U32NormalizedAssertion.Assumptions]
-  constructor
-  · -- All values in yielded are < 256
-    intro v hv
-    simp only [U32NormalizedAssertion.elaborated] at hv
-    cases hv with
-    | inl h =>
-      -- From ByteRangeYielder
-      rw [byteRangeYielder_yields_exactly] at h
-      obtain ⟨n, hn, h_eq⟩ := h
-      injection h_eq with _ h_list
-      injection h_list with h_v
-      subst h_v
-      rw [ZMod.val_cast_of_lt]
-      · exact hn
-      · -- n < p follows from n < 256 and p > 512
-        have hp : p > 512 := Fact.out
-        trans 256
-        · exact hn
-        · linarith [hp]
-    | inr h =>
-      -- From U32NormalizedAssertion (which yields nothing)
-      simp at h
-  · -- All bytes 0-255 are in yielded
-    intro n hn
-    left
-    rw [byteRangeYielder_yields_exactly]
-    use n, hn
-
 theorem soundness : GeneralFormalCircuit.Soundness (F p) elaborated Spec := by
-  circuit_proof_start
-  -- After circuit_proof_start, we need to prove Spec input yielded output localYields
-  intro h_yielded_eq
-  -- We have h_holds which contains the constraints from both circuits
-  obtain ⟨h_byte_range, h_normalized⟩ := h_holds
-  apply h_normalized
-  rw [h_yielded_eq]
-  exact yielded_equals_local_satisfies_assumptions input env i₀ input_var
+  circuit_proof_all [ByteRangeYielder.circuit, ByteRangeYielder.elaborated,
+    ByteRangeYielder.Assumptions, ByteRangeYielder.Spec,
+    U32NormalizedAssertion.circuit, U32NormalizedAssertion.elaborated,
+    U32NormalizedAssertion.Assumptions, U32NormalizedAssertion.Spec]
 
 theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assumptions := by
-  circuit_proof_start
-  -- h_local_yields gives us elaborated.yields input_var env i₀ ⊆ yielded
-  -- h_assumptions gives us input.Normalized and that yielded = elaborated.yields for matching inputs
+  circuit_proof_start [ByteRangeYielder.circuit, ByteRangeYielder.elaborated,
+    ByteRangeYielder.Assumptions, ByteRangeYielder.Spec,
+    U32NormalizedAssertion.circuit, U32NormalizedAssertion.elaborated,
+    U32NormalizedAssertion.Assumptions, U32NormalizedAssertion.Spec]
   obtain ⟨h_normalized, h_yielded_eq⟩ := h_assumptions
-  -- Apply h_yielded_eq to get that yielded = elaborated.yields input_var env i₀
-  have h_eq := h_yielded_eq env i₀ input_var h_input
-  constructor
-  · exact trivial  -- ByteRangeYielder.Assumptions is True
-  specialize h_env trivial
-  simp only [ByteRangeYielder.circuit, ByteRangeYielder.Spec] at h_env
-  constructor
-  · -- U32NormalizedAssertion.circuit.Assumptions
-    simp only [U32NormalizedAssertion.circuit, U32NormalizedAssertion.Assumptions]
-    constructor
-    · -- All values in yielded are < 256
-      intro v hv
-      simp only [h_eq, U32NormalizedAssertion.elaborated, ByteRangeYielder.elaborated] at hv
-      cases hv with
-      | inl h =>
-        simp only [Set.mem_setOf_eq] at h
-        obtain ⟨n, hn, h_eq⟩ := h
-        injection h_eq with _ h_list
-        injection h_list with h_v
-        subst h_v
-        rw [ZMod.val_cast_of_lt]
-        · exact hn
-        · have hp : p > 512 := Fact.out
-          trans 256
-          · exact hn
-          · linarith [hp]
-      | inr h =>
-        simp at h
-    · -- All bytes 0-255 are in yielded
-      intro n hn
-      rw [h_eq]
-      left
-      simp only [ByteRangeYielder.elaborated, Set.mem_setOf_eq]
-      use n, hn
-  · exact h_normalized
+  specialize h_yielded_eq env input_var h_input
+  simp_all
 
 def circuit : GeneralFormalCircuit (F p) U32 unit where
   elaborated
