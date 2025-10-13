@@ -39,8 +39,6 @@ def circuit : FormalCircuit (F p) field field where
   localLength _ := 2
   yields_eq := by intros; simp only [circuit_norm, main]
 
-  Assumptions _ _ := True
-
   Spec input output _ :=
     output = (if input = 0 then 1 else 0)
 
@@ -92,8 +90,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 2
   yields_eq := by intros; simp only [circuit_norm, main, IsZero.circuit]
-
-  Assumptions _ _ := True
 
   Spec input output _ :=
     output = (if input.1 = input.2 then 1 else 0)

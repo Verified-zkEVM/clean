@@ -354,7 +354,6 @@ def fetchInstructionCircuit
 
   localLength _ := 4
   yields_eq := by intros; simp only [circuit_norm]
-  Assumptions | pc, _ => True
   Spec
   | pc, output, _ =>
     match Spec.fetchInstruction program pc with
