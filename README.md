@@ -47,6 +47,10 @@ We are actively working on creating proper documentation for `clean`. In the mea
 
 We follow standard Lean/Mathlib conventions with some local variations. See [doc/conventions.md](doc/conventions.md) for details.
 
+## Proof Finding Guide
+
+Some heuristics for finding proofs are in [doc/proving-guide.md](doc/proving-guide.md).
+
 ## Roadmap
 
 The following is a rough, longer-term roadmap for clean. Note that some of the bullets below could be multi-month projects!
