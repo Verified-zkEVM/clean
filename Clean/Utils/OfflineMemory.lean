@@ -60,6 +60,7 @@ def MemoryAccessList.lastWriteValue (accesses : MemoryAccessList) (h : accesses.
   | [] => 0
   | (_t, addr', _readValue, writeValue) :: rest =>
     if addr' = addr then
+      -- since the list is timestamp sorted, the first operation we find for this address is the most recent one
       writeValue
     else
       MemoryAccessList.lastWriteValue rest (List.Sorted.of_cons h) addr
@@ -67,9 +68,8 @@ def MemoryAccessList.lastWriteValue (accesses : MemoryAccessList) (h : accesses.
 -- now, we need a way to express that the memory access list is consistent
 def MemoryAccessList.isConsistentOnline (accesses : MemoryAccessList) (h : accesses.isTimestampSorted) : Prop := match accesses with
   | [] => True -- no memory access is trivially consistent
-  | (timestamp, addr, readValue, _writeValue) :: rest =>
+  | (_timestamp, addr, readValue, _writeValue) :: rest =>
     -- here we need to check that the readValue is consistent with the previous writes to the same address
-    timestamp = rest.length ∧
     readValue = MemoryAccessList.lastWriteValue rest (List.Sorted.of_cons h) addr
     ∧ MemoryAccessList.isConsistentOnline rest (List.Sorted.of_cons h)
 
