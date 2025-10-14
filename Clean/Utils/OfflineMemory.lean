@@ -121,6 +121,10 @@ theorem MemoryAccessList.filterAddress_sorted (accesses : MemoryAccessList)
 
 /--
   A memory access list is consistent for a single address if the reads and writes to that address are consistent.
+  This variant of the consistency check is simpler, and holds only when the array contains only accesses to a single address.
+  This function checks the following:
+  - the first memory access must read 0
+  - for each pair of consecutive accesses, the read of the most recent access must equal the write of the previous access
 -/
 def MemoryAccessList.isConsistentSingleAddress (accesses : MemoryAccessList) : Prop := match accesses with
   -- no memory access is trivially consistent
@@ -131,11 +135,52 @@ def MemoryAccessList.isConsistentSingleAddress (accesses : MemoryAccessList) : P
   | (_t2, _addr2, readValue2, _writeValue2) :: (t1, addr1, readValue1, writeValue1) :: rest =>
     readValue2 = writeValue1 ∧ MemoryAccessList.isConsistentSingleAddress ((t1, addr1, readValue1, writeValue1) :: rest)
 
-
+/--
+  If a memory access list contains only accesses to a single address, then the following two consistency are equivalent:
+  - the online consistency check
+  - the single address consistency check
+-/
 theorem MemoryAccessList.isConsistentSingleAddress_iff (accesses : MemoryAccessList) (addr : ℕ) (h_sorted : accesses.isTimestampSorted)
-    (h_eq : accesses.all (fun (addr', _readValue, _writeValue) => addr' = addr)) :
+    (h_eq : accesses.all (fun (_t, addr', _readValue, _writeValue) => addr' = addr)) :
     MemoryAccessList.isConsistentOnline accesses h_sorted ↔ MemoryAccessList.isConsistentSingleAddress accesses := by
-  sorry
+  induction accesses with
+  | nil => simp only [isConsistentOnline, isConsistentSingleAddress]
+  | cons head tail ih =>
+    constructor
+    · intro h
+      cases tail with
+      | nil =>
+        obtain ⟨t, a, r, w⟩ := head
+        simp_all only [List.all_nil, isConsistentOnline, isConsistentSingleAddress, imp_self,
+          implies_true, List.all_cons, Bool.and_true, decide_eq_true_eq, lastWriteValue, and_true]
+      | cons head2 tail2 =>
+        obtain ⟨t2, a2, r2, w2⟩ := head
+        obtain ⟨t1, a1, r1, w1⟩ := head2
+        simp [isConsistentOnline, isConsistentSingleAddress, lastWriteValue] at ⊢ h h_eq ih
+        have h_sorted' : isTimestampSorted ((t1, a1, r1, w1) :: tail2) := by
+          unfold isTimestampSorted at h_sorted
+          exact List.Sorted.of_cons h_sorted
+        obtain ⟨h_eq1, h_eq2, h_eq3⟩ := h_eq
+        specialize ih h_sorted' h_eq2 h_eq3
+        rw [←ih]
+        simp_all only [↓reduceIte, and_self, true_iff]
+    · intro h
+      cases tail with
+      | nil =>
+        obtain ⟨t, a, r, w⟩ := head
+        simp_all only [List.all_nil, isConsistentOnline, isConsistentSingleAddress, imp_self,
+          implies_true, List.all_cons, Bool.and_true, decide_eq_true_eq, lastWriteValue, and_true]
+      | cons head2 tail2 =>
+        obtain ⟨t2, a2, r2, w2⟩ := head
+        obtain ⟨t1, a1, r1, w1⟩ := head2
+        simp [isConsistentOnline, isConsistentSingleAddress, lastWriteValue] at ⊢ h h_eq ih
+        have h_sorted' : isTimestampSorted ((t1, a1, r1, w1) :: tail2) := by
+          unfold isTimestampSorted at h_sorted
+          exact List.Sorted.of_cons h_sorted
+        obtain ⟨h_eq1, h_eq2, h_eq3⟩ := h_eq
+        specialize ih h_sorted' h_eq2 h_eq3
+        rw [ih]
+        simp_all only [↓reduceIte, and_self]
 
 
 theorem MemoryAccessList.isConsistent_iff_all_single_address (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
