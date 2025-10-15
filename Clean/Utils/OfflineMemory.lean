@@ -119,6 +119,15 @@ theorem MemoryAccessList.filterAddress_sorted (accesses : MemoryAccessList)
   apply List.Sorted.filter
   exact h
 
+theorem MemoryAccessList.filterAddress_cons (head : MemoryAccess) (tail : MemoryAccessList) (addr : ℕ) :
+    MemoryAccessList.filterAddress (head :: tail) addr =
+    match head with
+    | ⟨_t, a, _r, _w⟩ => ((if a = addr then
+      (head :: (MemoryAccessList.filterAddress tail addr))
+        else (MemoryAccessList.filterAddress tail addr))) := by
+  obtain ⟨_t, a, _r, _w⟩ := head
+  simp [filterAddress, List.filter_cons]
+
 /--
   A memory access list is consistent for a single address if the reads and writes to that address are consistent.
   This variant of the consistency check is simpler, and holds only when the array contains only accesses to a single address.
@@ -126,14 +135,15 @@ theorem MemoryAccessList.filterAddress_sorted (accesses : MemoryAccessList)
   - the first memory access must read 0
   - for each pair of consecutive accesses, the read of the most recent access must equal the write of the previous access
 -/
-def MemoryAccessList.isConsistentSingleAddress (accesses : MemoryAccessList) : Prop := match accesses with
+def MemoryAccessList.isConsistentSingleAddress (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) : Prop := match accesses with
   -- no memory access is trivially consistent
   | [] => True
   -- if there's only one access, the read must be zero
   | (_timestamp, _addr, readValue, _writeValue) :: [] => readValue = 0
   -- if there are multiple accesses, the read of the most recent access must equal the write of the previous access
   | (_t2, _addr2, readValue2, _writeValue2) :: (t1, addr1, readValue1, writeValue1) :: rest =>
-    readValue2 = writeValue1 ∧ MemoryAccessList.isConsistentSingleAddress ((t1, addr1, readValue1, writeValue1) :: rest)
+    readValue2 = writeValue1 ∧
+    MemoryAccessList.isConsistentSingleAddress ((t1, addr1, readValue1, writeValue1) :: rest) (List.Sorted.of_cons h_sorted)
 
 /--
   If a memory access list contains only accesses to a single address, then the following two consistency are equivalent:
@@ -142,7 +152,8 @@ def MemoryAccessList.isConsistentSingleAddress (accesses : MemoryAccessList) : P
 -/
 theorem MemoryAccessList.isConsistentSingleAddress_iff (accesses : MemoryAccessList) (addr : ℕ) (h_sorted : accesses.isTimestampSorted)
     (h_eq : accesses.all (fun (_t, addr', _readValue, _writeValue) => addr' = addr)) :
-    MemoryAccessList.isConsistentOnline accesses h_sorted ↔ MemoryAccessList.isConsistentSingleAddress accesses := by
+    MemoryAccessList.isConsistentOnline accesses h_sorted ↔
+    MemoryAccessList.isConsistentSingleAddress accesses h_sorted := by
   induction accesses with
   | nil => simp only [isConsistentOnline, isConsistentSingleAddress]
   | cons head tail ih =>
@@ -181,6 +192,33 @@ theorem MemoryAccessList.isConsistentSingleAddress_iff (accesses : MemoryAccessL
         specialize ih h_sorted' h_eq2 h_eq3
         rw [ih]
         simp_all only [↓reduceIte, and_self]
+
+/--
+  The last write value for a specific address is the same whether we compute it on the full list
+  or on the filtered list on that address.
+-/
+theorem MemoryAccessList.lastWriteValue_filter (accesses : MemoryAccessList)
+    (h_sorted : accesses.isTimestampSorted) (addr : ℕ) (h_sorted' : ((MemoryAccessList.filterAddress accesses addr).isTimestampSorted))  :
+    MemoryAccessList.lastWriteValue accesses h_sorted addr =
+    MemoryAccessList.lastWriteValue (MemoryAccessList.filterAddress accesses addr) h_sorted' addr := by
+  induction accesses with
+  | nil =>
+    simp only [filterAddress, List.filter_nil, lastWriteValue]
+  | cons head tail ih =>
+    obtain ⟨t, a, r, w⟩ := head
+    simp [filterAddress, List.filter_cons, lastWriteValue] at ⊢ ih
+    -- is the current address the one we are filtering for?
+    by_cases h_addr : a = addr
+    · simp_all only [↓reduceIte, lastWriteValue]
+    · have h_sorted_tail : isTimestampSorted tail := by
+        unfold isTimestampSorted at h_sorted
+        exact List.Sorted.of_cons h_sorted
+      have h_sorted_tail' : (MemoryAccessList.filterAddress tail addr).isTimestampSorted := by
+        simp only [filterAddress]
+        apply List.Sorted.filter
+        exact h_sorted_tail
+      specialize ih h_sorted_tail h_sorted_tail'
+      simp only [h_addr, ↓reduceIte, ih]
 
 
 theorem MemoryAccessList.isConsistent_iff_all_single_address (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
