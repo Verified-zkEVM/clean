@@ -254,13 +254,34 @@ theorem MemoryAccessList.isConsistentOnline_filter_of_consistentOnline (accesses
         exact h_sorted_tail'
     · simp_all only [forall_const, forall_true_left, ↓reduceIte]
 
+theorem MemoryAccessList.isTimestampSorted_cons (head : MemoryAccess) (tail : MemoryAccessList) :
+    isTimestampSorted (head :: tail) → isTimestampSorted tail := by
+  simp_all only [isTimestampSorted, List.sorted_cons, implies_true]
 
 theorem MemoryAccessList.isConsistentSingleAddress_cons (head : MemoryAccess) (tail : MemoryAccessList)
+    (h_sorted : isTimestampSorted (head :: tail)) (h_sorted' : tail.isTimestampSorted)
+    (h : isConsistentSingleAddress (head :: tail) h_sorted) :
+    isConsistentSingleAddress tail h_sorted' := by
+  obtain ⟨t_head, a_head, r_head, w_head⟩ := head
+  cases tail with
+  | nil =>
+    simp_all [isConsistentSingleAddress]
+  | cons head2 tail2 =>
+    obtain ⟨t1, a1, r1, w1⟩ := head2
+    simp_all [isConsistentSingleAddress]
+
+theorem MemoryAccessList.isConsistentSingleAddress_cons_forall (head : MemoryAccess) (tail : MemoryAccessList)
     (h_sorted : isTimestampSorted (head :: tail))
     : (∀ addr : ℕ, (filterAddress (head :: tail) addr).isConsistentSingleAddress (MemoryAccessList.filterAddress_sorted (head :: tail) h_sorted addr)) →
     (∀ addr : ℕ, isConsistentSingleAddress (filterAddress tail addr) (MemoryAccessList.filterAddress_sorted tail (by simp_all only [isTimestampSorted,
       List.sorted_cons]) addr)) := by
-  sorry
+  intro h addr'
+  obtain ⟨t_head, a_head, r_head, w_head⟩ := head
+  simp_all [MemoryAccessList.filterAddress_cons]
+  specialize h addr'
+  by_cases h_addr : a_head = addr'
+  · sorry
+  · sorry
 
 /--
   A memory access list is consistent if and only if, for each possible address, considering
