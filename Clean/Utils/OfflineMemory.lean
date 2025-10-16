@@ -107,6 +107,20 @@ def MemoryAccessList.isAddressTimestampSorted (accesses : MemoryAccessList) : Pr
 
 def AddressSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isAddressTimestampSorted}
 
+/--
+  Sort a memory access list by address and timestamp.
+-/
+def MemoryAccessList.addressTimestampSort (accesses : MemoryAccessList) : MemoryAccessList :=
+  List.insertionSort address_timestamp_ordering accesses
+
+theorem MemoryAccessList.addressTimestampSort_sorted (accesses : MemoryAccessList) :
+    (MemoryAccessList.addressTimestampSort accesses).Sorted address_timestamp_ordering := by
+  apply List.sorted_insertionSort
+
+theorem MemoryAccessList.addressTimestampSort_perm (accesses : MemoryAccessList) :
+    (MemoryAccessList.addressTimestampSort accesses).Perm accesses := by
+  apply List.perm_insertionSort
+
 def MemoryAccessList.lastWriteValue (accesses : MemoryAccessList) (h : accesses.isTimestampSorted) (addr : ℕ) : ℕ := match accesses with
   -- initially the memory is all zero
   | [] => 0
