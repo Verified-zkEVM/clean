@@ -46,12 +46,64 @@ def MemoryAccessList.isTimestampSorted (accesses : MemoryAccessList) : Prop :=
 
 def TimestampSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isTimestampSorted}
 
+def address_timestamp_ordering (x y : MemoryAccess) := match x, y with
+| (t2, a2, _, _), (t1, a1, _, _) => if a1 = a2 then t1 ≤ t2 else a1 < a2
+
+instance (x y : MemoryAccess) : Decidable (address_timestamp_ordering x y) := by
+  obtain ⟨t2, a2, _r2, _w2⟩ := x
+  obtain ⟨t1, a1, _r1, _w1⟩ := y
+  simp only [address_timestamp_ordering]
+  split
+  · apply Nat.decLe
+  · apply Nat.decLt
+
+instance : IsTrans MemoryAccess address_timestamp_ordering := by
+  constructor
+  intros a b c hab hbc
+  obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
+  obtain ⟨t_b, a_b, _r_b, _w_b⟩ := b
+  obtain ⟨t_c, a_c, _r_c, _w_c⟩ := c
+  simp only [address_timestamp_ordering] at hab hbc ⊢
+  split
+  · by_cases h : a_a = a_b
+    · simp_all only [↓reduceIte]
+      linarith
+    · simp_all only [↓reduceIte]
+      rw [eq_comm] at h
+      simp only [h, ↓reduceIte] at hab
+      linarith
+  · by_cases h : a_b = a_c
+    · simp_all only [↓reduceIte]
+    · by_cases h' : a_a = a_b
+      · simp_all only [↓reduceIte]
+      · rw [eq_comm] at h'
+        simp only [h', ↓reduceIte] at hab
+        rw [eq_comm] at h
+        simp only [h, ↓reduceIte] at hbc
+        linarith
+
+instance : IsTotal MemoryAccess address_timestamp_ordering := by
+  constructor
+  intros a b
+  obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
+  obtain ⟨t_b, a_b, _r_b, _w_b⟩ := b
+  simp only [address_timestamp_ordering]
+  by_cases h : a_a = a_b
+  · simp_all only [↓reduceIte]
+    apply Nat.le_total
+  · simp_all only [↓reduceIte]
+    rw [eq_comm] at h
+    simp only [h, ↓reduceIte]
+    apply Nat.lt_or_lt_of_ne (by simp only [ne_eq, h, not_false_eq_true])
+
+
 /--
   A memory access list is address sorted if the addresses are sorted, and for equal addresses,
   the timestamps are strictly decreasing.
 -/
 def MemoryAccessList.isAddressTimestampSorted (accesses : MemoryAccessList) : Prop :=
-  accesses.Sorted (fun (t2, addr2, _, _) (t1, addr1, _, _) => if addr1 = addr2 then t1 < t2 else addr1 < addr2)
+  accesses.Sorted address_timestamp_ordering
+
 
 def AddressSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isAddressTimestampSorted}
 
