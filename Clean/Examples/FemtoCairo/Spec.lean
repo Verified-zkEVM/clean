@@ -129,5 +129,4 @@ def femtoCairoMachineBoundedExecution
     let reachedState ← femtoCairoMachineBoundedExecution program memory state i
     femtoCairoMachineTransition program memory reachedState
 
-
 end Examples.FemtoCairo.Spec
