@@ -295,8 +295,7 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
             and_self, or_true]
 
-  completeness := by
-    sorry
+  completeness := by circuit_proof_all [Gadgets.toBits]
 
 /--
   Circuit that fetches a femtoCairo instruction from a read-only program memory,
@@ -364,6 +363,8 @@ def fetchInstructionCircuit
         simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1',
           Nat.mod_eq_of_lt h2', Nat.mod_eq_of_lt h3', Nat.mod_eq_of_lt h4']
   completeness := by
+    circuit_proof_start
+    simp only [ReadOnlyTableFromFunction, circuit_norm]
     sorry
 
 /--
