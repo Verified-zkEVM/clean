@@ -324,7 +324,7 @@ def fetchInstructionCircuit
 
   localLength _ := 4
   Assumptions
-  | pc => pc.val < programSize
+  | pc => pc.val + 3 < programSize
 
   Spec
   | pc, output =>
@@ -368,7 +368,28 @@ def fetchInstructionCircuit
   completeness := by
     circuit_proof_start
     simp only [ReadOnlyTableFromFunction, circuit_norm]
-    sorry
+    and_intros
+    · aesop
+    · simp_all; omega
+    · aesop
+    · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast]
+      calc
+      _ ≤ ZMod.val input + ZMod.val 1 := by apply ZMod.val_add_le
+      _ < programSize := by simp only [ZMod.val_one]; omega
+    · aesop
+    · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast]
+      calc
+      _ ≤ ZMod.val input + ZMod.val 2 := by apply ZMod.val_add_le
+      _ < programSize := by
+        simp only [ZMod.val_two_eq_two_mod]
+        rw [Nat.mod_eq_of_lt] <;> omega
+    · aesop
+    · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast]
+      calc
+      _ ≤ ZMod.val input + ZMod.val 3 := by apply ZMod.val_add_le
+      _ < programSize := by
+        rw [← Nat.cast_three, ZMod.val_natCast]
+        rw [Nat.mod_eq_of_lt] <;> omega
 
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
@@ -609,7 +630,7 @@ def femtoCairoStepElaboratedCircuit
     ElaboratedCircuit (F p) State State where
     main := fun state => do
       -- Fetch instruction
-      let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstructionCircuit program h_programSize) state.pc
+      let { rawInstrType, op1, op2, op3 } ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) state.pc
 
       -- Decode instruction
       let decoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
