@@ -415,8 +415,6 @@ lemma MemoryAccessList.eq_of_perm_of_sorted {l1 l2 l3 : MemoryAccessList} (h_l1_
     (h_perm1 : l1.Perm l2) (h_perm2 : l1.Perm l3) : l2 = l3 := by
   sorry
 
-
-
 /--
   This is the main theorem of this file.
 
@@ -439,7 +437,10 @@ theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline (accesses : 
       rw [←h']
       assumption
   · rintro ⟨⟨permuted, h_permuted_sorted⟩, h_perm, h_offline⟩
-    -- key idea: if two lists are permutations of accesses and are sorted, then they are the same list
-    -- this means, that if it exists such a list, then it is unique, and it must be equal to the output
-    -- of insertion sort
-    sorry
+    simp_all only
+    rw [List.perm_comm] at h_perm
+    have h_eq := MemoryAccessList.eq_of_perm_of_sorted h_sorted h_permuted_sorted (MemoryAccessList.addressTimestampSort_sorted accesses)
+      h_perm (by rw [List.perm_comm]; apply MemoryAccessList.addressTimestampSort_perm)
+    simp only [h_eq] at h_offline
+    simp_rw [←MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted] at h_offline
+    assumption
