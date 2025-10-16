@@ -306,7 +306,7 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
 -/
 def fetchInstructionCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    FormalCircuit (F p) field RawInstruction where
+    GeneralFormalCircuit (F p) field RawInstruction where
   main := fun pc => do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
@@ -323,6 +323,9 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
+  Assumptions
+  | pc => pc.val < programSize
+
   Spec
   | pc, output =>
     match Spec.fetchInstruction program pc with
