@@ -65,7 +65,7 @@ def ReadOnlyTableFromFunction
   It returns a `DecodedInstruction` struct containing the decoded fields.
   This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
-def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
+def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := fun instruction => do
     let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
     return {
@@ -95,6 +95,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
       }
     }
   localLength _ := 8
+
+  Assumptions
+  | instruction => instruction.val < 256
 
   Spec
   | instruction, output =>
@@ -605,7 +608,7 @@ def femtoCairoStepElaboratedCircuit
       let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstructionCircuit program h_programSize) state.pc
 
       -- Decode instruction
-      let decoded ← subcircuit decodeInstructionCircuit rawInstrType
+      let decoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
 
       -- Perform relevant memory accesses
       let v1 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
