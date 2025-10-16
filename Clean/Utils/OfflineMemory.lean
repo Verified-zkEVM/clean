@@ -374,14 +374,15 @@ theorem MemoryAccessList.isConsistent_iff_all_single_address (accesses : MemoryA
         unfold isTimestampSorted at h_sorted
         exact List.Sorted.of_cons h_sorted
       specialize ih h_sorted'
-      have h_tail := MemoryAccessList.isConsistentSingleAddress_cons (t, a, r, w) tail h_sorted h
-      specialize ih h_tail
-      simp only [isConsistentOnline, ih, and_true]
-      specialize h a
-      rw [← MemoryAccessList.isConsistentSingleAddress_iff _ a _ (by simp [filterAddress])] at h
-      simp [filterAddress_cons, isConsistentOnline] at h
-      simp [h.left]
-      rw [←MemoryAccessList.lastWriteValue_filter]
+      sorry
+      -- have h_tail := MemoryAccessList.isConsistentSingleAddress_cons (t, a, r, w) tail h_sorted h
+      -- specialize ih h_tail
+      -- simp only [isConsistentOnline, ih, and_true]
+      -- specialize h a
+      -- rw [← MemoryAccessList.isConsistentSingleAddress_iff _ a _ (by simp [filterAddress])] at h
+      -- simp [filterAddress_cons, isConsistentOnline] at h
+      -- simp [h.left]
+      -- rw [←MemoryAccessList.lastWriteValue_filter]
 
 /--
   Offline version of memory consistency checking.
@@ -392,6 +393,28 @@ def MemoryAccessList.isConsistentOffline (accesses : MemoryAccessList) (h_sorted
   | (_t2, addr2, readValue2, _writeValue2) :: (t1, addr1, readValue1, writeValue1) :: rest =>
     (if addr1 = addr2 then readValue2 = writeValue1 else readValue2 = 0) ∧
     MemoryAccessList.isConsistentOffline ((t1, addr1, readValue1, writeValue1) :: rest) (List.Sorted.of_cons h_sorted)
+
+/--
+  Constructive version of the theorem below.
+-/
+theorem MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
+    MemoryAccessList.isConsistentOnline accesses h_sorted ↔
+    MemoryAccessList.isConsistentOffline (MemoryAccessList.addressTimestampSort accesses) (MemoryAccessList.addressTimestampSort_sorted accesses) := by
+  sorry
+
+/--
+  Technical lemma for soundness: if there exists two address-timestamp sorted lists of memory accesses
+  that are both permutations of the same timestamp-sorted list, then they must be equal.
+
+  Intuition: since the input list is timestamp strictly sorted, then there are no two timestamps in l1
+  that are equal, and therefore, for that class of lists, any address-timestamp sorted list is unique.
+  (This is true in general, if the initial list contains no duplicates, then any sorting is unique.)
+-/
+lemma MemoryAccessList.eq_of_perm_of_sorted {l1 l2 l3 : MemoryAccessList} (h_l1_sorted: l1.isTimestampSorted)
+    (h_l2_sorted : l2.isAddressTimestampSorted) (h_l3_sorted : l3.isAddressTimestampSorted)
+    (h_perm1 : l1.Perm l2) (h_perm2 : l1.Perm l3) : l2 = l3 := by
+  sorry
+
 
 
 /--
@@ -405,4 +428,18 @@ theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline (accesses : 
     ∃ permuted : AddressSortedMemoryAccessList,
       permuted.val.Perm accesses ∧
       MemoryAccessList.isConsistentOffline permuted.val permuted.property := by
-  sorry
+  constructor
+  · intro h
+    use ⟨MemoryAccessList.addressTimestampSort accesses, MemoryAccessList.addressTimestampSort_sorted accesses⟩
+    constructor
+    · simp only
+      apply MemoryAccessList.addressTimestampSort_perm
+    · simp only
+      have h' := MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted
+      rw [←h']
+      assumption
+  · rintro ⟨⟨permuted, h_permuted_sorted⟩, h_perm, h_offline⟩
+    -- key idea: if two lists are permutations of accesses and are sorted, then they are the same list
+    -- this means, that if it exists such a list, then it is unique, and it must be equal to the output
+    -- of insertion sort
+    sorry
