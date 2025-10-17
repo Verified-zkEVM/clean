@@ -767,7 +767,6 @@ def femtoCairoTable
 
   completeness := by sorry
 
-
 /--
   The formal table for the femtoCairo VM, which ensures that the execution starts with
   the default initial state (pc=0, ap=0, fp=0)

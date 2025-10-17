@@ -59,7 +59,6 @@ structure DecodedInstruction (F : Type) where
   addr2 : DecodedAddressingMode F
   addr3 : DecodedAddressingMode F
 
-
 /--
   Input structure for the memory read circuit.
   Contains the current machine state, the offset operand, and the addressing mode.
@@ -79,8 +78,6 @@ structure StateTransitionInput (F : Type) where
   v1 : F
   v2 : F
   v3 : F
-
-
 
 instance : ProvableType State where
   size := 3
