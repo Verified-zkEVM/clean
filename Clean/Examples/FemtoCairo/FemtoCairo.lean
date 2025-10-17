@@ -504,7 +504,17 @@ def readFromMemoryCircuit
         zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
 
   completeness := by
-    sorry
+    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly]
+    and_intros
+    · aesop
+    · sorry
+    · aesop
+    · sorry
+    · aesop
+    · sorry
+    · aesop
+    · sorry
+    · aesop
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
