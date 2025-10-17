@@ -61,8 +61,10 @@ def Spec {N : ℕ} (trace : TraceOfLength (F p) RowType N) : Prop :=
     (row.y.val = fib8 (index + 1))
 
 lemma fib8_less_than_256 (n : ℕ) : fib8 n < 256 := by
-  induction' n using Nat.twoStepInduction
-  repeat {simp [fib8]}; apply Nat.mod_lt; simp
+  induction n using Nat.twoStepInduction with
+  | zero => simp [fib8]
+  | one => simp [fib8]
+  | more _ _ _ => simp [fib8]; apply Nat.mod_lt; simp
 
 -- TODO kinda pointless to use `assignCurrRow` if the easiest way to unfold it is by making the steps explicit
 omit p_large_enough in
@@ -101,11 +103,13 @@ def formalFibTable : FormalTable (F p) RowType := {
     simp only [TableConstraintsHold,
       fibTable, Spec, TraceOfLength.ForAllRowsOfTraceWithIndex, Trace.ForAllRowsOfTraceWithIndex]
 
-    induction' trace.val using Trace.every_row_two_rows_induction with first_row curr next rest _ ih2
-    · simp [table_norm]
-    · simp [table_norm]
+    induction trace.val using Trace.every_row_two_rows_induction with
+    | zero => simp [table_norm]
+    | one first_row =>
+      simp [table_norm]
       exact boundary_step first_row (envs 0 0)
-    · -- first, we prove the inductive part of the Spec
+    | more curr next rest ih1 ih2 =>
+      -- first, we prove the inductive part of the Spec
       -- TODO this should be easier, or there should be a custom induction for it
       unfold Trace.ForAllRowsOfTraceWithIndex.inner
       intros ConstraintsHold
