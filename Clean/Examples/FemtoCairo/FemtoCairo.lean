@@ -921,6 +921,7 @@ def femtoCairoStepCircuitSoundness
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
+-- Assumptions are missing about the content of the program memory. For instance rawInstructionType is less than 256.
 def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
   (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
