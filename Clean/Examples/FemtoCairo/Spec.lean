@@ -60,6 +60,18 @@ def dataMemoryAccess
   | _ => addr
 
 /--
+  Set of accessed addresses in the circuit. Current implementation
+  accesses all addresses touched by all of the addressing modes.
+-/
+def dataMemoryAddresses
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (addr : (F p)) (ap : F p) (fp : F p) : Set (F p) :=
+  {fp + addr, ap + addr, addr} ∪
+  match memoryAccess memory (ap + addr) with
+   | some addr' => {addr'}
+   | none => ∅
+
+/--
   Compute the next state of the femtoCairo machine based on the current state and instruction
   operands. Returns `some nextState` if the transition is valid, otherwise returns `none`.
 -/

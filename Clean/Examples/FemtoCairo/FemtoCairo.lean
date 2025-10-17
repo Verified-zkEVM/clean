@@ -428,7 +428,10 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
-  Assumptions | {state, mode, offset} => True
+  Assumptions
+  | {state, mode, offset} =>
+    ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
+      addr.val < memorySize
   Spec
   | {state, offset, mode}, output =>
     DecodedAddressingMode.isEncodedCorrectly mode →
@@ -506,17 +509,29 @@ def readFromMemoryCircuit
         zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
 
   completeness := by
-    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly]
+    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAddresses]
     and_intros
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
     · aesop
-    · sorry
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
+    · apply h_assumptions (env.get i₀)
+      simp only [Spec.memoryAccess]
+      apply Set.mem_union_right
+      rw [dite_cond_eq_true]
+      · simp only [h_env]
+        apply Set.mem_singleton_of_eq
+        congr
+        simp only [← h_input]
+        simp only [Fin.ofNat_eq_cast]
+        apply Fin.natCast_eq_mk
+      apply eq_true
+      apply h_assumptions (input_state.ap + input_offset)
+      simp
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
     · aesop
-    · sorry
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
     · aesop
-    · sorry
-    · aesop
-    · sorry
-    · aesop
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast, id_eq]
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
