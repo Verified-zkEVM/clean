@@ -840,7 +840,7 @@ def femtoCairoAssumptions (_state : State (F p)) : Prop :=
 def femtoCairoStepCircuitSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
+    : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) (femtoCairoCircuitSpec program memory) := by
   circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
     Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemoryCircuit, nextStateCircuit, decodeInstructionCircuit]
 
@@ -924,7 +924,7 @@ def femtoCairoStepCircuitSoundness
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : FormalCircuit (F p) State State := {
+    : GeneralFormalCircuit (F p) State State := {
       femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize with
       Assumptions := femtoCairoAssumptions,
       Spec := femtoCairoCircuitSpec program memory,
