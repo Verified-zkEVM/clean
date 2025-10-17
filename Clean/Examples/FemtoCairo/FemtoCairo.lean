@@ -921,6 +921,11 @@ def femtoCairoStepCircuitSoundness
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
+def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+  (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
+      femtoCairoAssumptions := by sorry
+
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
@@ -929,7 +934,7 @@ def femtoCairoStepCircuit
       Assumptions := femtoCairoAssumptions,
       Spec := femtoCairoCircuitSpec program memory,
       soundness := femtoCairoStepCircuitSoundness program h_programSize memory h_memorySize,
-      completeness := by sorry
+      completeness := femtoCairoStepCircuitCompleteness program h_programSize memory h_memorySize,
     }
 
 /--
