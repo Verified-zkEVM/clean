@@ -216,8 +216,10 @@ def fourRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
     simp only [roundWithPermute] at h_spec1_1 h_spec1_2 h_spec2_1 h_spec2_2
     simp only [FourRoundsSpec, applyFourRounds]
 
-    -- Build the result by chaining the four rounds
-    constructor <;> aesop
+    constructor
+    · simp_all only
+      congr
+    · aesop
   )
 
 /--
@@ -288,7 +290,12 @@ def sixRoundsApplyStyle : FormalCircuit (F p) Round.Inputs Round.Inputs :=
 
     simp only [roundWithPermute] at h_spec1_1_1 h_spec1_1_2 h_spec1_2_1 h_spec1_2_2 h_spec2_1 h_spec2_2
     simp only [SixRoundsSpec, applySixRounds]
-    aesop
+    and_intros
+    · simp_all only
+      congr
+    · aesop
+    · aesop
+    · aesop
   )
 
 /--
