@@ -404,7 +404,7 @@ def fetchInstructionCircuit
 -/
 def readFromMemoryCircuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    FormalCircuit (F p) MemoryReadInput field where
+    GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
     let memoryTable := ReadOnlyTableFromFunction memory h_memorySize
 
@@ -428,15 +428,17 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
-  Assumptions | {state, mode, offset} => DecodedAddressingMode.isEncodedCorrectly mode
+  Assumptions | {state, mode, offset} => True
   Spec
   | {state, offset, mode}, output =>
+    DecodedAddressingMode.isEncodedCorrectly mode →
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly]
+    intro h_assumptions
 
     -- circuit_proof_start did not unpack those, so we manually unpack here
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
@@ -646,9 +648,9 @@ def femtoCairoStepElaboratedCircuit
       let decoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
 
       -- Perform relevant memory accesses
-      let v1 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
-      let v2 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
-      let v3 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
+      let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
+      let v2 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
+      let v3 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
