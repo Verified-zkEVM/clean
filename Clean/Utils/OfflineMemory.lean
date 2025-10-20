@@ -516,8 +516,23 @@ theorem MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline (acce
 lemma MemoryAccessList.eq_of_perm_of_sorted {l1 l2 l3 : MemoryAccessList} (h_l1_sorted: l1.isTimestampSorted)
     (h_l2_sorted : l2.isAddressTimestampSorted) (h_l3_sorted : l3.isAddressTimestampSorted)
     (h_perm1 : l1.Perm l2) (h_perm2 : l1.Perm l3) : l2 = l3 := by
-  sorry
+  simp [isAddressTimestampSorted] at *
+  rw [List.perm_comm] at h_perm1
+  have l1_nodup := List.Sorted.nodup h_l1_sorted
 
+  have thm1 := List.Sorted.insertionSort_eq h_l2_sorted
+  have h_l2_nodup := (List.Perm.nodup_iff h_perm1).mpr l1_nodup
+  have h_l3_nodup := (List.Perm.nodup_iff h_perm2).mp l1_nodup
+
+  have l2_perm_l3 := List.Perm.trans h_perm1 h_perm2
+
+  have l1_notimestampdup := MemoryAccessList.noTimestampDup_of_TimestampSorted l1 h_l1_sorted
+  have l2_notimestampdup := MemoryAccessList.noTimestampDup_perm l1 l2 l1_notimestampdup (List.Perm.symm h_perm1)
+  have l3_notimestampdup := MemoryAccessList.noTimestampDup_perm l1 l3 l1_notimestampdup h_perm2
+
+  have l2_strict_sorted := MemoryAccessList.addressStrictTimestampSorted_of_AddressTimestampSorted_noTimestampDup l2 h_l2_sorted l2_notimestampdup
+  have l3_strict_sorted := MemoryAccessList.addressStrictTimestampSorted_of_AddressTimestampSorted_noTimestampDup l3 h_l3_sorted l3_notimestampdup
+  exact List.eq_of_perm_of_sorted l2_perm_l3 l2_strict_sorted l3_strict_sorted
 /--
   This is the main theorem of this file.
 
