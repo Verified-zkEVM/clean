@@ -122,6 +122,11 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 def yield (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
   ((), [.yield (Expression.const 1) nl])
 
+/-- Conditionally yield a named list of values based on an enabled flag. -/
+@[circuit_norm]
+def yieldWhen (enabled : Expression F) (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.yield enabled nl])
+
 /-- Use a named list of values that was yielded by another circuit. -/
 @[circuit_norm]
 def use (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
@@ -430,7 +435,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup yield use)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup yield yieldWhen use)
 
 -- general `witness` method
 
