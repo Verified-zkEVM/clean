@@ -15,7 +15,7 @@ theorem append_localLength {a b: Operations F} :
     (a ++ b).localLength = a.localLength + b.localLength := by
   induction a using induct with
   | empty => ac_rfl
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ ih | use _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ _ ih | use _ _ ih =>
     simp_all +arith [localLength]
 
 theorem localLength_cons {a : Operation F} {as : Operations F} :
@@ -46,7 +46,7 @@ theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operation
     forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
   induction as using induct generalizing offset with
   | empty => simp [forAll_empty, localLength]
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ ih | use _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ _ ih | use _ _ ih =>
     simp +arith only [List.cons_append, forAll, localLength, ih, and_assoc]
 end Operations
 
@@ -159,7 +159,7 @@ lemma localLength_append {F} {a b: List (FlatOperation F)} :
   | case1 => simp only [List.nil_append, localLength]; ac_rfl
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, ih]; ac_rfl
-  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih | case6 _ _ ih =>
+  | case3 _ _ ih | case4 _ _ ih | case5 _ _ _ ih | case6 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
 theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition [] = True := rfl
@@ -185,7 +185,7 @@ lemma localWitnesses_append {F} {a b: List (FlatOperation F)} {env} :
     Array.empty_append]
   | case2 _ _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, Vector.toArray_append, ih, Array.append_assoc]
-  | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih | case6 _ _ ih =>
+  | case3 _ _ ih | case4 _ _ ih | case5 _ _ _ ih | case6 _ _ ih =>
     simp only [List.cons_append, localLength, localWitnesses, ih]
 
 /--
@@ -195,7 +195,7 @@ lemma localLength_toFlat {ops : Operations F} :
     localLength ops.toFlat = ops.localLength := by
   induction ops using Operations.induct with
   | empty => trivial
-  | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih  | subcircuit _ ops ih | yield _ ops ih | use _ ops ih =>
+  | witness _ _ ops ih | assert _ ops ih | lookup _ ops ih  | subcircuit _ ops ih | yield _ _ ops ih | use _ ops ih =>
     dsimp only [Operations.toFlat, Operations.localLength]
     generalize ops.toFlat = flat_ops at *
     generalize Operations.localLength ops = n at *
@@ -216,7 +216,7 @@ lemma localWitnesses_toFlat {ops : Operations F} {env} :
   (localWitnesses env ops.toFlat).toArray = (ops.localWitnesses env).toArray := by
   induction ops using Operations.induct with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ ih | use _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ _ ih | use _ _ ih =>
     simp only [Operations.toFlat, Operations.localLength, Operations.localWitnesses, Vector.toArray_append]
     rw [←ih]
     try rw [localWitnesses_append]
@@ -229,7 +229,7 @@ lemma localYields_toFlat {ops : Operations F} {env} :
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | use _ _ ih =>
     simp only [Operations.toFlat, Operations.localYields, localYields]
     exact ih
-  | yield _ _ ih =>
+  | yield _ _ _ ih =>
     simp only [Operations.toFlat, Operations.localYields, localYields]
     rw [ih]
   | subcircuit s _ ih =>
@@ -286,13 +286,20 @@ theorem usesLocalWitnessesFlat_iff_extends {env : Environment F} {yielded : Set 
   | assert | lookup | use =>
     simp_all [UsesLocalWitnessesFlat, circuit_norm,
       FlatOperation.forAll_cons, Condition.applyFlat, FlatOperation.singleLocalLength, FlatOperation.localYields]
-  | yield nl _ ih =>
+  | yield enabled nl _ ih =>
     simp only [UsesLocalWitnessesFlat, FlatOperation.forAll, localWitnesses, FlatOperation.localYields]
     constructor
     · intro ⟨h_yield, h_rest⟩
       have h_rest' := (ih n).mp h_rest
       simp only [Set.union_subset_iff]
-      aesop
+      constructor
+      · exact h_rest'.1
+      · constructor
+        · intro x hx
+          simp only [Set.mem_setOf] at hx
+          obtain ⟨rfl, h_enabled⟩ := hx
+          exact h_yield h_enabled
+        · exact h_rest'.2
     · intro ⟨_, h_yields⟩
       constructor
       · aesop
@@ -321,11 +328,11 @@ theorem usesLocalWitnessesCompleteness_iff_forAll (n : ℕ) {env : Environment F
   env.UsesLocalWitnessesCompleteness yielded n ops ↔ ops.forAll n {
     witness m _ c := env.ExtendsVector (c env) m,
     subcircuit _ _ s := s.UsesLocalWitnesses env yielded,
-    yield _ nl := nl.eval env ∈ yielded
+    yield _ enabled nl := env enabled ≠ 0 → nl.eval env ∈ yielded
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | assert | lookup | witness | subcircuit | yield | use =>
+  | assert | lookup | witness | subcircuit | yield _ | use =>
     simp_all +arith [UsesLocalWitnessesCompleteness, Operations.forAll]
 
 theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F} {yielded : Set (NamedList F)} {ops : Operations F} :
@@ -333,9 +340,9 @@ theorem usesLocalWitnesses_iff_forAll (n : ℕ) {env : Environment F} {yielded :
     witness n _ c := env.ExtendsVector (c env) n,
     subcircuit n _ s := FlatOperation.forAll n {
       witness n _ c := env.ExtendsVector (c env) n,
-      yield _ nl := nl.eval env ∈ yielded
+      yield _ enabled nl := env enabled ≠ 0 → nl.eval env ∈ yielded
     } s.ops,
-    yield _ nl := nl.eval env ∈ yielded
+    yield _ enabled nl := env enabled ≠ 0 → nl.eval env ∈ yielded
   } := by
   simp only [UsesLocalWitnesses, Operations.forAllFlat]
 end Environment
@@ -351,7 +358,7 @@ theorem ConstraintsHold.soundness_iff_forAll (n : ℕ) (env : Environment F) (yi
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ ih | use _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ _ ih | use _ _ ih =>
     simp_all only [ConstraintsHold.Soundness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
@@ -365,7 +372,7 @@ theorem ConstraintsHold.completeness_iff_forAll (n : ℕ) (env : Environment F) 
   } := by
   induction ops using Operations.induct generalizing n with
   | empty => trivial
-  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ ih | use _ _ ih =>
+  | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | yield _ _ _ ih | use _ _ ih =>
     simp_all only [ConstraintsHold.Completeness, Operations.forAll, true_and, and_congr_right_iff]
     try intros
     apply ih
@@ -578,9 +585,11 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
     cases op with
     | assert | lookup | use =>
       simp_all [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness, localYields]
-    | yield nl =>
+    | yield enabled nl =>
       simp [dynamicWitnesses_cons, Condition.applyFlat, singleLocalLength, dynamicWitness, localYields] at h_computable ⊢
       have ih_applied := ih _ fun _ _ => h_computable ..
+      constructor
+      · aesop
       apply forAll_implies _ _ ih_applied
       apply forAll_True
       simp only [Condition.isTrue]
@@ -588,7 +597,8 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       · intro _ _ _ h; exact h
       · intro _ _ _; trivial
       · intro _ _ _; trivial
-      · intro _ _ h_in; right; exact h_in
+      · intro _ _ _ h_in h_nonzero
+        aesop
       · intro _ _ _; trivial
       · intro _ _ _; trivial
     | witness m compute =>
@@ -700,8 +710,7 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
-      intro offset env yielded input_var h_constraints
-      intro h_assumptions
+      intro offset env yielded input_var h_constraints h_assumptions
       apply orig.soundness <;> trivial
     ,
     completeness := by

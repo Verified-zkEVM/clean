@@ -120,7 +120,7 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 /-- Yield a named list of values to be used by other circuits. -/
 @[circuit_norm]
 def yield (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
-  ((), [.yield nl])
+  ((), [.yield (Expression.const 1) nl])
 
 /-- Use a named list of values that was yielded by another circuit. -/
 @[circuit_norm]
@@ -162,7 +162,7 @@ def ConstraintsHold (eval : Environment F) (yielded : Set (NamedList F)) : List 
     table.Contains (entry.map eval) ∧ ConstraintsHold eval yielded ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval yielded s.ops ∧ ConstraintsHold eval yielded ops
-  | .yield _ :: ops => ConstraintsHold eval yielded ops
+  | .yield _ _ :: ops => ConstraintsHold eval yielded ops
   | .use nl :: ops => nl.eval eval ∈ yielded ∧ ConstraintsHold eval yielded ops
 
 /--
@@ -177,7 +177,7 @@ def ConstraintsHold.Soundness (eval : Environment F) (yielded : Set (NamedList F
     table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval yielded ops
   | .subcircuit s :: ops =>
     s.Soundness eval yielded ∧ ConstraintsHold.Soundness eval yielded ops
-  | .yield _ :: ops => ConstraintsHold.Soundness eval yielded ops
+  | .yield _ _ :: ops => ConstraintsHold.Soundness eval yielded ops
   | .use nl :: ops => nl.eval eval ∈ yielded ∧ ConstraintsHold.Soundness eval yielded ops
 
 /--
@@ -192,7 +192,7 @@ def ConstraintsHold.Completeness (eval : Environment F) (yielded : Set (NamedLis
     table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval yielded ops
   | .subcircuit s :: ops =>
     s.Completeness eval yielded ∧ ConstraintsHold.Completeness eval yielded ops
-  | .yield _ :: ops => ConstraintsHold.Completeness eval yielded ops
+  | .yield _ _ :: ops => ConstraintsHold.Completeness eval yielded ops
   | .use nl :: ops => nl.eval eval ∈ yielded ∧ ConstraintsHold.Completeness eval yielded ops
 end Circuit
 
@@ -206,7 +206,7 @@ This is the condition needed to prove completeness of a circuit.
 def Environment.UsesLocalWitnesses (env : Environment F) (yielded : Set (NamedList F)) (offset : ℕ) (ops : Operations F) : Prop :=
   ops.forAllFlat offset {
     witness n _ compute := env.ExtendsVector (compute env) n,
-    yield _ nl := nl.eval env ∈ yielded
+    yield _ enabled nl := env enabled ≠ 0 → nl.eval env ∈ yielded
   }
 
 /--
@@ -219,14 +219,14 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (yielded : 
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness yielded offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness yielded offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env yielded ∧ env.UsesLocalWitnessesCompleteness yielded (offset + s.localLength) ops
-  | .yield nl :: ops => nl.eval env ∈ yielded ∧ env.UsesLocalWitnessesCompleteness yielded offset ops
+  | .yield enabled nl :: ops => (env enabled ≠ 0 → nl.eval env ∈ yielded) ∧ env.UsesLocalWitnessesCompleteness yielded offset ops
   | .use _ :: ops => env.UsesLocalWitnessesCompleteness yielded offset ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (yielded : Set (NamedList F)) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
   FlatOperation.forAll n {
     witness n _ compute := env.ExtendsVector (compute env) n,
-    yield _ nl := nl.eval env ∈ yielded
+    yield _ enabled nl := env enabled ≠ 0 → nl.eval env ∈ yielded
   } ops
 
 section
@@ -464,7 +464,7 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
-  | .yield _ => []
+  | .yield _ _ => []
   | .use _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
@@ -506,7 +506,7 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (E
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
-  | .yield _ :: ops => witnessGenerators ops
+  | .yield _ _ :: ops => witnessGenerators ops
   | .use _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
@@ -515,7 +515,7 @@ def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment 
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
-  | .yield _ :: ops => witnessGenerators ops
+  | .yield _ _ :: ops => witnessGenerators ops
   | .use _ :: ops => witnessGenerators ops
 
 -- statements about constant length or output

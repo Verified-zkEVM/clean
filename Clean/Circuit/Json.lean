@@ -44,7 +44,7 @@ instance : ToJson (FlatOperation F) where
     | FlatOperation.witness m _ => Json.mkObj [("witness", toJson m)]
     | FlatOperation.assert e => Json.mkObj [("assert", toJson e)]
     | FlatOperation.lookup l => Json.mkObj [("lookup", toJson l)]
-    | FlatOperation.yield nl => Json.mkObj [("yield", toJson nl.name)]
+    | FlatOperation.yield enabled nl => Json.mkObj [("yield", toJson nl.name), ("enabled", toJson enabled)]
     | FlatOperation.use nl => Json.mkObj [("use", toJson nl.name)]
 
 instance : ToJson (Operation F) where
@@ -53,7 +53,7 @@ instance : ToJson (Operation F) where
     | Operation.assert e => Json.mkObj [("assert", toJson e)]
     | Operation.lookup l => Json.mkObj [("lookup", toJson l)]
     | Operation.subcircuit { ops, .. } => Json.mkObj [("subcircuit", toJson ops)]
-    | Operation.yield nl => Json.mkObj [("yield", toJson nl.name)]
+    | Operation.yield enabled nl => Json.mkObj [("yield", toJson nl.name), ("enabled", toJson enabled)]
     | Operation.use nl => Json.mkObj [("use", toJson nl.name)]
 
 instance : ToJson (Operations F) where
