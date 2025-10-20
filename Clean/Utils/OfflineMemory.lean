@@ -150,6 +150,21 @@ instance : IsAntisymm MemoryAccess address_strict_timestamp_ordering := by
   · linarith
   · linarith
 
+instance {x y : MemoryAccess} : Decidable (address_strict_timestamp_ordering x y) := by
+  obtain ⟨t2, a2, _r2, _w2⟩ := x
+  obtain ⟨t1, a1, _r1, _w1⟩ := y
+  simp only [address_strict_timestamp_ordering]
+  split
+  · by_cases h : a1 = a2
+    · simp_all only
+      apply Nat.decLt
+    · simp_all only
+  · by_cases h : a1 = a2
+    · simp_all only
+      apply Nat.decLt
+    · simp_all only
+      apply Nat.decLt
+
 /--
   A memory access list is address sorted if the addresses are sorted, and for equal addresses,
   the timestamps are decreasing.
