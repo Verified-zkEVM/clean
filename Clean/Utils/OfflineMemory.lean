@@ -270,14 +270,6 @@ def MemoryAccessList.filterAddress (accesses : MemoryAccessList) (addr : ℕ) : 
   accesses.filter (fun (_timestamp, addr', _readValue, _writeValue) => addr' = addr)
 
 
-#eval MemoryAccessList.filterAddress [
-  (0, 0, 0, 42),
-  (1, 1, 0, 43),
-  (2, 0, 42, 44),
-  (3, 2, 0, 45),
-  (4, 1, 43, 46)
-].reverse 0
-
 /--
   A filtered sorted memory access list is sorted as well.
 -/
