@@ -65,7 +65,7 @@ def ReadOnlyTableFromFunction
   It returns a `DecodedInstruction` struct containing the decoded fields.
   This circuit is not satisfiable if the input instruction is not correctly encoded.
 -/
-def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction where
+def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := fun instruction => do
     let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
     return {
@@ -95,6 +95,9 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
       }
     }
   localLength _ := 8
+
+  Assumptions
+  | instruction => instruction.val < 256
 
   Spec
   | instruction, output =>
@@ -292,8 +295,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
             and_self, or_true]
 
-  completeness := by
-    sorry
+  completeness := by circuit_proof_all [Gadgets.toBits]
 
 /--
   Circuit that fetches a femtoCairo instruction from a read-only program memory,
@@ -304,7 +306,7 @@ def decodeInstructionCircuit : FormalCircuit (F p) field DecodedInstruction wher
 -/
 def fetchInstructionCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
-    FormalCircuit (F p) field RawInstruction where
+    GeneralFormalCircuit (F p) field RawInstruction where
   main := fun pc => do
     let programTable := ReadOnlyTableFromFunction program h_programSize
 
@@ -321,6 +323,9 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
+  Assumptions
+  | pc => pc.val + 3 < programSize
+
   Spec
   | pc, output =>
     match Spec.fetchInstruction program pc with
@@ -361,7 +366,30 @@ def fetchInstructionCircuit
         simp only [Fin.val_natCast, Nat.mod_eq_of_lt h1',
           Nat.mod_eq_of_lt h2', Nat.mod_eq_of_lt h3', Nat.mod_eq_of_lt h4']
   completeness := by
-    sorry
+    circuit_proof_start
+    simp only [ReadOnlyTableFromFunction, circuit_norm]
+    and_intros
+    · aesop
+    · simp_all; omega
+    · aesop
+    · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast]
+      calc
+      _ ≤ ZMod.val input + ZMod.val 1 := by apply ZMod.val_add_le
+      _ < programSize := by simp only [ZMod.val_one]; omega
+    · aesop
+    · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast]
+      calc
+      _ ≤ ZMod.val input + ZMod.val 2 := by apply ZMod.val_add_le
+      _ < programSize := by
+        simp only [ZMod.val_two_eq_two_mod]
+        rw [Nat.mod_eq_of_lt] <;> omega
+    · aesop
+    · simp_all only [gt_iff_lt, id_eq, Fin.ofNat_eq_cast]
+      calc
+      _ ≤ ZMod.val input + ZMod.val 3 := by apply ZMod.val_add_le
+      _ < programSize := by
+        rw [← Nat.cast_three, ZMod.val_natCast]
+        rw [Nat.mod_eq_of_lt] <;> omega
 
 /--
   Circuit that reads a value from a read-only memory, given a state, an offset,
@@ -376,7 +404,7 @@ def fetchInstructionCircuit
 -/
 def readFromMemoryCircuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    FormalCircuit (F p) MemoryReadInput field where
+    GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun { state, offset, mode } => do
     let memoryTable := ReadOnlyTableFromFunction memory h_memorySize
 
@@ -400,15 +428,20 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
-  Assumptions | {state, mode, offset} => DecodedAddressingMode.isEncodedCorrectly mode
+  Assumptions
+  | {state, mode, offset} =>
+    ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
+      addr.val < memorySize
   Spec
   | {state, offset, mode}, output =>
+    DecodedAddressingMode.isEncodedCorrectly mode →
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
       | some value => output = value
       | none => False -- impossible, constraints ensure that memory accesses are valid
   soundness := by
     circuit_proof_start [ReadOnlyTableFromFunction, Spec.dataMemoryAccess,
       Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly]
+    intro h_assumptions
 
     -- circuit_proof_start did not unpack those, so we manually unpack here
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
@@ -476,7 +509,29 @@ def readFromMemoryCircuit
         zero_add, zero_ne_one, ↓reduceIte, Option.some.injEq]
 
   completeness := by
-    sorry
+    circuit_proof_start [ReadOnlyTableFromFunction, DecodedAddressingMode.isEncodedCorrectly, Spec.dataMemoryAddresses]
+    and_intros
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
+    · aesop
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
+    · apply h_assumptions (env.get i₀)
+      simp only [Spec.memoryAccess]
+      apply Set.mem_union_right
+      rw [dite_cond_eq_true]
+      · simp only [h_env]
+        apply Set.mem_singleton_of_eq
+        congr
+        simp only [← h_input]
+        simp only [Fin.ofNat_eq_cast]
+        apply Fin.natCast_eq_mk
+      apply eq_true
+      apply h_assumptions (input_state.ap + input_offset)
+      simp
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
+    · aesop
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast]
+    · aesop
+    · simp_all only [gt_iff_lt, Set.mem_union, Set.mem_insert_iff, Set.mem_singleton_iff, Fin.ofNat_eq_cast, id_eq]
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
@@ -486,7 +541,7 @@ def readFromMemoryCircuit
   if the claimed state transition is invalid.
   Returns the next state.
 -/
-def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
+def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State where
   main := fun { state, decoded, v1, v2, v3 } => do
     -- Witness the claimed next state
     let nextState : State _ ← ProvableType.witness fun eval => {
@@ -514,14 +569,19 @@ def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
     return nextState
 
   localLength _ := 3
-  Assumptions | {state, decoded, v1, v2, v3} => DecodedInstructionType.isEncodedCorrectly decoded.instrType
+  Assumptions
+  | {state, decoded, v1, v2, v3} =>
+    DecodedInstructionType.isEncodedCorrectly decoded.instrType ∧
+    (Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state).isSome
   Spec
   | {state, decoded, v1, v2, v3}, output =>
+    DecodedInstructionType.isEncodedCorrectly decoded.instrType →
     match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
       | some nextState => output = nextState
       | none => False -- impossible, constraints ensure that the transition is valid
   soundness := by
     circuit_proof_start [DecodedInstructionType.isEncodedCorrectly, Spec.computeNextState, DecodedInstructionType.val]
+    intro h_assumptions
 
     -- unpack the decoded instruction type
     obtain ⟨isAdd, isMul, isStoreState, isLoadState⟩ := input_decoded_instrType
@@ -588,7 +648,157 @@ def nextStateCircuit : FormalCircuit (F p) StateTransitionInput State where
       rw [c5, c6, c7]
       simp only [and_self]
   completeness := by
-    sorry
+    circuit_proof_start [Spec.computeNextState]
+    rcases h_assumptions with ⟨ h_encode, h_exec ⟩
+    -- Turning DecodedInstructionType into ProvableStruct leads to performance problem in soundness,
+    -- that's why manual decomposition follows.
+    rcases input_var_decoded_instrType
+    rename_i iv_decoded_isAdd iv_decoded_isMul iv_decoded_isStoreState iv_decoded_isLoadState
+    rcases input_decoded_instrType
+    rename_i i_decoded_isAdd i_decoded_isMul i_decoded_isStoreState i_decoded_isLoadState
+    simp only [DecodedInstructionType.isEncodedCorrectly] at h_encode
+    simp only [DecodedInstructionType.val] at h_exec
+    simp only
+    rcases h_input with ⟨h_input1, ⟨ h_input2, h_input3 ⟩, h_input⟩
+    simp only [circuit_norm, explicit_provable_type, DecodedInstructionType.mk.injEq] at h_input2
+    rcases input_var_state
+    rename_i input_var_state_pc input_var_state_ap input_var_state_fp
+    rcases input_state
+    rename_i input_state_pc input_state_ap input_state_fp
+    simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input1
+    simp only [h_input2] at ⊢ h_env
+    rcases h_encode with h_add | h_mul | h_load | h_store
+    · simp only [h_add] at h_exec h_env ⊢
+      simp only [↓reduceIte, Option.isSome_ite] at h_exec
+      simp only [zero_ne_one, ↓reduceIte] at h_env
+      ring_nf
+      simp only [true_and, circuit_norm]
+      and_intros
+      · simp only [← h_exec]
+        ring_nf
+      · specialize h_env 0
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 1
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [one_ne_zero, ↓reduceDIte] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 2
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
+          one_ne_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+    · simp only [h_mul] at h_exec h_env ⊢
+      simp only [zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec
+      simp only [zero_ne_one, ↓reduceIte] at h_env
+      ring_nf
+      simp only [true_and, circuit_norm]
+      and_intros
+      · simp only [← h_exec]
+        ring_nf
+      · specialize h_env 0
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 1
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [one_ne_zero, ↓reduceDIte] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 2
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
+          one_ne_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+    · simp only [h_load] at h_exec h_env ⊢
+      simp only [zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec
+      simp only [zero_ne_one, ↓reduceIte] at h_env
+      ring_nf
+      simp only [true_and, circuit_norm]
+      and_intros
+      · simp only [h_exec, ← h_input1]
+        ring_nf
+      · simp only [h_exec, ← h_input1]
+        ring_nf
+      · simp only [h_exec, ← h_input1]
+        ring_nf
+      · specialize h_env 0
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 1
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [one_ne_zero, ↓reduceDIte] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 2
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
+          one_ne_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+    · simp only [h_store] at h_exec h_env ⊢
+      simp only [zero_ne_one, ↓reduceIte] at h_exec
+      simp only [↓reduceIte] at h_env
+      ring_nf
+      simp only [true_and, circuit_norm]
+      and_intros
+      · specialize h_env 0
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, add_zero, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 1
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [one_ne_zero, ↓reduceDIte] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+      · specialize h_env 2
+        simp only [explicit_provable_type] at h_env
+        simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Vector.getElem_mk,
+          List.getElem_toArray, List.getElem_cons] at h_env
+        simp only [Nat.mod_succ, OfNat.ofNat_ne_zero, ↓reduceDIte, Nat.add_one_sub_one,
+          one_ne_zero] at h_env
+        simp only [circuit_norm, explicit_provable_type, fromVars]
+        simp only [h_env]
+        ring_nf
+
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,
   memory accesses, and state transition into a single circuit.
@@ -602,15 +812,15 @@ def femtoCairoStepElaboratedCircuit
     ElaboratedCircuit (F p) State State where
     main := fun state => do
       -- Fetch instruction
-      let { rawInstrType, op1, op2, op3 } ← subcircuit (fetchInstructionCircuit program h_programSize) state.pc
+      let { rawInstrType, op1, op2, op3 } ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) state.pc
 
       -- Decode instruction
-      let decoded ← subcircuit decodeInstructionCircuit rawInstrType
+      let decoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
 
       -- Perform relevant memory accesses
-      let v1 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
-      let v2 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
-      let v3 ← subcircuit (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
+      let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
+      let v2 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
+      let v3 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
 
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
@@ -630,7 +840,7 @@ def femtoCairoAssumptions (_state : State (F p)) : Prop :=
 def femtoCairoStepCircuitSoundness
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) femtoCairoAssumptions (femtoCairoCircuitSpec program memory) := by
+    : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize) (femtoCairoCircuitSpec program memory) := by
   circuit_proof_start [femtoCairoCircuitSpec, femtoCairoAssumptions, femtoCairoStepElaboratedCircuit,
     Spec.femtoCairoMachineTransition, fetchInstructionCircuit, readFromMemoryCircuit, nextStateCircuit, decodeInstructionCircuit]
 
@@ -711,15 +921,21 @@ def femtoCairoStepCircuitSoundness
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
+-- Assumptions are missing about the content of the program memory. For instance rawInstructionType is less than 256.
+def femtoCairoStepCircuitCompleteness {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+  (h_programSize : programSize < p) {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize)
+      femtoCairoAssumptions := by sorry
+
 def femtoCairoStepCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    : FormalCircuit (F p) State State := {
+    : GeneralFormalCircuit (F p) State State := {
       femtoCairoStepElaboratedCircuit program h_programSize memory h_memorySize with
       Assumptions := femtoCairoAssumptions,
       Spec := femtoCairoCircuitSpec program memory,
       soundness := femtoCairoStepCircuitSoundness program h_programSize memory h_memorySize,
-      completeness := by sorry
+      completeness := femtoCairoStepCircuitCompleteness program h_programSize memory h_memorySize,
     }
 
 /--
