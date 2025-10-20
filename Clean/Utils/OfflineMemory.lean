@@ -37,17 +37,35 @@ A memory list is canonically represented in reverse order, so that the most rece
 -/
 def MemoryAccessList := List MemoryAccess
 
+abbrev timestamp_ordering (x y : MemoryAccess) := match x, y with
+| (t2, _a2, _r2, _w2), (t1, _a1, _r1, _w1) => t1 < t2
+
 /--
   A memory access list is timestamp sorted if the timestamps are strictly decreasing.
 -/
 def MemoryAccessList.isTimestampSorted (accesses : MemoryAccessList) : Prop :=
-  accesses.Sorted (fun (t2, _, _, _) (t1, _, _, _) => t1 < t2)
-
+  accesses.Sorted timestamp_ordering
 
 def TimestampSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isTimestampSorted}
 
-def address_timestamp_ordering (x y : MemoryAccess) := match x, y with
+def MemoryAccessList.timestamps_neq (x y: MemoryAccess) : Prop :=
+  match x, y with
+  | (t_x, _a_x, _r_x, _w_x), (t_y, _a_y, _r_y, _w_y) => t_x ≠ t_y
+
+def MemoryAccessList.Notimestampdup (accesses : MemoryAccessList) : Prop :=
+  List.Pairwise timestamps_neq accesses
+
+abbrev address_timestamp_ordering (x y : MemoryAccess) := match x, y with
 | (t2, a2, _, _), (t1, a1, _, _) => if a1 = a2 then t1 ≤ t2 else a1 < a2
+
+/--
+  A strict version of the address-timestamp ordering, where timestamps are strictly decreasing
+  for equal addresses. This relation is not used for sorting, as it is not total.
+  However, if the input list is timestamp strictly sorted, then the address-timestamp sorted
+  list is also address-strict-timestamp sorted.
+-/
+abbrev address_strict_timestamp_ordering (x y : MemoryAccess) := match x, y with
+| (t2, a2, _, _), (t1, a1, _, _) => if a1 = a2 then t1 < t2 else a1 < a2
 
 instance (x y : MemoryAccess) : Decidable (address_timestamp_ordering x y) := by
   obtain ⟨t2, a2, _r2, _w2⟩ := x
