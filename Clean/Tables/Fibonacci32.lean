@@ -175,16 +175,18 @@ def formalFib32Table : FormalTable (F p) RowType := {
     /-
       We prove the soundness of the table by induction on the trace.
     -/
-    induction' trace.val using Trace.every_row_two_rows_induction with first_row curr next rest _ ih2
+    induction trace.val using Trace.every_row_two_rows_induction with
     -- base case 1
-    · simp [table_norm]
+    | zero => simp [table_norm]
 
     -- base case 2
-    · simp [table_norm]
+    | one first_row =>
+      simp [table_norm]
       apply boundary_constraints first_row (envs 0 0) _
 
     -- inductive step
-    · simp [table_norm] at ih2 ⊢
+    | more curr next rest ih1 ih2 =>
+      simp [table_norm] at ih2 ⊢
       intro ConstraintsHold boundary rest
       -- first of all, we prove the inductive part of the Spec
 

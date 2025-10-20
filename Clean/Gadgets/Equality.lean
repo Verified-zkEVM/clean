@@ -39,7 +39,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   yields_eq _ _ _ := by simp [main, circuit_norm]
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
-@[simps! (config := {isSimp := false, attrs := [`circuit_norm]})]
+@[simps! (attr := circuit_norm) (config := {isSimp := false})]
 def circuit (α : TypeMap) [ProvableType α] : FormalAssertion F (ProvablePair α α) where
   Assumptions _ _ := True
 
