@@ -152,11 +152,19 @@ instance : IsAntisymm MemoryAccess address_strict_timestamp_ordering := by
 
 /--
   A memory access list is address sorted if the addresses are sorted, and for equal addresses,
-  the timestamps are strictly decreasing.
+  the timestamps are decreasing.
 -/
+@[reducible]
 def MemoryAccessList.isAddressTimestampSorted (accesses : MemoryAccessList) : Prop :=
   accesses.Sorted address_timestamp_ordering
 
+/--
+  A memory access list is strictly address-timestamp sorted if the addresses are sorted, and for
+  equal addresses, the timestamps are strictly decreasing.
+-/
+@[reducible]
+def MemoryAccessList.isAddressStrictTimestampSorted (accesses : MemoryAccessList) : Prop :=
+  accesses.Sorted address_strict_timestamp_ordering
 
 def AddressSortedMemoryAccessList := {accesses : MemoryAccessList // accesses.isAddressTimestampSorted}
 
@@ -173,6 +181,48 @@ theorem MemoryAccessList.addressTimestampSort_sorted (accesses : MemoryAccessLis
 theorem MemoryAccessList.addressTimestampSort_perm (accesses : MemoryAccessList) :
     (MemoryAccessList.addressTimestampSort accesses).Perm accesses := by
   apply List.perm_insertionSort
+
+theorem MemoryAccessList.addressStrictTimestampSorted_of_AddressTimestampSorted_noTimestampDup
+    (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted)
+    (h_no_timestamp_dup : accesses.Notimestampdup) :
+    accesses.isAddressStrictTimestampSorted := by
+  have h : List.Pairwise address_strict_timestamp_ordering accesses := h_sorted.imp₂ (fun x y hxy => by
+    obtain ⟨t_x, a_x, _r_x, _w_x⟩ := x
+    obtain ⟨t_y, a_y, _r_y, _w_y⟩ := y
+    intro h
+    simp [address_strict_timestamp_ordering, timestamps_neq, address_timestamp_ordering] at *
+    split_ifs with h_eq
+    · simp_all only [↓reduceIte]
+      rw [eq_comm] at h
+      apply Nat.lt_of_le_of_ne hxy h
+    · simp_all only [↓reduceIte]
+    ) h_no_timestamp_dup
+  exact h
+
+theorem MemoryAccessList.noTimestampDup_perm (l1 l2 : MemoryAccessList)
+    (h_l1_nodup : l1.Notimestampdup) (h_perm : l1.Perm l2) :
+    l2.Notimestampdup := by
+  simp only [Notimestampdup] at *
+  apply List.Pairwise.perm h_l1_nodup h_perm
+  intro x y hxy
+  simp only [timestamps_neq, ne_eq] at *
+  obtain ⟨t_x, a_x, _r_x, _w_x⟩ := x
+  obtain ⟨t_y, a_y, _r_y, _w_y⟩ := y
+  simp_all only [eq_comm, not_false_eq_true]
+
+theorem MemoryAccessList.noTimestampDup_of_TimestampSorted
+    (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
+    accesses.Notimestampdup := by
+  simp only [Notimestampdup, isTimestampSorted, List.Sorted] at *
+  have sort_imp_nodup : ∀ {x y : MemoryAccess}, timestamp_ordering x y → timestamps_neq x y := by
+    intros x y hxy
+    obtain ⟨t_x, a_x, _r_x, _w_x⟩ := x
+    obtain ⟨t_y, a_y, _r_y, _w_y⟩ := y
+    simp only [timestamp_ordering, timestamps_neq, ne_eq] at *
+    linarith
+  apply List.Pairwise.imp sort_imp_nodup
+  simp_all only
+
 
 def MemoryAccessList.lastWriteValue (accesses : MemoryAccessList) (h : accesses.isTimestampSorted) (addr : ℕ) : ℕ := match accesses with
   -- initially the memory is all zero
