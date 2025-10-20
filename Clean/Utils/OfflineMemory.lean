@@ -114,6 +114,41 @@ instance : IsTotal MemoryAccess address_timestamp_ordering := by
     simp only [h, ↓reduceIte]
     apply Nat.lt_or_lt_of_ne (by simp only [ne_eq, h, not_false_eq_true])
 
+instance : IsAntisymm MemoryAccess timestamp_ordering := by
+  constructor
+  intros a b hab hba
+  obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
+  obtain ⟨t_b, a_b, _r_b, _w_b⟩ := b
+  simp only [timestamp_ordering] at hab hba
+  linarith
+
+instance : IsIrrefl MemoryAccess timestamp_ordering := by
+  constructor
+  intros a ha
+  obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
+  simp only [timestamp_ordering] at ha
+  linarith
+
+instance : IsIrrefl MemoryAccess address_strict_timestamp_ordering := by
+  constructor
+  intros a ha
+  obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
+  simp only [address_strict_timestamp_ordering] at ha
+  split_ifs at ha
+  · linarith
+  · linarith
+
+instance : IsAntisymm MemoryAccess address_strict_timestamp_ordering := by
+  constructor
+  intros a b hab hba
+  obtain ⟨t_a, a_a, _r_a, _w_a⟩ := a
+  obtain ⟨t_b, a_b, _r_b, _w_b⟩ := b
+  simp only [address_strict_timestamp_ordering] at hab hba
+  split_ifs at hab hba
+  · linarith
+  · linarith
+  · linarith
+  · linarith
 
 /--
   A memory access list is address sorted if the addresses are sorted, and for equal addresses,
