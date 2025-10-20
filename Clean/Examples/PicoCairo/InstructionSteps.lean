@@ -37,39 +37,19 @@ def addStepCircuit
   return ()
 
 /--
-MUL instruction step circuit.
-Takes enabled flag, timestamp, and pre-state.
-If enabled and instruction at pc is MUL, computes new state and yields trace element.
+Bundle of ADD instruction step circuits.
+Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
 -/
-def mulStepCircuit
+def addStepCircuitsBundle
+    (capacity : ℕ)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
-  -- TODO: Implement MUL instruction logic
+    (inputs : Vector (Var InstructionStepInput (F p)) capacity) : Circuit (F p) Unit := do
+  -- Process each input
+  for h : i in [0:capacity] do
+    addStepCircuit program h_programSize memory h_memorySize inputs[i]
   return ()
 
-/--
-LOAD_STATE instruction step circuit.
-Takes enabled flag, timestamp, and pre-state.
-If enabled and instruction at pc is LOAD_STATE, computes new state and yields trace element.
--/
-def loadStateStepCircuit
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
-  -- TODO: Implement LOAD_STATE instruction logic
-  return ()
-
-/--
-STORE_STATE instruction step circuit.
-Takes enabled flag, timestamp, and pre-state.
-If enabled and instruction at pc is STORE_STATE, computes new state and yields trace element.
--/
-def storeStateStepCircuit
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
-  -- TODO: Implement STORE_STATE instruction logic
-  return ()
+-- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
 
 end Examples.PicoCairo
