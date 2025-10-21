@@ -86,8 +86,6 @@ def addStepCircuitMain
   -- Step 8: Conditional yield of new execution trace element
   yieldWhen enabled ⟨"execution", [timestamp + 1, postPc, postAp, postFp]⟩
 
-  return ()
-
 /--
 Bundle of ADD instruction step circuits.
 Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
@@ -100,7 +98,6 @@ def addStepCircuitsBundle
   -- Process each input
   for h : i in [0:capacity] do
     addStepCircuitMain program h_programSize memory h_memorySize inputs[i]
-  return ()
 
 -- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
 
