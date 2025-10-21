@@ -45,7 +45,11 @@ def addStepCircuitMain
   let rawInstruction ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) preState.pc
 
   -- Step 3: Conditionally decode the instruction (returns dummy ADD when disabled)
-  let decoded ← conditionalDecode enabled rawInstruction.rawInstrType dummyADDInstruction
+  let decoded ← subcircuitWithAssertion conditionalDecodeCircuit {
+    enabled := enabled,
+    rawInstrType := rawInstruction.rawInstrType,
+    dummy := dummyADDInstruction
+  }
 
   -- Step 4: Unconditionally assert it's an ADD instruction
   -- When enabled=1, this checks the actual instruction is ADD
@@ -119,7 +123,7 @@ def addStepElaboratedCircuit
   }
   yields_eq := by
     intro input env offset
-    simp only [addStepCircuitMain, circuit_norm]
+    simp only [addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit]
     sorry  -- TODO: Prove yields equality
 
 end Examples.PicoCairo
