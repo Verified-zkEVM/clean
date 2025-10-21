@@ -147,37 +147,36 @@ def addStepAssumptions
 
 /--
 Specification for ADD instruction step (for soundness).
-Relates global yields to local yields produced by this step.
+The circuit already ensures fetch/decode succeed and instruction is ADD.
+This spec verifies the ADD constraint and correct state transition.
 -/
 def addStepSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  -- If enabled and instruction is ADD, we yield the new state
+  -- If enabled, circuit ensures it's ADD, so we just specify the yields
   if input.enabled = 1 then
-    -- Check that instruction at PC is actually ADD
+    -- Circuit guarantees: fetch succeeds, decode succeeds, instruction is ADD
+    -- We need to verify the ADD operation and state transition
     match Spec.fetchInstruction program input.preState.pc with
     | some rawInstr =>
       match Spec.decodeInstruction rawInstr.rawInstrType with
-      | some (instrType, addr1, addr2, addr3) =>
-        if instrType = 0 then  -- ADD instruction
-          -- Read operands
-          match Spec.dataMemoryAccess memory rawInstr.op1 addr1 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op2 addr2 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op3 addr3 input.preState.ap input.preState.fp with
-          | some v1, some v2, some v3 =>
-            -- Check ADD constraint holds and yield new state
-            v1 + v2 = v3 ∧
-            localYields = {⟨"execution", [input.timestamp + 1,
-                                         input.preState.pc + 4,
-                                         input.preState.ap,
-                                         input.preState.fp]⟩}
-          | _, _, _ => localYields = ∅
-        else
-          localYields = ∅  -- Not an ADD instruction
-      | none => localYields = ∅
-    | none => localYields = ∅
+      | some (0, addr1, addr2, addr3) =>  -- Must be ADD (instrType = 0)
+        -- Read operands
+        match Spec.dataMemoryAccess memory rawInstr.op1 addr1 input.preState.ap input.preState.fp,
+              Spec.dataMemoryAccess memory rawInstr.op2 addr2 input.preState.ap input.preState.fp,
+              Spec.dataMemoryAccess memory rawInstr.op3 addr3 input.preState.ap input.preState.fp with
+        | some v1, some v2, some v3 =>
+          -- ADD constraint must hold and we yield new state
+          v1 + v2 = v3 ∧
+          localYields = {⟨"execution", [input.timestamp + 1,
+                                       input.preState.pc + 4,
+                                       input.preState.ap,
+                                       input.preState.fp]⟩}
+        | _, _, _ => False  -- Circuit would fail if reads fail
+      | _ => False  -- Circuit would fail if not ADD
+    | none => False  -- Circuit would fail if fetch fails
   else
     localYields = ∅  -- Disabled, no yields
 
