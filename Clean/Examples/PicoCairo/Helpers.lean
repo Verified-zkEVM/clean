@@ -65,7 +65,7 @@ def conditionalDecodeElaborated :
     ElaboratedCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   main := conditionalDecodeMain
   localLength _ := 8  -- Same as decodeInstructionCircuit since Conditional adds 0
-  yields_eq := by simp [conditionalDecodeMain, circuit_norm]; sorry
+  yields_eq := by simp [conditionalDecodeMain, circuit_norm, decodeInstructionCircuit, decodeInstructionElaborated, Gadgets.Conditional.circuit]
 
 /--
 Conditional decode circuit as GeneralFormalCircuit.
