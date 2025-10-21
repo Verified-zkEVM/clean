@@ -87,21 +87,6 @@ def addStepCircuitMain
   yieldWhen enabled ⟨"execution", [timestamp + 1, postPc, postAp, postFp]⟩
 
 /--
-Bundle of ADD instruction step circuits.
-Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
--/
-def addStepCircuitsBundle
-    (capacity : ℕ)
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (inputs : Vector (Var InstructionStepInput (F p)) capacity) : Circuit (F p) Unit := do
-  -- Process each input
-  for h : i in [0:capacity] do
-    addStepCircuitMain program h_programSize memory h_memorySize inputs[i]
-
--- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
-
-/--
 ElaboratedCircuit for ADD instruction step.
 Takes InstructionStepInput and produces unit (since we yield, not return).
 -/
@@ -189,5 +174,20 @@ def addStepFormalCircuit
   Spec := addStepSpec program h_programSize memory h_memorySize
   soundness := by sorry
   completeness := by sorry
+
+/--
+Bundle of ADD instruction step circuits.
+Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
+-/
+def addStepCircuitsBundle
+    (capacity : ℕ)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (inputs : Vector (Var InstructionStepInput (F p)) capacity) : Circuit (F p) Unit := do
+  -- Process each input
+  for h : i in [0:capacity] do
+    addStepCircuitMain program h_programSize memory h_memorySize inputs[i]
+
+-- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
 
 end Examples.PicoCairo
