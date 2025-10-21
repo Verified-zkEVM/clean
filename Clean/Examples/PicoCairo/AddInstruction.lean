@@ -138,6 +138,7 @@ def addStepSpec
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
+  IsBool input.enabled →
   -- If enabled, circuit ensures it's ADD, so we just specify the yields
   if input.enabled = 1 then
     -- Circuit guarantees: fetch succeeds, decode succeeds, instruction is ADD
@@ -145,20 +146,23 @@ def addStepSpec
     match Spec.fetchInstruction program input.preState.pc with
     | some rawInstr =>
       match Spec.decodeInstruction rawInstr.rawInstrType with
-      | some (0, addr1, addr2, addr3) =>  -- Must be ADD (instrType = 0)
-        -- Read operands
-        match Spec.dataMemoryAccess memory rawInstr.op1 addr1 input.preState.ap input.preState.fp,
-              Spec.dataMemoryAccess memory rawInstr.op2 addr2 input.preState.ap input.preState.fp,
-              Spec.dataMemoryAccess memory rawInstr.op3 addr3 input.preState.ap input.preState.fp with
-        | some v1, some v2, some v3 =>
-          -- ADD constraint must hold and we yield new state
-          v1 + v2 = v3 ∧
-          localYields = {⟨"execution", [input.timestamp + 1,
-                                       input.preState.pc + 4,
-                                       input.preState.ap,
-                                       input.preState.fp]⟩}
-        | _, _, _ => False  -- Circuit would fail if reads fail
-      | _ => False  -- Circuit would fail if not ADD
+      | some (instrType, addr1, addr2, addr3) =>
+        if instrType = 0 then  -- Must be ADD
+          -- Read operands
+          match Spec.dataMemoryAccess memory rawInstr.op1 addr1 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess memory rawInstr.op2 addr2 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess memory rawInstr.op3 addr3 input.preState.ap input.preState.fp with
+          | some v1, some v2, some v3 =>
+            -- ADD constraint must hold and we yield new state
+            v1 + v2 = v3 ∧
+            localYields = {⟨"execution", [input.timestamp + 1,
+                                         input.preState.pc + 4,
+                                         input.preState.ap,
+                                         input.preState.fp]⟩}
+          | _, _, _ => False  -- Circuit would fail if reads fail
+        else
+          False  -- Circuit would fail if not ADD
+      | none => False  -- Circuit would fail if decode fails
     | none => False  -- Circuit would fail if fetch fails
   else
     localYields = ∅  -- Disabled, no yields
@@ -173,7 +177,50 @@ def addStepFormalCircuit
   elaborated := addStepElaboratedCircuit program h_programSize memory h_memorySize
   Assumptions := addStepAssumptions program h_programSize memory h_memorySize
   Spec := addStepSpec program h_programSize memory h_memorySize
-  soundness := by sorry
+  soundness := by
+    circuit_proof_start [addStepSpec, addStepElaboratedCircuit, addStepCircuitMain,
+      Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
+      fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
+    intro h_bool
+    rcases h_bool with h_zero | h_one
+    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · subst h_one
+      simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
+        Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
+        List.cons.injEq, add_left_inj, and_true]
+      rcases h_holds with ⟨ h_iszero, h_nonzero, h_fetch, h_decode, h_isadd, h_read1, h_read2, h_read3, h_add ⟩
+      -- manual decomposition because State is not ProvableStruct
+      rcases input_var_preState with ⟨ input_var_pc, input_var_ap, input_var_fp ⟩
+      rcases input_preState with ⟨ input_pc, input_ap, input_fp ⟩
+      simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input
+      simp only [h_input] at h_fetch
+      simp only
+      cases h : fetchInstruction program input_pc
+      · simp only [h] at h_fetch
+      -- not indenting for heavy interesting case
+      simp only [h] at h_fetch
+      subst h_fetch
+      simp only
+      specialize h_decode (by simp only [circuit_norm])
+      simp only [one_ne_zero, ↓reduceIte, decodeInstructionSpec] at h_decode
+      simp only [circuit_norm, explicit_provable_type]
+      cases h2 : decodeInstruction (env.get (i₀ + 2))
+      · simp only [h2] at h_decode
+      -- not indenting for heavy interesting case
+      simp only [h2] at h_decode
+      rename_i decoded
+      rcases decoded with ⟨ type, addr1', addr2', addr3' ⟩
+      simp only at h_decode ⊢
+      by_cases h_type : type ≠ 0
+      ·
+        sorry
+
+
+
+
+
+      sorry
+
   completeness := by sorry
 
 /--
