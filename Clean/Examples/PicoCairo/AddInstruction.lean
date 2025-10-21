@@ -145,4 +145,53 @@ def addStepAssumptions
                     nl.values[0]'(by simp [h]) = input.timestamp} =
     {⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩})
 
+/--
+Specification for ADD instruction step (for soundness).
+Relates global yields to local yields produced by this step.
+-/
+def addStepSpec
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
+    (output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
+  -- If enabled and instruction is ADD, we yield the new state
+  if input.enabled = 1 then
+    -- Check that instruction at PC is actually ADD
+    match Spec.fetchInstruction program input.preState.pc with
+    | some rawInstr =>
+      match Spec.decodeInstruction rawInstr.rawInstrType with
+      | some (instrType, addr1, addr2, addr3) =>
+        if instrType = 0 then  -- ADD instruction
+          -- Read operands
+          match Spec.dataMemoryAccess memory rawInstr.op1 addr1 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess memory rawInstr.op2 addr2 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess memory rawInstr.op3 addr3 input.preState.ap input.preState.fp with
+          | some v1, some v2, some v3 =>
+            -- Check ADD constraint holds and yield new state
+            v1 + v2 = v3 ∧
+            localYields = {⟨"execution", [input.timestamp + 1,
+                                         input.preState.pc + 4,
+                                         input.preState.ap,
+                                         input.preState.fp]⟩}
+          | _, _, _ => localYields = ∅
+        else
+          localYields = ∅  -- Not an ADD instruction
+      | none => localYields = ∅
+    | none => localYields = ∅
+  else
+    localYields = ∅  -- Disabled, no yields
+
+/--
+GeneralFormalCircuit for ADD instruction step.
+-/
+def addStepFormalCircuit
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit (F p) InstructionStepInput unit where
+  elaborated := addStepElaboratedCircuit program h_programSize memory h_memorySize
+  Assumptions := addStepAssumptions program h_programSize memory h_memorySize
+  Spec := addStepSpec program h_programSize memory h_memorySize
+  soundness := by sorry
+  completeness := by sorry
+
 end Examples.PicoCairo
