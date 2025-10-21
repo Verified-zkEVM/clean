@@ -22,11 +22,11 @@ open Examples.FemtoCairo.Spec
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
-ADD instruction step circuit.
+Main circuit for ADD instruction step.
 Takes enabled flag, timestamp, and pre-state.
 If enabled and instruction at pc is ADD, computes new state and yields trace element.
 -/
-def addStepCircuit
+def addStepCircuitMain
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
@@ -95,9 +95,31 @@ def addStepCircuitsBundle
     (inputs : Vector (Var InstructionStepInput (F p)) capacity) : Circuit (F p) Unit := do
   -- Process each input
   for h : i in [0:capacity] do
-    addStepCircuit program h_programSize memory h_memorySize inputs[i]
+    addStepCircuitMain program h_programSize memory h_memorySize inputs[i]
   return ()
 
 -- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
+
+/--
+ElaboratedCircuit for ADD instruction step.
+Takes InstructionStepInput and produces unit (since we yield, not return).
+-/
+def addStepElaboratedCircuit
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    ElaboratedCircuit (F p) InstructionStepInput unit where
+  main := addStepCircuitMain program h_programSize memory h_memorySize
+  localLength _ := 29  -- IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
+  yields input env _ := {
+    nl | env input.enabled ≠ 0 ∧
+         nl = ⟨"execution", [env (input.timestamp + 1),
+                             env (input.preState.pc + 4),
+                             env input.preState.ap,
+                             env input.preState.fp]⟩
+  }
+  yields_eq := by
+    intro input env offset
+    simp only [addStepCircuitMain, circuit_norm]
+    sorry  -- TODO: Prove yields equality
 
 end Examples.PicoCairo
