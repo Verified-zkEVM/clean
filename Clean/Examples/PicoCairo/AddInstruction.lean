@@ -211,15 +211,59 @@ def addStepFormalCircuit
       rename_i decoded
       rcases decoded with ⟨ type, addr1', addr2', addr3' ⟩
       simp only at h_decode ⊢
-      by_cases h_type : type ≠ 0
-      ·
-        sorry
-
-
-
-
-
-      sorry
+      simp only [circuit_norm, explicit_provable_type] at h_decode h_isadd
+      rcases h_decode with ⟨ h_decode_type, h_decode ⟩
+      -- there should be a tactic for naming outputs of elaborated circuits
+      cases decoded : @ElaboratedCircuit.output (F p) ConditionalDecodeInput DecodedInstruction (instFieldFOfFactPrime p)
+        ProvableType.fromStruct ProvableType.fromStruct conditionalDecodeElaborated
+        { enabled := input_var_enabled, rawInstrType := var { index := i₀ + 2 }, dummy := dummyADDInstruction }
+          (i₀ + 2 + 4)
+      rename_i decoded_instr_type decoded_mode1 decoded_mode2 decoded_mode3
+      simp only [decoded] at h_decode_type h_isadd h_read1 h_read2 h_read3 h_decode
+      cases decoded_instr_type
+      simp only at h_decode_type h_isadd
+      simp only [DecodedInstructionType.val] at h_decode_type
+      rw [if_pos] at h_decode_type
+      · subst h_decode_type
+        simp only [↓reduceIte]
+        specialize h_read1 (by aesop)
+        specialize h_read2 (by aesop)
+        specialize h_read3 (by aesop)
+        rcases h_decode with ⟨ h_correct, h_addr1', h_correct1, h_addr2', h_correct2, h_addr3', h_correct3 ⟩
+        cases h_access1 : dataMemoryAccess memory (env.get (i₀ + 2 + 1)) addr1' input_ap input_fp
+        · simp only [circuit_norm, explicit_provable_type] at h_read1
+          subst h_addr1'
+          simp_all
+        rename_i v1
+        cases h_access2 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1)) addr2' input_ap input_fp
+        · simp only [circuit_norm, explicit_provable_type] at h_read2
+          subst h_addr2'
+          simp_all
+        rename_i v2
+        cases h_access3 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1 + 1)) addr3' input_ap input_fp
+        · simp only [circuit_norm, explicit_provable_type] at h_read3
+          subst h_addr3'
+          simp_all
+        rename_i v3
+        simp only
+        and_intros
+        · simp only [circuit_norm, explicit_provable_type] at h_read1
+          subst h_addr1'
+          simp only [h_access1] at h_read1
+          subst h_read1
+          simp only [circuit_norm, explicit_provable_type] at h_read2
+          subst h_addr2'
+          simp only [h_access2] at h_read2
+          subst h_read2
+          simp only [circuit_norm, explicit_provable_type] at h_read3
+          subst h_addr3'
+          simp only [h_access3] at h_read3
+          subst h_read3
+          grind
+        · simp_all
+        · simp_all
+        · simp_all
+      grind
 
   completeness := by sorry
 
