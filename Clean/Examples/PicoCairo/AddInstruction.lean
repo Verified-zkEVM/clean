@@ -105,8 +105,9 @@ def addStepElaboratedCircuit
   }
   yields_eq := by
     intro input env offset
-    simp only [addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit]
-    sorry  -- TODO: Prove yields equality
+    simp only [addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+      readFromMemoryCircuit, NamedList.eval]
+    aesop
 
 /--
 Assumptions for ADD instruction step (for completeness).
