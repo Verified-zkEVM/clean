@@ -11,6 +11,7 @@ import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Types
 import Clean.Examples.FemtoCairo.Spec
 import Clean.Gadgets.Conditional
+import Clean.Gadgets.IsZeroField
 
 namespace Examples.PicoCairo
 
@@ -34,18 +35,24 @@ def addStepCircuit
   let timestamp := input.timestamp
   let preState := input.preState
 
-  -- Step 1: Fetch instruction from program memory using FemtoCairo's circuit
+  -- Step 1: Check that timestamp + 1 is not zero (prevent overflow)
+  -- IsZeroField returns 1 if input is 0, 0 otherwise
+  -- We want to assert that the result is 0 (meaning timestamp + 1 ≠ 0)
+  let timestampPlusOneIsZero ← subcircuit Gadgets.IsZeroField.circuit (timestamp + 1)
+  assertZero timestampPlusOneIsZero
+
+  -- Step 2: Fetch instruction from program memory using FemtoCairo's circuit
   let rawInstruction ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) preState.pc
 
-  -- Step 2: Conditionally decode the instruction (returns dummy ADD when disabled)
+  -- Step 3: Conditionally decode the instruction (returns dummy ADD when disabled)
   let decoded ← conditionalDecode enabled rawInstruction.rawInstrType dummyADDInstruction
 
-  -- Step 3: Unconditionally assert it's an ADD instruction
+  -- Step 4: Unconditionally assert it's an ADD instruction
   -- When enabled=1, this checks the actual instruction is ADD
   -- When enabled=0, this always passes since dummy is ADD
   assertZero (decoded.instrType.isAdd - 1)
 
-  -- Step 4: Read operands from memory using addressing modes
+  -- Step 5: Read operands from memory using addressing modes
   let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op1,
@@ -64,15 +71,15 @@ def addStepCircuit
     mode := decoded.addr3
   }
 
-  -- Step 5: Conditional ADD constraint: v3 = v1 + v2 (only when enabled)
+  -- Step 6: Conditional ADD constraint: v3 = v1 + v2 (only when enabled)
   assertZero (enabled * (v3 - (v1 + v2)))
 
-  -- Step 6: Compute next state (pc increments by 4, ap and fp unchanged for ADD)
+  -- Step 7: Compute next state (pc increments by 4, ap and fp unchanged for ADD)
   let postPc := preState.pc + 4
   let postAp := preState.ap
   let postFp := preState.fp
 
-  -- Step 7: Conditional yield of new execution trace element
+  -- Step 8: Conditional yield of new execution trace element
   yieldWhen enabled ⟨"execution", [timestamp + 1, postPc, postAp, postFp]⟩
 
   return ()
