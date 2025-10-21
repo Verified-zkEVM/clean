@@ -94,7 +94,8 @@ def conditionalDecodeCircuit :
     · simp_all only [id_eq, ↓reduceIte, DecodedInstruction.mk.injEq, one_ne_zero]
       simp only [decodeInstructionCircuit, decodeInstructionElaborated] at h_decode
       exact h_decode
-  completeness := by sorry
+  completeness := by
+    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstructionCircuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions]
 
 /--
 Create a dummy ADD instruction with immediate addressing for all operands.
