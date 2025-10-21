@@ -184,9 +184,9 @@ def addStepCircuitsBundle
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Vector (Var InstructionStepInput (F p)) capacity) : Circuit (F p) Unit := do
-  -- Process each input
+  -- Process each input using the formal circuit
   for h : i in [0:capacity] do
-    addStepCircuitMain program h_programSize memory h_memorySize inputs[i]
+    subcircuitWithAssertion (addStepFormalCircuit program h_programSize memory h_memorySize) inputs[i]
 
 -- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
 
