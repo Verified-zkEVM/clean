@@ -77,11 +77,23 @@ def conditionalDecodeCircuit :
   Assumptions := fun input _ =>
     IsBool input.enabled ∧ input.rawInstrType.val < 256
   Spec := fun input yielded output localYields =>
+    IsBool input.enabled →
     if input.enabled = 0 then
       output = input.dummy
     else
       decodeInstructionSpec input.rawInstrType yielded output localYields
-  soundness := by sorry
+  soundness := by
+    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions]
+    intro h_assumptions
+    rcases h_holds with ⟨ h_decode, h_conditional ⟩
+    specialize h_conditional h_assumptions
+    simp only [Gadgets.Conditional.Spec] at h_conditional
+    simp only [h_conditional]
+    rcases h_assumptions with h_zero | h_one
+    · aesop
+    · simp_all only [id_eq, ↓reduceIte, DecodedInstruction.mk.injEq, one_ne_zero]
+      simp only [decodeInstructionCircuit, decodeInstructionElaborated] at h_decode
+      exact h_decode
   completeness := by sorry
 
 /--
