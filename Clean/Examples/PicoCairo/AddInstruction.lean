@@ -126,4 +126,23 @@ def addStepElaboratedCircuit
     simp only [addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit]
     sorry  -- TODO: Prove yields equality
 
+/--
+Assumptions for ADD instruction step (for completeness).
+Assumes enabled is binary and if enabled, the preState matches the unique execution trace at current timestamp.
+Also ensures new timestamp won't overflow.
+-/
+def addStepAssumptions
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+  IsBool input.enabled ∧
+  -- New timestamp should not be zero (prevent overflow)
+  input.timestamp + 1 ≠ 0 ∧
+  -- If enabled, there's exactly one execution trace at current timestamp matching input state
+  (input.enabled = 1 →
+    {nl ∈ yielded | nl.name = "execution" ∧
+                    ∃ h : nl.values.length = 4,
+                    nl.values[0]'(by simp [h]) = input.timestamp} =
+    {⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩})
+
 end Examples.PicoCairo
