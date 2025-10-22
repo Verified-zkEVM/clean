@@ -130,6 +130,8 @@ def storeStateStepSpec
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   if input.enabled ≠ 0 then
+    -- Timestamp must not overflow
+    input.timestamp + 1 ≠ 0 ∧
     -- When enabled, must have preState in yielded set
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     match fetchInstruction program input.preState.pc with
@@ -182,6 +184,9 @@ def storeStateStepFormalCircuit
         List.cons.injEq, add_left_inj, and_true]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isstore, h_read1, h_read2, h_read3, h_v1, h_v2, h_v3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
+      constructor
+      · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, one_mul,
+        not_false_eq_true]
       constructor
       · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, one_mul]
         obtain ⟨left, right⟩ := h_input
