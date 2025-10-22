@@ -107,19 +107,19 @@ def dummyADDInstruction : Var DecodedInstruction (F p) := {
     isStoreState := Expression.const 0,
     isLoadState := Expression.const 0
   },
-  addr1 := {
+  mode1 := {
     isImmediate := Expression.const 1,
     isDoubleAddressing := Expression.const 0,
     isApRelative := Expression.const 0,
     isFpRelative := Expression.const 0
   },
-  addr2 := {
+  mode2 := {
     isImmediate := Expression.const 1,
     isDoubleAddressing := Expression.const 0,
     isApRelative := Expression.const 0,
     isFpRelative := Expression.const 0
   },
-  addr3 := {
+  mode3 := {
     isImmediate := Expression.const 1,
     isDoubleAddressing := Expression.const 0,
     isApRelative := Expression.const 0,

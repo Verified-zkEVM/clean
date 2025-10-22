@@ -67,19 +67,19 @@ def addStepCircuitMain
   let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op1,
-    mode := decoded.addr1
+    mode := decoded.mode1
   }
 
   let v2 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op2,
-    mode := decoded.addr2
+    mode := decoded.mode2
   }
 
   let v3 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op3,
-    mode := decoded.addr3
+    mode := decoded.mode3
   }
 
   -- Step 7: Conditional ADD constraint: v3 = v1 + v2 (only when enabled)
@@ -147,12 +147,12 @@ def addStepSpec
     match Spec.fetchInstruction program input.preState.pc with
     | some rawInstr =>
       match Spec.decodeInstruction rawInstr.rawInstrType with
-      | some (instrType, addr1, addr2, addr3) =>
+      | some (instrType, mode1, mode2, mode3) =>
         if instrType = 0 then  -- Must be ADD
           -- Read operands
-          match Spec.dataMemoryAccess memory rawInstr.op1 addr1 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op2 addr2 input.preState.ap input.preState.fp,
-                Spec.dataMemoryAccess memory rawInstr.op3 addr3 input.preState.ap input.preState.fp with
+          match Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp,
+                Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp with
           | some v1, some v2, some v3 =>
             -- ADD constraint must hold and we yield new state
             v1 + v2 = v3 ∧
@@ -213,7 +213,7 @@ def addStepFormalCircuit
       -- not indenting for heavy interesting case
       simp only [h2] at h_decode
       rename_i decoded
-      rcases decoded with ⟨ type, addr1', addr2', addr3' ⟩
+      rcases decoded with ⟨ type, mode1', mode2', mode3' ⟩
       simp only at h_decode ⊢
       simp only [circuit_norm, explicit_provable_type] at h_decode h_isadd
       rcases h_decode with ⟨ h_decode_type, h_decode ⟩
@@ -234,17 +234,17 @@ def addStepFormalCircuit
         specialize h_read2 (by aesop)
         specialize h_read3 (by aesop)
         rcases h_decode with ⟨ h_correct, h_addr1', h_correct1, h_addr2', h_correct2, h_addr3', h_correct3 ⟩
-        cases h_access1 : dataMemoryAccess memory (env.get (i₀ + 2 + 1)) addr1' input_ap input_fp
+        cases h_access1 : dataMemoryAccess memory (env.get (i₀ + 2 + 1)) mode1' input_ap input_fp
         · simp only [circuit_norm, explicit_provable_type] at h_read1
           subst h_addr1'
           simp_all
         rename_i v1
-        cases h_access2 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1)) addr2' input_ap input_fp
+        cases h_access2 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1)) mode2' input_ap input_fp
         · simp only [circuit_norm, explicit_provable_type] at h_read2
           subst h_addr2'
           simp_all
         rename_i v2
-        cases h_access3 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1 + 1)) addr3' input_ap input_fp
+        cases h_access3 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1 + 1)) mode3' input_ap input_fp
         · simp only [circuit_norm, explicit_provable_type] at h_read3
           subst h_addr3'
           simp_all
