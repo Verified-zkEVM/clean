@@ -175,6 +175,9 @@ instance : ProvableType (fields n) where
   toElements x := x
   fromElements v := v
 
+instance {n : ℕ} : NonEmptyProvableType (fields (n + 1)) where
+nonempty := Nat.zero_lt_succ n
+
 namespace ProvableStruct
 structure WithProvableType where
   type : TypeMap
