@@ -87,6 +87,10 @@ Reach out [on TG](https://t.me/clean_zk) if you are looking for long-term contri
 - Advanced: Mixed proof systems like Longfellow-ZK
 - MORE GADGETS
 - MORE INTEGRATIONS
+- 
+## Attribution
+
+The Lean name and logo are trademarks of Lean FRO.
 
 
 

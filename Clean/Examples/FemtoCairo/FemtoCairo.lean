@@ -69,19 +69,19 @@ def decodeInstructionMain (instruction : Var field (F p)) : Circuit (F p) (Var D
         isStoreState := bits[1] - bits[0] * bits[1],
         isLoadState := bits[0] * bits[1]
       },
-      addr1 := {
+      mode1 := {
         isDoubleAddressing := (1 : Expression _) - bits[2] - bits[3] + bits[2] * bits[3],
         isApRelative := bits[2] - bits[2] * bits[3],
         isFpRelative := bits[3] - bits[2] * bits[3],
         isImmediate := bits[2] * bits[3]
       },
-      addr2 := {
+      mode2 := {
         isDoubleAddressing := (1 : Expression _) - bits[4] - bits[5] + bits[4] * bits[5],
         isApRelative := bits[4] - bits[4] * bits[5],
         isFpRelative := bits[5] - bits[4] * bits[5],
         isImmediate := bits[4] * bits[5]
       },
-      addr3 := {
+      mode3 := {
         isDoubleAddressing := (1 : Expression _) - bits[6] - bits[7] + bits[6] * bits[7],
         isApRelative := bits[6] - bits[6] * bits[7],
         isFpRelative := bits[7] - bits[6] * bits[7],
@@ -91,11 +91,11 @@ def decodeInstructionMain (instruction : Var field (F p)) : Circuit (F p) (Var D
 
 def decodeInstructionSpec (instruction : field (F p)) (_ : Set (NamedList (F p))) (output : DecodedInstruction (F p)) (_ : Set (NamedList (F p))) : Prop :=
     match Spec.decodeInstruction instruction with
-    | some (instr_type, addr1, addr2, addr3) =>
+    | some (instr_type, mode1, mode2, mode3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
-      output.addr1.val = addr1 ∧ output.addr1.isEncodedCorrectly ∧
-      output.addr2.val = addr2 ∧ output.addr2.isEncodedCorrectly ∧
-      output.addr3.val = addr3 ∧ output.addr3.isEncodedCorrectly
+      output.mode1.val = mode1 ∧ output.mode1.isEncodedCorrectly ∧
+      output.mode2.val = mode2 ∧ output.mode2.isEncodedCorrectly ∧
+      output.mode3.val = mode3 ∧ output.mode3.isEncodedCorrectly
     | none => False -- impossible, constraints ensure that input < 256
 
 def decodeInstructionElaborated : ElaboratedCircuit (F p) field DecodedInstruction where
@@ -149,7 +149,7 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
       rename_i h_eq2
       simp only [not_le, ite_eq_left_iff, reduceCtorEq, imp_false] at h_eq2
       contradiction
-    case _ x instr_type addr1 addr2 addr3 h_eq =>
+    case _ x instr_type mode1 mode2 mode3 h_eq =>
       have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
       have h_bits0 := h_bits_are_binary 0 (by linarith)
       have h_bits1 := h_bits_are_binary 1 (by linarith)
@@ -850,9 +850,9 @@ def femtoCairoStepElaboratedCircuit
       let decoded ← subcircuitWithAssertion decodeInstructionCircuit rawInstrType
 
       -- Perform relevant memory accesses
-      let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.addr1 }
-      let v2 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.addr2 }
-      let v3 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.addr3 }
+      let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op1, mode := decoded.mode1 }
+      let v2 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op2, mode := decoded.mode2 }
+      let v3 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) { state, offset := op3, mode := decoded.mode3 }
 
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
@@ -901,24 +901,24 @@ def femtoCairoStepCircuitSoundness
       -- impossible, decodeInstructionCircuit ensures that
       -- instruction decode is always successful
       contradiction
-    case h_1 instr_type addr1 addr2 addr3 h_eq_decode =>
+    case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>
       rw [h_eq_decode]
-      obtain ⟨ h_instr_type_val, h_instr_type_encoded_correctly, h_addr1_val,
-        h_addr1_encoded_correctly, h_addr2_val, h_addr2_encoded_correctly,
-        h_addr3_val, h_addr3_encoded_correctly ⟩ := c_decode
+      obtain ⟨ h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
+        h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
+        h_mode3_val, h_mode3_encoded_correctly ⟩ := c_decode
       simp [circuit_norm, explicit_provable_type]
 
       -- satisfy assumptions of read1
-      specialize c_read1 h_addr1_encoded_correctly
-      rw [h_addr1_val] at c_read1
+      specialize c_read1 h_mode1_encoded_correctly
+      rw [h_mode1_val] at c_read1
 
       -- satisfy assumptions of read2
-      specialize c_read2 h_addr2_encoded_correctly
-      rw [h_addr2_val] at c_read2
+      specialize c_read2 h_mode2_encoded_correctly
+      rw [h_mode2_val] at c_read2
 
       -- satisfy assumptions of read3
-      specialize c_read3 h_addr3_encoded_correctly
-      rw [h_addr3_val] at c_read3
+      specialize c_read3 h_mode3_encoded_correctly
+      rw [h_mode3_val] at c_read3
 
       -- satisfy assumptions of next
       specialize c_next h_instr_type_encoded_correctly

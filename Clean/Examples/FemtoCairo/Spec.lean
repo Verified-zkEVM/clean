@@ -18,10 +18,10 @@ def decodeInstruction (instr : (F p)) : Option (ℕ × ℕ × ℕ × ℕ) :=
   else
   let bits := fieldToBits 8 instr
   let type := bits[0].val + 2 * bits[1].val
-  let addr1 := bits[2].val + 2 * bits[3].val
-  let addr2 := bits[4].val + 2 * bits[5].val
-  let addr3 := bits[6].val + 2 * bits[7].val
-  some (type, addr1, addr2, addr3)
+  let mode1 := bits[2].val + 2 * bits[3].val
+  let mode2 := bits[4].val + 2 * bits[5].val
+  let mode3 := bits[6].val + 2 * bits[7].val
+  some (type, mode1, mode2, mode3)
 
 /--
   Safe memory access function. Returns `some value` if the address is within bounds,
@@ -47,6 +47,8 @@ def fetchInstruction
 
 /--
   Perform a memory access based on the addressing mode.
+  - addr: the offset value from the instruction operand
+  - mode: addressing mode (0=double, 1=ap-relative, 2=fp-relative, 3=immediate)
 -/
 def dataMemoryAccess
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
@@ -116,12 +118,12 @@ def femtoCairoMachineTransition
   let { rawInstrType, op1, op2, op3 } ← fetchInstruction program state.pc
 
   -- decode instruction
-  let (instr_type, addr1, addr2, addr3) ← decodeInstruction rawInstrType
+  let (instr_type, mode1, mode2, mode3) ← decodeInstruction rawInstrType
 
   -- perform relevant memory accesses
-  let v1 ← dataMemoryAccess memory op1 addr1 state.ap state.fp
-  let v2 ← dataMemoryAccess memory op2 addr2 state.ap state.fp
-  let v3 ← dataMemoryAccess memory op3 addr3 state.ap state.fp
+  let v1 ← dataMemoryAccess memory op1 mode1 state.ap state.fp
+  let v2 ← dataMemoryAccess memory op2 mode2 state.ap state.fp
+  let v3 ← dataMemoryAccess memory op3 mode3 state.ap state.fp
 
   -- return the next state
   computeNextState instr_type v1 v2 v3 state
