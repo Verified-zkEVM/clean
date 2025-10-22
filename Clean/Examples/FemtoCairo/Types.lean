@@ -55,9 +55,9 @@ structure DecodedAddressingMode (F : Type) where
 -/
 structure DecodedInstruction (F : Type) where
   instrType : DecodedInstructionType F
-  addr1 : DecodedAddressingMode F
-  addr2 : DecodedAddressingMode F
-  addr3 : DecodedAddressingMode F
+  mode1 : DecodedAddressingMode F
+  mode2 : DecodedAddressingMode F
+  mode3 : DecodedAddressingMode F
 
 /--
   Input structure for the memory read circuit.
@@ -121,9 +121,9 @@ instance : ProvableType DecodedAddressingMode where
 
 instance : ProvableStruct DecodedInstruction where
   components := [DecodedInstructionType, DecodedAddressingMode, DecodedAddressingMode, DecodedAddressingMode]
-  toComponents := fun { instrType, addr1, addr2, addr3 } => .cons instrType (.cons addr1 (.cons addr2 (.cons addr3 .nil)))
-  fromComponents := fun (.cons instrType (.cons addr1 (.cons addr2 (.cons addr3 .nil)))) => {
-    instrType, addr1, addr2, addr3
+  toComponents := fun { instrType, mode1, mode2, mode3 } => .cons instrType (.cons mode1 (.cons mode2 (.cons mode3 .nil)))
+  fromComponents := fun (.cons instrType (.cons mode1 (.cons mode2 (.cons mode3 .nil)))) => {
+    instrType, mode1, mode2, mode3
   }
 
 instance : ProvableStruct MemoryReadInput where
