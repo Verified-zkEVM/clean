@@ -1,4 +1,5 @@
 import Clean.Circuit.Expression
+import Clean.Circuit.Count
 import Clean.Circuit.Lookup
 import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
@@ -16,6 +17,7 @@ inductive FlatOperation (F : Type) where
   | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
+  | count : Count F → FlatOperation F
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
@@ -23,6 +25,7 @@ instance [Repr F] : Repr (FlatOperation F) where
   | witness m _, _ => "(Witness " ++ reprStr m ++ ")"
   | assert e, _ => "(Assert " ++ reprStr e ++ " == 0)"
   | lookup l, _ => reprStr l
+  | count c, _ => reprStr c
 
 /--
 What it means that "constraints hold" on a list of flat operations:
