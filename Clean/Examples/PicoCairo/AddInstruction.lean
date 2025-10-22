@@ -134,8 +134,8 @@ The circuit already ensures fetch/decode succeed and instruction is ADD.
 This spec verifies the ADD constraint and correct state transition.
 -/
 def addStepSpec
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (_h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (_h_memorySize : memorySize < p)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   -- If enabled (circuit enforces binary), circuit ensures it's ADD, so we just specify the yields
@@ -177,7 +177,7 @@ def addStepFormalCircuit
     GeneralFormalCircuit (F p) InstructionStepInput unit where
   elaborated := addStepElaboratedCircuit program h_programSize memory h_memorySize
   Assumptions := addStepAssumptions (programSize := programSize)
-  Spec := addStepSpec program h_programSize memory h_memorySize
+  Spec := addStepSpec program memory
   soundness := by
     circuit_proof_start [addStepSpec, addStepElaboratedCircuit, addStepCircuitMain,
       assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
