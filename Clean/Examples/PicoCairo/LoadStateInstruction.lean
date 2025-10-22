@@ -128,6 +128,8 @@ def loadStateStepSpec
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   if input.enabled ≠ 0 then
+    -- Timestamp must not overflow
+    input.timestamp + 1 ≠ 0 ∧
     -- When enabled, must have preState in yielded set
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     match fetchInstruction program input.preState.pc with
@@ -172,6 +174,8 @@ def loadStateStepFormalCircuit
       simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isload, h_read1, h_read2, h_read3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
+      constructor
+      · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, not_false_eq_true]
       constructor
       · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte]
         obtain ⟨left, right⟩ := h_input
