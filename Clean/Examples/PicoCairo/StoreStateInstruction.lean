@@ -158,8 +158,6 @@ def storeStateStepSpec
     -- When disabled, no yields
     localYields = ∅
 
-set_option maxHeartbeats 400000
-
 /--
 GeneralFormalCircuit for StoreState instruction step.
 -/
@@ -177,7 +175,7 @@ def storeStateStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
     · subst h_one
       simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
         Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
@@ -185,7 +183,12 @@ def storeStateStepFormalCircuit
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isstore, h_read1, h_read2, h_read3, h_v1, h_v2, h_v3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
-      · aesop
+      · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, one_mul]
+        obtain ⟨left, right⟩ := h_input
+        obtain ⟨left_1, right⟩ := right
+        subst right left_1
+        exact h_use
+      clear h_use
       -- manual decomposition because State is not ProvableStruct
       rcases input_var_preState with ⟨ input_var_pc, input_var_ap, input_var_fp ⟩
       rcases input_preState with ⟨ input_pc, input_ap, input_fp ⟩
@@ -226,31 +229,24 @@ def storeStateStepFormalCircuit
       swap
       · simp only at h_decode
         rcases h_decode with ⟨ h_encoded_correctly, h_decode ⟩
+        clear h_iszero h_nonzero h_v1 h_v2 h_v3 h_read1 h_read2 h_read3 h_decode
+        subst h_decode_type
         rcases h_encoded_correctly with h_encoded_add | h_encoded_mul | h_encoded_store | h_encoded_load
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_true_eq_false,
-            zero_add, neg_eq_zero, one_ne_zero]
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_false_eq_true]
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_false_eq_true]
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_false_eq_true]
+        · simp_all only [not_true_eq_false, zero_add, neg_eq_zero, one_ne_zero]
+        · simp_all only [zero_ne_one, not_false_eq_true]
+        · simp_all only [zero_ne_one, not_false_eq_true]
+        · simp_all only [zero_ne_one, not_false_eq_true]
       rw [if_neg] at h_decode_type
       swap
       · simp only at h_decode
         rcases h_decode with ⟨ h_encoded_correctly, h_decode ⟩
+        clear h_iszero h_nonzero h_v1 h_v2 h_v3 h_read1 h_read2 h_read3 h_decode
+        subst h_decode_type
         rcases h_encoded_correctly with h_encoded_add | h_encoded_mul | h_encoded_store | h_encoded_load
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_true_eq_false,
-            zero_add, neg_eq_zero, one_ne_zero]
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_true_eq_false,
-            zero_add, neg_eq_zero, one_ne_zero]
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_false_eq_true]
-        · subst h_decode_type
-          simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_mul, ↓reduceIte, not_false_eq_true]
+        · simp_all only [zero_ne_one, not_false_eq_true]
+        · simp_all only [not_true_eq_false, zero_add, neg_eq_zero, one_ne_zero]
+        · simp_all only [zero_ne_one, not_false_eq_true]
+        · simp_all only [zero_ne_one, not_false_eq_true]
       rw [if_pos] at h_decode_type
       swap
       · grind
