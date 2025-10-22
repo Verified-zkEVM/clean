@@ -127,7 +127,7 @@ def loadStateStepSpec
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  if input.enabled ≠ 0 then
+  if input.enabled = 1 then
     -- Timestamp must not overflow
     input.timestamp + 1 ≠ 0 ∧
     -- When enabled, must have preState in yielded set
@@ -169,7 +169,7 @@ def loadStateStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
     · subst h_one
       simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isload, h_read1, h_read2, h_read3 ⟩
@@ -294,5 +294,58 @@ def loadStateStepCircuitsBundle
   -- Process each input using the formal circuit
   for h : i in [0:capacity] do
     subcircuitWithAssertion (loadStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i]
+
+/--
+Characterization theorem for LoadState instruction localYields.
+If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
+This is useful for inductive reasoning about execution traces.
+-/
+theorem loadStateStepSpec_localYields_characterization
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : loadStateStepSpec program memory input yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    -- Then we can extract:
+    input.enabled = 1 ∧
+    input.timestamp + 1 ≠ 0 ∧
+    ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
+    ∃ (rawInstr : RawInstruction (F p)) (mode1 mode2 mode3 : ℕ) (newPc newAp newFp : F p),
+      Spec.fetchInstruction program input.preState.pc = some rawInstr ∧
+      Spec.decodeInstruction rawInstr.rawInstrType = some (3, mode1, mode2, mode3) ∧
+      Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp = some newPc ∧
+      Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp = some newAp ∧
+      Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp = some newFp ∧
+      nl = ⟨"execution", [input.timestamp + 1, newPc, newAp, newFp]⟩ := by
+  simp only [loadStateStepSpec] at h_spec
+  by_cases h_enabled : input.enabled = 1
+  swap -- error case first
+  · aesop
+  simp only [h_enabled, ↓reduceIte] at h_spec
+  simp only [ne_eq, exists_and_left]
+  rcases h_spec with ⟨ h_overflow, h_use, h_rest ⟩
+  refine ⟨h_enabled, h_overflow, h_use, ?_⟩
+  cases h_fetched : fetchInstruction program input.preState.pc
+  · simp_all
+  rename_i rawInstr
+  use rawInstr
+  simp only [true_and]
+  simp only [h_fetched] at h_rest
+  cases h_decoded : decodeInstruction rawInstr.rawInstrType
+  · simp_all
+  rename_i decoded
+  rcases decoded with ⟨ typ, mode1, mode2, mode3 ⟩
+  simp only [h_decoded] at h_rest
+  refine ⟨mode1, mode2, mode3, ?_, ?_⟩
+  · grind
+  cases h_access1 : dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp
+  · grind
+  cases h_access2 : dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp
+  · grind
+  cases h_access3 : dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp
+  · grind
+  grind
 
 end Examples.PicoCairo
