@@ -130,7 +130,12 @@ def yieldWhen (enabled : Expression F) (nl : NamedList (Expression F)) : Circuit
 /-- Use a named list of values that was yielded by another circuit. -/
 @[circuit_norm]
 def use (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
-  ((), [.use nl])
+  ((), [.use 1 nl])
+
+/-- Conditionally use a named list of values that was yielded by another circuit. -/
+@[circuit_norm]
+def useWhen (enabled : Expression F) (nl : NamedList (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.use enabled nl])
 
 end Circuit
 
@@ -168,7 +173,7 @@ def ConstraintsHold (eval : Environment F) (yielded : Set (NamedList F)) : List 
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval yielded s.ops ∧ ConstraintsHold eval yielded ops
   | .yield _ _ :: ops => ConstraintsHold eval yielded ops
-  | .use nl :: ops => nl.eval eval ∈ yielded ∧ ConstraintsHold eval yielded ops
+  | .use enabled nl :: ops => (eval enabled ≠ 0 → nl.eval eval ∈ yielded) ∧ ConstraintsHold eval yielded ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
@@ -183,7 +188,7 @@ def ConstraintsHold.Soundness (eval : Environment F) (yielded : Set (NamedList F
   | .subcircuit s :: ops =>
     s.Soundness eval yielded ∧ ConstraintsHold.Soundness eval yielded ops
   | .yield _ _ :: ops => ConstraintsHold.Soundness eval yielded ops
-  | .use nl :: ops => nl.eval eval ∈ yielded ∧ ConstraintsHold.Soundness eval yielded ops
+  | .use enabled nl :: ops => (eval enabled ≠ 0 → nl.eval eval ∈ yielded) ∧ ConstraintsHold.Soundness eval yielded ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -198,7 +203,7 @@ def ConstraintsHold.Completeness (eval : Environment F) (yielded : Set (NamedLis
   | .subcircuit s :: ops =>
     s.Completeness eval yielded ∧ ConstraintsHold.Completeness eval yielded ops
   | .yield _ _ :: ops => ConstraintsHold.Completeness eval yielded ops
-  | .use nl :: ops => nl.eval eval ∈ yielded ∧ ConstraintsHold.Completeness eval yielded ops
+  | .use enabled nl :: ops => (eval enabled ≠ 0 → nl.eval eval ∈ yielded) ∧ ConstraintsHold.Completeness eval yielded ops
 end Circuit
 
 /--
@@ -225,7 +230,7 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (yielded : 
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness yielded offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env yielded ∧ env.UsesLocalWitnessesCompleteness yielded (offset + s.localLength) ops
   | .yield enabled nl :: ops => (env enabled ≠ 0 → nl.eval env ∈ yielded) ∧ env.UsesLocalWitnessesCompleteness yielded offset ops
-  | .use _ :: ops => env.UsesLocalWitnessesCompleteness yielded offset ops
+  | .use _ _ :: ops => env.UsesLocalWitnessesCompleteness yielded offset ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (yielded : Set (NamedList F)) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
@@ -435,7 +440,7 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
 end
 
-export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup yield yieldWhen use)
+export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup yield yieldWhen use useWhen)
 
 -- general `witness` method
 
@@ -470,7 +475,7 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .assert _ => []
   | .lookup _ => []
   | .yield _ _ => []
-  | .use _ => []
+  | .use _ _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
@@ -512,7 +517,7 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (E
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .yield _ _ :: ops => witnessGenerators ops
-  | .use _ :: ops => witnessGenerators ops
+  | .use _ _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
@@ -521,7 +526,7 @@ def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment 
   | .lookup _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
   | .yield _ _ :: ops => witnessGenerators ops
-  | .use _ :: ops => witnessGenerators ops
+  | .use _ _ :: ops => witnessGenerators ops
 
 -- statements about constant length or output
 

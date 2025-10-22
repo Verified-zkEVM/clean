@@ -42,6 +42,7 @@ def Spec (input : U32 (F p)) : Prop :=
 theorem soundness : FormalAssertion.Soundness (F p) elaborated Assumptions Spec := by
   circuit_proof_start [NamedList.eval, U32.Normalized]
   obtain ⟨ x0, x1, x2, x3 ⟩ := input
+  simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_holds
   simp_all only [explicit_provable_type, circuit_norm, U32.mk.injEq]
 
 theorem completeness : FormalAssertion.Completeness (F p) elaborated Assumptions Spec := by

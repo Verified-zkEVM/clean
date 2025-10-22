@@ -13,7 +13,8 @@ lemma constraintsHold_cons : ∀ {op : FlatOperation F}, ∀ {ops : List (FlatOp
     rintro h
     dsimp only [ConstraintsHoldFlat] at h
     split at h
-    <;> simp_all only [ConstraintsHoldFlat, and_self])
+    <;> simp_all only [ConstraintsHoldFlat, and_self, and_true]
+    ; grind)
 
 lemma constraintsHold_append : ∀ {a b: List (FlatOperation F)}, ∀ {env : Environment F}, ∀ {yielded : Set (NamedList F)},
     ConstraintsHoldFlat env yielded (a ++ b) ↔ ConstraintsHoldFlat env yielded a ∧ ConstraintsHoldFlat env yielded b := by

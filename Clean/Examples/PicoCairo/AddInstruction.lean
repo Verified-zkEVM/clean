@@ -39,6 +39,9 @@ def addStepCircuitMain
   -- Step 1: Assert enabled is boolean (0 or 1)
   assertBool enabled
 
+  -- Step 1b: Conditionally use the preState from yielded execution trace
+  useWhen enabled ⟨"execution", [timestamp, preState.pc, preState.ap, preState.fp]⟩
+
   -- Step 2: Check that timestamp + 1 is not zero (prevent overflow)
   -- IsZeroField returns 1 if input is 0, 0 otherwise
   -- We want to assert that the result is 0 (meaning timestamp + 1 ≠ 0)
@@ -145,6 +148,8 @@ def addStepSpec
     (output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   -- If enabled (circuit enforces binary), circuit ensures it's ADD, so we just specify the yields
   if input.enabled = 1 then
+    -- The preState must be in the yielded set
+    ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     -- Circuit guarantees: fetch succeeds, decode succeeds, instruction is ADD
     -- We need to verify the ADD operation and state transition
     match Spec.fetchInstruction program input.preState.pc with
@@ -192,7 +197,10 @@ def addStepFormalCircuit
       simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
         Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
         List.cons.injEq, add_left_inj, and_true]
-      rcases h_holds with ⟨ h_iszero, h_nonzero, h_fetch, h_decode, h_isadd, h_read1, h_read2, h_read3, h_add ⟩
+      rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isadd, h_read1, h_read2, h_read3, h_add ⟩
+      simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
+      constructor
+      · aesop
       -- manual decomposition because State is not ProvableStruct
       rcases input_var_preState with ⟨ input_var_pc, input_var_ap, input_var_fp ⟩
       rcases input_preState with ⟨ input_pc, input_ap, input_fp ⟩
