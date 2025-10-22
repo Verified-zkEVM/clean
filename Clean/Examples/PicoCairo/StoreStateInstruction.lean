@@ -129,7 +129,7 @@ def storeStateStepSpec
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  if input.enabled ≠ 0 then
+  if input.enabled = 1 then
     -- Timestamp must not overflow
     input.timestamp + 1 ≠ 0 ∧
     -- When enabled, must have preState in yielded set
@@ -177,7 +177,7 @@ def storeStateStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
     · subst h_one
       simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
         Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
@@ -302,5 +302,69 @@ def storeStateStepCircuitsBundle
   -- Process each input using the formal circuit
   for h : i in [0:capacity] do
     subcircuitWithAssertion (storeStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i]
+
+/--
+Characterization theorem for StoreState instruction localYields.
+If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
+This is useful for inductive reasoning about execution traces.
+-/
+theorem storeStateStepSpec_localYields_characterization
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : storeStateStepSpec program memory input yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    -- Then we can extract:
+    input.enabled = 1 ∧
+    input.timestamp + 1 ≠ 0 ∧
+    ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
+    ∃ (rawInstr : RawInstruction (F p)) (mode1 mode2 mode3 : ℕ) (v1 v2 v3 : F p),
+      Spec.fetchInstruction program input.preState.pc = some rawInstr ∧
+      Spec.decodeInstruction rawInstr.rawInstrType = some (2, mode1, mode2, mode3) ∧
+      Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp = some v1 ∧
+      Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp = some v2 ∧
+      Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp = some v3 ∧
+      v1 = input.preState.pc ∧
+      v2 = input.preState.ap ∧
+      v3 = input.preState.fp ∧
+      nl = ⟨"execution", [input.timestamp + 1, input.preState.pc + 4, input.preState.ap, input.preState.fp]⟩ := by
+  simp only [storeStateStepSpec] at h_spec
+  by_cases h_enabled : input.enabled = 1
+  swap -- error case first
+  · aesop
+  simp only [h_enabled] at *
+  simp only [↓reduceIte, ne_eq, if_false_right] at h_spec
+  simp only [ne_eq, exists_and_left, existsAndEq, true_and]
+  rcases h_spec with ⟨ h_overflow, h_spec ⟩
+  constructor
+  · simp_all
+  rcases h_spec with ⟨ h_use, h_spec ⟩
+  constructor
+  · simp_all
+  cases h_fetched : fetchInstruction program input.preState.pc
+  · simp_all
+  rename_i rawInstr
+  use rawInstr
+  constructor
+  · rfl
+  simp only [h_fetched] at h_spec
+  cases h_decoded : decodeInstruction rawInstr.rawInstrType
+  · simp_all
+  rename_i decoded
+  rcases decoded with ⟨ typ, mode1, mode2, mode3 ⟩
+  simp only [h_decoded] at h_spec
+  use mode1, mode2, mode3
+  constructor
+  · grind
+  cases h_access1 : dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp
+  · grind
+  cases h_access2 : dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp
+  · grind
+  cases h_access3 : dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp
+  · grind
+  rename_i v1 v2 v3
+  simp_all
 
 end Examples.PicoCairo
