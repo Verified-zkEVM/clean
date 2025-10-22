@@ -140,6 +140,8 @@ def addStepSpec
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   -- If enabled (circuit enforces binary), circuit ensures it's ADD, so we just specify the yields
   if input.enabled = 1 then
+    -- Timestamp must not overflow
+    input.timestamp + 1 ≠ 0 ∧
     -- The preState must be in the yielded set
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     -- Circuit guarantees: fetch succeeds, decode succeeds, instruction is ADD
@@ -191,6 +193,9 @@ def addStepFormalCircuit
         List.cons.injEq, add_left_inj, and_true]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isadd, h_read1, h_read2, h_read3, h_add ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
+      -- Prove timestamp doesn't overflow
+      constructor
+      · aesop
       constructor
       · aesop
       -- manual decomposition because State is not ProvableStruct
