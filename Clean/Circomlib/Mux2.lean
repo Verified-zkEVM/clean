@@ -86,7 +86,35 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> decide
       output[i] = (c[i])[idx]
 
-  soundness := by sorry
+  soundness := by
+    simp only [circuit_norm, main]
+    intro offset env input_var input h_input h_assumptions h_output
+    obtain ⟨h_s10, h_out_vec⟩ := h_output
+
+    intro i hi
+
+    -- Extract the i-th element equality from h_output
+    have h_output_i := congrArg (fun v => v[i]) h_out_vec
+    simp only [Vector.getElem_map] at h_output_i
+    simp only [Vector.getElem_mapRange] at h_output_i
+    simp only [circuit_norm] at h_output_i
+    simp only [h_output_i]
+
+    rw [← h_input] at h_assumptions ⊢
+    -- Extract boolean assumptions
+    obtain ⟨h_s0, h_s1⟩ := h_assumptions
+
+    simp only [Vector.getElem_map] at h_s0 h_s1
+    simp only [Vector.getElem_map]
+
+    -- Case analysis on s[0] and s[1]
+    cases h_s0 <;> cases h_s1 <;>
+      (rename_i h_s0 h_s1
+       simp only [h_s0, h_s1, h_s10, circuit_norm]
+       norm_num
+       rw [ProvableType.getElem_eval_fields, getElem_eval_vector])
+
+    ring_nf
 
   completeness := by
     circuit_proof_start
@@ -166,7 +194,16 @@ def circuit : FormalCircuit (F p) Inputs field where
       split <;> split <;> decide
     output = c[idx]
 
-  soundness := by sorry
+  soundness := by
+    simp only [circuit_norm, main]
+    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
+    rw [← h_input] at *
+    clear input h_input
+    simp only [MultiMux2.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
+    specialize h_subcircuit_sound h_assumptions 0 (by omega)
+    rw [h_subcircuit_sound]
+    simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray,
+               List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
