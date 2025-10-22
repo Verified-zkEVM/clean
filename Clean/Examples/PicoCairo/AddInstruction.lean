@@ -12,6 +12,7 @@ import Clean.Examples.FemtoCairo.Types
 import Clean.Examples.FemtoCairo.Spec
 import Clean.Gadgets.Conditional
 import Clean.Gadgets.IsZeroField
+import Clean.Gadgets.Boolean
 
 namespace Examples.PicoCairo
 
@@ -35,28 +36,31 @@ def addStepCircuitMain
   let timestamp := input.timestamp
   let preState := input.preState
 
-  -- Step 1: Check that timestamp + 1 is not zero (prevent overflow)
+  -- Step 1: Assert enabled is boolean (0 or 1)
+  assertBool enabled
+
+  -- Step 2: Check that timestamp + 1 is not zero (prevent overflow)
   -- IsZeroField returns 1 if input is 0, 0 otherwise
   -- We want to assert that the result is 0 (meaning timestamp + 1 ≠ 0)
   let timestampPlusOneIsZero ← subcircuit Gadgets.IsZeroField.circuit (timestamp + 1)
   assertZero timestampPlusOneIsZero
 
-  -- Step 2: Fetch instruction from program memory using FemtoCairo's circuit
+  -- Step 3: Fetch instruction from program memory using FemtoCairo's circuit
   let rawInstruction ← subcircuitWithAssertion (fetchInstructionCircuit program h_programSize) preState.pc
 
-  -- Step 3: Conditionally decode the instruction (returns dummy ADD when disabled)
+  -- Step 4: Conditionally decode the instruction (returns dummy ADD when disabled)
   let decoded ← subcircuitWithAssertion conditionalDecodeCircuit {
     enabled := enabled,
     rawInstrType := rawInstruction.rawInstrType,
     dummy := dummyADDInstruction
   }
 
-  -- Step 4: Unconditionally assert it's an ADD instruction
+  -- Step 5: Unconditionally assert it's an ADD instruction
   -- When enabled=1, this checks the actual instruction is ADD
   -- When enabled=0, this always passes since dummy is ADD
   assertZero (decoded.instrType.isAdd - 1)
 
-  -- Step 5: Read operands from memory using addressing modes
+  -- Step 6: Read operands from memory using addressing modes
   let v1 ← subcircuitWithAssertion (readFromMemoryCircuit memory h_memorySize) {
     state := preState,
     offset := rawInstruction.op1,
@@ -75,15 +79,15 @@ def addStepCircuitMain
     mode := decoded.addr3
   }
 
-  -- Step 6: Conditional ADD constraint: v3 = v1 + v2 (only when enabled)
+  -- Step 7: Conditional ADD constraint: v3 = v1 + v2 (only when enabled)
   assertZero (enabled * (v3 - (v1 + v2)))
 
-  -- Step 7: Compute next state (pc increments by 4, ap and fp unchanged for ADD)
+  -- Step 8: Compute next state (pc increments by 4, ap and fp unchanged for ADD)
   let postPc := preState.pc + 4
   let postAp := preState.ap
   let postFp := preState.fp
 
-  -- Step 8: Conditional yield of new execution trace element
+  -- Step 9: Conditional yield of new execution trace element
   yieldWhen enabled ⟨"execution", [timestamp + 1, postPc, postAp, postFp]⟩
 
 /--
@@ -95,7 +99,7 @@ def addStepElaboratedCircuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
   main := addStepCircuitMain program h_programSize memory h_memorySize
-  localLength _ := 29  -- IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
+  localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
   yields input env _ := {
     nl | env input.enabled ≠ 0 ∧
          nl = ⟨"execution", [env (input.timestamp + 1),
@@ -111,17 +115,16 @@ def addStepElaboratedCircuit
 
 /--
 Assumptions for ADD instruction step (for completeness).
-Assumes enabled is binary and if enabled, the preState matches the unique execution trace at current timestamp.
+If enabled, the preState matches the unique execution trace at current timestamp.
 Also ensures new timestamp won't overflow.
 -/
 def addStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p))) : Prop :=
-  IsBool input.enabled ∧
   -- New timestamp should not be zero (prevent overflow)
   input.timestamp + 1 ≠ 0 ∧
-  -- If enabled, there's exactly one execution trace at current timestamp matching input state
+  -- If enabled (circuit enforces binary), there's exactly one execution trace at current timestamp matching input state
   (input.enabled = 1 →
     {nl ∈ yielded | nl.name = "execution" ∧
                     ∃ h : nl.values.length = 4,
@@ -138,8 +141,7 @@ def addStepSpec
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  IsBool input.enabled →
-  -- If enabled, circuit ensures it's ADD, so we just specify the yields
+  -- If enabled (circuit enforces binary), circuit ensures it's ADD, so we just specify the yields
   if input.enabled = 1 then
     -- Circuit guarantees: fetch succeeds, decode succeeds, instruction is ADD
     -- We need to verify the ADD operation and state transition
@@ -179,9 +181,9 @@ def addStepFormalCircuit
   Spec := addStepSpec program h_programSize memory h_memorySize
   soundness := by
     circuit_proof_start [addStepSpec, addStepElaboratedCircuit, addStepCircuitMain,
-      Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
+      assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
-    intro h_bool
+    rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
     · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
     · subst h_one
