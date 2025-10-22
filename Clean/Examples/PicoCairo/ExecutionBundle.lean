@@ -7,6 +7,7 @@ import Clean.Circuit.Basic
 import Clean.Utils.Vector
 import Clean.Examples.PicoCairo.Types
 import Clean.Examples.PicoCairo.AddInstruction
+import Clean.Examples.PicoCairo.MulInstruction
 
 namespace Examples.PicoCairo
 
