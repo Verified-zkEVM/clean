@@ -8,6 +8,7 @@ import Clean.Utils.Vector
 import Clean.Examples.PicoCairo.Types
 import Clean.Examples.PicoCairo.AddInstruction
 import Clean.Examples.PicoCairo.MulInstruction
+import Clean.Examples.PicoCairo.StoreStateInstruction
 
 namespace Examples.PicoCairo
 

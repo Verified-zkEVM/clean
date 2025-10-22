@@ -157,4 +157,31 @@ def dummyMULInstruction : Var DecodedInstruction (F p) := {
   }
 }
 
+def dummyStoreStateInstruction : Var DecodedInstruction (F p) := {
+  instrType := {
+    isAdd := Expression.const 0,
+    isMul := Expression.const 0,
+    isStoreState := Expression.const 1,
+    isLoadState := Expression.const 0
+  },
+  mode1 := {
+    isImmediate := Expression.const 1,
+    isDoubleAddressing := Expression.const 0,
+    isApRelative := Expression.const 0,
+    isFpRelative := Expression.const 0
+  },
+  mode2 := {
+    isImmediate := Expression.const 1,
+    isDoubleAddressing := Expression.const 0,
+    isApRelative := Expression.const 0,
+    isFpRelative := Expression.const 0
+  },
+  mode3 := {
+    isImmediate := Expression.const 1,
+    isDoubleAddressing := Expression.const 0,
+    isApRelative := Expression.const 0,
+    isFpRelative := Expression.const 0
+  }
+}
+
 end Examples.PicoCairo
