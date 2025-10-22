@@ -233,34 +233,34 @@ def addStepFormalCircuit
         specialize h_read1 (by aesop)
         specialize h_read2 (by aesop)
         specialize h_read3 (by aesop)
-        rcases h_decode with ⟨ h_correct, h_addr1', h_correct1, h_addr2', h_correct2, h_addr3', h_correct3 ⟩
+        rcases h_decode with ⟨ h_correct, h_mode1', h_correct1, h_mode2', h_correct2, h_mode3', h_correct3 ⟩
         cases h_access1 : dataMemoryAccess memory (env.get (i₀ + 2 + 1)) mode1' input_ap input_fp
         · simp only [circuit_norm, explicit_provable_type] at h_read1
-          subst h_addr1'
+          subst h_mode1'
           simp_all
         rename_i v1
         cases h_access2 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1)) mode2' input_ap input_fp
         · simp only [circuit_norm, explicit_provable_type] at h_read2
-          subst h_addr2'
+          subst h_mode2'
           simp_all
         rename_i v2
         cases h_access3 : dataMemoryAccess memory (env.get (i₀ + 2 + 1 + 1 + 1)) mode3' input_ap input_fp
         · simp only [circuit_norm, explicit_provable_type] at h_read3
-          subst h_addr3'
+          subst h_mode3'
           simp_all
         rename_i v3
         simp only
         and_intros
         · simp only [circuit_norm, explicit_provable_type] at h_read1
-          subst h_addr1'
+          subst h_mode1'
           simp only [h_access1] at h_read1
           subst h_read1
           simp only [circuit_norm, explicit_provable_type] at h_read2
-          subst h_addr2'
+          subst h_mode2'
           simp only [h_access2] at h_read2
           subst h_read2
           simp only [circuit_norm, explicit_provable_type] at h_read3
-          subst h_addr3'
+          subst h_mode3'
           simp only [h_access3] at h_read3
           subst h_read3
           grind
