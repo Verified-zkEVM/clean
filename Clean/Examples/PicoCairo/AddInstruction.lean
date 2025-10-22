@@ -122,9 +122,11 @@ def addStepAssumptions
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+  IsBool input.enabled ∧
   -- New timestamp should not be zero (prevent overflow)
   input.timestamp + 1 ≠ 0 ∧
-  -- If enabled (circuit enforces binary), there's exactly one execution trace at current timestamp matching input state
+  ZMod.val (input.preState.pc) + 3 < programSize ∧
+  -- If enabled, there's exactly one execution trace at current timestamp matching input state
   (input.enabled = 1 →
     {nl ∈ yielded | nl.name = "execution" ∧
                     ∃ h : nl.values.length = 4,
@@ -267,6 +269,8 @@ def addStepFormalCircuit
         · simp_all
       grind
 
+  -- Postponed: assumptions are missing about well-formedness of the program, etc.
+  -- Yield/use is more interesting in soundness.
   completeness := by sorry
 
 /--
