@@ -118,23 +118,15 @@ def addStepElaboratedCircuit
 
 /--
 Assumptions for ADD instruction step (for completeness).
-If enabled, the preState matches the unique execution trace at current timestamp.
-Also ensures new timestamp won't overflow.
+Ensures the instruction can be decoded, new timestamp won't overflow, and PC is in bounds.
 -/
 def addStepAssumptions
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+    {programSize : ℕ} [NeZero programSize]
+    (input : InstructionStepInput (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
   IsBool input.enabled ∧
   -- New timestamp should not be zero (prevent overflow)
   input.timestamp + 1 ≠ 0 ∧
-  ZMod.val (input.preState.pc) + 3 < programSize ∧
-  -- If enabled, there's exactly one execution trace at current timestamp matching input state
-  (input.enabled = 1 →
-    {nl ∈ yielded | nl.name = "execution" ∧
-                    ∃ h : nl.values.length = 4,
-                    nl.values[0]'(by simp [h]) = input.timestamp} =
-    {⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩})
+  ZMod.val (input.preState.pc) + 3 < programSize
 
 /--
 Specification for ADD instruction step (for soundness).
@@ -142,10 +134,10 @@ The circuit already ensures fetch/decode succeed and instruction is ADD.
 This spec verifies the ADD constraint and correct state transition.
 -/
 def addStepSpec
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (_h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (_h_memorySize : memorySize < p)
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
-    (output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
+    (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   -- If enabled (circuit enforces binary), circuit ensures it's ADD, so we just specify the yields
   if input.enabled = 1 then
     -- The preState must be in the yielded set
@@ -184,7 +176,7 @@ def addStepFormalCircuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuit (F p) InstructionStepInput unit where
   elaborated := addStepElaboratedCircuit program h_programSize memory h_memorySize
-  Assumptions := addStepAssumptions program h_programSize memory h_memorySize
+  Assumptions := addStepAssumptions (programSize := programSize)
   Spec := addStepSpec program h_programSize memory h_memorySize
   soundness := by
     circuit_proof_start [addStepSpec, addStepElaboratedCircuit, addStepCircuitMain,
