@@ -66,7 +66,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n + 1
-  localLength_eq := by sorry
+  localLength_eq := by
+    intro input offset
+    simp only [main, circuit_norm]
+    omega
 
   Assumptions input :=
     let ⟨_, s⟩ := input
@@ -85,7 +88,17 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   soundness := by sorry
 
-  completeness := by sorry
+  completeness := by
+    circuit_proof_start
+    obtain ⟨_, h_env⟩ := h_env
+    constructor
+    · assumption
+    · ext i hi
+      simp only [Vector.getElem_map, Vector.getElem_mapRange]
+      simp only [Expression.eval]
+      have h_env_i := h_env ⟨i, hi⟩
+      rw [h_env_i]
+      norm_num
 
 end MultiMux2
 
@@ -130,7 +143,10 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   localLength _ := 2
-  localLength_eq := by sorry
+  localLength_eq := by
+    intro input offset
+    simp only [main, circuit_norm]
+    rfl
 
   subcircuitsConsistent := by
     intro input offset
@@ -152,7 +168,12 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by sorry
 
-  completeness := by sorry
+  completeness := by
+    simp only [circuit_norm, main]
+    intro offset env input_var h_env input h_input h_s
+    simp only [MultiMux2.circuit, circuit_norm]
+    rw [← h_input] at h_s
+    simp_all
 
 end Mux2
 
