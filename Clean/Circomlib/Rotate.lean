@@ -1,5 +1,6 @@
 import Clean.Circuit
 import Clean.Utils.Field
+import Clean.Utils.Tactics
 
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
@@ -27,12 +28,18 @@ def main (n r : ℕ) [NeZero n] (inp : Vector (Expression (F p)) n) := do
 
 def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) where
   main := main n r
-  localLength := sorry
-  localLength_eq := sorry
-  subcircuitsConsistent := sorry
-  Spec := sorry
-  soundness := sorry
-  completeness := sorry
+
+  localLength _ := n
+
+  Spec input output := output = input.rotate r
+
+  soundness := by
+    circuit_proof_start
+    sorry
+
+  completeness := by
+    circuit_proof_start
+    sorry
 
 end RotR
 end Circomlib
