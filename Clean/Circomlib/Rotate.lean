@@ -21,9 +21,11 @@ template RotR(n, r) {
     }
 }
 -/
-def main (n r : ℕ) (inp : Vector (Expression (F p)) n) : Circuit (F p) (Vector (Expression (F p)) n) := sorry
+def main (n r : ℕ) [NeZero n] (inp : Vector (Expression (F p)) n) := do
+  let out <== Vector.mapFinRange n fun i => inp.get (i + Fin.ofNat n r)
+  return out
 
-def circuit (n r : ℕ) : FormalCircuit (F p) (fields n) (fields n) where
+def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) where
   main := main n r
   localLength := sorry
   localLength_eq := sorry
