@@ -18,13 +18,13 @@ Main execution circuit that proves a trace from initial to final state.
 Yields the initial state, runs the execution bundle, and uses the final state.
 -/
 def executionCircuit
-    (addCapacity : ℕ)
+    (addCapacity : ℕ) [NeZero addCapacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (initialState : FemtoCairo.Types.State (F p))
     (finalTimestamp : F p)
     (finalState : FemtoCairo.Types.State (F p))
-    (addInputs : Vector (Var InstructionStepInput (F p)) addCapacity) :
+    (addInputs : Var (ProvableVector InstructionStepInput addCapacity) (F p)) :
     Circuit (F p) Unit := do
 
   -- Yield initial state at timestamp 0

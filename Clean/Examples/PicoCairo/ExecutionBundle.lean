@@ -20,16 +20,16 @@ Main execution bundle that combines all instruction type bundles.
 For now, only includes ADD instructions.
 -/
 def executionBundle
-    (addCapacity : ℕ)
+    (addCapacity : ℕ) [NeZero addCapacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (addInputs : Vector (Var InstructionStepInput (F p)) addCapacity) :
+    (addInputs : Var (ProvableVector InstructionStepInput addCapacity) (F p)) :
     Circuit (F p) Unit := do
 
   -- Execute ADD instruction bundle
   addStepCircuitsBundle addCapacity program h_programSize memory h_memorySize addInputs
 
-  -- Future: Add other instruction bundles
+  -- Future: Add other instruction bundles (will need NeZero constraints and ProvableVector inputs)
   -- mulStepCircuitsBundle mulCapacity program h_programSize memory h_memorySize mulInputs
   -- loadStateStepCircuitsBundle loadCapacity program h_programSize memory h_memorySize loadInputs
   -- storeStateStepCircuitsBundle storeCapacity program h_programSize memory h_memorySize storeInputs
