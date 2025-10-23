@@ -87,22 +87,27 @@ def storeStateStepCircuitMain
   -- Step 8: Yield new execution state (pc advances by 4, ap and fp unchanged)
   yieldWhen enabled ⟨"execution", [timestamp + 1, preState.pc + 4, preState.ap, preState.fp]⟩
 
+/--
+Computes the localYields for a single StoreState instruction step.
+If enabled, yields the new execution state; otherwise yields nothing.
+-/
+def storeStateStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
+  { nl | input.enabled ≠ 0 ∧
+         nl = ⟨"execution", [input.timestamp + 1,
+                            input.preState.pc + 4,
+                            input.preState.ap,
+                            input.preState.fp]⟩ }
+
 def storeStateStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
   main := storeStateStepCircuitMain program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env _ := {
-    nl | env input.enabled ≠ 0 ∧
-         nl = ⟨"execution", [env (input.timestamp + 1),
-                             env (input.preState.pc + 4),
-                             env input.preState.ap,
-                             env input.preState.fp]⟩
-  }
+  yields input env _ := storeStateStepLocalYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [storeStateStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [storeStateStepLocalYields, storeStateStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
@@ -177,15 +182,16 @@ def storeStateStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, storeStateStepLocalYields]
+      subst h_zero
+      simp_all only [ne_eq, not_true_eq_false, IsEmpty.forall_iff, id_eq, ↓reduceIte, DecodedInstruction.mk.injEq,
+        zero_mul, and_self, and_true, true_and, zero_ne_one, false_and, Set.setOf_false]
     · subst h_one
-      simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
-        Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
-        List.cons.injEq, add_left_inj, and_true]
+      simp only [↓reduceIte, storeStateStepLocalYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isstore, h_read1, h_read2, h_read3, h_v1, h_v2, h_v3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
-      · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, one_mul,
+      · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, one_mul, ne_eq,
         not_false_eq_true]
       constructor
       · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, one_mul]
