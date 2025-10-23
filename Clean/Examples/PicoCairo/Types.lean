@@ -67,6 +67,10 @@ instance : ProvableStruct InstructionStepInput where
   fromComponents := fun (.cons enabled (.cons timestamp (.cons preState .nil))) =>
     { enabled, timestamp, preState }
 
+instance : NonEmptyProvableType InstructionStepInput where
+  nonempty := by
+    decide
+
 /--
 Bundle configuration specifying how many of each instruction type
 -/

@@ -289,10 +289,61 @@ def addStepCircuitsBundle
     (capacity : ℕ)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (inputs : Vector (Var InstructionStepInput (F p)) capacity) : Circuit (F p) Unit := do
+    (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   -- Process each input using the formal circuit
   for h : i in [0:capacity] do
     subcircuitWithAssertion (addStepFormalCircuit program h_programSize memory h_memorySize) inputs[i]
+
+/--
+Elaborated circuit for ADD instruction bundle.
+-/
+def addStepCircuitsBundleElaborated
+    (capacity : ℕ)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    ElaboratedCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+  main := addStepCircuitsBundle capacity program h_programSize memory h_memorySize
+  localLength _ := capacity * 29  -- Each step uses 29 locals
+  localLength_eq := sorry
+  yields inputs env offset :=
+    ⋃ i : Fin capacity, addStepLocalYields (eval env inputs[i])
+  yields_eq := sorry
+  subcircuitsConsistent := sorry
+
+/--
+Assumptions for the bundle: each input must satisfy the individual step assumptions.
+-/
+def addStepCircuitsBundleAssumptions
+    (capacity : ℕ)
+    {programSize : ℕ} [NeZero programSize]
+    (inputs : ProvableVector InstructionStepInput capacity (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
+  ∀ i : Fin capacity, addStepAssumptions (programSize := programSize) inputs[i] _yielded
+
+/--
+Spec for the bundle: each element satisfies its step spec, and local yields are the union.
+-/
+def addStepCircuitsBundleSpec
+    (capacity : ℕ)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
+    (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
+  (∀ i : Fin capacity, addStepSpec program memory inputs[i] yielded () (addStepLocalYields inputs[i])) ∧
+  localYields = ⋃ i : Fin capacity, addStepLocalYields inputs[i]
+
+/--
+GeneralFormalCircuit for ADD instruction bundle.
+-/
+def addStepCircuitsBundleFormalCircuit
+    (capacity : ℕ)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+  elaborated := addStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
+  Assumptions := addStepCircuitsBundleAssumptions capacity (programSize := programSize)
+  Spec := addStepCircuitsBundleSpec capacity program memory
+  soundness := sorry
+  completeness := sorry
 
 -- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
 
