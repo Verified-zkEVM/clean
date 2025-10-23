@@ -296,6 +296,24 @@ def loadStateStepCircuitsBundle
     subcircuitWithAssertion (loadStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i]
 
 /--
+Predicate stating that a named list represents a valid LoadState instruction execution.
+This captures the relationship between a pre-state, the instruction execution, and the resulting yield.
+-/
+def IsValidLoadStateExecution
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p)) : Prop :=
+  ∃ (rawInstr : RawInstruction (F p)) (mode1 mode2 mode3 : ℕ) (newPc newAp newFp : F p),
+    Spec.fetchInstruction program preState.pc = some rawInstr ∧
+    Spec.decodeInstruction rawInstr.rawInstrType = some (3, mode1, mode2, mode3) ∧
+    Spec.dataMemoryAccess memory rawInstr.op1 mode1 preState.ap preState.fp = some newPc ∧
+    Spec.dataMemoryAccess memory rawInstr.op2 mode2 preState.ap preState.fp = some newAp ∧
+    Spec.dataMemoryAccess memory rawInstr.op3 mode3 preState.ap preState.fp = some newFp ∧
+    nl = ⟨"execution", [timestamp + 1, newPc, newAp, newFp]⟩
+
+/--
 Characterization theorem for LoadState instruction localYields.
 If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
 This is useful for inductive reasoning about execution traces.
@@ -312,14 +330,9 @@ theorem loadStateStepSpec_localYields_characterization
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
-    ∃ (rawInstr : RawInstruction (F p)) (mode1 mode2 mode3 : ℕ) (newPc newAp newFp : F p),
-      Spec.fetchInstruction program input.preState.pc = some rawInstr ∧
-      Spec.decodeInstruction rawInstr.rawInstrType = some (3, mode1, mode2, mode3) ∧
-      Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp = some newPc ∧
-      Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp = some newAp ∧
-      Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp = some newFp ∧
-      nl = ⟨"execution", [input.timestamp + 1, newPc, newAp, newFp]⟩ := by
+    IsValidLoadStateExecution program memory input.preState input.timestamp nl := by
   simp only [loadStateStepSpec] at h_spec
+  simp only [IsValidLoadStateExecution]
   by_cases h_enabled : input.enabled = 1
   swap -- error case first
   · aesop

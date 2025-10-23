@@ -304,6 +304,27 @@ def storeStateStepCircuitsBundle
     subcircuitWithAssertion (storeStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i]
 
 /--
+Predicate stating that a named list represents a valid StoreState instruction execution.
+This captures the relationship between a pre-state, the instruction execution, and the resulting yield.
+-/
+def IsValidStoreStateExecution
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p)) : Prop :=
+  ∃ (rawInstr : RawInstruction (F p)) (mode1 mode2 mode3 : ℕ) (v1 v2 v3 : F p),
+    Spec.fetchInstruction program preState.pc = some rawInstr ∧
+    Spec.decodeInstruction rawInstr.rawInstrType = some (2, mode1, mode2, mode3) ∧
+    Spec.dataMemoryAccess memory rawInstr.op1 mode1 preState.ap preState.fp = some v1 ∧
+    Spec.dataMemoryAccess memory rawInstr.op2 mode2 preState.ap preState.fp = some v2 ∧
+    Spec.dataMemoryAccess memory rawInstr.op3 mode3 preState.ap preState.fp = some v3 ∧
+    v1 = preState.pc ∧
+    v2 = preState.ap ∧
+    v3 = preState.fp ∧
+    nl = ⟨"execution", [timestamp + 1, preState.pc + 4, preState.ap, preState.fp]⟩
+
+/--
 Characterization theorem for StoreState instruction localYields.
 If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
 This is useful for inductive reasoning about execution traces.
@@ -320,17 +341,9 @@ theorem storeStateStepSpec_localYields_characterization
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
-    ∃ (rawInstr : RawInstruction (F p)) (mode1 mode2 mode3 : ℕ) (v1 v2 v3 : F p),
-      Spec.fetchInstruction program input.preState.pc = some rawInstr ∧
-      Spec.decodeInstruction rawInstr.rawInstrType = some (2, mode1, mode2, mode3) ∧
-      Spec.dataMemoryAccess memory rawInstr.op1 mode1 input.preState.ap input.preState.fp = some v1 ∧
-      Spec.dataMemoryAccess memory rawInstr.op2 mode2 input.preState.ap input.preState.fp = some v2 ∧
-      Spec.dataMemoryAccess memory rawInstr.op3 mode3 input.preState.ap input.preState.fp = some v3 ∧
-      v1 = input.preState.pc ∧
-      v2 = input.preState.ap ∧
-      v3 = input.preState.fp ∧
-      nl = ⟨"execution", [input.timestamp + 1, input.preState.pc + 4, input.preState.ap, input.preState.fp]⟩ := by
+    IsValidStoreStateExecution program memory input.preState input.timestamp nl := by
   simp only [storeStateStepSpec] at h_spec
+  simp only [IsValidStoreStateExecution]
   by_cases h_enabled : input.enabled = 1
   swap -- error case first
   · aesop
