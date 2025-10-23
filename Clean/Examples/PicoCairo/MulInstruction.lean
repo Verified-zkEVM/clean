@@ -89,6 +89,17 @@ def mulStepCircuitMain
   yieldWhen enabled ⟨"execution", [timestamp + 1, preState.pc + 4, preState.ap, preState.fp]⟩
 
 /--
+Computes the localYields for a single MUL instruction step.
+If enabled, yields the new execution state; otherwise yields nothing.
+-/
+def mulStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
+  { nl | input.enabled ≠ 0 ∧
+         nl = ⟨"execution", [input.timestamp + 1,
+                            input.preState.pc + 4,
+                            input.preState.ap,
+                            input.preState.fp]⟩ }
+
+/--
 Elaborated circuit for MUL instruction step.
 -/
 def mulStepElaboratedCircuit
@@ -97,16 +108,10 @@ def mulStepElaboratedCircuit
     ElaboratedCircuit (F p) InstructionStepInput unit where
   main := mulStepCircuitMain program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env _ := {
-    nl | env input.enabled ≠ 0 ∧
-         nl = ⟨"execution", [env (input.timestamp + 1),
-                             env (input.preState.pc + 4),
-                             env input.preState.ap,
-                             env input.preState.fp]⟩
-  }
+  yields input env _ := mulStepLocalYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [mulStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [mulStepLocalYields, mulStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
@@ -179,11 +184,10 @@ def mulStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, mulStepLocalYields]
+      aesop
     · subst h_one
-      simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
-        Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
-        List.cons.injEq, add_left_inj, and_true]
+      simp only [↓reduceIte, mulStepLocalYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_ismul, h_read1, h_read2, h_read3, h_mul ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
@@ -276,8 +280,6 @@ def mulStepFormalCircuit
         simp only [h_access3] at h_read3
         subst h_read3
         grind
-      · simp_all
-      · simp_all
       · simp_all
 
   -- Postponed: assumptions are missing about well-formedness of the program, etc.

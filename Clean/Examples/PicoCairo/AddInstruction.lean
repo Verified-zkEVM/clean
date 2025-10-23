@@ -94,6 +94,17 @@ def addStepCircuitMain
   yieldWhen enabled ⟨"execution", [timestamp + 1, postPc, postAp, postFp]⟩
 
 /--
+Computes the localYields for a single ADD instruction step.
+If enabled, yields the new execution state; otherwise yields nothing.
+-/
+def addStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
+  { nl | input.enabled ≠ 0 ∧
+         nl = ⟨"execution", [input.timestamp + 1,
+                            input.preState.pc + 4,
+                            input.preState.ap,
+                            input.preState.fp]⟩ }
+
+/--
 ElaboratedCircuit for ADD instruction step.
 Takes InstructionStepInput and produces unit (since we yield, not return).
 -/
@@ -103,16 +114,10 @@ def addStepElaboratedCircuit
     ElaboratedCircuit (F p) InstructionStepInput unit where
   main := addStepCircuitMain program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env _ := {
-    nl | env input.enabled ≠ 0 ∧
-         nl = ⟨"execution", [env (input.timestamp + 1),
-                             env (input.preState.pc + 4),
-                             env input.preState.ap,
-                             env input.preState.fp]⟩
-  }
+  yields input env _ := addStepLocalYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [addStepLocalYields, addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
@@ -186,11 +191,10 @@ def addStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, addStepLocalYields]
+      aesop
     · subst h_one
-      simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and,
-        Set.setOf_eq_eq_singleton, Set.singleton_eq_singleton_iff, NamedList.mk.injEq,
-        List.cons.injEq, add_left_inj, and_true]
+      simp only [↓reduceIte, addStepLocalYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isadd, h_read1, h_read2, h_read3, h_add ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       -- Prove timestamp doesn't overflow
@@ -271,8 +275,6 @@ def addStepFormalCircuit
         simp only [h_access3] at h_read3
         subst h_read3
         grind
-      · simp_all
-      · simp_all
       · simp_all
 
   -- Postponed: assumptions are missing about well-formedness of the program, etc.
