@@ -14,6 +14,7 @@ import Clean.Examples.FemtoCairo.Spec
 import Clean.Gadgets.Conditional
 import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.Boolean
+import Batteries.Data.Vector.Lemmas
 
 namespace Examples.PicoCairo
 
@@ -361,7 +362,25 @@ def addStepCircuitsBundleFormalCircuit
   elaborated := addStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
   Assumptions := addStepCircuitsBundleAssumptions capacity (programSize := programSize)
   Spec := addStepCircuitsBundleSpec capacity program memory
-  soundness := sorry
+  soundness := by
+    circuit_proof_start [addStepCircuitsBundleElaborated, addStepCircuitsBundleSpec]
+    simp only [addStepCircuitsBundle, circuit_norm, addStepFormalCircuit] at h_holds
+    and_intros
+    · intro i
+      specialize h_holds i
+      simp only [addStepElaboratedCircuit] at h_holds
+      simp only [Fin.eta] at h_holds
+      cases iv_h : Vector.get input_var i
+      rename_i enabledVar timestampVar preStateVar
+      simp only [iv_h] at h_holds
+      simp only [← h_input, eval_vector, Vector.getElem_map]
+      rw [Vector.get_eq_getElem] at iv_h
+      conv =>
+        arg 3
+        simp only [iv_h]
+        simp only [circuit_norm]
+      assumption
+    · sorry
   completeness := sorry
 
 -- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
