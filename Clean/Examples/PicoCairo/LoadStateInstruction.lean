@@ -468,4 +468,47 @@ def loadStateStepCircuitsBundleSpec
     (∀ i : Fin capacity, loadStateStepSpec program memory inputs[i] yielded () (loadStateStepLocalYields (inputs[i]) env (baseOffset + i * 29))) ∧
     localYields = ⋃ i : Fin capacity, loadStateStepLocalYields (inputs[i]) env (baseOffset + i * 29)
 
+/--
+Bundle-level formal circuit for LoadState instructions.
+-/
+def loadStateStepCircuitsBundleFormalCircuit
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+  elaborated := loadStateStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
+  Assumptions := loadStateStepCircuitsBundleAssumptions capacity (programSize := programSize)
+  Spec := loadStateStepCircuitsBundleSpec capacity program memory
+  soundness := by
+    circuit_proof_start [loadStateStepCircuitsBundleElaborated, loadStateStepCircuitsBundleSpec]
+    -- Need to provide env and baseOffset witnesses for the existential in the spec
+    use env, i₀
+    simp only [loadStateStepCircuitsBundle, circuit_norm] at h_holds
+    and_intros
+    · intro i
+      specialize h_holds i
+      simp only [loadStateStepFormalCircuit, loadStateStepElaboratedCircuit] at h_holds
+      simp only [Fin.eta] at h_holds
+      cases iv_h : Vector.get input_var i
+      rename_i enabledVar timestampVar preStateVar
+      simp only [iv_h] at h_holds
+      simp only [← h_input, eval_vector, Vector.getElem_map]
+      rw [Vector.get_eq_getElem] at iv_h
+      conv =>
+        arg 3
+        simp only [iv_h]
+        simp only [circuit_norm]
+      assumption
+    · apply Set.iUnion_congr
+      intro i
+      congr 1
+      simp only [← h_input, eval_vector, Vector.getElem_map]
+      cases iv_h : Vector.get input_var i
+      rename_i enabledVar timestampVar preStateVar
+      rw [Vector.get_eq_getElem] at iv_h
+      simp only [iv_h]
+      conv_rhs =>
+        simp only [circuit_norm]
+  completeness := sorry
+
 end Examples.PicoCairo
