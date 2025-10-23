@@ -373,4 +373,27 @@ theorem addStepSpec_localYields_characterization
   simp only [true_and]
   simp_all
 
+/--
+Theorem stating that IsValidAddExecution implies a valid femtoCairoMachineTransition.
+This connects the circuit specification to the machine semantics.
+-/
+theorem IsValidAddExecution_implies_valid_transition
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p))
+    (h_valid : IsValidAddExecution program memory preState timestamp nl) :
+    ∃ newState : State (F p),
+      Spec.femtoCairoMachineTransition program memory preState = some newState ∧
+      nl = ⟨"execution", [timestamp + 1, newState.pc, newState.ap, newState.fp]⟩ := by
+  simp only [IsValidAddExecution] at h_valid
+  rcases h_valid with ⟨rawInstr, mode1, mode2, mode3, v1, v2, v3, h_fetch, h_decode, h_access1, h_access2, h_access3, h_add, h_nl⟩
+  use { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
+  constructor
+  · simp only [Spec.femtoCairoMachineTransition, Option.bind_eq_bind, h_fetch]
+    simp only [h_decode, Option.bind_some, h_access1, h_access2, h_access3, computeNextState]
+    aesop
+  · exact h_nl
+
 end Examples.PicoCairo
