@@ -82,22 +82,27 @@ def loadStateStepCircuitMain
   -- Note: For LoadState, the new state comes from the operands
   yieldWhen enabled ⟨"execution", [timestamp + 1, newPc, newAp, newFp]⟩
 
+/--
+Computes the localYields for a single LoadState instruction step.
+If enabled, yields the new execution state with loaded pc, ap, fp values from the environment.
+-/
+def loadStateStepLocalYields (input : Var InstructionStepInput (F p)) (env : Environment (F p)) (offset : ℕ) : Set (NamedList (F p)) :=
+  { nl | env input.enabled ≠ 0 ∧
+         nl = ⟨"execution", [env (input.timestamp + 1),
+                            env.get (offset + 2 + 4 + 8 + 1 + 1 + 1 + 1),
+                            env.get (offset + 2 + 4 + 8 + 5 + 1 + 1 + 1 + 1),
+                            env.get (offset + 2 + 4 + 8 + 5 + 5 + 1 + 1 + 1 + 1)]⟩ }
+
 def loadStateStepElaboratedCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
   main := loadStateStepCircuitMain program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env offset := {
-    nl | env input.enabled ≠ 0 ∧
-         nl = ⟨"execution", [env (input.timestamp + 1),
-                             env.get (offset + 2 + 4 + 8 + 1 + 1 + 1 + 1),
-                             env.get (offset + 2 + 4 + 8 + 5 + 1 + 1 + 1 + 1),
-                             env.get (offset + 2 + 4 + 8 + 5 + 5 + 1 + 1 + 1 + 1)]⟩
-  }
+  yields input env offset := loadStateStepLocalYields input env offset
   yields_eq := by
     intro input env offset
-    simp only [loadStateStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [loadStateStepLocalYields, loadStateStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     ext nl
     constructor <;> intro h <;> simp only [Set.mem_setOf_eq] at h ⊢
@@ -169,13 +174,14 @@ def loadStateStepFormalCircuit
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, zero_ne_one, ↓reduceIte, ne_eq, not_true_eq_false, false_and, Set.setOf_false]
+    · simp only [h_zero, loadStateStepLocalYields]
+      aesop
     · subst h_one
-      simp only [↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true, true_and]
+      simp only [↓reduceIte, loadStateStepLocalYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isload, h_read1, h_read2, h_read3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
-      · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte, not_false_eq_true]
+      · aesop
       constructor
       · simp_all only [id_eq, right_eq_ite_iff, zero_ne_one, imp_false, one_ne_zero, ↓reduceIte]
         obtain ⟨left, right⟩ := h_input
