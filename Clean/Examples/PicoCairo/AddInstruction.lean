@@ -380,7 +380,16 @@ def addStepCircuitsBundleFormalCircuit
         simp only [iv_h]
         simp only [circuit_norm]
       assumption
-    · sorry
+    · apply Set.iUnion_congr
+      intro i
+      congr 1
+      simp only [← h_input, eval_vector, Vector.getElem_map]
+      cases iv_h : Vector.get input_var i
+      rename_i enabledVar timestampVar preStateVar
+      rw [Vector.get_eq_getElem] at iv_h
+      simp only [iv_h]
+      conv_rhs =>
+        simp only [circuit_norm]
   completeness := sorry
 
 -- Future: mulStepCircuitsBundle, loadStateStepCircuitsBundle, storeStateStepCircuitsBundle
