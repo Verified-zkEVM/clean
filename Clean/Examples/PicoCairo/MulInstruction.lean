@@ -376,6 +376,7 @@ theorem mulStepSpec_localYields_characterization
   simp only [true_and]
   simp_all
 
+omit p_large_enough in
 /--
 Theorem stating that IsValidMulExecution implies a valid femtoCairoMachineTransition.
 This connects the circuit specification to the machine semantics.

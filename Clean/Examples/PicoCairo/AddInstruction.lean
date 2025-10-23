@@ -373,6 +373,7 @@ theorem addStepSpec_localYields_characterization
   simp only [true_and]
   simp_all
 
+omit p_large_enough in
 /--
 Theorem stating that IsValidAddExecution implies a valid femtoCairoMachineTransition.
 This connects the circuit specification to the machine semantics.
