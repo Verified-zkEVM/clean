@@ -361,4 +361,27 @@ theorem loadStateStepSpec_localYields_characterization
   · grind
   grind
 
+omit p_large_enough in
+/--
+Theorem: If IsValidLoadStateExecution holds, then there exists a valid femtoCairoMachineTransition.
+This connects the circuit specification to the machine semantics.
+-/
+theorem IsValidLoadStateExecution_implies_valid_transition
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p))
+    (h_valid : IsValidLoadStateExecution program memory preState timestamp nl) :
+    ∃ newState : State (F p),
+      Spec.femtoCairoMachineTransition program memory preState = some newState ∧
+      nl = ⟨"execution", [timestamp + 1, newState.pc, newState.ap, newState.fp]⟩ := by
+  simp only [IsValidLoadStateExecution] at h_valid
+  rcases h_valid with ⟨rawInstr, mode1, mode2, mode3, newPc, newAp, newFp, h_fetch, h_decode, h_access1, h_access2, h_access3, h_nl⟩
+  use { pc := newPc, ap := newAp, fp := newFp }
+  constructor
+  · simp only [Spec.femtoCairoMachineTransition, Option.bind_eq_bind, h_fetch]
+    simp only [h_decode, Option.bind_some, h_access1, h_access2, h_access3, computeNextState]
+  · exact h_nl
+
 end Examples.PicoCairo

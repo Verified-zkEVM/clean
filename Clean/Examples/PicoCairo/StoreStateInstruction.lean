@@ -380,4 +380,28 @@ theorem storeStateStepSpec_localYields_characterization
   rename_i v1 v2 v3
   simp_all
 
+omit p_large_enough in
+/--
+Theorem: If IsValidStoreStateExecution holds, then there exists a valid femtoCairoMachineTransition.
+This connects the circuit specification to the machine semantics.
+-/
+theorem IsValidStoreStateExecution_implies_valid_transition
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p))
+    (h_valid : IsValidStoreStateExecution program memory preState timestamp nl) :
+    ∃ newState : State (F p),
+      Spec.femtoCairoMachineTransition program memory preState = some newState ∧
+      nl = ⟨"execution", [timestamp + 1, newState.pc, newState.ap, newState.fp]⟩ := by
+  simp only [IsValidStoreStateExecution] at h_valid
+  rcases h_valid with ⟨rawInstr, mode1, mode2, mode3, v1, v2, v3, h_fetch, h_decode, h_access1, h_access2, h_access3, h_v1, h_v2, h_v3, h_nl⟩
+  use { pc := preState.pc + 4, ap := preState.ap, fp := preState.fp }
+  constructor
+  · simp only [Spec.femtoCairoMachineTransition, Option.bind_eq_bind, h_fetch]
+    simp only [h_decode, Option.bind_some, h_access1, h_access2, h_access3, computeNextState]
+    aesop
+  · exact h_nl
+
 end Examples.PicoCairo
