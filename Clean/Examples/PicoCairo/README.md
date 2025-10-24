@@ -78,7 +78,7 @@ def executionBundle (N : ℕ) (program memory : ...) : Circuit (F p) Unit := do
 
 ### Phase 4: Main Execution Circuit
 ```lean
-def executionCircuit : Circuit (F p) Unit := do
+def executionCircuitMain : Circuit (F p) Unit := do
   -- Yield initial state
   yield ("execution", [0, initial_pc, initial_ap, initial_fp])
 

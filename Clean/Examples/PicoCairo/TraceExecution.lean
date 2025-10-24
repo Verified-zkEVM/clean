@@ -17,7 +17,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 Main execution circuit that proves a trace from initial to final state.
 Yields the initial state, runs the execution bundle, and uses the final state.
 -/
-def executionCircuit
+def executionCircuitMain
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
