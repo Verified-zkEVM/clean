@@ -8,6 +8,7 @@ import Clean.Utils.Vector
 import Clean.Examples.PicoCairo.Types
 import Clean.Examples.PicoCairo.ExecutionBundle
 import Clean.Examples.FemtoCairo.Types
+import Clean.Examples.FemtoCairo.Spec
 
 namespace Examples.PicoCairo
 
@@ -32,12 +33,33 @@ def executionCircuitMain
                         Expression.const initialState.ap, Expression.const initialState.fp]⟩
 
   -- Run the execution bundle (proves intermediate steps)
-  executionBundleMain capacities program h_programSize memory h_memorySize inputs
+  executionBundleFormalCircuit capacities program h_programSize memory h_memorySize inputs
 
   -- Use the expected final state
   use ⟨"execution", [Expression.const finalTimestamp, Expression.const finalState.pc,
                      Expression.const finalState.ap, Expression.const finalState.fp]⟩
 
   return ()
+
+/--
+Spec for the execution circuit: yields initial state, execution bundle spec holds, uses final state.
+The local yields are the union of the initial state yield and the execution bundle's local yields.
+-/
+def executionCircuitSpec
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (initialState : FemtoCairo.Types.State (F p))
+    (finalTimestamp : F p)
+    (finalState : FemtoCairo.Types.State (F p))
+    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p)))
+    (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
+  ∃ (bundleLocalYields : Set (NamedList (F p))),
+    -- Execution bundle spec holds
+    executionBundleSpec capacities program memory inputs yielded () bundleLocalYields ∧
+    -- Final state is used (must be in yielded)
+    ⟨"execution", [finalTimestamp, finalState.pc, finalState.ap, finalState.fp]⟩ ∈ yielded ∧
+    -- Local yields are the initial state plus bundle local yields
+    localYields = {⟨"execution", [0, initialState.pc, initialState.ap, initialState.fp]⟩} ∪ bundleLocalYields
 
 end Examples.PicoCairo
