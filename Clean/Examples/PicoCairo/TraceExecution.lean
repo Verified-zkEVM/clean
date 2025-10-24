@@ -102,9 +102,35 @@ def executionCircuitElaborated
     {⟨"execution", [0, initialState.pc, initialState.ap, initialState.fp]⟩} ∪
     (executionBundleFormalCircuit capacities program h_programSize memory h_memorySize).elaborated.yields input_var.bundledInputs env i₀
   output input_var env := ()
-  localLength_eq := by sorry
-  yields_eq := by sorry
-  output_eq := by sorry
+  localLength_eq := by
+    intro input_var n
+    simp only [executionCircuitMain, circuit_norm]
+  yields_eq := by
+    intro input_var env i₀
+    simp only [executionCircuitMain, circuit_norm]
+    ext nl
+    simp only [Set.mem_union, Set.mem_setOf_eq, Set.mem_singleton_iff]
+    constructor
+    · intro h
+      rcases h with h_yield | h_bundle
+      · left
+        rcases h_yield with ⟨h_eq, _⟩
+        simp only [NamedList.eval] at h_eq
+        exact h_eq
+      · right
+        exact h_bundle
+    · intro h
+      rcases h with h_eq | h_bundle
+      · left
+        constructor
+        · simp only [NamedList.eval]
+          exact h_eq
+        · norm_num
+      · right
+        exact h_bundle
+  output_eq := by
+    intro input_var env
+    simp only [executionCircuitMain, circuit_norm]
 
 /--
 Formal circuit for the execution circuit, packaging everything together.
