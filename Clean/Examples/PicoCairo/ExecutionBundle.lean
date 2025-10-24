@@ -309,4 +309,38 @@ theorem IsValidInstructionExecution_implies_valid_transition
   -- Case 4: LoadState instruction
   · exact IsValidLoadStateExecution_implies_valid_transition program memory preState timestamp nl h_valid
 
+/--
+Combined theorem: from execution bundle spec to valid machine transition.
+This directly shows that any named list in the execution bundle's local yields
+corresponds to a valid machine state transition.
+-/
+theorem executionBundleSpec_implies_valid_transition
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : executionBundleSpec capacities program memory inputs yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    ∃ (preState newState : FemtoCairo.Types.State (F p)) (timestamp : F p),
+      -- One of the instruction inputs has this preState and timestamp
+      ((∃ (i : Fin capacities.addCapacity), inputs.addInputs[i].preState = preState ∧ inputs.addInputs[i].timestamp = timestamp ∧ inputs.addInputs[i].enabled = 1) ∨
+       (∃ (i : Fin capacities.mulCapacity), inputs.mulInputs[i].preState = preState ∧ inputs.mulInputs[i].timestamp = timestamp ∧ inputs.mulInputs[i].enabled = 1) ∨
+       (∃ (i : Fin capacities.storeStateCapacity), inputs.storeStateInputs[i].preState = preState ∧ inputs.storeStateInputs[i].timestamp = timestamp ∧ inputs.storeStateInputs[i].enabled = 1) ∨
+       (∃ (i : Fin capacities.loadStateCapacity), inputs.loadStateInputs[i].preState = preState ∧ inputs.loadStateInputs[i].timestamp = timestamp ∧ inputs.loadStateInputs[i].enabled = 1)) ∧
+      -- The timestamp doesn't overflow
+      timestamp + 1 ≠ 0 ∧
+      -- The previous state was yielded
+      ⟨"execution", [timestamp, preState.pc, preState.ap, preState.fp]⟩ ∈ yielded ∧
+      -- The transition is valid
+      FemtoCairo.Spec.femtoCairoMachineTransition program memory preState = some newState ∧
+      -- And the named list represents the new state
+      nl = ⟨"execution", [timestamp + 1, newState.pc, newState.ap, newState.fp]⟩ := by
+  have ⟨preState, timestamp, h_input, h_overflow, h_yielded, h_valid⟩ :=
+    executionBundleSpec_localYields_characterization capacities program memory inputs yielded localYields nl h_spec h_mem
+  have ⟨newState, h_transition, h_nl⟩ :=
+    IsValidInstructionExecution_implies_valid_transition program memory preState timestamp nl h_valid
+  exact ⟨preState, newState, timestamp, h_input, h_overflow, h_yielded, h_transition, h_nl⟩
+
 end Examples.PicoCairo
