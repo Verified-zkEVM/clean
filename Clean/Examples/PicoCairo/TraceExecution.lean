@@ -282,8 +282,17 @@ theorem executionCircuitSpec_localYields_reachable
         simp at this
         exact this
 
-      -- Now we need to show preState is reachable at preTimestamp
-      -- Since timestamp.val = t + 1 and timestamp = preTimestamp + 1, we have preTimestamp.val = t
-      sorry
+      use timestamp, newState, (t + 1)
+      constructor
+      · apply ZMod.val_injective
+        rw [h_timestamp_val]
+        have h_lt : t + 1 < p := by
+          rw [← h_timestamp_val]
+          exact ZMod.val_lt timestamp
+        rw [ZMod.val_cast_of_lt h_lt]
+      constructor
+      · sorry
+      · rw [h_nl_structure]
+        simp only [h_timestamp_eq, h_pc_eq, h_ap_eq, h_fp_eq]
 
 end Examples.PicoCairo
