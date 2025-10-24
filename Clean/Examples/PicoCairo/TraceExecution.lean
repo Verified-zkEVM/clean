@@ -209,7 +209,8 @@ theorem executionCircuitSpec_localYields_reachable
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
     (h_spec : executionCircuitSpec capacities program memory input yielded () localYields)
-    (h_mem : nl ∈ localYields) :
+    (h_mem : nl ∈ localYields)
+    (h_yielded_eq : localYields = yielded) :
     ∃ (timestamp : F p) (state : FemtoCairo.Types.State (F p)) (steps : ℕ),
       timestamp = steps ∧
       FemtoCairo.Spec.femtoCairoMachineBoundedExecution program memory (some input.initialState) steps = some state ∧
@@ -218,12 +219,12 @@ theorem executionCircuitSpec_localYields_reachable
   have ⟨timestamp, pc, ap, fp, h_nl_structure⟩ :=
     executionCircuitSpec_localYields_structure capacities program memory input yielded localYields nl h_spec h_mem
   -- Now do induction on timestamp.val
-  -- Use generalize to keep the equality timestamp.val = n in the context
+  -- Generalize timestamp, pc, ap, fp, and nl before induction so IH is more flexible
   generalize h_timestamp_val : timestamp.val = n
+  revert timestamp pc ap fp nl h_nl_structure h_mem h_timestamp_val
   induction n with
   | zero =>
-    -- Base case: timestamp = 0, this must be the initial state
-    -- We need to show that nl with timestamp.val = 0 is exactly the initial state
+    intro nl h_mem timestamp pc ap fp h_nl_structure h_timestamp_val
     obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
     rw [h_local_yields] at h_mem
     simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
@@ -239,7 +240,7 @@ theorem executionCircuitSpec_localYields_reachable
       -- This should be impossible or needs proof
       sorry
   | succ t IH =>
-    -- Inductive case: timestamp.val = t + 1, so nl must come from bundle
+    intro nl h_mem timestamp pc ap fp h_nl_structure h_timestamp_val
     obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
     rw [h_local_yields] at h_mem
     simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
@@ -282,6 +283,21 @@ theorem executionCircuitSpec_localYields_reachable
         simp at this
         exact this
 
+      -- First show preTimestamp.val = t
+      have h_preTimestamp_val : preTimestamp.val = t := by
+        have h_eq : (preTimestamp + 1).val = t + 1 := by
+          rw [← h_timestamp_eq, h_timestamp_val]
+        sorry -- Need to show no overflow to get preTimestamp.val = t from (preTimestamp + 1).val = t + 1
+
+      -- Use IH to show preState is reachable
+      have h_preState_in_localYields : ⟨"execution", [preTimestamp, preState.pc, preState.ap, preState.fp]⟩ ∈ localYields := by
+        rw [h_yielded_eq]
+        exact h_preState_yielded
+
+      have ⟨preTimestamp', preState', preSteps, h_preTimestamp_eq, h_preState_reach, h_preState_nl⟩ :=
+        IH _ h_preState_in_localYields preTimestamp preState.pc preState.ap preState.fp rfl h_preTimestamp_val
+
+      -- Now extend by one transition to get newState
       use timestamp, newState, (t + 1)
       constructor
       · apply ZMod.val_injective
@@ -291,7 +307,47 @@ theorem executionCircuitSpec_localYields_reachable
           exact ZMod.val_lt timestamp
         rw [ZMod.val_cast_of_lt h_lt]
       constructor
-      · sorry
+      · -- Extract that preState' = preState and preTimestamp' = preTimestamp
+        have h_preTimestamp'_eq : preTimestamp' = preTimestamp := by
+          have := congrArg (fun nl => nl.values.head?) h_preState_nl
+          simp at this
+          exact this.symm
+        have h_preState'_eq : preState' = preState := by
+          have h_pc : preState'.pc = preState.pc := by
+            have := congrArg (fun nl => nl.values.tail?.bind List.head?) h_preState_nl
+            simp at this
+            exact this.symm
+          have h_ap : preState'.ap = preState.ap := by
+            have := congrArg (fun nl => nl.values.tail?.bind (·.tail?.bind List.head?)) h_preState_nl
+            simp at this
+            exact this.symm
+          have h_fp : preState'.fp = preState.fp := by
+            have := congrArg (fun nl => nl.values.tail?.bind (·.tail?.bind (·.tail?.bind List.head?))) h_preState_nl
+            simp at this
+            exact this.symm
+          cases preState'; cases preState
+          simp at h_pc h_ap h_fp
+          simp [h_pc, h_ap, h_fp]
+        -- Now we have:
+        -- h_preState_reach : BoundedExecution ... preSteps = some preState'
+        -- h_preState'_eq : preState' = preState
+        -- h_transition : MachineTransition ... preState = some newState
+        -- h_preTimestamp_eq : preTimestamp' = ↑preSteps
+        -- h_preTimestamp'_eq : preTimestamp' = preTimestamp
+        -- h_preTimestamp_val : preTimestamp.val = t
+        -- Need to show preSteps = t
+        have h_preSteps_eq : preSteps = t := by
+          have : preTimestamp'.val = preSteps := by
+            rw [h_preTimestamp_eq]
+            sorry -- Need preSteps < p to show (↑preSteps : F p).val = preSteps
+          rw [h_preTimestamp'_eq, h_preTimestamp_val] at this
+          exact this.symm
+        -- Use femtoCairoMachineBoundedExecution_succ
+        rw [← h_preSteps_eq]
+        apply FemtoCairo.Spec.femtoCairoMachineBoundedExecution_succ (state := preState)
+        · rw [← h_preState'_eq]
+          exact h_preState_reach
+        · exact h_transition
       · rw [h_nl_structure]
         simp only [h_timestamp_eq, h_pc_eq, h_ap_eq, h_fp_eq]
 
