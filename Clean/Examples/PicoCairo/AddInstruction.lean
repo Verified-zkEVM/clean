@@ -497,4 +497,32 @@ theorem IsValidAddExecution_implies_valid_transition
     aesop
   · exact h_nl
 
+/--
+Characterization theorem for ADD instruction bundle localYields.
+Given a bundle spec and a named list in the local yields, we can find which instruction index it came from
+and extract witnesses for all the conditions.
+-/
+theorem addStepCircuitsBundleSpec_localYields_characterization
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : addStepCircuitsBundleSpec capacity program memory inputs yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    -- Then we can find an index i such that the conditions hold for inputs[i]
+    ∃ (i : Fin capacity),
+      inputs[i].enabled = 1 ∧
+      inputs[i].timestamp + 1 ≠ 0 ∧
+      ⟨"execution", [inputs[i].timestamp, inputs[i].preState.pc, inputs[i].preState.ap, inputs[i].preState.fp]⟩ ∈ yielded ∧
+      IsValidAddExecution program memory inputs[i].preState inputs[i].timestamp nl := by
+  simp only [addStepCircuitsBundleSpec] at h_spec
+  rcases h_spec with ⟨h_all, h_yields⟩
+  rw [h_yields] at h_mem
+  simp only [Set.mem_iUnion] at h_mem
+  rcases h_mem with ⟨i, h_i⟩
+  use i
+  exact addStepSpec_localYields_characterization program memory inputs[i] yielded (addStepLocalYields inputs[i]) nl (h_all i) h_i
+
 end Examples.PicoCairo
