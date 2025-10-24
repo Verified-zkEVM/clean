@@ -182,4 +182,19 @@ def executionBundleFormalCircuit
     aesop
   completeness := sorry
 
+/--
+Predicate stating that a named list represents a valid instruction execution
+from any of the four instruction types (ADD, MUL, StoreState, or LoadState).
+-/
+def IsValidInstructionExecution
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : FemtoCairo.Types.State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p)) : Prop :=
+  IsValidAddExecution program memory preState timestamp nl ∨
+  IsValidMulExecution program memory preState timestamp nl ∨
+  IsValidStoreStateExecution program memory preState timestamp nl ∨
+  IsValidLoadStateExecution program memory preState timestamp nl
+
 end Examples.PicoCairo
