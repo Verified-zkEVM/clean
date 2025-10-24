@@ -170,6 +170,13 @@ def executionBundleFormalCircuit
   Assumptions := executionBundleAssumptions capacities (programSize := programSize)
   Spec := executionBundleSpec capacities program memory
   soundness := by
+    circuit_proof_start [executionBundleSpec, executionBundleElaborated, executionBundleMain]
+    simp only [addStepCircuitsBundleFormalCircuit, addStepCircuitsBundleElaborated] at h_holds
+    simp only [mulStepCircuitsBundleFormalCircuit, mulStepCircuitsBundleElaborated] at h_holds
+    simp only [storeStateStepCircuitsBundleFormalCircuit, storeStateStepCircuitsBundleElaborated] at h_holds
+    simp only [loadStateStepCircuitsBundleFormalCircuit, loadStateStepCircuitsBundleElaborated] at h_holds
+    use ⋃ (i : Fin capacities.addCapacity), addStepLocalYields (eval env input_var.addInputs[i])
+
     sorry
   completeness := sorry
 
