@@ -43,22 +43,19 @@ def executionCircuitMain
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (initialState : FemtoCairo.Types.State (F p))
-    (finalTimestamp : F p)
-    (finalState : FemtoCairo.Types.State (F p))
-    (inputs : Var (BundledInstructionInputs capacities) (F p)) :
+    (input : Var (ExecutionCircuitInput capacities) (F p)) :
     Circuit (F p) Unit := do
 
   -- Yield initial state at timestamp 0
-  yield ⟨"execution", [Expression.const 0, Expression.const initialState.pc,
-                        Expression.const initialState.ap, Expression.const initialState.fp]⟩
+  yield ⟨"execution", [Expression.const 0, input.initialState.pc,
+                        input.initialState.ap, input.initialState.fp]⟩
 
   -- Run the execution bundle (proves intermediate steps)
-  executionBundleFormalCircuit capacities program h_programSize memory h_memorySize inputs
+  executionBundleFormalCircuit capacities program h_programSize memory h_memorySize input.bundledInputs
 
   -- Use the expected final state
-  use ⟨"execution", [Expression.const finalTimestamp, Expression.const finalState.pc,
-                     Expression.const finalState.ap, Expression.const finalState.fp]⟩
+  use ⟨"execution", [input.finalTimestamp, input.finalState.pc,
+                     input.finalState.ap, input.finalState.fp]⟩
 
   return ()
 
@@ -68,11 +65,8 @@ Assumptions for the execution circuit: same as execution bundle assumptions.
 def executionCircuitAssumptions
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize]
-    (initialState : FemtoCairo.Types.State (F p))
-    (finalTimestamp : F p)
-    (finalState : FemtoCairo.Types.State (F p))
-    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p))) : Prop :=
-  executionBundleAssumptions capacities (programSize := programSize) inputs yielded
+    (input : ExecutionCircuitInput capacities (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+  executionBundleAssumptions capacities (programSize := programSize) input.bundledInputs yielded
 
 /--
 Spec for the execution circuit: yields initial state, execution bundle spec holds, uses final state.
@@ -82,17 +76,14 @@ def executionCircuitSpec
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (initialState : FemtoCairo.Types.State (F p))
-    (finalTimestamp : F p)
-    (finalState : FemtoCairo.Types.State (F p))
-    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p)))
+    (input : ExecutionCircuitInput capacities (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   ∃ (bundleLocalYields : Set (NamedList (F p))),
     -- Execution bundle spec holds
-    executionBundleSpec capacities program memory inputs yielded () bundleLocalYields ∧
+    executionBundleSpec capacities program memory input.bundledInputs yielded () bundleLocalYields ∧
     -- Final state is used (must be in yielded)
-    ⟨"execution", [finalTimestamp, finalState.pc, finalState.ap, finalState.fp]⟩ ∈ yielded ∧
+    ⟨"execution", [input.finalTimestamp, input.finalState.pc, input.finalState.ap, input.finalState.fp]⟩ ∈ yielded ∧
     -- Local yields are the initial state plus bundle local yields
-    localYields = {⟨"execution", [0, initialState.pc, initialState.ap, initialState.fp]⟩} ∪ bundleLocalYields
+    localYields = {⟨"execution", [0, input.initialState.pc, input.initialState.ap, input.initialState.fp]⟩} ∪ bundleLocalYields
 
 end Examples.PicoCairo
