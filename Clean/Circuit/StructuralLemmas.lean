@@ -108,3 +108,42 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableT
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Set (NamedList F) → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
+
+/--
+Weaken the specification of a GeneralFormalCircuit.
+
+This combinator takes a GeneralFormalCircuit with a strong specification and produces
+a new GeneralFormalCircuit with a weaker specification. This is useful when:
+- You have a circuit that proves more than you need
+- You want to compose circuits where the specs don't match exactly
+- You need to adapt a specific circuit to a more general interface
+
+The requirements are:
+- The assumptions remain the same
+- The stronger spec implies the weaker spec
+-/
+def GeneralFormalCircuit.weakenSpec
+    {F : Type} [Field F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output)
+    (WeakerSpec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop)
+    (h_spec_implication : ∀ input yielded output localYields,
+      circuit.Spec input yielded output localYields →
+      WeakerSpec input yielded output localYields) :
+    GeneralFormalCircuit F Input Output := {
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := WeakerSpec
+  soundness := by
+    intro offset env yielded input_var input h_eval h_holds
+    have h_strong_spec := circuit.soundness offset env yielded input_var input h_eval h_holds
+    exact h_spec_implication input yielded _ _ h_strong_spec
+  completeness := by
+    exact circuit.completeness
+}
+
+@[circuit_norm]
+lemma GeneralFormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : GeneralFormalCircuit F Input Output) (WeakerSpec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
+  simp only [GeneralFormalCircuit.weakenSpec]
