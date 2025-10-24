@@ -389,9 +389,9 @@ theorem executionCircuitSpec_localYields_reachable
         simp only [h_timestamp_eq, h_pc_eq, h_ap_eq, h_fp_eq]
 
 /--
-**Execution Circuit with Proven Reachability** 🎉
+**Execution Circuit with Proven Reachability**
 
-This is a strengthened version of executionCircuitFormalCircuit that proves:
+This is a version of executionCircuitFormalCircuit that proves:
 If localYields = yielded (i.e., the circuit doesn't use any external yields),
 then the final state is reachable from the initial state via valid Cairo execution.
 
