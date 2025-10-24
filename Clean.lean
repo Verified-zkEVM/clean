@@ -16,6 +16,10 @@ import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
 import Clean.Examples.FemtoCairo.FemtoCairo
+import Clean.Examples.PicoCairo.TraceExecution
+import Clean.Examples.YieldExample.ByteRangeYielder
+import Clean.Examples.YieldExample.U32NormalizedAssertion
+import Clean.Examples.YieldExample.ComposedExample
 import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
 import Clean.Tables.Fibonacci32Inductive

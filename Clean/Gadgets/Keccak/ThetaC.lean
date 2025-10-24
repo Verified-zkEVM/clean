@@ -17,9 +17,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-def Assumptions (state : KeccakState (F p)) := state.Normalized
+def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
+def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) (_ : Set (NamedList (F p))) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
@@ -27,6 +27,7 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow where
   main
   localLength _ := 160
+  yields_eq := by intros; simp [circuit_norm, main, Xor64.circuit, Xor64.elaborated]
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]; intro; and_intros <;> ac_rfl
 
@@ -38,7 +39,7 @@ lemma thetaC_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  intro i0 env yielded state_var state h_input state_norm h_holds
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
@@ -58,7 +59,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   aesop
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+  intro i0 env yielded state_var h_env state h_input state_norm
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [h_input, circuit_norm,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢

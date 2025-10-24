@@ -71,11 +71,15 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [main, circuit_norm]
     omega
 
-  Assumptions input :=
+  yields_eq := by
+    intros
+    simp only [circuit_norm, main]
+
+  Assumptions input _yielded :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
 
-  Spec input output :=
+  Spec input output _localYields :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       let s0 := (if s[0] = 0 then 0 else 1)
@@ -182,15 +186,19 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [main, circuit_norm]
     rfl
 
+  yields_eq := by
+    intros
+    simp only [circuit_norm, main, MultiMux2.circuit]
+
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]
 
-  Assumptions input :=
+  Assumptions input _yielded :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
 
-  Spec input output :=
+  Spec input output _localYields :=
     let ⟨c, s⟩ := input
     let s0 := (if s[0] = 0 then 0 else 1)
     let s1 := (if s[1] = 0 then 0 else 1)
@@ -202,22 +210,24 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
-    rw [← h_input] at *
-    clear input h_input
-    simp only [MultiMux2.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
+    intro _ _ _ input_var input h_input h_assumptions h_subcircuit_sound
+    rw [← h_input] at h_assumptions
+    simp only [MultiMux2.circuit, circuit_norm, Vector.getElem_map] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray,
                List.getElem_cons_zero, circuit_norm]
+    rw [← h_input]
+    simp only [Vector.getElem_map]
 
   completeness := by
     simp only [circuit_norm, main]
-    intro offset env input_var h_env input h_input h_s
+    intro offset env _ input_var h_env input h_input h_s
     simp only [MultiMux2.circuit, circuit_norm]
     rw [← h_input] at h_s
+    simp only [Vector.getElem_map] at h_s
     simp_all
 
 end Mux2

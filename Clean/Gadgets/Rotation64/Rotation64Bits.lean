@@ -28,9 +28,9 @@ def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :=
 
   return U64.fromLimbs rotated
 
-def Assumptions (input : U64 (F p)) := input.Normalized
+def Assumptions (input : U64 (F p)) (_ : Set (NamedList (F p))) := input.Normalized
 
-def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
+def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) (_ : Set (NamedList (F p))) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
@@ -44,6 +44,9 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
   output _ i0 := output off i0
   localLength_eq _ i0 := by
     simp only [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
+  yields_eq := by
+    intros
+    simp [circuit_norm, main, ByteDecomposition.circuit, ByteDecomposition.elaborated]
   output_eq _ _ := by
     simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U64.fromLimbs
@@ -53,7 +56,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U64 U64 where
       ByteDecomposition.circuit, ByteDecomposition.elaborated]
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumptions (Spec offset) := by
-  intro i0 env x_var x h_input x_normalized h_holds
+  intro i0 env yielded x_var x h_input x_normalized h_holds
 
   -- simplify statements
   dsimp only [circuit_norm, elaborated, main,
@@ -107,7 +110,7 @@ theorem soundness (offset : Fin 8) : Soundness (F p) (elaborated offset) Assumpt
   exact ⟨ rotation64_bits_soundness offset.is_lt, y_norm ⟩
 
 theorem completeness (offset : Fin 8) : Completeness (F p) (elaborated offset) Assumptions := by
-  intro i0 env x_var _ x h_input x_normalized
+  intro i0 env yielded x_var _ x h_input x_normalized
 
   -- simplify goal
   simp only [main, elaborated, circuit_norm,

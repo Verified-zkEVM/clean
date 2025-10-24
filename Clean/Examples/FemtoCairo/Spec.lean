@@ -143,4 +143,24 @@ def femtoCairoMachineBoundedExecution
     let reachedState ← femtoCairoMachineBoundedExecution program memory state i
     femtoCairoMachineTransition program memory reachedState
 
+/--
+Extending a bounded execution by one transition.
+If we can reach `state` in `steps` steps and transition from `state` to `newState`,
+then we can reach `newState` in `steps + 1` steps.
+-/
+theorem femtoCairoMachineBoundedExecution_succ
+    {p : ℕ} [Fact p.Prime]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (initialState : State (F p))
+    (steps : ℕ)
+    (state newState : State (F p))
+    (h_reach : femtoCairoMachineBoundedExecution program memory (some initialState) steps = some state)
+    (h_transition : femtoCairoMachineTransition program memory state = some newState) :
+    femtoCairoMachineBoundedExecution program memory (some initialState) (steps + 1) = some newState := by
+  simp only [femtoCairoMachineBoundedExecution]
+  rw [h_reach]
+  simp only [Option.bind_eq_bind, Option.bind_some]
+  exact h_transition
+
 end Examples.FemtoCairo.Spec

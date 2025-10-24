@@ -24,13 +24,14 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   localLength _ := 200
 
   localLength_eq _ n := by simp only [main, circuit_norm, Xor64.circuit]
+  yields_eq := by intros; simp [circuit_norm, main, Xor64.circuit]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
 
-def Assumptions (inputs : Inputs (F p)) : Prop :=
+def Assumptions (inputs : Inputs (F p)) (_ : Set (NamedList (F p))) : Prop :=
   let ⟨state, d⟩ := inputs
   state.Normalized ∧ d.Normalized
 
-def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
+def Spec (inputs : Inputs (F p)) (out : KeccakState (F p))  (_ : Set (NamedList (F p))) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaXor state.value d.value
@@ -41,7 +42,7 @@ lemma thetaXor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
   simp [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
+  intro i0 env yielded ⟨state_var, d_var⟩ ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩ h_holds
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
@@ -58,7 +59,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   exact ⟨ h_holds.right, h_holds.left ⟩
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
+  intro i0 env yielded ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
   simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
   simp only [h_input, main, circuit_norm, Xor64.circuit, Xor64.Assumptions]
   intro i

@@ -105,6 +105,7 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
 
   localLength _ := n
   localLength_eq := by sorry
+  yields_eq := by intros; simp [circuit_norm, main]
 
   output _ i := varFromOffset (fields n) i
 
@@ -112,11 +113,11 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
 
   subcircuitsConsistent := by sorry
 
-  Assumptions input :=
+  Assumptions input _ :=
     -- All inputs are binary
     ∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i]
 
-  Spec input output :=
+  Spec input output _ :=
     -- All inputs are binary
     (∀ j i (hj : j < 2) (hi : i < n), IsBool input[j][i])
     -- All output bits are binary

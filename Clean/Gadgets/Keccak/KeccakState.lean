@@ -72,9 +72,10 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
   main block := .forEach block (assertion U64.AssertNormalized.circuit)
-  Assumptions _ := True
+  Assumptions _ _ := True
   Spec block := block.Normalized
   localLength_eq _ _ := by simp +arith only [circuit_norm, U64.AssertNormalized.circuit]
+  yields_eq := by intros; simp [circuit_norm, U64.AssertNormalized.circuit]
   soundness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]
