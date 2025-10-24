@@ -16,33 +16,49 @@ namespace Examples.PicoCairo
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
+Instruction capacities for the execution bundle.
+Groups all instruction type capacities with their NeZero constraints.
+-/
+structure InstructionCapacities where
+  addCapacity : ℕ
+  mulCapacity : ℕ
+  storeStateCapacity : ℕ
+  loadStateCapacity : ℕ
+  addCapacity_nz : NeZero addCapacity
+  mulCapacity_nz : NeZero mulCapacity
+  storeStateCapacity_nz : NeZero storeStateCapacity
+  loadStateCapacity_nz : NeZero loadStateCapacity
+
+instance (capacities : InstructionCapacities) : NeZero capacities.addCapacity := capacities.addCapacity_nz
+instance (capacities : InstructionCapacities) : NeZero capacities.mulCapacity := capacities.mulCapacity_nz
+instance (capacities : InstructionCapacities) : NeZero capacities.storeStateCapacity := capacities.storeStateCapacity_nz
+instance (capacities : InstructionCapacities) : NeZero capacities.loadStateCapacity := capacities.loadStateCapacity_nz
+
+/--
 Main execution bundle that combines all instruction type bundles.
 Includes ADD, MUL, StoreState, and LoadState instructions.
 -/
 def executionBundleMain
-    (addCapacity : ℕ) [NeZero addCapacity]
-    (mulCapacity : ℕ) [NeZero mulCapacity]
-    (storeStateCapacity : ℕ) [NeZero storeStateCapacity]
-    (loadStateCapacity : ℕ) [NeZero loadStateCapacity]
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (addInputs : Var (ProvableVector InstructionStepInput addCapacity) (F p))
-    (mulInputs : Var (ProvableVector InstructionStepInput mulCapacity) (F p))
-    (storeStateInputs : Var (ProvableVector InstructionStepInput storeStateCapacity) (F p))
-    (loadStateInputs : Var (ProvableVector InstructionStepInput loadStateCapacity) (F p)) :
+    (addInputs : Var (ProvableVector InstructionStepInput capacities.addCapacity) (F p))
+    (mulInputs : Var (ProvableVector InstructionStepInput capacities.mulCapacity) (F p))
+    (storeStateInputs : Var (ProvableVector InstructionStepInput capacities.storeStateCapacity) (F p))
+    (loadStateInputs : Var (ProvableVector InstructionStepInput capacities.loadStateCapacity) (F p)) :
     Circuit (F p) Unit := do
 
   -- Execute ADD instruction bundle
-  addStepCircuitsBundle addCapacity program h_programSize memory h_memorySize addInputs
+  addStepCircuitsBundle capacities.addCapacity program h_programSize memory h_memorySize addInputs
 
   -- Execute MUL instruction bundle
-  mulStepCircuitsBundle mulCapacity program h_programSize memory h_memorySize mulInputs
+  mulStepCircuitsBundle capacities.mulCapacity program h_programSize memory h_memorySize mulInputs
 
   -- Execute StoreState instruction bundle
-  storeStateStepCircuitsBundle storeStateCapacity program h_programSize memory h_memorySize storeStateInputs
+  storeStateStepCircuitsBundle capacities.storeStateCapacity program h_programSize memory h_memorySize storeStateInputs
 
   -- Execute LoadState instruction bundle
-  loadStateStepCircuitsBundle loadStateCapacity program h_programSize memory h_memorySize loadStateInputs
+  loadStateStepCircuitsBundle capacities.loadStateCapacity program h_programSize memory h_memorySize loadStateInputs
 
   return ()
 

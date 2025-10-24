@@ -18,19 +18,16 @@ Main execution circuit that proves a trace from initial to final state.
 Yields the initial state, runs the execution bundle, and uses the final state.
 -/
 def executionCircuit
-    (addCapacity : ℕ) [NeZero addCapacity]
-    (mulCapacity : ℕ) [NeZero mulCapacity]
-    (storeStateCapacity : ℕ) [NeZero storeStateCapacity]
-    (loadStateCapacity : ℕ) [NeZero loadStateCapacity]
+    (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (initialState : FemtoCairo.Types.State (F p))
     (finalTimestamp : F p)
     (finalState : FemtoCairo.Types.State (F p))
-    (addInputs : Var (ProvableVector InstructionStepInput addCapacity) (F p))
-    (mulInputs : Var (ProvableVector InstructionStepInput mulCapacity) (F p))
-    (storeStateInputs : Var (ProvableVector InstructionStepInput storeStateCapacity) (F p))
-    (loadStateInputs : Var (ProvableVector InstructionStepInput loadStateCapacity) (F p)) :
+    (addInputs : Var (ProvableVector InstructionStepInput capacities.addCapacity) (F p))
+    (mulInputs : Var (ProvableVector InstructionStepInput capacities.mulCapacity) (F p))
+    (storeStateInputs : Var (ProvableVector InstructionStepInput capacities.storeStateCapacity) (F p))
+    (loadStateInputs : Var (ProvableVector InstructionStepInput capacities.loadStateCapacity) (F p)) :
     Circuit (F p) Unit := do
 
   -- Yield initial state at timestamp 0
@@ -38,8 +35,7 @@ def executionCircuit
                         Expression.const initialState.ap, Expression.const initialState.fp]⟩
 
   -- Run the execution bundle (proves intermediate steps)
-  executionBundleMain addCapacity mulCapacity storeStateCapacity loadStateCapacity
-    program h_programSize memory h_memorySize
+  executionBundleMain capacities program h_programSize memory h_memorySize
     addInputs mulInputs storeStateInputs loadStateInputs
 
   -- Use the expected final state
