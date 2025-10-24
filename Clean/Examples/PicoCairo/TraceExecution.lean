@@ -213,6 +213,7 @@ theorem executionCircuitSpec_localYields_reachable
     (h_yielded_eq : localYields = yielded) :
     ∃ (timestamp : F p) (state : FemtoCairo.Types.State (F p)) (steps : ℕ),
       timestamp = steps ∧
+      steps < p ∧
       FemtoCairo.Spec.femtoCairoMachineBoundedExecution program memory (some input.initialState) steps = some state ∧
       nl = ⟨"execution", [timestamp, state.pc, state.ap, state.fp]⟩ := by
   -- First, use the structure lemma to get the timestamp
@@ -233,6 +234,8 @@ theorem executionCircuitSpec_localYields_reachable
       use 0, input.initialState, 0
       constructor
       · simp
+      constructor
+      · exact Nat.zero_lt_of_lt p_large_enough.out
       constructor
       · simp [FemtoCairo.Spec.femtoCairoMachineBoundedExecution]
       · exact h_initial
@@ -294,18 +297,21 @@ theorem executionCircuitSpec_localYields_reachable
         rw [h_yielded_eq]
         exact h_preState_yielded
 
-      have ⟨preTimestamp', preState', preSteps, h_preTimestamp_eq, h_preState_reach, h_preState_nl⟩ :=
+      have ⟨preTimestamp', preState', preSteps, h_preTimestamp_eq, h_preSteps_lt, h_preState_reach, h_preState_nl⟩ :=
         IH _ h_preState_in_localYields preTimestamp preState.pc preState.ap preState.fp rfl h_preTimestamp_val
 
       -- Now extend by one transition to get newState
+      have h_lt : t + 1 < p := by
+        rw [← h_timestamp_val]
+        exact ZMod.val_lt timestamp
+
       use timestamp, newState, (t + 1)
       constructor
       · apply ZMod.val_injective
         rw [h_timestamp_val]
-        have h_lt : t + 1 < p := by
-          rw [← h_timestamp_val]
-          exact ZMod.val_lt timestamp
         rw [ZMod.val_cast_of_lt h_lt]
+      constructor
+      · exact h_lt
       constructor
       · -- Extract that preState' = preState and preTimestamp' = preTimestamp
         have h_preTimestamp'_eq : preTimestamp' = preTimestamp := by
