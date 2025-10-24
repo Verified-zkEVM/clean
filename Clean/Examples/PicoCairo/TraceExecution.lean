@@ -214,25 +214,44 @@ theorem executionCircuitSpec_localYields_reachable
       timestamp = steps ∧
       FemtoCairo.Spec.femtoCairoMachineBoundedExecution program memory (some input.initialState) steps = some state ∧
       nl = ⟨"execution", [timestamp, state.pc, state.ap, state.fp]⟩ := by
-  -- Extract bundle local yields from spec
-  obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
-  rw [h_local_yields] at h_mem
-  simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
-  rcases h_mem with h_initial | h_bundle
-  · -- Case 1: nl is the initial state
-    use 0, input.initialState, 0
-    constructor
-    · simp
-    constructor
-    · simp [FemtoCairo.Spec.femtoCairoMachineBoundedExecution]
-    · exact h_initial
-  · -- Case 2: nl is from bundle local yields
-    -- Use the execution bundle characterization to get the transition
-    have ⟨preState, timestamp, h_input_match, h_overflow, h_yielded, h_valid⟩ :=
-      executionBundleSpec_localYields_characterization capacities program memory input.bundledInputs yielded bundleLocalYields nl h_bundle_spec h_bundle
-    -- Use the valid instruction execution to get the new state
-    have ⟨newState, h_transition, h_nl⟩ :=
-      IsValidInstructionExecution_implies_valid_transition program memory preState timestamp nl h_valid
-    sorry
+  -- First, use the structure lemma to get the timestamp
+  have ⟨timestamp, pc, ap, fp, h_nl_structure⟩ :=
+    executionCircuitSpec_localYields_structure capacities program memory input yielded localYields nl h_spec h_mem
+  -- Now do induction on timestamp.val
+  induction timestamp.val with
+  | zero =>
+    -- Base case: timestamp = 0, this must be the initial state
+    -- We need to show that nl with timestamp.val = 0 is exactly the initial state
+    obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
+    rw [h_local_yields] at h_mem
+    simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
+    rcases h_mem with h_initial | h_bundle
+    · -- nl is the initial state
+      use 0, input.initialState, 0
+      constructor
+      · simp
+      constructor
+      · simp [FemtoCairo.Spec.femtoCairoMachineBoundedExecution]
+      · exact h_initial
+    · -- nl is from bundle but has timestamp.val = 0
+      -- This should be impossible or needs proof
+      sorry
+  | succ t IH =>
+    -- Inductive case: timestamp.val = t + 1, so nl must come from bundle
+    obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
+    rw [h_local_yields] at h_mem
+    simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
+    rcases h_mem with h_initial | h_bundle
+    · -- nl is the initial state, but timestamp.val = t + 1 ≠ 0, contradiction
+      rw [h_nl_structure] at h_initial
+      injection h_initial
+    · -- nl is from bundle local yields
+      -- Use the combined theorem to get preState, newState, and transition
+      have ⟨preState, newState, preTimestamp, h_input_match, h_overflow, h_preState_yielded, h_transition, h_nl_eq⟩ :=
+        executionBundleSpec_implies_valid_transition capacities program memory input.bundledInputs yielded bundleLocalYields nl h_bundle_spec h_bundle
+
+      -- From h_nl_eq and h_nl_structure, extract equalities
+      rw [h_nl_structure] at h_nl_eq
+      injection h_nl_eq
 
 end Examples.PicoCairo
