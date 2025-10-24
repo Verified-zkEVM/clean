@@ -345,7 +345,7 @@ theorem executionCircuitSpec_localYields_reachable
         have h_preSteps_eq : preSteps = t := by
           have : preTimestamp'.val = preSteps := by
             rw [h_preTimestamp_eq]
-            sorry -- Need preSteps < p to show (↑preSteps : F p).val = preSteps
+            exact ZMod.val_cast_of_lt h_preSteps_lt
           rw [h_preTimestamp'_eq, h_preTimestamp_val] at this
           exact this.symm
         -- Use femtoCairoMachineBoundedExecution_succ
