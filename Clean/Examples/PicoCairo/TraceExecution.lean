@@ -290,7 +290,27 @@ theorem executionCircuitSpec_localYields_reachable
       have h_preTimestamp_val : preTimestamp.val = t := by
         have h_eq : (preTimestamp + 1).val = t + 1 := by
           rw [← h_timestamp_eq, h_timestamp_val]
-        sorry -- Need to show no overflow to get preTimestamp.val = t from (preTimestamp + 1).val = t + 1
+        -- Use h_overflow to show no overflow occurred
+        have h_no_overflow : preTimestamp.val + (1 : F p).val < p := by
+          simp only [ZMod.val_one]
+          by_contra h_not
+          push_neg at h_not
+          -- If preTimestamp.val + 1 ≥ p, and preTimestamp.val < p, then preTimestamp.val + 1 = p
+          have h_val_eq : preTimestamp.val + 1 = p := by
+            have : preTimestamp.val < p := ZMod.val_lt preTimestamp
+            omega
+          -- Then (preTimestamp + 1).val = 0
+          have : (preTimestamp + 1).val = 0 := by
+            have h_le : p ≤ preTimestamp.val + (1 : F p).val := by simp only [ZMod.val_one]; omega
+            rw [ZMod.val_add_of_le h_le]
+            simp only [ZMod.val_one, h_val_eq]
+            simp
+          -- But h_eq says (preTimestamp + 1).val = t + 1, contradiction
+          rw [this] at h_eq
+          omega
+        rw [ZMod.val_add_of_lt h_no_overflow] at h_eq
+        simp only [ZMod.val_one] at h_eq
+        omega
 
       -- Use IH to show preState is reachable
       have h_preState_in_localYields : ⟨"execution", [preTimestamp, preState.pc, preState.ap, preState.fp]⟩ ∈ localYields := by
