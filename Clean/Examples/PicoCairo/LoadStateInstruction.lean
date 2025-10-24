@@ -390,7 +390,6 @@ def loadStateStepCircuitsBundle
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
     subcircuitWithAssertion (loadStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
-  return ()
 
 /--
 Elaborated circuit for LoadState instruction bundle.

@@ -58,8 +58,6 @@ def executionCircuitMain
   use ⟨"execution", [input.finalTimestamp, input.finalState.pc,
                      input.finalState.ap, input.finalState.fp]⟩
 
-  return ()
-
 /--
 Assumptions for the execution circuit: same as execution bundle assumptions.
 -/
