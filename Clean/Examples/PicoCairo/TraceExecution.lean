@@ -240,8 +240,27 @@ theorem executionCircuitSpec_localYields_reachable
       · simp [FemtoCairo.Spec.femtoCairoMachineBoundedExecution]
       · exact h_initial
     · -- nl is from bundle but has timestamp.val = 0
-      -- This should be impossible or needs proof
-      sorry
+      -- This is impossible: bundle yields have timestamp = preTimestamp + 1 ≠ 0
+      have ⟨preState, newState, preTimestamp, h_input_match, h_overflow, h_preState_yielded, h_transition, h_nl_eq⟩ :=
+        executionBundleSpec_implies_valid_transition capacities program memory input.bundledInputs yielded bundleLocalYields nl h_bundle_spec h_bundle
+
+      -- From h_nl_eq, we know nl has timestamp = preTimestamp + 1
+      rw [h_nl_structure] at h_nl_eq
+      injection h_nl_eq with _ h_values_eq
+      have h_timestamp_eq : timestamp = preTimestamp + 1 := by
+        have := congrArg List.head? h_values_eq
+        simp at this
+        exact this
+
+      -- But timestamp.val = 0 means timestamp = 0
+      have h_timestamp_zero : timestamp = 0 := by
+        apply ZMod.val_injective
+        rw [h_timestamp_val]
+        simp
+
+      -- So preTimestamp + 1 = 0, contradicting h_overflow
+      rw [h_timestamp_zero] at h_timestamp_eq
+      exact absurd h_timestamp_eq.symm h_overflow
   | succ t IH =>
     intro nl h_mem timestamp pc ap fp h_nl_structure h_timestamp_val
     obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
