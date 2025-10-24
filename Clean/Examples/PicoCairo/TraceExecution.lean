@@ -143,7 +143,26 @@ def executionCircuitFormalCircuit
   elaborated := executionCircuitElaborated capacities program h_programSize memory h_memorySize
   Assumptions := executionCircuitAssumptions capacities (programSize := programSize)
   Spec := executionCircuitSpec capacities program memory
-  soundness := by sorry
+  soundness := by
+    circuit_proof_start [executionCircuitSpec, executionCircuitElaborated, executionCircuitMain]
+    -- Extract the bundle spec from h_holds
+    obtain ⟨h_bundle_spec, h_final_used⟩ := h_holds
+    -- The bundle local yields are exactly what the bundle circuit yields
+    use (executionBundleFormalCircuit capacities program h_programSize memory h_memorySize).elaborated.yields input_var.bundledInputs env i₀
+    constructor
+    · -- Bundle spec holds
+      rw [← h_input]
+      simp only [eval]
+      exact h_bundle_spec
+    constructor
+    · -- Final state is in yielded
+      have := h_final_used (by norm_num)
+      simp only [NamedList.eval] at this
+      rw [← h_input]
+      simp only [eval]
+      exact this
+    · -- Local yields equality
+      rw [← h_input]
   completeness := by sorry
 
 end Examples.PicoCairo
