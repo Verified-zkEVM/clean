@@ -218,7 +218,9 @@ theorem executionCircuitSpec_localYields_reachable
   have ⟨timestamp, pc, ap, fp, h_nl_structure⟩ :=
     executionCircuitSpec_localYields_structure capacities program memory input yielded localYields nl h_spec h_mem
   -- Now do induction on timestamp.val
-  induction timestamp.val with
+  -- Use generalize to keep the equality timestamp.val = n in the context
+  generalize h_timestamp_val : timestamp.val = n
+  induction n with
   | zero =>
     -- Base case: timestamp = 0, this must be the initial state
     -- We need to show that nl with timestamp.val = 0 is exactly the initial state
@@ -244,7 +246,13 @@ theorem executionCircuitSpec_localYields_reachable
     rcases h_mem with h_initial | h_bundle
     · -- nl is the initial state, but timestamp.val = t + 1 ≠ 0, contradiction
       rw [h_nl_structure] at h_initial
-      injection h_initial
+      injection h_initial with _ h_values_eq
+      have h_timestamp_zero : timestamp = 0 := by
+        have := congrArg List.head? h_values_eq
+        simp at this
+        exact this
+      -- Now we have timestamp.val = t + 1 and timestamp = 0, so 0 = t + 1 at the Nat level, contradiction
+      simp [h_timestamp_zero] at h_timestamp_val
     · -- nl is from bundle local yields
       -- Use the combined theorem to get preState, newState, and transition
       have ⟨preState, newState, preTimestamp, h_input_match, h_overflow, h_preState_yielded, h_transition, h_nl_eq⟩ :=
@@ -252,6 +260,30 @@ theorem executionCircuitSpec_localYields_reachable
 
       -- From h_nl_eq and h_nl_structure, extract equalities
       rw [h_nl_structure] at h_nl_eq
-      injection h_nl_eq
+      injection h_nl_eq with _ h_values_eq
+
+      -- Extract timestamp = preTimestamp + 1
+      have h_timestamp_eq : timestamp = preTimestamp + 1 := by
+        have := congrArg List.head? h_values_eq
+        simp at this
+        exact this
+
+      -- Extract pc = newState.pc, ap = newState.ap, fp = newState.fp
+      have h_pc_eq : pc = newState.pc := by
+        have := congrArg (fun l => l.tail?.bind List.head?) h_values_eq
+        simp at this
+        exact this
+      have h_ap_eq : ap = newState.ap := by
+        have := congrArg (fun l => l.tail?.bind (·.tail?.bind List.head?)) h_values_eq
+        simp at this
+        exact this
+      have h_fp_eq : fp = newState.fp := by
+        have := congrArg (fun l => l.tail?.bind (·.tail?.bind (·.tail?.bind List.head?))) h_values_eq
+        simp at this
+        exact this
+
+      -- Now we need to show preState is reachable at preTimestamp
+      -- Since timestamp.val = t + 1 and timestamp = preTimestamp + 1, we have preTimestamp.val = t
+      sorry
 
 end Examples.PicoCairo
