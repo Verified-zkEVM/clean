@@ -197,4 +197,89 @@ def IsValidInstructionExecution
   IsValidStoreStateExecution program memory preState timestamp nl ∨
   IsValidLoadStateExecution program memory preState timestamp nl
 
+/--
+Characterization theorem for execution bundle localYields.
+Given a bundle spec and a named list in the local yields, we can find which instruction it came from
+and extract witnesses showing it's a valid instruction execution.
+-/
+theorem executionBundleSpec_localYields_characterization
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : executionBundleSpec capacities program memory inputs yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    -- We can find which instruction type and which index within that type
+    ∃ (preState : FemtoCairo.Types.State (F p)) (timestamp : F p),
+      -- One of the instruction inputs has this preState and timestamp
+      ((∃ (i : Fin capacities.addCapacity), inputs.addInputs[i].preState = preState ∧ inputs.addInputs[i].timestamp = timestamp ∧ inputs.addInputs[i].enabled = 1) ∨
+       (∃ (i : Fin capacities.mulCapacity), inputs.mulInputs[i].preState = preState ∧ inputs.mulInputs[i].timestamp = timestamp ∧ inputs.mulInputs[i].enabled = 1) ∨
+       (∃ (i : Fin capacities.storeStateCapacity), inputs.storeStateInputs[i].preState = preState ∧ inputs.storeStateInputs[i].timestamp = timestamp ∧ inputs.storeStateInputs[i].enabled = 1) ∨
+       (∃ (i : Fin capacities.loadStateCapacity), inputs.loadStateInputs[i].preState = preState ∧ inputs.loadStateInputs[i].timestamp = timestamp ∧ inputs.loadStateInputs[i].enabled = 1)) ∧
+      -- The timestamp doesn't overflow
+      timestamp + 1 ≠ 0 ∧
+      -- The previous state was yielded
+      ⟨"execution", [timestamp, preState.pc, preState.ap, preState.fp]⟩ ∈ yielded ∧
+      -- And this is a valid execution from one of the four instruction types
+      IsValidInstructionExecution program memory preState timestamp nl := by
+  simp only [executionBundleSpec] at h_spec
+  rcases h_spec with ⟨addLocalYields, mulLocalYields, storeStateLocalYields, loadStateLocalYields, h_add, h_mul, h_store, h_load, h_union⟩
+  rw [h_union] at h_mem
+  simp only [Set.mem_union] at h_mem
+  rcases h_mem with ((h_mem | h_mem) | h_mem) | h_mem
+  -- Case 1: ADD instruction
+  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := addStepCircuitsBundleSpec_localYields_characterization capacities.addCapacity program memory inputs.addInputs yielded addLocalYields nl h_add h_mem
+    use inputs.addInputs[i].preState, inputs.addInputs[i].timestamp
+    constructor
+    · left
+      use i
+    constructor
+    · exact h_overflow
+    constructor
+    · exact h_yielded
+    · simp only [IsValidInstructionExecution]
+      left
+      exact h_valid
+  -- Case 2: MUL instruction
+  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := mulStepCircuitsBundleSpec_localYields_characterization capacities.mulCapacity program memory inputs.mulInputs yielded mulLocalYields nl h_mul h_mem
+    use inputs.mulInputs[i].preState, inputs.mulInputs[i].timestamp
+    constructor
+    · right; left
+      use i
+    constructor
+    · exact h_overflow
+    constructor
+    · exact h_yielded
+    · simp only [IsValidInstructionExecution]
+      right; left
+      exact h_valid
+  -- Case 3: StoreState instruction
+  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := storeStateStepCircuitsBundleSpec_localYields_characterization capacities.storeStateCapacity program memory inputs.storeStateInputs yielded storeStateLocalYields nl h_store h_mem
+    use inputs.storeStateInputs[i].preState, inputs.storeStateInputs[i].timestamp
+    constructor
+    · right; right; left
+      use i
+    constructor
+    · exact h_overflow
+    constructor
+    · exact h_yielded
+    · simp only [IsValidInstructionExecution]
+      right; right; left
+      exact h_valid
+  -- Case 4: LoadState instruction
+  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := loadStateStepCircuitsBundleSpec_localYields_characterization capacities.loadStateCapacity program memory inputs.loadStateInputs yielded loadStateLocalYields nl h_load h_mem
+    use inputs.loadStateInputs[i].preState, inputs.loadStateInputs[i].timestamp
+    constructor
+    · right; right; right
+      use i
+    constructor
+    · exact h_overflow
+    constructor
+    · exact h_yielded
+    · simp only [IsValidInstructionExecution]
+      right; right; right
+      exact h_valid
+
 end Examples.PicoCairo
