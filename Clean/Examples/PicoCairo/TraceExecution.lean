@@ -15,6 +15,27 @@ namespace Examples.PicoCairo
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
+Input structure for the execution circuit, bundling all parameters.
+-/
+structure ExecutionCircuitInput (capacities : InstructionCapacities) (F : Type) where
+  initialState : FemtoCairo.Types.State F
+  finalTimestamp : F
+  finalState : FemtoCairo.Types.State F
+  bundledInputs : BundledInstructionInputs capacities F
+
+instance (capacities : InstructionCapacities) : ProvableStruct (ExecutionCircuitInput capacities) where
+  components := [
+    FemtoCairo.Types.State,
+    field,
+    FemtoCairo.Types.State,
+    BundledInstructionInputs capacities
+  ]
+  toComponents := fun { initialState, finalTimestamp, finalState, bundledInputs } =>
+    .cons initialState (.cons finalTimestamp (.cons finalState (.cons bundledInputs .nil)))
+  fromComponents := fun (.cons initialState (.cons finalTimestamp (.cons finalState (.cons bundledInputs .nil)))) =>
+    { initialState, finalTimestamp, finalState, bundledInputs }
+
+/--
 Main execution circuit that proves a trace from initial to final state.
 Yields the initial state, runs the execution bundle, and uses the final state.
 -/
@@ -40,6 +61,18 @@ def executionCircuitMain
                      Expression.const finalState.ap, Expression.const finalState.fp]⟩
 
   return ()
+
+/--
+Assumptions for the execution circuit: same as execution bundle assumptions.
+-/
+def executionCircuitAssumptions
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize]
+    (initialState : FemtoCairo.Types.State (F p))
+    (finalTimestamp : F p)
+    (finalState : FemtoCairo.Types.State (F p))
+    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p))) : Prop :=
+  executionBundleAssumptions capacities (programSize := programSize) inputs yielded
 
 /--
 Spec for the execution circuit: yields initial state, execution bundle spec holds, uses final state.
