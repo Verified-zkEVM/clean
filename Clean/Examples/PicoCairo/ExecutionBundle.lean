@@ -77,17 +77,100 @@ def executionBundleMain
     Circuit (F p) Unit := do
 
   -- Execute ADD instruction bundle
-  addStepCircuitsBundle capacities.addCapacity program h_programSize memory h_memorySize inputs.addInputs
+  addStepCircuitsBundleFormalCircuit capacities.addCapacity program h_programSize memory h_memorySize inputs.addInputs
 
   -- Execute MUL instruction bundle
-  mulStepCircuitsBundle capacities.mulCapacity program h_programSize memory h_memorySize inputs.mulInputs
+  mulStepCircuitsBundleFormalCircuit capacities.mulCapacity program h_programSize memory h_memorySize inputs.mulInputs
 
   -- Execute StoreState instruction bundle
-  storeStateStepCircuitsBundle capacities.storeStateCapacity program h_programSize memory h_memorySize inputs.storeStateInputs
+  storeStateStepCircuitsBundleFormalCircuit capacities.storeStateCapacity program h_programSize memory h_memorySize inputs.storeStateInputs
 
   -- Execute LoadState instruction bundle
-  loadStateStepCircuitsBundle capacities.loadStateCapacity program h_programSize memory h_memorySize inputs.loadStateInputs
+  loadStateStepCircuitsBundleFormalCircuit capacities.loadStateCapacity program h_programSize memory h_memorySize inputs.loadStateInputs
 
-  return ()
+/--
+Elaborated circuit for the execution bundle.
+The localYields are the union of yields from all instruction bundles.
+-/
+def executionBundleElaborated
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    ElaboratedCircuit (F p) (BundledInstructionInputs capacities) unit where
+  main := executionBundleMain capacities program h_programSize memory h_memorySize
+  localLength _ :=
+    capacities.addCapacity * 29 +
+    capacities.mulCapacity * 29 +
+    capacities.storeStateCapacity * 29 +
+    capacities.loadStateCapacity * 29
+  localLength_eq := by
+    intros input offset
+    simp only [circuit_norm, executionBundleMain]
+    simp only [addStepCircuitsBundleFormalCircuit, addStepCircuitsBundleElaborated]
+    simp only [mulStepCircuitsBundleFormalCircuit, mulStepCircuitsBundleElaborated]
+    simp only [storeStateStepCircuitsBundleFormalCircuit, storeStateStepCircuitsBundleElaborated]
+    simp only [loadStateStepCircuitsBundleFormalCircuit, loadStateStepCircuitsBundleElaborated]
+    omega
+  yields inputs env offset :=
+    (addStepCircuitsBundleElaborated capacities.addCapacity program h_programSize memory h_memorySize).yields
+      inputs.addInputs env offset ∪
+    (mulStepCircuitsBundleElaborated capacities.mulCapacity program h_programSize memory h_memorySize).yields
+      inputs.mulInputs env (offset + capacities.addCapacity * 29) ∪
+    (storeStateStepCircuitsBundleElaborated capacities.storeStateCapacity program h_programSize memory h_memorySize).yields
+      inputs.storeStateInputs env (offset + capacities.addCapacity * 29 + capacities.mulCapacity * 29) ∪
+    (loadStateStepCircuitsBundleElaborated capacities.loadStateCapacity program h_programSize memory h_memorySize).yields
+      inputs.loadStateInputs env (offset + capacities.addCapacity * 29 + capacities.mulCapacity * 29 + capacities.storeStateCapacity * 29)
+  yields_eq := by
+    intros inputs env offset
+    simp only [circuit_norm, executionBundleMain]
+    aesop
+  subcircuitsConsistent := by
+    intros inputs offset
+    simp only [circuit_norm, executionBundleMain]
+    omega
+
+/--
+Assumptions for the execution bundle: each instruction bundle must satisfy its assumptions.
+-/
+def executionBundleAssumptions
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize]
+    (inputs : BundledInstructionInputs capacities (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
+  addStepCircuitsBundleAssumptions capacities.addCapacity (programSize := programSize) inputs.addInputs _yielded ∧
+  mulStepCircuitsBundleAssumptions capacities.mulCapacity (programSize := programSize) inputs.mulInputs _yielded ∧
+  storeStateStepCircuitsBundleAssumptions capacities.storeStateCapacity (programSize := programSize) inputs.storeStateInputs _yielded ∧
+  loadStateStepCircuitsBundleAssumptions capacities.loadStateCapacity (programSize := programSize) inputs.loadStateInputs _yielded
+
+/--
+Spec for the execution bundle: each instruction bundle must satisfy its spec,
+and the local yields are the union of all bundle yields.
+-/
+def executionBundleSpec
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p)))
+    (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
+  ∃ (addLocalYields mulLocalYields storeStateLocalYields loadStateLocalYields : Set (NamedList (F p))),
+    addStepCircuitsBundleSpec capacities.addCapacity program memory inputs.addInputs yielded () addLocalYields ∧
+    mulStepCircuitsBundleSpec capacities.mulCapacity program memory inputs.mulInputs yielded () mulLocalYields ∧
+    storeStateStepCircuitsBundleSpec capacities.storeStateCapacity program memory inputs.storeStateInputs yielded () storeStateLocalYields ∧
+    loadStateStepCircuitsBundleSpec capacities.loadStateCapacity program memory inputs.loadStateInputs yielded () loadStateLocalYields ∧
+    localYields = addLocalYields ∪ mulLocalYields ∪ storeStateLocalYields ∪ loadStateLocalYields
+
+/--
+Formal circuit for the execution bundle.
+-/
+def executionBundleFormalCircuit
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit (F p) (BundledInstructionInputs capacities) unit where
+  elaborated := executionBundleElaborated capacities program h_programSize memory h_memorySize
+  Assumptions := executionBundleAssumptions capacities (programSize := programSize)
+  Spec := executionBundleSpec capacities program memory
+  soundness := by
+    sorry
+  completeness := sorry
 
 end Examples.PicoCairo
