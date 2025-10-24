@@ -86,4 +86,38 @@ def executionCircuitSpec
     -- Local yields are the initial state plus bundle local yields
     localYields = {⟨"execution", [0, input.initialState.pc, input.initialState.ap, input.initialState.fp]⟩} ∪ bundleLocalYields
 
+/--
+Elaborated circuit for the execution circuit.
+-/
+def executionCircuitElaborated
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    ElaboratedCircuit (F p) (ExecutionCircuitInput capacities) unit where
+  main := executionCircuitMain capacities program h_programSize memory h_memorySize
+  localLength input_var :=
+    (executionBundleFormalCircuit capacities program h_programSize memory h_memorySize).elaborated.localLength input_var.bundledInputs
+  yields input_var env i₀ :=
+    let initialState := eval env input_var.initialState
+    {⟨"execution", [0, initialState.pc, initialState.ap, initialState.fp]⟩} ∪
+    (executionBundleFormalCircuit capacities program h_programSize memory h_memorySize).elaborated.yields input_var.bundledInputs env i₀
+  output input_var env := ()
+  localLength_eq := by sorry
+  yields_eq := by sorry
+  output_eq := by sorry
+
+/--
+Formal circuit for the execution circuit, packaging everything together.
+-/
+def executionCircuitFormalCircuit
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
+    GeneralFormalCircuit (F p) (ExecutionCircuitInput capacities) unit where
+  elaborated := executionCircuitElaborated capacities program h_programSize memory h_memorySize
+  Assumptions := executionCircuitAssumptions capacities (programSize := programSize)
+  Spec := executionCircuitSpec capacities program memory
+  soundness := by sorry
+  completeness := by sorry
+
 end Examples.PicoCairo
