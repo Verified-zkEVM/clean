@@ -24,10 +24,7 @@ def executionCircuit
     (initialState : FemtoCairo.Types.State (F p))
     (finalTimestamp : F p)
     (finalState : FemtoCairo.Types.State (F p))
-    (addInputs : Var (ProvableVector InstructionStepInput capacities.addCapacity) (F p))
-    (mulInputs : Var (ProvableVector InstructionStepInput capacities.mulCapacity) (F p))
-    (storeStateInputs : Var (ProvableVector InstructionStepInput capacities.storeStateCapacity) (F p))
-    (loadStateInputs : Var (ProvableVector InstructionStepInput capacities.loadStateCapacity) (F p)) :
+    (inputs : Var (BundledInstructionInputs capacities) (F p)) :
     Circuit (F p) Unit := do
 
   -- Yield initial state at timestamp 0
@@ -35,8 +32,7 @@ def executionCircuit
                         Expression.const initialState.ap, Expression.const initialState.fp]⟩
 
   -- Run the execution bundle (proves intermediate steps)
-  executionBundleMain capacities program h_programSize memory h_memorySize
-    addInputs mulInputs storeStateInputs loadStateInputs
+  executionBundleMain capacities program h_programSize memory h_memorySize inputs
 
   -- Use the expected final state
   use ⟨"execution", [Expression.const finalTimestamp, Expression.const finalState.pc,

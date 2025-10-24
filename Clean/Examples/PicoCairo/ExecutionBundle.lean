@@ -35,6 +35,37 @@ instance (capacities : InstructionCapacities) : NeZero capacities.storeStateCapa
 instance (capacities : InstructionCapacities) : NeZero capacities.loadStateCapacity := capacities.loadStateCapacity_nz
 
 /--
+Bundled instruction inputs for all instruction types.
+Groups the input vectors for ADD, MUL, StoreState, and LoadState instructions.
+-/
+structure BundledInstructionInputs (capacities : InstructionCapacities) (F : Type) where
+  addInputs : ProvableVector InstructionStepInput capacities.addCapacity F
+  mulInputs : ProvableVector InstructionStepInput capacities.mulCapacity F
+  storeStateInputs : ProvableVector InstructionStepInput capacities.storeStateCapacity F
+  loadStateInputs : ProvableVector InstructionStepInput capacities.loadStateCapacity F
+
+instance (capacities : InstructionCapacities) : ProvableStruct (BundledInstructionInputs capacities) where
+  components := [
+    ProvableVector InstructionStepInput capacities.addCapacity,
+    ProvableVector InstructionStepInput capacities.mulCapacity,
+    ProvableVector InstructionStepInput capacities.storeStateCapacity,
+    ProvableVector InstructionStepInput capacities.loadStateCapacity
+  ]
+  toComponents := fun { addInputs, mulInputs, storeStateInputs, loadStateInputs } =>
+    .cons addInputs (.cons mulInputs (.cons storeStateInputs (.cons loadStateInputs .nil)))
+  fromComponents := fun (.cons addInputs (.cons mulInputs (.cons storeStateInputs (.cons loadStateInputs .nil)))) =>
+    { addInputs, mulInputs, storeStateInputs, loadStateInputs }
+
+instance (capacities : InstructionCapacities) : NonEmptyProvableType (BundledInstructionInputs capacities) where
+  nonempty := by
+    simp only [size, circuit_norm]
+    simp only [List.sum_cons, List.sum_nil, add_zero, Nat.reduceAdd, gt_iff_lt, add_pos_iff,
+      Nat.ofNat_pos, mul_pos_iff_of_pos_right]
+    have : NeZero capacities.addCapacity := inferInstance
+    rcases this
+    omega
+
+/--
 Main execution bundle that combines all instruction type bundles.
 Includes ADD, MUL, StoreState, and LoadState instructions.
 -/
@@ -42,23 +73,20 @@ def executionBundleMain
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (addInputs : Var (ProvableVector InstructionStepInput capacities.addCapacity) (F p))
-    (mulInputs : Var (ProvableVector InstructionStepInput capacities.mulCapacity) (F p))
-    (storeStateInputs : Var (ProvableVector InstructionStepInput capacities.storeStateCapacity) (F p))
-    (loadStateInputs : Var (ProvableVector InstructionStepInput capacities.loadStateCapacity) (F p)) :
+    (inputs : Var (BundledInstructionInputs capacities) (F p)) :
     Circuit (F p) Unit := do
 
   -- Execute ADD instruction bundle
-  addStepCircuitsBundle capacities.addCapacity program h_programSize memory h_memorySize addInputs
+  addStepCircuitsBundle capacities.addCapacity program h_programSize memory h_memorySize inputs.addInputs
 
   -- Execute MUL instruction bundle
-  mulStepCircuitsBundle capacities.mulCapacity program h_programSize memory h_memorySize mulInputs
+  mulStepCircuitsBundle capacities.mulCapacity program h_programSize memory h_memorySize inputs.mulInputs
 
   -- Execute StoreState instruction bundle
-  storeStateStepCircuitsBundle capacities.storeStateCapacity program h_programSize memory h_memorySize storeStateInputs
+  storeStateStepCircuitsBundle capacities.storeStateCapacity program h_programSize memory h_memorySize inputs.storeStateInputs
 
   -- Execute LoadState instruction bundle
-  loadStateStepCircuitsBundle capacities.loadStateCapacity program h_programSize memory h_memorySize loadStateInputs
+  loadStateStepCircuitsBundle capacities.loadStateCapacity program h_programSize memory h_memorySize inputs.loadStateInputs
 
   return ()
 
