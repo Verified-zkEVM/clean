@@ -235,9 +235,6 @@ def storeStateStepFormalCircuit
       cases decoded_instr_type
       simp only at h_decode_type h_isstore
       simp only [DecodedInstructionType.val] at h_decode_type
-      -- For StoreState: isAdd=0, isMul=0, so we reach else-else branch
-      -- That returns 2 + (if isStoreState = 1 then 0 else ...)
-      -- Since isStoreState=1 (from h_isstore), this gives 2, which equals type
       rw [if_neg] at h_decode_type
       swap
       · simp only at h_decode
@@ -332,7 +329,6 @@ theorem storeStateStepSpec_localYields_characterization
     (nl : NamedList (F p))
     (h_spec : storeStateStepSpec program memory input yielded () localYields)
     (h_mem : nl ∈ localYields) :
-    -- Then we can extract:
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧

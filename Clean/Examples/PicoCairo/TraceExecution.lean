@@ -374,21 +374,12 @@ theorem executionCircuitSpec_localYields_reachable
           cases preState'; cases preState
           simp at h_pc h_ap h_fp
           simp [h_pc, h_ap, h_fp]
-        -- Now we have:
-        -- h_preState_reach : BoundedExecution ... preSteps = some preState'
-        -- h_preState'_eq : preState' = preState
-        -- h_transition : MachineTransition ... preState = some newState
-        -- h_preTimestamp_eq : preTimestamp' = ↑preSteps
-        -- h_preTimestamp'_eq : preTimestamp' = preTimestamp
-        -- h_preTimestamp_val : preTimestamp.val = t
-        -- Need to show preSteps = t
         have h_preSteps_eq : preSteps = t := by
           have : preTimestamp'.val = preSteps := by
             rw [h_preTimestamp_eq]
             exact ZMod.val_cast_of_lt h_preSteps_lt
           rw [h_preTimestamp'_eq, h_preTimestamp_val] at this
           exact this.symm
-        -- Use femtoCairoMachineBoundedExecution_succ
         rw [← h_preSteps_eq]
         apply FemtoCairo.Spec.femtoCairoMachineBoundedExecution_succ (state := preState)
         · rw [← h_preState'_eq]
