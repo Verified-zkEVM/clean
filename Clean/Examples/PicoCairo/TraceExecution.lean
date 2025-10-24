@@ -165,4 +165,74 @@ def executionCircuitFormalCircuit
       rw [← h_input]
   completeness := by sorry
 
+/--
+Lemma: All elements in localYields have the form "execution" with a 4-element list.
+-/
+theorem executionCircuitSpec_localYields_structure
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (input : ExecutionCircuitInput capacities (F p))
+    (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : executionCircuitSpec capacities program memory input yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    ∃ (timestamp pc ap fp : F p),
+      nl = ⟨"execution", [timestamp, pc, ap, fp]⟩ := by
+  -- Extract bundle local yields from spec
+  obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
+  rw [h_local_yields] at h_mem
+  simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
+  rcases h_mem with h_initial | h_bundle
+  · -- Case 1: nl is the initial state
+    use 0, input.initialState.pc, input.initialState.ap, input.initialState.fp
+  · -- Case 2: nl is from bundle local yields
+    -- Use executionBundleSpec_localYields_characterization
+    have ⟨preState, timestamp, h_input_match, h_overflow, h_yielded, h_valid⟩ :=
+      executionBundleSpec_localYields_characterization capacities program memory input.bundledInputs yielded bundleLocalYields nl h_bundle_spec h_bundle
+    -- Use IsValidInstructionExecution_implies_valid_transition
+    have ⟨newState, h_transition, h_nl⟩ :=
+      IsValidInstructionExecution_implies_valid_transition program memory preState timestamp nl h_valid
+    use timestamp + 1, newState.pc, newState.ap, newState.fp
+
+/--
+Theorem: Every element in localYields represents a state in the execution from initialState.
+This shows that the spec implies all local yields correspond to reachable states.
+-/
+theorem executionCircuitSpec_localYields_reachable
+    (capacities : InstructionCapacities)
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (input : ExecutionCircuitInput capacities (F p))
+    (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : executionCircuitSpec capacities program memory input yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    ∃ (timestamp : F p) (state : FemtoCairo.Types.State (F p)) (steps : ℕ),
+      timestamp = steps ∧
+      FemtoCairo.Spec.femtoCairoMachineBoundedExecution program memory (some input.initialState) steps = some state ∧
+      nl = ⟨"execution", [timestamp, state.pc, state.ap, state.fp]⟩ := by
+  -- Extract bundle local yields from spec
+  obtain ⟨bundleLocalYields, h_bundle_spec, h_final_used, h_local_yields⟩ := h_spec
+  rw [h_local_yields] at h_mem
+  simp only [Set.mem_union, Set.mem_singleton_iff] at h_mem
+  rcases h_mem with h_initial | h_bundle
+  · -- Case 1: nl is the initial state
+    use 0, input.initialState, 0
+    constructor
+    · simp
+    constructor
+    · simp [FemtoCairo.Spec.femtoCairoMachineBoundedExecution]
+    · exact h_initial
+  · -- Case 2: nl is from bundle local yields
+    -- Use the execution bundle characterization to get the transition
+    have ⟨preState, timestamp, h_input_match, h_overflow, h_yielded, h_valid⟩ :=
+      executionBundleSpec_localYields_characterization capacities program memory input.bundledInputs yielded bundleLocalYields nl h_bundle_spec h_bundle
+    -- Use the valid instruction execution to get the new state
+    have ⟨newState, h_transition, h_nl⟩ :=
+      IsValidInstructionExecution_implies_valid_transition program memory preState timestamp nl h_valid
+    sorry
+
 end Examples.PicoCairo
