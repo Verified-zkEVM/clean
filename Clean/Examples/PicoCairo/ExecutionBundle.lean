@@ -17,22 +17,32 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
 Main execution bundle that combines all instruction type bundles.
-For now, only includes ADD instructions.
+Includes ADD, MUL, StoreState, and LoadState instructions.
 -/
 def executionBundleMain
     (addCapacity : ℕ) [NeZero addCapacity]
+    (mulCapacity : ℕ) [NeZero mulCapacity]
+    (storeStateCapacity : ℕ) [NeZero storeStateCapacity]
+    (loadStateCapacity : ℕ) [NeZero loadStateCapacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
-    (addInputs : Var (ProvableVector InstructionStepInput addCapacity) (F p)) :
+    (addInputs : Var (ProvableVector InstructionStepInput addCapacity) (F p))
+    (mulInputs : Var (ProvableVector InstructionStepInput mulCapacity) (F p))
+    (storeStateInputs : Var (ProvableVector InstructionStepInput storeStateCapacity) (F p))
+    (loadStateInputs : Var (ProvableVector InstructionStepInput loadStateCapacity) (F p)) :
     Circuit (F p) Unit := do
 
   -- Execute ADD instruction bundle
   addStepCircuitsBundle addCapacity program h_programSize memory h_memorySize addInputs
 
-  -- Future: Add other instruction bundles (will need NeZero constraints and ProvableVector inputs)
-  -- mulStepCircuitsBundle mulCapacity program h_programSize memory h_memorySize mulInputs
-  -- loadStateStepCircuitsBundle loadCapacity program h_programSize memory h_memorySize loadInputs
-  -- storeStateStepCircuitsBundle storeCapacity program h_programSize memory h_memorySize storeInputs
+  -- Execute MUL instruction bundle
+  mulStepCircuitsBundle mulCapacity program h_programSize memory h_memorySize mulInputs
+
+  -- Execute StoreState instruction bundle
+  storeStateStepCircuitsBundle storeStateCapacity program h_programSize memory h_memorySize storeStateInputs
+
+  -- Execute LoadState instruction bundle
+  loadStateStepCircuitsBundle loadStateCapacity program h_programSize memory h_memorySize loadStateInputs
 
   return ()
 
