@@ -10,6 +10,7 @@ import Clean.Examples.PicoCairo.AddInstruction
 import Clean.Examples.PicoCairo.MulInstruction
 import Clean.Examples.PicoCairo.StoreStateInstruction
 import Clean.Examples.PicoCairo.LoadStateInstruction
+import Clean.Examples.FemtoCairo.Spec
 
 namespace Examples.PicoCairo
 
@@ -281,5 +282,31 @@ theorem executionBundleSpec_localYields_characterization
     · simp only [IsValidInstructionExecution]
       right; right; right
       exact h_valid
+
+omit p_large_enough in
+/--
+Theorem stating that IsValidInstructionExecution implies a valid femtoCairoMachineTransition.
+This connects the circuit specification to the machine semantics.
+-/
+theorem IsValidInstructionExecution_implies_valid_transition
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (preState : FemtoCairo.Types.State (F p))
+    (timestamp : F p)
+    (nl : NamedList (F p))
+    (h_valid : IsValidInstructionExecution program memory preState timestamp nl) :
+    ∃ newState : FemtoCairo.Types.State (F p),
+      FemtoCairo.Spec.femtoCairoMachineTransition program memory preState = some newState ∧
+      nl = ⟨"execution", [timestamp + 1, newState.pc, newState.ap, newState.fp]⟩ := by
+  simp only [IsValidInstructionExecution] at h_valid
+  rcases h_valid with h_valid | h_valid | h_valid | h_valid
+  -- Case 1: ADD instruction
+  · exact IsValidAddExecution_implies_valid_transition program memory preState timestamp nl h_valid
+  -- Case 2: MUL instruction
+  · exact IsValidMulExecution_implies_valid_transition program memory preState timestamp nl h_valid
+  -- Case 3: StoreState instruction
+  · exact IsValidStoreStateExecution_implies_valid_transition program memory preState timestamp nl h_valid
+  -- Case 4: LoadState instruction
+  · exact IsValidLoadStateExecution_implies_valid_transition program memory preState timestamp nl h_valid
 
 end Examples.PicoCairo
