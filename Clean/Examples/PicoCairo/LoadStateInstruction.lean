@@ -511,4 +511,33 @@ def loadStateStepCircuitsBundleFormalCircuit
         simp only [circuit_norm]
   completeness := sorry
 
+/--
+Characterization theorem for LoadState instruction bundle localYields.
+Given a bundle spec and a named list in the local yields, we can find which instruction index it came from
+and extract witnesses for all the conditions.
+Note: LoadState bundle spec includes existential for environment and offset, but IsValidLoadStateExecution doesn't need them.
+-/
+theorem loadStateStepCircuitsBundleSpec_localYields_characterization
+    (capacity : ℕ) [NeZero capacity]
+    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
+    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+    (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
+    (localYields : Set (NamedList (F p)))
+    (nl : NamedList (F p))
+    (h_spec : loadStateStepCircuitsBundleSpec capacity program memory inputs yielded () localYields)
+    (h_mem : nl ∈ localYields) :
+    -- Then we can find an index i such that the conditions hold for inputs[i]
+    ∃ (i : Fin capacity),
+      inputs[i].enabled = 1 ∧
+      inputs[i].timestamp + 1 ≠ 0 ∧
+      ⟨"execution", [inputs[i].timestamp, inputs[i].preState.pc, inputs[i].preState.ap, inputs[i].preState.fp]⟩ ∈ yielded ∧
+      IsValidLoadStateExecution program memory inputs[i].preState inputs[i].timestamp nl := by
+  simp only [loadStateStepCircuitsBundleSpec] at h_spec
+  rcases h_spec with ⟨env, baseOffset, h_all, h_yields⟩
+  rw [h_yields] at h_mem
+  simp only [Set.mem_iUnion] at h_mem
+  rcases h_mem with ⟨i, h_i⟩
+  use i
+  exact loadStateStepSpec_localYields_characterization program memory inputs[i] yielded (loadStateStepLocalYields inputs[i] env (baseOffset + i * 29)) nl (h_all i) h_i
+
 end Examples.PicoCairo
