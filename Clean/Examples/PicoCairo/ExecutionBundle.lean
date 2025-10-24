@@ -176,8 +176,10 @@ def executionBundleFormalCircuit
     simp only [storeStateStepCircuitsBundleFormalCircuit, storeStateStepCircuitsBundleElaborated] at h_holds
     simp only [loadStateStepCircuitsBundleFormalCircuit, loadStateStepCircuitsBundleElaborated] at h_holds
     use ⋃ (i : Fin capacities.addCapacity), addStepLocalYields (eval env input_var.addInputs[i])
-
-    sorry
+    use ⋃ (i : Fin capacities.mulCapacity), mulStepLocalYields (eval env input_var.mulInputs[i])
+    use ⋃ (i : Fin capacities.storeStateCapacity), storeStateStepLocalYields (eval env input_var.storeStateInputs[i])
+    use ⋃ (i : Fin capacities.loadStateCapacity), loadStateStepLocalYields (eval env input_var.loadStateInputs[i]) env (i₀ + capacities.addCapacity * 29 + capacities.mulCapacity * 29 + capacities.storeStateCapacity * 29 + i * 29)
+    aesop
   completeness := sorry
 
 end Examples.PicoCairo
