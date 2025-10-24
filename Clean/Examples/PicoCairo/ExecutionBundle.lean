@@ -19,7 +19,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 Main execution bundle that combines all instruction type bundles.
 For now, only includes ADD instructions.
 -/
-def executionBundle
+def executionBundleMain
     (addCapacity : ℕ) [NeZero addCapacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)

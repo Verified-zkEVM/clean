@@ -32,7 +32,7 @@ def executionCircuit
                         Expression.const initialState.ap, Expression.const initialState.fp]⟩
 
   -- Run the execution bundle (proves intermediate steps)
-  executionBundle addCapacity program h_programSize memory h_memorySize addInputs
+  executionBundleMain addCapacity program h_programSize memory h_memorySize addInputs
 
   -- Use the expected final state
   use ⟨"execution", [Expression.const finalTimestamp, Expression.const finalState.pc,
