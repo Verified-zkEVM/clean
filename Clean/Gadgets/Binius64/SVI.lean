@@ -74,25 +74,51 @@ variable {p : ℕ} [Fact p.Prime]
 
 /-- Logical shift left -/
 def shiftLeftLogical (wire : Vector (F p) 64)
-    (amount : ℕ) (h_amount : amount < 64) : Vector (F p) 64 :=
-  by
-    sorry
+    (amount : ℕ) : Vector (F p) 64 :=
+  if hZero : amount = 0 then
+    wire
+  else
+    Vector.ofFn fun i : Fin 64 =>
+      if hLe : amount ≤ i.val then
+        let idxVal := i.val - amount
+        -- idxVal < 64 because idxVal ≤ i.val and i.val < 64
+        have hIdx : idxVal < 64 := by
+          have : idxVal ≤ i.val := Nat.sub_le _ _
+          exact lt_of_le_of_lt this i.isLt
+        let idx : Fin 64 := ⟨idxVal, hIdx⟩
+        wire[idx]
+      else
+        (0 : F p)
+
 
 /-- Logical shift right -/
 def shiftRightLogical (wire : Vector (F p) 64) (amount : ℕ) : Vector (F p) 64 :=
-  by
-    sorry
+  Vector.ofFn fun i : Fin 64 =>
+    let src := i.val + amount
+    if hSrc : src < 64 then
+      let idx : Fin 64 := ⟨src, hSrc⟩
+      wire[idx]
+    else
+      (0 : F p)
 
 /-- Arithmetic shift right -/
 def shiftRightArithmetic (wire : Vector (F p) 64) (amount : ℕ) : Vector (F p) 64 :=
-  by
-    sorry
+  let msbIdx : Fin 64 := Fin.last 63
+  let msb := wire[msbIdx]
+  Vector.ofFn fun i : Fin 64 =>
+    let src := i.val + amount
+    if hSrc : src < 64 then
+      let idx : Fin 64 := ⟨src, hSrc⟩
+      wire[idx]
+    else
+      msb
+
 
 /-- Apply a shift described by kind and amount. -/
 def applyShiftVec (wire : Vector (F p) 64) (kind : ShiftKind)
-    (amount : ℕ) (h_amount : amount < 64) : Vector (F p) 64 :=
+    (amount : ℕ) : Vector (F p) 64 :=
   match kind with
-  | .sll => shiftLeftLogical wire amount h_amount
+  | .sll => shiftLeftLogical wire amount
   | .srl => shiftRightLogical wire amount
   | .sra => shiftRightArithmetic wire amount
 
@@ -105,7 +131,7 @@ variable {p : ℕ} [Fact p.Prime]
 def applyShift (x : SVIData (F p)) : Vector (F p) 64 :=
   let kind := decodeShiftKind x.shiftType
   let amount := decodeShiftAmount x.shiftAmount
-  applyShiftVec x.wire kind amount (decodeShiftAmount_lt x.shiftAmount)
+  applyShiftVec x.wire kind amount
 
 end Evaluation
 

@@ -30,8 +30,7 @@ private def evalShiftedWire
   let wireVals := Vector.map (Expression.eval env) wire
   let kind := decodeShiftKind (Expression.eval env shiftType)
   let amount := decodeShiftAmount (Expression.eval env shiftAmount)
-  have hAmount : amount < 64 := decodeShiftAmount_lt (Expression.eval env shiftAmount)
-  applyShiftVec wireVals kind amount hAmount
+  applyShiftVec wireVals kind amount
 
 private def elementwiseAndExpr
     (lhs rhs : Vector (Expression (F p)) 64) : Vector (Expression (F p)) 64 :=
