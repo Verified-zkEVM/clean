@@ -2,6 +2,7 @@ import Mathlib.Data.ZMod.Basic
 import Clean.Circuit.Provable
 import Clean.Utils.Field
 import Clean.Utils.Vector
+import Clean.Circuit.Basic
 
 namespace Gadgets.Binius64
 
@@ -73,8 +74,8 @@ section ShiftOperations
 variable {p : ℕ} [Fact p.Prime]
 
 /-- Logical shift left -/
-def shiftLeftLogical (wire : Vector (F p) 64)
-    (amount : ℕ) : Vector (F p) 64 :=
+def shiftLeftLogical {F : Type} [Zero F] (wire : Vector F 64)
+    (amount : ℕ) : Vector F 64 :=
   if hZero : amount = 0 then
     wire
   else
@@ -88,21 +89,21 @@ def shiftLeftLogical (wire : Vector (F p) 64)
         let idx : Fin 64 := ⟨idxVal, hIdx⟩
         wire[idx]
       else
-        (0 : F p)
+        (0 : F)
 
 
 /-- Logical shift right -/
-def shiftRightLogical (wire : Vector (F p) 64) (amount : ℕ) : Vector (F p) 64 :=
+def shiftRightLogical {F : Type} [Zero F] (wire : Vector F 64) (amount : ℕ) : Vector F 64 :=
   Vector.ofFn fun i : Fin 64 =>
     let src := i.val + amount
     if hSrc : src < 64 then
       let idx : Fin 64 := ⟨src, hSrc⟩
       wire[idx]
     else
-      (0 : F p)
+      (0 : F)
 
 /-- Arithmetic shift right -/
-def shiftRightArithmetic (wire : Vector (F p) 64) (amount : ℕ) : Vector (F p) 64 :=
+def shiftRightArithmetic {F : Type} [Zero F] (wire : Vector F 64) (amount : ℕ) : Vector F 64 :=
   let msbIdx : Fin 64 := Fin.last 63
   let msb := wire[msbIdx]
   Vector.ofFn fun i : Fin 64 =>
@@ -113,10 +114,9 @@ def shiftRightArithmetic (wire : Vector (F p) 64) (amount : ℕ) : Vector (F p) 
     else
       msb
 
-
 /-- Apply a shift described by kind and amount. -/
-def applyShiftVec (wire : Vector (F p) 64) (kind : ShiftKind)
-    (amount : ℕ) : Vector (F p) 64 :=
+def applyShiftVec {F: Type} [Zero F] (wire : Vector F 64) (kind : ShiftKind)
+    (amount : ℕ) : Vector F 64 :=
   match kind with
   | .sll => shiftLeftLogical wire amount
   | .srl => shiftRightLogical wire amount
@@ -132,6 +132,26 @@ def applyShift (x : SVIData (F p)) : Vector (F p) 64 :=
   let kind := decodeShiftKind x.shiftType
   let amount := decodeShiftAmount x.shiftAmount
   applyShiftVec x.wire kind amount
+
+private def evalShiftedWire
+    (wire : Vector (Expression (F p)) 64)
+    (shiftType shiftAmount : Expression (F p))
+    (env : Environment (F p)) : Vector (F p) 64 :=
+  let wireVals := Vector.map (Expression.eval env) wire
+  let kind := decodeShiftKind (Expression.eval env shiftType)
+  let amount := decodeShiftAmount (Expression.eval env shiftAmount)
+  applyShiftVec wireVals kind amount
+
+def applyShiftExpr (x : SVIData (Expression (F p))) :
+  Circuit (F p) (Vector (Expression (F p)) 64) :=
+  match x with
+    | ⟨wire, .const shiftType, .const shiftAmount⟩ =>
+    let kind := decodeShiftKind shiftType
+    let amount := decodeShiftAmount shiftAmount
+    return applyShiftVec wire kind amount
+
+    | x => witnessVector 64 fun env =>
+      evalShiftedWire x.wire x.shiftType x.shiftAmount env
 
 end Evaluation
 
