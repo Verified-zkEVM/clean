@@ -23,15 +23,6 @@ instance : ProvableStruct BandInputs where
 
 namespace Band
 
-private def evalShiftedWire
-    (wire : Vector (Expression (F p)) 64)
-    (shiftType shiftAmount : Expression (F p))
-    (env : Environment (F p)) : Vector (F p) 64 :=
-  let wireVals := Vector.map (Expression.eval env) wire
-  let kind := decodeShiftKind (Expression.eval env shiftType)
-  let amount := decodeShiftAmount (Expression.eval env shiftAmount)
-  applyShiftVec wireVals kind amount
-
 private def elementwiseAndExpr
     (lhs rhs : Vector (Expression (F p)) 64) : Vector (Expression (F p)) 64 :=
   Vector.ofFn fun i => lhs[i] * rhs[i]
@@ -43,10 +34,8 @@ private def elementwiseAndVals
 /-- we do not constrain the shifts yet   --/
 def main (input : Var BandInputs (F p)) : Circuit (F p) (Var SVI (F p)) := do
   let ⟨lhs, rhs⟩ := input
-  let lhsShifted ← witnessVector 64 fun env =>
-    evalShiftedWire lhs.wire lhs.shiftType lhs.shiftAmount env
-  let rhsShifted ← witnessVector 64 fun env =>
-    evalShiftedWire rhs.wire rhs.shiftType rhs.shiftAmount env
+  let lhsShifted ← applyShiftExpr lhs
+  let rhsShifted ← applyShiftExpr rhs
   let wire := elementwiseAndExpr lhsShifted rhsShifted
   return {
     wire
@@ -65,7 +54,20 @@ def Spec (input : BandInputs (F p)) (output : SVIData (F p)) : Prop :=
 
 instance elaborated : ElaboratedCircuit (F p) BandInputs SVI where
   main := main
-  localLength _ := 128
+  localLength input :=
+    let ⟨lhs, rhs⟩ := input
+    let lhsLen := match lhs with
+        | ⟨_, .const _, .const _⟩ => 0
+        | _ => 64
+
+    let rhsLen := match rhs with
+        | ⟨_, .const _, .const _⟩ => 0
+        | _ => 64
+
+    lhsLen + rhsLen
+
+  localLength_eq := by sorry
+  subcircuitsConsistent := by sorry
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro offset env inputVar input h_input _ h_constraints

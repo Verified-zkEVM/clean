@@ -91,7 +91,6 @@ def shiftLeftLogical {F : Type} [Zero F] (wire : Vector F 64)
       else
         (0 : F)
 
-
 /-- Logical shift right -/
 def shiftRightLogical {F : Type} [Zero F] (wire : Vector F 64) (amount : ℕ) : Vector F 64 :=
   Vector.ofFn fun i : Fin 64 =>
