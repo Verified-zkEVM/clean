@@ -145,12 +145,35 @@ def applyShiftExpr (x : SVIData (Expression (F p))) :
   Circuit (F p) (Vector (Expression (F p)) 64) :=
   match x with
     | ⟨wire, .const shiftType, .const shiftAmount⟩ =>
-    let kind := decodeShiftKind shiftType
-    let amount := decodeShiftAmount shiftAmount
-    return applyShiftVec wire kind amount
+      let kind := decodeShiftKind shiftType
+      let amount := decodeShiftAmount shiftAmount
+      return applyShiftVec wire kind amount
 
-    | x => witnessVector 64 fun env =>
-      evalShiftedWire x.wire x.shiftType x.shiftAmount env
+    | x =>
+      witnessVector 64 fun env =>
+        evalShiftedWire x.wire x.shiftType x.shiftAmount env
+
+def shiftLocalLength (x : SVIData (Expression (F p))) : ℕ :=
+  match x.shiftType, x.shiftAmount with
+  | Expression.const _, Expression.const _ => 0
+  | _, _ => 64
+
+@[simp] lemma applyShiftExpr_localLength
+    (x : SVIData (Expression (F p))) (offset : ℕ) :
+    (applyShiftExpr x).localLength offset = shiftLocalLength x := by
+  rcases x with ⟨wire, shiftType, shiftAmount⟩
+  cases shiftType with
+  | const shiftType =>
+    cases shiftAmount with
+    | const shiftAmount =>
+      simp [applyShiftExpr, shiftLocalLength, Circuit.localLength, Circuit.pure_def,
+        Operations.localLength]
+    | _ =>
+      simp [applyShiftExpr, shiftLocalLength, evalShiftedWire, Circuit.witnessVector,
+        Circuit.localLength, Operations.localLength]
+  | _ =>
+    simp [applyShiftExpr, shiftLocalLength, evalShiftedWire, Circuit.witnessVector,
+      Circuit.localLength, Operations.localLength]
 
 end Evaluation
 

@@ -1,5 +1,6 @@
 import Mathlib.Data.ZMod.Basic
 import Clean.Circuit.Basic
+import Clean.Circuit.Theorems
 import Clean.Circuit.Provable
 import Clean.Circuit.Expression
 import Clean.Gadgets.Binius64.SVI
@@ -55,18 +56,13 @@ def Spec (input : BandInputs (F p)) (output : SVIData (F p)) : Prop :=
 instance elaborated : ElaboratedCircuit (F p) BandInputs SVI where
   main := main
   localLength input :=
-    let ⟨lhs, rhs⟩ := input
-    let lhsLen := match lhs with
-        | ⟨_, .const _, .const _⟩ => 0
-        | _ => 64
+    shiftLocalLength input.lhs + shiftLocalLength input.rhs
 
-    let rhsLen := match rhs with
-        | ⟨_, .const _, .const _⟩ => 0
-        | _ => 64
-
-    lhsLen + rhsLen
-
-  localLength_eq := by sorry
+  localLength_eq := by
+    intro input offset
+    rcases input with ⟨lhs, rhs⟩
+    simp [main, shiftLocalLength, Circuit.bind_localLength_eq,
+      Circuit.map_localLength_eq]
   subcircuitsConsistent := by sorry
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
