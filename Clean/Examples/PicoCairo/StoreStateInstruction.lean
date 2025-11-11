@@ -16,7 +16,7 @@ import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.Boolean
 import Batteries.Data.Vector.Lemmas
 
-namespace Examples.PicoCairo
+namespace Examples.PicoCairo.StoreStateInstruction
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
@@ -29,7 +29,7 @@ Main circuit for StoreState instruction step.
 Takes enabled flag, timestamp, and pre-state.
 If enabled and instruction at pc is StoreState, enforces that operands match state values and yields trace element.
 -/
-def storeStateStepCircuitMain
+def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
@@ -93,30 +93,30 @@ def storeStateStepCircuitMain
 Computes the localYields for a single StoreState instruction step.
 If enabled, yields the new execution state; otherwise yields nothing.
 -/
-def storeStateStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
+def localYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
   { nl | input.enabled ≠ 0 ∧
          nl = ⟨"execution", [input.timestamp + 1,
                             input.preState.pc + 4,
                             input.preState.ap,
                             input.preState.fp]⟩ }
 
-def storeStateStepElaboratedCircuit
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
-  main := storeStateStepCircuitMain program h_programSize memory h_memorySize
+  main := main program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env _ := storeStateStepLocalYields (eval env input)
+  yields input env _ := localYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [storeStateStepLocalYields, storeStateStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [localYields, main, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
 /--
 Assumptions for StoreState instruction step (for completeness).
 -/
-def storeStateStepAssumptions
+def assumptions
     {programSize : ℕ} [NeZero programSize]
     (input : InstructionStepInput (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
   IsBool input.enabled ∧
@@ -131,7 +131,7 @@ Checks that:
 3. Operands v1, v2, v3 read correctly and match pc, ap, fp
 4. New state is yielded with pc+4, unchanged ap and fp
 -/
-def storeStateStepSpec
+def spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
@@ -170,26 +170,26 @@ def storeStateStepSpec
 /--
 GeneralFormalCircuitUsingYields for StoreState instruction step.
 -/
-def storeStateStepFormalCircuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
-  elaborated := storeStateStepElaboratedCircuit program h_programSize memory h_memorySize
-  Assumptions := storeStateStepAssumptions (programSize := programSize)
-  Spec := storeStateStepSpec program memory
+  elaborated := elaborated program h_programSize memory h_memorySize
+  Assumptions := assumptions (programSize := programSize)
+  Spec := spec program memory
 
   soundness := by
-    circuit_proof_start [storeStateStepSpec, storeStateStepElaboratedCircuit, storeStateStepCircuitMain,
+    circuit_proof_start [spec, elaborated, main,
       assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, storeStateStepLocalYields]
+    · simp only [h_zero, localYields]
       subst h_zero
       simp_all only [ne_eq, not_true_eq_false, IsEmpty.forall_iff, id_eq, ↓reduceIte, DecodedInstruction.mk.injEq,
         zero_mul, and_self, and_true, true_and, zero_ne_one, false_and, Set.setOf_false]
     · subst h_one
-      simp only [↓reduceIte, storeStateStepLocalYields]
+      simp only [↓reduceIte, localYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isstore, h_read1, h_read2, h_read3, h_v1, h_v2, h_v3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
@@ -321,19 +321,19 @@ Characterization theorem for StoreState instruction localYields.
 If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
 This is useful for inductive reasoning about execution traces.
 -/
-theorem storeStateStepSpec_localYields_characterization
+theorem spec_localYields_characterization
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : storeStateStepSpec program memory input yielded () localYields)
+    (h_spec : spec program memory input yielded () localYields)
     (h_mem : nl ∈ localYields) :
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     IsValidStoreStateExecution program memory input.preState input.timestamp nl := by
-  simp only [storeStateStepSpec] at h_spec
+  simp only [spec] at h_spec
   simp only [IsValidStoreStateExecution]
   by_cases h_enabled : input.enabled = 1
   swap -- error case first
@@ -395,91 +395,93 @@ theorem IsValidStoreStateExecution_implies_valid_transition
     aesop
   · exact h_nl
 
+namespace Bundle
+
 /--
 Bundle of StoreState instruction step circuits.
 Takes a vector of inputs with given capacity and executes StoreState instructions for each enabled input.
 -/
-def storeStateStepCircuitsBundle
+def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertionUsingYields (storeStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (StoreStateInstruction.circuit program h_programSize memory h_memorySize) inputs[i.val]
 
 /--
 Elaborated circuit for StoreState instruction bundle.
 -/
-def storeStateStepCircuitsBundleElaborated
+def elaborated
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
-  main := storeStateStepCircuitsBundle capacity program h_programSize memory h_memorySize
+  main := main capacity program h_programSize memory h_memorySize
   localLength _ := capacity * 29  -- Each step uses 29 locals
   localLength_eq := by
     intros input offset
-    simp only [circuit_norm, storeStateStepCircuitsBundle]
+    simp only [circuit_norm, main]
     congr 1
   yields inputs env offset :=
-    ⋃ i : Fin capacity, storeStateStepLocalYields (eval env inputs[i])
+    ⋃ i : Fin capacity, StoreStateInstruction.localYields (eval env inputs[i])
   yields_eq := by
     intros inputs env offset
-    simp only [circuit_norm, storeStateStepCircuitsBundle]
+    simp only [circuit_norm, main]
     ext nl
     simp only [Set.mem_iUnion]
     constructor
     · intro ⟨i, hi⟩
       use i
-      simp only [storeStateStepFormalCircuit, storeStateStepElaboratedCircuit, circuit_norm] at hi
+      simp only [StoreStateInstruction.circuit, StoreStateInstruction.elaborated, circuit_norm] at hi
       exact hi
     · intro ⟨i, hi⟩
       use i
-      simp only [storeStateStepFormalCircuit, storeStateStepElaboratedCircuit, circuit_norm]
+      simp only [StoreStateInstruction.circuit, StoreStateInstruction.elaborated, circuit_norm]
       exact hi
   subcircuitsConsistent := by
     intros inputs offset
-    simp only [circuit_norm, storeStateStepCircuitsBundle]
+    simp only [circuit_norm, main]
 
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.
 -/
-def storeStateStepCircuitsBundleAssumptions
+def assumptions
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize]
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
-  ∀ i : Fin capacity, storeStateStepAssumptions (programSize := programSize) inputs[i] _yielded
+  ∀ i : Fin capacity, StoreStateInstruction.assumptions (programSize := programSize) inputs[i] _yielded
 
 /--
 Spec for the bundle: each element satisfies its step spec, and local yields are the union.
 -/
-def storeStateStepCircuitsBundleSpec
+def spec
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  (∀ i : Fin capacity, storeStateStepSpec program memory inputs[i] yielded () (storeStateStepLocalYields inputs[i])) ∧
-  localYields = ⋃ i : Fin capacity, storeStateStepLocalYields inputs[i]
+  (∀ i : Fin capacity, StoreStateInstruction.spec program memory inputs[i] yielded () (StoreStateInstruction.localYields inputs[i])) ∧
+  localYields = ⋃ i : Fin capacity, StoreStateInstruction.localYields inputs[i]
 
 /--
 GeneralFormalCircuitUsingYields for StoreState instruction bundle.
 -/
-def storeStateStepCircuitsBundleFormalCircuit
+def circuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
-  elaborated := storeStateStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
-  Assumptions := storeStateStepCircuitsBundleAssumptions capacity (programSize := programSize)
-  Spec := storeStateStepCircuitsBundleSpec capacity program memory
+  elaborated := elaborated capacity program h_programSize memory h_memorySize
+  Assumptions := assumptions capacity (programSize := programSize)
+  Spec := spec capacity program memory
   soundness := by
-    circuit_proof_start [storeStateStepCircuitsBundleElaborated, storeStateStepCircuitsBundleSpec]
-    simp only [storeStateStepCircuitsBundle, circuit_norm, storeStateStepFormalCircuit] at h_holds
+    circuit_proof_start [elaborated, spec]
+    simp only [circuit_norm, StoreStateInstruction.circuit] at h_holds
     and_intros
     · intro i
       specialize h_holds i
-      simp only [storeStateStepElaboratedCircuit] at h_holds
+      simp only [StoreStateInstruction.elaborated] at h_holds
       simp only [Fin.eta] at h_holds
       cases iv_h : Vector.get input_var i
       rename_i enabledVar timestampVar preStateVar
@@ -508,14 +510,14 @@ Characterization theorem for StoreState instruction bundle localYields.
 Given a bundle spec and a named list in the local yields, we can find which instruction index it came from
 and extract witnesses for all the conditions.
 -/
-theorem storeStateStepCircuitsBundleSpec_localYields_characterization
+theorem spec_localYields_characterization_bundle
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : storeStateStepCircuitsBundleSpec capacity program memory inputs yielded () localYields)
+    (h_spec : spec capacity program memory inputs yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can find an index i such that the conditions hold for inputs[i]
     ∃ (i : Fin capacity),
@@ -523,12 +525,14 @@ theorem storeStateStepCircuitsBundleSpec_localYields_characterization
       inputs[i].timestamp + 1 ≠ 0 ∧
       ⟨"execution", [inputs[i].timestamp, inputs[i].preState.pc, inputs[i].preState.ap, inputs[i].preState.fp]⟩ ∈ yielded ∧
       IsValidStoreStateExecution program memory inputs[i].preState inputs[i].timestamp nl := by
-  simp only [storeStateStepCircuitsBundleSpec] at h_spec
+  simp only [spec] at h_spec
   rcases h_spec with ⟨h_all, h_yields⟩
   rw [h_yields] at h_mem
   simp only [Set.mem_iUnion] at h_mem
   rcases h_mem with ⟨i, h_i⟩
   use i
-  exact storeStateStepSpec_localYields_characterization program memory inputs[i] yielded (storeStateStepLocalYields inputs[i]) nl (h_all i) h_i
+  exact StoreStateInstruction.spec_localYields_characterization program memory inputs[i] yielded (StoreStateInstruction.localYields inputs[i]) nl (h_all i) h_i
 
-end Examples.PicoCairo
+end Bundle
+
+end Examples.PicoCairo.StoreStateInstruction
