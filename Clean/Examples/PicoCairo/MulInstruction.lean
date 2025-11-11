@@ -16,7 +16,7 @@ import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.Boolean
 import Batteries.Data.Vector.Lemmas
 
-namespace Examples.PicoCairo
+namespace Examples.PicoCairo.MulInstruction
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
@@ -29,7 +29,7 @@ Main circuit for MUL instruction step.
 Takes enabled flag, timestamp, and pre-state.
 If enabled and instruction at pc is MUL, computes new state and yields trace element.
 -/
-def mulStepCircuitMain
+def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
@@ -94,7 +94,7 @@ def mulStepCircuitMain
 Computes the localYields for a single MUL instruction step.
 If enabled, yields the new execution state; otherwise yields nothing.
 -/
-def mulStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
+def localYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
   { nl | input.enabled ≠ 0 ∧
          nl = ⟨"execution", [input.timestamp + 1,
                             input.preState.pc + 4,
@@ -104,16 +104,16 @@ def mulStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F 
 /--
 Elaborated circuit for MUL instruction step.
 -/
-def mulStepElaboratedCircuit
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
-  main := mulStepCircuitMain program h_programSize memory h_memorySize
+  main := main program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env _ := mulStepLocalYields (eval env input)
+  yields input env _ := localYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [mulStepLocalYields, mulStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [localYields, main, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
@@ -121,7 +121,7 @@ def mulStepElaboratedCircuit
 Assumptions for MUL instruction step (for completeness).
 Ensures the instruction can be decoded, new timestamp won't overflow, and PC is in bounds.
 -/
-def mulStepAssumptions
+def assumptions
     {programSize : ℕ} [NeZero programSize]
     (input : InstructionStepInput (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
   IsBool input.enabled ∧
@@ -134,7 +134,7 @@ Specification for MUL instruction step (for soundness).
 The circuit already ensures fetch/decode succeed and instruction is MUL.
 This spec verifies the MUL constraint and correct state transition.
 -/
-def mulStepSpec
+def spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
@@ -173,23 +173,23 @@ def mulStepSpec
 /--
 GeneralFormalCircuitUsingYields for MUL instruction step.
 -/
-def mulStepFormalCircuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
-  elaborated := mulStepElaboratedCircuit program h_programSize memory h_memorySize
-  Assumptions := mulStepAssumptions (programSize := programSize)
-  Spec := mulStepSpec program memory
+  elaborated := elaborated program h_programSize memory h_memorySize
+  Assumptions := assumptions (programSize := programSize)
+  Spec := spec program memory
   soundness := by
-    circuit_proof_start [mulStepSpec, mulStepElaboratedCircuit, mulStepCircuitMain,
+    circuit_proof_start [spec, elaborated, main,
       assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, mulStepLocalYields]
+    · simp only [h_zero, localYields]
       aesop
     · subst h_one
-      simp only [↓reduceIte, mulStepLocalYields]
+      simp only [↓reduceIte, localYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_ismul, h_read1, h_read2, h_read3, h_mul ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
@@ -288,6 +288,7 @@ def mulStepFormalCircuit
   -- Yield/use is more interesting in soundness.
   completeness := by sorry
 
+namespace Bundle
 /--
 Predicate stating that a named list represents a valid MUL instruction execution.
 This captures the relationship between a pre-state, the instruction execution, and the resulting yield.
@@ -312,20 +313,20 @@ Characterization theorem for MUL instruction localYields.
 If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
 This is useful for inductive reasoning about execution traces.
 -/
-theorem mulStepSpec_localYields_characterization
+theorem spec_localYields_characterization
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : mulStepSpec program memory input yielded () localYields)
+    (h_spec : MulInstruction.spec program memory input yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can extract:
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     IsValidMulExecution program memory input.preState input.timestamp nl := by
-  simp only [mulStepSpec] at h_spec
+  simp only [MulInstruction.spec] at h_spec
   simp only [IsValidMulExecution]
   by_cases h_enabled : input.enabled = 1
   swap -- error case first
@@ -395,88 +396,88 @@ theorem IsValidMulExecution_implies_valid_transition
 Bundle of MUL instruction step circuits.
 Takes a vector of inputs with given capacity and executes MUL instructions for each enabled input.
 -/
-def mulStepCircuitsBundle
+def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertionUsingYields (mulStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (circuit program h_programSize memory h_memorySize) inputs[i.val]
   return ()
 
 /--
 Elaborated circuit for MUL instruction bundle.
 -/
-def mulStepCircuitsBundleElaborated
+def elaborated
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
-  main := mulStepCircuitsBundle capacity program h_programSize memory h_memorySize
+  main := main capacity program h_programSize memory h_memorySize
   localLength _ := capacity * 29  -- Each step uses 29 locals
   localLength_eq := by
     intros input offset
-    simp only [circuit_norm, mulStepCircuitsBundle]
+    simp only [circuit_norm, main]
     congr 1
   yields inputs env offset :=
-    ⋃ i : Fin capacity, mulStepLocalYields (eval env inputs[i])
+    ⋃ i : Fin capacity, MulInstruction.localYields (eval env inputs[i])
   yields_eq := by
     intros inputs env offset
-    simp only [circuit_norm, mulStepCircuitsBundle]
+    simp only [circuit_norm, main]
     ext nl
     simp only [Set.mem_iUnion]
     constructor
     · intro ⟨i, hi⟩
       use i
-      simp only [mulStepFormalCircuit, mulStepElaboratedCircuit, circuit_norm] at hi
+      simp only [circuit, MulInstruction.elaborated, circuit_norm] at hi
       exact hi
     · intro ⟨i, hi⟩
       use i
-      simp only [mulStepFormalCircuit, mulStepElaboratedCircuit, circuit_norm]
+      simp only [circuit, MulInstruction.elaborated, circuit_norm]
       exact hi
   subcircuitsConsistent := by
     intros inputs offset
-    simp only [circuit_norm, mulStepCircuitsBundle]
+    simp only [circuit_norm, main]
 
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.
 -/
-def mulStepCircuitsBundleAssumptions
+def assumptions
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize]
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
-  ∀ i : Fin capacity, mulStepAssumptions (programSize := programSize) inputs[i] _yielded
+  ∀ i : Fin capacity, MulInstruction.assumptions (programSize := programSize) inputs[i] _yielded
 
 /--
 Spec for the bundle: each element satisfies its step spec, and local yields are the union.
 -/
-def mulStepCircuitsBundleSpec
+def spec
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  (∀ i : Fin capacity, mulStepSpec program memory inputs[i] yielded () (mulStepLocalYields inputs[i])) ∧
-  localYields = ⋃ i : Fin capacity, mulStepLocalYields inputs[i]
+  (∀ i : Fin capacity, MulInstruction.spec program memory inputs[i] yielded () (MulInstruction.localYields inputs[i])) ∧
+  localYields = ⋃ i : Fin capacity, MulInstruction.localYields inputs[i]
 
 /--
 GeneralFormalCircuitUsingYields for MUL instruction bundle.
 -/
-def mulStepCircuitsBundleFormalCircuit
+def circuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
-  elaborated := mulStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
-  Assumptions := mulStepCircuitsBundleAssumptions capacity (programSize := programSize)
-  Spec := mulStepCircuitsBundleSpec capacity program memory
+  elaborated := elaborated capacity program h_programSize memory h_memorySize
+  Assumptions := assumptions capacity (programSize := programSize)
+  Spec := spec capacity program memory
   soundness := by
-    circuit_proof_start [mulStepCircuitsBundleElaborated, mulStepCircuitsBundleSpec]
-    simp only [mulStepCircuitsBundle, circuit_norm, mulStepFormalCircuit] at h_holds
+    circuit_proof_start [elaborated, spec]
+    simp only [circuit_norm, MulInstruction.circuit] at h_holds
     and_intros
     · intro i
       specialize h_holds i
-      simp only [mulStepElaboratedCircuit] at h_holds
+      simp only [MulInstruction.elaborated] at h_holds
       simp only [Fin.eta] at h_holds
       cases iv_h : Vector.get input_var i
       rename_i enabledVar timestampVar preStateVar
@@ -505,14 +506,14 @@ Characterization theorem for MUL instruction bundle localYields.
 Given a bundle spec and a named list in the local yields, we can find which instruction index it came from
 and extract witnesses for all the conditions.
 -/
-theorem mulStepCircuitsBundleSpec_localYields_characterization
+theorem spec_localYields_characterization_bundle
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : mulStepCircuitsBundleSpec capacity program memory inputs yielded () localYields)
+    (h_spec : spec capacity program memory inputs yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can find an index i such that the conditions hold for inputs[i]
     ∃ (i : Fin capacity),
@@ -520,12 +521,13 @@ theorem mulStepCircuitsBundleSpec_localYields_characterization
       inputs[i].timestamp + 1 ≠ 0 ∧
       ⟨"execution", [inputs[i].timestamp, inputs[i].preState.pc, inputs[i].preState.ap, inputs[i].preState.fp]⟩ ∈ yielded ∧
       IsValidMulExecution program memory inputs[i].preState inputs[i].timestamp nl := by
-  simp only [mulStepCircuitsBundleSpec] at h_spec
+  simp only [spec] at h_spec
   rcases h_spec with ⟨h_all, h_yields⟩
   rw [h_yields] at h_mem
   simp only [Set.mem_iUnion] at h_mem
   rcases h_mem with ⟨i, h_i⟩
   use i
-  exact mulStepSpec_localYields_characterization program memory inputs[i] yielded (mulStepLocalYields inputs[i]) nl (h_all i) h_i
+  exact spec_localYields_characterization program memory inputs[i] yielded (MulInstruction.localYields inputs[i]) nl (h_all i) h_i
+end Bundle
 
-end Examples.PicoCairo
+end Examples.PicoCairo.MulInstruction

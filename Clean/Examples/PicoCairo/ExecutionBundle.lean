@@ -81,7 +81,7 @@ def executionBundleMain
   AddInstruction.Bundle.circuit capacities.addCapacity program h_programSize memory h_memorySize inputs.addInputs
 
   -- Execute MUL instruction bundle
-  mulStepCircuitsBundleFormalCircuit capacities.mulCapacity program h_programSize memory h_memorySize inputs.mulInputs
+  MulInstruction.Bundle.circuit capacities.mulCapacity program h_programSize memory h_memorySize inputs.mulInputs
 
   -- Execute StoreState instruction bundle
   storeStateStepCircuitsBundleFormalCircuit capacities.storeStateCapacity program h_programSize memory h_memorySize inputs.storeStateInputs
@@ -108,14 +108,14 @@ def executionBundleElaborated
     intros input offset
     simp only [circuit_norm, executionBundleMain]
     simp only [AddInstruction.Bundle.circuit, AddInstruction.Bundle.elaborated]
-    simp only [mulStepCircuitsBundleFormalCircuit, mulStepCircuitsBundleElaborated]
+    simp only [MulInstruction.Bundle.circuit, MulInstruction.Bundle.elaborated]
     simp only [storeStateStepCircuitsBundleFormalCircuit, storeStateStepCircuitsBundleElaborated]
     simp only [loadStateStepCircuitsBundleFormalCircuit, loadStateStepCircuitsBundleElaborated]
     omega
   yields inputs env offset :=
     (AddInstruction.Bundle.elaborated capacities.addCapacity program h_programSize memory h_memorySize).yields
       inputs.addInputs env offset ∪
-    (mulStepCircuitsBundleElaborated capacities.mulCapacity program h_programSize memory h_memorySize).yields
+    (MulInstruction.Bundle.elaborated capacities.mulCapacity program h_programSize memory h_memorySize).yields
       inputs.mulInputs env (offset + capacities.addCapacity * 29) ∪
     (storeStateStepCircuitsBundleElaborated capacities.storeStateCapacity program h_programSize memory h_memorySize).yields
       inputs.storeStateInputs env (offset + capacities.addCapacity * 29 + capacities.mulCapacity * 29) ∪
@@ -138,7 +138,7 @@ def executionBundleAssumptions
     {programSize : ℕ} [NeZero programSize]
     (inputs : BundledInstructionInputs capacities (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
   AddInstruction.Bundle.assumptions capacities.addCapacity (programSize := programSize) inputs.addInputs _yielded ∧
-  mulStepCircuitsBundleAssumptions capacities.mulCapacity (programSize := programSize) inputs.mulInputs _yielded ∧
+  MulInstruction.Bundle.assumptions capacities.mulCapacity (programSize := programSize) inputs.mulInputs _yielded ∧
   storeStateStepCircuitsBundleAssumptions capacities.storeStateCapacity (programSize := programSize) inputs.storeStateInputs _yielded ∧
   loadStateStepCircuitsBundleAssumptions capacities.loadStateCapacity (programSize := programSize) inputs.loadStateInputs _yielded
 
@@ -154,7 +154,7 @@ def executionBundleSpec
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   ∃ (addLocalYields mulLocalYields storeStateLocalYields loadStateLocalYields : Set (NamedList (F p))),
     AddInstruction.Bundle.spec capacities.addCapacity program memory inputs.addInputs yielded () addLocalYields ∧
-    mulStepCircuitsBundleSpec capacities.mulCapacity program memory inputs.mulInputs yielded () mulLocalYields ∧
+    MulInstruction.Bundle.spec capacities.mulCapacity program memory inputs.mulInputs yielded () mulLocalYields ∧
     storeStateStepCircuitsBundleSpec capacities.storeStateCapacity program memory inputs.storeStateInputs yielded () storeStateLocalYields ∧
     loadStateStepCircuitsBundleSpec capacities.loadStateCapacity program memory inputs.loadStateInputs yielded () loadStateLocalYields ∧
     localYields = addLocalYields ∪ mulLocalYields ∪ storeStateLocalYields ∪ loadStateLocalYields
@@ -173,11 +173,11 @@ def executionBundleFormalCircuit
   soundness := by
     circuit_proof_start [executionBundleSpec, executionBundleElaborated, executionBundleMain]
     simp only [AddInstruction.Bundle.circuit, AddInstruction.Bundle.elaborated] at h_holds
-    simp only [mulStepCircuitsBundleFormalCircuit, mulStepCircuitsBundleElaborated] at h_holds
+    simp only [MulInstruction.Bundle.circuit, MulInstruction.Bundle.elaborated] at h_holds
     simp only [storeStateStepCircuitsBundleFormalCircuit, storeStateStepCircuitsBundleElaborated] at h_holds
     simp only [loadStateStepCircuitsBundleFormalCircuit, loadStateStepCircuitsBundleElaborated] at h_holds
     use ⋃ (i : Fin capacities.addCapacity), AddInstruction.localYields (eval env input_var.addInputs[i])
-    use ⋃ (i : Fin capacities.mulCapacity), mulStepLocalYields (eval env input_var.mulInputs[i])
+    use ⋃ (i : Fin capacities.mulCapacity), MulInstruction.localYields (eval env input_var.mulInputs[i])
     use ⋃ (i : Fin capacities.storeStateCapacity), storeStateStepLocalYields (eval env input_var.storeStateInputs[i])
     use ⋃ (i : Fin capacities.loadStateCapacity), loadStateStepLocalYields (eval env input_var.loadStateInputs[i]) env (i₀ + capacities.addCapacity * 29 + capacities.mulCapacity * 29 + capacities.storeStateCapacity * 29 + i * 29)
     aesop
@@ -194,7 +194,7 @@ def IsValidInstructionExecution
     (timestamp : F p)
     (nl : NamedList (F p)) : Prop :=
   AddInstruction.Bundle.IsValidAddExecution program memory preState timestamp nl ∨
-  IsValidMulExecution program memory preState timestamp nl ∨
+  MulInstruction.Bundle.IsValidMulExecution program memory preState timestamp nl ∨
   IsValidStoreStateExecution program memory preState timestamp nl ∨
   IsValidLoadStateExecution program memory preState timestamp nl
 
@@ -244,7 +244,7 @@ theorem executionBundleSpec_localYields_characterization
       left
       exact h_valid
   -- Case 2: MUL instruction
-  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := mulStepCircuitsBundleSpec_localYields_characterization capacities.mulCapacity program memory inputs.mulInputs yielded mulLocalYields nl h_mul h_mem
+  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := MulInstruction.Bundle.spec_localYields_characterization_bundle capacities.mulCapacity program memory inputs.mulInputs yielded mulLocalYields nl h_mul h_mem
     use inputs.mulInputs[i].preState, inputs.mulInputs[i].timestamp
     constructor
     · right; left
@@ -303,7 +303,7 @@ theorem IsValidInstructionExecution_implies_valid_transition
   -- Case 1: ADD instruction
   · exact AddInstruction.Bundle.IsValidAddExecution_implies_valid_transition program memory preState timestamp nl h_valid
   -- Case 2: MUL instruction
-  · exact IsValidMulExecution_implies_valid_transition program memory preState timestamp nl h_valid
+  · exact MulInstruction.Bundle.IsValidMulExecution_implies_valid_transition program memory preState timestamp nl h_valid
   -- Case 3: StoreState instruction
   · exact IsValidStoreStateExecution_implies_valid_transition program memory preState timestamp nl h_valid
   -- Case 4: LoadState instruction
