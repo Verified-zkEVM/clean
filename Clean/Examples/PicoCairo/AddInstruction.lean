@@ -16,7 +16,7 @@ import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.Boolean
 import Batteries.Data.Vector.Lemmas
 
-namespace Examples.PicoCairo
+namespace Examples.PicoCairo.AddInstruction
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
@@ -29,7 +29,7 @@ Main circuit for ADD instruction step.
 Takes enabled flag, timestamp, and pre-state.
 If enabled and instruction at pc is ADD, computes new state and yields trace element.
 -/
-def addStepCircuitMain
+def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
@@ -110,16 +110,16 @@ def addStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F 
 ElaboratedCircuit for ADD instruction step.
 Takes InstructionStepInput and produces unit (since we yield, not return).
 -/
-def addStepElaboratedCircuit
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
-  main := addStepCircuitMain program h_programSize memory h_memorySize
+  main := main program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
   yields input env _ := addStepLocalYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [addStepLocalYields, addStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [addStepLocalYields, main, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
@@ -180,15 +180,15 @@ def addStepSpec
 /--
 GeneralFormalCircuitUsingYields for ADD instruction step.
 -/
-def addStepFormalCircuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
-  elaborated := addStepElaboratedCircuit program h_programSize memory h_memorySize
+  elaborated := elaborated program h_programSize memory h_memorySize
   Assumptions := addStepAssumptions (programSize := programSize)
   Spec := addStepSpec program memory
   soundness := by
-    circuit_proof_start [addStepSpec, addStepElaboratedCircuit, addStepCircuitMain,
+    circuit_proof_start [addStepSpec, elaborated, main,
       assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
@@ -283,52 +283,53 @@ def addStepFormalCircuit
   -- Yield/use is more interesting in soundness.
   completeness := by sorry
 
+namespace Bundle
 /--
 Bundle of ADD instruction step circuits.
 Takes a vector of inputs with given capacity and executes ADD instructions for each enabled input.
 -/
-def addStepCircuitsBundle
+def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertionUsingYields (addStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (circuit program h_programSize memory h_memorySize) inputs[i.val]
   return ()
 
 /--
 Elaborated circuit for ADD instruction bundle.
 -/
-def addStepCircuitsBundleElaborated
+def elaborated
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
-  main := addStepCircuitsBundle capacity program h_programSize memory h_memorySize
+  main := main capacity program h_programSize memory h_memorySize
   localLength _ := capacity * 29  -- Each step uses 29 locals
   localLength_eq := by
     intros input offset
-    simp only [circuit_norm, addStepCircuitsBundle]
+    simp only [circuit_norm, main]
     congr 1
   yields inputs env offset :=
     ⋃ i : Fin capacity, addStepLocalYields (eval env inputs[i])
   yields_eq := by
     intros inputs env offset
-    simp only [circuit_norm, addStepCircuitsBundle]
+    simp only [circuit_norm, main]
     ext nl
     simp only [Set.mem_iUnion]
     constructor
     · intro ⟨i, hi⟩
       use i
-      simp only [addStepFormalCircuit, addStepElaboratedCircuit, circuit_norm] at hi
+      simp only [circuit, AddInstruction.elaborated, circuit_norm] at hi
       exact hi
     · intro ⟨i, hi⟩
       use i
-      simp only [addStepFormalCircuit, addStepElaboratedCircuit, circuit_norm]
+      simp only [circuit, AddInstruction.elaborated, circuit_norm]
       exact hi
   subcircuitsConsistent := by
     intros inputs offset
-    simp only [circuit_norm, addStepCircuitsBundle]
+    simp only [circuit_norm, main]
 
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.
@@ -354,21 +355,21 @@ def addStepCircuitsBundleSpec
 /--
 GeneralFormalCircuitUsingYields for ADD instruction bundle.
 -/
-def addStepCircuitsBundleFormalCircuit
+def circuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
-  elaborated := addStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
+  elaborated := elaborated capacity program h_programSize memory h_memorySize
   Assumptions := addStepCircuitsBundleAssumptions capacity (programSize := programSize)
   Spec := addStepCircuitsBundleSpec capacity program memory
   soundness := by
-    circuit_proof_start [addStepCircuitsBundleElaborated, addStepCircuitsBundleSpec]
-    simp only [addStepCircuitsBundle, circuit_norm, addStepFormalCircuit] at h_holds
+    circuit_proof_start [elaborated, addStepCircuitsBundleSpec]
+    simp only [circuit_norm, AddInstruction.circuit] at h_holds
     and_intros
     · intro i
       specialize h_holds i
-      simp only [addStepElaboratedCircuit] at h_holds
+      simp only [AddInstruction.elaborated] at h_holds
       simp only [Fin.eta] at h_holds
       cases iv_h : Vector.get input_var i
       rename_i enabledVar timestampVar preStateVar
@@ -524,5 +525,6 @@ theorem addStepCircuitsBundleSpec_localYields_characterization
   rcases h_mem with ⟨i, h_i⟩
   use i
   exact addStepSpec_localYields_characterization program memory inputs[i] yielded (addStepLocalYields inputs[i]) nl (h_all i) h_i
+end Bundle
 
-end Examples.PicoCairo
+end Examples.PicoCairo.AddInstruction
