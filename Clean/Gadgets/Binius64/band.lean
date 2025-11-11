@@ -1,9 +1,7 @@
 import Mathlib.Data.ZMod.Basic
-import Clean.Circuit.Basic
-import Clean.Circuit.Theorems
-import Clean.Circuit.Provable
-import Clean.Circuit.Expression
+import Clean.Circuit
 import Clean.Gadgets.Binius64.SVI
+import Clean.Utils.Tactics.CircuitProofStart
 
 namespace Gadgets.Binius64
 
@@ -66,7 +64,6 @@ instance elaborated : ElaboratedCircuit (F p) BandInputs SVI where
   subcircuitsConsistent := by sorry
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro offset env inputVar input h_input _ h_constraints
   sorry
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
