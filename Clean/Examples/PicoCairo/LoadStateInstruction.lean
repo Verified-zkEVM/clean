@@ -16,7 +16,7 @@ import Clean.Gadgets.IsZeroField
 import Clean.Gadgets.Boolean
 import Batteries.Data.Vector.Lemmas
 
-namespace Examples.PicoCairo
+namespace Examples.PicoCairo.LoadStateInstruction
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
@@ -29,7 +29,7 @@ Main circuit for LoadState instruction step.
 Takes enabled flag, timestamp, and pre-state.
 If enabled and instruction at pc is LoadState, loads new state from operands and yields trace element.
 -/
-def loadStateStepCircuitMain
+def main
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (input : Var InstructionStepInput (F p)) : Circuit (F p) Unit := do
@@ -88,23 +88,23 @@ def loadStateStepCircuitMain
 Computes the localYields for a single LoadState instruction step.
 If enabled, yields the new execution state with loaded pc, ap, fp values from the environment.
 -/
-def loadStateStepLocalYields (input : InstructionStepInput (F p)) (env : Environment (F p)) (offset : ℕ) : Set (NamedList (F p)) :=
+def localYields (input : InstructionStepInput (F p)) (env : Environment (F p)) (offset : ℕ) : Set (NamedList (F p)) :=
   { nl | input.enabled ≠ 0 ∧
          nl = ⟨"execution", [input.timestamp + 1,
                             env.get (offset + 2 + 4 + 8 + 1 + 1 + 1 + 1),
                             env.get (offset + 2 + 4 + 8 + 5 + 1 + 1 + 1 + 1),
                             env.get (offset + 2 + 4 + 8 + 5 + 5 + 1 + 1 + 1 + 1)]⟩ }
 
-def loadStateStepElaboratedCircuit
+def elaborated
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) InstructionStepInput unit where
-  main := loadStateStepCircuitMain program h_programSize memory h_memorySize
+  main := main program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env offset := loadStateStepLocalYields (eval env input) env offset
+  yields input env offset := localYields (eval env input) env offset
   yields_eq := by
     intro input env offset
-    simp only [loadStateStepLocalYields, loadStateStepCircuitMain, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [localYields, main, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     ext nl
     constructor <;> intro h <;> simp only [Set.mem_setOf_eq] at h ⊢
@@ -114,7 +114,7 @@ def loadStateStepElaboratedCircuit
 /--
 Assumptions for LoadState instruction step (for completeness).
 -/
-def loadStateStepAssumptions
+def assumptions
     {programSize : ℕ} [NeZero programSize]
     (input : InstructionStepInput (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
   IsBool input.enabled ∧
@@ -129,7 +129,7 @@ Checks that:
 3. Operands v1, v2, v3 are read correctly (new pc, ap, fp values)
 4. New state is yielded with loaded pc, ap, fp values
 -/
-def loadStateStepSpec
+def spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
@@ -162,24 +162,24 @@ def loadStateStepSpec
 /--
 GeneralFormalCircuitUsingYields for LoadState instruction step.
 -/
-def loadStateStepFormalCircuit
+def circuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
-  elaborated := loadStateStepElaboratedCircuit program h_programSize memory h_memorySize
-  Assumptions := loadStateStepAssumptions (programSize := programSize)
-  Spec := loadStateStepSpec program memory
+  elaborated := elaborated program h_programSize memory h_memorySize
+  Assumptions := assumptions (programSize := programSize)
+  Spec := spec program memory
 
   soundness := by
-    circuit_proof_start [loadStateStepSpec, loadStateStepElaboratedCircuit, loadStateStepCircuitMain,
+    circuit_proof_start [spec, elaborated, main,
       assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, loadStateStepLocalYields]
+    · simp only [h_zero, localYields]
       aesop
     · subst h_one
-      simp only [↓reduceIte, loadStateStepLocalYields]
+      simp only [↓reduceIte, localYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isload, h_read1, h_read2, h_read3 ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       constructor
@@ -290,6 +290,7 @@ def loadStateStepFormalCircuit
   -- Yield/use is more interesting in soundness.
   completeness := by sorry
 
+namespace Bundle
 /--
 Predicate stating that a named list represents a valid LoadState instruction execution.
 This captures the relationship between a pre-state, the instruction execution, and the resulting yield.
@@ -313,20 +314,20 @@ Characterization theorem for LoadState instruction localYields.
 If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
 This is useful for inductive reasoning about execution traces.
 -/
-theorem loadStateStepSpec_localYields_characterization
+theorem spec_localYields_characterization
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : loadStateStepSpec program memory input yielded () localYields)
+    (h_spec : LoadStateInstruction.spec program memory input yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can extract:
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     IsValidLoadStateExecution program memory input.preState input.timestamp nl := by
-  simp only [loadStateStepSpec] at h_spec
+  simp only [LoadStateInstruction.spec] at h_spec
   simp only [IsValidLoadStateExecution]
   by_cases h_enabled : input.enabled = 1
   swap -- error case first
@@ -383,41 +384,41 @@ theorem IsValidLoadStateExecution_implies_valid_transition
 Bundle of LoadState instruction step circuits.
 Takes a vector of inputs with given capacity and executes LoadState instructions for each enabled input.
 -/
-def loadStateStepCircuitsBundle
+def main
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertionUsingYields (loadStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (circuit program h_programSize memory h_memorySize) inputs[i.val]
 
 /--
 Elaborated circuit for LoadState instruction bundle.
 Note: Unlike ADD/MUL/StoreState, LoadState yields depend on the offset (because they include loaded values from memory).
 -/
-def loadStateStepCircuitsBundleElaborated
+def elaborated
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     ElaboratedCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
-  main := loadStateStepCircuitsBundle capacity program h_programSize memory h_memorySize
+  main := main capacity program h_programSize memory h_memorySize
   localLength _ := capacity * 29  -- Each step uses 29 locals
   localLength_eq := by
     intros input offset
-    simp only [circuit_norm, loadStateStepCircuitsBundle]
+    simp only [circuit_norm, main]
     congr 1
   yields inputs env offset :=
     -- Each instruction i has its own offset: offset + i * 29
-    ⋃ i : Fin capacity, loadStateStepLocalYields (eval env inputs[i]) env (offset + i * 29)
+    ⋃ i : Fin capacity, LoadStateInstruction.localYields (eval env inputs[i]) env (offset + i * 29)
   yields_eq := by
     intros inputs env offset
-    simp only [circuit_norm, loadStateStepCircuitsBundle]
+    simp only [circuit_norm, main]
     ext nl
     simp only [Set.mem_iUnion]
     constructor
     · simp only [Nat.zero_mod, Fin.eta, forall_exists_index]
       intro i
-      simp only [loadStateStepFormalCircuit, loadStateStepElaboratedCircuit]
+      simp only [circuit, LoadStateInstruction.elaborated]
       cases iv_h : Vector.get inputs i
       rename_i enabledVar timestampVar preStateVar
       rw [Vector.get_eq_getElem] at iv_h
@@ -429,7 +430,7 @@ def loadStateStepCircuitsBundleElaborated
       assumption
     · simp only [Fin.eta, Nat.zero_mod, forall_exists_index]
       intro i
-      simp only [loadStateStepFormalCircuit, loadStateStepElaboratedCircuit]
+      simp only [circuit, LoadStateInstruction.elaborated]
       cases iv_h : Vector.get inputs i
       rename_i enabledVar timestampVar preStateVar
       rw [Vector.get_eq_getElem] at iv_h
@@ -440,22 +441,22 @@ def loadStateStepCircuitsBundleElaborated
       assumption
   subcircuitsConsistent := by
     intros inputs offset
-    simp only [circuit_norm, loadStateStepCircuitsBundle]
+    simp only [circuit_norm, main]
 
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.
 -/
-def loadStateStepCircuitsBundleAssumptions
+def assumptions
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize]
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
-  ∀ i : Fin capacity, loadStateStepAssumptions (programSize := programSize) inputs[i] _yielded
+  ∀ i : Fin capacity, LoadStateInstruction.assumptions (programSize := programSize) inputs[i] _yielded
 
 /--
 Spec for the bundle: each element satisfies its step spec with offset-dependent yields, and local yields are the union.
 Note: Unlike ADD/MUL/StoreState, the spec needs to account for offset-dependent localYields.
 -/
-def loadStateStepCircuitsBundleSpec
+def spec
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
@@ -464,29 +465,28 @@ def loadStateStepCircuitsBundleSpec
   -- This spec is more complex because we need an environment to evaluate the offset-dependent yields
   -- For now, we'll just require the union property
   ∃ (env : Environment (F p)) (baseOffset : ℕ),
-    (∀ i : Fin capacity, loadStateStepSpec program memory inputs[i] yielded () (loadStateStepLocalYields (inputs[i]) env (baseOffset + i * 29))) ∧
-    localYields = ⋃ i : Fin capacity, loadStateStepLocalYields (inputs[i]) env (baseOffset + i * 29)
+    (∀ i : Fin capacity, LoadStateInstruction.spec program memory inputs[i] yielded () (LoadStateInstruction.localYields (inputs[i]) env (baseOffset + i * 29))) ∧
+    localYields = ⋃ i : Fin capacity, LoadStateInstruction.localYields (inputs[i]) env (baseOffset + i * 29)
 
 /--
 Bundle-level formal circuit for LoadState instructions.
 -/
-def loadStateStepCircuitsBundleFormalCircuit
+def circuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
-  elaborated := loadStateStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
-  Assumptions := loadStateStepCircuitsBundleAssumptions capacity (programSize := programSize)
-  Spec := loadStateStepCircuitsBundleSpec capacity program memory
+  elaborated := elaborated capacity program h_programSize memory h_memorySize
+  Assumptions := assumptions capacity (programSize := programSize)
+  Spec := spec capacity program memory
   soundness := by
-    circuit_proof_start [loadStateStepCircuitsBundleElaborated, loadStateStepCircuitsBundleSpec]
+    circuit_proof_start [elaborated, spec]
     -- Need to provide env and baseOffset witnesses for the existential in the spec
     use env, i₀
-    simp only [loadStateStepCircuitsBundle, circuit_norm] at h_holds
     and_intros
     · intro i
       specialize h_holds i
-      simp only [loadStateStepFormalCircuit, loadStateStepElaboratedCircuit] at h_holds
+      simp only [LoadStateInstruction.circuit, LoadStateInstruction.elaborated] at h_holds
       simp only [Fin.eta] at h_holds
       cases iv_h : Vector.get input_var i
       rename_i enabledVar timestampVar preStateVar
@@ -516,14 +516,14 @@ Given a bundle spec and a named list in the local yields, we can find which inst
 and extract witnesses for all the conditions.
 Note: LoadState bundle spec includes existential for environment and offset, but IsValidLoadStateExecution doesn't need them.
 -/
-theorem loadStateStepCircuitsBundleSpec_localYields_characterization
+theorem spec_localYields_characterization_bundle
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : loadStateStepCircuitsBundleSpec capacity program memory inputs yielded () localYields)
+    (h_spec : spec capacity program memory inputs yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can find an index i such that the conditions hold for inputs[i]
     ∃ (i : Fin capacity),
@@ -531,12 +531,13 @@ theorem loadStateStepCircuitsBundleSpec_localYields_characterization
       inputs[i].timestamp + 1 ≠ 0 ∧
       ⟨"execution", [inputs[i].timestamp, inputs[i].preState.pc, inputs[i].preState.ap, inputs[i].preState.fp]⟩ ∈ yielded ∧
       IsValidLoadStateExecution program memory inputs[i].preState inputs[i].timestamp nl := by
-  simp only [loadStateStepCircuitsBundleSpec] at h_spec
+  simp only [spec] at h_spec
   rcases h_spec with ⟨env, baseOffset, h_all, h_yields⟩
   rw [h_yields] at h_mem
   simp only [Set.mem_iUnion] at h_mem
   rcases h_mem with ⟨i, h_i⟩
   use i
-  exact loadStateStepSpec_localYields_characterization program memory inputs[i] yielded (loadStateStepLocalYields inputs[i] env (baseOffset + i * 29)) nl (h_all i) h_i
+  exact spec_localYields_characterization program memory inputs[i] yielded (LoadStateInstruction.localYields inputs[i] env (baseOffset + i * 29)) nl (h_all i) h_i
+end Bundle
 
-end Examples.PicoCairo
+end Examples.PicoCairo.LoadStateInstruction
