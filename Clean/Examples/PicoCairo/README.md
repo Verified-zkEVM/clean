@@ -126,3 +126,4 @@ def proveExecution (program memory : ...) : Circuit (F p) Unit := do
 - Optimized witness generation for long executions
 - Memory consistency verification across the trace
 - Integration with other proof systems
+- Explore the possibility of dropping timestamps from the yielded tuples
