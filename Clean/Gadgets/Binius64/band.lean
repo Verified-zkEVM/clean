@@ -10,9 +10,9 @@ open Circuit
 variable {p : ℕ} [Fact p.Prime]
 
 /-- Inputs to the Binius 64-bit bitwise-and gadget. -/
-structure BandInputs (F : Type) where
-  lhs : SVIData F
-  rhs : SVIData F
+structure BandInputs (k m: ShiftKind) (a b: Fin 64) (F : Type) where
+  lhs : SVIData k a F
+  rhs : SVIData m b F
 
 instance : ProvableStruct BandInputs where
   components := [SVI, SVI]
@@ -31,16 +31,12 @@ private def elementwiseAndVals
   Vector.ofFn fun i => lhs[i] * rhs[i]
 
 /-- we do not constrain the shifts yet   --/
-def main (input : Var BandInputs (F p)) : Circuit (F p) (Var SVI (F p)) := do
+def main (k m: ShiftKind) (a b: Fin 64) (input : Var BandInputs k m a b (F p)) : Circuit (F p) (Var SVI (.sll) 0 (F p)) := do
   let ⟨lhs, rhs⟩ := input
   let lhsShifted ← applyShiftExpr lhs
   let rhsShifted ← applyShiftExpr rhs
   let wire := elementwiseAndExpr lhsShifted rhsShifted
-  return {
-    wire
-    shiftType := Expression.const (F:=F p) 0
-    shiftAmount := Expression.const (F:=F p) 0
-  }
+  return { wire }
 
 def Assumptions (_ : BandInputs (F p)) : Prop := True
 
