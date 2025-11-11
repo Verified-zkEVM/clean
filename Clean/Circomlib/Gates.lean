@@ -84,7 +84,6 @@ def circuit : FormalCircuit (F p) fieldPair field where
   main
   localLength _ := 1
   localLength_eq := by simp [circuit_norm, main]
-  yields _ _ _ := ∅
   yields_eq := by intros; simp only [circuit_norm, main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 

@@ -194,14 +194,13 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ env input_var input h_input h_assumptions h_subcircuit_sound
-    have h_assumptions' : IsBool (Expression.eval env input_var.s) := by
-      have : Expression.eval env input_var.s = input.s := by rw [← h_input]
-      rw [this]; exact h_assumptions
-    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound ⊢
-    specialize h_subcircuit_sound h_assumptions' 0 (by omega)
+    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
+    rw[← h_input] at *
+    clear input
+    clear h_input
+    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
+    specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
-    rw [← h_input]
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
