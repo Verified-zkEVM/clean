@@ -210,24 +210,22 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ env input_var input h_input h_assumptions h_subcircuit_sound
-    rw [← h_input] at h_assumptions
-    simp only [MultiMux2.circuit, circuit_norm, Vector.getElem_map] at h_subcircuit_sound h_assumptions ⊢
+    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
+    rw [← h_input] at *
+    clear input h_input
+    simp only [MultiMux2.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec
     -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray,
                List.getElem_cons_zero, circuit_norm]
-    rw [← h_input]
-    simp only [Vector.getElem_map]
 
   completeness := by
     simp only [circuit_norm, main]
     intro offset env input_var h_env input h_input h_s
     simp only [MultiMux2.circuit, circuit_norm]
     rw [← h_input] at h_s
-    simp only [Vector.getElem_map] at h_s
     simp_all
 
 end Mux2
