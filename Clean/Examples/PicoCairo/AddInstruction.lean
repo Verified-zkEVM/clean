@@ -99,7 +99,7 @@ def main
 Computes the localYields for a single ADD instruction step.
 If enabled, yields the new execution state; otherwise yields nothing.
 -/
-def addStepLocalYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
+def localYields (input : InstructionStepInput (F p)) : Set (NamedList (F p)) :=
   { nl | input.enabled ≠ 0 ∧
          nl = ⟨"execution", [input.timestamp + 1,
                             input.preState.pc + 4,
@@ -116,10 +116,10 @@ def elaborated
     ElaboratedCircuit (F p) InstructionStepInput unit where
   main := main program h_programSize memory h_memorySize
   localLength _ := 29  -- boolean(0) + IsZero(2) + fetch(4) + conditionalDecode(8) + 3×readMemory(5)
-  yields input env _ := addStepLocalYields (eval env input)
+  yields input env _ := localYields (eval env input)
   yields_eq := by
     intro input env offset
-    simp only [addStepLocalYields, main, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
+    simp only [localYields, main, circuit_norm, Gadgets.IsZeroField.circuit, fetchInstructionCircuit, conditionalDecodeCircuit, conditionalDecodeElaborated,
       readFromMemoryCircuit, NamedList.eval]
     aesop
 
@@ -127,7 +127,7 @@ def elaborated
 Assumptions for ADD instruction step (for completeness).
 Ensures the instruction can be decoded, new timestamp won't overflow, and PC is in bounds.
 -/
-def addStepAssumptions
+def assumptions
     {programSize : ℕ} [NeZero programSize]
     (input : InstructionStepInput (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
   IsBool input.enabled ∧
@@ -140,7 +140,7 @@ Specification for ADD instruction step (for soundness).
 The circuit already ensures fetch/decode succeed and instruction is ADD.
 This spec verifies the ADD constraint and correct state transition.
 -/
-def addStepSpec
+def spec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
@@ -185,18 +185,18 @@ def circuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
   elaborated := elaborated program h_programSize memory h_memorySize
-  Assumptions := addStepAssumptions (programSize := programSize)
-  Spec := addStepSpec program memory
+  Assumptions := assumptions (programSize := programSize)
+  Spec := spec program memory
   soundness := by
-    circuit_proof_start [addStepSpec, elaborated, main,
+    circuit_proof_start [spec, elaborated, main,
       assertBool, Gadgets.IsZeroField.circuit, Gadgets.IsZeroField.Assumptions, Gadgets.IsZeroField.Spec,
       fetchInstructionCircuit, conditionalDecodeCircuit, readFromMemoryCircuit]
     rcases h_holds with ⟨ h_bool, h_holds ⟩
     rcases h_bool with h_zero | h_one
-    · simp only [h_zero, addStepLocalYields]
+    · simp only [h_zero, localYields]
       aesop
     · subst h_one
-      simp only [↓reduceIte, addStepLocalYields]
+      simp only [↓reduceIte, localYields]
       rcases h_holds with ⟨ h_use, h_iszero, h_nonzero, h_fetch, h_decode, h_isadd, h_read1, h_read2, h_read3, h_add ⟩
       simp only [ne_eq, one_ne_zero, not_false_eq_true, forall_const] at h_use
       -- Prove timestamp doesn't overflow
@@ -312,7 +312,7 @@ def elaborated
     simp only [circuit_norm, main]
     congr 1
   yields inputs env offset :=
-    ⋃ i : Fin capacity, addStepLocalYields (eval env inputs[i])
+    ⋃ i : Fin capacity, AddInstruction.localYields (eval env inputs[i])
   yields_eq := by
     intros inputs env offset
     simp only [circuit_norm, main]
@@ -334,23 +334,23 @@ def elaborated
 /--
 Assumptions for the bundle: each input must satisfy the individual step assumptions.
 -/
-def addStepCircuitsBundleAssumptions
+def assumptions
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize]
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
-  ∀ i : Fin capacity, addStepAssumptions (programSize := programSize) inputs[i] _yielded
+  ∀ i : Fin capacity, AddInstruction.assumptions (programSize := programSize) inputs[i] _yielded
 
 /--
 Spec for the bundle: each element satisfies its step spec, and local yields are the union.
 -/
-def addStepCircuitsBundleSpec
+def spec
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
-  (∀ i : Fin capacity, addStepSpec program memory inputs[i] yielded () (addStepLocalYields inputs[i])) ∧
-  localYields = ⋃ i : Fin capacity, addStepLocalYields inputs[i]
+  (∀ i : Fin capacity, AddInstruction.spec program memory inputs[i] yielded () (AddInstruction.localYields inputs[i])) ∧
+  localYields = ⋃ i : Fin capacity, AddInstruction.localYields inputs[i]
 
 /--
 GeneralFormalCircuitUsingYields for ADD instruction bundle.
@@ -361,10 +361,10 @@ def circuit
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
     GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
   elaborated := elaborated capacity program h_programSize memory h_memorySize
-  Assumptions := addStepCircuitsBundleAssumptions capacity (programSize := programSize)
-  Spec := addStepCircuitsBundleSpec capacity program memory
+  Assumptions := assumptions capacity (programSize := programSize)
+  Spec := spec capacity program memory
   soundness := by
-    circuit_proof_start [elaborated, addStepCircuitsBundleSpec]
+    circuit_proof_start [elaborated, spec]
     simp only [circuit_norm, AddInstruction.circuit] at h_holds
     and_intros
     · intro i
@@ -419,20 +419,20 @@ Characterization theorem for ADD instruction localYields.
 If something is in localYields and the spec holds, we can extract witnesses for all the conditions.
 This is useful for inductive reasoning about execution traces.
 -/
-theorem addStepSpec_localYields_characterization
+theorem spec_localYields_characterization
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (input : InstructionStepInput (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : addStepSpec program memory input yielded () localYields)
+    (h_spec : AddInstruction.spec program memory input yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can extract:
     input.enabled = 1 ∧
     input.timestamp + 1 ≠ 0 ∧
     ⟨"execution", [input.timestamp, input.preState.pc, input.preState.ap, input.preState.fp]⟩ ∈ yielded ∧
     IsValidAddExecution program memory input.preState input.timestamp nl := by
-  simp only [addStepSpec] at h_spec
+  simp only [AddInstruction.spec] at h_spec
   simp only [IsValidAddExecution]
   by_cases h_enabled : input.enabled = 1
   swap -- error case first
@@ -503,14 +503,14 @@ Characterization theorem for ADD instruction bundle localYields.
 Given a bundle spec and a named list in the local yields, we can find which instruction index it came from
 and extract witnesses for all the conditions.
 -/
-theorem addStepCircuitsBundleSpec_localYields_characterization
+theorem spec_localYields_characterization_bundle
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
     (inputs : ProvableVector InstructionStepInput capacity (F p)) (yielded : Set (NamedList (F p)))
     (localYields : Set (NamedList (F p)))
     (nl : NamedList (F p))
-    (h_spec : addStepCircuitsBundleSpec capacity program memory inputs yielded () localYields)
+    (h_spec : spec capacity program memory inputs yielded () localYields)
     (h_mem : nl ∈ localYields) :
     -- Then we can find an index i such that the conditions hold for inputs[i]
     ∃ (i : Fin capacity),
@@ -518,13 +518,13 @@ theorem addStepCircuitsBundleSpec_localYields_characterization
       inputs[i].timestamp + 1 ≠ 0 ∧
       ⟨"execution", [inputs[i].timestamp, inputs[i].preState.pc, inputs[i].preState.ap, inputs[i].preState.fp]⟩ ∈ yielded ∧
       IsValidAddExecution program memory inputs[i].preState inputs[i].timestamp nl := by
-  simp only [addStepCircuitsBundleSpec] at h_spec
+  simp only [spec] at h_spec
   rcases h_spec with ⟨h_all, h_yields⟩
   rw [h_yields] at h_mem
   simp only [Set.mem_iUnion] at h_mem
   rcases h_mem with ⟨i, h_i⟩
   use i
-  exact addStepSpec_localYields_characterization program memory inputs[i] yielded (addStepLocalYields inputs[i]) nl (h_all i) h_i
+  exact spec_localYields_characterization program memory inputs[i] yielded (AddInstruction.localYields inputs[i]) nl (h_all i) h_i
 end Bundle
 
 end Examples.PicoCairo.AddInstruction

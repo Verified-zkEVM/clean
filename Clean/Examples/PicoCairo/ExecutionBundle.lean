@@ -137,7 +137,7 @@ def executionBundleAssumptions
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize]
     (inputs : BundledInstructionInputs capacities (F p)) (_yielded : Set (NamedList (F p))) : Prop :=
-  AddInstruction.Bundle.addStepCircuitsBundleAssumptions capacities.addCapacity (programSize := programSize) inputs.addInputs _yielded ∧
+  AddInstruction.Bundle.assumptions capacities.addCapacity (programSize := programSize) inputs.addInputs _yielded ∧
   mulStepCircuitsBundleAssumptions capacities.mulCapacity (programSize := programSize) inputs.mulInputs _yielded ∧
   storeStateStepCircuitsBundleAssumptions capacities.storeStateCapacity (programSize := programSize) inputs.storeStateInputs _yielded ∧
   loadStateStepCircuitsBundleAssumptions capacities.loadStateCapacity (programSize := programSize) inputs.loadStateInputs _yielded
@@ -153,7 +153,7 @@ def executionBundleSpec
     (inputs : BundledInstructionInputs capacities (F p)) (yielded : Set (NamedList (F p)))
     (_output : Unit) (localYields : Set (NamedList (F p))) : Prop :=
   ∃ (addLocalYields mulLocalYields storeStateLocalYields loadStateLocalYields : Set (NamedList (F p))),
-    AddInstruction.Bundle.addStepCircuitsBundleSpec capacities.addCapacity program memory inputs.addInputs yielded () addLocalYields ∧
+    AddInstruction.Bundle.spec capacities.addCapacity program memory inputs.addInputs yielded () addLocalYields ∧
     mulStepCircuitsBundleSpec capacities.mulCapacity program memory inputs.mulInputs yielded () mulLocalYields ∧
     storeStateStepCircuitsBundleSpec capacities.storeStateCapacity program memory inputs.storeStateInputs yielded () storeStateLocalYields ∧
     loadStateStepCircuitsBundleSpec capacities.loadStateCapacity program memory inputs.loadStateInputs yielded () loadStateLocalYields ∧
@@ -176,7 +176,7 @@ def executionBundleFormalCircuit
     simp only [mulStepCircuitsBundleFormalCircuit, mulStepCircuitsBundleElaborated] at h_holds
     simp only [storeStateStepCircuitsBundleFormalCircuit, storeStateStepCircuitsBundleElaborated] at h_holds
     simp only [loadStateStepCircuitsBundleFormalCircuit, loadStateStepCircuitsBundleElaborated] at h_holds
-    use ⋃ (i : Fin capacities.addCapacity), AddInstruction.addStepLocalYields (eval env input_var.addInputs[i])
+    use ⋃ (i : Fin capacities.addCapacity), AddInstruction.localYields (eval env input_var.addInputs[i])
     use ⋃ (i : Fin capacities.mulCapacity), mulStepLocalYields (eval env input_var.mulInputs[i])
     use ⋃ (i : Fin capacities.storeStateCapacity), storeStateStepLocalYields (eval env input_var.storeStateInputs[i])
     use ⋃ (i : Fin capacities.loadStateCapacity), loadStateStepLocalYields (eval env input_var.loadStateInputs[i]) env (i₀ + capacities.addCapacity * 29 + capacities.mulCapacity * 29 + capacities.storeStateCapacity * 29 + i * 29)
@@ -231,7 +231,7 @@ theorem executionBundleSpec_localYields_characterization
   simp only [Set.mem_union] at h_mem
   rcases h_mem with ((h_mem | h_mem) | h_mem) | h_mem
   -- Case 1: ADD instruction
-  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := AddInstruction.Bundle.addStepCircuitsBundleSpec_localYields_characterization capacities.addCapacity program memory inputs.addInputs yielded addLocalYields nl h_add h_mem
+  · have ⟨i, h_enabled, h_overflow, h_yielded, h_valid⟩ := AddInstruction.Bundle.spec_localYields_characterization_bundle capacities.addCapacity program memory inputs.addInputs yielded addLocalYields nl h_add h_mem
     use inputs.addInputs[i].preState, inputs.addInputs[i].timestamp
     constructor
     · left
