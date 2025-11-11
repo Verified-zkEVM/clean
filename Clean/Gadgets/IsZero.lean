@@ -29,6 +29,8 @@ instance elaborated : ElaboratedCircuit F M field where
   localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
+  yields_eq := by
+    intros; simp [circuit_norm, main, IsZeroField.circuit]
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 
@@ -48,7 +50,7 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
         IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
             (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i])))) :
+              (i₀ + i * IsZeroField.circuit.localLength vars[i]))) ) :
     Expression.eval env
       (Fin.foldl n
         (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))

@@ -24,8 +24,10 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   main := main n
   localLength _ := n
   output _ i := varFromOffset (fields n) i
+  yields _ _ _ := ∅
 
   localLength_eq _ _ := by simp only [main, circuit_norm]; ac_rfl
+  yields_eq := by intros; simp [circuit_norm, main]
   subcircuitsConsistent x i0 := by simp +arith only [main, circuit_norm]
     -- TODO arith is needed because forAll passes `localLength + offset` while bind passes `offset + localLength`
 
@@ -76,6 +78,8 @@ def rangeCheck (n : ℕ) (hn : 2^n < p) : FormalAssertion (F p) field where
     let _ ← toBits n hn x
 
   localLength _ := n
+  yields _ _ _ := ∅
+  yields_eq := by intros; simp only [circuit_norm, Set.union_empty, toBits]
 
   Assumptions _ := True
   Spec (x : F p) := x.val < 2^n

@@ -48,6 +48,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
   localLength_eq := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
+  yields_eq := by intros; simp [circuit_norm, main, Num2Bits.main, AliasCheck.circuit]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
@@ -55,7 +56,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     bits = fieldToBits 254 input
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
+    intro i0 env _ input_var input h_input assumptions h_holds
     simp only [circuit_norm, main, Num2Bits.main] at h_holds ⊢
     simp_all only [circuit_norm, AliasCheck.circuit,
       Vector.map_mapRange]
@@ -75,7 +76,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
       <;> simp [h_bits, ZMod.val_one]
 
   completeness := by
-    intro i0 env input_var h_env input h_input assumptions
+    intro i0 env _ input_var h_env input h_input assumptions
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
@@ -126,6 +127,7 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
+  yields_eq := by intros; simp [circuit_norm, main, Bits2Num.main, AliasCheck.circuit]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
@@ -189,6 +191,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
+  yields_eq := by intros; simp [circuit_norm, main, IsZero.circuit]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 

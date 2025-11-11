@@ -61,10 +61,11 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   Spec
   localLength _ := 2
   output _ i0 := { z := var ⟨i0⟩, carryOut := var ⟨i0 + 1⟩ }
+  yields_eq := by intros; simp only [circuit_norm, main]
 
   soundness := by
     -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
+    rintro i0 env yielded ⟨x_var, y_var, carry_in_var⟩ ⟨x, y, carry_in⟩ h_inputs h_assumptions h_holds
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
@@ -89,7 +90,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 
   completeness := by
    -- introductions
-    rintro i0 env ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
+    rintro i0 env yielded ⟨x_var, y_var, carry_in_var⟩ h_env ⟨x, y, carry_in⟩ h_inputs h_assumptions
 
     -- characterize inputs
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
@@ -132,6 +133,8 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
   name := "Addition8FullCarry"
+
+  noYields := by intros; simp only [circuit_norm, circuit]
 
   computableWitnesses n input := by
     simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,

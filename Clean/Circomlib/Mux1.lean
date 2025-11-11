@@ -65,6 +65,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
   localLength _ := n
+  yields_eq := by intros; simp only [circuit_norm, main]
 
   Assumptions input :=
     let ⟨c, s⟩ := input
@@ -178,6 +179,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     -- The goal is about MultiMux1.circuit's localLength with n=1
     -- which is defined as n = 1
     rfl
+  yields_eq := by intros; simp only [circuit_norm, main, MultiMux1.circuit]
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]
@@ -199,16 +201,11 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
-    -- Now we need to show the RHS equals our spec
-    -- First, simplify the evaluation of the vector
     simp only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, circuit_norm]
-    rw [← h_input] at h_s
-    simp_all
+    aesop
 
 end Mux1
 

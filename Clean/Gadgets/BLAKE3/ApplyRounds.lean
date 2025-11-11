@@ -44,6 +44,9 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   output_eq := by
     intro input offset
     simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+  yields_eq := by
+    intro input env offset
+    simp [Circuit.bind_def, circuit_norm, Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated]
 
   Assumptions := Round.Assumptions
   Spec := fun input output =>
@@ -53,7 +56,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     BLAKE3State.value output.message = permute (BLAKE3State.value input.message) ∧
     BLAKE3State.Normalized output.message
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
+    intro offset env yielded input_var input h_eval h_assumptions h_holds
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm] at h_holds
@@ -80,7 +83,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     · exact h_holds2
 
   completeness := by
-    intro offset env input_var h_env_uses_witnesses input h_eval h_assumptions
+    intro offset env yielded input_var h_env_uses_witnesses input h_eval h_assumptions
     simp only [Round.Assumptions] at h_assumptions
     decompose_provable_struct
     simp only [circuit_norm, Round.Inputs.mk.injEq] at h_eval
@@ -347,7 +350,9 @@ Seven rounds with spec matching the applyRounds pattern.
 def sevenRoundsApplyStyle : FormalCircuit (F p) Round.Inputs BLAKE3State :=
   sevenRoundsFinal.weakenSpec SevenRoundsSpec (by
     -- Prove that sevenRoundsFinal's spec implies our SevenRoundsSpec
-    rintro input output h_assumptions ⟨mid, h_spec1, h_spec2⟩
+    intro input output h_assumptions h_spec
+    -- sevenRoundsFinal.Spec says ∃ mid, sixRoundsApplyStyle.Spec input mid ∧ Round.circuit.Spec mid output
+    obtain ⟨mid, h_spec1, h_spec2⟩ := h_spec
     -- Break down the specs similar to previous proofs
     simp_all only [sixRoundsApplyStyle, FormalCircuit.weakenSpec, SixRoundsSpec, Round.circuit, Round.Spec, SevenRoundsSpec, applySevenRounds, applySixRounds]
     aesop
@@ -438,6 +443,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
   main := main
   localLength _ := 5376
+  yields_eq := by intros; simp [circuit_norm, main, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, FormalCircuit.weakenSpec, FormalCircuit.concat]
   localLength_eq input i0 := by
     dsimp only [main, Round.circuit, sevenRoundsApplyStyle, sevenRoundsFinal, sixRoundsApplyStyle, sixRoundsWithPermute,
       fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute, FormalCircuit.weakenSpec,

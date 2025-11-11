@@ -102,6 +102,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
   main
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
+  yields_eq := by intros; simp [circuit_norm, main, IsZero.circuit, IsZero.elaborated, Or32.circuit, Or32.elaborated, Compress.circuit, Compress.elaborated]
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧

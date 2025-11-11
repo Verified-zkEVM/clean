@@ -29,6 +29,7 @@ def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
 instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 0
+  yields_eq := by intros; simp [circuit_norm, main]; split_ifs <;> rfl
   output input i0 :=
     let ⟨x0, x1, x2, x3⟩ := input
     match off with
@@ -51,7 +52,7 @@ instance elaborated (off : Fin 4): ElaboratedCircuit (F p) U32 U32 where
     repeat rfl
 
 theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
+  rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var ⟩ ⟨ x0, x1, x2, x3 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
   have h_x1 : x1_var.eval env = x1 := by injections h_inputs
@@ -69,7 +70,7 @@ theorem soundness (off : Fin 4) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> simp_all [circuit_norm, U32.Normalized, explicit_provable_type]
 
 theorem completeness (off : Fin 4) : Completeness (F p) (elaborated off) Assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
+  rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var ⟩ henv ⟨ x0, x1, x2, x3 ⟩ _
   fin_cases off
   repeat
     intro Assumptions

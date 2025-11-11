@@ -36,9 +36,17 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    yields input env offset :=
+      circuit1.yields input env offset ∪
+      circuit2.yields (circuit1.output input offset) env (offset + circuit1.localLength input)
+    yields_eq := by
+      intro input env offset
+      simp only [Circuit.bind_def, circuit_norm]
   }
   Assumptions := circuit1.Assumptions
-  Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
+  Spec input output := ∃ mid,
+    circuit1.Spec input mid ∧
+    circuit2.Spec mid output
   soundness := by
     simp only [Soundness]
     intros
@@ -83,9 +91,9 @@ def FormalCircuit.weakenSpec
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   soundness := by
-    intro offset env input_var input h_eval h_assumptions h_holds
+    intro offset env yielded input_var input h_eval h_assumptions h_holds
     -- Use the original circuit's soundness
-    have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds
+    have h_strong_spec := circuit.soundness offset env yielded input_var input h_eval h_assumptions h_holds
     -- Apply the implication to get the weaker spec
     exact h_spec_implication input _ h_assumptions h_strong_spec
   completeness := by
@@ -99,3 +107,68 @@ lemma FormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableT
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [FormalCircuit.weakenSpec]
+
+/--
+Weaken the specification of a GeneralFormalCircuit.
+
+This combinator takes a GeneralFormalCircuit with a strong specification and produces
+a new GeneralFormalCircuit with a weaker specification. This is useful when:
+- You have a circuit that proves more than you need
+- You want to compose circuits where the specs don't match exactly
+- You need to adapt a specific circuit to a more general interface
+
+The requirements are:
+- The assumptions remain the same
+- The stronger spec implies the weaker spec
+-/
+def GeneralFormalCircuit.weakenSpec
+    {F : Type} [Field F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output)
+    (WeakerSpec : Input F → Output F → Prop)
+    (h_spec_implication : ∀ input output,
+      circuit.Spec input output →
+      WeakerSpec input output) :
+    GeneralFormalCircuit F Input Output := {
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := WeakerSpec
+  soundness := by
+    intro offset env yielded input_var input h_eval h_holds
+    have h_strong_spec := circuit.soundness offset env yielded input_var input h_eval h_holds
+    exact h_spec_implication input _ h_strong_spec
+  completeness := by
+    exact circuit.completeness
+}
+
+@[circuit_norm]
+lemma GeneralFormalCircuit.weakenSpec_assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : GeneralFormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
+  simp only [GeneralFormalCircuit.weakenSpec]
+
+def GeneralFormalCircuitUsingYields.weakenSpec
+    {F : Type} [Field F]
+    {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuitUsingYields F Input Output)
+    (WeakerSpec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop)
+    (h_spec_implication : ∀ input yielded output localYields,
+      circuit.Spec input yielded output localYields →
+      WeakerSpec input yielded output localYields) :
+    GeneralFormalCircuitUsingYields F Input Output := {
+  elaborated := circuit.elaborated
+  Assumptions := circuit.Assumptions
+  Spec := WeakerSpec
+  soundness := by
+    intro offset env yielded input_var input h_eval h_holds
+    have h_strong_spec := circuit.soundness offset env yielded input_var input h_eval h_holds
+    exact h_spec_implication input yielded _ _ h_strong_spec
+  completeness := by
+    exact circuit.completeness
+}
+
+@[circuit_norm]
+lemma GeneralFormalCircuitUsingYields.weakenSpec_assumptions {F Input Output} [Field F] [ProvableType Input] [ProvableType Output]
+    (c : GeneralFormalCircuitUsingYields F Input Output) (WeakerSpec : Input F → Set (NamedList F) → Output F → Set (NamedList F) → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
+  simp only [GeneralFormalCircuitUsingYields.weakenSpec]

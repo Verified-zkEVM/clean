@@ -37,6 +37,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
 instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
   main := main off
   localLength _ := 0
+  yields_eq := by intros; simp [circuit_norm, main]; split_ifs <;> rfl
   output input i0 :=
     let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := input
     match off with
@@ -62,7 +63,7 @@ instance elaborated (off : Fin 8): ElaboratedCircuit (F p) U64 U64 where
     repeat rfl
 
 theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (Spec off) := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
+  rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
   have h_x0 : x0_var.eval env = x0 := by injections h_inputs
   have h_x1 : x1_var.eval env = x1 := by injections h_inputs
@@ -84,7 +85,7 @@ theorem soundness (off : Fin 8) : Soundness (F p) (elaborated off) Assumptions (
   · fin_cases off <;> simp_all [circuit_norm, U64.Normalized, explicit_provable_type]
 
 theorem completeness (off : Fin 8) : Completeness (F p) (elaborated off) Assumptions := by
-  rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
+  rintro i0 env yielded ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [main, circuit_norm]
 
 def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {

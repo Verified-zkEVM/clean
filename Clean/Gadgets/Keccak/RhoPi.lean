@@ -19,7 +19,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   .map rhoPiConstants fun (i, s) =>
     Rotation64.circuit (-s) state[i.val]
 
-def Assumptions := KeccakState.Normalized (p:=p)
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
 def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
@@ -29,6 +29,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 400
   localLength_eq _ _ := by simp only [main, circuit_norm, Rotation64.circuit, Rotation64.elaborated]
+  yields_eq := by intros; simp [circuit_norm, main, Rotation64.circuit, Rotation64.elaborated]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
 
 -- recharacterize rhoPi as a loop
@@ -41,7 +42,7 @@ lemma rhoPi_loop (state : Vector ℕ 25) :
   rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env state_var state h_input state_norm h_holds
+  intro i0 env yielded state_var state h_input state_norm h_holds
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -56,7 +57,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env state_var h_env state h_input state_norm
+  intro i0 env yielded state_var h_env state h_input state_norm
 
   -- simplify assumptions
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

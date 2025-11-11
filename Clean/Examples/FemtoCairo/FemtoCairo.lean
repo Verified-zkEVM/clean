@@ -60,13 +60,7 @@ def ReadOnlyTableFromFunction
       · apply ZMod.val_injective
 }
 
-/--
-  Circuit that decodes a femtoCairo instruction into a one-hot representation.
-  It returns a `DecodedInstruction` struct containing the decoded fields.
-  This circuit is not satisfiable if the input instruction is not correctly encoded.
--/
-def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstruction where
-  main := fun instruction => do
+def decodeInstructionMain (instruction : Var field (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
     let bits ← Gadgets.ToBits.toBits 8 (by linarith [p_large_enough.elim]) instruction
     return {
       instrType := {
@@ -94,13 +88,8 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
         isImmediate := bits[6] * bits[7]
       }
     }
-  localLength _ := 8
 
-  Assumptions
-  | instruction => instruction.val < 256
-
-  Spec
-  | instruction, output =>
+def decodeInstructionSpec (instruction : field (F p)) (output : DecodedInstruction (F p)) : Prop :=
     match Spec.decodeInstruction instruction with
     | some (instr_type, mode1, mode2, mode3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
@@ -109,8 +98,26 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
       output.mode3.val = mode3 ∧ output.mode3.isEncodedCorrectly
     | none => False -- impossible, constraints ensure that input < 256
 
+def decodeInstructionElaborated : ElaboratedCircuit (F p) field DecodedInstruction where
+  main := decodeInstructionMain
+  localLength _ := 8
+  yields_eq := by intros; simp only [circuit_norm, decodeInstructionMain, Gadgets.ToBits.toBits]
+
+/--
+  Circuit that decodes a femtoCairo instruction into a one-hot representation.
+  It returns a `DecodedInstruction` struct containing the decoded fields.
+  This circuit is not satisfiable if the input instruction is not correctly encoded.
+-/
+def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstruction where
+  elaborated := decodeInstructionElaborated
+
+  Assumptions
+  | instruction => instruction.val < 256
+  Spec := decodeInstructionSpec
+
   soundness := by
-    circuit_proof_start [Gadgets.toBits]
+    circuit_proof_start [Gadgets.toBits, decodeInstructionMain, decodeInstructionSpec, decodeInstructionElaborated]
+    clear yielded
     simp only [Nat.reducePow] at h_holds
     obtain ⟨ h_range_check, h_eq ⟩ := h_holds
     have h : ¬ 256 ≤ input.val := by linarith
@@ -118,7 +125,8 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
     simp [Vector.mapRange, circuit_norm] at h_eq
     simp [circuit_norm, explicit_provable_type]
     rw [Array.ext_iff] at h_eq
-    simp at h_eq
+    simp only [List.size_toArray, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Vector.size_toArray, List.getElem_toArray, Vector.getElem_toArray, true_and] at h_eq
     have h_bits_eval0 := h_eq 0 (by linarith) (by linarith)
     have h_bits_eval1 := h_eq 1 (by linarith) (by linarith)
     have h_bits_eval2 := h_eq 2 (by linarith) (by linarith)
@@ -127,15 +135,20 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
     have h_bits_eval5 := h_eq 5 (by linarith) (by linarith)
     have h_bits_eval6 := h_eq 6 (by linarith) (by linarith)
     have h_bits_eval7 := h_eq 7 (by linarith) (by linarith)
+    clear h_eq
     simp only [List.getElem_cons_zero,
       List.getElem_cons_succ] at h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
+    simp only [h_bits_eval0, h_bits_eval1, h_bits_eval2, h_bits_eval3, h_bits_eval4, h_bits_eval5, h_bits_eval6, h_bits_eval7]
+    clear h_bits_eval0 h_bits_eval1 h_bits_eval2 h_bits_eval3 h_bits_eval4 h_bits_eval5 h_bits_eval6 h_bits_eval7
 
     split
 
     -- the bit decomposition also implies that the input is < 256
     -- therefore, Spec.decodeInstruction never returns none
-    case h_2 => simp_all only [gt_iff_lt, id_eq, not_le, ite_eq_left_iff, reduceCtorEq, imp_false,
-      not_true_eq_false]
+    case h_2 =>
+      rename_i h_eq2
+      simp only [not_le, ite_eq_left_iff, reduceCtorEq, imp_false] at h_eq2
+      contradiction
     case _ x instr_type mode1 mode2 mode3 h_eq =>
       have h_bits_are_binary := fieldToBits_bits (x := input) (n := 8)
       have h_bits0 := h_bits_are_binary 0 (by linarith)
@@ -146,156 +159,174 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
       have h_bits5 := h_bits_are_binary 5 (by linarith)
       have h_bits6 := h_bits_are_binary 6 (by linarith)
       have h_bits7 := h_bits_are_binary 7 (by linarith)
+      generalize (fieldToBits 8 input)[0] = f0 at *
+      generalize (fieldToBits 8 input)[1] = f1 at *
+      generalize (fieldToBits 8 input)[2] = f2 at *
+      generalize (fieldToBits 8 input)[3] = f3 at *
+      generalize (fieldToBits 8 input)[4] = f4 at *
+      generalize (fieldToBits 8 input)[5] = f5 at *
+      generalize (fieldToBits 8 input)[6] = f6 at *
+      generalize (fieldToBits 8 input)[7] = f7 at *
 
+      simp only [gt_iff_lt, id_eq, not_le,
+        Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq] at *
       repeat' apply And.intro
-      · simp [DecodedInstructionType.val]
+      · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedInstructionType.val]
         rcases h_bits0 with h0 | h0
-        · rcases h_bits1 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, neg_zero, add_zero, add_neg_cancel, zero_ne_one, ↓reduceIte]
-        · rcases h_bits1 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte,
-            add_eq_left, neg_eq_zero, ite_eq_left_iff, not_true_eq_false, IsEmpty.forall_iff]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedInstructionType.isEncodedCorrectly]
+        · subst h0
+          rcases h_bits1 with h1 | h1
+          · subst h1
+            simp only [ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [neg_zero, add_zero, mul_zero, ↓reduceIte, h_eq]
+          · simp only [h1] at h_eq ⊢
+            simp only [ZMod.val_zero, ZMod.val_one, mul_one, zero_add] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · subst h0
+          rcases h_bits1 with h1 | h1
+          · subst h1
+            simp only [ZMod.val_one, ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_one, mul_one, Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte, h_eq]
+      · clear h_bits2 h_bits3 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedInstructionType.isEncodedCorrectly, mul_eq_zero]
         rcases h_bits0 with h0 | h0
-        · rcases h_bits1 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, or_false,
-            and_true, and_false, and_self, or_true]
-        · rcases h_bits1 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero,
-            false_or, false_and, add_eq_left, neg_eq_zero, and_self, and_false, neg_zero, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
-            and_self, or_true]
-      · simp [DecodedAddressingMode.val]
+        · subst h0
+          rcases h_bits1 with h1 | h1
+          · subst h1
+            simp only [neg_zero, add_zero, mul_zero, or_self, and_self, one_ne_zero,
+              zero_ne_one, and_true, and_false, or_false]
+          · subst h1
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, one_ne_zero,
+              or_false, and_true, and_false, and_self, or_true]
+        · subst h0
+          rcases h_bits1 with h1 | h1
+          · subst h1
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, one_ne_zero,
+              or_true, and_self, and_true, and_false, or_self, or_false]
+          · subst h1
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, one_ne_zero,
+              or_self, and_false, and_self, or_true]
+      · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.val]
         rcases h_bits2 with h0 | h0
-        · rcases h_bits3 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel_comm, neg_add_cancel, zero_ne_one, ↓reduceIte, add_neg_cancel,
-            add_eq_left, neg_eq_zero, ite_eq_left_iff, not_true_eq_false, IsEmpty.forall_iff]
-        · rcases h_bits3 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, ↓reduceIte, add_eq_left,
-            neg_eq_zero, ite_eq_right_iff, one_ne_zero, IsEmpty.forall_iff]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
+        · subst h0
+          rcases h_bits3 with h1 | h1
+          · subst h1
+            simp only [ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [neg_zero, add_zero, mul_zero, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_zero, zero_add, ZMod.val_one, mul_one] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · subst h0
+          rcases h_bits3 with h1 | h1
+          · subst h1
+            simp only [ZMod.val_one, ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_one, mul_one, Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte, h_eq]
+      · clear h_bits0 h_bits1 h_bits4 h_bits5 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
         rcases h_bits2 with h0 | h0
-        · rcases h_bits3 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
+        · subst h0
+          rcases h_bits3 with h1 | h1
+          · subst h1
+            simp only [mul_zero,
+            add_zero,
             neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel_comm, neg_add_cancel, zero_ne_one, add_neg_cancel, one_ne_zero,
-            or_false, false_and, and_false, add_eq_left, neg_eq_zero, and_self, false_or, neg_zero,
-            add_zero]
-        · rcases h_bits3 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
-            and_true, and_false, or_self, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, one_mul, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
-            false_and, add_eq_left, neg_eq_zero, and_self, and_false, or_true]
-      · simp [DecodedAddressingMode.val]
-        rcases h_bits4 with h0 | h0
-        · rcases h_bits5 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel_comm, neg_add_cancel, zero_ne_one, ↓reduceIte, add_neg_cancel,
-            add_eq_left, neg_eq_zero,]
-        · rcases h_bits5 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        rcases h_bits4 with h0 | h0
-        · rcases h_bits5 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, zero_ne_one, add_neg_cancel, one_ne_zero,
+          · subst h1
+            simp only [
+            mul_one,
+            zero_ne_one, add_neg_cancel, one_ne_zero,
             or_false, false_and, and_false, and_self, false_or, neg_zero,
             add_zero]
+        · subst h0
+          rcases h_bits3 with h1 | h1 <;> subst h1
+          · simp only [
+            mul_zero, add_zero,
+            add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
+            and_true, true_or]
+          · simp only [mul_one,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero,
+            and_self, or_true]
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.val]
+        rcases h_bits4 with h0 | h0 <;> subst h0
         · rcases h_bits5 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
+          · subst h1
+            simp only [ZMod.val_zero, mul_zero,
+            add_zero] at h_eq
+            simp only [neg_zero, add_zero, mul_zero, ↓reduceIte, h_eq]
+          · subst h1
+            simp only [ZMod.val_zero, ZMod.val_one,
+            mul_one, zero_add] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · rcases h_bits5 with h1 | h1 <;> subst h1
+          · simp only [ZMod.val_one, ZMod.val_zero,
+            mul_zero, add_zero] at h_eq
+            simp only [add_neg_cancel, neg_zero, add_zero, mul_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · simp only [ZMod.val_one, mul_one,
+            Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte,
+              h_eq]
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits6 h_bits7
+        simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
+        rcases h_bits4 with h0 | h0 <;> subst h0
+        · rcases h_bits5 with h1 | h1 <;> subst h1
+          · simp only [neg_zero, add_zero, mul_zero, or_self, and_self, one_ne_zero, zero_ne_one,
+            and_true, and_false, or_false]
+          · simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, one_ne_zero,
+            or_false, and_true, and_false, and_self, or_true]
+        · rcases h_bits5 with h1 | h1 <;> subst h1
+          · simp only [
+            mul_zero, add_zero,
+            add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
             and_true, and_false, or_self, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
+          · simp only [mul_one,
             add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, false_or,
             and_self, and_false, or_true]
-      · simp [DecodedAddressingMode.val]
-        rcases h_bits6 with h0 | h0
-        · rcases h_bits7 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, neg_zero, add_zero, add_neg_cancel, zero_ne_one, ↓reduceIte]
-        · rcases h_bits7 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, ↓reduceIte]
-      · simp [DecodedAddressingMode.isEncodedCorrectly]
-        rcases h_bits6 with h0 | h0
-        · rcases h_bits7 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, mul_zero,
-            add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            neg_zero, or_self, and_self, one_ne_zero, zero_ne_one, and_true, and_false, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_zero, ZMod.val_one,
-            mul_one, zero_add, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, or_false,
-            and_true, and_false, and_self, or_true]
-        · rcases h_bits7 with h1 | h1
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, ZMod.val_zero,
-            mul_zero, add_zero, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq,
-            true_and, add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
-            and_true, and_false, or_self, or_false]
-          · simp_all only [gt_iff_lt, id_eq, not_le, forall_true_left, ZMod.val_one, mul_one,
-            Nat.reduceAdd, Option.ite_none_left_eq_some, Option.some.injEq, Prod.mk.injEq, true_and,
-            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self, and_false,
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
+        simp only [DecodedAddressingMode.val]
+        rcases h_bits6 with h0 | h0 <;> subst h0
+        · rcases h_bits7 with h1 | h1 <;> subst h1
+          · simp only [ZMod.val_zero, mul_zero, add_zero] at h_eq
+            simp only [mul_zero,
+            add_zero,
+            neg_zero, ↓reduceIte, h_eq]
+          · simp only [ZMod.val_zero, zero_add, ZMod.val_one, mul_one] at h_eq
+            simp only [neg_zero, add_zero, add_neg_cancel, mul_one, zero_ne_one, ↓reduceIte, h_eq]
+        · rcases h_bits7 with h1 | h1 <;> subst h1
+          · simp only [ZMod.val_zero, mul_zero, add_zero, ZMod.val_one] at h_eq
+            simp only [
+            mul_zero, add_zero,
+            add_neg_cancel, neg_zero, zero_ne_one, ↓reduceIte, h_eq]
+          · simp only [ZMod.val_one, mul_one, Nat.reduceAdd] at h_eq
+            simp only [add_neg_cancel, zero_add, mul_one, neg_add_cancel, zero_ne_one, ↓reduceIte,
+              h_eq]
+      · clear h_bits0 h_bits1 h_bits2 h_bits3 h_bits4 h_bits5
+        simp only [DecodedAddressingMode.isEncodedCorrectly, mul_eq_zero]
+        rcases h_bits6 with h0 | h0 <;> subst h0
+        · rcases h_bits7 with h1 | h1 <;> subst h1
+          · simp only [mul_zero,
+            add_zero,
+            neg_zero, and_self, one_ne_zero, zero_ne_one, and_true, true_or]
+          · simp only [
+            mul_one,
+            neg_zero, add_zero, add_neg_cancel, zero_ne_one, one_ne_zero, true_or,
+            and_true, and_self, or_true]
+        · rcases h_bits7 with h1 | h1 <;> subst h1
+          · simp only [
+            mul_zero, add_zero,
+            add_neg_cancel, neg_zero, zero_ne_one, one_ne_zero, or_true, and_self,
+            and_true, true_or]
+          · simp only [mul_one,
+            add_neg_cancel, zero_add, neg_add_cancel, zero_ne_one, one_ne_zero, or_self,
             and_self, or_true]
 
-  completeness := by circuit_proof_all [Gadgets.toBits]
+  completeness := by circuit_proof_all [Gadgets.toBits, decodeInstructionElaborated, decodeInstructionMain]
 
 /--
   Circuit that fetches a femtoCairo instruction from a read-only program memory,
@@ -428,6 +459,7 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
+  yields_eq _ _ _ := by simp [circuit_norm]
   Assumptions
   | {state, mode, offset} =>
     ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
@@ -825,6 +857,8 @@ def femtoCairoStepElaboratedCircuit
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
     localLength := 30
+    yields_eq := by
+      simp only [circuit_norm, readFromMemoryCircuit, fetchInstructionCircuit, nextStateCircuit, decodeInstructionCircuit, decodeInstructionElaborated]
 
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
@@ -860,6 +894,7 @@ def femtoCairoStepCircuitSoundness
     rw [h_input_pc] at h_eq
     rw [h_eq, ←c_fetch]
     simp [circuit_norm, explicit_provable_type]
+    simp only [decodeInstructionSpec] at c_decode
 
     split at c_decode
     case h_2 =>
@@ -918,6 +953,8 @@ def femtoCairoStepCircuitSoundness
               -- state transition is always successful
               contradiction
             case h_1 next_state h_eq_next =>
+              simp only [decodeInstructionElaborated] at c_next ⊢ h_eq_next
+              simp only [h_eq_next]
               rw [←c_next]
               simp [explicit_provable_type, circuit_norm]
 
@@ -961,7 +998,7 @@ def femtoCairoTable
     | none => False -- impossible, constraints ensure that every transition is valid
 
   soundness := by
-    intros initial_state i env state_var input_var state input h1 h2 h_inputs h_hold
+    intros initial_state i env yielded state_var input_var state input h1 h2 h_inputs h_hold
     simp [Spec.femtoCairoMachineBoundedExecution, femtoCairoStepCircuit,
       femtoCairoCircuitSpec, femtoCairoAssumptions, circuit_norm] at ⊢ h_hold
     split at h_hold

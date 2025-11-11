@@ -82,7 +82,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : Input F := input
   have : eval env input_var = input := h_input
   have : Assumptions input := h_assumptions
-  have : ConstraintsHold.Soundness env (circuit.main input_var i₀).2 := h_holds
+  have : ConstraintsHold.Soundness env yielded (circuit.main input_var i₀).2 := h_holds
   sorry
 
 example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
@@ -96,7 +96,7 @@ example {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [Prov
   have : ℕ := i₀
   have : Environment F := env
   have : Input (Expression F) := input_var
-  have : env.UsesLocalWitnessesCompleteness i₀ (circuit.main input_var i₀).2 := h_env
+  have : env.UsesLocalWitnessesCompleteness yielded i₀ (circuit.main input_var i₀).2 := h_env
   -- After provable_struct_simp, we work with eval env input_var instead of input
   sorry
 
@@ -169,7 +169,7 @@ example : Soundness (F p) elaborated TestAssumptions TestSpec := by
   circuit_proof_start
   -- elaborated should be unfolded to testCircuit
   -- Check that h_holds now refers to testCircuit.main, not elaborated.main
-  guard_hyp h_holds : ConstraintsHold.Soundness env (testCircuit.main input_var i₀).2
+  guard_hyp h_holds : ConstraintsHold.Soundness env yielded (testCircuit.main input_var i₀).2
   sorry
 end UnfoldTest3
 

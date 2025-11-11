@@ -91,6 +91,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [main, circuit_norm]
     omega
 
+  yields_eq := by
+    intros
+    simp only [circuit_norm, main]
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
@@ -203,6 +207,10 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [main, circuit_norm]
     rfl
 
+  yields_eq := by
+    intros
+    simp only [circuit_norm, main, MultiMux3.circuit]
+
   subcircuitsConsistent := by
     intro input offset
     simp only [main, circuit_norm]
@@ -227,7 +235,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro _ _ _ input h_input h_assumptions h_subcircuit_sound
     rw [← h_input] at *
     clear input h_input
-    simp only [MultiMux3.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
+    simp only [MultiMux3.circuit, circuit_norm, Vector.getElem_map] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
     rw [h_subcircuit_sound]
     -- Now we need to show the RHS equals our spec

@@ -13,6 +13,7 @@ structure LookupCircuit (F : Type) [Field F] (α β : TypeMap) [ProvableType α]
     extends circuit : FormalCircuit F α β where
   name : String
   computableWitnesses : circuit.ComputableWitnesses
+  noYields : ∀ input env n, circuit.yields (const input) env n = ∅
 
 namespace LookupCircuit
 variable {F : Type} [Field F] {α β : TypeMap} [ProvableType α] [ProvableType β]
@@ -21,7 +22,9 @@ def proverEnvironment (circuit : LookupCircuit F α β) (input : α F) : Environ
   circuit.main (const input) |>.proverEnvironment
 
 theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β) (input : α F) :
-    (circuit.proverEnvironment input).UsesLocalWitnesses 0 ((circuit.main (const input)).operations 0) := by
+    (circuit.proverEnvironment input).UsesLocalWitnesses
+      (FlatOperation.localYields (circuit.proverEnvironment input) ((circuit.main (const input)).operations 0).toFlat)
+      0 ((circuit.main (const input)).operations 0) := by
   apply Circuit.proverEnvironment_usesLocalWitnesses
   apply circuit.compose_computableWitnesses
   simp [Environment.OnlyAccessedBelow, ProvableType.eval_const, circuit.computableWitnesses]
@@ -36,8 +39,9 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
   Contains := fun (input, output) =>
     -- there exists an environment, such that
     ∃ n env,
-    -- the circuit constraints hold
-    Circuit.ConstraintsHold env (circuit.main (const input) |>.operations n)
+    let ops := (circuit.main (const input) |>.operations n)
+    -- the circuit constraints hold with the specific yielded set from localYields
+    Circuit.ConstraintsHold env (FlatOperation.localYields env ops.toFlat) ops
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
@@ -47,14 +51,25 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
   imply_soundness := by
     intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
     simp only [h_output]
-    exact circuit.original_soundness n env (const input) input ProvableType.eval_const h_assumptions h_holds
+    let ops := (circuit.main (const input) |>.operations n)
+    have h_yields : FlatOperation.localYields env ops.toFlat = ∅ := by
+      rw [FlatOperation.localYields_toFlat, circuit.yields_eq, circuit.noYields]
+    rw [h_yields] at h_holds
+    have h_spec := circuit.original_soundness n env ∅ (const input) input ProvableType.eval_const h_assumptions h_holds
+    rw [circuit.noYields] at h_spec
+    exact h_spec
 
   implied_by_completeness := by
-    intro (input, output) ⟨h_assumptions, h_output⟩
+    intro (input, output) ⟨h_assump, h_output⟩
     use 0, circuit.proverEnvironment input
     simp only [h_output, LookupCircuit.constantOutput, and_true]
     set env := circuit.proverEnvironment input
-    apply circuit.original_completeness 0 env (const input) input ProvableType.eval_const h_assumptions
+    let ops := (circuit.main (const input) |>.operations 0)
+    have h_yields : FlatOperation.localYields env ops.toFlat = ∅ := by
+      rw [FlatOperation.localYields_toFlat, circuit.yields_eq, circuit.noYields]
+    rw [h_yields]
+    apply circuit.original_completeness 0 env ∅ (const input) input ProvableType.eval_const h_assump
+    rw [←h_yields]
     exact circuit.proverEnvironment_usesLocalWitnesses input
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
@@ -72,15 +87,17 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   localLength n := size β
   output _ n := varFromOffset β n
 
-  Assumptions := circuit.Assumptions
-  Spec := circuit.Spec
+  yields_eq := by intro; simp [circuit_norm]
+
+  Assumptions input := circuit.Assumptions input
+  Spec input output := circuit.Spec input output
 
   soundness := by
-    intro n env input_var input h_input h_assumptions h_holds
+    intro n env yielded input_var input h_input h_assumptions h_holds
     simp_all only [circuit_norm, toTable]
 
   completeness := by
-    intro n env input_var h_env input h_input h_assumptions
+    intro n env yielded input_var h_env input h_input h_assumptions
     simp_all only [circuit_norm, toTable]
     rw [ProvableType.ext_iff]
     intro i hi

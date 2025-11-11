@@ -33,6 +33,7 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   output _ i0 := Permutation.stateVar (i0 + 136) 23
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
+  yields_eq := by intros; simp [circuit_norm, main, Xor64.circuit, Permutation.circuit, Permutation.elaborated]
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
@@ -44,7 +45,7 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   out_state.value = absorbBlock input.state.value input.block.value
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
-  intro i0 env ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
+  intro i0 env yielded ⟨ state_var, block_var ⟩ ⟨ state, block ⟩ h_input h_assumptions h_holds
 
   -- simplify goal and constraints
   simp only [circuit_norm, RATE, main, Spec, Assumptions, absorbBlock,
@@ -79,7 +80,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
     simp only [this, getElem_eval_vector, h_input, h_assumptions.left ⟨i, hi⟩, Nat.xor_zero, and_self]
 
 theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro i0 env ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
+  intro i0 env yielded ⟨ state_var, block_var ⟩ h_env ⟨ state, block ⟩ h_input h_assumptions
 
   -- simplify goal and witnesses
   simp only [circuit_norm, RATE, main, Assumptions, Xor64.circuit, Xor64.Assumptions, Xor64.Spec,

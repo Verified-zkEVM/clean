@@ -71,6 +71,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [main, circuit_norm]
     omega
 
+  yields_eq := by
+    intros
+    simp only [circuit_norm, main]
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
@@ -181,6 +185,10 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro input offset
     simp only [main, circuit_norm]
     rfl
+
+  yields_eq := by
+    intros
+    simp only [circuit_norm, main, MultiMux2.circuit]
 
   subcircuitsConsistent := by
     intro input offset
