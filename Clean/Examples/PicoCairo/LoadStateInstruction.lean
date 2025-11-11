@@ -160,12 +160,12 @@ def loadStateStepSpec
     localYields = ∅
 
 /--
-GeneralFormalCircuit for LoadState instruction step.
+GeneralFormalCircuitUsingYields for LoadState instruction step.
 -/
 def loadStateStepFormalCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) InstructionStepInput unit where
+    GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
   elaborated := loadStateStepElaboratedCircuit program h_programSize memory h_memorySize
   Assumptions := loadStateStepAssumptions (programSize := programSize)
   Spec := loadStateStepSpec program memory
@@ -389,7 +389,7 @@ def loadStateStepCircuitsBundle
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertion (loadStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (loadStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
 
 /--
 Elaborated circuit for LoadState instruction bundle.
@@ -474,7 +474,7 @@ def loadStateStepCircuitsBundleFormalCircuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+    GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
   elaborated := loadStateStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
   Assumptions := loadStateStepCircuitsBundleAssumptions capacity (programSize := programSize)
   Spec := loadStateStepCircuitsBundleSpec capacity program memory

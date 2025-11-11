@@ -69,11 +69,11 @@ instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3Sta
     simp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit, Rotation32.elaborated]
     ring_nf; trivial
 
-def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
+def Assumptions (input : Inputs (F p)) :=
   let { state, x, y } := input
   state.Normalized ∧ x.Normalized ∧ y.Normalized
 
-def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (a b c d : Fin 16) (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
   let { state, x, y } := input
   out.value = g state.value a b c d x.value y.value ∧ out.Normalized
 

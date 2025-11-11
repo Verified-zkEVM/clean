@@ -201,7 +201,7 @@ def main (inputs : Var U64 (F p)) : Circuit (F p) Unit  := do
 def circuit : FormalAssertion (F p) U64 where
   main
 
-  Assumptions _ _ := True
+  Assumptions _ := True
   Spec inputs := inputs.Normalized
 
   soundness := by

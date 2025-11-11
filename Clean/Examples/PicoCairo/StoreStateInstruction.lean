@@ -168,12 +168,12 @@ def storeStateStepSpec
     localYields = ∅
 
 /--
-GeneralFormalCircuit for StoreState instruction step.
+GeneralFormalCircuitUsingYields for StoreState instruction step.
 -/
 def storeStateStepFormalCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) InstructionStepInput unit where
+    GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
   elaborated := storeStateStepElaboratedCircuit program h_programSize memory h_memorySize
   Assumptions := storeStateStepAssumptions (programSize := programSize)
   Spec := storeStateStepSpec program memory
@@ -405,7 +405,7 @@ def storeStateStepCircuitsBundle
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertion (storeStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (storeStateStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
 
 /--
 Elaborated circuit for StoreState instruction bundle.
@@ -463,13 +463,13 @@ def storeStateStepCircuitsBundleSpec
   localYields = ⋃ i : Fin capacity, storeStateStepLocalYields inputs[i]
 
 /--
-GeneralFormalCircuit for StoreState instruction bundle.
+GeneralFormalCircuitUsingYields for StoreState instruction bundle.
 -/
 def storeStateStepCircuitsBundleFormalCircuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+    GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
   elaborated := storeStateStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
   Assumptions := storeStateStepCircuitsBundleAssumptions capacity (programSize := programSize)
   Spec := storeStateStepCircuitsBundleSpec capacity program memory

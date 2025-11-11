@@ -27,11 +27,11 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
   yields_eq := by intros; simp [circuit_norm, main, Xor64.circuit]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
 
-def Assumptions (inputs : Inputs (F p)) (_ : Set (NamedList (F p))) : Prop :=
+def Assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   state.Normalized ∧ d.Normalized
 
-def Spec (inputs : Inputs (F p)) (out : KeccakState (F p))  (_ : Set (NamedList (F p))) : Prop :=
+def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
   let ⟨state, d⟩ := inputs
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaXor state.value d.value

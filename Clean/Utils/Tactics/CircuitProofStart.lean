@@ -17,11 +17,17 @@ partial def circuitProofStartCore : TacticM Unit := do
     -- We need to check the head constant of the expression
     let headConst? := goalType.getAppFn.constName?
     let isSoundness := headConst? == some ``Soundness ||
+                       headConst? == some ``SoundnessUsingYields ||
                        headConst? == some ``FormalAssertion.Soundness ||
-                       headConst? == some ``GeneralFormalCircuit.Soundness
+                       headConst? == some ``FormalAssertionUsingYields.Soundness ||
+                       headConst? == some ``GeneralFormalCircuit.Soundness ||
+                       headConst? == some ``GeneralFormalCircuitUsingYields.Soundness
     let isCompleteness := headConst? == some ``Completeness ||
+                          headConst? == some ``CompletenessUsingYields ||
                           headConst? == some ``FormalAssertion.Completeness ||
-                          headConst? == some ``GeneralFormalCircuit.Completeness
+                          headConst? == some ``FormalAssertionUsingYields.Completeness ||
+                          headConst? == some ``GeneralFormalCircuit.Completeness ||
+                          headConst? == some ``GeneralFormalCircuitUsingYields.Completeness
 
     if isSoundness then
       match headConst? with
@@ -30,13 +36,28 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``SoundnessUsingYields =>
+        evalTactic (← `(tactic| unfold SoundnessUsingYields))
+        let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Soundness =>
         evalTactic (← `(tactic| unfold FormalAssertion.Soundness))
         let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_assumptions, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``FormalAssertionUsingYields.Soundness =>
+        evalTactic (← `(tactic| unfold FormalAssertionUsingYields.Soundness))
+        let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_assumptions, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Soundness =>
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Soundness))
+        let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_holds]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``GeneralFormalCircuitUsingYields.Soundness =>
+        evalTactic (← `(tactic| unfold GeneralFormalCircuitUsingYields.Soundness))
         let names := [`i₀, `env, `yielded, `input_var, `input, `h_input, `h_holds]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
@@ -50,21 +71,36 @@ partial def circuitProofStartCore : TacticM Unit := do
         let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``CompletenessUsingYields =>
+        evalTactic (← `(tactic| unfold CompletenessUsingYields))
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``FormalAssertion.Completeness =>
         evalTactic (← `(tactic| unfold FormalAssertion.Completeness))
         let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``FormalAssertionUsingYields.Completeness =>
+        evalTactic (← `(tactic| unfold FormalAssertionUsingYields.Completeness))
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_spec]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | some ``GeneralFormalCircuit.Completeness =>
         evalTactic (← `(tactic| unfold GeneralFormalCircuit.Completeness))
-        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions, `h_local_yields]
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions]
+        for name in names do
+          evalTactic (← `(tactic| intro $(mkIdent name):ident))
+      | some ``GeneralFormalCircuitUsingYields.Completeness =>
+        evalTactic (← `(tactic| unfold GeneralFormalCircuitUsingYields.Completeness))
+        let names := [`i₀, `env, `yielded, `input_var, `h_env, `input, `h_input, `h_assumptions]
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
       return
     else
       -- Goal is not a supported Soundness or Completeness type
-      throwError "circuitProofStartCore can only be used on Soundness, Completeness, FormalAssertion.Soundness, FormalAssertion.Completeness, GeneralFormalCircuit.Soundness, or GeneralFormalCircuit.Completeness goals"
+      throwError "circuitProofStartCore can only be used on Soundness, Completeness, SoundnessUsingYields, CompletenessUsingYields, FormalAssertion.Soundness, FormalAssertion.Completeness, FormalAssertionUsingYields.Soundness, FormalAssertionUsingYields.Completeness, GeneralFormalCircuit.Soundness, GeneralFormalCircuit.Completeness, GeneralFormalCircuitUsingYields.Soundness, or GeneralFormalCircuitUsingYields.Completeness goals"
 
 /--
   Standard tactic for starting soundness and completeness proofs.

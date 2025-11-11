@@ -684,7 +684,7 @@ def FormalCircuit.isGeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Fi
     (orig : FormalCircuit F Input Output): GeneralFormalCircuit F Input Output := {
     elaborated := orig.elaborated,
     Assumptions := orig.Assumptions,
-    Spec := fun input yielded output localYields => orig.Assumptions input yielded → orig.Spec input output localYields,
+    Spec := fun input output => orig.Assumptions input → orig.Spec input output,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness]
       intros
@@ -703,10 +703,10 @@ by putting it within `GeneralFormalCircuit.Assumption`.
 -/
 def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
     (orig : FormalAssertion F Input) : GeneralFormalCircuit F Input unit := by
-  let Spec input yielded (_ : unit F) (localYields : Set (NamedList F)) := orig.Assumptions input yielded → orig.Spec input
+  let Spec input (_ : unit F) := orig.Assumptions input → orig.Spec input
   exact {
     elaborated := orig.elaborated,
-    Assumptions input yielded := orig.Assumptions input yielded ∧ orig.Spec input,
+    Assumptions input := orig.Assumptions input ∧ orig.Spec input,
     Spec,
     soundness := by
       simp only [GeneralFormalCircuit.Soundness, forall_eq', Spec]
@@ -715,6 +715,6 @@ def FormalAssertion.isGeneralFormalCircuit (F : Type) (Input : TypeMap) [Field F
     ,
     completeness := by
       simp only [GeneralFormalCircuit.Completeness, forall_eq']
-      rintro _ _ _ _ _ ⟨ _, _ ⟩ _
+      rintro _ _ _ _ _ ⟨ _, _ ⟩
       apply orig.completeness <;> trivial
   }

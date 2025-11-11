@@ -37,10 +37,10 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 
-@[reducible] def Assumptions (input : Input (F p)) (_ : Set (NamedList (F p))) :=
+@[reducible] def Assumptions (input : Input (F p)) :=
   input.state.Normalized ∧ input.block.Normalized
 
-@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) (_ : Set (NamedList (F p))) :=
+@[reducible] def Spec (input : Input (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized ∧
   out_state.value = absorbBlock input.state.value input.block.value
 

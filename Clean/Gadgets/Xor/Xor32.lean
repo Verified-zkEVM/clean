@@ -39,11 +39,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   lookup ByteXorTable (x.x3, y.x3, z.x3)
   return z
 
-def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U32 (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ^^^ y.value ∧ z.Normalized
 
@@ -59,7 +59,7 @@ theorem soundness_to_u32 {x y z : U32 (F p)}
     z.x0.val = x.x0.val ^^^ y.x0.val ∧
     z.x1.val = x.x1.val ^^^ y.x1.val ∧
     z.x2.val = x.x2.val ^^^ y.x2.val ∧
-    z.x3.val = x.x3.val ^^^ y.x3.val) : Spec { x, y } z ∅ := by
+    z.x3.val = x.x3.val ^^^ y.x3.val) : Spec { x, y } z := by
   simp only [Spec]
   have ⟨ hx0, hx1, hx2, hx3 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3 ⟩ := y_norm

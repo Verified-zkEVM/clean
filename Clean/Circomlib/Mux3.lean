@@ -95,11 +95,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intros
     simp only [circuit_norm, main]
 
-  Assumptions input _yielded :=
+  Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
 
-  Spec input output _localYields :=
+  Spec input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       let s0 := (if s[0] = 0 then 0 else 1)
@@ -215,11 +215,11 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro input offset
     simp only [main, circuit_norm]
 
-  Assumptions input _yielded :=
+  Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
 
-  Spec input output _localYields :=
+  Spec input output :=
     let ⟨c, s⟩ := input
     let s0 := (if s[0] = 0 then 0 else 1)
     let s1 := (if s[1] = 0 then 0 else 1)
@@ -232,7 +232,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ _ _ input_var input h_input h_assumptions h_subcircuit_sound
+    intro _ env input_var input h_input h_assumptions h_subcircuit_sound
     rw [← h_input] at h_assumptions
     simp only [MultiMux3.circuit, circuit_norm, Vector.getElem_map] at h_subcircuit_sound h_assumptions ⊢
     specialize h_subcircuit_sound h_assumptions 0 (by omega)
@@ -246,7 +246,7 @@ def circuit : FormalCircuit (F p) Inputs field where
 
   completeness := by
     simp only [circuit_norm, main]
-    intros offset env _ input_var h_env input h_input h_s
+    intros offset env input_var h_env input h_input h_s
     simp only [MultiMux3.circuit, circuit_norm]
     rw [← h_input] at h_s
     simp only [Vector.getElem_map] at h_s

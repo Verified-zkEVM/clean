@@ -89,7 +89,7 @@ def decodeInstructionMain (instruction : Var field (F p)) : Circuit (F p) (Var D
       }
     }
 
-def decodeInstructionSpec (instruction : field (F p)) (_ : Set (NamedList (F p))) (output : DecodedInstruction (F p)) (_ : Set (NamedList (F p))) : Prop :=
+def decodeInstructionSpec (instruction : field (F p)) (output : DecodedInstruction (F p)) : Prop :=
     match Spec.decodeInstruction instruction with
     | some (instr_type, mode1, mode2, mode3) =>
       output.instrType.val = instr_type ∧ output.instrType.isEncodedCorrectly ∧
@@ -112,7 +112,7 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
   elaborated := decodeInstructionElaborated
 
   Assumptions
-  | instruction, _ => instruction.val < 256
+  | instruction => instruction.val < 256
   Spec := decodeInstructionSpec
 
   soundness := by
@@ -355,10 +355,10 @@ def fetchInstructionCircuit
 
   localLength _ := 4
   Assumptions
-  | pc, _ => pc.val + 3 < programSize
+  | pc => pc.val + 3 < programSize
 
   Spec
-  | pc, _, output, _ =>
+  | pc, output =>
     match Spec.fetchInstruction program pc with
       | some claimed_output => output = claimed_output
       | none => False -- impossible, lookups ensure that memory accesses are valid
@@ -461,11 +461,11 @@ def readFromMemoryCircuit
   localLength _ := 5
   yields_eq _ _ _ := by simp [circuit_norm]
   Assumptions
-  | {state, mode, offset}, _ =>
+  | {state, mode, offset} =>
     ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
       addr.val < memorySize
   Spec
-  | {state, offset, mode}, _, output, _ =>
+  | {state, offset, mode}, output =>
     DecodedAddressingMode.isEncodedCorrectly mode →
     match Spec.dataMemoryAccess memory offset (DecodedAddressingMode.val mode) state.ap state.fp with
       | some value => output = value
@@ -602,11 +602,11 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
 
   localLength _ := 3
   Assumptions
-  | {state, decoded, v1, v2, v3}, _ =>
+  | {state, decoded, v1, v2, v3} =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType ∧
     (Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state).isSome
   Spec
-  | {state, decoded, v1, v2, v3}, _, output, _ =>
+  | {state, decoded, v1, v2, v3}, output =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType →
     match Spec.computeNextState (DecodedInstructionType.val decoded.instrType) v1 v2 v3 state with
       | some nextState => output = nextState
@@ -863,12 +863,12 @@ def femtoCairoStepElaboratedCircuit
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
-    (state : State (F p)) (_ : Set (NamedList (F p))) (nextState : State (F p)) (_ : Set (NamedList (F p))) : Prop :=
+    (state : State (F p)) (nextState : State (F p)) : Prop :=
   match Spec.femtoCairoMachineTransition program memory state with
     | some s => s = nextState
     | none => False -- impossible, constraints ensure that the transition is valid
 
-def femtoCairoAssumptions (_state : State (F p)) (_ : Set (NamedList (F p))) : Prop :=
+def femtoCairoAssumptions (_state : State (F p)) : Prop :=
   True
 
 def femtoCairoStepCircuitSoundness

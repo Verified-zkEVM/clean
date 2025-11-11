@@ -14,9 +14,9 @@ instance elaborated: ElaboratedCircuit (F p) BLAKE3State BLAKE3State where
   yields_eq := by intros; simp only [circuit_norm, main]
   output state i0 := Vector.ofFn (fun i => state[msgPermutation[i]])
 
-def Assumptions (state : BLAKE3State (F p)) (_ : Set (NamedList (F p))) := state.Normalized
+def Assumptions (state : BLAKE3State (F p)) := state.Normalized
 
-def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
   out.value = permute state.value ∧ out.Normalized
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by

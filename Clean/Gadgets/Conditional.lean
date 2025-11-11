@@ -36,13 +36,13 @@ def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
 
   return fromVars resultVars
 
-def Assumptions (input : Inputs M F) (_ : Set (NamedList F)) : Prop :=
+def Assumptions (input : Inputs M F) : Prop :=
   IsBool input.selector
 
 /--
 Specification: Output is selected based on selector value using if-then-else.
 -/
-def Spec [DecidableEq F] (input : Inputs M F) (output : M F) (_ : Set (NamedList F)) : Prop :=
+def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
   output = if input.selector = 1 then input.ifTrue else input.ifFalse
 
 instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where

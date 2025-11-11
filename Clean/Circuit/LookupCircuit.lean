@@ -45,8 +45,8 @@ def toTable (circuit : LookupCircuit F α β) : Table F (ProvablePair α β) whe
     -- and the output matches
     ∧ output = eval env (circuit.output (const input) n)
 
-  Soundness := fun (input, output) => circuit.Assumptions input ∅ → circuit.Spec input output ∅
-  Completeness := fun (input, output) => circuit.Assumptions input ∅ ∧ output = circuit.constantOutput input
+  Soundness := fun (input, output) => circuit.Assumptions input → circuit.Spec input output
+  Completeness := fun (input, output) => circuit.Assumptions input ∧ output = circuit.constantOutput input
 
   imply_soundness := by
     intro (input, output) ⟨n, env, h_holds, h_output⟩ h_assumptions
@@ -89,8 +89,8 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
 
   yields_eq := by intro; simp [circuit_norm]
 
-  Assumptions input _ := circuit.Assumptions input ∅
-  Spec input output _ := circuit.Spec input output ∅
+  Assumptions input := circuit.Assumptions input
+  Spec input output := circuit.Spec input output
 
   soundness := by
     intro n env yielded input_var input h_input h_assumptions h_holds

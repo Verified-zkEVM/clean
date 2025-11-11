@@ -67,11 +67,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   localLength _ := n
   yields_eq := by intros; simp only [circuit_norm, main]
 
-  Assumptions input _ :=
+  Assumptions input :=
     let ⟨c, s⟩ := input
     IsBool s
 
-  Spec input output _ :=
+  Spec input output :=
     let ⟨c, s⟩ := input
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
@@ -184,17 +184,17 @@ def circuit : FormalCircuit (F p) Inputs field where
     intro input offset
     simp only [main, circuit_norm]
 
-  Assumptions input _ :=
+  Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s
 
-  Spec input output _ :=
+  Spec input output :=
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
     simp only [circuit_norm, main]
-    intro _ env yielded input_var input h_input h_assumptions h_subcircuit_sound
+    intro _ env input_var input h_input h_assumptions h_subcircuit_sound
     have h_assumptions' : IsBool (Expression.eval env input_var.s) := by
       have : Expression.eval env input_var.s = input.s := by rw [← h_input]
       rw [this]; exact h_assumptions

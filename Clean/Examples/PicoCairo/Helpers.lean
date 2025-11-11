@@ -74,28 +74,24 @@ Takes ConditionalDecodeInput and returns decoded instruction or dummy.
 def conditionalDecodeCircuit :
     GeneralFormalCircuit (F p) ConditionalDecodeInput DecodedInstruction where
   elaborated := conditionalDecodeElaborated
-  Assumptions := fun input _ =>
+  Assumptions := fun input =>
     IsBool input.enabled ∧ input.rawInstrType.val < 256
-  Spec := fun input yielded output localYields =>
+  Spec := fun input output =>
     IsBool input.enabled →
     if input.enabled = 0 then
       output = input.dummy
     else
-      decodeInstructionSpec input.rawInstrType yielded output localYields
+      decodeInstructionSpec input.rawInstrType output
   soundness := by
-    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions]
+    circuit_proof_start [conditionalDecodeElaborated, conditionalDecodeMain, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstructionCircuit, decodeInstructionSpec]
     intro h_assumptions
     rcases h_holds with ⟨ h_decode, h_conditional ⟩
     specialize h_conditional h_assumptions
     simp only [Gadgets.Conditional.Spec] at h_conditional
     simp only [h_conditional]
-    rcases h_assumptions with h_zero | h_one
-    · aesop
-    · simp_all only [id_eq, ↓reduceIte, DecodedInstruction.mk.injEq, one_ne_zero]
-      simp only [decodeInstructionCircuit, decodeInstructionElaborated] at h_decode
-      exact h_decode
+    rcases h_assumptions with h_zero | h_one <;> aesop
   completeness := by
-    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstructionCircuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions]
+    circuit_proof_all [conditionalDecodeElaborated, conditionalDecodeMain, decodeInstructionCircuit, Gadgets.Conditional.circuit, Gadgets.Conditional.Assumptions, decodeInstructionSpec]
 
 /--
 Create a dummy ADD instruction with immediate addressing for all operands.

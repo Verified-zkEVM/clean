@@ -166,7 +166,7 @@ def executionBundleFormalCircuit
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (BundledInstructionInputs capacities) unit where
+    GeneralFormalCircuitUsingYields (F p) (BundledInstructionInputs capacities) unit where
   elaborated := executionBundleElaborated capacities program h_programSize memory h_memorySize
   Assumptions := executionBundleAssumptions capacities (programSize := programSize)
   Spec := executionBundleSpec capacities program memory

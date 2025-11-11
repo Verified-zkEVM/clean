@@ -28,11 +28,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
 
   return ⟨z0, z1, z2, z3⟩
 
-def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U32 (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (input : Inputs (F p)) (z : U32 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value ||| y.value ∧ z.Normalized
 

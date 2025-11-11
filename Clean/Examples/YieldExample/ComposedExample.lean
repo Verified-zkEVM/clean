@@ -51,13 +51,13 @@ def Spec (input : U32 (F p)) (yielded : Set (NamedList (F p)))
          (_ : unit (F p)) (localYields : Set (NamedList (F p))) : Prop :=
   yielded = localYields → input.Normalized
 
-theorem soundness : GeneralFormalCircuit.Soundness (F p) elaborated Spec := by
+theorem soundness : GeneralFormalCircuitUsingYields.Soundness (F p) elaborated Spec := by
   circuit_proof_all [ByteRangeYielder.circuit, ByteRangeYielder.elaborated,
     ByteRangeYielder.Assumptions, ByteRangeYielder.Spec,
     U32NormalizedAssertion.circuit, U32NormalizedAssertion.elaborated,
     U32NormalizedAssertion.Assumptions, U32NormalizedAssertion.Spec]
 
-theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assumptions := by
+theorem completeness : GeneralFormalCircuitUsingYields.Completeness (F p) elaborated Assumptions := by
   circuit_proof_start [ByteRangeYielder.circuit, ByteRangeYielder.elaborated,
     ByteRangeYielder.Assumptions, ByteRangeYielder.Spec,
     U32NormalizedAssertion.circuit, U32NormalizedAssertion.elaborated,
@@ -66,7 +66,7 @@ theorem completeness : GeneralFormalCircuit.Completeness (F p) elaborated Assump
   specialize h_yielded_eq env input_var h_input
   simp_all
 
-def circuit : GeneralFormalCircuit (F p) U32 unit where
+def circuit : GeneralFormalCircuitUsingYields (F p) U32 unit where
   elaborated
   Assumptions
   Spec

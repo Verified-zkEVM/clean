@@ -34,23 +34,23 @@ instance elaborated : ElaboratedCircuit F M field where
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 
-def Assumptions (_ : M F) (_ : Set (NamedList F)) : Prop := True
+def Assumptions (_ : M F) : Prop := True
 
-def Spec [DecidableEq (M F)] (input : M F) (output : F) (_ : Set (NamedList F)) : Prop :=
+def Spec [DecidableEq (M F)] (input : M F) (output : F) : Prop :=
   output = if input = 0 then 1 else 0
 
 /--
 lemma for soundness. Separate because the statement is optimized for induction.
 -/
 lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals : Vector F n}
-    {env : Environment F} {yielded : Set (NamedList F)} {i₀ : ℕ}
+    {env : Environment F} {i₀ : ℕ}
     (h_eval : Vector.map (Expression.eval env) vars = vals)
     (h_isZero : ∀ (i : Fin n),
-      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) yielded →
+      IsZeroField.circuit.Assumptions (Expression.eval (F:=F) env vars[i]) →
         IsZeroField.circuit.Spec (Expression.eval (F:=F) env vars[i])
           (Expression.eval (F:=F) env
             (IsZeroField.circuit.output vars[i]
-              (i₀ + i * IsZeroField.circuit.localLength vars[i]))) ∅) :
+              (i₀ + i * IsZeroField.circuit.localLength vars[i]))) ) :
     Expression.eval env
       (Fin.foldl n
         (fun acc i => acc * (IsZeroField.circuit.output vars[i] (i₀ + i * IsZeroField.circuit.localLength vars[i]) : Var field F))

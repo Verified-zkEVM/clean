@@ -31,9 +31,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   localLength _ := 120
   yields_eq := by intros; simp [circuit_norm, main, Rotation64.circuit, Rotation64.elaborated, Xor64.circuit, Xor64.elaborated]
 
-def Assumptions (state : KeccakRow (F p)) (_ : Set (NamedList (F p))) := state.Normalized
+def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
-def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p))  (_ : Set (NamedList (F p))) : Prop :=
+def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaD row.value
 

@@ -138,7 +138,7 @@ def executionCircuitFormalCircuit
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (ExecutionCircuitInput capacities) unit where
+    GeneralFormalCircuitUsingYields (F p) (ExecutionCircuitInput capacities) unit where
   elaborated := executionCircuitElaborated capacities program h_programSize memory h_memorySize
   Assumptions := executionCircuitAssumptions capacities (programSize := programSize)
   Spec := executionCircuitSpec capacities program memory
@@ -402,7 +402,7 @@ def executionCircuitProvenReachability
     (capacities : InstructionCapacities)
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (ExecutionCircuitInput capacities) unit :=
+    GeneralFormalCircuitUsingYields (F p) (ExecutionCircuitInput capacities) unit :=
   (executionCircuitFormalCircuit capacities program h_programSize memory h_memorySize).weakenSpec
     (fun input yielded _output localYields =>
       -- Assume localYields = yielded

@@ -171,12 +171,12 @@ def mulStepSpec
     localYields = ∅
 
 /--
-GeneralFormalCircuit for MUL instruction step.
+GeneralFormalCircuitUsingYields for MUL instruction step.
 -/
 def mulStepFormalCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) InstructionStepInput unit where
+    GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
   elaborated := mulStepElaboratedCircuit program h_programSize memory h_memorySize
   Assumptions := mulStepAssumptions (programSize := programSize)
   Spec := mulStepSpec program memory
@@ -401,7 +401,7 @@ def mulStepCircuitsBundle
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertion (mulStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (mulStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
   return ()
 
 /--
@@ -460,13 +460,13 @@ def mulStepCircuitsBundleSpec
   localYields = ⋃ i : Fin capacity, mulStepLocalYields inputs[i]
 
 /--
-GeneralFormalCircuit for MUL instruction bundle.
+GeneralFormalCircuitUsingYields for MUL instruction bundle.
 -/
 def mulStepCircuitsBundleFormalCircuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+    GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
   elaborated := mulStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
   Assumptions := mulStepCircuitsBundleAssumptions capacity (programSize := programSize)
   Spec := mulStepCircuitsBundleSpec capacity program memory

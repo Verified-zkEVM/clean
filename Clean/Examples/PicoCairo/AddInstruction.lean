@@ -178,12 +178,12 @@ def addStepSpec
     localYields = ∅  -- Disabled, no yields
 
 /--
-GeneralFormalCircuit for ADD instruction step.
+GeneralFormalCircuitUsingYields for ADD instruction step.
 -/
 def addStepFormalCircuit
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) InstructionStepInput unit where
+    GeneralFormalCircuitUsingYields (F p) InstructionStepInput unit where
   elaborated := addStepElaboratedCircuit program h_programSize memory h_memorySize
   Assumptions := addStepAssumptions (programSize := programSize)
   Spec := addStepSpec program memory
@@ -293,7 +293,7 @@ def addStepCircuitsBundle
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p)
     (inputs : Var (ProvableVector InstructionStepInput capacity) (F p)) : Circuit (F p) Unit := do
   let _ ← Circuit.mapFinRange capacity fun i =>
-    subcircuitWithAssertion (addStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
+    subcircuitWithAssertionUsingYields (addStepFormalCircuit program h_programSize memory h_memorySize) inputs[i.val]
   return ()
 
 /--
@@ -352,13 +352,13 @@ def addStepCircuitsBundleSpec
   localYields = ⋃ i : Fin capacity, addStepLocalYields inputs[i]
 
 /--
-GeneralFormalCircuit for ADD instruction bundle.
+GeneralFormalCircuitUsingYields for ADD instruction bundle.
 -/
 def addStepCircuitsBundleFormalCircuit
     (capacity : ℕ) [NeZero capacity]
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p)) (h_memorySize : memorySize < p) :
-    GeneralFormalCircuit (F p) (ProvableVector InstructionStepInput capacity) unit where
+    GeneralFormalCircuitUsingYields (F p) (ProvableVector InstructionStepInput capacity) unit where
   elaborated := addStepCircuitsBundleElaborated capacity program h_programSize memory h_memorySize
   Assumptions := addStepCircuitsBundleAssumptions capacity (programSize := programSize)
   Spec := addStepCircuitsBundleSpec capacity program memory

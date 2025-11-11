@@ -16,11 +16,11 @@ instance : ProvableStruct Inputs where
   toComponents := fun { x, y } => .cons x (.cons y .nil)
   fromComponents := fun (.cons x (.cons y .nil)) => { x, y }
 
-def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.val < 256 ∧ y.val < 256
 
-def Spec (input : Inputs (F p)) (z : F p) (_ : Set (NamedList (F p))) :=
+def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 

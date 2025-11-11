@@ -34,9 +34,9 @@ def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F
 
   return { low, high }
 
-def Assumptions (x : F p) (_ : Set (NamedList (F p))) := x.val < 256
+def Assumptions (x : F p) := x.val < 256
 
-def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (offset : Fin 8) (x : F p) (out : Outputs (F p)) :=
   let ⟨low, high⟩ := out
   (low.val = x.val % (2^offset.val) ∧ high.val = x.val / (2^offset.val))
   ∧ (low.val < 2^offset.val ∧ high.val < 2^(8-offset.val))

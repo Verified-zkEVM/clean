@@ -53,7 +53,7 @@ Spec: If a NamedList "byte" [i] is in localYields, then i represents a byte valu
 def Spec (_ : unit (F p)) (_ : unit (F p)) (localYields : Set (NamedList (F p))) : Prop :=
   ∀ (v : (F p)), ⟨"byte", [v]⟩ ∈ localYields → v.val < 256
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness : SoundnessUsingYields (F p) elaborated Assumptions Spec := by
   circuit_proof_start
   -- After circuit_proof_start, the goal is Spec input output localYields
   -- where localYields is the yields from elaborated
@@ -70,7 +70,7 @@ theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rw [h_i]
   exact hn
 
-def circuit : FormalCircuit (F p) unit unit where
+def circuit : FormalCircuitUsingYields (F p) unit unit where
   elaborated
   Assumptions
   Spec

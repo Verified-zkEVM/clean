@@ -104,14 +104,14 @@ instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) wher
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
   yields_eq := by intros; simp [circuit_norm, main, IsZero.circuit, IsZero.elaborated, Or32.circuit, Or32.elaborated, Compress.circuit, Compress.elaborated]
 
-def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) : Prop :=
+def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧
   input.buffer_len.val ≤ 64 ∧
   (∀ i : Fin 64, input.buffer_data[i].val < 256) ∧
   (∀ i : Fin 64, i.val ≥ input.buffer_len.val → input.buffer_data[i] = 0) ∧
   input.base_flags.Normalized
 
-def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p))  (_ : Set (NamedList (F p))) : Prop :=
+def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   let chunk_state : ChunkState := {
     chaining_value := input.state.chaining_value.map U32.value
     chunk_counter := input.state.chunk_counter.value

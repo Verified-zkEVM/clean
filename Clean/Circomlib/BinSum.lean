@@ -179,11 +179,11 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
 
   subcircuitsConsistent := by simp +arith [circuit_norm, main]
 
-  Assumptions input _ :=
+  Assumptions input :=
     -- All inputs are binary
     ∀ j k (hj : j < ops) (hk : k < n), IsBool input[j][k]
 
-  Spec input output _ :=
+  Spec input output :=
     let nout := nbits ((2^n - 1) * ops)
     -- All outputs are binary
     (∀ i (hi : i < nout), IsBool output[i])

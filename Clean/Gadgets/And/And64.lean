@@ -28,11 +28,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let z7 ← And8.circuit ⟨ x.x7, y.x7 ⟩
   return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
-def Assumptions (input : Inputs (F p)) (_ : Set (NamedList (F p))) :=
+def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y⟩ := input
   x.Normalized ∧ y.Normalized
 
-def Spec (input : Inputs (F p)) (z : U64 (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (input : Inputs (F p)) (z : U64 (F p)) :=
   let ⟨x, y⟩ := input
   z.value = x.value &&& y.value ∧ z.Normalized
 
@@ -53,7 +53,7 @@ theorem soundness_to_u64 {x y z : U64 (F p)}
     z.x4.val = x.x4.val &&& y.x4.val ∧
     z.x5.val = x.x5.val &&& y.x5.val ∧
     z.x6.val = x.x6.val &&& y.x6.val ∧
-    z.x7.val = x.x7.val &&& y.x7.val) : Spec { x, y } z ∅ := by
+    z.x7.val = x.x7.val &&& y.x7.val) : Spec { x, y } z := by
   simp only [Spec]
   have ⟨ hx0, hx1, hx2, hx3, hx4, hx5, hx6, hx7 ⟩ := x_norm
   have ⟨ hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7 ⟩ := y_norm

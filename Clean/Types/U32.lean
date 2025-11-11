@@ -276,7 +276,7 @@ def main (inputs : Var U32 (F p)) : Circuit (F p) Unit  := do
 
 def circuit : FormalAssertion (F p) U32 where
   main
-  Assumptions _ _ := True
+  Assumptions _ := True
   Spec inputs := inputs.Normalized
 
   soundness := by

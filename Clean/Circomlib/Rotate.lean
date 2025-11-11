@@ -31,7 +31,7 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
   localLength _ := n
   yields_eq _ _ _ := by simp only [main, circuit_norm]
 
-  Spec input output _localYields := output = input.rotate r
+  Spec input output := output = input.rotate r
 
   soundness := by
     circuit_proof_start

@@ -17,9 +17,9 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :
     let c ← Xor64.circuit ⟨c, state[5*i.val + 4]⟩
     return c
 
-def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   out.Normalized
   ∧ out.value = Specs.Keccak256.thetaC state.value
 

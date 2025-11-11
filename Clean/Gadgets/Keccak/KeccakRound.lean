@@ -17,9 +17,9 @@ def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var Kecc
   let s0 ← Xor64.circuit ⟨state[0], const (U64.fromUInt64 rc)⟩
   return state.set 0 s0
 
-def Assumptions (state : KeccakState (F p)) (_ : Set (NamedList (F p))) := state.Normalized
+def Assumptions (state : KeccakState (F p)) := state.Normalized
 
-def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) (_ : Set (NamedList (F p))) :=
+def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
