@@ -45,9 +45,9 @@ lemma h_div32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3: ℕ} :
   rw [←Nat.pow_one 256]
   repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power ho; linarith)]
 
-  rw [mul_div_256_off ho 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
-  rw [mul_div_256_off ho 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  rw [mul_div_256_off ho 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 1 (by simp only [Nat.lt_one_iff, pos_of_gt])]
+  rw [mul_div_256_off ho 2 (by simp only [Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 3 (by simp only [Nat.ofNat_pos])]
   simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow]
 
 lemma h_x0_const32 {o : ℕ} (ho : o < 8) :
@@ -67,7 +67,7 @@ theorem rotation32_bits_soundness {o : ℕ} (ho : o < 8) {x : U32 ℕ} :
   -- proof technique: we care about only what happens to x0, all "internal" terms remain
   -- the same, and are just divided by 2^o
   rw [shifted_decomposition_eq ho]
-  repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  repeat rw [shifted_decomposition_eq'' ho (by simp only [Nat.ofNat_pos])]
   simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
   rw [←add_assoc _ _ (_ * 256 ^ 3), soundness_simp]
   nth_rw 4 [←add_assoc]

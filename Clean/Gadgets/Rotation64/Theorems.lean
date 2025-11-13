@@ -48,13 +48,13 @@ lemma h_div {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     x5 * 256^4 * 2^(8-o) + x6 * 256^5 * 2^(8-o) + x7 * 256^6 * 2^(8-o) := by
   rw [←Nat.pow_one 256]
   repeat rw [Nat.add_div_of_dvd_left (by apply divides_256_two_power ho; linarith)]
-  rw [mul_div_256_off ho 1 (by simp only [gt_iff_lt, Nat.lt_one_iff, pos_of_gt])]
-  rw [mul_div_256_off ho 2 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  rw [mul_div_256_off ho 3 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  rw [mul_div_256_off ho 4 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  rw [mul_div_256_off ho 5 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  rw [mul_div_256_off ho 6 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
-  rw [mul_div_256_off ho 7 (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 1 (by simp only [Nat.lt_one_iff, pos_of_gt])]
+  rw [mul_div_256_off ho 2 (by simp only [Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 3 (by simp only [Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 4 (by simp only [Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 5 (by simp only [Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 6 (by simp only [Nat.ofNat_pos])]
+  rw [mul_div_256_off ho 7 (by simp only [Nat.ofNat_pos])]
   simp only [tsub_self, pow_zero, mul_one, Nat.add_one_sub_one, pow_one, Nat.reducePow]
 
 lemma h_x0_const {o : ℕ} (ho : o < 8) :
@@ -74,7 +74,7 @@ theorem rotation64_bits_soundness {o : ℕ} (ho : o < 8) {x : U64 ℕ} :
   -- proof technique: we care about only what happens to x0, all "internal" terms remain
   -- the same, and are just divided by 2^o
   rw [shifted_decomposition_eq ho]
-  repeat rw [shifted_decomposition_eq'' ho (by simp only [gt_iff_lt, Nat.ofNat_pos])]
+  repeat rw [shifted_decomposition_eq'' ho (by simp only [Nat.ofNat_pos])]
   simp only [Nat.add_one_sub_one, pow_one, add_mul, add_assoc]
 
   -- we do a bit of expression juggling here
