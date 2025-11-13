@@ -163,7 +163,7 @@ def circuit : FormalAssertion (F p) Inputs where
   soundness := by
     circuit_proof_start
     intro h_ie
-    simp_all only [gt_iff_lt, one_ne_zero, or_true, id_eq, one_mul]
+    simp_all only [one_ne_zero, or_true, id_eq, one_mul]
     cases h_input with
     | intro h_enabled h_inp =>
       rw [← h_inp]
@@ -184,7 +184,7 @@ def circuit : FormalAssertion (F p) Inputs where
 
   completeness := by
     circuit_proof_start
-    simp_all only [gt_iff_lt, id_eq]
+    simp_all only [id_eq]
     constructor
     trivial
     rw [mul_eq_zero, add_comm, neg_add_eq_zero]
