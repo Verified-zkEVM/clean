@@ -225,6 +225,12 @@ theorem MemoryAccessList.noTimestampDup_perm (l1 l2 : MemoryAccessList)
   obtain ⟨t_y, a_y, _r_y, _w_y⟩ := y
   simp_all only [eq_comm, not_false_eq_true]
 
+theorem MemoryAccessList.noTimestampDup_of_cons (head : MemoryAccess) (tail : MemoryAccessList)
+    (h : Notimestampdup (head :: tail)) :
+    Notimestampdup tail := by
+  simp only [Notimestampdup] at *
+  exact List.Pairwise.of_cons h
+
 theorem MemoryAccessList.noTimestampDup_of_TimestampSorted
     (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
     accesses.Notimestampdup := by
@@ -620,8 +626,7 @@ theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses 
     apply h_ih
     · -- need a theorem isConsistentSingleAddress cann be carried over to cons
       sorry
-    · -- need a theorem saying Notimestampdup can carried over to cons
-      sorry
+    · exact noTimestampDup_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_nodup
 
 /--
   Constructive version of the theorem below.
