@@ -590,7 +590,38 @@ theorem MemoryAccessList.filterAddress_sorted_from_addressTimestampSorted
 
 theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOffline accesses h_sorted ↔
-    ∀ addr, MemoryAccessList.isConsistentSingleAddress (MemoryAccessList.filterAddress accesses addr) (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by sorry
+    ∀ addr, MemoryAccessList.isConsistentSingleAddress (MemoryAccessList.filterAddress accesses addr) (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by
+  constructor
+  · -- need a theorem saying that accesses = pre ++ filterAddress accesses addr ++ post
+    sorry
+  · induction accesses
+    · simp [isConsistentOffline]
+    rename_i hd tl h_ih
+    intro h
+    rcases tl
+    · rcases hd with ⟨ hd_t, hd_a, hd_r, hd_w ⟩
+      simp only [isConsistentOffline]
+      specialize h hd_a
+      simp only [filterAddress, List.filter, decide_true, isConsistentSingleAddress] at h
+      assumption
+    rename_i snd tl
+    rcases hd with ⟨ hd_t, hd_a, hd_r, hd_w ⟩
+    rcases snd with ⟨ snd_t, snd_a, snd_r, snd_w ⟩
+    simp only [isConsistentOffline]
+    and_intros
+    · split
+      · rename_i addr_eq
+        subst addr_eq
+        specialize h snd_a
+        simp only [filterAddress, List.filter, decide_true, isConsistentSingleAddress] at h
+        aesop
+      · -- addresstimestampsorted, and seeing two different addresses, then the first address will never appear again, kind of theorem is needed
+        sorry
+    apply h_ih
+    · -- need a theorem isConsistentSingleAddress cann be carried over to cons
+      sorry
+    · -- need a theorem saying Notimestampdup can carried over to cons
+      sorry
 
 /--
   Constructive version of the theorem below.
