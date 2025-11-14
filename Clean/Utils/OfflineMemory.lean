@@ -473,7 +473,6 @@ theorem MemoryAccessList.isConsistentSingleAddress_filterAddress_of_cons (head :
       (filterAddress_sorted tail h_sorted_tail addr) h
   · exact h
 
-
 theorem MemoryAccessList.isConsistentSingleAddress_cons_forall (head : MemoryAccess) (tail : MemoryAccessList)
     (h_sorted : isTimestampSorted (head :: tail))
     : (∀ addr : ℕ, (filterAddress (head :: tail) addr).isConsistentSingleAddress (MemoryAccessList.filterAddress_sorted (head :: tail) h_sorted addr)) →
@@ -616,6 +615,27 @@ theorem MemoryAccessList.filterAddress_sorted_from_addressTimestampSorted
         exact List.Pairwise.of_cons h_nodup
       · exact List.Sorted.of_cons h_strict
 
+theorem MemoryAccessList.isConsistentSingleAddress_filterAddress_forall_of_cons
+    (head : MemoryAccess) (tail : MemoryAccessList)
+    (h_sorted : isAddressTimestampSorted (head :: tail))
+    (h_nodup : Notimestampdup (head :: tail))
+    (h : ∀ addr, isConsistentSingleAddress (filterAddress (head :: tail) addr)
+         (filterAddress_sorted_from_addressTimestampSorted (head :: tail) h_sorted h_nodup addr)) :
+    ∀ addr, isConsistentSingleAddress (filterAddress tail addr)
+      (filterAddress_sorted_from_addressTimestampSorted tail
+        (isAddressTimestampSorted_of_cons head tail h_sorted)
+        (noTimestampDup_of_cons head tail h_nodup) addr) := by
+  intro addr
+  obtain ⟨t, a, r, w⟩ := head
+  have h_sorted_tail := isAddressTimestampSorted_of_cons (t, a, r, w) tail h_sorted
+  have h_nodup_tail := noTimestampDup_of_cons (t, a, r, w) tail h_nodup
+  have h_addr_spec := h addr
+  simp only [filterAddress, List.filter_cons] at h_addr_spec
+  split_ifs at h_addr_spec with h_eq
+  · exact isConsistentSingleAddress_cons (t, a, r, w) (filterAddress tail addr) _
+      (filterAddress_sorted_from_addressTimestampSorted tail h_sorted_tail h_nodup_tail addr) h_addr_spec
+  · exact h_addr_spec
+
 theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOffline accesses h_sorted ↔
     ∀ addr, MemoryAccessList.isConsistentSingleAddress (MemoryAccessList.filterAddress accesses addr) (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by
@@ -646,8 +666,7 @@ theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses 
       · -- addresstimestampsorted, and seeing two different addresses, then the first address will never appear again, kind of theorem is needed
         sorry
     apply h_ih
-    · -- can use isConsistentSingleAddress_filterAddress_of_cons pattern here
-      sorry
+    · exact isConsistentSingleAddress_filterAddress_forall_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_sorted h_nodup h
     · exact noTimestampDup_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_nodup
 
 /--
