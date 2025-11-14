@@ -636,6 +636,13 @@ theorem MemoryAccessList.isConsistentSingleAddress_filterAddress_forall_of_cons
       (filterAddress_sorted_from_addressTimestampSorted tail h_sorted_tail h_nodup_tail addr) h_addr_spec
   · exact h_addr_spec
 
+theorem MemoryAccessList.filterAddress_empty_when_address_changes
+    (head : MemoryAccess) (second : MemoryAccess) (tail : MemoryAccessList)
+    (h_sorted : isAddressTimestampSorted (head :: second :: tail))
+    (h_addr_ne : head.2.1 ≠ second.2.1) :
+    filterAddress (second :: tail) head.2.1 = [] := by
+  sorry
+
 theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOffline accesses h_sorted ↔
     ∀ addr, MemoryAccessList.isConsistentSingleAddress (MemoryAccessList.filterAddress accesses addr) (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by
