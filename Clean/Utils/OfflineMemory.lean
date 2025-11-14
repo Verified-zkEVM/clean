@@ -886,7 +886,10 @@ lemma MemoryAccessList.eq_of_perm_of_sorted {l1 l2 l3 : MemoryAccessList} (h_l1_
   A list of timestamp-sorted memory accesses is consistent if and only if there exists a permutation of the list
   that is address-sorted, and such that the offline consistency check holds.
 -/
-theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
+theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline
+    (accesses : MemoryAccessList)
+    (h_sorted : accesses.isTimestampSorted)
+    (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOnline accesses h_sorted ↔
     ∃ permuted : AddressSortedMemoryAccessList,
       permuted.val.Perm accesses ∧
@@ -898,7 +901,7 @@ theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline (accesses : 
     · simp only
       apply MemoryAccessList.addressTimestampSort_perm
     · simp only
-      have h' := MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted
+      have h' := MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted h_nodup
       rw [←h']
       assumption
   · rintro ⟨⟨permuted, h_permuted_sorted⟩, h_perm, h_offline⟩
@@ -907,5 +910,5 @@ theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline (accesses : 
     have h_eq := MemoryAccessList.eq_of_perm_of_sorted h_sorted h_permuted_sorted (MemoryAccessList.addressTimestampSort_sorted accesses)
       h_perm (by rw [List.perm_comm]; apply MemoryAccessList.addressTimestampSort_perm)
     simp only [h_eq] at h_offline
-    simp_rw [←MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted] at h_offline
+    rw [←MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted h_nodup] at h_offline
     assumption
