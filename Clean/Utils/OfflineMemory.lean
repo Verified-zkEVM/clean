@@ -641,7 +641,39 @@ theorem MemoryAccessList.filterAddress_empty_when_address_changes
     (h_sorted : isAddressTimestampSorted (head :: second :: tail))
     (h_addr_ne : head.2.1 ≠ second.2.1) :
     filterAddress (second :: tail) head.2.1 = [] := by
-  sorry
+  obtain ⟨t1, a1, r1, w1⟩ := head
+  obtain ⟨t2, a2, r2, w2⟩ := second
+  simp at h_addr_ne
+  simp only [filterAddress]
+  -- Show that no element in (second :: tail) has address = a1
+  apply List.filter_eq_nil_iff.mpr
+  intro x hx
+  obtain ⟨tx, ax, rx, wx⟩ := x
+  intro h_eq
+  -- Convert decide (ax = a1) = true to ax = a1
+  rw [decide_eq_true_eq] at h_eq
+  subst h_eq
+  -- Now we have ax = a1 and x ∈ (second :: tail)
+  -- Get the ordering between (t1, ax, r1, w1) and (t2, a2, r2, w2)
+  simp only [isAddressTimestampSorted, List.sorted_cons] at h_sorted
+  have h_ord_first := h_sorted.1 (t2, a2, r2, w2) List.mem_cons_self
+  simp only [address_timestamp_ordering] at h_ord_first
+  split_ifs at h_ord_first with h_eq_addr
+  · -- Case: a2 = ax, but we have h_addr_ne : ax ≠ a2
+    exact h_addr_ne h_eq_addr.symm
+  · -- Case: ax < a2
+    -- Now get ordering between (t2, a2, r2, w2) and (tx, ax, rx, wx)
+    -- x is in (second :: tail), so it's either second or in tail
+    cases hx with
+    | head =>
+      -- x = second, so (tx, ax, rx, wx) = (t2, a2, r2, w2)
+      -- This means ax = a2, but we have h_addr_ne : ax ≠ a2
+      linarith
+    | tail _ hx_tail =>
+      -- x ∈ tail
+      have h_ord_second := h_sorted.2.1 (tx, ax, rx, wx) hx_tail
+      simp only [address_timestamp_ordering] at h_ord_second
+      split_ifs at h_ord_second; linarith
 
 theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOffline accesses h_sorted ↔
