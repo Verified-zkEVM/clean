@@ -813,7 +813,8 @@ theorem MemoryAccessList.addressTimestampSort_noTimestampDup
     (accesses : MemoryAccessList)
     (h_nodup : accesses.Notimestampdup) :
     accesses.addressTimestampSort.Notimestampdup := by
-  sorry
+  apply noTimestampDup_perm accesses accesses.addressTimestampSort h_nodup
+  exact (addressTimestampSort_perm accesses).symm
 
 theorem MemoryAccessList.filterAddress_addressTimestampSort_eq
     (accesses : MemoryAccessList)
