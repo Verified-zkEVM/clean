@@ -675,6 +675,19 @@ theorem MemoryAccessList.filterAddress_empty_when_address_changes
       simp only [address_timestamp_ordering] at h_ord_second
       split_ifs at h_ord_second; linarith
 
+theorem MemoryAccessList.isConsistentOffline_of_cons
+    (head : MemoryAccess) (tail : MemoryAccessList)
+    (h_sorted : isAddressTimestampSorted (head :: tail))
+    (h_offline : isConsistentOffline (head :: tail) h_sorted) :
+    isConsistentOffline tail (isAddressTimestampSorted_of_cons head tail h_sorted) := by
+  obtain ⟨t_head, a_head, r_head, w_head⟩ := head
+  cases tail with
+  | nil => simp [isConsistentOffline]
+  | cons second tail_rest =>
+    obtain ⟨t_second, a_second, r_second, w_second⟩ := second
+    simp only [isConsistentOffline] at h_offline ⊢
+    exact h_offline.2
+
 theorem MemoryAccessList.isConsistentOffline_implies_single_address
     (accesses : MemoryAccessList)
     (h_sorted : accesses.isAddressTimestampSorted)
@@ -683,7 +696,71 @@ theorem MemoryAccessList.isConsistentOffline_implies_single_address
     (addr : ℕ) :
     (accesses.filterAddress addr).isConsistentSingleAddress
       (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by
-  sorry
+  induction accesses with
+  | nil =>
+    simp [filterAddress, isConsistentSingleAddress]
+  | cons head tail ih =>
+    obtain ⟨t_head, a_head, r_head, w_head⟩ := head
+    simp only [filterAddress, List.filter_cons]
+    split_ifs with h_addr
+    · -- head has the target address
+      rw [decide_eq_true_eq] at h_addr
+      subst h_addr
+      -- Now we need to show consistency for (head :: filterAddress tail addr)
+      cases tail with
+      | nil =>
+        simp [isConsistentSingleAddress]
+        -- For a singleton list, need to show r_head = 0
+        exact h_offline
+      | cons second tail_rest =>
+        obtain ⟨t_second, a_second, r_second, w_second⟩ := second
+        -- Filter the tail
+        simp only [List.filter_cons]
+        split_ifs with h_second_addr
+        · -- second also has address a_head
+          rw [decide_eq_true_eq] at h_second_addr
+          subst h_second_addr
+          -- Now we show consistency for (head :: second :: filterAddress tail_rest a_head)
+          simp only [isConsistentSingleAddress]
+          constructor
+          · -- Show r_second = w_head from offline consistency
+            simp only [isConsistentOffline] at h_offline
+            simp at h_offline
+            exact h_offline.1
+          · -- Apply IH to (second :: tail_rest)
+            have ih_applied := ih
+              (isAddressTimestampSorted_of_cons (t_head, a_second, r_head, w_head) ((t_second, a_second, r_second, w_second) :: tail_rest) h_sorted)
+              (noTimestampDup_of_cons (t_head, a_second, r_head, w_head) ((t_second, a_second, r_second, w_second) :: tail_rest) h_nodup)
+              (isConsistentOffline_of_cons (t_head, a_second, r_head, w_head) ((t_second, a_second, r_second, w_second) :: tail_rest) h_sorted h_offline)
+            simp only [filterAddress, List.filter_cons, decide_true] at ih_applied
+            exact ih_applied
+        · -- second has a different address
+          -- Need to show isConsistentSingleAddress for (head :: filterAddress tail_rest a_head)
+          -- Key insight: since a_head ≠ a_second and list is address-sorted,
+          -- all elements in (second :: tail_rest) have address ≠ a_head
+          have h_addr_ne : ¬(a_second = a_head) := by
+            simp only [decide_eq_true_eq] at h_second_addr
+            exact h_second_addr
+          -- Use filterAddress_empty_when_address_changes to show filterAddress (second :: tail_rest) a_head = []
+          have h_empty := filterAddress_empty_when_address_changes
+            (t_head, a_head, r_head, w_head) (t_second, a_second, r_second, w_second) tail_rest h_sorted
+            (by simp; intro h_eq; exact h_addr_ne h_eq.symm)
+          simp only [filterAddress, List.filter_cons] at h_empty
+          have h_second_ne : decide (a_second = a_head) = false := by
+            simp [h_addr_ne]
+          simp only [h_second_ne] at h_empty
+          have h_empty_simplified : List.filter (fun x => match x with | (_, addr', _, _) => decide (addr' = a_head)) tail_rest = [] := by
+            simp at h_empty
+            exact h_empty
+          simp only [h_empty_simplified, isConsistentSingleAddress]
+          simp only [isConsistentOffline] at h_offline
+          simp [h_addr_ne] at h_offline
+          exact h_offline.1
+    · -- head doesn't have the target address
+      -- Apply IH to tail
+      apply ih (isAddressTimestampSorted_of_cons (t_head, a_head, r_head, w_head) tail h_sorted)
+        (noTimestampDup_of_cons (t_head, a_head, r_head, w_head) tail h_nodup)
+      exact isConsistentOffline_of_cons (t_head, a_head, r_head, w_head) tail h_sorted h_offline
 
 theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOffline accesses h_sorted ↔
