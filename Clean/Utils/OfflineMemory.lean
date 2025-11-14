@@ -827,7 +827,25 @@ theorem MemoryAccessList.filterAddress_addressTimestampSort_eq
       (filterAddress_sorted_from_addressTimestampSorted accesses.addressTimestampSort
         (addressTimestampSort_sorted accesses)
         (addressTimestampSort_noTimestampDup accesses h_nodup) addr) := by
-  sorry
+  -- Key: filtering commutes with permutation, so the filtered lists are permutations
+  -- Both filtered lists are sorted, so they must be equal
+  -- Therefore consistency is trivially equivalent
+  have h_perm := addressTimestampSort_perm accesses
+  -- Show that filter preserves permutation
+  have h_filter_perm : (accesses.filterAddress addr).Perm (accesses.addressTimestampSort.filterAddress addr) := by
+    simp only [filterAddress]
+    exact List.Perm.filter _ h_perm.symm
+  -- Both filtered lists are sorted (timestamp_ordering is already strict)
+  have h_sorted1 := filterAddress_sorted accesses h_sorted addr
+  have h_sorted2 := filterAddress_sorted_from_addressTimestampSorted accesses.addressTimestampSort
+    (addressTimestampSort_sorted accesses)
+    (addressTimestampSort_noTimestampDup accesses h_nodup) addr
+  -- Two permutations that are sorted with strict ordering must be equal
+  have h_eq : accesses.filterAddress addr = accesses.addressTimestampSort.filterAddress addr := by
+    simp only [isTimestampSorted] at h_sorted1 h_sorted2
+    exact List.eq_of_perm_of_sorted h_filter_perm h_sorted1 h_sorted2
+  -- Since the lists are equal, the iff is trivial
+  simp only [h_eq]
 
 /--
   Constructive version of the theorem below.
