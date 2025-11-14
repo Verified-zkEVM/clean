@@ -809,15 +809,47 @@ theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses 
     · exact isConsistentSingleAddress_filterAddress_forall_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_sorted h_nodup h
     · exact noTimestampDup_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_nodup
 
+theorem MemoryAccessList.addressTimestampSort_noTimestampDup
+    (accesses : MemoryAccessList)
+    (h_nodup : accesses.Notimestampdup) :
+    accesses.addressTimestampSort.Notimestampdup := by
+  sorry
+
+theorem MemoryAccessList.filterAddress_addressTimestampSort_eq
+    (accesses : MemoryAccessList)
+    (h_sorted : accesses.isTimestampSorted)
+    (h_nodup : accesses.Notimestampdup)
+    (addr : ℕ) :
+    (accesses.filterAddress addr).isConsistentSingleAddress
+      (filterAddress_sorted accesses h_sorted addr) ↔
+    (accesses.addressTimestampSort.filterAddress addr).isConsistentSingleAddress
+      (filterAddress_sorted_from_addressTimestampSorted accesses.addressTimestampSort
+        (addressTimestampSort_sorted accesses)
+        (addressTimestampSort_noTimestampDup accesses h_nodup) addr) := by
+  sorry
+
 /--
   Constructive version of the theorem below.
 -/
-theorem MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
+theorem MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline
+    (accesses : MemoryAccessList)
+    (h_sorted : accesses.isTimestampSorted)
+    (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOnline accesses h_sorted ↔
     MemoryAccessList.isConsistentOffline (MemoryAccessList.addressTimestampSort accesses) (MemoryAccessList.addressTimestampSort_sorted accesses) := by
   rw [isConsistent_iff_all_single_address]
-
-  sorry
+  -- Use isConsistentOffline_iff_all_single_addresses
+  rw [isConsistentOffline_iff_all_single_addresses (addressTimestampSort accesses)
+    (addressTimestampSort_sorted accesses)
+    (addressTimestampSort_noTimestampDup accesses h_nodup)]
+  -- Now use filterAddress_addressTimestampSort_eq to relate the two sides
+  constructor
+  · intro h addr
+    rw [← filterAddress_addressTimestampSort_eq accesses h_sorted h_nodup addr]
+    exact h addr
+  · intro h addr
+    rw [filterAddress_addressTimestampSort_eq accesses h_sorted h_nodup addr]
+    exact h addr
 
 /--
   Technical lemma for soundness: if there exists two address-timestamp sorted lists of memory accesses
