@@ -675,12 +675,22 @@ theorem MemoryAccessList.filterAddress_empty_when_address_changes
       simp only [address_timestamp_ordering] at h_ord_second
       split_ifs at h_ord_second; linarith
 
+theorem MemoryAccessList.isConsistentOffline_implies_single_address
+    (accesses : MemoryAccessList)
+    (h_sorted : accesses.isAddressTimestampSorted)
+    (h_nodup : accesses.Notimestampdup)
+    (h_offline : accesses.isConsistentOffline h_sorted)
+    (addr : ℕ) :
+    (accesses.filterAddress addr).isConsistentSingleAddress
+      (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by
+  sorry
+
 theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) (h_nodup : accesses.Notimestampdup) :
     MemoryAccessList.isConsistentOffline accesses h_sorted ↔
     ∀ addr, MemoryAccessList.isConsistentSingleAddress (MemoryAccessList.filterAddress accesses addr) (filterAddress_sorted_from_addressTimestampSorted accesses h_sorted h_nodup addr) := by
   constructor
-  · -- need a theorem saying that accesses = pre ++ filterAddress accesses addr ++ post
-    sorry
+  · intro h_offline addr
+    exact isConsistentOffline_implies_single_address accesses h_sorted h_nodup h_offline addr
   · induction accesses
     · simp [isConsistentOffline]
     rename_i hd tl h_ih
