@@ -12,4 +12,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Check for consecutive empty lines
+        run: python3 scripts/check-consecutive-empty-lines.py
       - uses: leanprover/lean-action@v1
