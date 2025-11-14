@@ -675,17 +675,17 @@ theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses 
         -- Therefore filterAddress ((hd :: snd :: tl)) hd_a = [hd]
         -- And since isConsistentSingleAddress [hd] must hold, we get hd_r = 0
         rename_i h_addr_ne
+        -- Use the lemma to show filterAddress (snd :: tl) hd_a is empty
+        have h_empty := filterAddress_empty_when_address_changes (hd_t, hd_a, hd_r, hd_w) (snd_t, snd_a, snd_r, snd_w) tl h_sorted (by simp; intro h_eq; exact h_addr_ne h_eq.symm)
         specialize h hd_a
         simp only [filterAddress, List.filter_cons, decide_true] at h
-        have h_snd_ne : ¬(decide (snd_a = hd_a) = true) := by
-          simp only [decide_eq_true_eq]
-          intro h_eq
-          exact h_addr_ne h_eq
+        have h_snd_ne : decide (snd_a = hd_a) = false := by
+          simp only [decide_eq_false_iff_not]
+          exact h_addr_ne
         simp only [h_snd_ne, ↓reduceIte] at h
-        simp at h
-        -- Now h says: isConsistentSingleAddress [(hd_t, hd_a, hd_r, hd_w) :: filterAddress tl hd_a]
-        -- Need lemma: if list is address-sorted and hd_a < snd_a, then hd_a doesn't appear in (snd :: tl)
-        sorry
+        simp only [filterAddress, List.filter_cons, h_snd_ne] at h_empty
+        simp only [h_empty, isConsistentSingleAddress] at h
+        exact h
     apply h_ih
     · exact isConsistentSingleAddress_filterAddress_forall_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_sorted h_nodup h
     · exact noTimestampDup_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_nodup
