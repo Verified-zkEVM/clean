@@ -231,6 +231,12 @@ theorem MemoryAccessList.noTimestampDup_of_cons (head : MemoryAccess) (tail : Me
   simp only [Notimestampdup] at *
   exact List.Pairwise.of_cons h
 
+theorem MemoryAccessList.isAddressTimestampSorted_of_cons (head : MemoryAccess) (tail : MemoryAccessList)
+    (h : isAddressTimestampSorted (head :: tail)) :
+    isAddressTimestampSorted tail := by
+  simp only [isAddressTimestampSorted] at *
+  exact List.Sorted.of_cons h
+
 theorem MemoryAccessList.noTimestampDup_of_TimestampSorted
     (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
     accesses.Notimestampdup := by
@@ -452,6 +458,22 @@ theorem MemoryAccessList.isConsistentSingleAddress_cons (head : MemoryAccess) (t
     obtain ⟨t1, a1, r1, w1⟩ := head2
     simp_all [isConsistentSingleAddress]
 
+theorem MemoryAccessList.isConsistentSingleAddress_filterAddress_of_cons (head : MemoryAccess) (tail : MemoryAccessList)
+    (addr : ℕ)
+    (h_sorted : isTimestampSorted (head :: tail))
+    (h : isConsistentSingleAddress (filterAddress (head :: tail) addr)
+         (filterAddress_sorted (head :: tail) h_sorted addr)) :
+    isConsistentSingleAddress (filterAddress tail addr)
+      (filterAddress_sorted tail (isTimestampSorted_cons head tail h_sorted) addr) := by
+  obtain ⟨t, a, r, w⟩ := head
+  have h_sorted_tail := isTimestampSorted_cons (t, a, r, w) tail h_sorted
+  simp only [filterAddress, List.filter_cons] at h
+  split_ifs at h with h_addr
+  · exact isConsistentSingleAddress_cons (t, a, r, w) (filterAddress tail addr) _
+      (filterAddress_sorted tail h_sorted_tail addr) h
+  · exact h
+
+
 theorem MemoryAccessList.isConsistentSingleAddress_cons_forall (head : MemoryAccess) (tail : MemoryAccessList)
     (h_sorted : isTimestampSorted (head :: tail))
     : (∀ addr : ℕ, (filterAddress (head :: tail) addr).isConsistentSingleAddress (MemoryAccessList.filterAddress_sorted (head :: tail) h_sorted addr)) →
@@ -624,7 +646,7 @@ theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses 
       · -- addresstimestampsorted, and seeing two different addresses, then the first address will never appear again, kind of theorem is needed
         sorry
     apply h_ih
-    · -- need a theorem isConsistentSingleAddress cann be carried over to cons
+    · -- can use isConsistentSingleAddress_filterAddress_of_cons pattern here
       sorry
     · exact noTimestampDup_of_cons (hd_t, hd_a, hd_r, hd_w) ((snd_t, snd_a, snd_r, snd_w) :: tl) h_nodup
 
