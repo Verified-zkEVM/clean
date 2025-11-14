@@ -546,12 +546,60 @@ def MemoryAccessList.isConsistentOffline (accesses : MemoryAccessList) (h_sorted
     (if addr1 = addr2 then readValue2 = writeValue1 else readValue2 = 0) ∧
     MemoryAccessList.isConsistentOffline ((t1, addr1, readValue1, writeValue1) :: rest) (List.Sorted.of_cons h_sorted)
 
+theorem MemoryAccessList.filterAddress_sorted_from_addressTimestampSorted
+    (accesses : MemoryAccessList)
+    (h_sorted : accesses.isAddressTimestampSorted)
+    (h_nodup : accesses.Notimestampdup)
+    (addr : ℕ) :
+    (accesses.filterAddress addr).isTimestampSorted := by
+  have h_strict := addressStrictTimestampSorted_of_AddressTimestampSorted_noTimestampDup accesses h_sorted h_nodup
+  simp only [isAddressStrictTimestampSorted, filterAddress, isTimestampSorted] at h_strict ⊢
+  induction accesses with
+  | nil => simp
+  | cons head tail ih =>
+    obtain ⟨t, a, r, w⟩ := head
+    simp only [List.filter_cons]
+    split_ifs with h_addr
+    · simp only [List.sorted_cons]
+      constructor
+      · intro z hz
+        simp only [List.mem_filter] at hz
+        obtain ⟨hz_mem, hz_addr⟩ := hz
+        obtain ⟨t_z, a_z, r_z, w_z⟩ := z
+        simp only [decide_eq_true_eq] at hz_addr
+        simp only [List.sorted_cons] at h_strict
+        have h_ord := h_strict.1 (t_z, a_z, r_z, w_z) hz_mem
+        simp only [address_strict_timestamp_ordering] at h_ord
+        simp only [decide_eq_true_eq] at h_addr
+        rw [hz_addr, h_addr] at h_ord
+        simp only [↓reduceIte] at h_ord
+        simp only [timestamp_ordering]
+        exact h_ord
+      · apply ih
+        · simp only [isAddressTimestampSorted] at h_sorted ⊢
+          exact List.Sorted.of_cons h_sorted
+        · simp only [Notimestampdup] at h_nodup ⊢
+          exact List.Pairwise.of_cons h_nodup
+        · exact List.Sorted.of_cons h_strict
+    · apply ih
+      · simp only [isAddressTimestampSorted] at h_sorted ⊢
+        exact List.Sorted.of_cons h_sorted
+      · simp only [Notimestampdup] at h_nodup ⊢
+        exact List.Pairwise.of_cons h_nodup
+      · exact List.Sorted.of_cons h_strict
+
+theorem MemoryAccessList.isConsistentOffline_iff_all_single_addresses (accesses : MemoryAccessList) (h_sorted : accesses.isAddressTimestampSorted) :
+    MemoryAccessList.isConsistentOffline accesses h_sorted ↔
+    ∀ addr, MemoryAccessList.isConsistentSingleAddress (MemoryAccessList.filterAddress accesses addr) (by sorry) := by sorry
+
 /--
   Constructive version of the theorem below.
 -/
 theorem MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline (accesses : MemoryAccessList) (h_sorted : accesses.isTimestampSorted) :
     MemoryAccessList.isConsistentOnline accesses h_sorted ↔
     MemoryAccessList.isConsistentOffline (MemoryAccessList.addressTimestampSort accesses) (MemoryAccessList.addressTimestampSort_sorted accesses) := by
+  rw [isConsistent_iff_all_single_address]
+
   sorry
 
 /--
