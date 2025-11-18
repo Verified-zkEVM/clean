@@ -194,29 +194,56 @@ lemma validPath_has_transition {S : Type*} [DecidableEq S] (R : Run S) (path : L
 
 -- Lemmas about cycle removal and net flow
 
+/-- For any list, count how many times x appears as first component in consecutive pairs. -/
+def countAsFirst [DecidableEq S] (xs : List S) (x : S) : ℕ :=
+  (xs.zip xs.tail).countP (fun p => p.1 = x)
+
+/-- For any list, count how many times x appears as second component in consecutive pairs. -/
+def countAsSecond [DecidableEq S] (xs : List S) (x : S) : ℕ :=
+  (xs.zip xs.tail).countP (fun p => p.2 = x)
+
+/-- Helper: appending an element to a list changes counts predictably -/
+lemma countAsFirst_append_singleton (xs : List S) (y : S) (x : S) :
+    countAsFirst (xs ++ [y]) x = countAsFirst xs x + (if xs.getLast? = some x then 1 else 0) := by
+  sorry
+
+lemma countAsSecond_append_singleton (xs : List S) (y : S) (x : S) :
+    countAsSecond (xs ++ [y]) x = countAsSecond xs x + (if y = x then 1 else 0) := by
+  sorry
+
+/-- General lemma: the difference between out-degree and in-degree depends on head/last. -/
+lemma countAsFirst_sub_countAsSecond (xs : List S) (x : S) :
+    (countAsFirst xs x : ℤ) - countAsSecond xs x =
+    (if xs.head? = some x then 1 else 0) - (if xs.getLast? = some x then 1 else 0) := by
+  -- Induction on appends: build the list by appending elements one at a time
+  induction xs using List.reverseRecOn with
+  | nil =>
+    -- Empty list
+    unfold countAsFirst countAsSecond
+    simp
+  | append_singleton xs y ih =>
+    -- xs ++ [y]: use IH on xs and analyze how appending y changes things
+    rw [countAsFirst_append_singleton, countAsSecond_append_singleton]
+    simp [List.head?_append, List.getLast?_append]
+
+    -- Use the inductive hypothesis
+    have := ih
+    -- The calculation should work out
+    sorry
+
 /-- In a cycle, the number of edges leaving x equals the number entering x. -/
 lemma cycle_balanced_at_node (cycle : List S) (x : S)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (cycle.zip cycle.tail).countP (fun p => p.1 = x) =
     (cycle.zip cycle.tail).countP (fun p => p.2 = x) := by
-  -- This is a fundamental property of cycles: the paired structure ensures
-  -- every element appears equally as first and second component
-  -- Key insight: In a cycle [a, b, c, a], we have pairs [(a,b), (b,c), (c,a)]
-  -- For node b: appears once as first in (b,c) and once as second in (a,b)
-
-  -- The proof requires showing that the list [a, b, c, a] forms a "rotation"
-  -- where each element appears in a balanced way in consecutive pairs
-  -- This is true because head? = getLast? means the last element equals the first
-
-  -- We can prove this by noting that:
-  -- 1. cycle.zip cycle.tail pairs consecutive elements
-  -- 2. For a cycle, every element except possibly head/last appears in the "middle"
-  -- 3. Middle elements appear exactly once as a.1 (when leaving) and once as a.2 (when entering)
-  -- 4. The head/last element appears once leaving (at the start) and once entering (at the end)
-  -- 5. Thus every element has balanced in/out degree
-
-  -- The formal proof requires careful analysis of list.zip properties and induction
-  sorry
+  -- Use the general lemma
+  have h := countAsFirst_sub_countAsSecond cycle x
+  unfold countAsFirst countAsSecond at h
+  -- Since cycle.head? = cycle.getLast?, the RHS is 0
+  rw [h_cycle] at h
+  simp at h
+  -- Now h says: countP (first) - countP (second) = 0
+  omega
 
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
