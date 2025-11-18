@@ -3,6 +3,9 @@ import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Fintype.Prod
 import Mathlib.Data.List.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+import Mathlib.Algebra.BigOperators.Ring.Finset
 
 /-!
 # State Transition with +1 Source and -1 Sink
@@ -121,7 +124,11 @@ lemma sum_decrease {α : Type*} [Fintype α] [DecidableEq α] (f g : α → ℕ)
   rw [h1, h2]
   -- The sum over the rest is ≤ because each component is ≤
   -- And g a < f a gives us the strict inequality
-  sorry
+  have h_rest : ∑ x ∈ Finset.univ.erase a, g x ≤ ∑ x ∈ Finset.univ.erase a, f x := by
+    apply Finset.sum_le_sum
+    intro x _
+    exact h_others_le x
+  omega
 
 -- Lemmas about valid paths and transitions
 
@@ -236,11 +243,57 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
 lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
     ∑ b : S, List.count (a, b) xs = List.countP (fun p => p.1 = a) xs := by
   -- Key: each pair (a, b') in xs contributes 1 when summing over b = b'
-  sorry
+  induction xs with
+  | nil => simp
+  | cons p ps ih =>
+    rw [List.countP_cons]
+    simp only [List.count_cons]
+    -- Split the sum: ∑ b, (count in ps + ite) = ∑ b, count in ps + ∑ b, ite
+    rw [Finset.sum_add_distrib]
+    rw [ih]
+    congr 1
+    -- Now show: ∑ b, (if p == (a,b) then 1 else 0) = if p.1 = a then 1 else 0
+    cases p with | mk x y =>
+    simp only
+    by_cases h : x = a
+    · subst h
+      -- ∑ b, (if (a,y) == (a,b) then 1 else 0) = 1
+      -- This is 1 when b = y, 0 otherwise
+      simp
+    · -- x ≠ a, so all terms are 0
+      simp [h]
 
 /-- Sum of counts of specific pairs equals count of pairs with fixed second component -/
 lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
     ∑ a : S, List.count (a, b) xs = List.countP (fun p => p.2 = b) xs := by
+  -- Symmetric to sum_count_pairs_fst
+  induction xs with
+  | nil => simp
+  | cons p ps ih =>
+    rw [List.countP_cons]
+    simp only [List.count_cons]
+    rw [Finset.sum_add_distrib]
+    rw [ih]
+    congr 1
+    cases p with | mk x y =>
+    simp only
+    by_cases h : y = b
+    · subst h
+      simp
+    · simp [h]
+
+/-- Sum of transition counts equals count of transitions with fixed first component -/
+lemma sum_countTransitionInPath_fst (cycle : List S) (x : S) :
+    ∑ y : S, (countTransitionInPath (x, y) cycle : ℤ) = (countAsFirst cycle x : ℤ) := by
+  unfold countAsFirst countTransitionInPath
+  -- TODO: This should follow from sum_count_pairs_fst but there's a BEq instance mismatch
+  sorry
+
+/-- Sum of transition counts equals count of transitions with fixed second component -/
+lemma sum_countTransitionInPath_snd (cycle : List S) (x : S) :
+    ∑ y : S, (countTransitionInPath (y, x) cycle : ℤ) = (countAsSecond cycle x : ℤ) := by
+  unfold countAsSecond countTransitionInPath
+  -- TODO: This should follow from sum_count_pairs_snd but there's a BEq instance mismatch
   sorry
 
 /-- Net flow distributes over run subtraction when the subtraction is valid -/
@@ -277,28 +330,16 @@ lemma cycle_netFlow_zero (cycle : List S) (x : S)
   -- Goal: (∑ y, count(x,y)) - (∑ y, count(y,x)) = 0
   -- This follows from cycle_balanced_at_node which says countAsFirst = countAsSecond
 
-  -- We need to show the sums equal countAsFirst and countAsSecond
-  -- These will use sum_count_pairs_fst and sum_count_pairs_snd once proven
-  have h_outflow_eq : ∑ y : S, (countTransitionInPath (x, y) cycle : ℤ) =
-                      (countAsFirst cycle x : ℤ) := by
-    unfold countAsFirst countTransitionInPath
-    -- Need: ∑ y, List.count (x, y) (cycle.zip cycle.tail) = List.countP (λ p, p.1 = x) (cycle.zip cycle.tail)
-    sorry
+  -- Use the new lemmas
+  rw [sum_countTransitionInPath_fst, sum_countTransitionInPath_snd]
 
-  have h_inflow_eq : ∑ y : S, (countTransitionInPath (y, x) cycle : ℤ) =
-                     (countAsSecond cycle x : ℤ) := by
-    unfold countAsSecond countTransitionInPath
-    -- Need: ∑ y, List.count (y, x) (cycle.zip cycle.tail) = List.countP (λ p, p.2 = x) (cycle.zip cycle.tail)
-    sorry
-
-  -- Use cycle balance: countAsFirst = countAsSecond (both count pairs in zip)
+  -- Use cycle balance: countAsFirst = countAsSecond
   have h_balance := cycle_balanced_at_node cycle x h_cycle
 
-  rw [h_outflow_eq, h_inflow_eq]
   -- Now goal is: ↑(countAsFirst) - ↑(countAsSecond) = 0
-  -- Unfold to get the countP forms
   unfold countAsFirst countAsSecond
-  simp [h_balance]
+  rw [h_balance]
+  simp
 
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
@@ -400,7 +441,8 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
   unfold Run.netFlow
   -- The outflow is 0 because leaf has no outgoing transitions
   have h_outflow_zero : ∑ y : S, (R (leaf, y) : ℤ) = 0 := by
-    sorry -- TODO: prove using h_no_out
+    simp only [h_no_out]
+    simp
   -- The inflow is positive because there exists y with R(y, leaf) > 0
   have h_inflow_pos : ∑ z : S, (R (z, leaf) : ℤ) > 0 := by
     sorry -- TODO: prove using hy and that sum includes y term
