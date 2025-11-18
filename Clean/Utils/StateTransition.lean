@@ -285,16 +285,28 @@ lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
 /-- Sum of transition counts equals count of transitions with fixed first component -/
 lemma sum_countTransitionInPath_fst (cycle : List S) (x : S) :
     ∑ y : S, (countTransitionInPath (x, y) cycle : ℤ) = (countAsFirst cycle x : ℤ) := by
-  unfold countAsFirst countTransitionInPath
-  -- TODO: This should follow from sum_count_pairs_fst but there's a BEq instance mismatch
-  sorry
+  unfold countAsFirst countTransitionInPath Transition
+  -- Goal: ∑ y, ↑(List.count (x, y) (cycle.zip cycle.tail)) = ↑(List.countP (fun p => p.1 = x) (cycle.zip cycle.tail))
+  -- First convert the sum of casts to a cast of a sum
+  rw [← Nat.cast_sum]
+  -- Now we need to show: (∑ y, List.count (x, y) xs) = List.countP (fun p => p.1 = x) xs
+  -- This is exactly sum_count_pairs_fst, we just need to handle the BEq instance
+  -- Use the fact that List.count doesn't depend on the specific BEq instance for pairs with DecidableEq
+  have h := sum_count_pairs_fst (cycle.zip cycle.tail) x
+  convert congr_arg Nat.cast h
 
 /-- Sum of transition counts equals count of transitions with fixed second component -/
 lemma sum_countTransitionInPath_snd (cycle : List S) (x : S) :
     ∑ y : S, (countTransitionInPath (y, x) cycle : ℤ) = (countAsSecond cycle x : ℤ) := by
-  unfold countAsSecond countTransitionInPath
-  -- TODO: This should follow from sum_count_pairs_snd but there's a BEq instance mismatch
-  sorry
+  unfold countAsSecond countTransitionInPath Transition
+  -- Goal: ∑ y, ↑(List.count (y, x) (cycle.zip cycle.tail)) = ↑(List.countP (fun p => p.2 = x) (cycle.zip cycle.tail))
+  -- First convert the sum of casts to a cast of a sum
+  rw [← Nat.cast_sum]
+  -- Now we need to show: (∑ y, List.count (y, x) xs) = List.countP (fun p => p.2 = x) xs
+  -- This is exactly sum_count_pairs_snd, we just need to handle the BEq instance
+  -- Use the fact that List.count doesn't depend on the specific BEq instance for pairs with DecidableEq
+  have h := sum_count_pairs_snd (cycle.zip cycle.tail) x
+  convert congr_arg Nat.cast h
 
 /-- Net flow distributes over run subtraction when the subtraction is valid -/
 lemma netFlow_sub (R R' : Run S) (x : S)
