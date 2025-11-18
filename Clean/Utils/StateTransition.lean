@@ -202,6 +202,7 @@ def countAsFirst [DecidableEq S] (xs : List S) (x : S) : ℕ :=
 def countAsSecond [DecidableEq S] (xs : List S) (x : S) : ℕ :=
   (xs.zip xs.tail).countP (fun p => p.2 = x)
 
+set_option linter.unusedSectionVars false in
 /-- Helper: cons adds a pair that contributes to first count if head matches -/
 lemma countAsFirst_cons (hd : S) (tl : List S) (x : S) :
     countAsFirst (hd :: tl) x = (if hd = x ∧ tl ≠ [] then 1 else 0) + countAsFirst tl x := by
@@ -218,6 +219,7 @@ lemma countAsFirst_cons (hd : S) (tl : List S) (x : S) :
     by_cases h : hd = x <;> simp [h]
     omega
 
+set_option linter.unusedSectionVars false in
 /-- Helper: cons adds a pair that contributes to second count if head of tail matches -/
 lemma countAsSecond_cons (hd : S) (tl : List S) (x : S) :
     countAsSecond (hd :: tl) x = (if tl.head? = some x then 1 else 0) + countAsSecond tl x := by
@@ -234,6 +236,7 @@ lemma countAsSecond_cons (hd : S) (tl : List S) (x : S) :
     by_cases h : hd2 = x <;> simp [h]
     omega
 
+set_option linter.unusedSectionVars false in
 /-- General lemma: countAsFirst + last = countAsSecond + head -/
 lemma countAsFirst_add_last_eq_countAsSecond_add_head (xs : List S) (x : S) :
     countAsFirst xs x + (if xs.getLast? = some x then 1 else 0) =
@@ -264,6 +267,7 @@ lemma countAsFirst_add_last_eq_countAsSecond_add_head (xs : List S) (x : S) :
       --         = RHS ✓
       omega
 
+set_option linter.unusedSectionVars false in
 /-- In a cycle, the number of edges leaving x equals the number entering x. -/
 lemma cycle_balanced_at_node (cycle : List S) (x : S)
     (h_cycle : cycle.head? = cycle.getLast?) :
