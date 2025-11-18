@@ -292,6 +292,30 @@ lemma foldl_int_add_from_acc (f : S → ℤ) (xs : List S) (acc : ℤ) :
     rw [ih (acc + f hd), ih (f hd)]
     omega
 
+set_option linter.unusedSectionVars false in
+/-- Casting a nat fold to int -/
+lemma foldl_nat_cast_to_int (f : S → ℕ) (xs : List S) :
+    (xs.foldl (fun acc y => acc + f y) 0 : ℤ) =
+    xs.foldl (fun acc y => acc + (f y : ℤ)) 0 := by
+  induction xs with
+  | nil => simp [List.foldl]
+  | cons hd tl ih => simp only [List.foldl]
+
+/-- Sum of counts of specific pairs equals count of pairs with fixed first component -/
+lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
+    (Finset.univ : Finset S).toList.foldl (fun acc b => acc + List.count (a, b) xs) 0 =
+    List.countP (fun p => p.1 = a) xs := by
+  -- Each element of xs either has first component = a or not
+  -- If (a,b) ∈ xs, it contributes 1 to List.count (a,b) xs and 1 to countP
+  -- If (c,d) ∈ xs with c ≠ a, it contributes 0 to all List.count (a,_) and 0 to countP
+  sorry
+
+/-- Sum of counts of specific pairs equals count of pairs with fixed second component -/
+lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
+    (Finset.univ : Finset S).toList.foldl (fun acc a => acc + List.count (a, b) xs) 0 =
+    List.countP (fun p => p.2 = b) xs := by
+  sorry
+
 /-- Helper: convert foldl of nat subtraction to int subtraction when bounds hold -/
 lemma foldl_nat_sub_to_int_sub (f g : S → ℕ) (xs : List S)
     (h_bound : ∀ y ∈ xs, g y ≤ f y) :
@@ -348,15 +372,40 @@ lemma netFlow_sub (R R' : Run S) (x : S)
   rw [h_outflow, h_inflow]
   omega
 
+/-- A cycle has zero net flow at any node -/
+lemma cycle_netFlow_zero (cycle : List S) (x : S)
+    (h_cycle : cycle.head? = cycle.getLast?) :
+    Run.netFlow (fun t => countTransitionInPath t cycle) x = 0 := by
+  unfold Run.netFlow
+  simp only
+  -- Goal: (Σ count(x,y)) - (Σ count(y,x)) = 0
+  -- This follows from cycle_balanced_at_node which says countAsFirst = countAsSecond
+
+  -- We need to show the sums equal countAsFirst and countAsSecond
+  have h_outflow_eq : Finset.univ.toList.foldl (fun acc y => acc + (countTransitionInPath (x, y) cycle : ℤ)) 0 =
+                      (countAsFirst cycle x : ℤ) := by
+    unfold countAsFirst countTransitionInPath
+    sorry
+
+  have h_inflow_eq : Finset.univ.toList.foldl (fun acc y => acc + (countTransitionInPath (y, x) cycle : ℤ)) 0 =
+                     (countAsSecond cycle x : ℤ) := by
+    unfold countAsSecond countTransitionInPath
+    sorry
+
+  -- Use cycle balance: countAsFirst = countAsSecond (both count pairs in zip)
+  have h_balance := cycle_balanced_at_node cycle x h_cycle
+
+  rw [h_outflow_eq, h_inflow_eq]
+  -- Now goal is: ↑(countAsFirst) - ↑(countAsSecond) = 0
+  -- Unfold to get the countP forms
+  unfold countAsFirst countAsSecond
+  simp [h_balance]
+
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_valid : R.validPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- The key is to show that the cycle contributes 0 net flow
-  -- i.e., Run.netFlow (fun t => countTransitionInPath t cycle) x = 0
-  -- This follows from cycle balance: in-degree = out-degree
-
   -- First, we need h_valid_sub: countTransitionInPath t cycle ≤ R t for all t
   have h_valid_sub : ∀ t, countTransitionInPath t cycle ≤ R t := by
     sorry
@@ -367,15 +416,7 @@ lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     rfl
 
   rw [h_eq, netFlow_sub R (fun t => countTransitionInPath t cycle) x h_valid_sub]
-
-  -- Now show that Run.netFlow (fun t => countTransitionInPath t cycle) x = 0
-  have h_cycle_netFlow_zero : Run.netFlow (fun t => countTransitionInPath t cycle) x = 0 := by
-    unfold Run.netFlow
-    simp only
-    -- This should follow from cycle balance
-    sorry
-
-  rw [h_cycle_netFlow_zero]
+  rw [cycle_netFlow_zero cycle x h_cycle]
   simp
 
 /-- Removing a cycle decreases the total size of the run. -/
