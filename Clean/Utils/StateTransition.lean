@@ -169,6 +169,22 @@ lemma foldl_sum_decrease {α : Type*} [DecidableEq α] (f g : α → ℕ) (xs : 
       have h_hd_le : g hd ≤ f hd := h_others_le hd
       omega
 
+/-- If one element strictly decreases and others are ≤, the sum decreases -/
+lemma sum_decrease {α : Type*} [Fintype α] [DecidableEq α] (f g : α → ℕ) (a : α)
+    (h_a_decrease : g a < f a)
+    (h_others_le : ∀ x, g x ≤ f x) :
+    ∑ x : α, g x < ∑ x : α, f x := by
+  have h1 : ∑ x : α, f x = f a + ∑ x ∈ Finset.univ.erase a, f x := by
+    rw [← Finset.sum_erase_add _ _ (Finset.mem_univ a)]
+    omega
+  have h2 : ∑ x : α, g x = g a + ∑ x ∈ Finset.univ.erase a, g x := by
+    rw [← Finset.sum_erase_add _ _ (Finset.mem_univ a)]
+    omega
+  rw [h1, h2]
+  -- The sum over the rest is ≤ because each component is ≤
+  -- And g a < f a gives us the strict inequality
+  sorry
+
 -- Lemmas about valid paths and transitions
 
 /-- A valid path with at least 2 elements has at least one transition with positive count. -/
@@ -326,25 +342,15 @@ lemma foldl_add_const {α : Type*} (xs : List α) (c : ℕ) :
   rw [foldl_add_const_aux]
   simp
 
-/-- Helper lemma: convert foldl to Finset.sum -/
-lemma foldl_univ_to_sum (f : S → ℕ) :
-    (Finset.univ : Finset S).toList.foldl (fun acc b => acc + f b) 0 =
-    Finset.sum Finset.univ f := by
-  sorry
-
 /-- Sum of counts of specific pairs equals count of pairs with fixed first component -/
 lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
-    (Finset.univ : Finset S).toList.foldl (fun acc b => acc + List.count (a, b) xs) 0 =
-    List.countP (fun p => p.1 = a) xs := by
-  rw [foldl_univ_to_sum]
-  -- Now we have: ∑ b, List.count (a, b) xs = List.countP (fun p => p.1 = a) xs
+    ∑ b : S, List.count (a, b) xs = List.countP (fun p => p.1 = a) xs := by
   -- Key: each pair (a, b') in xs contributes 1 when summing over b = b'
   sorry
 
 /-- Sum of counts of specific pairs equals count of pairs with fixed second component -/
 lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
-    (Finset.univ : Finset S).toList.foldl (fun acc a => acc + List.count (a, b) xs) 0 =
-    List.countP (fun p => p.2 = b) xs := by
+    ∑ a : S, List.count (a, b) xs = List.countP (fun p => p.2 = b) xs := by
   sorry
 
 /-- Helper: convert foldl of nat subtraction to int subtraction when bounds hold -/
