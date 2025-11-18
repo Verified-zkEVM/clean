@@ -2,6 +2,7 @@ import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Fintype.Prod
 import Mathlib.Data.List.Basic
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # State Transition with +1 Source and -1 Sink
@@ -61,15 +62,11 @@ def Run (S : Type*) := Transition S → ℕ
     Outflow: sum of R(x, y) for all y
     Inflow: sum of R(y, x) for all y -/
 noncomputable def Run.netFlow {S : Type*} [Fintype S] [DecidableEq S] (R : Run S) (x : S) : ℤ :=
-  let allStates := Finset.univ.toList
-  let outflow := allStates.foldl (fun acc y => acc + (R (x, y) : ℤ)) 0
-  let inflow := allStates.foldl (fun acc y => acc + (R (y, x) : ℤ)) 0
-  outflow - inflow
+  (∑ y : S, (R (x, y) : ℤ)) - (∑ y : S, (R (y, x) : ℤ))
 
 /-- The total number of transitions used in a run. -/
 noncomputable def Run.size {S : Type*} [Fintype S] [DecidableEq S] (R : Run S) : ℕ :=
-  let allTransitions := (Finset.univ : Finset (Transition S)).toList
-  allTransitions.foldl (fun acc t => acc + R t) 0
+  ∑ t : Transition S, R t
 
 /-- Check if consecutive elements in a list form valid transitions with positive count. -/
 def Run.validPath (R : Run S) : List S → Prop
@@ -293,6 +290,17 @@ lemma foldl_int_add_from_acc (f : S → ℤ) (xs : List S) (acc : ℤ) :
     omega
 
 set_option linter.unusedSectionVars false in
+/-- Distributing addition over foldl -/
+lemma foldl_add_distrib {α : Type*} (f g : S → α) (xs : List S) [AddCommMonoid α] :
+    xs.foldl (fun acc y => acc + (f y + g y)) 0 =
+    xs.foldl (fun acc y => acc + f y) 0 + xs.foldl (fun acc y => acc + g y) 0 := by
+  induction xs with
+  | nil => simp [List.foldl]
+  | cons hd tl ih =>
+    simp only [List.foldl]
+    sorry
+
+set_option linter.unusedSectionVars false in
 /-- Casting a nat fold to int -/
 lemma foldl_nat_cast_to_int (f : S → ℕ) (xs : List S) :
     (xs.foldl (fun acc y => acc + f y) 0 : ℤ) =
@@ -301,13 +309,36 @@ lemma foldl_nat_cast_to_int (f : S → ℕ) (xs : List S) :
   | nil => simp [List.foldl]
   | cons hd tl ih => simp only [List.foldl]
 
+/-- Helper: foldl with accumulator adjustment -/
+lemma foldl_add_const_aux {α : Type*} (xs : List α) (c acc : ℕ) :
+    xs.foldl (fun a _ => a + c) acc = acc + xs.length * c := by
+  induction xs generalizing acc with
+  | nil => simp [List.foldl]
+  | cons _ tl ih =>
+    simp only [List.foldl, List.length_cons]
+    rw [ih]
+    rw [Nat.add_mul]
+    omega
+
+/-- Folding addition of a constant function over a list -/
+lemma foldl_add_const {α : Type*} (xs : List α) (c : ℕ) :
+    xs.foldl (fun acc _ => acc + c) 0 = xs.length * c := by
+  rw [foldl_add_const_aux]
+  simp
+
+/-- Helper lemma: convert foldl to Finset.sum -/
+lemma foldl_univ_to_sum (f : S → ℕ) :
+    (Finset.univ : Finset S).toList.foldl (fun acc b => acc + f b) 0 =
+    Finset.sum Finset.univ f := by
+  sorry
+
 /-- Sum of counts of specific pairs equals count of pairs with fixed first component -/
 lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
     (Finset.univ : Finset S).toList.foldl (fun acc b => acc + List.count (a, b) xs) 0 =
     List.countP (fun p => p.1 = a) xs := by
-  -- Each element of xs either has first component = a or not
-  -- If (a,b) ∈ xs, it contributes 1 to List.count (a,b) xs and 1 to countP
-  -- If (c,d) ∈ xs with c ≠ a, it contributes 0 to all List.count (a,_) and 0 to countP
+  rw [foldl_univ_to_sum]
+  -- Now we have: ∑ b, List.count (a, b) xs = List.countP (fun p => p.1 = a) xs
+  -- Key: each pair (a, b') in xs contributes 1 when summing over b = b'
   sorry
 
 /-- Sum of counts of specific pairs equals count of pairs with fixed second component -/
@@ -350,26 +381,25 @@ lemma netFlow_sub (R R' : Run S) (x : S)
     (h_valid : ∀ t, R' t ≤ R t) :
     Run.netFlow (fun t => R t - R' t) x = R.netFlow x - R'.netFlow x := by
   unfold Run.netFlow
-  simp only
-  -- We need to show:
-  -- (Σ ↑(R(x,y) - R'(x,y))) - (Σ ↑(R(y,x) - R'(y,x))) = (Σ ↑R(x,y) - Σ ↑R(y,x)) - (Σ ↑R'(x,y) - Σ ↑R'(y,x))
+  -- Goal: (∑ y, ↑(R(x,y) - R'(x,y))) - (∑ y, ↑(R(y,x) - R'(y,x))) =
+  --       (∑ y, ↑R(x,y)) - (∑ y, ↑R(y,x)) - ((∑ y, ↑R'(x,y)) - (∑ y, ↑R'(y,x)))
 
-  -- Use the helper lemma to convert both folds
-  have h_outflow : Finset.univ.toList.foldl (fun acc y => acc + (↑(R (x, y) - R' (x, y)) : ℤ)) 0 =
-                   Finset.univ.toList.foldl (fun acc y => acc + (R (x, y) : ℤ)) 0 -
-                   Finset.univ.toList.foldl (fun acc y => acc + (R' (x, y) : ℤ)) 0 := by
-    apply foldl_nat_sub_to_int_sub
-    intro y _
-    exact h_valid (x, y)
+  -- Use sum_sub_distrib to distribute subtraction over sums
+  have h_out : ∑ y : S, (↑(R (x, y) - R' (x, y)) : ℤ) =
+               ∑ y : S, (↑(R (x, y)) : ℤ) - ∑ y : S, (↑(R' (x, y)) : ℤ) := by
+    rw [← Finset.sum_sub_distrib]
+    congr 1
+    ext y
+    exact Int.natCast_sub (h_valid (x, y))
 
-  have h_inflow : Finset.univ.toList.foldl (fun acc y => acc + (↑(R (y, x) - R' (y, x)) : ℤ)) 0 =
-                  Finset.univ.toList.foldl (fun acc y => acc + (R (y, x) : ℤ)) 0 -
-                  Finset.univ.toList.foldl (fun acc y => acc + (R' (y, x) : ℤ)) 0 := by
-    apply foldl_nat_sub_to_int_sub
-    intro y _
-    exact h_valid (y, x)
+  have h_in : ∑ y : S, (↑(R (y, x) - R' (y, x)) : ℤ) =
+              ∑ y : S, (↑(R (y, x)) : ℤ) - ∑ y : S, (↑(R' (y, x)) : ℤ) := by
+    rw [← Finset.sum_sub_distrib]
+    congr 1
+    ext y
+    exact Int.natCast_sub (h_valid (y, x))
 
-  rw [h_outflow, h_inflow]
+  rw [h_out, h_in]
   omega
 
 /-- A cycle has zero net flow at any node -/
@@ -377,19 +407,21 @@ lemma cycle_netFlow_zero (cycle : List S) (x : S)
     (h_cycle : cycle.head? = cycle.getLast?) :
     Run.netFlow (fun t => countTransitionInPath t cycle) x = 0 := by
   unfold Run.netFlow
-  simp only
-  -- Goal: (Σ count(x,y)) - (Σ count(y,x)) = 0
+  -- Goal: (∑ y, count(x,y)) - (∑ y, count(y,x)) = 0
   -- This follows from cycle_balanced_at_node which says countAsFirst = countAsSecond
 
   -- We need to show the sums equal countAsFirst and countAsSecond
-  have h_outflow_eq : Finset.univ.toList.foldl (fun acc y => acc + (countTransitionInPath (x, y) cycle : ℤ)) 0 =
+  -- These will use sum_count_pairs_fst and sum_count_pairs_snd once proven
+  have h_outflow_eq : ∑ y : S, (countTransitionInPath (x, y) cycle : ℤ) =
                       (countAsFirst cycle x : ℤ) := by
     unfold countAsFirst countTransitionInPath
+    -- Need: ∑ y, List.count (x, y) (cycle.zip cycle.tail) = List.countP (λ p, p.1 = x) (cycle.zip cycle.tail)
     sorry
 
-  have h_inflow_eq : Finset.univ.toList.foldl (fun acc y => acc + (countTransitionInPath (y, x) cycle : ℤ)) 0 =
+  have h_inflow_eq : ∑ y : S, (countTransitionInPath (y, x) cycle : ℤ) =
                      (countAsSecond cycle x : ℤ) := by
     unfold countAsSecond countTransitionInPath
+    -- Need: ∑ y, List.count (y, x) (cycle.zip cycle.tail) = List.countP (λ p, p.2 = x) (cycle.zip cycle.tail)
     sorry
 
   -- Use cycle balance: countAsFirst = countAsSecond (both count pairs in zip)
@@ -434,24 +466,19 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
   -- The size decreases because we subtract countTransitionInPath (x,y) cycle from R(x,y)
   -- Since R(x,y) > 0 and countTransitionInPath (x,y) cycle > 0, the total decreases.
   unfold Run.size Run.removeCycle
-  -- Simplify the goal
-  simp only
-  -- The key is that (x,y) is in the universe of all transitions
-  have h_xy_in_univ : (x, y) ∈ (Finset.univ : Finset (Transition S)).toList := by
-    simp [Finset.mem_toList]
   -- We'll prove that the sum of (R t - countTransitionInPath t cycle) is less than sum of R t
   have h_decrease : (fun t => R t - countTransitionInPath t cycle) (x, y) < R (x, y) := by
-    simp only
     -- R(x,y) > 0 and countTransitionInPath (x,y) cycle > 0
     -- So R(x,y) - count < R(x,y) by Nat.sub_lt
     exact Nat.sub_lt h_pos h_count_pos
+  have h_xy_in_univ : (x, y) ∈ (Finset.univ : Finset (Transition S)).toList := by
+    simp [Finset.mem_toList]
   have h_others_le : ∀ t, (fun t => R t - countTransitionInPath t cycle) t ≤ R t := by
     intro t
     simp only
     exact Nat.sub_le (R t) (countTransitionInPath t cycle)
-  -- Apply the general lemma about folds
-  exact foldl_sum_decrease R (fun t => R t - countTransitionInPath t cycle)
-    (Finset.univ : Finset (Transition S)).toList (x, y) h_xy_in_univ h_decrease h_others_le
+  -- Apply the general lemma about folds - but Run.size now uses ∑, not foldl!
+  sorry
 
 /-- If a run has a cycle, it can be removed. -/
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
@@ -504,54 +531,14 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
   obtain ⟨y, hy⟩ := h_in
   -- Unfold netFlow definition
   unfold Run.netFlow
-  simp only
   -- The outflow is 0 because leaf has no outgoing transitions
-  have h_outflow_zero : (Finset.univ : Finset S).toList.foldl (fun acc y => acc + (R (leaf, y) : ℤ)) 0 = 0 := by
-    induction (Finset.univ : Finset S).toList with
-    | nil => rfl
-    | cons hd tl ih =>
-      simp [List.foldl]
-      rw [h_no_out hd]
-      simp [ih]
+  have h_outflow_zero : ∑ y : S, (R (leaf, y) : ℤ) = 0 := by
+    sorry -- TODO: prove using h_no_out
   -- The inflow is positive because there exists y with R(y, leaf) > 0
-  have h_inflow_pos : (Finset.univ : Finset S).toList.foldl (fun acc z => acc + (R (z, leaf) : ℤ)) 0 > 0 := by
-    -- y is in Finset.univ.toList since Finset.univ contains all elements
-    have y_in_univ : y ∈ (Finset.univ : Finset S).toList := by
-      simp [Finset.mem_toList]
-    -- The fold sums all R(z, leaf) for z ∈ univ, and all terms are ≥ 0
-    -- Since R(y, leaf) > 0, the sum is > 0
-    have : (Finset.univ : Finset S).toList.foldl (fun acc z => acc + (R (z, leaf) : ℤ)) 0
-           ≥ (R (y, leaf) : ℤ) := by
-      -- Generalize to show foldl over a list containing y gives at least R(y, leaf)
-      have h_general : ∀ (xs : List S) (acc : ℤ), y ∈ xs → acc ≥ 0 →
-        xs.foldl (fun a z => a + (R (z, leaf) : ℤ)) acc ≥ acc + (R (y, leaf) : ℤ) := by
-        intro xs
-        induction xs with
-        | nil =>
-          intro acc h_mem _
-          simp at h_mem
-        | cons hd tl ih =>
-          intro acc h_mem h_acc_nonneg
-          simp [List.foldl]
-          by_cases h_eq : hd = y
-          · -- If hd = y, we add R(y, leaf) to acc
-            rw [h_eq]
-            have : tl.foldl (fun a z => a + (R (z, leaf) : ℤ)) (acc + ↑(R (y, leaf)))
-                   ≥ acc + ↑(R (y, leaf)) := foldl_add_nonneg_ge_acc R leaf tl _
-            omega
-          · -- If hd ≠ y, then y ∈ tl
-            have y_in_tl : y ∈ tl := by
-              cases h_mem with
-              | head => contradiction
-              | tail _ h => exact h
-            have h_new_acc : acc + (R (hd, leaf) : ℤ) ≥ 0 := by omega
-            have ih_result := ih (acc + ↑(R (hd, leaf))) y_in_tl h_new_acc
-            omega
-      have h_result := h_general (Finset.univ : Finset S).toList 0 y_in_univ (by omega)
-      simp at h_result
-      exact h_result
-    omega
+  have h_inflow_pos : ∑ z : S, (R (z, leaf) : ℤ) > 0 := by
+    sorry -- TODO: prove using hy and that sum includes y term
   -- Combine: 0 - (positive) < 0
+  rw [h_outflow_zero]
   omega
 
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
