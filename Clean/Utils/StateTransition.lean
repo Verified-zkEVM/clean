@@ -141,7 +141,33 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     (h_leaf : R.isLeaf root leaf)
     (h_in : ∃ y, R (y, leaf) > 0) :
     R.netFlow leaf < 0 := by
-  sorry
+  -- Unfold the definition of isLeaf
+  obtain ⟨_, h_no_out⟩ := h_leaf
+  obtain ⟨y, hy⟩ := h_in
+  -- Unfold netFlow definition
+  unfold Run.netFlow
+  simp only
+  -- The outflow is 0 because leaf has no outgoing transitions
+  have h_outflow_zero : (Finset.univ : Finset S).toList.foldl (fun acc y => acc + (R (leaf, y) : ℤ)) 0 = 0 := by
+    induction (Finset.univ : Finset S).toList with
+    | nil => rfl
+    | cons hd tl ih =>
+      simp [List.foldl]
+      rw [h_no_out hd]
+      simp [ih]
+  -- The inflow is positive because there exists y with R(y, leaf) > 0
+  have h_inflow_pos : (Finset.univ : Finset S).toList.foldl (fun acc z => acc + (R (z, leaf) : ℤ)) 0 > 0 := by
+    -- y is in Finset.univ.toList since Finset.univ contains all elements
+    have y_in_univ : y ∈ (Finset.univ : Finset S).toList := by
+      simp [Finset.mem_toList]
+    -- The fold sums all R(z, leaf) for z ∈ univ, and all terms are ≥ 0
+    -- Since R(y, leaf) > 0, the sum is > 0
+    have : (Finset.univ : Finset S).toList.foldl (fun acc z => acc + (R (z, leaf) : ℤ)) 0
+           ≥ (R (y, leaf) : ℤ) := by
+      sorry
+    omega
+  -- Combine: 0 - (positive) < 0
+  omega
 
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
     then there exists a cycle-free path from s to d. -/
