@@ -17,7 +17,7 @@ inductive ShiftKind
 Structured representation of a Binius shifted vector index (SVI).
 
 The wire is encoded using the `fields 64` provable type, while the shift
-metadata lives directly in the base field.
+metadata lives as type parameters.
 -/
 structure SVI (shiftKind: ShiftKind) (shiftAmount: Fin 64) (F : Type) where
   wire : (fields 64) F
@@ -27,23 +27,6 @@ instance (k: ShiftKind) (a: Fin 64) : ProvableStruct (SVI k a) where
   components := [fields 64]
   toComponents := fun svi => .cons svi.wire .nil
   fromComponents := fun | .cons wire .nil => { wire }
-
-namespace ShiftKind
-
-/-- Encode a shift kind as a natural number. -/
-def toNat : ShiftKind → ℕ
-  | .sll => 0
-  | .srl => 1
-  | .sra => 2
-
-/-- Decode a shift kind from a natural number. Values wrap modulo 3. -/
-def fromNat (n : ℕ) : ShiftKind :=
-  match n % 3 with
-  | 0 => .sll
-  | 1 => .srl
-  | _ => .sra
-
-end ShiftKind
 
 section ShiftOperations
 variable {p : ℕ} [Fact p.Prime]
