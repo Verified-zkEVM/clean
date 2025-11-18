@@ -126,6 +126,9 @@ lemma foldl_add_nonneg_ge_acc {S : Type*} (R : S × S → ℕ) (leaf : S) (xs : 
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
+  -- Key insight: In a cycle, each state appears as source and sink equally many times
+  -- (since cycle.head? = cycle.getLast?). So removing the cycle decreases
+  -- both inflow and outflow by the same amount, preserving net flow.
   sorry
 
 /-- Removing a cycle decreases the total size of the run. -/
@@ -134,6 +137,9 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     (h_valid : R.validPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).size < R.size := by
+  -- A valid non-empty cycle has at least one transition with positive count.
+  -- removeCycle subtracts countTransitionInPath for each transition,
+  -- so at least one transition count decreases, making size smaller.
   sorry
 
 /-- If a run has a cycle, it can be removed. -/
