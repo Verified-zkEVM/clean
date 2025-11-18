@@ -194,14 +194,40 @@ lemma validPath_has_transition {S : Type*} [DecidableEq S] (R : Run S) (path : L
 
 -- Lemmas about cycle removal and net flow
 
+/-- In a cycle, the number of edges leaving x equals the number entering x. -/
+lemma cycle_balanced_at_node (cycle : List S) (x : S)
+    (h_cycle : cycle.head? = cycle.getLast?) :
+    (cycle.zip cycle.tail).countP (fun p => p.1 = x) =
+    (cycle.zip cycle.tail).countP (fun p => p.2 = x) := by
+  -- This is a fundamental property of cycles: the paired structure ensures
+  -- every element appears equally as first and second component
+  -- Key insight: In a cycle [a, b, c, a], we have pairs [(a,b), (b,c), (c,a)]
+  -- For node b: appears once as first in (b,c) and once as second in (a,b)
+
+  -- The proof requires showing that the list [a, b, c, a] forms a "rotation"
+  -- where each element appears in a balanced way in consecutive pairs
+  -- This is true because head? = getLast? means the last element equals the first
+
+  -- A rigorous proof would proceed by induction on the cycle structure,
+  -- showing that for each internal element, its in-degree equals its out-degree
+  sorry
+
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- This requires proving that in a cycle, the number of edges leaving x
-  -- equals the number of edges entering x (counting with multiplicity).
-  -- This is a fundamental property of cycles: every node has in-degree = out-degree.
-  -- The proof would require careful induction on the cycle structure.
+  -- Unfold the definitions
+  unfold Run.netFlow Run.removeCycle
+  simp only
+  -- The net flow is outflow - inflow
+  -- When we remove the cycle, both outflow and inflow decrease by the same amount
+  -- because cycles are balanced (in-degree = out-degree for each node)
+
+  -- For outflow: we subtract the count of transitions (x, y) in the cycle
+  -- For inflow: we subtract the count of transitions (y, x) in the cycle
+  -- These counts are equal by cycle_balanced_at_node
+
+  -- The detailed proof requires showing that the fold sums distribute correctly
   sorry
 
 /-- Removing a cycle decreases the total size of the run. -/
@@ -261,6 +287,21 @@ lemma acyclic_has_leaf (R : Run S) (root : S)
     (h_acyclic : R.isAcyclic)
     (h_has_out : ∃ y, R (root, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
+  -- Key idea: In a finite acyclic graph, if we start from a node with an outgoing edge
+  -- and follow any maximal path, we must reach a leaf within at most Fintype.card S steps.
+  -- This is because:
+  -- 1. We can't revisit a node (would create a cycle)
+  -- 2. We can't have a path longer than the number of states
+  -- 3. If we're at a node with no outgoing edges, we've found a leaf
+
+  -- This proof requires well-founded induction or classical reasoning about
+  -- the existence of maximal elements in finite partially ordered sets.
+  -- The standard approach would be:
+  -- 1. Consider all paths starting from root
+  -- 2. Among all finite acyclic paths, there exist maximal ones (by finiteness)
+  -- 3. Any maximal path must end at a leaf (by maximality)
+
+  -- For now, we admit this fundamental graph-theoretic result
   sorry
 
 /-- A leaf with an incoming edge has negative net flow. -/
@@ -332,6 +373,16 @@ theorem exists_path_from_source_to_sink
     (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
     ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
       R.hasPath path ∧ path.Nodup := by
+  -- Proof sketch:
+  -- 1. If R has a cycle, remove it using exists_smaller_run_with_same_netFlow
+  --    The resulting R' is smaller and has the same net flows
+  -- 2. Repeat until R is acyclic (terminates by well-founded induction on R.size)
+  -- 3. Since netFlow(s) = 1 > 0, s must have some outgoing edge
+  -- 4. Use acyclic_has_leaf to find a leaf reachable from s
+  -- 5. The leaf must have negative net flow by leaf_has_negative_netFlow
+  -- 6. Since d is the only state with negative net flow, the leaf = d
+  -- 7. The path from s to d is cycle-free by acyclicity
+  -- 8. Extract a simple (no-duplicate) path from the reachability path
   sorry
 
 end Utils.StateTransition
