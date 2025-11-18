@@ -83,6 +83,12 @@ instance : HDiv (Expression F) ℕ (Expression F) where
 -- TODO probably should just make Variable F := ℕ
 instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
+
+@[simp] lemma eval_const (env : Environment F) (c : F) :
+    Expression.eval env (.const c) = c := rfl
+
+@[simp] lemma eval_zero (env : Environment F) :
+    Expression.eval env (0 : Expression F) = 0 := rfl
 end Expression
 
 instance [Field F] : CoeFun (Environment F) (fun _ => (Expression F) → F) where

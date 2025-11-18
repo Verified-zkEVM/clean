@@ -110,6 +110,35 @@ def applyShiftExpr (x : SVI k a (Expression (F p))) :
   simp [applyShiftExpr, Operations.SubcircuitsConsistent,
     Operations.forAll, Circuit.pure_def, Circuit.operations]
 
+@[simp] lemma map_eval_applyShiftVec
+    (env : Environment (F p))
+    (wire : Vector (Expression (F p)) 64)
+    (kind : ShiftKind) (amount : Fin 64) :
+    Vector.map (Expression.eval env) (applyShiftVec wire kind amount) =
+      applyShiftVec (Vector.map (Expression.eval env) wire) kind amount := by
+  classical
+  cases kind with
+  | sll =>
+      by_cases hZero : amount = 0
+      · simp [applyShiftVec, shiftLeftLogical, hZero]
+      · ext i
+        rename_i hi
+        by_cases hLe : amount ≤ (⟨i, hi⟩ : Fin 64)
+        · simp [applyShiftVec, shiftLeftLogical, hZero, hLe]
+        · simp [applyShiftVec, shiftLeftLogical, hZero, hLe]
+  | srl =>
+      ext i
+      rename_i hi
+      by_cases hSrc : i + amount.val < 64
+      · simp [applyShiftVec, shiftRightLogical, hSrc]
+      · simp [applyShiftVec, shiftRightLogical, hSrc]
+  | sra =>
+      ext i
+      rename_i hi
+      by_cases hSrc : i + amount.val < 64
+      · simp [applyShiftVec, shiftRightArithmetic, hSrc]
+      · simp [applyShiftVec, shiftRightArithmetic, hSrc]
+
 end Evaluation
 
 end Gadgets.Binius64
