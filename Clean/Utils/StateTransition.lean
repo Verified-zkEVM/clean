@@ -202,34 +202,40 @@ def countAsFirst [DecidableEq S] (xs : List S) (x : S) : ℕ :=
 def countAsSecond [DecidableEq S] (xs : List S) (x : S) : ℕ :=
   (xs.zip xs.tail).countP (fun p => p.2 = x)
 
-/-- Helper: appending an element to a list changes counts predictably -/
-lemma countAsFirst_append_singleton (xs : List S) (y : S) (x : S) :
-    countAsFirst (xs ++ [y]) x = countAsFirst xs x + (if xs.getLast? = some x then 1 else 0) := by
+/-- Helper: cons adds a pair that contributes to first count if head matches -/
+lemma countAsFirst_cons (hd : S) (tl : List S) (x : S) :
+    countAsFirst (hd :: tl) x = (if hd = x ∧ tl ≠ [] then 1 else 0) + countAsFirst tl x := by
   sorry
 
-lemma countAsSecond_append_singleton (xs : List S) (y : S) (x : S) :
-    countAsSecond (xs ++ [y]) x = countAsSecond xs x + (if y = x then 1 else 0) := by
+/-- Helper: cons adds a pair that contributes to second count if head of tail matches -/
+lemma countAsSecond_cons (hd : S) (tl : List S) (x : S) :
+    countAsSecond (hd :: tl) x = (if tl.head? = some x then 1 else 0) + countAsSecond tl x := by
   sorry
 
 /-- General lemma: the difference between out-degree and in-degree depends on head/last. -/
 lemma countAsFirst_sub_countAsSecond (xs : List S) (x : S) :
     (countAsFirst xs x : ℤ) - countAsSecond xs x =
     (if xs.head? = some x then 1 else 0) - (if xs.getLast? = some x then 1 else 0) := by
-  -- Induction on appends: build the list by appending elements one at a time
-  induction xs using List.reverseRecOn with
+  -- Induction on list structure
+  induction xs with
   | nil =>
     -- Empty list
     unfold countAsFirst countAsSecond
     simp
-  | append_singleton xs y ih =>
-    -- xs ++ [y]: use IH on xs and analyze how appending y changes things
-    rw [countAsFirst_append_singleton, countAsSecond_append_singleton]
-    simp [List.head?_append, List.getLast?_append]
+  | cons hd tl ih =>
+    -- Use helper lemmas
+    rw [countAsFirst_cons, countAsSecond_cons]
 
-    -- Use the inductive hypothesis
-    have := ih
-    -- The calculation should work out
-    sorry
+    cases tl with
+    | nil =>
+      -- Single element [hd]: no pairs, both counts are 0
+      unfold countAsFirst countAsSecond at ih ⊢
+      simp
+    | cons hd2 tl2 =>
+      -- At least 2 elements: [hd, hd2] ++ tl2
+      simp [List.head?, List.getLast?]
+      -- Now apply IH and arithmetic
+      sorry
 
 /-- In a cycle, the number of edges leaving x equals the number entering x. -/
 lemma cycle_balanced_at_node (cycle : List S) (x : S)
