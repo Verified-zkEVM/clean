@@ -198,9 +198,10 @@ lemma validPath_has_transition {S : Type*} [DecidableEq S] (R : Run S) (path : L
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- Key insight: In a cycle, each state appears as source and sink equally many times
-  -- (since cycle.head? = cycle.getLast?). So removing the cycle decreases
-  -- both inflow and outflow by the same amount, preserving net flow.
+  -- This requires proving that in a cycle, the number of edges leaving x
+  -- equals the number of edges entering x (counting with multiplicity).
+  -- This is a fundamental property of cycles: every node has in-degree = out-degree.
+  -- The proof would require careful induction on the cycle structure.
   sorry
 
 /-- Removing a cycle decreases the total size of the run. -/
