@@ -212,10 +212,10 @@ lemma countAsSecond_cons (hd : S) (tl : List S) (x : S) :
     countAsSecond (hd :: tl) x = (if tl.head? = some x then 1 else 0) + countAsSecond tl x := by
   sorry
 
-/-- General lemma: the difference between out-degree and in-degree depends on head/last. -/
-lemma countAsFirst_sub_countAsSecond (xs : List S) (x : S) :
-    (countAsFirst xs x : ℤ) - countAsSecond xs x =
-    (if xs.head? = some x then 1 else 0) - (if xs.getLast? = some x then 1 else 0) := by
+/-- General lemma: countAsFirst + last = countAsSecond + head -/
+lemma countAsFirst_add_last_eq_countAsSecond_add_head (xs : List S) (x : S) :
+    countAsFirst xs x + (if xs.getLast? = some x then 1 else 0) =
+    countAsSecond xs x + (if xs.head? = some x then 1 else 0) := by
   -- Induction on list structure
   induction xs with
   | nil =>
@@ -233,9 +233,14 @@ lemma countAsFirst_sub_countAsSecond (xs : List S) (x : S) :
       simp
     | cons hd2 tl2 =>
       -- At least 2 elements: [hd, hd2] ++ tl2
-      simp [List.head?, List.getLast?]
-      -- Now apply IH and arithmetic
-      sorry
+      simp [List.head?, List.getLast?] at ih ⊢
+      -- LHS = (if hd = x then 1 else 0) + countAsFirst (hd2::tl2) x + last
+      -- RHS = (if hd2 = x then 1 else 0) + countAsSecond (hd2::tl2) x + 1
+      -- IH: countAsFirst (hd2::tl2) x + last = countAsSecond (hd2::tl2) x + (if hd2 = x then 1 else 0)
+      -- So: LHS = (if hd = x then 1 else 0) + countAsSecond (hd2::tl2) x + (if hd2 = x then 1 else 0)
+      --         = (if hd2 = x then 1 else 0) + countAsSecond (hd2::tl2) x + (if hd = x then 1 else 0)
+      --         = RHS ✓
+      omega
 
 /-- In a cycle, the number of edges leaving x equals the number entering x. -/
 lemma cycle_balanced_at_node (cycle : List S) (x : S)
@@ -243,12 +248,11 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
     (cycle.zip cycle.tail).countP (fun p => p.1 = x) =
     (cycle.zip cycle.tail).countP (fun p => p.2 = x) := by
   -- Use the general lemma
-  have h := countAsFirst_sub_countAsSecond cycle x
+  have h := countAsFirst_add_last_eq_countAsSecond_add_head cycle x
   unfold countAsFirst countAsSecond at h
-  -- Since cycle.head? = cycle.getLast?, the RHS is 0
+  -- Since cycle.head? = cycle.getLast?, we have countFirst + last = countSecond + last
+  -- So countFirst = countSecond
   rw [h_cycle] at h
-  simp at h
-  -- Now h says: countP (first) - countP (second) = 0
   omega
 
 /-- Removing a cycle preserves net flow at each state. -/
