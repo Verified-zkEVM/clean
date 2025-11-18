@@ -281,6 +281,46 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
   rw [h_cycle] at h
   omega
 
+set_option linter.unusedSectionVars false in
+/-- Helper: foldl with integer accumulator starting from acc -/
+lemma foldl_int_add_from_acc (f : S → ℤ) (xs : List S) (acc : ℤ) :
+    xs.foldl (fun a y => a + f y) acc = acc + xs.foldl (fun a y => a + f y) 0 := by
+  induction xs generalizing acc with
+  | nil => simp [List.foldl]
+  | cons hd tl ih =>
+    simp [List.foldl]
+    rw [ih (acc + f hd), ih (f hd)]
+    omega
+
+/-- Helper: convert foldl of nat subtraction to int subtraction when bounds hold -/
+lemma foldl_nat_sub_to_int_sub (f g : S → ℕ) (xs : List S)
+    (h_bound : ∀ y ∈ xs, g y ≤ f y) :
+    xs.foldl (fun acc y => acc + (↑(f y - g y) : ℤ)) 0 =
+    xs.foldl (fun acc y => acc + (f y : ℤ)) 0 - xs.foldl (fun acc y => acc + (g y : ℤ)) 0 := by
+  induction xs with
+  | nil => simp [List.foldl]
+  | cons hd tl ih =>
+    have h_hd : g hd ≤ f hd := h_bound hd (by simp)
+    have h_tl : ∀ y ∈ tl, g y ≤ f y := fun y hy => h_bound y (by simp [hy])
+
+    simp only [List.foldl]
+
+    -- Convert nat subtraction to int subtraction for hd
+    have h_cast : (↑(f hd - g hd) : ℤ) = ↑(f hd) - ↑(g hd) := Int.ofNat_sub h_hd
+
+    rw [h_cast]
+    simp only [zero_add]
+
+    -- Use the accumulator lemma
+    rw [foldl_int_add_from_acc (fun y => ↑(f y - g y)) tl (↑(f hd) - ↑(g hd))]
+    rw [foldl_int_add_from_acc (fun y => (f y : ℤ)) tl (↑(f hd))]
+    rw [foldl_int_add_from_acc (fun y => (g y : ℤ)) tl (↑(g hd))]
+
+    -- Apply IH
+    rw [ih h_tl]
+
+    omega
+
 /-- Net flow distributes over run subtraction when the subtraction is valid -/
 lemma netFlow_sub (R R' : Run S) (x : S)
     (h_valid : ∀ t, R' t ≤ R t) :
@@ -289,8 +329,24 @@ lemma netFlow_sub (R R' : Run S) (x : S)
   simp only
   -- We need to show:
   -- (Σ ↑(R(x,y) - R'(x,y))) - (Σ ↑(R(y,x) - R'(y,x))) = (Σ ↑R(x,y) - Σ ↑R(y,x)) - (Σ ↑R'(x,y) - Σ ↑R'(y,x))
-  -- Using h_valid, we can rewrite ↑(R t - R' t) = ↑(R t) - ↑(R' t)
-  sorry
+
+  -- Use the helper lemma to convert both folds
+  have h_outflow : Finset.univ.toList.foldl (fun acc y => acc + (↑(R (x, y) - R' (x, y)) : ℤ)) 0 =
+                   Finset.univ.toList.foldl (fun acc y => acc + (R (x, y) : ℤ)) 0 -
+                   Finset.univ.toList.foldl (fun acc y => acc + (R' (x, y) : ℤ)) 0 := by
+    apply foldl_nat_sub_to_int_sub
+    intro y _
+    exact h_valid (x, y)
+
+  have h_inflow : Finset.univ.toList.foldl (fun acc y => acc + (↑(R (y, x) - R' (y, x)) : ℤ)) 0 =
+                  Finset.univ.toList.foldl (fun acc y => acc + (R (y, x) : ℤ)) 0 -
+                  Finset.univ.toList.foldl (fun acc y => acc + (R' (y, x) : ℤ)) 0 := by
+    apply foldl_nat_sub_to_int_sub
+    intro y _
+    exact h_valid (y, x)
+
+  rw [h_outflow, h_inflow]
+  omega
 
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
