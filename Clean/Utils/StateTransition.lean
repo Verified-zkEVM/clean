@@ -51,6 +51,8 @@ def Transition (S : Type*) := S × S
 
 instance [Fintype S] : Fintype (Transition S) := instFintypeProd S S
 
+instance [DecidableEq S] : DecidableEq (Transition S) := instDecidableEqProd
+
 /-- A run is a function assigning a natural number to each transition,
     representing how many times that transition is used. -/
 def Run (S : Type*) := Transition S → ℕ
@@ -69,18 +71,42 @@ noncomputable def Run.size {S : Type*} [Fintype S] [DecidableEq S] (R : Run S) :
   let allTransitions := (Finset.univ : Finset (Transition S)).toList
   allTransitions.foldl (fun acc t => acc + R t) 0
 
+/-- Check if consecutive elements in a list form valid transitions with positive count. -/
+def Run.validPath (R : Run S) : List S → Prop
+  | [] => True
+  | [_] => True
+  | x :: y :: rest => R (x, y) > 0 ∧ Run.validPath R (y :: rest)
+
 /-- A path in the transition system is a list of states where consecutive states
     form transitions in the run. -/
 def Run.hasPath (R : Run S) (path : List S) : Prop :=
-  sorry
+  path ≠ [] ∧ R.validPath path
 
 /-- A cycle is a non-empty path where the first and last states are the same. -/
 def Run.hasCycle (R : Run S) : Prop :=
-  sorry
+  ∃ (cycle : List S), cycle.length ≥ 2 ∧
+    cycle.head? = cycle.getLast? ∧
+    R.validPath cycle
 
 /-- A run is acyclic if it contains no cycles. -/
 def Run.isAcyclic (R : Run S) : Prop :=
   ¬R.hasCycle
+
+/-- Count how many times a transition appears in a path (as consecutive elements). -/
+def countTransitionInPath [DecidableEq S] (t : Transition S) (path : List S) : ℕ :=
+  (path.zip path.tail).count t
+
+/-- Remove one instance of a cycle from a run. -/
+def Run.removeCycle (R : Run S) (cycle : List S) : Run S :=
+  fun t => R t - countTransitionInPath t cycle
+
+/-- A state is reachable from another via transitions in the run. -/
+def Run.reachable (R : Run S) (start finish : S) : Prop :=
+  ∃ (path : List S), path.head? = some start ∧ path.getLast? = some finish ∧ R.hasPath path
+
+/-- A leaf in the run from a given state is a reachable state with no outgoing transitions. -/
+def Run.isLeaf (R : Run S) (root leaf : S) : Prop :=
+  R.reachable root leaf ∧ ∀ y, R (leaf, y) = 0
 
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
     then there exists a cycle-free path from s to d. -/
