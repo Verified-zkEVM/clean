@@ -108,6 +108,18 @@ def Run.reachable (R : Run S) (start finish : S) : Prop :=
 def Run.isLeaf (R : Run S) (root leaf : S) : Prop :=
   R.reachable root leaf ∧ ∀ y, R (leaf, y) = 0
 
+-- Helper lemmas
+
+/-- Folding addition over non-negative terms preserves the accumulator's lower bound. -/
+lemma foldl_add_nonneg_ge_acc {S : Type*} (R : S × S → ℕ) (leaf : S) (xs : List S) (acc : ℤ) :
+    xs.foldl (fun a z => a + (R (z, leaf) : ℤ)) acc ≥ acc := by
+  induction xs generalizing acc with
+  | nil => simp [List.foldl]
+  | cons hd tl ih =>
+    simp [List.foldl]
+    have : tl.foldl (fun a z => a + (R (z, leaf) : ℤ)) (acc + ↑(R (hd, leaf))) ≥ acc + ↑(R (hd, leaf)) := ih _
+    omega
+
 -- Lemmas about cycle removal and net flow
 
 /-- Removing a cycle preserves net flow at each state. -/
@@ -164,7 +176,34 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     -- Since R(y, leaf) > 0, the sum is > 0
     have : (Finset.univ : Finset S).toList.foldl (fun acc z => acc + (R (z, leaf) : ℤ)) 0
            ≥ (R (y, leaf) : ℤ) := by
-      sorry
+      -- Generalize to show foldl over a list containing y gives at least R(y, leaf)
+      have h_general : ∀ (xs : List S) (acc : ℤ), y ∈ xs → acc ≥ 0 →
+        xs.foldl (fun a z => a + (R (z, leaf) : ℤ)) acc ≥ acc + (R (y, leaf) : ℤ) := by
+        intro xs
+        induction xs with
+        | nil =>
+          intro acc h_mem _
+          simp at h_mem
+        | cons hd tl ih =>
+          intro acc h_mem h_acc_nonneg
+          simp [List.foldl]
+          by_cases h_eq : hd = y
+          · -- If hd = y, we add R(y, leaf) to acc
+            rw [h_eq]
+            have : tl.foldl (fun a z => a + (R (z, leaf) : ℤ)) (acc + ↑(R (y, leaf)))
+                   ≥ acc + ↑(R (y, leaf)) := foldl_add_nonneg_ge_acc R leaf tl _
+            omega
+          · -- If hd ≠ y, then y ∈ tl
+            have y_in_tl : y ∈ tl := by
+              cases h_mem with
+              | head => contradiction
+              | tail _ h => exact h
+            have h_new_acc : acc + (R (hd, leaf) : ℤ) ≥ 0 := by omega
+            have ih_result := ih (acc + ↑(R (hd, leaf))) y_in_tl h_new_acc
+            omega
+      have h_result := h_general (Finset.univ : Finset S).toList 0 y_in_univ (by omega)
+      simp at h_result
+      exact h_result
     omega
   -- Combine: 0 - (positive) < 0
   omega
