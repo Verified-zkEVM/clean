@@ -139,7 +139,23 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
 /-- If a run has a cycle, it can be removed. -/
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     ∃ (R' : Run S), (∀ x, R'.netFlow x = R.netFlow x) ∧ R'.size < R.size := by
-  sorry
+  -- Extract the cycle from the hypothesis
+  obtain ⟨cycle, h_len, h_cycle_prop, h_valid⟩ := h_cycle
+  -- Use R.removeCycle as the witness
+  use R.removeCycle cycle
+  constructor
+  · -- Net flow is preserved
+    intro x
+    apply netFlow_removeCycle_eq
+    exact h_cycle_prop
+  · -- Size decreases
+    apply size_removeCycle_lt
+    · -- cycle is nonempty
+      intro h_empty
+      rw [h_empty] at h_len
+      simp at h_len
+    · exact h_valid
+    · exact h_cycle_prop
 
 /-- A finite DAG reachable from a root has at least one leaf. -/
 lemma acyclic_has_leaf (R : Run S) (root : S)
