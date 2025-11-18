@@ -120,6 +120,58 @@ lemma foldl_add_nonneg_ge_acc {S : Type*} (R : S × S → ℕ) (leaf : S) (xs : 
     have : tl.foldl (fun a z => a + (R (z, leaf) : ℤ)) (acc + ↑(R (hd, leaf))) ≥ acc + ↑(R (hd, leaf)) := ih _
     omega
 
+-- Lemmas about folds and sums
+
+/-- foldl with accumulator is equal to foldl without plus accumulator. -/
+lemma foldl_add_acc {α : Type*} (f : α → ℕ) (xs : List α) (acc : ℕ) :
+    xs.foldl (fun a x => a + f x) acc = acc + xs.foldl (fun a x => a + f x) 0 := by
+  induction xs generalizing acc with
+  | nil => simp [List.foldl]
+  | cons hd tl ih =>
+    simp [List.foldl]
+    rw [ih (acc + f hd), ih (f hd)]
+    omega
+
+/-- If g x ≤ f x for all x, then the fold sum of g is ≤ fold sum of f. -/
+lemma foldl_sum_le {α : Type*} (f g : α → ℕ) (xs : List α)
+    (h_le : ∀ x, g x ≤ f x) :
+    xs.foldl (fun acc x => acc + g x) 0 ≤ xs.foldl (fun acc x => acc + f x) 0 := by
+  induction xs with
+  | nil => simp [List.foldl]
+  | cons hd tl ih =>
+    simp [List.foldl]
+    rw [foldl_add_acc g tl (g hd), foldl_add_acc f tl (f hd)]
+    have h_hd : g hd ≤ f hd := h_le hd
+    omega
+
+-- Lemmas about folds and sums
+
+/-- If we decrease one element in a sum and all others are non-negative, the sum decreases. -/
+lemma foldl_sum_decrease {α : Type*} [DecidableEq α] (f g : α → ℕ) (xs : List α) (a : α)
+    (h_a_in : a ∈ xs) (h_a_decrease : g a < f a)
+    (h_others_le : ∀ x, g x ≤ f x) :
+    xs.foldl (fun acc x => acc + g x) 0 < xs.foldl (fun acc x => acc + f x) 0 := by
+  induction xs with
+  | nil => simp at h_a_in
+  | cons hd tl ih =>
+    simp [List.foldl]
+    by_cases h_eq : hd = a
+    · -- If hd = a, then we have the strict decrease here
+      rw [h_eq]
+      rw [foldl_add_acc g tl (g a), foldl_add_acc f tl (f a)]
+      have h_rest_le : tl.foldl (fun acc x => acc + g x) 0 ≤ tl.foldl (fun acc x => acc + f x) 0 := by
+        exact foldl_sum_le f g tl h_others_le
+      omega
+    · -- If hd ≠ a, then a ∈ tl, so we use IH
+      have h_a_in_tl : a ∈ tl := by
+        cases h_a_in with
+        | head => contradiction
+        | tail _ h => exact h
+      rw [foldl_add_acc g tl (g hd), foldl_add_acc f tl (f hd)]
+      have ih_result := ih h_a_in_tl
+      have h_hd_le : g hd ≤ f hd := h_others_le hd
+      omega
+
 -- Lemmas about valid paths and transitions
 
 /-- A valid path with at least 2 elements has at least one transition with positive count. -/
@@ -155,7 +207,7 @@ lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
 lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     (h_len : cycle.length ≥ 2)
     (h_valid : R.validPath cycle)
-    (h_cycle : cycle.head? = cycle.getLast?) :
+    (_h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).size < R.size := by
   -- Get a transition with positive count
   obtain ⟨x, y, h_in_zip, h_pos⟩ := validPath_has_transition R cycle h_valid h_len
@@ -164,12 +216,26 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     unfold countTransitionInPath
     exact List.count_pos_iff.mpr h_in_zip
   -- The size decreases because we subtract countTransitionInPath (x,y) cycle from R(x,y)
-  -- Since R(x,y) > 0 and countTransitionInPath (x,y) cycle > 0, and all other terms
-  -- either stay the same or decrease, the total size strictly decreases.
+  -- Since R(x,y) > 0 and countTransitionInPath (x,y) cycle > 0, the total decreases.
   unfold Run.size Run.removeCycle
-  -- This requires a general lemma about folds: if you decrease at least one positive
-  -- element and don't increase any elements, the sum decreases. Left as sorry for now.
-  sorry
+  -- Simplify the goal
+  simp only
+  -- The key is that (x,y) is in the universe of all transitions
+  have h_xy_in_univ : (x, y) ∈ (Finset.univ : Finset (Transition S)).toList := by
+    simp [Finset.mem_toList]
+  -- We'll prove that the sum of (R t - countTransitionInPath t cycle) is less than sum of R t
+  have h_decrease : (fun t => R t - countTransitionInPath t cycle) (x, y) < R (x, y) := by
+    simp only
+    -- R(x,y) > 0 and countTransitionInPath (x,y) cycle > 0
+    -- So R(x,y) - count < R(x,y) by Nat.sub_lt
+    exact Nat.sub_lt h_pos h_count_pos
+  have h_others_le : ∀ t, (fun t => R t - countTransitionInPath t cycle) t ≤ R t := by
+    intro t
+    simp only
+    exact Nat.sub_le (R t) (countTransitionInPath t cycle)
+  -- Apply the general lemma about folds
+  exact foldl_sum_decrease R (fun t => R t - countTransitionInPath t cycle)
+    (Finset.univ : Finset (Transition S)).toList (x, y) h_xy_in_univ h_decrease h_others_le
 
 /-- If a run has a cycle, it can be removed. -/
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
