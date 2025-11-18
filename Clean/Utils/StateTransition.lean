@@ -120,6 +120,26 @@ lemma foldl_add_nonneg_ge_acc {S : Type*} (R : S × S → ℕ) (leaf : S) (xs : 
     have : tl.foldl (fun a z => a + (R (z, leaf) : ℤ)) (acc + ↑(R (hd, leaf))) ≥ acc + ↑(R (hd, leaf)) := ih _
     omega
 
+-- Lemmas about valid paths and transitions
+
+/-- A valid path with at least 2 elements has at least one transition with positive count. -/
+lemma validPath_has_transition {S : Type*} [DecidableEq S] (R : Run S) (path : List S)
+    (h_valid : R.validPath path) (h_len : path.length ≥ 2) :
+    ∃ (x y : S), (x, y) ∈ path.zip path.tail ∧ R (x, y) > 0 := by
+  cases path with
+  | nil => simp at h_len
+  | cons hd tl =>
+    cases tl with
+    | nil => simp at h_len
+    | cons hd2 tl2 =>
+      unfold Run.validPath at h_valid
+      simp at h_valid
+      obtain ⟨h_pos, _⟩ := h_valid
+      use hd, hd2
+      constructor
+      · simp [List.zip, List.tail]
+      · exact h_pos
+
 -- Lemmas about cycle removal and net flow
 
 /-- Removing a cycle preserves net flow at each state. -/
@@ -133,13 +153,22 @@ lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
 
 /-- Removing a cycle decreases the total size of the run. -/
 lemma size_removeCycle_lt (R : Run S) (cycle : List S)
-    (h_nonempty : cycle ≠ [])
+    (h_len : cycle.length ≥ 2)
     (h_valid : R.validPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).size < R.size := by
-  -- A valid non-empty cycle has at least one transition with positive count.
-  -- removeCycle subtracts countTransitionInPath for each transition,
-  -- so at least one transition count decreases, making size smaller.
+  -- Get a transition with positive count
+  obtain ⟨x, y, h_in_zip, h_pos⟩ := validPath_has_transition R cycle h_valid h_len
+  -- Show that this transition appears in the cycle, so countTransitionInPath > 0
+  have h_count_pos : countTransitionInPath (x, y) cycle > 0 := by
+    unfold countTransitionInPath
+    exact List.count_pos_iff.mpr h_in_zip
+  -- The size decreases because we subtract countTransitionInPath (x,y) cycle from R(x,y)
+  -- Since R(x,y) > 0 and countTransitionInPath (x,y) cycle > 0, and all other terms
+  -- either stay the same or decrease, the total size strictly decreases.
+  unfold Run.size Run.removeCycle
+  -- This requires a general lemma about folds: if you decrease at least one positive
+  -- element and don't increase any elements, the sum decreases. Left as sorry for now.
   sorry
 
 /-- If a run has a cycle, it can be removed. -/
@@ -156,10 +185,7 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     exact h_cycle_prop
   · -- Size decreases
     apply size_removeCycle_lt
-    · -- cycle is nonempty
-      intro h_empty
-      rw [h_empty] at h_len
-      simp at h_len
+    · exact h_len
     · exact h_valid
     · exact h_cycle_prop
 
