@@ -19,12 +19,9 @@ Structured representation of a Binius shifted vector index (SVI).
 The wire is encoded using the `fields 64` provable type, while the shift
 metadata lives directly in the base field.
 -/
-structure SVIData (shiftKind: ShiftKind) (shiftAmount: Fin 64) (F : Type) where
+structure SVI (shiftKind: ShiftKind) (shiftAmount: Fin 64) (F : Type) where
   wire : (fields 64) F
 deriving Repr
-
-@[reducible]
-def SVI := SVIData
 
 instance (k: ShiftKind) (a: Fin 64) : ProvableStruct (SVI k a) where
   components := [fields 64]
@@ -105,25 +102,30 @@ section Evaluation
 variable {p : ℕ} [Fact p.Prime]
 variable {k: ShiftKind} {a: Fin 64}
 
-/-- Apply the shift metadata of an `SVIData` to its wire. -/
-def applyShift (x : SVIData k a (F p)) : Vector (F p) 64 :=
+/-- Apply the shift metadata of an `SVI` to its wire. -/
+def applyShift (x : SVI k a (F p)) : Vector (F p) 64 :=
   applyShiftVec x.wire k a
 
 private def evalShiftedWire
-    (x : SVIData k a (Expression (F p)))
+    (x : SVI k a (Expression (F p)))
     (env : Environment (F p)) : Vector (F p) 64 :=
   let wireVals := Vector.map (Expression.eval env) x.wire
   applyShiftVec wireVals k a
 
-def applyShiftExpr (x : SVIData k a (Expression (F p))) :
+def applyShiftExpr (x : SVI k a (Expression (F p))) :
     Circuit (F p) (Vector (Expression (F p)) 64) :=
   return applyShiftVec x.wire k a
 
--- TODO can remove
 @[simp] lemma applyShiftExpr_localLength
-    (x : SVIData k a (Expression (F p))) (offset : ℕ) :
+    (x : SVI k a (Expression (F p))) (offset : ℕ) :
     (applyShiftExpr x).localLength offset = 0 := by
   simp_all [circuit_norm, applyShiftExpr]
+
+@[simp] lemma applyShiftExpr_subcircuitsConsistent
+    (x : SVI k a (Expression (F p))) (offset : ℕ) :
+    ((applyShiftExpr x).operations offset).SubcircuitsConsistent offset := by
+  simp [applyShiftExpr, Operations.SubcircuitsConsistent,
+    Operations.forAll, Circuit.pure_def, Circuit.operations]
 
 end Evaluation
 

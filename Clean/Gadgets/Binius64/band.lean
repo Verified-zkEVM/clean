@@ -8,14 +8,15 @@ namespace Gadgets.Binius64
 open Circuit
 
 variable {p : ℕ} [Fact p.Prime]
+variable {k m : ShiftKind} {a b : Fin 64}
 
 /-- Inputs to the Binius 64-bit bitwise-and gadget. -/
-structure BandInputs (k m: ShiftKind) (a b: Fin 64) (F : Type) where
-  lhs : SVIData k a F
-  rhs : SVIData m b F
+structure BandInputs (k m : ShiftKind) (a b : Fin 64) (F : Type) where
+  lhs : SVI k a F
+  rhs : SVI m b F
 
-instance : ProvableStruct BandInputs where
-  components := [SVI, SVI]
+instance : ProvableStruct (BandInputs k m a b) where
+  components := [SVI k a, SVI m b]
   toComponents := fun { lhs, rhs } => .cons lhs (.cons rhs .nil)
   fromComponents := fun
     | .cons lhs (.cons rhs .nil) => { lhs, rhs }
@@ -30,48 +31,47 @@ private def elementwiseAndVals
     (lhs rhs : Vector (F p) 64) : Vector (F p) 64 :=
   Vector.ofFn fun i => lhs[i] * rhs[i]
 
-/-- we do not constrain the shifts yet   --/
-def main (k m: ShiftKind) (a b: Fin 64) (input : Var BandInputs k m a b (F p)) : Circuit (F p) (Var SVI (.sll) 0 (F p)) := do
+def main (k m : ShiftKind) (a b : Fin 64)
+    (input : Var (BandInputs k m a b) (F p)) :
+    Circuit (F p) (Var (SVI .sll 0) (F p)) := do
   let ⟨lhs, rhs⟩ := input
   let lhsShifted ← applyShiftExpr lhs
   let rhsShifted ← applyShiftExpr rhs
   let wire := elementwiseAndExpr lhsShifted rhsShifted
-  return { wire }
+  return { wire := wire }
 
-def Assumptions (_ : BandInputs (F p)) : Prop := True
+def Assumptions (_ : BandInputs k m a b (F p)) : Prop := True
 
-def Spec (input : BandInputs (F p)) (output : SVIData (F p)) : Prop :=
+def Spec (input : BandInputs k m a b (F p))
+    (output : SVI (.sll) 0 (F p)) : Prop :=
   let lhsShift := applyShift input.lhs
   let rhsShift := applyShift input.rhs
-  output.shiftType = 0 ∧
-  output.shiftAmount = 0 ∧
   output.wire = elementwiseAndVals lhsShift rhsShift
 
-instance elaborated : ElaboratedCircuit (F p) BandInputs SVI where
-  main := main
-  localLength input :=
-    shiftLocalLength input.lhs + shiftLocalLength input.rhs
+instance elaborated (k m : ShiftKind) (a b : Fin 64) :
+    ElaboratedCircuit (F p) (BandInputs k m a b) (SVI .sll 0) where
+  main := main k m a b
+  localLength _ := 0
 
-  localLength_eq := by
-    intro input offset
-    rcases input with ⟨lhs, rhs⟩
-    simp [main, shiftLocalLength, Circuit.bind_localLength_eq,
-      Circuit.map_localLength_eq]
-  subcircuitsConsistent := by sorry
 
-theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
+theorem soundness (k m : ShiftKind) (a b : Fin 64) :
+    Soundness (F p) (elaborated (k:=k) (m:=m) (a:=a) (b:=b))
+      (Assumptions (k:=k) (m:=m) (a:=a) (b:=b))
+      (Spec (k:=k) (m:=m) (a:=a) (b:=b)) := by
   sorry
 
-theorem completeness : Completeness (F p) elaborated Assumptions := by
-  intro offset env inputVar h_env input h_eval _
+theorem completeness (k m : ShiftKind) (a b : Fin 64) :
+    Completeness (F p) (elaborated (k:=k) (m:=m) (a:=a) (b:=b))
+      (Assumptions) := by
   sorry
 
-def circuit : FormalCircuit (F p) BandInputs SVI where
-  elaborated := elaborated
+def circuit (k m : ShiftKind) (a b : Fin 64) :
+    FormalCircuit (F p) (BandInputs k m a b) (SVI .sll 0) where
+  elaborated := elaborated (k:=k) (m:=m) (a:=a) (b:=b)
   Assumptions := Assumptions
   Spec := Spec
-  soundness := soundness
-  completeness := completeness
+  soundness := soundness (k:=k) (m:=m) (a:=a) (b:=b)
+  completeness := completeness (k:=k) (m:=m) (a:=a) (b:=b)
 
 end Band
 
