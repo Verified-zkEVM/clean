@@ -108,6 +108,41 @@ def Run.reachable (R : Run S) (start finish : S) : Prop :=
 def Run.isLeaf (R : Run S) (root leaf : S) : Prop :=
   R.reachable root leaf ∧ ∀ y, R (leaf, y) = 0
 
+-- Lemmas about cycle removal and net flow
+
+/-- Removing a cycle preserves net flow at each state. -/
+lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
+    (h_cycle : cycle.head? = cycle.getLast?) :
+    (R.removeCycle cycle).netFlow x = R.netFlow x := by
+  sorry
+
+/-- Removing a cycle decreases the total size of the run. -/
+lemma size_removeCycle_lt (R : Run S) (cycle : List S)
+    (h_nonempty : cycle ≠ [])
+    (h_valid : R.validPath cycle)
+    (h_cycle : cycle.head? = cycle.getLast?) :
+    (R.removeCycle cycle).size < R.size := by
+  sorry
+
+/-- If a run has a cycle, it can be removed. -/
+lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
+    ∃ (R' : Run S), (∀ x, R'.netFlow x = R.netFlow x) ∧ R'.size < R.size := by
+  sorry
+
+/-- A finite DAG reachable from a root has at least one leaf. -/
+lemma acyclic_has_leaf (R : Run S) (root : S)
+    (h_acyclic : R.isAcyclic)
+    (h_has_out : ∃ y, R (root, y) > 0) :
+    ∃ leaf, R.isLeaf root leaf := by
+  sorry
+
+/-- A leaf with an incoming edge has negative net flow. -/
+lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
+    (h_leaf : R.isLeaf root leaf)
+    (h_in : ∃ y, R (y, leaf) > 0) :
+    R.netFlow leaf < 0 := by
+  sorry
+
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
     then there exists a cycle-free path from s to d. -/
 theorem exists_path_from_source_to_sink
@@ -116,7 +151,7 @@ theorem exists_path_from_source_to_sink
     (h_sink : R.netFlow d = -1)
     (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
     ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
-      R.hasPath path ∧ path.Nodup :=
+      R.hasPath path ∧ path.Nodup := by
   sorry
 
 end Utils.StateTransition
