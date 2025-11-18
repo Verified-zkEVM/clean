@@ -281,23 +281,46 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
   rw [h_cycle] at h
   omega
 
+/-- Net flow distributes over run subtraction when the subtraction is valid -/
+lemma netFlow_sub (R R' : Run S) (x : S)
+    (h_valid : ∀ t, R' t ≤ R t) :
+    Run.netFlow (fun t => R t - R' t) x = R.netFlow x - R'.netFlow x := by
+  unfold Run.netFlow
+  simp only
+  -- We need to show:
+  -- (Σ ↑(R(x,y) - R'(x,y))) - (Σ ↑(R(y,x) - R'(y,x))) = (Σ ↑R(x,y) - Σ ↑R(y,x)) - (Σ ↑R'(x,y) - Σ ↑R'(y,x))
+  -- Using h_valid, we can rewrite ↑(R t - R' t) = ↑(R t) - ↑(R' t)
+  sorry
+
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
+    (h_valid : R.validPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- Unfold the definitions
-  unfold Run.netFlow Run.removeCycle
-  simp only
-  -- The net flow is outflow - inflow
-  -- When we remove the cycle, both outflow and inflow decrease by the same amount
-  -- because cycles are balanced (in-degree = out-degree for each node)
+  -- The key is to show that the cycle contributes 0 net flow
+  -- i.e., Run.netFlow (fun t => countTransitionInPath t cycle) x = 0
+  -- This follows from cycle balance: in-degree = out-degree
 
-  -- For outflow: we subtract the count of transitions (x, y) in the cycle
-  -- For inflow: we subtract the count of transitions (y, x) in the cycle
-  -- These counts are equal by cycle_balanced_at_node
+  -- First, we need h_valid_sub: countTransitionInPath t cycle ≤ R t for all t
+  have h_valid_sub : ∀ t, countTransitionInPath t cycle ≤ R t := by
+    sorry
 
-  -- The detailed proof requires showing that the fold sums distribute correctly
-  sorry
+  -- Unfold removeCycle and use netFlow_sub
+  have h_eq : (R.removeCycle cycle).netFlow x = Run.netFlow (fun t => R t - countTransitionInPath t cycle) x := by
+    unfold Run.removeCycle
+    rfl
+
+  rw [h_eq, netFlow_sub R (fun t => countTransitionInPath t cycle) x h_valid_sub]
+
+  -- Now show that Run.netFlow (fun t => countTransitionInPath t cycle) x = 0
+  have h_cycle_netFlow_zero : Run.netFlow (fun t => countTransitionInPath t cycle) x = 0 := by
+    unfold Run.netFlow
+    simp only
+    -- This should follow from cycle balance
+    sorry
+
+  rw [h_cycle_netFlow_zero]
+  simp
 
 /-- Removing a cycle decreases the total size of the run. -/
 lemma size_removeCycle_lt (R : Run S) (cycle : List S)
@@ -344,7 +367,8 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
   · -- Net flow is preserved
     intro x
     apply netFlow_removeCycle_eq
-    exact h_cycle_prop
+    · exact h_valid
+    · exact h_cycle_prop
   · -- Size decreases
     apply size_removeCycle_lt
     · exact h_len
