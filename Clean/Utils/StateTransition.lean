@@ -105,69 +105,7 @@ def Run.reachable (R : Run S) (start finish : S) : Prop :=
 def Run.isLeaf (R : Run S) (root leaf : S) : Prop :=
   R.reachable root leaf ∧ ∀ y, R (leaf, y) = 0
 
--- Helper lemmas
-
-/-- Folding addition over non-negative terms preserves the accumulator's lower bound. -/
-lemma foldl_add_nonneg_ge_acc {S : Type*} (R : S × S → ℕ) (leaf : S) (xs : List S) (acc : ℤ) :
-    xs.foldl (fun a z => a + (R (z, leaf) : ℤ)) acc ≥ acc := by
-  induction xs generalizing acc with
-  | nil => simp [List.foldl]
-  | cons hd tl ih =>
-    simp [List.foldl]
-    have : tl.foldl (fun a z => a + (R (z, leaf) : ℤ)) (acc + ↑(R (hd, leaf))) ≥ acc + ↑(R (hd, leaf)) := ih _
-    omega
-
--- Lemmas about folds and sums
-
-/-- foldl with accumulator is equal to foldl without plus accumulator. -/
-lemma foldl_add_acc {α : Type*} (f : α → ℕ) (xs : List α) (acc : ℕ) :
-    xs.foldl (fun a x => a + f x) acc = acc + xs.foldl (fun a x => a + f x) 0 := by
-  induction xs generalizing acc with
-  | nil => simp [List.foldl]
-  | cons hd tl ih =>
-    simp [List.foldl]
-    rw [ih (acc + f hd), ih (f hd)]
-    omega
-
-/-- If g x ≤ f x for all x, then the fold sum of g is ≤ fold sum of f. -/
-lemma foldl_sum_le {α : Type*} (f g : α → ℕ) (xs : List α)
-    (h_le : ∀ x, g x ≤ f x) :
-    xs.foldl (fun acc x => acc + g x) 0 ≤ xs.foldl (fun acc x => acc + f x) 0 := by
-  induction xs with
-  | nil => simp [List.foldl]
-  | cons hd tl ih =>
-    simp [List.foldl]
-    rw [foldl_add_acc g tl (g hd), foldl_add_acc f tl (f hd)]
-    have h_hd : g hd ≤ f hd := h_le hd
-    omega
-
--- Lemmas about folds and sums
-
-/-- If we decrease one element in a sum and all others are non-negative, the sum decreases. -/
-lemma foldl_sum_decrease {α : Type*} [DecidableEq α] (f g : α → ℕ) (xs : List α) (a : α)
-    (h_a_in : a ∈ xs) (h_a_decrease : g a < f a)
-    (h_others_le : ∀ x, g x ≤ f x) :
-    xs.foldl (fun acc x => acc + g x) 0 < xs.foldl (fun acc x => acc + f x) 0 := by
-  induction xs with
-  | nil => simp at h_a_in
-  | cons hd tl ih =>
-    simp [List.foldl]
-    by_cases h_eq : hd = a
-    · -- If hd = a, then we have the strict decrease here
-      rw [h_eq]
-      rw [foldl_add_acc g tl (g a), foldl_add_acc f tl (f a)]
-      have h_rest_le : tl.foldl (fun acc x => acc + g x) 0 ≤ tl.foldl (fun acc x => acc + f x) 0 := by
-        exact foldl_sum_le f g tl h_others_le
-      omega
-    · -- If hd ≠ a, then a ∈ tl, so we use IH
-      have h_a_in_tl : a ∈ tl := by
-        cases h_a_in with
-        | head => contradiction
-        | tail _ h => exact h
-      rw [foldl_add_acc g tl (g hd), foldl_add_acc f tl (f hd)]
-      have ih_result := ih h_a_in_tl
-      have h_hd_le : g hd ≤ f hd := h_others_le hd
-      omega
+-- Helper lemmas for sums
 
 /-- If one element strictly decreases and others are ≤, the sum decreases -/
 lemma sum_decrease {α : Type*} [Fintype α] [DecidableEq α] (f g : α → ℕ) (a : α)
@@ -294,54 +232,6 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
   rw [h_cycle] at h
   omega
 
-set_option linter.unusedSectionVars false in
-/-- Helper: foldl with integer accumulator starting from acc -/
-lemma foldl_int_add_from_acc (f : S → ℤ) (xs : List S) (acc : ℤ) :
-    xs.foldl (fun a y => a + f y) acc = acc + xs.foldl (fun a y => a + f y) 0 := by
-  induction xs generalizing acc with
-  | nil => simp [List.foldl]
-  | cons hd tl ih =>
-    simp [List.foldl]
-    rw [ih (acc + f hd), ih (f hd)]
-    omega
-
-set_option linter.unusedSectionVars false in
-/-- Distributing addition over foldl -/
-lemma foldl_add_distrib {α : Type*} (f g : S → α) (xs : List S) [AddCommMonoid α] :
-    xs.foldl (fun acc y => acc + (f y + g y)) 0 =
-    xs.foldl (fun acc y => acc + f y) 0 + xs.foldl (fun acc y => acc + g y) 0 := by
-  induction xs with
-  | nil => simp [List.foldl]
-  | cons hd tl ih =>
-    simp only [List.foldl]
-    sorry
-
-set_option linter.unusedSectionVars false in
-/-- Casting a nat fold to int -/
-lemma foldl_nat_cast_to_int (f : S → ℕ) (xs : List S) :
-    (xs.foldl (fun acc y => acc + f y) 0 : ℤ) =
-    xs.foldl (fun acc y => acc + (f y : ℤ)) 0 := by
-  induction xs with
-  | nil => simp [List.foldl]
-  | cons hd tl ih => simp only [List.foldl]
-
-/-- Helper: foldl with accumulator adjustment -/
-lemma foldl_add_const_aux {α : Type*} (xs : List α) (c acc : ℕ) :
-    xs.foldl (fun a _ => a + c) acc = acc + xs.length * c := by
-  induction xs generalizing acc with
-  | nil => simp [List.foldl]
-  | cons _ tl ih =>
-    simp only [List.foldl, List.length_cons]
-    rw [ih]
-    rw [Nat.add_mul]
-    omega
-
-/-- Folding addition of a constant function over a list -/
-lemma foldl_add_const {α : Type*} (xs : List α) (c : ℕ) :
-    xs.foldl (fun acc _ => acc + c) 0 = xs.length * c := by
-  rw [foldl_add_const_aux]
-  simp
-
 /-- Sum of counts of specific pairs equals count of pairs with fixed first component -/
 lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
     ∑ b : S, List.count (a, b) xs = List.countP (fun p => p.1 = a) xs := by
@@ -352,35 +242,6 @@ lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
 lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
     ∑ a : S, List.count (a, b) xs = List.countP (fun p => p.2 = b) xs := by
   sorry
-
-/-- Helper: convert foldl of nat subtraction to int subtraction when bounds hold -/
-lemma foldl_nat_sub_to_int_sub (f g : S → ℕ) (xs : List S)
-    (h_bound : ∀ y ∈ xs, g y ≤ f y) :
-    xs.foldl (fun acc y => acc + (↑(f y - g y) : ℤ)) 0 =
-    xs.foldl (fun acc y => acc + (f y : ℤ)) 0 - xs.foldl (fun acc y => acc + (g y : ℤ)) 0 := by
-  induction xs with
-  | nil => simp [List.foldl]
-  | cons hd tl ih =>
-    have h_hd : g hd ≤ f hd := h_bound hd (by simp)
-    have h_tl : ∀ y ∈ tl, g y ≤ f y := fun y hy => h_bound y (by simp [hy])
-
-    simp only [List.foldl]
-
-    -- Convert nat subtraction to int subtraction for hd
-    have h_cast : (↑(f hd - g hd) : ℤ) = ↑(f hd) - ↑(g hd) := Int.ofNat_sub h_hd
-
-    rw [h_cast]
-    simp only [zero_add]
-
-    -- Use the accumulator lemma
-    rw [foldl_int_add_from_acc (fun y => ↑(f y - g y)) tl (↑(f hd) - ↑(g hd))]
-    rw [foldl_int_add_from_acc (fun y => (f y : ℤ)) tl (↑(f hd))]
-    rw [foldl_int_add_from_acc (fun y => (g y : ℤ)) tl (↑(g hd))]
-
-    -- Apply IH
-    rw [ih h_tl]
-
-    omega
 
 /-- Net flow distributes over run subtraction when the subtraction is valid -/
 lemma netFlow_sub (R R' : Run S) (x : S)
@@ -483,7 +344,7 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     intro t
     simp only
     exact Nat.sub_le (R t) (countTransitionInPath t cycle)
-  -- Apply the general lemma about folds - but Run.size now uses ∑, not foldl!
+  -- Apply the sum_decrease lemma
   sorry
 
 /-- If a run has a cycle, it can be removed. -/
