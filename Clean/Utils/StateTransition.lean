@@ -208,8 +208,14 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
   -- where each element appears in a balanced way in consecutive pairs
   -- This is true because head? = getLast? means the last element equals the first
 
-  -- A rigorous proof would proceed by induction on the cycle structure,
-  -- showing that for each internal element, its in-degree equals its out-degree
+  -- We can prove this by noting that:
+  -- 1. cycle.zip cycle.tail pairs consecutive elements
+  -- 2. For a cycle, every element except possibly head/last appears in the "middle"
+  -- 3. Middle elements appear exactly once as a.1 (when leaving) and once as a.2 (when entering)
+  -- 4. The head/last element appears once leaving (at the start) and once entering (at the end)
+  -- 5. Thus every element has balanced in/out degree
+
+  -- The formal proof requires careful analysis of list.zip properties and induction
   sorry
 
 /-- Removing a cycle preserves net flow at each state. -/
