@@ -153,11 +153,38 @@ lemma containsPath_has_positive_transition (R : Run S) (path : List S)
   have h_bound := h_contains t
   omega
 
+/-- Zipping drops of consecutive indices produces a sublist of zipping a list with its tail. -/
+lemma zip_drop_sublist (l : List S) (n : ℕ) :
+    ((l.drop n).zip (l.drop (n + 1))).Sublist (l.zip l.tail) := by
+  induction n generalizing l with
+  | zero =>
+    simp [List.drop, List.tail]
+  | succ n' ih =>
+    cases l with
+    | nil => simp
+    | cons h t =>
+      simp only [List.drop_succ_cons, List.tail_cons]
+      have h_sub := ih t
+      refine List.Sublist.trans h_sub ?_
+      cases t with
+      | nil => simp
+      | cons t0 ts =>
+        rw [List.tail_cons]
+        simp [List.zip_cons_cons]
+
 /-- If a path is contained in a run, dropping elements preserves containment. -/
 lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
     (h_contains : R.containsPath path) :
     R.containsPath (path.drop n) := by
-  sorry
+  unfold Run.containsPath countTransitionInPath at h_contains ⊢
+  intro t
+  have h_tail_drop : (path.drop n).tail = path.drop (n + 1) := List.tail_drop
+  rw [h_tail_drop]
+  have h_sublist := zip_drop_sublist path n
+  have h_count_le : List.count t ((path.drop n).zip (path.drop (n + 1))) ≤
+      List.count t (path.zip path.tail) := List.Sublist.count_le t h_sublist
+  have h_original := h_contains t
+  omega
 
 /-- Zipping takes of two lists produces a sublist of zipping the original lists. -/
 lemma zip_take_sublist (l1 l2 : List S) (n m : ℕ) :
