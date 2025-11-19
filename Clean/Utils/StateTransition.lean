@@ -944,24 +944,25 @@ lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
 /-- Helper: Starting from a current node with outgoing edges, excluding visited states,
     we can find a leaf reachable from the root. Uses strong induction on unvisited state count. -/
 lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
-    (visited : Finset S)
+    (path : List S)
     (h_acyclic : R.isAcyclic)
-    (h_reachable : R.reachable root current)
-    (h_current_not_visited : current ∉ visited)
-    (h_has_out : ∃ y, y ∉ visited ∧ R (current, y) > 0) :
+    (h_path : path.head? = some root ∧ path.getLast? = some current ∧ path ≠ [] ∧ R.containsPath path)
+    (h_has_out : ∃ y, y ∉ path ∧ R (current, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
-  -- Get a successor not in visited
-  obtain ⟨y, h_y_not_visited, h_edge⟩ := h_has_out
+  -- Get a successor not in path
+  obtain ⟨y, h_y_not_in_path, h_edge⟩ := h_has_out
 
-  -- Check if y has any outgoing edges (excluding visited ∪ {current})
-  by_cases h_y_has_out : ∃ z, z ∉ visited ∧ z ≠ current ∧ R (y, z) > 0
+  --Extract path properties
+  obtain ⟨h_start, h_end, h_nonempty, h_contains⟩ := h_path
+
+  -- Check if y has any outgoing edges to states not in path ++ [y]
+  by_cases h_y_has_out : ∃ z, z ∉ path ∧ z ≠ y ∧ R (y, z) > 0
   case neg =>
-    -- y has no outgoing edges to unvisited states (except possibly current)
+    -- y has no outgoing edges to states not in path ++ [y]
     -- We'll show y is actually a leaf (has NO outgoing edges at all)
     use y
     constructor
     · -- Show y is reachable from root
-      obtain ⟨path, h_start, h_end, h_nonempty, h_contains⟩ := h_reachable
       -- Extend the path by adding y
       use path ++ [y]
       constructor
@@ -970,111 +971,85 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
       · simp
       constructor
       · simp [h_nonempty]
-      · intro t
-        unfold countTransitionInPath
-        -- Key: path is Nodup (from acyclicity), so (current, y) doesn't appear in path
-        have h_path_nodup : path.Nodup := by
-          exact acyclic_containsPath_nodup R path h_acyclic h_contains
-        -- Since path ends with current and is Nodup, (current, _) appears at most once in path.zip path.tail
-        -- and specifically (current, y) doesn't appear since y ∉ path
-        have h_y_not_in_path : y ∉ path := by
-          intro h_y_in_path
-          exact acyclic_edge_not_in_path R path current y h_acyclic h_nonempty h_end h_contains h_edge h_y_in_path
-        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge t
+      · exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
     · -- Show y has no outgoing edges
       intro z
       by_contra h_pos
       push_neg at h_y_has_out
-      -- If R(y,z) > 0, then by h_y_has_out, either z ∈ visited or z = current
+      -- If R(y,z) > 0, then by h_y_has_out, either z ∈ path or z = y
       have h_z_pos : R (y, z) > 0 := by omega
-      have h_z_in_visited_or_current : z ∈ visited ∨ z = current := by
+      have h_z_in_path_or_y : z ∈ path ∨ z = y := by
         by_contra h_not
         push_neg at h_not
         specialize h_y_has_out z
-        have h_contra : z ∉ visited ∧ z ≠ current ∧ R (y, z) > 0 := ⟨h_not.1, h_not.2, h_z_pos⟩
+        have h_contra : z ∉ path ∧ z ≠ y ∧ R (y, z) > 0 := ⟨h_not.1, h_not.2, h_z_pos⟩
         -- This contradicts h_y_has_out which says no such z exists
         have h_le := h_y_has_out h_not.1 h_not.2
         omega
 
       -- Derive contradiction from cycle
-      cases h_z_in_visited_or_current with
-      | inl h_z_in_visited =>
-        -- z ∈ visited, but we're claiming y is a leaf reachable from root
-        -- This is impossible because y has an outgoing edge to z
-        -- Actually, this case requires showing the path creates a cycle through visited
-        -- For now, this is the harder case
-        sorry
-      | inr h_z_eq_current =>
-        -- z = current, so we have current → y → current (a 2-cycle)
-        rw [h_z_eq_current] at h_z_pos
-        by_cases h_y_eq : y = current
-        · -- If y = current, we have a self-loop
-          rw [h_y_eq] at h_edge
-          exact acyclic_no_self_loop R current h_acyclic h_edge
-        · -- If y ≠ current, we have a proper 2-cycle
-          have h_ne : current ≠ y := by intro h; exact h_y_eq h.symm
-          exact acyclic_no_two_cycle R current y h_acyclic h_ne h_edge h_z_pos
+      cases h_z_in_path_or_y with
+      | inl h_z_in_path =>
+        -- z ∈ path, so we can construct a cycle
+        -- path ends with current, current → y, y → z, and z ∈ path
+        -- This creates a cycle: (suffix of path from z to current) → y → z
+        have h_z_in_extended : z ∈ path ++ [y] := by simp [h_z_in_path]
+        exact acyclic_edge_not_in_path R (path ++ [y]) y z h_acyclic (by simp [h_nonempty]) (by simp) (containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge) h_z_pos h_z_in_extended
+      | inr h_z_eq_y =>
+        -- z = y, so we have a self-loop y → y
+        rw [h_z_eq_y] at h_z_pos
+        exact acyclic_no_self_loop R y h_acyclic h_z_pos
 
   case pos =>
-    -- y has an outgoing edge to some z ∉ visited ∪ {current}
-    -- Recurse with visited ∪ {current}
-    obtain ⟨z, h_z_not_visited, h_z_ne_current, h_y_z_edge⟩ := h_y_has_out
+    -- y has an outgoing edge to some z not in path and z ≠ y
+    -- Recurse with path ++ [y]
+    obtain ⟨z, h_z_not_in_path, h_z_ne_y, h_y_z_edge⟩ := h_y_has_out
 
-    -- Show y is reachable from root
-    have h_y_reachable : R.reachable root y := by
-      obtain ⟨path, h_start, h_end, h_nonempty, h_contains⟩ := h_reachable
-      use path ++ [y]
+    -- Construct new path
+    let new_path := path ++ [y]
+
+    -- Show properties of new_path
+    have h_new_path : new_path.head? = some root ∧ new_path.getLast? = some y ∧ new_path ≠ [] ∧ R.containsPath new_path := by
       constructor
-      · simp [h_start]
+      · simp [new_path, h_start]
       constructor
-      · simp
+      · simp [new_path]
       constructor
-      · simp [h_nonempty]
-      · intro t
-        -- Similar to the neg case above - use the helper lemmas
-        have h_path_nodup : path.Nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
-        have h_y_not_in_path : y ∉ path := by
-          intro h_y_in_path
-          exact acyclic_edge_not_in_path R path current y h_acyclic h_nonempty h_end h_contains h_edge h_y_in_path
-        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge t
+      · simp [new_path, h_nonempty]
+      · exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
 
-    -- Recurse with visited ∪ {current}
-    let new_visited := insert current visited
-
-    have h_y_ne_current : y ≠ current := by
-      intro h_y_eq_current
-      rw [h_y_eq_current] at h_edge
-      exact acyclic_no_self_loop R current h_acyclic h_edge
-
-    have h_y_not_in_new_visited' : y ∉ new_visited := by
-      simp [new_visited, h_y_ne_current, h_y_not_visited]
-
-    have h_new_has_out' : ∃ w, w ∉ new_visited ∧ R (y, w) > 0 := by
+    have h_new_has_out : ∃ w, w ∉ new_path ∧ R (y, w) > 0 := by
       use z
-      simp [new_visited]
       constructor
-      · constructor
-        · exact h_z_ne_current
-        · exact h_z_not_visited
+      · unfold new_path
+        simp
+        constructor
+        · exact h_z_not_in_path
+        · exact h_z_ne_y
       · exact h_y_z_edge
 
-    exact acyclic_has_leaf_aux R root y new_visited
-      h_acyclic h_y_reachable h_y_not_in_new_visited' h_new_has_out'
-termination_by Fintype.card S - visited.card
+    exact acyclic_has_leaf_aux R root y new_path h_acyclic h_new_path h_new_has_out
+termination_by Fintype.card S - path.toFinset.card
 decreasing_by
   simp_wf
-  have h_card_increase : (insert current visited).card = visited.card + 1 := by
-    apply Finset.card_insert_of_notMem
-    exact h_current_not_visited
-  simp [h_card_increase]
-  have h_visited_subset : visited ⊂ Finset.univ := by
+  -- new_path = path ++ [y], and y ∉ path, so toFinset increases by 1
+  have h_y_not_mem : y ∉ path.toFinset := by
+    simp
+    exact h_y_not_in_path
+  have h_card_increase : (insert y path.toFinset).card = path.toFinset.card + 1 := by
+    rw [Finset.card_insert_of_notMem h_y_not_mem]
+  -- path.toFinset is a strict subset of univ
+  have h_path_subset : path.toFinset ⊂ Finset.univ := by
     rw [Finset.ssubset_univ_iff]
     intro h_eq_univ
-    rw [h_eq_univ] at h_current_not_visited
-    exact h_current_not_visited (Finset.mem_univ current)
-  have h_card_bound : visited.card < Fintype.card S := by
+    -- If path.toFinset = univ, then y ∈ path.toFinset (since y ∈ univ)
+    have : y ∈ Finset.univ := Finset.mem_univ y
+    rw [← h_eq_univ] at this
+    exact h_y_not_mem this
+  have h_card_bound : path.toFinset.card < Fintype.card S := by
     rw [← Finset.card_univ]
-    exact Finset.card_lt_card h_visited_subset
+    exact Finset.card_lt_card h_path_subset
+  rw [h_card_increase]
   omega
 
 /-- A finite DAG reachable from a root has at least one leaf. -/
@@ -1082,10 +1057,8 @@ lemma acyclic_has_leaf (R : Run S) (root : S)
     (h_acyclic : R.isAcyclic)
     (h_has_out : ∃ y, R (root, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
-  -- Start with empty visited set and root as current
-  -- Root is reachable from itself via empty path
-  have h_root_reachable : R.reachable root root := by
-    use [root]
+  -- Start with path = [root]
+  have h_root_path : [root].head? = some root ∧ [root].getLast? = some root ∧ [root] ≠ [] ∧ R.containsPath [root] := by
     constructor
     · simp
     constructor
@@ -1097,10 +1070,14 @@ lemma acyclic_has_leaf (R : Run S) (root : S)
 
   -- Apply the auxiliary lemma
   obtain ⟨y, h_pos⟩ := h_has_out
-  apply acyclic_has_leaf_aux R root root ∅ h_acyclic h_root_reachable
-  · simp
-  · use y
-    simp [h_pos]
+  apply acyclic_has_leaf_aux R root root [root] h_acyclic h_root_path
+  use y
+  constructor
+  · intro h_mem
+    simp at h_mem
+    rw [h_mem] at h_pos
+    exact acyclic_no_self_loop R root h_acyclic h_pos
+  · exact h_pos
 
 /-- A leaf with an incoming edge has negative net flow. -/
 lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
