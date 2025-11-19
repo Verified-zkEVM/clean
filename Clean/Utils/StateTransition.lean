@@ -473,7 +473,20 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         -- This contradicts h_y_has_out which says no such z exists
         have h_le := h_y_has_out h_not.1 h_not.2
         omega
-      sorry -- Need to derive contradiction from cycle
+
+      -- Derive contradiction from cycle
+      cases h_z_in_visited_or_current with
+      | inl h_z_in_visited =>
+        -- z ∈ visited, but we're claiming y is a leaf reachable from root
+        -- This is impossible because y has an outgoing edge to z
+        -- Actually, this case requires showing the path creates a cycle through visited
+        -- For now, this is the harder case
+        sorry
+      | inr h_z_eq_current =>
+        -- z = current, so we have current → y → current
+        -- But current ∉ visited and the neg case allows edges back to current
+        -- This case needs more thought - the case split might be wrong
+        sorry
 
   case pos =>
     -- y has an outgoing edge to some z ∉ visited ∪ {current}
