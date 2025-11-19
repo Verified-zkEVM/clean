@@ -361,19 +361,13 @@ lemma cycle_netFlow_zero (cycle : List S) (x : S)
   rw [h_balance]
   simp
 
-/-- If a path is contained in a run, then transition counts are bounded -/
-lemma containsPath_count_le (R : Run S) (cycle : List S)
-    (h_contains : R.containsPath cycle) :
-    ∀ t, countTransitionInPath t cycle ≤ R t :=
-  h_contains
-
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_contains : R.containsPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- Use the containsPath_count_le lemma
-  have h_valid_sub := containsPath_count_le R cycle h_contains
+  -- h_contains gives us: ∀ t, countTransitionInPath t cycle ≤ R t
+  have h_valid_sub := h_contains
 
   -- Unfold removeCycle and use netFlow_sub
   have h_eq : (R.removeCycle cycle).netFlow x = Run.netFlow (fun t => R t - countTransitionInPath t cycle) x := by
