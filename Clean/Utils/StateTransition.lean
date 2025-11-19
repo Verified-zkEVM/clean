@@ -230,6 +230,22 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
   push_neg at h_acyclic
   apply h_acyclic cycle h_cycle_len h_cycle_starts_ends_with_x h_cycle_contained
 
+/-- Appending an element to a non-empty path adds exactly one transition from the last element. -/
+lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
+    (h_nonempty : path ≠ [])
+    (h_last : path.getLast? = some x)
+    (h_not_in : (x, y) ∉ path.zip path.tail) :
+    countTransitionInPath (x, y) (path ++ [y]) = 1 := by
+  sorry
+
+/-- Appending an element doesn't add a transition that's different from (last, new). -/
+lemma countTransitionInPath_append_singleton_other (path : List S) (x y : S) (t : Transition S)
+    (h_nonempty : path ≠ [])
+    (h_last : path.getLast? = some x)
+    (h_ne : t ≠ (x, y)) :
+    countTransitionInPath t (path ++ [y]) = countTransitionInPath t path := by
+  sorry
+
 /-- If a path has no duplicates, each transition appears at most once. -/
 lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
     (t : Transition S) :
@@ -606,20 +622,15 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         by_cases h_t_eq : t = (current, y)
         · -- t is the new transition (current, y)
           subst h_t_eq
-          have h_old_count_zero : countTransitionInPath (current, y) path = 0 := by
-            unfold countTransitionInPath
-            exact List.count_eq_zero.mpr h_current_y_not_in_path
-          -- The new count is exactly 1
-          have h_new_count_one : countTransitionInPath (current, y) (path ++ [y]) = 1 := by
-            unfold countTransitionInPath
-            sorry -- List property: appending [y] adds exactly one (current, y)
+          have h_new_count : countTransitionInPath (current, y) (path ++ [y]) = 1 := by
+            exact countTransitionInPath_append_singleton path current y h_nonempty h_end h_current_y_not_in_path
           show countTransitionInPath (current, y) (path ++ [y]) ≤ R (current, y)
-          rw [h_new_count_one]
+          rw [h_new_count]
           omega
         · -- t is not the new transition, so count doesn't change
-          have h_count_same : List.count t ((path ++ [y]).zip (path ++ [y]).tail) =
-              List.count t (path.zip path.tail) := by
-            sorry -- Since t ≠ (current, y), appending y doesn't add t
+          have h_count_same : countTransitionInPath t (path ++ [y]) = countTransitionInPath t path := by
+            exact countTransitionInPath_append_singleton_other path current y t h_nonempty h_end h_t_eq
+          unfold countTransitionInPath at h_count_same
           rw [h_count_same]
           exact h_contains t
     · -- Show y has no outgoing edges
@@ -667,7 +678,25 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
       constructor
       · simp [h_nonempty]
       · intro t
-        sorry -- Similar to above
+        -- Similar to the neg case above - use the helper lemmas
+        have h_path_nodup : path.Nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
+        have h_y_not_in_path : y ∉ path := by
+          sorry -- y not in path (same reasoning as above)
+        have h_current_y_not_in_path : (current, y) ∉ path.zip path.tail := by
+          intro h_in
+          have h_y_in_tail : y ∈ path.tail := (List.of_mem_zip h_in).2
+          have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
+          exact h_y_not_in_path h_y_in_path'
+        by_cases h_t_eq : t = (current, y)
+        · subst h_t_eq
+          have h_new_count : countTransitionInPath (current, y) (path ++ [y]) = 1 :=
+            countTransitionInPath_append_singleton path current y h_nonempty h_end h_current_y_not_in_path
+          rw [h_new_count]
+          omega
+        · have h_count_same : countTransitionInPath t (path ++ [y]) = countTransitionInPath t path :=
+            countTransitionInPath_append_singleton_other path current y t h_nonempty h_end h_t_eq
+          rw [h_count_same]
+          exact h_contains t
 
     -- Recurse with visited ∪ {current}
     let new_visited := insert current visited
