@@ -82,19 +82,27 @@ def Run.validPath (R : Run S) : List S → Prop
 def Run.hasPath (R : Run S) (path : List S) : Prop :=
   path ≠ [] ∧ R.validPath path
 
-/-- A cycle is a non-empty path where the first and last states are the same. -/
-def Run.hasCycle (R : Run S) : Prop :=
-  ∃ (cycle : List S), cycle.length ≥ 2 ∧
-    cycle.head? = cycle.getLast? ∧
-    R.validPath cycle
-
-/-- A run is acyclic if it contains no cycles. -/
-def Run.isAcyclic (R : Run S) : Prop :=
-  ¬R.hasCycle
-
 /-- Count how many times a transition appears in a path (as consecutive elements). -/
 def countTransitionInPath [DecidableEq S] (t : Transition S) (path : List S) : ℕ :=
   (path.zip path.tail).count t
+
+/-- A path is contained in a run if the count of each transition in the path
+    does not exceed its capacity in the run. This is the stronger property needed
+    for removeCycle to be well-defined. -/
+def Run.containsPath [DecidableEq S] (R : Run S) (path : List S) : Prop :=
+  ∀ t : Transition S, countTransitionInPath t path ≤ R t
+
+/-- A cycle is a non-empty path where the first and last states are the same,
+    and the cycle is contained in the run (so it can be removed). -/
+def Run.hasCycle [DecidableEq S] (R : Run S) : Prop :=
+  ∃ (cycle : List S), cycle.length ≥ 2 ∧
+    cycle.head? = cycle.getLast? ∧
+    R.validPath cycle ∧
+    R.containsPath cycle
+
+/-- A run is acyclic if it contains no cycles. -/
+def Run.isAcyclic [DecidableEq S] (R : Run S) : Prop :=
+  ¬R.hasCycle
 
 /-- Remove one instance of a cycle from a run. -/
 def Run.removeCycle (R : Run S) (cycle : List S) : Run S :=
@@ -353,23 +361,19 @@ lemma cycle_netFlow_zero (cycle : List S) (x : S)
   rw [h_balance]
   simp
 
-/-- A valid path has transition counts bounded by the run capacity -/
-lemma validPath_count_le (R : Run S) (cycle : List S)
-    (h_valid : R.validPath cycle) :
-    ∀ t, countTransitionInPath t cycle ≤ R t := by
-  intro t
-  -- For a validPath, each transition in the path has positive capacity in R
-  -- The countTransitionInPath counts occurrences in cycle.zip cycle.tail
-  -- For the path to be valid, the count cannot exceed the capacity
-  sorry
+/-- If a path is contained in a run, then transition counts are bounded -/
+lemma containsPath_count_le (R : Run S) (cycle : List S)
+    (h_contains : R.containsPath cycle) :
+    ∀ t, countTransitionInPath t cycle ≤ R t :=
+  h_contains
 
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
-    (h_valid : R.validPath cycle)
+    (h_contains : R.containsPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- Use the validPath_count_le lemma
-  have h_valid_sub := validPath_count_le R cycle h_valid
+  -- Use the containsPath_count_le lemma
+  have h_valid_sub := containsPath_count_le R cycle h_contains
 
   -- Unfold removeCycle and use netFlow_sub
   have h_eq : (R.removeCycle cycle).netFlow x = Run.netFlow (fun t => R t - countTransitionInPath t cycle) x := by
@@ -413,14 +417,14 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     ∃ (R' : Run S), (∀ x, R'.netFlow x = R.netFlow x) ∧ R'.size < R.size := by
   -- Extract the cycle from the hypothesis
-  obtain ⟨cycle, h_len, h_cycle_prop, h_valid⟩ := h_cycle
+  obtain ⟨cycle, h_len, h_cycle_prop, h_valid, h_contains⟩ := h_cycle
   -- Use R.removeCycle as the witness
   use R.removeCycle cycle
   constructor
   · -- Net flow is preserved
     intro x
     apply netFlow_removeCycle_eq
-    · exact h_valid
+    · exact h_contains
     · exact h_cycle_prop
   · -- Size decreases
     apply size_removeCycle_lt
