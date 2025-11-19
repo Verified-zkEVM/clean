@@ -71,24 +71,12 @@ noncomputable def Run.netFlow {S : Type*} [Fintype S] [DecidableEq S] (R : Run S
 noncomputable def Run.size {S : Type*} [Fintype S] [DecidableEq S] (R : Run S) : ℕ :=
   ∑ t : Transition S, R t
 
-/-- Check if consecutive elements in a list form valid transitions with positive count. -/
-def Run.validPath (R : Run S) : List S → Prop
-  | [] => True
-  | [_] => True
-  | x :: y :: rest => R (x, y) > 0 ∧ Run.validPath R (y :: rest)
-
-/-- A path in the transition system is a list of states where consecutive states
-    form transitions in the run. -/
-def Run.hasPath (R : Run S) (path : List S) : Prop :=
-  path ≠ [] ∧ R.validPath path
-
 /-- Count how many times a transition appears in a path (as consecutive elements). -/
 def countTransitionInPath [DecidableEq S] (t : Transition S) (path : List S) : ℕ :=
   (path.zip path.tail).count t
 
 /-- A path is contained in a run if the count of each transition in the path
-    does not exceed its capacity in the run. This is the stronger property needed
-    for removeCycle to be well-defined. -/
+    does not exceed its capacity in the run. -/
 def Run.containsPath [DecidableEq S] (R : Run S) (path : List S) : Prop :=
   ∀ t : Transition S, countTransitionInPath t path ≤ R t
 
@@ -97,7 +85,6 @@ def Run.containsPath [DecidableEq S] (R : Run S) (path : List S) : Prop :=
 def Run.hasCycle [DecidableEq S] (R : Run S) : Prop :=
   ∃ (cycle : List S), cycle.length ≥ 2 ∧
     cycle.head? = cycle.getLast? ∧
-    R.validPath cycle ∧
     R.containsPath cycle
 
 /-- A run is acyclic if it contains no cycles. -/
@@ -109,8 +96,9 @@ def Run.removeCycle (R : Run S) (cycle : List S) : Run S :=
   fun t => R t - countTransitionInPath t cycle
 
 /-- A state is reachable from another via transitions in the run. -/
-def Run.reachable (R : Run S) (start finish : S) : Prop :=
-  ∃ (path : List S), path.head? = some start ∧ path.getLast? = some finish ∧ R.hasPath path
+def Run.reachable [DecidableEq S] (R : Run S) (start finish : S) : Prop :=
+  ∃ (path : List S), path.head? = some start ∧ path.getLast? = some finish ∧
+    path ≠ [] ∧ R.containsPath path
 
 /-- A leaf in the run from a given state is a reachable state with no outgoing transitions. -/
 def Run.isLeaf (R : Run S) (root leaf : S) : Prop :=
@@ -140,23 +128,29 @@ lemma sum_decrease {α : Type*} [Fintype α] [DecidableEq α] (f g : α → ℕ)
 
 -- Lemmas about valid paths and transitions
 
-/-- A valid path with at least 2 elements has at least one transition with positive count. -/
-lemma validPath_has_transition {S : Type*} [DecidableEq S] (R : Run S) (path : List S)
-    (h_valid : R.validPath path) (h_len : path.length ≥ 2) :
-    ∃ (x y : S), (x, y) ∈ path.zip path.tail ∧ R (x, y) > 0 := by
+/-- A path with at least 2 elements has at least one transition. -/
+lemma path_has_transition {S : Type*} [DecidableEq S] (path : List S)
+    (h_len : path.length ≥ 2) :
+    ∃ (t : Transition S), t ∈ path.zip path.tail := by
   cases path with
   | nil => simp at h_len
   | cons hd tl =>
     cases tl with
     | nil => simp at h_len
     | cons hd2 tl2 =>
-      unfold Run.validPath at h_valid
-      simp at h_valid
-      obtain ⟨h_pos, _⟩ := h_valid
-      use hd, hd2
-      constructor
-      · simp [List.zip, List.tail]
-      · exact h_pos
+      use (hd, hd2)
+      simp [List.zip, List.tail]
+
+/-- If a path is contained in a run and uses a transition, that transition has positive capacity. -/
+lemma containsPath_has_positive_transition (R : Run S) (path : List S)
+    (h_contains : R.containsPath path) (t : Transition S)
+    (h_in : t ∈ path.zip path.tail) :
+    R t > 0 := by
+  have h_count_pos : countTransitionInPath t path > 0 := by
+    unfold countTransitionInPath
+    exact List.count_pos_iff.mpr h_in
+  have h_bound := h_contains t
+  omega
 
 -- Lemmas about cycle removal and net flow
 
@@ -381,11 +375,14 @@ lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
 /-- Removing a cycle decreases the total size of the run. -/
 lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     (h_len : cycle.length ≥ 2)
-    (h_valid : R.validPath cycle)
+    (h_contains : R.containsPath cycle)
     (_h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).size < R.size := by
-  -- Get a transition with positive count
-  obtain ⟨x, y, h_in_zip, h_pos⟩ := validPath_has_transition R cycle h_valid h_len
+  -- Get a transition in the path
+  obtain ⟨t, h_in_zip⟩ := path_has_transition cycle h_len
+  -- This transition has positive capacity
+  have h_pos := containsPath_has_positive_transition R cycle h_contains t h_in_zip
+  let (x, y) := t
   -- Show that this transition appears in the cycle, so countTransitionInPath > 0
   have h_count_pos : countTransitionInPath (x, y) cycle > 0 := by
     unfold countTransitionInPath
@@ -411,7 +408,7 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     ∃ (R' : Run S), (∀ x, R'.netFlow x = R.netFlow x) ∧ R'.size < R.size := by
   -- Extract the cycle from the hypothesis
-  obtain ⟨cycle, h_len, h_cycle_prop, h_valid, h_contains⟩ := h_cycle
+  obtain ⟨cycle, h_len, h_cycle_prop, h_contains⟩ := h_cycle
   -- Use R.removeCycle as the witness
   use R.removeCycle cycle
   constructor
@@ -423,7 +420,7 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
   · -- Size decreases
     apply size_removeCycle_lt
     · exact h_len
-    · exact h_valid
+    · exact h_contains
     · exact h_cycle_prop
 
 /-- A finite DAG reachable from a root has at least one leaf. -/
@@ -485,7 +482,7 @@ theorem exists_path_from_source_to_sink
     (h_sink : R.netFlow d = -1)
     (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
     ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
-      R.hasPath path ∧ path.Nodup := by
+      path ≠ [] ∧ R.containsPath path ∧ path.Nodup := by
   -- Proof sketch:
   -- 1. If R has a cycle, remove it using exists_smaller_run_with_same_netFlow
   --    The resulting R' is smaller and has the same net flows
