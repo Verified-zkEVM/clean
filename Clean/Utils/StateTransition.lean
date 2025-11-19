@@ -770,7 +770,6 @@ lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
     (h_nonempty : path ≠ [])
     (h_last : path.getLast? = some x)
     (h_contains : R.containsPath path)
-    (h_nodup : path.Nodup)
     (h_y_not_in_path : y ∉ path)
     (h_edge : R (x, y) > 0) :
     R.containsPath (path ++ [y]) := by
@@ -842,7 +841,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
           -- we know y appears exactly once and before current
           -- Extract the tail of path starting from y
           sorry -- Need to construct the cycle: take path from y to current, then add edge current → y
-        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_path_nodup h_y_not_in_path h_edge t
+        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge t
     · -- Show y has no outgoing edges
       intro z
       by_contra h_pos
@@ -897,7 +896,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         have h_path_nodup : path.Nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
         have h_y_not_in_path : y ∉ path := by
           sorry -- y not in path (same reasoning as above)
-        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_path_nodup h_y_not_in_path h_edge t
+        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge t
 
     -- Recurse with visited ∪ {current}
     let new_visited := insert current visited
