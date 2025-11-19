@@ -160,7 +160,6 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     path.Nodup := by
   -- Proof by contradiction: if path has duplicates, extract a cycle
   by_contra h_dup
-  push_neg at h_dup
   -- If path is not Nodup, there exists an element that appears twice
   -- This creates a cycle
   sorry
@@ -503,12 +502,15 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
           sorry
         by_cases h_t_eq : t = (current, y)
         · -- t is the new transition (current, y)
-          rw [h_t_eq]
-          have h_old_count_zero : List.count (current, y) (path.zip path.tail) = 0 := by
+          subst h_t_eq
+          have h_old_count_zero : countTransitionInPath (current, y) path = 0 := by
+            unfold countTransitionInPath
             exact List.count_eq_zero.mpr h_current_y_not_in_path
           -- The new count is exactly 1
-          have h_new_count_one : List.count (current, y) ((path ++ [y]).zip (path ++ [y]).tail) = 1 := by
+          have h_new_count_one : countTransitionInPath (current, y) (path ++ [y]) = 1 := by
+            unfold countTransitionInPath
             sorry -- List property: appending [y] adds exactly one (current, y)
+          show countTransitionInPath (current, y) (path ++ [y]) ≤ R (current, y)
           rw [h_new_count_one]
           omega
         · -- t is not the new transition, so count doesn't change
