@@ -825,10 +825,67 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         -- For now, this is the harder case
         sorry
       | inr h_z_eq_current =>
-        -- z = current, so we have current → y → current
-        -- But current ∉ visited and the neg case allows edges back to current
-        -- This case needs more thought - the case split might be wrong
-        sorry
+        -- z = current, so we have current → y → current (a 2-cycle)
+        -- We have R(current, y) > 0 and R(y, current) > 0
+        rw [h_z_eq_current] at h_z_pos
+        -- First check if y = current (self-loop case)
+        by_cases h_y_eq : y = current
+        · -- If y = current, we have a self-loop
+          rw [h_y_eq] at h_edge h_z_pos
+          unfold Run.isAcyclic Run.hasCycle at h_acyclic
+          push_neg at h_acyclic
+          apply h_acyclic [current, current]
+          · simp
+          · simp
+          · intro t
+            unfold countTransitionInPath
+            simp [List.zip, List.tail]
+            by_cases h_t : t = (current, current)
+            · subst h_t
+              simp [List.count]
+              omega
+            · have : List.count t [(current, current)] = 0 := by
+                simp only [List.count_cons, List.count_nil, beq_iff_eq]
+                split
+                · rename_i h_eq; cases h_eq; exact absurd rfl h_t
+                · rfl
+              omega
+        · -- If y ≠ current, we have a proper 2-cycle
+          unfold Run.isAcyclic Run.hasCycle at h_acyclic
+          push_neg at h_acyclic
+          apply h_acyclic [current, y, current]
+          · simp
+          · simp
+          · intro t
+            unfold countTransitionInPath
+            simp [List.zip, List.tail]
+            -- We have the edges R(current, y) > 0 and R(y, current) > 0
+            -- and the cycle has (current,y) once and (y,current) once
+            by_cases h1 : t = (current, y)
+            · subst h1
+              simp [List.count]
+              have : ¬(y, current) = (current, y) := by
+                intro h_eq
+                have := Prod.mk_inj.mp h_eq
+                exact h_y_eq this.1
+              simp [beq_iff_eq, this]
+              omega
+            · by_cases h2 : t = (y, current)
+              · subst h2
+                simp [List.count]
+                have : ¬(current, y) = (y, current) := by
+                  intro h_eq
+                  have := Prod.mk_inj.mp h_eq
+                  exact h_y_eq this.1.symm
+                simp [beq_iff_eq, this]
+                omega
+              · have : List.count t [(current, y), (y, current)] = 0 := by
+                  simp [List.count]
+                  constructor
+                  · intro h_eq; cases h_eq; exact h1 rfl
+                  · intro h_eq; cases h_eq; exact h2 rfl
+                rw [this]
+                omega
 
   case pos =>
     -- y has an outgoing edge to some z ∉ visited ∪ {current}
