@@ -186,7 +186,43 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     simp [Nat.min_eq_left this]
     omega
   have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? := by
-    sorry -- The cycle starts and ends with x = path[n] = path[m]
+    -- cycle = (path.drop n).take (m - n + 1)
+    -- head? of (path.drop n) is path[n]
+    -- getLast? of cycle needs careful handling with take
+    have h_head : cycle.head? = some x := by
+      simp only [cycle]
+      rw [List.head?_take]
+      have h_take_nonzero : m.val - n.val + 1 ≠ 0 := by omega
+      simp only [if_neg h_take_nonzero]
+      rw [List.head?_drop]
+      have h_n_in_bounds : n.val < path.length := h_n_lt_len
+      simp only [List.getElem?_eq_getElem h_n_in_bounds]
+      congr 1
+      -- path[n] is the same as path.get n
+      exact h_x_at_n.symm
+    have h_last : cycle.getLast? = some x := by
+      simp only [cycle]
+      -- cycle.length = m - n + 1, so getLast is at index (m - n)
+      -- which corresponds to path[n + (m - n)] = path[m]
+      have h_cycle_length : cycle.length = m.val - n.val + 1 := by
+        simp only [cycle]
+        rw [List.length_take, List.length_drop]
+        have : m.val - n.val + 1 ≤ path.length - n.val := by omega
+        simp [Nat.min_eq_left this]
+      rw [List.getLast?_eq_getElem?, h_cycle_length]
+      have h_idx : m.val - n.val + 1 - 1 = m.val - n.val := by omega
+      rw [h_idx]
+      -- Now show cycle[m - n] = path[m]
+      simp only [List.getElem?_take, List.getElem?_drop]
+      have h_in_bounds : m.val - n.val < m.val - n.val + 1 := by omega
+      simp [h_in_bounds]
+      have : n.val + (m.val - n.val) = m.val := by omega
+      simp only [this]
+      have h_m_in_bounds : m.val < path.length := h_m_lt_len
+      simp only [List.getElem?_eq_getElem h_m_in_bounds]
+      congr 1
+      exact h_x_at_m.symm
+    rw [h_head, h_last]
   have h_cycle_contained : R.containsPath cycle := by
     sorry -- cycle is a subpath of path, so it's contained in R
   -- This contradicts acyclicity
