@@ -424,27 +424,53 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     · exact h_contains
     · exact h_cycle_prop
 
+/-- Helper: Starting from a current node with outgoing edges, excluding visited states,
+    we can find a leaf reachable from the root. Uses strong induction on unvisited state count. -/
+lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
+    (visited : Finset S)
+    (h_acyclic : R.isAcyclic)
+    (h_reachable : R.reachable root current)
+    (h_current_not_visited : current ∉ visited)
+    (h_has_out : ∃ y, y ∉ visited ∧ R (current, y) > 0) :
+    ∃ leaf, R.isLeaf root leaf := by
+  -- Use strong induction on the number of unvisited states
+  -- Measure: Fintype.card S - visited.card
+
+  -- The key steps:
+  -- 1. Pick a successor y ∉ visited with R(current, y) > 0
+  -- 2. If y has no outgoing edges → y is a leaf
+  -- 3. If y has an outgoing edge to z ∉ (visited ∪ {current}) → recurse
+  --    - New visited set = visited ∪ {current} has size visited.card + 1
+  --    - Measure decreases by 1
+  --    - Can't have z = current (would create cycle)
+  --    - Can't have z ∈ visited (would create cycle through visited states)
+
+  sorry
+
 /-- A finite DAG reachable from a root has at least one leaf. -/
 lemma acyclic_has_leaf (R : Run S) (root : S)
     (h_acyclic : R.isAcyclic)
     (h_has_out : ∃ y, R (root, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
-  -- Key idea: In a finite acyclic graph, if we start from a node with an outgoing edge
-  -- and follow any maximal path, we must reach a leaf within at most Fintype.card S steps.
-  -- This is because:
-  -- 1. We can't revisit a node (would create a cycle)
-  -- 2. We can't have a path longer than the number of states
-  -- 3. If we're at a node with no outgoing edges, we've found a leaf
+  -- Start with empty visited set and root as current
+  -- Root is reachable from itself via empty path
+  have h_root_reachable : R.reachable root root := by
+    use [root]
+    constructor
+    · simp
+    constructor
+    · simp
+    constructor
+    · simp
+    · intro t
+      simp [countTransitionInPath]
 
-  -- This proof requires well-founded induction or classical reasoning about
-  -- the existence of maximal elements in finite partially ordered sets.
-  -- The standard approach would be:
-  -- 1. Consider all paths starting from root
-  -- 2. Among all finite acyclic paths, there exist maximal ones (by finiteness)
-  -- 3. Any maximal path must end at a leaf (by maximality)
-
-  -- For now, we admit this fundamental graph-theoretic result
-  sorry
+  -- Apply the auxiliary lemma
+  obtain ⟨y, h_pos⟩ := h_has_out
+  apply acyclic_has_leaf_aux R root root ∅ h_acyclic h_root_reachable
+  · simp
+  · use y
+    simp [h_pos]
 
 /-- A leaf with an incoming edge has negative net flow. -/
 lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
