@@ -398,7 +398,7 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     simp only
     exact Nat.sub_le (R t) (countTransitionInPath t cycle)
   -- Apply the sum_decrease lemma
-  sorry
+  exact sum_decrease R (fun t => R t - countTransitionInPath t cycle) (x, y) h_decrease h_others_le
 
 /-- If a run has a cycle, it can be removed. -/
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
