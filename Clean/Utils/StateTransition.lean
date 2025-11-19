@@ -493,13 +493,50 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         -- Since path ends with current and is Nodup, (current, _) appears at most once in path.zip path.tail
         -- and specifically (current, y) doesn't appear since y ∉ path
         have h_y_not_in_path : y ∉ path := by
-          -- y ≠ current (we have h_y_not_visited and current ∉ visited)
-          -- If y ∈ path, then since path goes root → current, we'd have y in the path
-          -- But path ⊆ reachable states, and we haven't visited y yet
-          sorry
+          -- Key: y ≠ current (proven below), and if y ∈ path with path ending at current,
+          -- we can extract a cycle from y back to y via current
+          by_contra h_y_in_path
+          -- First prove y ≠ current
+          have h_y_ne_current : y ≠ current := by
+            intro h_eq
+            -- If y = current, then R(current, current) > 0, which creates a self-loop cycle
+            rw [h_eq] at h_edge
+            unfold Run.isAcyclic Run.hasCycle at h_acyclic
+            push_neg at h_acyclic
+            apply h_acyclic [current, current]
+            · simp
+            · simp
+            · intro t
+              unfold countTransitionInPath
+              simp [List.zip, List.tail]
+              by_cases h_t : t = (current, current)
+              · subst h_t
+                simp [List.count]
+                omega
+              · have : List.count t [(current, current)] = 0 := by
+                  simp only [List.count_cons, List.count_nil, beq_iff_eq]
+                  split
+                  · rename_i h_eq
+                    cases h_eq
+                    exact absurd rfl h_t
+                  · rfl
+                omega
+          -- Since y ∈ path and path.Nodup, and path.getLast? = some current with y ≠ current,
+          -- we know y appears exactly once and before current
+          -- Extract the tail of path starting from y
+          sorry -- Need to construct the cycle: take path from y to current, then add edge current → y
         have h_current_y_not_in_path : (current, y) ∉ path.zip path.tail := by
           -- If (current, y) ∈ path.zip path.tail, then y ∈ path.tail, so y ∈ path
-          sorry
+          intro h_in
+          -- (current, y) ∈ path.zip path.tail means there's some position where
+          -- path has current followed by y
+          -- From membership in zip, we can extract that y ∈ path.tail
+          have h_y_in_tail : y ∈ path.tail := by
+            -- If (a, b) ∈ xs.zip ys, then b ∈ ys
+            have : current ∈ path ∧ y ∈ path.tail := List.of_mem_zip h_in
+            exact this.2
+          have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
+          exact h_y_not_in_path h_y_in_path'
         by_cases h_t_eq : t = (current, y)
         · -- t is the new transition (current, y)
           subst h_t_eq
