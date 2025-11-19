@@ -163,7 +163,27 @@ lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
 lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
     (h_contains : R.containsPath path) :
     R.containsPath (path.take n) := by
-  sorry
+  unfold Run.containsPath countTransitionInPath at h_contains ⊢
+  intro t
+  -- (path.take n).zip (path.take n).tail is related to path.zip path.tail
+  -- We need to show count t in the smaller list ≤ count t in path
+  have h_tail_take : (path.take n).tail = (path.tail).take (n - 1) := by
+    cases n with
+    | zero => simp
+    | succ n' =>
+      cases path with
+      | nil => simp
+      | cons hd tl =>
+        simp [List.take, List.tail]
+  rw [h_tail_take]
+  -- Now we have (path.take n).zip ((path.tail).take (n - 1))
+  -- This is a sublist of path.zip path.tail
+  have h_sublist : ((path.take n).zip ((path.tail).take (n - 1))).Sublist (path.zip path.tail) := by
+    sorry -- Need to prove the zip of takes is a sublist
+  have h_count_le : List.count t ((path.take n).zip ((path.tail).take (n - 1))) ≤
+      List.count t (path.zip path.tail) := List.Sublist.count_le t h_sublist
+  have h_original := h_contains t
+  omega
 
 /-- If a run is acyclic and contains a path, the path has no duplicate vertices. -/
 lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
