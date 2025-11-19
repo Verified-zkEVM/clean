@@ -353,14 +353,23 @@ lemma cycle_netFlow_zero (cycle : List S) (x : S)
   rw [h_balance]
   simp
 
+/-- A valid path has transition counts bounded by the run capacity -/
+lemma validPath_count_le (R : Run S) (cycle : List S)
+    (h_valid : R.validPath cycle) :
+    ∀ t, countTransitionInPath t cycle ≤ R t := by
+  intro t
+  -- For a validPath, each transition in the path has positive capacity in R
+  -- The countTransitionInPath counts occurrences in cycle.zip cycle.tail
+  -- For the path to be valid, the count cannot exceed the capacity
+  sorry
+
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_valid : R.validPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- First, we need h_valid_sub: countTransitionInPath t cycle ≤ R t for all t
-  have h_valid_sub : ∀ t, countTransitionInPath t cycle ≤ R t := by
-    sorry
+  -- Use the validPath_count_le lemma
+  have h_valid_sub := validPath_count_le R cycle h_valid
 
   -- Unfold removeCycle and use netFlow_sub
   have h_eq : (R.removeCycle cycle).netFlow x = Run.netFlow (fun t => R t - countTransitionInPath t cycle) x := by
