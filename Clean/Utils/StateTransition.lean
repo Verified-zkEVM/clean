@@ -839,8 +839,69 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
             exact acyclic_no_self_loop R current h_acyclic h_edge
           -- Since y ∈ path and path.Nodup, and path.getLast? = some current with y ≠ current,
           -- we know y appears exactly once and before current
-          -- Extract the tail of path starting from y
-          sorry -- Need to construct the cycle: take path from y to current, then add edge current → y
+          -- We'll use List.mem_iff_getElem to reason about y's position in path
+          rw [List.mem_iff_getElem] at h_y_in_path
+          obtain ⟨i, h_i_lt, h_y_eq⟩ := h_y_in_path
+          -- Now construct a cycle: drop i elements from path to get suffix starting at y,
+          -- then append y to close the cycle
+          let suffix := path.drop i
+          -- suffix starts with y and ends with current
+          have h_suffix_nonempty : suffix ≠ [] := by
+            intro h_empty
+            unfold suffix at h_empty
+            have : path.drop i = [] → i ≥ path.length := by
+              intro h_drop_nil
+              by_contra h_not_ge
+              push_neg at h_not_ge
+              have : (path.drop i).length > 0 := by
+                rw [List.length_drop]
+                omega
+              rw [h_drop_nil] at this
+              simp at this
+            have : i ≥ path.length := this h_empty
+            omega
+          have h_suffix_head : suffix.head? = some y := by
+            unfold suffix
+            have h_cons : path[i] :: path.drop (i + 1) = path.drop i := by
+              exact List.getElem_cons_drop h_i_lt
+            rw [← h_cons]
+            simp [h_y_eq]
+          have h_suffix_last : suffix.getLast? = some current := by
+            unfold suffix
+            -- Since getLast? path = some current and suffix is a non-empty suffix of path,
+            -- we need to show that current is also the last element of suffix
+            -- This follows because y ≠ current and y appears before current in path
+            sorry
+          -- Now construct the cycle
+          let cycle := suffix ++ [y]
+          -- Show cycle is a valid cycle
+          have h_cycle_head : cycle.head? = some y := by
+            unfold cycle
+            rw [List.head?_append]
+            simp [h_suffix_head]
+          have h_cycle_last : cycle.getLast? = some y := by
+            unfold cycle
+            rw [List.getLast?_append]
+            simp
+          have h_cycle_len : cycle.length ≥ 2 := by
+            unfold cycle
+            rw [List.length_append, List.length_cons, List.length_nil]
+            have h_suffix_len : suffix.length ≥ 1 := List.length_pos_of_ne_nil h_suffix_nonempty
+            omega
+          -- Show R.hasCycle
+          have h_hasCycle : R.hasCycle := by
+            use cycle
+            constructor
+            · -- cycle.length ≥ 2
+              exact h_cycle_len
+            constructor
+            · -- cycle.head? = cycle.getLast?
+              rw [h_cycle_head, h_cycle_last]
+            · -- show R.containsPath cycle
+              sorry
+          -- Contradiction
+          unfold Run.isAcyclic at h_acyclic
+          exact h_acyclic h_hasCycle
         exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge t
     · -- Show y has no outgoing edges
       intro z
