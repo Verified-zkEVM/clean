@@ -457,7 +457,15 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     simp
   -- The inflow is positive because there exists y with R(y, leaf) > 0
   have h_inflow_pos : ∑ z : S, (R (z, leaf) : ℤ) > 0 := by
-    sorry -- TODO: prove using hy and that sum includes y term
+    -- The sum includes the term for z = y, which is positive
+    have h_y_in_sum : (R (y, leaf) : ℤ) ≤ ∑ z : S, (R (z, leaf) : ℤ) := by
+      calc (R (y, leaf) : ℤ)
+        = ∑ z ∈ ({y} : Finset S), (R (z, leaf) : ℤ) := by simp
+      _ ≤ ∑ z : S, (R (z, leaf) : ℤ) := by
+          apply Finset.sum_le_univ_sum_of_nonneg
+          intro x
+          omega
+    omega
   -- Combine: 0 - (positive) < 0
   rw [h_outflow_zero]
   omega
