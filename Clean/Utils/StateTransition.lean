@@ -159,6 +159,11 @@ lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
     R.containsPath (path.drop n) := by
   sorry
 
+/-- Zipping takes of two lists produces a sublist of zipping the original lists. -/
+lemma zip_take_sublist (l1 l2 : List S) (n m : ℕ) :
+    ((l1.take n).zip (l2.take m)).Sublist (l1.zip l2) := by
+  sorry
+
 /-- If a path is contained in a run, taking elements preserves containment. -/
 lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
     (h_contains : R.containsPath path) :
@@ -166,7 +171,6 @@ lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
   unfold Run.containsPath countTransitionInPath at h_contains ⊢
   intro t
   -- (path.take n).zip (path.take n).tail is related to path.zip path.tail
-  -- We need to show count t in the smaller list ≤ count t in path
   have h_tail_take : (path.take n).tail = (path.tail).take (n - 1) := by
     cases n with
     | zero => simp
@@ -176,10 +180,8 @@ lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
       | cons hd tl =>
         simp [List.take, List.tail]
   rw [h_tail_take]
-  -- Now we have (path.take n).zip ((path.tail).take (n - 1))
-  -- This is a sublist of path.zip path.tail
-  have h_sublist : ((path.take n).zip ((path.tail).take (n - 1))).Sublist (path.zip path.tail) := by
-    sorry -- Need to prove the zip of takes is a sublist
+  -- Use the general lemma about zip and take
+  have h_sublist := zip_take_sublist path path.tail n (n - 1)
   have h_count_le : List.count t ((path.take n).zip ((path.tail).take (n - 1))) ≤
       List.count t (path.zip path.tail) := List.Sublist.count_le t h_sublist
   have h_original := h_contains t
