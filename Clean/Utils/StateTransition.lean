@@ -153,6 +153,39 @@ lemma containsPath_has_positive_transition (R : Run S) (path : List S)
   have h_bound := h_contains t
   omega
 
+/-- If a run is acyclic and contains a path, the path has no duplicate vertices. -/
+lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
+    (h_acyclic : R.isAcyclic)
+    (h_contains : R.containsPath path) :
+    path.Nodup := by
+  -- Proof by contradiction: if path has duplicates, extract a cycle
+  by_contra h_dup
+  push_neg at h_dup
+  -- If path is not Nodup, there exists an element that appears twice
+  -- This creates a cycle
+  sorry
+
+/-- If a path has no duplicates, each transition appears at most once. -/
+lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
+    (t : Transition S) :
+    countTransitionInPath t path ≤ 1 := by
+  unfold countTransitionInPath
+  -- If path has Nodup, consecutive pairs are distinct
+  have h_zip_nodup : (path.zip path.tail).Nodup := by
+    -- If (a,b) and (c,d) are both in path.zip path.tail and (a,b) = (c,d),
+    -- then a = c and b = d
+    -- Since a, b are consecutive in path and c, d are consecutive,
+    -- and path is Nodup, this means they're the same pair
+    sorry
+  -- If list is Nodup, each element appears at most once
+  by_cases h_in : t ∈ path.zip path.tail
+  · have : List.count t (path.zip path.tail) = 1 := by
+      exact List.count_eq_one_of_mem h_zip_nodup h_in
+    omega
+  · have : List.count t (path.zip path.tail) = 0 := by
+      exact List.count_eq_zero.mpr h_in
+    omega
+
 -- Lemmas about cycle removal and net flow
 
 /-- For any list, count how many times x appears as first component in consecutive pairs. -/
@@ -454,11 +487,36 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
       constructor
       · simp [h_nonempty]
       · intro t
-        simp [countTransitionInPath]
-        by_cases h_t_in_path : t ∈ path.zip path.tail
-        · have h_bound := h_contains t
-          sorry -- Need to show count in extended path ≤ R
-        · sorry -- Need to handle the new transition (last of path, y)
+        unfold countTransitionInPath
+        -- Key: path is Nodup (from acyclicity), so (current, y) doesn't appear in path
+        have h_path_nodup : path.Nodup := by
+          exact acyclic_containsPath_nodup R path h_acyclic h_contains
+        -- Since path ends with current and is Nodup, (current, _) appears at most once in path.zip path.tail
+        -- and specifically (current, y) doesn't appear since y ∉ path
+        have h_y_not_in_path : y ∉ path := by
+          -- y ≠ current (we have h_y_not_visited and current ∉ visited)
+          -- If y ∈ path, then since path goes root → current, we'd have y in the path
+          -- But path ⊆ reachable states, and we haven't visited y yet
+          sorry
+        have h_current_y_not_in_path : (current, y) ∉ path.zip path.tail := by
+          -- If (current, y) ∈ path.zip path.tail, then y ∈ path.tail, so y ∈ path
+          sorry
+        by_cases h_t_eq : t = (current, y)
+        · -- t is the new transition (current, y)
+          rw [h_t_eq]
+          have h_old_count_zero : List.count (current, y) (path.zip path.tail) = 0 := by
+            exact List.count_eq_zero.mpr h_current_y_not_in_path
+          -- The new count is exactly 1
+          have h_new_count_one : List.count (current, y) ((path ++ [y]).zip (path ++ [y]).tail) = 1 := by
+            sorry -- List property: appending [y] adds exactly one (current, y)
+          rw [h_new_count_one]
+          omega
+        · -- t is not the new transition, so count doesn't change
+          have h_count_same : List.count t ((path ++ [y]).zip (path ++ [y]).tail) =
+              List.count t (path.zip path.tail) := by
+            sorry -- Since t ≠ (current, y), appending y doesn't add t
+          rw [h_count_same]
+          exact h_contains t
     · -- Show y has no outgoing edges
       intro z
       by_contra h_pos
