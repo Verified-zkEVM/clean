@@ -141,6 +141,7 @@ lemma path_has_transition {S : Type*} [DecidableEq S] (path : List S)
       use (hd, hd2)
       simp [List.zip, List.tail]
 
+omit [Fintype S] in
 /-- If a path is contained in a run and uses a transition, that transition has positive capacity. -/
 lemma containsPath_has_positive_transition (R : Run S) (path : List S)
     (h_contains : R.containsPath path) (t : Transition S)
