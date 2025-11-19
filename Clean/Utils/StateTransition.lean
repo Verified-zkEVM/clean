@@ -433,19 +433,102 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
     (h_current_not_visited : current ∉ visited)
     (h_has_out : ∃ y, y ∉ visited ∧ R (current, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
-  -- Use strong induction on the number of unvisited states
-  -- Measure: Fintype.card S - visited.card
+  -- Get a successor not in visited
+  obtain ⟨y, h_y_not_visited, h_edge⟩ := h_has_out
 
-  -- The key steps:
-  -- 1. Pick a successor y ∉ visited with R(current, y) > 0
-  -- 2. If y has no outgoing edges → y is a leaf
-  -- 3. If y has an outgoing edge to z ∉ (visited ∪ {current}) → recurse
-  --    - New visited set = visited ∪ {current} has size visited.card + 1
-  --    - Measure decreases by 1
-  --    - Can't have z = current (would create cycle)
-  --    - Can't have z ∈ visited (would create cycle through visited states)
+  -- Check if y has any outgoing edges (excluding visited ∪ {current})
+  by_cases h_y_has_out : ∃ z, z ∉ visited ∧ z ≠ current ∧ R (y, z) > 0
+  case neg =>
+    -- y has no outgoing edges to unvisited states (except possibly current)
+    -- We'll show y is actually a leaf (has NO outgoing edges at all)
+    use y
+    constructor
+    · -- Show y is reachable from root
+      obtain ⟨path, h_start, h_end, h_nonempty, h_contains⟩ := h_reachable
+      -- Extend the path by adding y
+      use path ++ [y]
+      constructor
+      · simp [h_start]
+      constructor
+      · simp
+      constructor
+      · simp [h_nonempty]
+      · intro t
+        simp [countTransitionInPath]
+        by_cases h_t_in_path : t ∈ path.zip path.tail
+        · have h_bound := h_contains t
+          sorry -- Need to show count in extended path ≤ R
+        · sorry -- Need to handle the new transition (last of path, y)
+    · -- Show y has no outgoing edges
+      intro z
+      by_contra h_pos
+      push_neg at h_y_has_out
+      -- If R(y,z) > 0, then by h_y_has_out, either z ∈ visited or z = current
+      have h_z_pos : R (y, z) > 0 := by omega
+      have h_z_in_visited_or_current : z ∈ visited ∨ z = current := by
+        by_contra h_not
+        push_neg at h_not
+        specialize h_y_has_out z
+        have h_contra : z ∉ visited ∧ z ≠ current ∧ R (y, z) > 0 := ⟨h_not.1, h_not.2, h_z_pos⟩
+        -- This contradicts h_y_has_out which says no such z exists
+        have h_le := h_y_has_out h_not.1 h_not.2
+        omega
+      sorry -- Need to derive contradiction from cycle
 
-  sorry
+  case pos =>
+    -- y has an outgoing edge to some z ∉ visited ∪ {current}
+    -- Recurse with visited ∪ {current}
+    obtain ⟨z, h_z_not_visited, h_z_ne_current, h_y_z_edge⟩ := h_y_has_out
+
+    -- Show y is reachable from root
+    have h_y_reachable : R.reachable root y := by
+      obtain ⟨path, h_start, h_end, h_nonempty, h_contains⟩ := h_reachable
+      use path ++ [y]
+      constructor
+      · simp [h_start]
+      constructor
+      · simp
+      constructor
+      · simp [h_nonempty]
+      · intro t
+        sorry -- Similar to above
+
+    -- Recurse with visited ∪ {current}
+    let new_visited := insert current visited
+
+    have h_y_not_in_new_visited' : y ∉ new_visited := by
+      simp [new_visited]
+      constructor
+      · sorry -- y ≠ current from acyclicity
+      · exact h_y_not_visited
+
+    have h_new_has_out' : ∃ w, w ∉ new_visited ∧ R (y, w) > 0 := by
+      use z
+      simp [new_visited]
+      constructor
+      · constructor
+        · exact h_z_ne_current
+        · exact h_z_not_visited
+      · exact h_y_z_edge
+
+    exact acyclic_has_leaf_aux R root y new_visited
+      h_acyclic h_y_reachable h_y_not_in_new_visited' h_new_has_out'
+termination_by Fintype.card S - visited.card
+decreasing_by
+  simp_wf
+  have h_card_increase : (insert current visited).card = visited.card + 1 := by
+    apply Finset.card_insert_of_notMem
+    exact h_current_not_visited
+  simp [h_card_increase]
+  have h_visited_subset : visited ⊂ Finset.univ := by
+    rw [Finset.ssubset_univ_iff]
+    intro h_eq_univ
+    rw [h_eq_univ] at h_current_not_visited
+    exact h_current_not_visited (Finset.mem_univ current)
+  have h_card_bound : visited.card < Fintype.card S := by
+    rw [← Finset.card_univ]
+    exact Finset.card_lt_card h_visited_subset
+  omega
 
 /-- A finite DAG reachable from a root has at least one leaf. -/
 lemma acyclic_has_leaf (R : Run S) (root : S)
