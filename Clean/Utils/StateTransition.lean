@@ -706,6 +706,93 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     · exact h_contains
     · exact h_cycle_prop
 
+/-- If a run has a self-loop, it contradicts acyclicity. -/
+lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge : R (s, s) > 0) : False := by
+  unfold Run.isAcyclic Run.hasCycle at h_acyclic
+  push_neg at h_acyclic
+  apply h_acyclic [s, s]
+  · simp
+  · simp
+  · intro t
+    unfold countTransitionInPath
+    simp [List.zip, List.tail]
+    by_cases h_t : t = (s, s)
+    · subst h_t
+      simp [List.count]
+      omega
+    · have : List.count t [(s, s)] = 0 := by
+        simp only [List.count_cons, List.count_nil, beq_iff_eq]
+        split
+        · rename_i h_eq; cases h_eq; exact absurd rfl h_t
+        · rfl
+      omega
+
+/-- If a run has a 2-cycle between distinct vertices, it contradicts acyclicity. -/
+lemma acyclic_no_two_cycle (R : Run S) (a b : S)
+    (h_acyclic : R.isAcyclic) (h_ne : a ≠ b)
+    (h_edge1 : R (a, b) > 0) (h_edge2 : R (b, a) > 0) : False := by
+  unfold Run.isAcyclic Run.hasCycle at h_acyclic
+  push_neg at h_acyclic
+  apply h_acyclic [a, b, a]
+  · simp
+  · simp
+  · intro t
+    unfold countTransitionInPath
+    simp [List.zip, List.tail]
+    by_cases h1 : t = (a, b)
+    · subst h1
+      simp [List.count]
+      have : ¬(b, a) = (a, b) := by
+        intro h_eq
+        have := Prod.mk_inj.mp h_eq
+        exact h_ne this.1.symm
+      simp [beq_iff_eq, this]
+      omega
+    · by_cases h2 : t = (b, a)
+      · subst h2
+        simp [List.count]
+        have : ¬(a, b) = (b, a) := by
+          intro h_eq
+          have := Prod.mk_inj.mp h_eq
+          exact h_ne this.1
+        simp [beq_iff_eq, this]
+        omega
+      · have : List.count t [(a, b), (b, a)] = 0 := by
+          simp [List.count]
+          constructor
+          · intro h_eq; cases h_eq; exact h1 rfl
+          · intro h_eq; cases h_eq; exact h2 rfl
+        rw [this]
+        omega
+
+/-- Extending a path that satisfies containsPath preserves the property when there's an edge. -/
+lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
+    (h_nonempty : path ≠ [])
+    (h_last : path.getLast? = some x)
+    (h_contains : R.containsPath path)
+    (h_nodup : path.Nodup)
+    (h_y_not_in_path : y ∉ path)
+    (h_edge : R (x, y) > 0) :
+    R.containsPath (path ++ [y]) := by
+  intro t
+  have h_current_y_not_in_path : (x, y) ∉ path.zip path.tail := by
+    intro h_in
+    have h_y_in_tail : y ∈ path.tail := (List.of_mem_zip h_in).2
+    have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
+    exact h_y_not_in_path h_y_in_path'
+  by_cases h_t_eq : t = (x, y)
+  · subst h_t_eq
+    have h_new_count : countTransitionInPath (x, y) (path ++ [y]) = 1 :=
+      countTransitionInPath_append_singleton path x y h_nonempty h_last h_current_y_not_in_path
+    unfold countTransitionInPath at h_new_count ⊢
+    rw [h_new_count]
+    omega
+  · have h_count_same : countTransitionInPath t (path ++ [y]) = countTransitionInPath t path :=
+      countTransitionInPath_append_singleton_other path x y t h_nonempty h_last h_t_eq
+    unfold countTransitionInPath at h_count_same ⊢
+    rw [h_count_same]
+    exact h_contains t
+
 /-- Helper: Starting from a current node with outgoing edges, excluding visited states,
     we can find a leaf reachable from the root. Uses strong induction on unvisited state count. -/
 lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
@@ -749,58 +836,13 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
           -- First prove y ≠ current
           have h_y_ne_current : y ≠ current := by
             intro h_eq
-            -- If y = current, then R(current, current) > 0, which creates a self-loop cycle
             rw [h_eq] at h_edge
-            unfold Run.isAcyclic Run.hasCycle at h_acyclic
-            push_neg at h_acyclic
-            apply h_acyclic [current, current]
-            · simp
-            · simp
-            · intro t
-              unfold countTransitionInPath
-              simp [List.zip, List.tail]
-              by_cases h_t : t = (current, current)
-              · subst h_t
-                simp [List.count]
-                omega
-              · have : List.count t [(current, current)] = 0 := by
-                  simp only [List.count_cons, List.count_nil, beq_iff_eq]
-                  split
-                  · rename_i h_eq
-                    cases h_eq
-                    exact absurd rfl h_t
-                  · rfl
-                omega
+            exact acyclic_no_self_loop R current h_acyclic h_edge
           -- Since y ∈ path and path.Nodup, and path.getLast? = some current with y ≠ current,
           -- we know y appears exactly once and before current
           -- Extract the tail of path starting from y
           sorry -- Need to construct the cycle: take path from y to current, then add edge current → y
-        have h_current_y_not_in_path : (current, y) ∉ path.zip path.tail := by
-          -- If (current, y) ∈ path.zip path.tail, then y ∈ path.tail, so y ∈ path
-          intro h_in
-          -- (current, y) ∈ path.zip path.tail means there's some position where
-          -- path has current followed by y
-          -- From membership in zip, we can extract that y ∈ path.tail
-          have h_y_in_tail : y ∈ path.tail := by
-            -- If (a, b) ∈ xs.zip ys, then b ∈ ys
-            have : current ∈ path ∧ y ∈ path.tail := List.of_mem_zip h_in
-            exact this.2
-          have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
-          exact h_y_not_in_path h_y_in_path'
-        by_cases h_t_eq : t = (current, y)
-        · -- t is the new transition (current, y)
-          subst h_t_eq
-          have h_new_count : countTransitionInPath (current, y) (path ++ [y]) = 1 := by
-            exact countTransitionInPath_append_singleton path current y h_nonempty h_end h_current_y_not_in_path
-          show countTransitionInPath (current, y) (path ++ [y]) ≤ R (current, y)
-          rw [h_new_count]
-          omega
-        · -- t is not the new transition, so count doesn't change
-          have h_count_same : countTransitionInPath t (path ++ [y]) = countTransitionInPath t path := by
-            exact countTransitionInPath_append_singleton_other path current y t h_nonempty h_end h_t_eq
-          unfold countTransitionInPath at h_count_same
-          rw [h_count_same]
-          exact h_contains t
+        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_path_nodup h_y_not_in_path h_edge t
     · -- Show y has no outgoing edges
       intro z
       by_contra h_pos
@@ -826,66 +868,14 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         sorry
       | inr h_z_eq_current =>
         -- z = current, so we have current → y → current (a 2-cycle)
-        -- We have R(current, y) > 0 and R(y, current) > 0
         rw [h_z_eq_current] at h_z_pos
-        -- First check if y = current (self-loop case)
         by_cases h_y_eq : y = current
         · -- If y = current, we have a self-loop
-          rw [h_y_eq] at h_edge h_z_pos
-          unfold Run.isAcyclic Run.hasCycle at h_acyclic
-          push_neg at h_acyclic
-          apply h_acyclic [current, current]
-          · simp
-          · simp
-          · intro t
-            unfold countTransitionInPath
-            simp [List.zip, List.tail]
-            by_cases h_t : t = (current, current)
-            · subst h_t
-              simp [List.count]
-              omega
-            · have : List.count t [(current, current)] = 0 := by
-                simp only [List.count_cons, List.count_nil, beq_iff_eq]
-                split
-                · rename_i h_eq; cases h_eq; exact absurd rfl h_t
-                · rfl
-              omega
+          rw [h_y_eq] at h_edge
+          exact acyclic_no_self_loop R current h_acyclic h_edge
         · -- If y ≠ current, we have a proper 2-cycle
-          unfold Run.isAcyclic Run.hasCycle at h_acyclic
-          push_neg at h_acyclic
-          apply h_acyclic [current, y, current]
-          · simp
-          · simp
-          · intro t
-            unfold countTransitionInPath
-            simp [List.zip, List.tail]
-            -- We have the edges R(current, y) > 0 and R(y, current) > 0
-            -- and the cycle has (current,y) once and (y,current) once
-            by_cases h1 : t = (current, y)
-            · subst h1
-              simp [List.count]
-              have : ¬(y, current) = (current, y) := by
-                intro h_eq
-                have := Prod.mk_inj.mp h_eq
-                exact h_y_eq this.1
-              simp [beq_iff_eq, this]
-              omega
-            · by_cases h2 : t = (y, current)
-              · subst h2
-                simp [List.count]
-                have : ¬(current, y) = (y, current) := by
-                  intro h_eq
-                  have := Prod.mk_inj.mp h_eq
-                  exact h_y_eq this.1.symm
-                simp [beq_iff_eq, this]
-                omega
-              · have : List.count t [(current, y), (y, current)] = 0 := by
-                  simp [List.count]
-                  constructor
-                  · intro h_eq; cases h_eq; exact h1 rfl
-                  · intro h_eq; cases h_eq; exact h2 rfl
-                rw [this]
-                omega
+          have h_ne : current ≠ y := by intro h; exact h_y_eq h.symm
+          exact acyclic_no_two_cycle R current y h_acyclic h_ne h_edge h_z_pos
 
   case pos =>
     -- y has an outgoing edge to some z ∉ visited ∪ {current}
@@ -907,45 +897,15 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         have h_path_nodup : path.Nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
         have h_y_not_in_path : y ∉ path := by
           sorry -- y not in path (same reasoning as above)
-        have h_current_y_not_in_path : (current, y) ∉ path.zip path.tail := by
-          intro h_in
-          have h_y_in_tail : y ∈ path.tail := (List.of_mem_zip h_in).2
-          have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
-          exact h_y_not_in_path h_y_in_path'
-        by_cases h_t_eq : t = (current, y)
-        · subst h_t_eq
-          have h_new_count : countTransitionInPath (current, y) (path ++ [y]) = 1 :=
-            countTransitionInPath_append_singleton path current y h_nonempty h_end h_current_y_not_in_path
-          rw [h_new_count]
-          omega
-        · have h_count_same : countTransitionInPath t (path ++ [y]) = countTransitionInPath t path :=
-            countTransitionInPath_append_singleton_other path current y t h_nonempty h_end h_t_eq
-          rw [h_count_same]
-          exact h_contains t
+        exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_path_nodup h_y_not_in_path h_edge t
 
     -- Recurse with visited ∪ {current}
     let new_visited := insert current visited
 
     have h_y_ne_current : y ≠ current := by
-      -- If y = current, then R(current, current) > 0, forming a self-loop cycle
-      by_contra h_y_eq_current
-      -- Construct a cycle [current, current]
-      unfold Run.isAcyclic Run.hasCycle at h_acyclic
-      push_neg at h_acyclic
-      specialize h_acyclic [current, current]
-      simp at h_acyclic
-      apply h_acyclic
-      intro t
-      unfold countTransitionInPath
-      simp
-      by_cases h_t_eq : t = (current, current)
-      · subst h_t_eq h_y_eq_current
-        simp
-        omega
-      · have h_count_zero : List.count t [(current, current)] = 0 := by
-          simp [List.count_eq_zero]
-          exact h_t_eq
-        omega
+      intro h_y_eq_current
+      rw [h_y_eq_current] at h_edge
+      exact acyclic_no_self_loop R current h_acyclic h_edge
 
     have h_y_not_in_new_visited' : y ∉ new_visited := by
       simp [new_visited, h_y_ne_current, h_y_not_visited]
