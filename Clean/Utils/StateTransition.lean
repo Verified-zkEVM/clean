@@ -153,6 +153,18 @@ lemma containsPath_has_positive_transition (R : Run S) (path : List S)
   have h_bound := h_contains t
   omega
 
+/-- If a path is contained in a run, dropping elements preserves containment. -/
+lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
+    (h_contains : R.containsPath path) :
+    R.containsPath (path.drop n) := by
+  sorry
+
+/-- If a path is contained in a run, taking elements preserves containment. -/
+lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
+    (h_contains : R.containsPath path) :
+    R.containsPath (path.take n) := by
+  sorry
+
 /-- If a run is acyclic and contains a path, the path has no duplicate vertices. -/
 lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     (h_acyclic : R.isAcyclic)
@@ -224,7 +236,12 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
       exact h_x_at_m.symm
     rw [h_head, h_last]
   have h_cycle_contained : R.containsPath cycle := by
-    sorry -- cycle is a subpath of path, so it's contained in R
+    -- cycle = (path.drop n).take (m - n + 1)
+    -- First apply drop, then take
+    simp only [cycle]
+    have h_after_drop : R.containsPath (path.drop n.val) := by
+      exact containsPath_drop R path n.val h_contains
+    exact containsPath_take R (path.drop n.val) (m.val - n.val + 1) h_after_drop
   -- This contradicts acyclicity
   unfold Run.isAcyclic Run.hasCycle at h_acyclic
   push_neg at h_acyclic
