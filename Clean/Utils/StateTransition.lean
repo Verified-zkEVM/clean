@@ -765,6 +765,50 @@ lemma acyclic_no_two_cycle (R : Run S) (a b : S)
         rw [this]
         omega
 
+/-- The last element of a nodup list cannot appear as the first component of a pair in zip with tail. -/
+lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
+    (h_nodup : l.Nodup)
+    (h_last : l.getLast? = some x) :
+    ∀ y : α, (x, y) ∉ l.zip l.tail := by
+  intro y h_in
+  -- If (x, y) ∈ l.zip l.tail, then x appears at position i where i < length - 1
+  -- But x is the last element (at position length - 1)
+  -- Since l.Nodup, x appears only once, so i = length - 1, contradiction
+  induction l with
+  | nil =>
+    simp at h_last
+  | cons head tail ih =>
+    cases tail with
+    | nil =>
+      simp at h_in
+    | cons head2 tail2 =>
+      simp [List.getLast?_cons_cons] at h_last
+      simp [List.tail_cons, List.zip_cons_cons] at h_in
+      -- l.Nodup means head ≠ head2, head ∉ tail2, and (head2 :: tail2).Nodup
+      have h_nodup_tail := List.nodup_cons.mp h_nodup
+      cases h_in with
+      | inl h_eq =>
+        -- (x, y) = (head, head2), so x = head
+        have h_x_head : x = head := h_eq.1
+        subst h_x_head
+        -- But getLast? (head2 :: tail2) = some x (which is head)
+        -- This means x ∈ head2 :: tail2
+        have h_x_in_tail : x ∈ head2 :: tail2 := by
+          have h_ne : (head2 :: tail2) ≠ [] := by simp
+          have h_last_eq : (head2 :: tail2).getLast h_ne = x := by
+            have : (head2 :: tail2).getLast? = some ((head2 :: tail2).getLast h_ne) := by
+              exact List.getLast?_eq_getLast h_ne
+            rw [this] at h_last
+            injection h_last
+          rw [← h_last_eq]
+          exact List.getLast_mem h_ne
+        -- But h_nodup says x ∉ head2 :: tail2 (since x = head and head is the first element)
+        exact h_nodup_tail.1 h_x_in_tail
+      | inr h_in_rest =>
+        -- (x, y) ∈ (head2 :: tail2).zip (head2 :: tail2).tail
+        -- Apply IH to head2 :: tail2 with its Nodup property
+        exact ih h_nodup_tail.2 h_last h_in_rest
+
 /-- If there's an edge from current to y, and y is in the path from root to current,
     then we can construct a cycle, contradicting acyclicity. -/
 lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
@@ -840,7 +884,32 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
     · -- cycle.head? = cycle.getLast?
       rw [h_cycle_head, h_cycle_last]
     · -- show R.containsPath cycle
-      sorry
+      unfold cycle
+      have h_suffix_contains : R.containsPath suffix := by
+        unfold suffix
+        exact containsPath_drop R path i h_contains
+      -- Now show suffix ++ [y] is contained by case analysis on transitions
+      intro t
+      unfold countTransitionInPath at h_suffix_contains ⊢
+      by_cases h_t_eq : t = (current, y)
+      · -- For transition (current, y), it appears exactly once in suffix ++ [y]
+        subst h_t_eq
+        -- Show (current, y) ∉ suffix.zip suffix.tail using our helper lemma
+        have h_path_nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
+        have h_suffix_nodup : suffix.Nodup := by
+          unfold suffix
+          exact h_path_nodup.drop
+        have h_not_in : (current, y) ∉ suffix.zip suffix.tail :=
+          last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
+        have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
+        unfold countTransitionInPath at h_count_one
+        rw [h_count_one]
+        omega
+      · -- For other transitions, count stays the same
+        have h_count_same := countTransitionInPath_append_singleton_other suffix current y t h_suffix_nonempty h_suffix_last h_t_eq
+        unfold countTransitionInPath at h_count_same
+        rw [h_count_same]
+        exact h_suffix_contains t
   -- Contradiction
   unfold Run.isAcyclic at h_acyclic
   exact h_acyclic h_hasCycle
