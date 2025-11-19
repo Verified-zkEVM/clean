@@ -496,11 +496,29 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
     -- Recurse with visited ∪ {current}
     let new_visited := insert current visited
 
+    have h_y_ne_current : y ≠ current := by
+      -- If y = current, then R(current, current) > 0, forming a self-loop cycle
+      by_contra h_y_eq_current
+      -- Construct a cycle [current, current]
+      unfold Run.isAcyclic Run.hasCycle at h_acyclic
+      push_neg at h_acyclic
+      specialize h_acyclic [current, current]
+      simp at h_acyclic
+      apply h_acyclic
+      intro t
+      unfold countTransitionInPath
+      simp
+      by_cases h_t_eq : t = (current, current)
+      · subst h_t_eq h_y_eq_current
+        simp
+        omega
+      · have h_count_zero : List.count t [(current, current)] = 0 := by
+          simp [List.count_eq_zero]
+          exact h_t_eq
+        omega
+
     have h_y_not_in_new_visited' : y ∉ new_visited := by
-      simp [new_visited]
-      constructor
-      · sorry -- y ≠ current from acyclicity
-      · exact h_y_not_visited
+      simp [new_visited, h_y_ne_current, h_y_not_visited]
 
     have h_new_has_out' : ∃ w, w ∉ new_visited ∧ R (y, w) > 0 := by
       use z
