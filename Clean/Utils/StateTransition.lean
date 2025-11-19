@@ -323,7 +323,20 @@ lemma countTransitionInPath_append_singleton_other (path : List S) (x y : S) (t 
     (h_last : path.getLast? = some x)
     (h_ne : t ≠ (x, y)) :
     countTransitionInPath t (path ++ [y]) = countTransitionInPath t path := by
-  sorry
+  unfold countTransitionInPath
+  obtain ⟨h, t', rfl⟩ := List.exists_cons_of_ne_nil h_nonempty
+  rw [List.cons_append, List.tail_cons]
+  induction t' generalizing h with
+  | nil =>
+    simp [List.count]
+    intro h_eq; subst h_eq; simp at h_last; subst h_last; exact h_ne rfl
+  | cons h2 t2 ih =>
+    rw [List.tail_cons]
+    simp [List.zip_cons_cons, List.count_cons]
+    -- Now we need to apply IH for h2 :: t2
+    apply ih
+    · simp
+    · rw [← List.getLast?_cons_cons]; exact h_last
 
 /-- If a pair is in a zip, its first component is in the first list. -/
 lemma mem_of_mem_zip_fst {α β : Type*} (l1 : List α) (l2 : List β) (a : α) (b : β) :
