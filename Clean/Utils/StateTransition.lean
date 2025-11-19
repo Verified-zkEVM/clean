@@ -162,7 +162,20 @@ lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
 /-- Zipping takes of two lists produces a sublist of zipping the original lists. -/
 lemma zip_take_sublist (l1 l2 : List S) (n m : ℕ) :
     ((l1.take n).zip (l2.take m)).Sublist (l1.zip l2) := by
-  sorry
+  cases n with
+  | zero => simp
+  | succ n' =>
+    cases m with
+    | zero => simp
+    | succ m' =>
+      cases l1 with
+      | nil => simp
+      | cons h1 t1 =>
+        cases l2 with
+        | nil => simp
+        | cons h2 t2 =>
+          simp only [List.take_succ_cons, List.zip_cons_cons]
+          exact List.Sublist.cons₂ (h1, h2) (zip_take_sublist t1 t2 n' m')
 
 /-- If a path is contained in a run, taking elements preserves containment. -/
 lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
