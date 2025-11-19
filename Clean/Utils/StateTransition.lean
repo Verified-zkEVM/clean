@@ -315,7 +315,31 @@ lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
     (h_last : path.getLast? = some x)
     (h_not_in : (x, y) ∉ path.zip path.tail) :
     countTransitionInPath (x, y) (path ++ [y]) = 1 := by
-  sorry
+  unfold countTransitionInPath
+  obtain ⟨h, t', rfl⟩ := List.exists_cons_of_ne_nil h_nonempty
+  rw [List.cons_append, List.tail_cons]
+  induction t' generalizing h with
+  | nil =>
+    simp
+    have : x = h := by simp at h_last; exact h_last.symm
+    simp [this]
+  | cons h2 t2 ih =>
+    simp [List.zip_cons_cons, List.count_cons]
+    by_cases h_eq : (h, h2) = (x, y)
+    · -- This contradicts h_not_in
+      exfalso
+      rw [List.tail_cons, List.zip_cons_cons] at h_not_in
+      simp at h_not_in
+      have ⟨h1, h2⟩ := Prod.mk_inj.mp h_eq
+      exact h_not_in.1 h1.symm h2.symm
+    · simp [h_eq]
+      -- Now apply IH for h2 :: t2
+      apply ih
+      · simp
+      · rw [← List.getLast?_cons_cons]; exact h_last
+      · rw [List.tail_cons, List.zip_cons_cons] at h_not_in
+        simp at h_not_in
+        exact h_not_in.2
 
 /-- Appending an element doesn't add a transition that's different from (last, new). -/
 lemma countTransitionInPath_append_singleton_other (path : List S) (x y : S) (t : Transition S)
