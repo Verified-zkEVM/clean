@@ -161,8 +161,38 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
   -- Proof by contradiction: if path has duplicates, extract a cycle
   by_contra h_dup
   -- If path is not Nodup, there exists an element that appears twice
-  -- This creates a cycle
-  sorry
+  rw [← List.exists_duplicate_iff_not_nodup] at h_dup
+  obtain ⟨x, h_duplicate⟩ := h_dup
+  -- x appears at least twice in path, at distinct positions
+  rw [List.duplicate_iff_exists_distinct_get] at h_duplicate
+  obtain ⟨n, m, h_n_lt_m, h_x_at_n, h_x_at_m⟩ := h_duplicate
+  -- Extract the subpath from index n to index m (inclusive)
+  -- This forms a cycle: path[n..m] starts and ends with x
+  -- Use take and drop: drop n first, then take (m - n + 1) elements
+  let cycle := (path.drop n.val).take (m.val - n.val + 1)
+  -- Prove this is a cycle
+  have h_n_lt_len : n.val < path.length := n.isLt
+  have h_m_lt_len : m.val < path.length := m.isLt
+  have h_cycle_len : cycle.length ≥ 2 := by
+    simp only [cycle]
+    rw [List.length_take, List.length_drop]
+    have h_diff : m.val - n.val ≥ 1 := by
+      have : (n : ℕ) < (m : ℕ) := h_n_lt_m
+      omega
+    -- We're taking min(m - n + 1, path.length - n)
+    -- Since m < path.length, we have m - n < path.length - n
+    -- So min(m - n + 1, path.length - n) = m - n + 1
+    have : m.val - n.val + 1 ≤ path.length - n.val := by omega
+    simp [Nat.min_eq_left this]
+    omega
+  have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? := by
+    sorry -- The cycle starts and ends with x = path[n] = path[m]
+  have h_cycle_contained : R.containsPath cycle := by
+    sorry -- cycle is a subpath of path, so it's contained in R
+  -- This contradicts acyclicity
+  unfold Run.isAcyclic Run.hasCycle at h_acyclic
+  push_neg at h_acyclic
+  apply h_acyclic cycle h_cycle_len h_cycle_starts_ends_with_x h_cycle_contained
 
 /-- If a path has no duplicates, each transition appears at most once. -/
 lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
