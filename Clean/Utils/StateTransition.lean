@@ -811,10 +811,9 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
     simp [h_y_eq]
   have h_suffix_last : suffix.getLast? = some current := by
     unfold suffix
-    -- Since getLast? path = some current and suffix is a non-empty suffix of path,
-    -- we need to show that current is also the last element of suffix
-    -- This follows because y ≠ current and y appears before current in path
-    sorry
+    rw [List.getLast?_drop, if_neg]
+    · exact h_end
+    · omega
   -- Now construct the cycle
   let cycle := suffix ++ [y]
   -- Show cycle is a valid cycle
