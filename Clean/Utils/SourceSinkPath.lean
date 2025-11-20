@@ -113,7 +113,17 @@ def Run.reachable [DecidableEq S] (R : Run S) (start finish : S) : Prop :=
 def Run.isLeaf (R : Run S) (root leaf : S) : Prop :=
   R.reachable root leaf ∧ ∀ y, R (leaf, y) = 0
 
--- Helper lemmas for sums
+-- Helper lemmas for sums and finsets
+
+/-- If an element is not in a finset, the finset is a strict subset of univ. -/
+lemma finset_ssubset_univ_of_not_mem {α : Type*} [Fintype α] (s : Finset α) (x : α)
+    (h : x ∉ s) :
+    s ⊂ Finset.univ := by
+  rw [Finset.ssubset_univ_iff]
+  intro h_eq_univ
+  have : x ∈ Finset.univ := Finset.mem_univ x
+  rw [← h_eq_univ] at this
+  exact h this
 
 /-- If one element strictly decreases and others are ≤, the sum decreases -/
 lemma sum_decrease {α : Type*} [Fintype α] [DecidableEq α] (f g : α → ℕ) (a : α)
@@ -991,13 +1001,7 @@ decreasing_by
   have h_card_increase : (insert y path.toFinset).card = path.toFinset.card + 1 := by
     rw [Finset.card_insert_of_notMem h_y_not_mem]
   -- path.toFinset is a strict subset of univ
-  have h_path_subset : path.toFinset ⊂ Finset.univ := by
-    rw [Finset.ssubset_univ_iff]
-    intro h_eq_univ
-    -- If path.toFinset = univ, then y ∈ path.toFinset (since y ∈ univ)
-    have : y ∈ Finset.univ := Finset.mem_univ y
-    rw [← h_eq_univ] at this
-    exact h_y_not_mem this
+  have h_path_subset := finset_ssubset_univ_of_not_mem path.toFinset y h_y_not_mem
   have h_card_bound : path.toFinset.card < Fintype.card S := by
     rw [← Finset.card_univ]
     exact Finset.card_lt_card h_path_subset
