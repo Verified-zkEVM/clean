@@ -1092,6 +1092,31 @@ lemma last_has_incoming_transition {α : Type*} (l : List α) (x : α)
         obtain ⟨y, h_y_in⟩ := last_has_incoming_transition (hd2 :: hd3 :: tl3) x h_tail_len h_last
         aesop
 
+omit [DecidableEq S] [Fintype S] in
+/-- A non-empty path with distinct head and last has length at least 2. -/
+lemma path_distinct_head_last_length_ge_two {α : Type*} (path : List α) (x y : α)
+    (h_nonempty : path ≠ [])
+    (h_head : path.head? = some x)
+    (h_last : path.getLast? = some y)
+    (h_ne : x ≠ y) :
+    path.length ≥ 2 := by
+  by_contra h_not
+  push_neg at h_not
+  cases path with
+  | nil => simp at h_nonempty
+  | cons hd tl =>
+    cases tl with
+    | nil =>
+      -- Singleton list [hd]
+      simp only [List.head?, Option.some.injEq, List.getLast?,
+        List.getLast_singleton] at h_head h_last
+      have : x = y := by rw [← h_head, ← h_last]
+      exact h_ne this
+    | cons hd2 tl2 =>
+      -- Length is at least 2
+      simp only [List.length] at h_not
+      omega
+
 omit [Fintype S] in
 /-- A leaf reachable from a root (with root ≠ leaf) must have an incoming edge. -/
 lemma reachable_leaf_has_incoming_edge (R : Run S) (root leaf : S)
@@ -1103,24 +1128,7 @@ lemma reachable_leaf_has_incoming_edge (R : Run S) (root leaf : S)
   -- From reachability, we have a path from root to leaf
   obtain ⟨path, h_head, h_last, h_nonempty, h_contains⟩ := h_reach
   -- Since root ≠ leaf, the path has length ≥ 2
-  have h_len : path.length ≥ 2 := by
-    -- path is non-empty and head ≠ last, so length ≥ 2
-    by_contra h_not
-    push_neg at h_not
-    cases path with
-    | nil => simp at h_nonempty
-    | cons hd tl =>
-      cases tl with
-      | nil =>
-        -- Singleton list [hd]
-        simp only [List.head?, Option.some.injEq, List.getLast?,
-          List.getLast_singleton] at h_head h_last
-        have : root = leaf := by rw [← h_head, ← h_last]
-        exact h_ne this
-      | cons hd2 tl2 =>
-        -- Length is at least 2
-        simp only [List.length] at h_not
-        omega
+  have h_len := path_distinct_head_last_length_ge_two path root leaf h_nonempty h_head h_last h_ne
   -- Use the helper lemma to get a transition into leaf
   obtain ⟨y, h_y_leaf_in⟩ := last_has_incoming_transition path leaf h_len h_last
   -- This transition has positive capacity in R
