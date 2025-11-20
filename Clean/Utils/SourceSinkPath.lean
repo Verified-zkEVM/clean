@@ -1065,6 +1065,15 @@ lemma sum_pos_of_pos_element {α : Type*} [Fintype α] (f : α → ℤ) (a : α)
   have h_a_in_sum : f a ≤ ∑ x : α, f x := single_le_sum_of_nonneg f a h_nonneg
   omega
 
+/-- Sum of natural numbers cast to integers is positive when one element is positive. -/
+lemma sum_nat_cast_pos {α : Type*} [Fintype α] (f : α → ℕ) (a : α)
+    (h_pos : f a > 0) :
+    ∑ x : α, (f x : ℤ) > 0 := by
+  apply sum_pos_of_pos_element (fun z => (f z : ℤ)) a
+  · omega
+  · intro x
+    omega
+
 /-- A leaf with an incoming edge has negative net flow. -/
 lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     (h_leaf : R.isLeaf root leaf)
@@ -1080,12 +1089,8 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     simp only [h_no_out]
     simp
   -- The inflow is positive because there exists y with R(y, leaf) > 0
-  have h_inflow_pos : ∑ z : S, (R (z, leaf) : ℤ) > 0 := by
-    apply sum_pos_of_pos_element (fun z => (R (z, leaf) : ℤ)) y
-    · omega
-    · intro x
-      have : (R (x, leaf) : ℤ) = ↑(R (x, leaf)) := rfl
-      omega
+  have h_inflow_pos : ∑ z : S, (R (z, leaf) : ℤ) > 0 :=
+    sum_nat_cast_pos (fun z => R (z, leaf)) y hy
   -- Combine: 0 - (positive) < 0
   rw [h_outflow_zero]
   omega
