@@ -336,7 +336,7 @@ lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
   induction t' generalizing h with
   | nil =>
     simp
-    have : x = h := by simp at h_last; exact h_last.symm
+    have : x = h := by simpa using h_last.symm
     simp [this]
   | cons h2 t2 ih =>
     simp only [List.cons_append, List.zip_cons_cons, List.count_cons, beq_iff_eq]
