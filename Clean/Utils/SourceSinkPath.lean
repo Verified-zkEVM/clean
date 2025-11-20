@@ -1232,7 +1232,6 @@ lemma leaf_has_incoming_and_negative_netFlow (R : Run S) (root leaf : S)
 lemma acyclic_run_has_path_from_source_to_sink (R : Run S) (s d : S)
     (h_acyclic : R.isAcyclic)
     (h_source : R.netFlow s = 1)
-    (h_sink : R.netFlow d = -1)
     (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
     ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
       path ≠ [] ∧ R.containsPath path ∧ path.Nodup := by
@@ -1264,7 +1263,6 @@ lemma acyclic_run_has_path_from_source_to_sink (R : Run S) (s d : S)
 theorem exists_path_from_source_to_sink
     (R : Run S) (s d : S)
     (h_source : R.netFlow s = 1)
-    (h_sink : R.netFlow d = -1)
     (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
     ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
       path ≠ [] ∧ R.containsPath path ∧ path.Nodup := by
@@ -1275,11 +1273,10 @@ theorem exists_path_from_source_to_sink
     obtain ⟨R', h_netFlow_preserved, h_size_lt, h_R'_le_R⟩ := exists_smaller_run_with_same_netFlow R h_cyclic
     -- R' has the same net flows
     have h_source' : R'.netFlow s = 1 := by aesop
-    have h_sink' : R'.netFlow d = -1 := by aesop
     have h_others' : ∀ x, x ≠ s → x ≠ d → R'.netFlow x = 0 := by aesop
     -- Recursive call with smaller run
     obtain ⟨path, h_head, h_last, h_nonempty, h_contains', h_nodup⟩ :=
-      exists_path_from_source_to_sink R' s d h_source' h_sink' h_others'
+      exists_path_from_source_to_sink R' s d h_source' h_others'
     use path
     refine ⟨h_head, h_last, h_nonempty, ?_, h_nodup⟩
     -- Show R.containsPath path from R'.containsPath path
@@ -1290,7 +1287,7 @@ theorem exists_path_from_source_to_sink
     _ ≤ R t := h_R'_le_R t
   case neg =>
     -- R is acyclic, use the acyclic case lemma
-    exact acyclic_run_has_path_from_source_to_sink R s d h_cyclic h_source h_sink h_others
+    exact acyclic_run_has_path_from_source_to_sink R s d h_cyclic h_source h_others
 termination_by R.size
 decreasing_by
   simp_wf
