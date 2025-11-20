@@ -782,19 +782,10 @@ lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
         -- This means x ∈ head2 :: tail2
         have h_x_in_tail : x ∈ head2 :: tail2 := by
           have h_ne : (head2 :: tail2) ≠ [] := by simp
-          have h_last_eq : (head2 :: tail2).getLast h_ne = x := by
-            have : (head2 :: tail2).getLast? = some ((head2 :: tail2).getLast h_ne) := by
-              exact List.getLast?_eq_getLast h_ne
-            rw [this] at h_last
-            injection h_last
-          rw [← h_last_eq]
-          exact List.getLast_mem h_ne
-        -- But h_nodup says x ∉ head2 :: tail2 (since x = head and head is the first element)
-        exact h_nodup_tail.1 h_x_in_tail
-      | inr h_in_rest =>
-        -- (x, y) ∈ (head2 :: tail2).zip (head2 :: tail2).tail
-        -- Apply IH to head2 :: tail2 with its Nodup property
-        exact ih h_nodup_tail.2 h_last h_in_rest
+          have h_last_eq : (head2 :: tail2).getLast h_ne = x := by grind
+          aesop
+        grind
+      | inr h_in_rest => grind
 
 omit [Fintype S] in
 /-- If there's an edge from current to y, and y is in the path from root to current,
@@ -824,43 +815,18 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
     intro h_empty
     unfold suffix at h_empty
     have : path.drop i = [] → i ≥ path.length := by
-      intro h_drop_nil
-      by_contra h_not_ge
-      push_neg at h_not_ge
-      have : (path.drop i).length > 0 := by
-        rw [List.length_drop]
-        omega
-      rw [h_drop_nil] at this
-      simp at this
+      have : (path.drop i).length > 0 := by grind
+      grind
     have : i ≥ path.length := this h_empty
     omega
-  have h_suffix_head : suffix.head? = some y := by
-    unfold suffix
-    have h_cons : path[i] :: path.drop (i + 1) = path.drop i := by
-      exact List.getElem_cons_drop h_i_lt
-    rw [← h_cons]
-    simp [h_y_eq]
-  have h_suffix_last : suffix.getLast? = some current := by
-    unfold suffix
-    rw [List.getLast?_drop, if_neg]
-    · exact h_end
-    · omega
+  have h_suffix_head : suffix.head? = some y := by aesop
+  have h_suffix_last : suffix.getLast? = some current := by grind
   -- Now construct the cycle
   let cycle := suffix ++ [y]
   -- Show cycle is a valid cycle
-  have h_cycle_head : cycle.head? = some y := by
-    unfold cycle
-    rw [List.head?_append]
-    simp [h_suffix_head]
-  have h_cycle_last : cycle.getLast? = some y := by
-    unfold cycle
-    rw [List.getLast?_append]
-    simp
-  have h_cycle_len : cycle.length ≥ 2 := by
-    unfold cycle
-    rw [List.length_append, List.length_cons, List.length_nil]
-    have h_suffix_len : suffix.length ≥ 1 := List.length_pos_of_ne_nil h_suffix_nonempty
-    omega
+  have h_cycle_head : cycle.head? = some y := by grind
+  have h_cycle_last : cycle.getLast? = some y := by grind
+  have h_cycle_len : cycle.length ≥ 2 := by grind
   -- Show R.hasCycle
   have h_hasCycle : R.hasCycle := by
     use cycle
@@ -883,9 +849,7 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
         subst h_t_eq
         -- Show (current, y) ∉ suffix.zip suffix.tail using our helper lemma
         have h_path_nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
-        have h_suffix_nodup : suffix.Nodup := by
-          unfold suffix
-          exact h_path_nodup.drop
+        have h_suffix_nodup : suffix.Nodup := by grind
         have h_not_in : (current, y) ∉ suffix.zip suffix.tail :=
           last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
         have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
@@ -950,11 +914,11 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
       -- Extend the path by adding y
       use path ++ [y]
       constructor
-      · simp [h_start]
+      · aesop
       constructor
       · simp
       constructor
-      · simp [h_nonempty]
+      · aesop
       · exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
     · -- Show y has no outgoing edges
       intro z
@@ -962,11 +926,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
       push_neg at h_y_has_out
       -- If R(y,z) > 0, then by h_y_has_out, either z ∈ path or z = y
       have h_z_pos : R (y, z) > 0 := by omega
-      have h_z_in_path_or_y : z ∈ path ∨ z = y := by
-        by_contra h_not
-        push_neg at h_not
-        specialize h_y_has_out z
-        aesop
+      have h_z_in_path_or_y : z ∈ path ∨ z = y := by grind
 
       -- Derive contradiction from cycle
       cases h_z_in_path_or_y with
@@ -974,7 +934,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         -- z ∈ path, so we can construct a cycle
         -- path ends with current, current → y, y → z, and z ∈ path
         -- This creates a cycle: (suffix of path from z to current) → y → z
-        have h_z_in_extended : z ∈ path ++ [y] := by simp [h_z_in_path]
+        have h_z_in_extended : z ∈ path ++ [y] := by aesop
         exact acyclic_edge_not_in_path R (path ++ [y]) y z h_acyclic (by simp) (containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge) h_z_pos h_z_in_extended
       | inr h_z_eq_y =>
         -- z = y, so we have a self-loop y → y
@@ -999,9 +959,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
       · aesop
       · exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
 
-    have h_new_has_out : ∃ w, w ∉ new_path ∧ R (y, w) > 0 := by
-      use z
-      aesop
+    have h_new_has_out : ∃ w, w ∉ new_path ∧ R (y, w) > 0 := by grind
     exact acyclic_has_leaf_aux R root y new_path h_acyclic h_new_path h_new_has_out
 termination_by Fintype.card S - path.toFinset.card
 decreasing_by
