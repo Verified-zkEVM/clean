@@ -1107,6 +1107,15 @@ lemma sum_nat_cast_nonneg {α : Type*} [Fintype α] (f : α → ℕ) :
   intro x _
   omega
 
+/-- Sum of natural numbers cast to integers is zero when all are not positive. -/
+lemma sum_nat_cast_zero_of_not_pos {α : Type*} [Fintype α] (f : α → ℕ)
+    (h : ∀ x, ¬(f x > 0)) :
+    ∑ x : α, (f x : ℤ) = 0 := by
+  apply sum_zero_of_all_zero
+  intro y
+  have h_le := h y
+  omega
+
 /-- If a state has positive net flow, it must have an outgoing edge. -/
 lemma positive_netFlow_has_outgoing_edge (R : Run S) (s : S)
     (h_pos : R.netFlow s > 0) :
@@ -1116,9 +1125,9 @@ lemma positive_netFlow_has_outgoing_edge (R : Run S) (s : S)
   push_neg at h_none
   -- All outgoing edges have capacity 0
   have h_outflow_zero : ∑ y : S, (R (s, y) : ℤ) = 0 := by
-    apply sum_zero_of_all_zero
+    apply sum_nat_cast_zero_of_not_pos
     intro y
-    have h_le := h_none y
+    have := h_none y
     omega
   -- But netFlow = outflow - inflow > 0
   unfold Run.netFlow at h_pos
