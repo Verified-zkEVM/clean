@@ -303,8 +303,7 @@ def ComputableWitnesses (circuit : ElaboratedCircuit F β α) : Prop :=
 lemma computableWitnesses_implies {circuit : ElaboratedCircuit F β α} :
     circuit.ComputableWitnesses → circuit.ComputableWitnesses' := by
   simp only [ComputableWitnesses, ComputableWitnesses']
-  intro h_computable n input input_only_accesses_n
-  intro env env'
+  intro h_computable n input input_only_accesses_n env env'
   specialize h_computable n input env env'
   specialize input_only_accesses_n env env'
   simp only [Operations.ComputableWitnesses, ←Operations.forAll_toFlat_iff] at *

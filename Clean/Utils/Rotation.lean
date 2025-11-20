@@ -128,7 +128,7 @@ def rotRight64_eq_bv_rotate (x : ℕ) (h : x < 2^64) (offset : ℕ) :
       apply Nat.shiftLeft_lt
       rw [Nat.one_shiftLeft]
       apply Nat.mod_lt
-      simp only [gt_iff_lt, Nat.ofNat_pos, pow_pos]
+      simp only [Nat.ofNat_pos, pow_pos]
 
     rw [h_eq3]
 
@@ -371,7 +371,7 @@ def rotRight32_eq_bv_rotate (x : ℕ) (h : x < 2^32) (offset : ℕ) :
       apply Nat.shiftLeft_lt
       rw [Nat.one_shiftLeft]
       apply Nat.mod_lt
-      simp only [gt_iff_lt, Nat.ofNat_pos, pow_pos]
+      simp only [Nat.ofNat_pos, pow_pos]
 
     rw [h_eq3]
 
