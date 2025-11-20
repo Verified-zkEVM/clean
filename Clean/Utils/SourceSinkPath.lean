@@ -1258,8 +1258,8 @@ lemma acyclic_run_has_path_from_source_to_sink (R : Run S) (s d : S)
   refine ⟨h_head, h_last, h_nonempty, h_contains, ?_⟩
   exact acyclic_containsPath_nodup R path h_acyclic h_contains
 
-/-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
-    then there exists a cycle-free path from s to d. -/
+/-- Main theorem: If the net flow is +1 at source s, anything at sink d,
+    and 0 elsewhere, then there exists a cycle-free path from s to d. -/
 theorem exists_path_from_source_to_sink
     (R : Run S) (s d : S)
     (h_source : R.netFlow s = 1)
