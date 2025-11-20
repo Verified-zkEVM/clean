@@ -1031,6 +1031,20 @@ lemma acyclic_has_leaf (R : Run S) (root : S)
     exact acyclic_no_self_loop R root h_acyclic h_pos
   · exact h_pos
 
+/-- If one element of a sum is positive and all elements are nonnegative, the sum is positive. -/
+lemma sum_pos_of_pos_element {α : Type*} [Fintype α] (f : α → ℤ) (a : α)
+    (h_pos : f a > 0)
+    (h_nonneg : ∀ x, f x ≥ 0) :
+    ∑ x : α, f x > 0 := by
+  have h_a_in_sum : f a ≤ ∑ x : α, f x := by
+    calc f a
+      = ∑ x ∈ ({a} : Finset α), f x := by simp
+    _ ≤ ∑ x : α, f x := by
+        apply Finset.sum_le_univ_sum_of_nonneg
+        intro x
+        exact h_nonneg x
+  omega
+
 /-- A leaf with an incoming edge has negative net flow. -/
 lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     (h_leaf : R.isLeaf root leaf)
@@ -1047,15 +1061,11 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
     simp
   -- The inflow is positive because there exists y with R(y, leaf) > 0
   have h_inflow_pos : ∑ z : S, (R (z, leaf) : ℤ) > 0 := by
-    -- The sum includes the term for z = y, which is positive
-    have h_y_in_sum : (R (y, leaf) : ℤ) ≤ ∑ z : S, (R (z, leaf) : ℤ) := by
-      calc (R (y, leaf) : ℤ)
-        = ∑ z ∈ ({y} : Finset S), (R (z, leaf) : ℤ) := by simp
-      _ ≤ ∑ z : S, (R (z, leaf) : ℤ) := by
-          apply Finset.sum_le_univ_sum_of_nonneg
-          intro x
-          omega
-    omega
+    apply sum_pos_of_pos_element (fun z => (R (z, leaf) : ℤ)) y
+    · omega
+    · intro x
+      have : (R (x, leaf) : ℤ) = ↑(R (x, leaf)) := rfl
+      omega
   -- Combine: 0 - (positive) < 0
   rw [h_outflow_zero]
   omega
