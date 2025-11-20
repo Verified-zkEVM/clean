@@ -1080,25 +1080,11 @@ lemma last_has_incoming_transition {α : Type*} (l : List α) (x : α)
       simp only [List.getLast?_cons_cons] at h_last
       -- If tl2 = [], then getLast? = some hd2, so x = hd2, and (hd, hd2) is in zip
       cases tl2 with
-      | nil =>
-        simp only [List.getLast?, List.getLast_singleton, Option.some.injEq] at h_last
-        subst h_last
-        use hd
-        simp [List.zip]
+      | nil => aesop
       | cons hd3 tl3 =>
-        -- l = [hd, hd2, hd3] ++ tl3
-        -- Recurse on tail
-        have h_tail_len : (hd2 :: hd3 :: tl3).length ≥ 2 := by simp [List.length]
-        have h_tail_last : (hd2 :: hd3 :: tl3).getLast? = some x := h_last
-        obtain ⟨y, h_y_in⟩ := last_has_incoming_transition (hd2 :: hd3 :: tl3) x h_tail_len h_tail_last
-        use y
-        -- (hd :: hd2 :: hd3 :: tl3).tail = (hd2 :: hd3 :: tl3)
-        -- (hd :: hd2 :: hd3 :: tl3).zip (hd2 :: hd3 :: tl3)
-        -- = (hd, hd2) :: ((hd2 :: hd3 :: tl3).zip (hd3 :: tl3))
-        simp only [List.tail_cons]
-        rw [List.zip_cons_cons]
-        right
-        exact h_y_in
+        have h_tail_len : (hd2 :: hd3 :: tl3).length ≥ 2 := by grind
+        obtain ⟨y, h_y_in⟩ := last_has_incoming_transition (hd2 :: hd3 :: tl3) x h_tail_len h_last
+        aesop
 
 omit [Fintype S] in
 /-- A leaf reachable from a root (with root ≠ leaf) must have an incoming edge. -/
