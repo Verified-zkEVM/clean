@@ -216,6 +216,18 @@ lemma zip_take_sublist (l1 l2 : List S) (n m : ℕ) :
           simp only [List.take_succ_cons, List.zip_cons_cons]
           exact List.Sublist.cons₂ (h1, h2) (zip_take_sublist t1 t2 n' m')
 
+omit [DecidableEq S] [Fintype S] in
+/-- The tail of a take is the take of the tail (with adjusted count). -/
+lemma tail_take {α : Type*} (l : List α) (n : ℕ) :
+    (l.take n).tail = (l.tail).take (n - 1) := by
+  cases n with
+  | zero => simp
+  | succ n' =>
+    cases l with
+    | nil => simp
+    | cons hd tl =>
+      simp [List.take, List.tail]
+
 omit [Fintype S] in
 /-- If a path is contained in a run, taking elements preserves containment. -/
 lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
@@ -223,16 +235,7 @@ lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
     R.containsPath (path.take n) := by
   unfold Run.containsPath countTransitionInPath at h_contains ⊢
   intro t
-  -- (path.take n).zip (path.take n).tail is related to path.zip path.tail
-  have h_tail_take : (path.take n).tail = (path.tail).take (n - 1) := by
-    cases n with
-    | zero => simp
-    | succ n' =>
-      cases path with
-      | nil => simp
-      | cons hd tl =>
-        simp [List.take, List.tail]
-  rw [h_tail_take]
+  rw [tail_take]
   -- Use the general lemma about zip and take
   have h_sublist := zip_take_sublist path path.tail n (n - 1)
   have h_count_le : List.count t ((path.take n).zip ((path.tail).take (n - 1))) ≤
