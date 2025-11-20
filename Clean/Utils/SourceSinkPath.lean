@@ -284,10 +284,7 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
       simp only [if_neg h_take_nonzero]
       rw [List.head?_drop]
       have h_n_in_bounds : n.val < path.length := h_n_lt_len
-      simp only [List.getElem?_eq_getElem h_n_in_bounds]
-      congr 1
-      -- path[n] is the same as path.get n
-      exact h_x_at_n.symm
+      aesop
     have h_last : cycle.getLast? = some x := by
       simp only [cycle]
       -- cycle.length = m - n + 1, so getLast is at index (m - n)
@@ -307,9 +304,7 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
       have : n.val + (m.val - n.val) = m.val := by omega
       simp only [this]
       have h_m_in_bounds : m.val < path.length := h_m_lt_len
-      simp only [List.getElem?_eq_getElem h_m_in_bounds]
-      congr 1
-      exact h_x_at_m.symm
+      aesop
     rw [h_head, h_last]
   have h_cycle_contained : R.containsPath cycle := by
     -- cycle = (path.drop n).take (m - n + 1)
@@ -341,20 +336,14 @@ lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
   | cons h2 t2 ih =>
     simp only [List.cons_append, List.zip_cons_cons, List.count_cons, beq_iff_eq]
     by_cases h_eq : (h, h2) = (x, y)
-    · -- This contradicts h_not_in
-      exfalso
-      rw [List.tail_cons, List.zip_cons_cons] at h_not_in
-      simp at h_not_in
-      have ⟨h1, h2⟩ := Prod.mk_inj.mp h_eq
-      exact h_not_in.1 h1.symm h2.symm
+    · aesop
     · simp [h_eq]
       -- Now apply IH for h2 :: t2
       apply ih
       · simp
       · rw [← List.getLast?_cons_cons]; exact h_last
       · rw [List.tail_cons, List.zip_cons_cons] at h_not_in
-        simp at h_not_in
-        exact h_not_in.2
+        aesop
 
 omit [Fintype S] in
 /-- Appending an element doesn't add a transition that's different from (last, new). -/
@@ -489,14 +478,12 @@ lemma countAsSecond_cons (hd : S) (tl : List S) (x : S) :
     countAsSecond (hd :: tl) x = (if tl.head? = some x then 1 else 0) + countAsSecond tl x := by
   unfold countAsSecond
   cases tl with
-  | nil =>
-    -- [hd] has no pairs, tail is empty
-    simp [List.zip, List.tail, List.countP]
+  | nil => aesop
   | cons hd2 tl2 =>
     -- [hd, hd2] ++ tl2: zip creates (hd, hd2) :: rest
     simp only [List.zip, List.tail, List.zipWith_cons_cons, List.head?, Option.some.injEq]
     rw [List.countP_cons]
-    simp
+    simp only [decide_eq_true_eq]
     by_cases h : hd2 = x <;> simp only [h, ↓reduceIte, add_zero, zero_add]
     omega
 
@@ -507,10 +494,7 @@ lemma countAsFirst_add_last_eq_countAsSecond_add_head (xs : List S) (x : S) :
     countAsSecond xs x + (if xs.head? = some x then 1 else 0) := by
   -- Induction on list structure
   induction xs with
-  | nil =>
-    -- Empty list
-    unfold countAsFirst countAsSecond
-    simp
+  | nil => aesop
   | cons hd tl ih =>
     -- Use helper lemmas
     rw [countAsFirst_cons, countAsSecond_cons]
@@ -538,8 +522,7 @@ lemma cycle_balanced_at_node (cycle : List S) (x : S)
   unfold countAsFirst countAsSecond at h
   -- Since cycle.head? = cycle.getLast?, we have countFirst + last = countSecond + last
   -- So countFirst = countSecond
-  rw [h_cycle] at h
-  omega
+  aesop
 
 /-- Sum of counts of specific pairs equals count of pairs with fixed first component -/
 lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
@@ -557,13 +540,7 @@ lemma sum_count_pairs_fst (xs : List (S × S)) (a : S) :
     -- Now show: ∑ b, (if p == (a,b) then 1 else 0) = if p.1 = a then 1 else 0
     cases p with | mk x y =>
     simp only
-    by_cases h : x = a
-    · subst h
-      -- ∑ b, (if (a,y) == (a,b) then 1 else 0) = 1
-      -- This is 1 when b = y, 0 otherwise
-      simp
-    · -- x ≠ a, so all terms are 0
-      simp [h]
+    by_cases h : x = a <;> aesop
 
 /-- Sum of counts of specific pairs equals count of pairs with fixed second component -/
 lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
@@ -580,9 +557,8 @@ lemma sum_count_pairs_snd (xs : List (S × S)) (b : S) :
     cases p with | mk x y =>
     simp only
     by_cases h : y = b
-    · subst h
-      simp
-    · simp [h]
+    · aesop
+    · aesop
 
 /-- Sum of transition counts equals count of transitions with fixed first component -/
 lemma sum_countTransitionInPath_fst (cycle : List S) (x : S) :
@@ -620,19 +596,10 @@ lemma netFlow_sub (R R' : Run S) (x : S)
 
   -- Use sum_sub_distrib to distribute subtraction over sums
   have h_out : ∑ y : S, (↑(R (x, y) - R' (x, y)) : ℤ) =
-               ∑ y : S, (↑(R (x, y)) : ℤ) - ∑ y : S, (↑(R' (x, y)) : ℤ) := by
-    rw [← Finset.sum_sub_distrib]
-    congr 1
-    ext y
-    exact Int.natCast_sub (h_valid (x, y))
+               ∑ y : S, (↑(R (x, y)) : ℤ) - ∑ y : S, (↑(R' (x, y)) : ℤ) := by aesop
 
   have h_in : ∑ y : S, (↑(R (y, x) - R' (y, x)) : ℤ) =
-              ∑ y : S, (↑(R (y, x)) : ℤ) - ∑ y : S, (↑(R' (y, x)) : ℤ) := by
-    rw [← Finset.sum_sub_distrib]
-    congr 1
-    ext y
-    exact Int.natCast_sub (h_valid (y, x))
-
+              ∑ y : S, (↑(R (y, x)) : ℤ) - ∑ y : S, (↑(R' (y, x)) : ℤ) := by aesop
   rw [h_out, h_in]
   omega
 
@@ -652,23 +619,18 @@ lemma cycle_netFlow_zero (cycle : List S) (x : S)
 
   -- Now goal is: ↑(countAsFirst) - ↑(countAsSecond) = 0
   unfold countAsFirst countAsSecond
-  rw [h_balance]
-  simp
+  aesop
 
 /-- Removing a cycle preserves net flow at each state. -/
 lemma netFlow_removeCycle_eq (R : Run S) (cycle : List S) (x : S)
     (h_contains : R.containsPath cycle)
     (h_cycle : cycle.head? = cycle.getLast?) :
     (R.removeCycle cycle).netFlow x = R.netFlow x := by
-  -- h_contains gives us: ∀ t, countTransitionInPath t cycle ≤ R t
-  have h_valid_sub := h_contains
 
   -- Unfold removeCycle and use netFlow_sub
-  have h_eq : (R.removeCycle cycle).netFlow x = Run.netFlow (fun t => R t - countTransitionInPath t cycle) x := by
-    unfold Run.removeCycle
-    rfl
+  have h_eq : (R.removeCycle cycle).netFlow x = Run.netFlow (fun t => R t - countTransitionInPath t cycle) x := by aesop
 
-  rw [h_eq, netFlow_sub R (fun t => countTransitionInPath t cycle) x h_valid_sub]
+  rw [h_eq, netFlow_sub R (fun t => countTransitionInPath t cycle) x h_contains]
   rw [cycle_netFlow_zero cycle x h_cycle]
   simp
 
@@ -709,7 +671,7 @@ omit [Fintype S] in
 lemma removeCycle_le (R : Run S) (cycle : List S) (t : Transition S) :
     (R.removeCycle cycle) t ≤ R t := by
   unfold Run.removeCycle
-  exact Nat.sub_le (R t) (countTransitionInPath t cycle)
+  aesop
 
 /-- If a run has a cycle, it can be removed. -/
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
@@ -721,15 +683,10 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
   constructor
   · -- Net flow is preserved
     intro x
-    apply netFlow_removeCycle_eq
-    · exact h_contains
-    · exact h_cycle_prop
+    apply netFlow_removeCycle_eq <;> aesop
   constructor
   · -- Size decreases
-    apply size_removeCycle_lt
-    · exact h_len
-    · exact h_contains
-    · exact h_cycle_prop
+    apply size_removeCycle_lt <;> aesop
   · -- Each transition capacity is ≤
     intro t
     exact removeCycle_le R cycle t
@@ -751,9 +708,7 @@ lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge
       omega
     · have : List.count t [(s, s)] = 0 := by
         simp only [List.count_cons, List.count_nil, beq_iff_eq]
-        split
-        · rename_i h_eq; cases h_eq; exact absurd rfl h_t
-        · rfl
+        aesop
       omega
 
 omit [Fintype S] in
@@ -935,16 +890,14 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
           last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
         have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
         unfold countTransitionInPath at h_count_one
-        rw [h_count_one]
-        omega
+        aesop
       · -- For other transitions, count stays the same
         have h_count_same := countTransitionInPath_append_singleton_other suffix current y t h_suffix_nonempty h_suffix_last h_t_eq
         unfold countTransitionInPath at h_count_same
         rw [h_count_same]
         exact h_suffix_contains t
   -- Contradiction
-  unfold Run.isAcyclic at h_acyclic
-  exact h_acyclic h_hasCycle
+  aesop
 
 omit [Fintype S] in
 /-- Extending a path that satisfies containsPath preserves the property when there's an edge. -/
@@ -960,19 +913,17 @@ lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
     intro h_in
     have h_y_in_tail : y ∈ path.tail := (List.of_mem_zip h_in).2
     have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
-    exact h_y_not_in_path h_y_in_path'
+    aesop
   by_cases h_t_eq : t = (x, y)
   · subst h_t_eq
     have h_new_count : countTransitionInPath (x, y) (path ++ [y]) = 1 :=
       countTransitionInPath_append_singleton path x y h_nonempty h_last h_current_y_not_in_path
     unfold countTransitionInPath at h_new_count ⊢
-    rw [h_new_count]
-    omega
+    aesop
   · have h_count_same : countTransitionInPath t (path ++ [y]) = countTransitionInPath t path :=
       countTransitionInPath_append_singleton_other path x y t h_nonempty h_last h_t_eq
     unfold countTransitionInPath at h_count_same ⊢
-    rw [h_count_same]
-    exact h_contains t
+    aesop
 
 /-- Helper: Starting from a current node with outgoing edges, excluding visited states,
     we can find a leaf reachable from the root. Uses strong induction on unvisited state count. -/
@@ -1015,10 +966,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         by_contra h_not
         push_neg at h_not
         specialize h_y_has_out z
-        have h_contra : z ∉ path ∧ z ≠ y ∧ R (y, z) > 0 := ⟨h_not.1, h_not.2, h_z_pos⟩
-        -- This contradicts h_y_has_out which says no such z exists
-        have h_le := h_y_has_out h_not.1 h_not.2
-        omega
+        aesop
 
       -- Derive contradiction from cycle
       cases h_z_in_path_or_y with
@@ -1044,23 +992,16 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
     -- Show properties of new_path
     have h_new_path : new_path.head? = some root ∧ new_path.getLast? = some y ∧ new_path ≠ [] ∧ R.containsPath new_path := by
       constructor
-      · simp [new_path, h_start]
+      · aesop
       constructor
-      · simp [new_path]
+      · aesop
       constructor
-      · simp [new_path, h_nonempty]
+      · aesop
       · exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
 
     have h_new_has_out : ∃ w, w ∉ new_path ∧ R (y, w) > 0 := by
       use z
-      constructor
-      · unfold new_path
-        simp
-        constructor
-        · exact h_z_not_in_path
-        · exact h_z_ne_y
-      · exact h_y_z_edge
-
+      aesop
     exact acyclic_has_leaf_aux R root y new_path h_acyclic h_new_path h_new_has_out
 termination_by Fintype.card S - path.toFinset.card
 decreasing_by
@@ -1251,12 +1192,9 @@ theorem exists_path_from_source_to_sink
     -- R has a cycle, remove it and recurse
     obtain ⟨R', h_netFlow_preserved, h_size_lt, h_R'_le_R⟩ := exists_smaller_run_with_same_netFlow R h_cyclic
     -- R' has the same net flows
-    have h_source' : R'.netFlow s = 1 := by rw [h_netFlow_preserved]; exact h_source
-    have h_sink' : R'.netFlow d = -1 := by rw [h_netFlow_preserved]; exact h_sink
-    have h_others' : ∀ x, x ≠ s → x ≠ d → R'.netFlow x = 0 := by
-      intro x h_ne_s h_ne_d
-      rw [h_netFlow_preserved]
-      exact h_others x h_ne_s h_ne_d
+    have h_source' : R'.netFlow s = 1 := by aesop
+    have h_sink' : R'.netFlow d = -1 := by aesop
+    have h_others' : ∀ x, x ≠ s → x ≠ d → R'.netFlow x = 0 := by aesop
     -- Recursive call with smaller run
     obtain ⟨path, h_head, h_last, h_nonempty, h_contains', h_nodup⟩ :=
       exists_path_from_source_to_sink R' s d h_source' h_sink' h_others'
@@ -1290,10 +1228,7 @@ theorem exists_path_from_source_to_sink
       · -- If s = leaf, then s is a leaf (no outgoing edges)
         subst h_s_eq_leaf
         obtain ⟨_, h_no_out⟩ := h_leaf
-        -- But we have h_s_out : ∃ y, R (s, y) > 0
-        obtain ⟨y, h_pos⟩ := h_s_out
-        have := h_no_out y
-        omega
+        aesop
       · -- s ≠ leaf, so use the helper lemma
         exact reachable_leaf_has_incoming_edge R s leaf h_leaf h_s_eq_leaf
 
