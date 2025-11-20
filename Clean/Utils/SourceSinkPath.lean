@@ -744,8 +744,7 @@ lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge
   · simp
   · intro t
     unfold countTransitionInPath
-    simp only [List.zip, List.tail, List.zipWith_cons_cons, List.zipWith_nil_right, List.nodup_cons,
-      List.not_mem_nil, not_false_eq_true, List.nodup_nil, and_self]
+    simp only [List.zip, List.tail, List.zipWith_cons_cons, List.zipWith_nil_right]
     by_cases h_t : t = (s, s)
     · subst h_t
       simp only [List.count, BEq.rfl, List.countP_cons_of_pos, List.countP_nil, zero_add]
@@ -947,6 +946,7 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
   unfold Run.isAcyclic at h_acyclic
   exact h_acyclic h_hasCycle
 
+omit [Fintype S] in
 /-- Extending a path that satisfies containsPath preserves the property when there's an edge. -/
 lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
     (h_nonempty : path ≠ [])
@@ -1027,7 +1027,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         -- path ends with current, current → y, y → z, and z ∈ path
         -- This creates a cycle: (suffix of path from z to current) → y → z
         have h_z_in_extended : z ∈ path ++ [y] := by simp [h_z_in_path]
-        exact acyclic_edge_not_in_path R (path ++ [y]) y z h_acyclic (by simp [h_nonempty]) (containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge) h_z_pos h_z_in_extended
+        exact acyclic_edge_not_in_path R (path ++ [y]) y z h_acyclic (by simp) (containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge) h_z_pos h_z_in_extended
       | inr h_z_eq_y =>
         -- z = y, so we have a self-loop y → y
         rw [h_z_eq_y] at h_z_pos
