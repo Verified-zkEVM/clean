@@ -304,6 +304,15 @@ lemma drop_take_cycle_same_endpoints (path : List S) (x : S) (n m : Fin path.len
   rw [h_head, h_last]
 
 omit [Fintype S] in
+/-- If a run contains a path, then any subpath obtained by dropping and taking is also contained. -/
+lemma containsPath_drop_take (R : Run S) (path : List S) (n m : ℕ)
+    (h_contains : R.containsPath path) :
+    R.containsPath ((path.drop n).take m) := by
+  have h_after_drop : R.containsPath (path.drop n) :=
+    containsPath_drop R path n h_contains
+  exact containsPath_take R (path.drop n) m h_after_drop
+
+omit [Fintype S] in
 /-- If a run is acyclic and contains a path, the path has no duplicate vertices. -/
 lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     (h_acyclic : R.isAcyclic)
@@ -327,13 +336,8 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
   have h_cycle_len := drop_take_length_ge_two path n m h_n_lt_m
   have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? :=
     drop_take_cycle_same_endpoints path x n m h_n_lt_m h_x_at_n.symm h_x_at_m.symm
-  have h_cycle_contained : R.containsPath cycle := by
-    -- cycle = (path.drop n).take (m - n + 1)
-    -- First apply drop, then take
-    simp only [cycle]
-    have h_after_drop : R.containsPath (path.drop n.val) := by
-      exact containsPath_drop R path n.val h_contains
-    exact containsPath_take R (path.drop n.val) (m.val - n.val + 1) h_after_drop
+  have h_cycle_contained : R.containsPath cycle :=
+    containsPath_drop_take R path n.val (m.val - n.val + 1) h_contains
   -- This contradicts acyclicity
   unfold Run.isAcyclic Run.hasCycle at h_acyclic
   push_neg at h_acyclic
