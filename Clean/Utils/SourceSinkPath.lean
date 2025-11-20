@@ -1178,6 +1178,24 @@ lemma unique_negative_netFlow (R : Run S) (s d x : S)
   have h_x_zero := h_others x h_not_s h_ne
   omega
 
+/-- A leaf reachable from a root with outgoing edges has an incoming edge and negative net flow. -/
+lemma leaf_has_incoming_and_negative_netFlow (R : Run S) (root leaf : S)
+    (h_leaf : R.isLeaf root leaf)
+    (h_root_out : ∃ y, R (root, y) > 0) :
+    R.netFlow leaf < 0 := by
+  apply leaf_has_negative_netFlow R root leaf h_leaf
+  -- Need to show ∃ y, R (y, leaf) > 0
+  -- This requires root ≠ leaf
+  by_cases h_eq : root = leaf
+  · -- If root = leaf, then root is a leaf (no outgoing edges)
+    subst h_eq
+    obtain ⟨_, h_no_out⟩ := h_leaf
+    obtain ⟨y, h_pos⟩ := h_root_out
+    have := h_no_out y
+    omega
+  · -- root ≠ leaf, so use the helper lemma
+    exact reachable_leaf_has_incoming_edge R root leaf h_leaf h_eq
+
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
     then there exists a cycle-free path from s to d. -/
 theorem exists_path_from_source_to_sink
@@ -1221,17 +1239,7 @@ theorem exists_path_from_source_to_sink
     obtain ⟨leaf, h_leaf⟩ := acyclic_has_leaf R s h_acyclic h_s_out
 
     -- The leaf has negative net flow
-    have h_leaf_neg : R.netFlow leaf < 0 := by
-      apply leaf_has_negative_netFlow R s leaf h_leaf
-      -- Need to show ∃ y, R (y, leaf) > 0
-      -- This requires s ≠ leaf
-      by_cases h_s_eq_leaf : s = leaf
-      · -- If s = leaf, then s is a leaf (no outgoing edges)
-        subst h_s_eq_leaf
-        obtain ⟨_, h_no_out⟩ := h_leaf
-        aesop
-      · -- s ≠ leaf, so use the helper lemma
-        exact reachable_leaf_has_incoming_edge R s leaf h_leaf h_s_eq_leaf
+    have h_leaf_neg := leaf_has_incoming_and_negative_netFlow R s leaf h_leaf h_s_out
 
     -- Identify leaf = d (only state with negative net flow)
     have h_leaf_eq_d := unique_negative_netFlow R s d leaf h_source h_others h_leaf_neg
