@@ -744,6 +744,43 @@ lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge
       omega
 
 omit [Fintype S] in
+/-- The two-cycle path [a, b, a] contains the transitions (a,b) and (b,a) exactly once each. -/
+lemma two_cycle_contains_both_edges (R : Run S) (a b : S)
+    (h_ne : a ≠ b)
+    (h_edge1 : R (a, b) > 0) (h_edge2 : R (b, a) > 0) :
+    ∀ t : Transition S, countTransitionInPath t [a, b, a] ≤ R t := by
+  intro t
+  unfold countTransitionInPath
+  simp only [List.zip, List.tail, List.zipWith_cons_cons, List.zipWith_nil_right]
+  by_cases h1 : t = (a, b)
+  · subst h1
+    simp only [List.count, BEq.rfl, List.countP_cons_of_pos, List.countP_singleton, beq_iff_eq]
+    have : ¬(b, a) = (a, b) := by
+      intro h_eq
+      have := Prod.mk_inj.mp h_eq
+      exact h_ne this.1.symm
+    simp only [this, ↓reduceIte, zero_add, ge_iff_le]
+    omega
+  · by_cases h2 : t = (b, a)
+    · subst h2
+      simp only [List.count]
+      have : ¬(a, b) = (b, a) := by
+        intro h_eq
+        have := Prod.mk_inj.mp h_eq
+        exact h_ne this.1
+      simp only [beq_iff_eq, this, not_false_eq_true, List.countP_cons_of_neg, BEq.rfl,
+        List.countP_cons_of_pos, List.countP_nil, zero_add, ge_iff_le]
+      omega
+    · have : List.count t [(a, b), (b, a)] = 0 := by
+        simp only [List.count, List.countP_eq_zero, List.mem_cons, List.not_mem_nil, or_false,
+          beq_iff_eq, forall_eq_or_imp, forall_eq]
+        constructor
+        · intro h_eq; cases h_eq; exact h1 rfl
+        · intro h_eq; cases h_eq; exact h2 rfl
+      rw [this]
+      omega
+
+omit [Fintype S] in
 /-- If a run has a 2-cycle between distinct vertices, it contradicts acyclicity. -/
 lemma acyclic_no_two_cycle (R : Run S) (a b : S)
     (h_acyclic : R.isAcyclic) (h_ne : a ≠ b)
@@ -753,36 +790,7 @@ lemma acyclic_no_two_cycle (R : Run S) (a b : S)
   apply h_acyclic [a, b, a]
   · simp
   · simp
-  · intro t
-    unfold countTransitionInPath
-    simp only [List.zip, List.tail, List.zipWith_cons_cons, List.zipWith_nil_right]
-    by_cases h1 : t = (a, b)
-    · subst h1
-      simp only [List.count, BEq.rfl, List.countP_cons_of_pos, List.countP_singleton, beq_iff_eq]
-      have : ¬(b, a) = (a, b) := by
-        intro h_eq
-        have := Prod.mk_inj.mp h_eq
-        exact h_ne this.1.symm
-      simp only [this, ↓reduceIte, zero_add, ge_iff_le]
-      omega
-    · by_cases h2 : t = (b, a)
-      · subst h2
-        simp only [List.count]
-        have : ¬(a, b) = (b, a) := by
-          intro h_eq
-          have := Prod.mk_inj.mp h_eq
-          exact h_ne this.1
-        simp only [beq_iff_eq, this, not_false_eq_true, List.countP_cons_of_neg, BEq.rfl,
-          List.countP_cons_of_pos, List.countP_nil, zero_add, ge_iff_le]
-        omega
-      · have : List.count t [(a, b), (b, a)] = 0 := by
-          simp only [List.count, List.countP_eq_zero, List.mem_cons, List.not_mem_nil, or_false,
-            beq_iff_eq, forall_eq_or_imp, forall_eq]
-          constructor
-          · intro h_eq; cases h_eq; exact h1 rfl
-          · intro h_eq; cases h_eq; exact h2 rfl
-        rw [this]
-        omega
+  · exact two_cycle_contains_both_edges R a b h_ne h_edge1 h_edge2
 
 omit [DecidableEq S] [Fintype S] in
 /-- If getLast? of a non-empty list is some x, then x is in the list. -/
