@@ -254,6 +254,22 @@ lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
   omega
 
 omit [DecidableEq S] [Fintype S] in
+/-- The sublist from index n to m (where n < m < path.length) has length at least 2. -/
+lemma drop_take_length_ge_two {α : Type*} (path : List α) (n m : Fin path.length)
+    (h_n_lt_m : n < m) :
+    ((path.drop n.val).take (m.val - n.val + 1)).length ≥ 2 := by
+  rw [List.length_take, List.length_drop]
+  have h_diff : m.val - n.val ≥ 1 := by
+    have : (n : ℕ) < (m : ℕ) := h_n_lt_m
+    omega
+  -- We're taking min(m - n + 1, path.length - n)
+  -- Since m < path.length, we have m - n < path.length - n
+  -- So min(m - n + 1, path.length - n) = m - n + 1
+  have : m.val - n.val + 1 ≤ path.length - n.val := by omega
+  simp only [Nat.min_eq_left this, ge_iff_le, Nat.reduceLeDiff]
+  omega
+
+omit [DecidableEq S] [Fintype S] in
 /-- If path[n] = path[m] = x, then the sublist from n to m forms a cycle starting and ending with x. -/
 lemma drop_take_cycle_same_endpoints (path : List S) (x : S) (n m : Fin path.length)
     (h_n_lt_m : n < m)
@@ -308,18 +324,7 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
   -- Prove this is a cycle
   have h_n_lt_len : n.val < path.length := n.isLt
   have h_m_lt_len : m.val < path.length := m.isLt
-  have h_cycle_len : cycle.length ≥ 2 := by
-    simp only [cycle]
-    rw [List.length_take, List.length_drop]
-    have h_diff : m.val - n.val ≥ 1 := by
-      have : (n : ℕ) < (m : ℕ) := h_n_lt_m
-      omega
-    -- We're taking min(m - n + 1, path.length - n)
-    -- Since m < path.length, we have m - n < path.length - n
-    -- So min(m - n + 1, path.length - n) = m - n + 1
-    have : m.val - n.val + 1 ≤ path.length - n.val := by omega
-    simp only [Nat.min_eq_left this, ge_iff_le, Nat.reduceLeDiff]
-    omega
+  have h_cycle_len := drop_take_length_ge_two path n m h_n_lt_m
   have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? :=
     drop_take_cycle_same_endpoints path x n m h_n_lt_m h_x_at_n.symm h_x_at_m.symm
   have h_cycle_contained : R.containsPath cycle := by
