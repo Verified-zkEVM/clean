@@ -1135,6 +1135,21 @@ lemma reachable_leaf_has_incoming_edge (R : Run S) (root leaf : S)
   use y
   exact containsPath_has_positive_transition R path h_contains (y, leaf) h_y_leaf_in
 
+/-- If net flow is +1 at s and 0 elsewhere except d, then any state with negative net flow must be d. -/
+lemma unique_negative_netFlow (R : Run S) (s d x : S)
+    (h_source : R.netFlow s = 1)
+    (h_others : ∀ y, y ≠ s → y ≠ d → R.netFlow y = 0)
+    (h_x_neg : R.netFlow x < 0) :
+    x = d := by
+  by_contra h_ne
+  have h_not_s : x ≠ s := by
+    intro h_eq
+    rw [h_eq] at h_x_neg
+    rw [h_source] at h_x_neg
+    omega
+  have h_x_zero := h_others x h_not_s h_ne
+  omega
+
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
     then there exists a cycle-free path from s to d. -/
 theorem exists_path_from_source_to_sink
@@ -1191,15 +1206,7 @@ theorem exists_path_from_source_to_sink
         exact reachable_leaf_has_incoming_edge R s leaf h_leaf h_s_eq_leaf
 
     -- Identify leaf = d (only state with negative net flow)
-    have h_leaf_eq_d : leaf = d := by
-      by_contra h_ne
-      have h_not_s : leaf ≠ s := by
-        intro h_eq
-        rw [h_eq] at h_leaf_neg
-        rw [h_source] at h_leaf_neg
-        omega
-      have h_leaf_zero := h_others leaf h_not_s h_ne
-      omega
+    have h_leaf_eq_d := unique_negative_netFlow R s d leaf h_source h_others h_leaf_neg
 
     -- Extract the path from s to d
     rw [h_leaf_eq_d] at h_leaf
