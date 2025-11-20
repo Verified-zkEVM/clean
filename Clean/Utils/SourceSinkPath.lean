@@ -758,6 +758,17 @@ lemma acyclic_no_two_cycle (R : Run S) (a b : S)
         rw [this]
         omega
 
+omit [DecidableEq S] [Fintype S] in
+/-- If getLast? of a non-empty list is some x, then x is in the list. -/
+lemma getLast_mem {α : Type*} (l : List α) (x : α) (h_last : l.getLast? = some x) :
+    x ∈ l := by
+  have h_ne : l ≠ [] := by
+    intro h_eq
+    simp [h_eq] at h_last
+  rw [List.getLast?_eq_getLast h_ne] at h_last
+  cases h_last
+  exact List.getLast_mem h_ne
+
 /-- The last element of a nodup list cannot appear as the first component of a pair in zip with tail. -/
 lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
     (h_nodup : l.Nodup)
@@ -786,10 +797,7 @@ lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
         subst h_x_head
         -- But getLast? (head2 :: tail2) = some x (which is head)
         -- This means x ∈ head2 :: tail2
-        have h_x_in_tail : x ∈ head2 :: tail2 := by
-          have h_ne : (head2 :: tail2) ≠ [] := by simp
-          have h_last_eq : (head2 :: tail2).getLast h_ne = x := by grind
-          aesop
+        have h_x_in_tail := getLast_mem (head2 :: tail2) x h_last
         grind
       | inr h_in_rest => grind
 
