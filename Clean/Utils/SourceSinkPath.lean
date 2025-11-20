@@ -925,14 +925,14 @@ lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
 lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
     (path : List S)
     (h_acyclic : R.isAcyclic)
-    (h_path : path.head? = some root ∧ path.getLast? = some current ∧ path ≠ [] ∧ R.containsPath path)
+    (h_start : path.head? = some root)
+    (h_end : path.getLast? = some current)
+    (h_nonempty : path ≠ [])
+    (h_contains : R.containsPath path)
     (h_has_out : ∃ y, y ∉ path ∧ R (current, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
   -- Get a successor not in path
   obtain ⟨y, h_y_not_in_path, h_edge⟩ := h_has_out
-
-  --Extract path properties
-  obtain ⟨h_start, h_end, h_nonempty, h_contains⟩ := h_path
 
   -- Check if y has any outgoing edges to states not in path ++ [y]
   by_cases h_y_has_out : ∃ z, z ∉ path ∧ z ≠ y ∧ R (y, z) > 0
@@ -981,17 +981,14 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
     let new_path := path ++ [y]
 
     -- Show properties of new_path
-    have h_new_path : new_path.head? = some root ∧ new_path.getLast? = some y ∧ new_path ≠ [] ∧ R.containsPath new_path := by
-      constructor
-      · aesop
-      constructor
-      · aesop
-      constructor
-      · aesop
-      · exact containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
+    have h_new_start : new_path.head? = some root := by aesop
+    have h_new_end : new_path.getLast? = some y := by aesop
+    have h_new_nonempty : new_path ≠ [] := by aesop
+    have h_new_contains : R.containsPath new_path :=
+      containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge
 
     have h_new_has_out : ∃ w, w ∉ new_path ∧ R (y, w) > 0 := by grind
-    exact acyclic_has_leaf_aux R root y new_path h_acyclic h_new_path h_new_has_out
+    exact acyclic_has_leaf_aux R root y new_path h_acyclic h_new_start h_new_end h_new_nonempty h_new_contains h_new_has_out
 termination_by Fintype.card S - path.toFinset.card
 decreasing_by
   simp_wf
@@ -1015,19 +1012,16 @@ lemma acyclic_has_leaf (R : Run S) (root : S)
     (h_has_out : ∃ y, R (root, y) > 0) :
     ∃ leaf, R.isLeaf root leaf := by
   -- Start with path = [root]
-  have h_root_path : [root].head? = some root ∧ [root].getLast? = some root ∧ [root] ≠ [] ∧ R.containsPath [root] := by
-    constructor
-    · simp
-    constructor
-    · simp
-    constructor
-    · simp
-    · intro t
-      simp [countTransitionInPath]
+  have h_root_start : [root].head? = some root := by simp
+  have h_root_end : [root].getLast? = some root := by simp
+  have h_root_nonempty : [root] ≠ [] := by simp
+  have h_root_contains : R.containsPath [root] := by
+    intro t
+    simp [countTransitionInPath]
 
   -- Apply the auxiliary lemma
   obtain ⟨y, h_pos⟩ := h_has_out
-  apply acyclic_has_leaf_aux R root root [root] h_acyclic h_root_path
+  apply acyclic_has_leaf_aux R root root [root] h_acyclic h_root_start h_root_end h_root_nonempty h_root_contains
   use y
   constructor
   · intro h_mem
