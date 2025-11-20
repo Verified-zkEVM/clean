@@ -389,52 +389,52 @@ lemma mem_of_mem_zip_fst {α β : Type*} (l1 : List α) (l2 : List β) (a : α) 
         have : a ∈ t1 := ih t2 h_rest
         exact List.mem_cons_of_mem h1 this
 
+omit [DecidableEq S] [Fintype S] in
+/-- If a list has no duplicates, its zip with tail also has no duplicates. -/
+lemma nodup_zip_tail (path : List S) (h_nodup : path.Nodup) :
+    (path.zip path.tail).Nodup := by
+  induction path with
+  | nil => simp
+  | cons h t ih =>
+    cases t with
+    | nil => simp
+    | cons h2 t2 =>
+      rw [List.tail_cons]
+      simp only [List.zip_cons_cons, List.nodup_cons]
+      have ⟨h_not_in, h_nodup_tail⟩ := List.nodup_cons.mp h_nodup
+      constructor
+      · -- Prove (h, h2) ∉ (h2 :: t2).zip t2
+        intro h_contra
+        -- If (h, h2) ∈ (h2 :: t2).zip t2, then h must be in h2 :: t2
+        -- But we know h ∉ h2 :: t2, contradiction
+        cases t2 with
+        | nil =>
+          simp [List.zip] at h_contra
+        | cons h3 t3 =>
+          simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h_contra
+          cases h_contra with
+          | inl h_eq =>
+            -- (h, h2) = (h2, h3), so h = h2
+            have : h = h2 := h_eq.1
+            subst this
+            -- Now h_not_in says h2 ∉ h2 :: t3, but h2 is the head
+            simp at h_not_in
+          | inr h_rest =>
+            -- (h, h2) ∈ (h3 :: t3).zip t3
+            -- This means h ∈ h3 :: t3, so h ∈ h2 :: h3 :: t3
+            have h_in_t3 : h ∈ h3 :: t3 := mem_of_mem_zip_fst (h3 :: t3) t3 h h2 h_rest
+            have : h ∈ h2 :: h3 :: t3 := List.mem_cons_of_mem h2 h_in_t3
+            contradiction
+      · -- Prove ((h2 :: t2).zip t2).Nodup
+        exact ih h_nodup_tail
+
 omit [Fintype S] in
 /-- If a path has no duplicates, each transition appears at most once. -/
 lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
     (t : Transition S) :
     countTransitionInPath t path ≤ 1 := by
   unfold countTransitionInPath
-  -- If path has Nodup, consecutive pairs are distinct
-  have h_zip_nodup : (path.zip path.tail).Nodup := by
-    -- If (a,b) and (c,d) are both in path.zip path.tail and (a,b) = (c,d),
-    -- then a = c and b = d
-    -- Since a, b are consecutive in path and c, d are consecutive,
-    -- and path is Nodup, this means they're the same pair
-    induction path with
-    | nil => simp
-    | cons h t ih =>
-      cases t with
-      | nil => simp
-      | cons h2 t2 =>
-        rw [List.tail_cons]
-        simp only [List.zip_cons_cons, List.nodup_cons]
-        have ⟨h_not_in, h_nodup_tail⟩ := List.nodup_cons.mp h_nodup
-        constructor
-        · -- Prove (h, h2) ∉ (h2 :: t2).zip t2
-          intro h_contra
-          -- If (h, h2) ∈ (h2 :: t2).zip t2, then h must be in h2 :: t2
-          -- But we know h ∉ h2 :: t2, contradiction
-          cases t2 with
-          | nil =>
-            simp [List.zip] at h_contra
-          | cons h3 t3 =>
-            simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h_contra
-            cases h_contra with
-            | inl h_eq =>
-              -- (h, h2) = (h2, h3), so h = h2
-              have : h = h2 := h_eq.1
-              subst this
-              -- Now h_not_in says h2 ∉ h2 :: t3, but h2 is the head
-              simp at h_not_in
-            | inr h_rest =>
-              -- (h, h2) ∈ (h3 :: t3).zip t3
-              -- This means h ∈ h3 :: t3, so h ∈ h2 :: h3 :: t3
-              have h_in_t3 : h ∈ h3 :: t3 := mem_of_mem_zip_fst (h3 :: t3) t3 h h2 h_rest
-              have : h ∈ h2 :: h3 :: t3 := List.mem_cons_of_mem h2 h_in_t3
-              contradiction
-        · -- Prove ((h2 :: t2).zip t2).Nodup
-          exact ih h_nodup_tail
+  have h_zip_nodup := nodup_zip_tail path h_nodup
   -- If list is Nodup, each element appears at most once
   by_cases h_in : t ∈ path.zip path.tail
   · have : List.count t (path.zip path.tail) = 1 := by
