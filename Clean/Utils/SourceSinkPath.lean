@@ -817,29 +817,19 @@ lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
       | inr h_in_rest => grind
 
 omit [Fintype S] in
-/-- If there's an edge from current to y, and y is in the path from root to current,
-    then we can construct a cycle, contradicting acyclicity. -/
-lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
+/-- If a run contains an acyclic path and has an edge from the end back into the path,
+    then the run has a cycle. -/
+lemma path_with_back_edge_creates_cycle (R : Run S) (path : List S) (current y : S)
     (h_acyclic : R.isAcyclic)
     (h_end : path.getLast? = some current)
     (h_contains : R.containsPath path)
-    (h_edge : R (current, y) > 0)
-    (h_y_in_path : y ∈ path) :
-    False := by
-  -- First prove y ≠ current
-  have h_y_ne_current : y ≠ current := by
-    intro h_eq
-    rw [h_eq] at h_edge
-    exact acyclic_no_self_loop R current h_acyclic h_edge
-  -- Since y ∈ path and path.Nodup, and path.getLast? = some current with y ≠ current,
-  -- we know y appears exactly once and before current
-  -- We'll use List.mem_iff_getElem to reason about y's position in path
+    (h_y_in_path : y ∈ path)
+    (h_edge : R (current, y) > 0) :
+    R.hasCycle := by
+  -- Find y's position in path
   rw [List.mem_iff_getElem] at h_y_in_path
   obtain ⟨i, h_i_lt, h_y_eq⟩ := h_y_in_path
-  -- Now construct a cycle: drop i elements from path to get suffix starting at y,
-  -- then append y to close the cycle
   let suffix := path.drop i
-  -- suffix starts with y and ends with current
   have h_suffix_nonempty : suffix ≠ [] := by
     intro h_empty
     unfold suffix at h_empty
@@ -850,46 +840,48 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
     omega
   have h_suffix_head : suffix.head? = some y := by aesop
   have h_suffix_last : suffix.getLast? = some current := by grind
-  -- Now construct the cycle
   let cycle := suffix ++ [y]
-  -- Show cycle is a valid cycle
   have h_cycle_head : cycle.head? = some y := by grind
   have h_cycle_last : cycle.getLast? = some y := by grind
   have h_cycle_len : cycle.length ≥ 2 := by grind
-  -- Show R.hasCycle
-  have h_hasCycle : R.hasCycle := by
-    use cycle
-    constructor
-    · -- cycle.length ≥ 2
-      exact h_cycle_len
-    constructor
-    · -- cycle.head? = cycle.getLast?
-      rw [h_cycle_head, h_cycle_last]
-    · -- show R.containsPath cycle
-      unfold cycle
-      have h_suffix_contains : R.containsPath suffix := by
-        unfold suffix
-        exact containsPath_drop R path i h_contains
-      -- Now show suffix ++ [y] is contained by case analysis on transitions
-      intro t
-      unfold countTransitionInPath at h_suffix_contains ⊢
-      by_cases h_t_eq : t = (current, y)
-      · -- For transition (current, y), it appears exactly once in suffix ++ [y]
-        subst h_t_eq
-        -- Show (current, y) ∉ suffix.zip suffix.tail using our helper lemma
-        have h_path_nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
-        have h_suffix_nodup : suffix.Nodup := by grind
-        have h_not_in : (current, y) ∉ suffix.zip suffix.tail :=
-          last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
-        have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
-        unfold countTransitionInPath at h_count_one
-        aesop
-      · -- For other transitions, count stays the same
-        have h_count_same := countTransitionInPath_append_singleton_other suffix current y t h_suffix_nonempty h_suffix_last h_t_eq
-        unfold countTransitionInPath at h_count_same
-        rw [h_count_same]
-        exact h_suffix_contains t
-  -- Contradiction
+  use cycle
+  constructor
+  · exact h_cycle_len
+  constructor
+  · rw [h_cycle_head, h_cycle_last]
+  · unfold cycle
+    have h_suffix_contains : R.containsPath suffix := by
+      unfold suffix
+      exact containsPath_drop R path i h_contains
+    intro t
+    unfold countTransitionInPath at h_suffix_contains ⊢
+    by_cases h_t_eq : t = (current, y)
+    · subst h_t_eq
+      have h_path_nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
+      have h_suffix_nodup : suffix.Nodup := by grind
+      have h_not_in : (current, y) ∉ suffix.zip suffix.tail :=
+        last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
+      have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
+      unfold countTransitionInPath at h_count_one
+      aesop
+    · have h_count_same := countTransitionInPath_append_singleton_other suffix current y t h_suffix_nonempty h_suffix_last h_t_eq
+      unfold countTransitionInPath at h_count_same
+      rw [h_count_same]
+      exact h_suffix_contains t
+
+omit [Fintype S] in
+/-- If there's an edge from current to y, and y is in the path from root to current,
+    then we can construct a cycle, contradicting acyclicity. -/
+lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
+    (h_acyclic : R.isAcyclic)
+    (h_end : path.getLast? = some current)
+    (h_contains : R.containsPath path)
+    (h_edge : R (current, y) > 0)
+    (h_y_in_path : y ∈ path) :
+    False := by
+  -- Use helper lemma to show R has a cycle, contradicting acyclicity
+  have h_hasCycle : R.hasCycle :=
+    path_with_back_edge_creates_cycle R path current y h_acyclic h_end h_contains h_y_in_path h_edge
   aesop
 
 omit [DecidableEq S] [Fintype S] in
