@@ -1079,6 +1079,13 @@ lemma sum_zero_of_all_zero {α : Type*} [Fintype α] (f : α → ℕ) (h : ∀ x
     ∑ x : α, (f x : ℤ) = 0 := by
   simp [h]
 
+/-- A sum of natural numbers cast to integers is nonnegative. -/
+lemma sum_nat_cast_nonneg {α : Type*} [Fintype α] (f : α → ℕ) :
+    0 ≤ ∑ x : α, (f x : ℤ) := by
+  apply Finset.sum_nonneg
+  intro x _
+  omega
+
 /-- If a state has positive net flow, it must have an outgoing edge. -/
 lemma positive_netFlow_has_outgoing_edge (R : Run S) (s : S)
     (h_pos : R.netFlow s > 0) :
@@ -1096,10 +1103,7 @@ lemma positive_netFlow_has_outgoing_edge (R : Run S) (s : S)
   unfold Run.netFlow at h_pos
   rw [h_outflow_zero] at h_pos
   -- This gives 0 - inflow > 0, so inflow < 0, impossible for ℕ
-  have h_inflow_nonneg : 0 ≤ ∑ y : S, (R (y, s) : ℤ) := by
-    apply Finset.sum_nonneg
-    intro y _
-    omega
+  have h_inflow_nonneg := sum_nat_cast_nonneg (fun y => R (y, s))
   omega
 
 /-- If a list has length ≥ 2 and last element x, then there's a transition into x. -/
