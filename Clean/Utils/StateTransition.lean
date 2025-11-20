@@ -10,7 +10,16 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 /-!
 # State Transition with +1 Source and -1 Sink
 
-This file formalizes a foundational result about state transition systems.
+This file formalizes a result about state transition systems that's useful for Cairo-like
+construction where a multiset of states represent an execution.
+
+The initial state will be added once, the final state will be removed once. Otherwise,
+for each step of the execution, the source is removed and the destination is added. All these
+need to balance out.
+
+The tricky aspect is how to deal with cycles like a snake eating its own tail. The idea is
+that we can remove all the cycles and then find a path from the initial state to the final
+state.
 
 ## Setup
 
@@ -687,9 +696,15 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
   -- Apply the sum_decrease lemma
   exact sum_decrease R (fun t => R t - countTransitionInPath t cycle) (x, y) h_decrease h_others_le
 
+/-- Removing a cycle gives a smaller or equal run at each transition. -/
+lemma removeCycle_le (R : Run S) (cycle : List S) (t : Transition S) :
+    (R.removeCycle cycle) t ≤ R t := by
+  unfold Run.removeCycle
+  exact Nat.sub_le (R t) (countTransitionInPath t cycle)
+
 /-- If a run has a cycle, it can be removed. -/
 lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
-    ∃ (R' : Run S), (∀ x, R'.netFlow x = R.netFlow x) ∧ R'.size < R.size := by
+    ∃ (R' : Run S), (∀ x, R'.netFlow x = R.netFlow x) ∧ R'.size < R.size ∧ (∀ t, R' t ≤ R t) := by
   -- Extract the cycle from the hypothesis
   obtain ⟨cycle, h_len, h_cycle_prop, h_contains⟩ := h_cycle
   -- Use R.removeCycle as the witness
@@ -700,11 +715,15 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     apply netFlow_removeCycle_eq
     · exact h_contains
     · exact h_cycle_prop
+  constructor
   · -- Size decreases
     apply size_removeCycle_lt
     · exact h_len
     · exact h_contains
     · exact h_cycle_prop
+  · -- Each transition capacity is ≤
+    intro t
+    exact removeCycle_le R cycle t
 
 /-- If a run has a self-loop, it contradicts acyclicity. -/
 lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge : R (s, s) > 0) : False := by
@@ -1108,6 +1127,99 @@ lemma leaf_has_negative_netFlow (R : Run S) (root leaf : S)
   rw [h_outflow_zero]
   omega
 
+/-- If a state has positive net flow, it must have an outgoing edge. -/
+lemma positive_netFlow_has_outgoing_edge (R : Run S) (s : S)
+    (h_pos : R.netFlow s > 0) :
+    ∃ y, R (s, y) > 0 := by
+  -- By contradiction: if all outgoing edges are 0, then netFlow ≤ 0
+  by_contra h_none
+  push_neg at h_none
+  -- All outgoing edges have capacity 0
+  have h_outflow_zero : ∑ y : S, (R (s, y) : ℤ) = 0 := by
+    have : ∀ y, R (s, y) = 0 := by
+      intro y
+      have h_le := h_none y
+      omega
+    simp [this]
+  -- But netFlow = outflow - inflow > 0
+  unfold Run.netFlow at h_pos
+  rw [h_outflow_zero] at h_pos
+  -- This gives 0 - inflow > 0, so inflow < 0, impossible for ℕ
+  have h_inflow_nonneg : 0 ≤ ∑ y : S, (R (y, s) : ℤ) := by
+    apply Finset.sum_nonneg
+    intro y _
+    omega
+  omega
+
+/-- If a list has length ≥ 2 and last element x, then there's a transition into x. -/
+lemma last_has_incoming_transition {α : Type*} (l : List α) (x : α)
+    (h_len : l.length ≥ 2)
+    (h_last : l.getLast? = some x) :
+    ∃ y, (y, x) ∈ l.zip l.tail := by
+  cases l with
+  | nil => simp at h_len
+  | cons hd tl =>
+    cases tl with
+    | nil => simp at h_len
+    | cons hd2 tl2 =>
+      -- l = [hd, hd2] ++ tl2, so l.tail = [hd2] ++ tl2
+      -- getLast of l is getLast of tail
+      simp [List.tail, List.getLast?_cons_cons] at h_last
+      -- If tl2 = [], then getLast? = some hd2, so x = hd2, and (hd, hd2) is in zip
+      cases tl2 with
+      | nil =>
+        simp [List.getLast?] at h_last
+        subst h_last
+        use hd
+        simp [List.zip]
+      | cons hd3 tl3 =>
+        -- l = [hd, hd2, hd3] ++ tl3
+        -- Recurse on tail
+        have h_tail_len : (hd2 :: hd3 :: tl3).length ≥ 2 := by simp [List.length]
+        have h_tail_last : (hd2 :: hd3 :: tl3).getLast? = some x := h_last
+        obtain ⟨y, h_y_in⟩ := last_has_incoming_transition (hd2 :: hd3 :: tl3) x h_tail_len h_tail_last
+        use y
+        -- (hd :: hd2 :: hd3 :: tl3).tail = (hd2 :: hd3 :: tl3)
+        -- (hd :: hd2 :: hd3 :: tl3).zip (hd2 :: hd3 :: tl3)
+        -- = (hd, hd2) :: ((hd2 :: hd3 :: tl3).zip (hd3 :: tl3))
+        simp only [List.tail_cons]
+        rw [List.zip_cons_cons]
+        right
+        exact h_y_in
+
+/-- A leaf reachable from a root (with root ≠ leaf) must have an incoming edge. -/
+lemma reachable_leaf_has_incoming_edge (R : Run S) (root leaf : S)
+    (h_leaf : R.isLeaf root leaf)
+    (h_ne : root ≠ leaf) :
+    ∃ y, R (y, leaf) > 0 := by
+  -- From R.isLeaf, we have R.reachable root leaf
+  obtain ⟨h_reach, _⟩ := h_leaf
+  -- From reachability, we have a path from root to leaf
+  obtain ⟨path, h_head, h_last, h_nonempty, h_contains⟩ := h_reach
+  -- Since root ≠ leaf, the path has length ≥ 2
+  have h_len : path.length ≥ 2 := by
+    -- path is non-empty and head ≠ last, so length ≥ 2
+    by_contra h_not
+    push_neg at h_not
+    cases path with
+    | nil => simp at h_nonempty
+    | cons hd tl =>
+      cases tl with
+      | nil =>
+        -- Singleton list [hd]
+        simp [List.head?, List.getLast?] at h_head h_last
+        have : root = leaf := by rw [← h_head, ← h_last]
+        exact h_ne this
+      | cons hd2 tl2 =>
+        -- Length is at least 2
+        simp [List.length] at h_not
+        omega
+  -- Use the helper lemma to get a transition into leaf
+  obtain ⟨y, h_y_leaf_in⟩ := last_has_incoming_transition path leaf h_len h_last
+  -- This transition has positive capacity in R
+  use y
+  exact containsPath_has_positive_transition R path h_contains (y, leaf) h_y_leaf_in
+
 /-- Main theorem: If the net flow is +1 at source s, -1 at sink d, and 0 elsewhere,
     then there exists a cycle-free path from s to d. -/
 theorem exists_path_from_source_to_sink
@@ -1117,16 +1229,79 @@ theorem exists_path_from_source_to_sink
     (h_others : ∀ x, x ≠ s → x ≠ d → R.netFlow x = 0) :
     ∃ (path : List S), path.head? = some s ∧ path.getLast? = some d ∧
       path ≠ [] ∧ R.containsPath path ∧ path.Nodup := by
-  -- Proof sketch:
-  -- 1. If R has a cycle, remove it using exists_smaller_run_with_same_netFlow
-  --    The resulting R' is smaller and has the same net flows
-  -- 2. Repeat until R is acyclic (terminates by well-founded induction on R.size)
-  -- 3. Since netFlow(s) = 1 > 0, s must have some outgoing edge
-  -- 4. Use acyclic_has_leaf to find a leaf reachable from s
-  -- 5. The leaf must have negative net flow by leaf_has_negative_netFlow
-  -- 6. Since d is the only state with negative net flow, the leaf = d
-  -- 7. The path from s to d is cycle-free by acyclicity
-  -- 8. Extract a simple (no-duplicate) path from the reachability path
-  sorry
+  -- Reduce to acyclic case by removing cycles
+  by_cases h_cyclic : R.hasCycle
+  case pos =>
+    -- R has a cycle, remove it and recurse
+    obtain ⟨R', h_netFlow_preserved, h_size_lt, h_R'_le_R⟩ := exists_smaller_run_with_same_netFlow R h_cyclic
+    -- R' has the same net flows
+    have h_source' : R'.netFlow s = 1 := by rw [h_netFlow_preserved]; exact h_source
+    have h_sink' : R'.netFlow d = -1 := by rw [h_netFlow_preserved]; exact h_sink
+    have h_others' : ∀ x, x ≠ s → x ≠ d → R'.netFlow x = 0 := by
+      intro x h_ne_s h_ne_d
+      rw [h_netFlow_preserved]
+      exact h_others x h_ne_s h_ne_d
+    -- Recursive call with smaller run
+    obtain ⟨path, h_head, h_last, h_nonempty, h_contains', h_nodup⟩ :=
+      exists_path_from_source_to_sink R' s d h_source' h_sink' h_others'
+    use path
+    refine ⟨h_head, h_last, h_nonempty, ?_, h_nodup⟩
+    -- Show R.containsPath path from R'.containsPath path
+    -- R' t ≤ R t for all t (from exists_smaller_run_with_same_netFlow)
+    intro t
+    calc countTransitionInPath t path
+      ≤ R' t := h_contains' t
+    _ ≤ R t := h_R'_le_R t
+  case neg =>
+    -- R is acyclic
+    have h_acyclic : R.isAcyclic := h_cyclic
+
+    -- s has positive net flow, so it has an outgoing edge
+    have h_s_out : ∃ y, R (s, y) > 0 := by
+      apply positive_netFlow_has_outgoing_edge
+      rw [h_source]
+      omega
+
+    -- Find a leaf reachable from s
+    obtain ⟨leaf, h_leaf⟩ := acyclic_has_leaf R s h_acyclic h_s_out
+
+    -- The leaf has negative net flow
+    have h_leaf_neg : R.netFlow leaf < 0 := by
+      apply leaf_has_negative_netFlow R s leaf h_leaf
+      -- Need to show ∃ y, R (y, leaf) > 0
+      -- This requires s ≠ leaf
+      by_cases h_s_eq_leaf : s = leaf
+      · -- If s = leaf, then s is a leaf (no outgoing edges)
+        subst h_s_eq_leaf
+        obtain ⟨_, h_no_out⟩ := h_leaf
+        -- But we have h_s_out : ∃ y, R (s, y) > 0
+        obtain ⟨y, h_pos⟩ := h_s_out
+        have := h_no_out y
+        omega
+      · -- s ≠ leaf, so use the helper lemma
+        exact reachable_leaf_has_incoming_edge R s leaf h_leaf h_s_eq_leaf
+
+    -- Identify leaf = d (only state with negative net flow)
+    have h_leaf_eq_d : leaf = d := by
+      by_contra h_ne
+      have h_not_s : leaf ≠ s := by
+        intro h_eq
+        rw [h_eq] at h_leaf_neg
+        rw [h_source] at h_leaf_neg
+        omega
+      have h_leaf_zero := h_others leaf h_not_s h_ne
+      omega
+
+    -- Extract the path from s to d
+    rw [h_leaf_eq_d] at h_leaf
+    obtain ⟨h_reach, _⟩ := h_leaf
+    obtain ⟨path, h_head, h_last, h_nonempty, h_contains⟩ := h_reach
+    use path
+    refine ⟨h_head, h_last, h_nonempty, h_contains, ?_⟩
+    exact acyclic_containsPath_nodup R path h_acyclic h_contains
+termination_by R.size
+decreasing_by
+  simp_wf
+  exact h_size_lt
 
 end Utils.StateTransition
