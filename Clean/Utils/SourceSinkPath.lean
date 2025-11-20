@@ -869,6 +869,16 @@ lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
   -- Contradiction
   aesop
 
+omit [DecidableEq S] [Fintype S] in
+/-- If y is not in a path, then (x, y) is not in the path's zip with its tail. -/
+lemma not_mem_implies_transition_not_in_zip_tail {α : Type*} (path : List α) (x y : α)
+    (h_y_not_in : y ∉ path) :
+    (x, y) ∉ path.zip path.tail := by
+  intro h_in
+  have h_y_in_tail : y ∈ path.tail := (List.of_mem_zip h_in).2
+  have h_y_in_path : y ∈ path := List.mem_of_mem_tail h_y_in_tail
+  exact h_y_not_in h_y_in_path
+
 omit [Fintype S] in
 /-- Extending a path that satisfies containsPath preserves the property when there's an edge. -/
 lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
@@ -879,11 +889,7 @@ lemma containsPath_append_singleton (R : Run S) (path : List S) (x y : S)
     (h_edge : R (x, y) > 0) :
     R.containsPath (path ++ [y]) := by
   intro t
-  have h_current_y_not_in_path : (x, y) ∉ path.zip path.tail := by
-    intro h_in
-    have h_y_in_tail : y ∈ path.tail := (List.of_mem_zip h_in).2
-    have h_y_in_path' : y ∈ path := List.mem_of_mem_tail h_y_in_tail
-    aesop
+  have h_current_y_not_in_path := not_mem_implies_transition_not_in_zip_tail path x y h_y_not_in_path
   by_cases h_t_eq : t = (x, y)
   · subst h_t_eq
     have h_new_count : countTransitionInPath (x, y) (path ++ [y]) = 1 :=
