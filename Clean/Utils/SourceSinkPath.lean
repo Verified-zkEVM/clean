@@ -469,11 +469,9 @@ lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
   have h_zip_nodup := nodup_zip_tail path h_nodup
   -- If list is Nodup, each element appears at most once
   by_cases h_in : t ∈ path.zip path.tail
-  · have : List.count t (path.zip path.tail) = 1 := by
-      exact List.count_eq_one_of_mem h_zip_nodup h_in
+  · have : List.count t (path.zip path.tail) = 1 := List.count_eq_one_of_mem h_zip_nodup h_in
     omega
-  · have : List.count t (path.zip path.tail) = 0 := by
-      exact List.count_eq_zero.mpr h_in
+  · have : List.count t (path.zip path.tail) = 0 := List.count_eq_zero.mpr h_in
     omega
 
 -- Lemmas about cycle removal and net flow
@@ -691,10 +689,8 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
     exact Nat.sub_lt h_pos h_count_pos
   have h_xy_in_univ : (x, y) ∈ (Finset.univ : Finset (Transition S)).toList := by
     simp [Finset.mem_toList]
-  have h_others_le : ∀ t, (fun t => R t - countTransitionInPath t cycle) t ≤ R t := by
-    intro t
-    simp only
-    exact Nat.sub_le (R t) (countTransitionInPath t cycle)
+  have h_others_le : ∀ t, (fun t => R t - countTransitionInPath t cycle) t ≤ R t := fun t =>
+    Nat.sub_le (R t) (countTransitionInPath t cycle)
   -- Apply the sum_decrease lemma
   exact sum_decrease R (fun t => R t - countTransitionInPath t cycle) (x, y) h_decrease h_others_le
 
@@ -738,9 +734,7 @@ lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge
     · subst h_t
       simp only [List.count, BEq.rfl, List.countP_cons_of_pos, List.countP_nil, zero_add]
       omega
-    · have : List.count t [(s, s)] = 0 := by
-        simp only [List.count_cons, List.count_nil, beq_iff_eq]
-        aesop
+    · have : List.count t [(s, s)] = 0 := by aesop (add norm simp [List.count_cons, List.count_nil, beq_iff_eq])
       omega
 
 omit [Fintype S] in
