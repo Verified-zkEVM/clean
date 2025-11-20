@@ -827,6 +827,22 @@ lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
         grind
       | inr h_in_rest => grind
 
+omit [DecidableEq S] [Fintype S] in
+/-- Dropping from a valid index i < path.length produces a non-empty list. -/
+lemma drop_of_lt_length_nonempty {α : Type*} (path : List α) (i : ℕ)
+    (h_i_lt : i < path.length) :
+    path.drop i ≠ [] := by
+  intro h_empty
+  have : path.drop i = [] → i ≥ path.length := by
+    have : (path.drop i).length > 0 := by
+      rw [List.length_drop]
+      omega
+    intro h
+    rw [h] at this
+    simp at this
+  have : i ≥ path.length := this h_empty
+  omega
+
 omit [Fintype S] in
 /-- If a run contains an acyclic path and has an edge from the end back into the path,
     then the run has a cycle. -/
@@ -841,14 +857,7 @@ lemma path_with_back_edge_creates_cycle (R : Run S) (path : List S) (current y :
   rw [List.mem_iff_getElem] at h_y_in_path
   obtain ⟨i, h_i_lt, h_y_eq⟩ := h_y_in_path
   let suffix := path.drop i
-  have h_suffix_nonempty : suffix ≠ [] := by
-    intro h_empty
-    unfold suffix at h_empty
-    have : path.drop i = [] → i ≥ path.length := by
-      have : (path.drop i).length > 0 := by grind
-      grind
-    have : i ≥ path.length := this h_empty
-    omega
+  have h_suffix_nonempty : suffix ≠ [] := drop_of_lt_length_nonempty path i h_i_lt
   have h_suffix_head : suffix.head? = some y := by aesop
   have h_suffix_last : suffix.getLast? = some current := by grind
   let cycle := suffix ++ [y]
