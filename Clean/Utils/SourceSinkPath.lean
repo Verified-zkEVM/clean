@@ -270,6 +270,23 @@ lemma drop_take_length_ge_two {α : Type*} (path : List α) (n m : Fin path.leng
   omega
 
 omit [DecidableEq S] [Fintype S] in
+/-- The last element of (path.drop n).take k is path[n + k - 1] when n + k - 1 < path.length. -/
+lemma getLast_drop_take {α : Type*} (path : List α) (n k : ℕ)
+    (h_n_lt : n < path.length)
+    (h_bound : n + k ≤ path.length)
+    (h_k_pos : k > 0) :
+    ((path.drop n).take k).getLast? = path[n + k - 1]? := by
+  have h_cycle_length : ((path.drop n).take k).length = k := by
+    rw [List.length_take, List.length_drop]
+    have : k ≤ path.length - n := by omega
+    simp [Nat.min_eq_left this]
+  rw [List.getLast?_eq_getElem?, h_cycle_length]
+  have h_idx : k - 1 < k := by omega
+  simp only [h_idx, ↓reduceIte, List.getElem?_take, List.getElem?_drop]
+  have : n + (k - 1) = n + k - 1 := by omega
+  rw [this]
+
+omit [DecidableEq S] [Fintype S] in
 /-- If path[n] = path[m] = x, then the sublist from n to m forms a cycle starting and ending with x. -/
 lemma drop_take_cycle_same_endpoints (path : List S) (x : S) (n m : Fin path.length)
     (h_n_lt_m : n < m)
@@ -287,19 +304,9 @@ lemma drop_take_cycle_same_endpoints (path : List S) (x : S) (n m : Fin path.len
     have h_n_in_bounds : n.val < path.length := h_n_lt_len
     aesop
   have h_last : ((path.drop n.val).take (m.val - n.val + 1)).getLast? = some x := by
-    have h_cycle_length : ((path.drop n.val).take (m.val - n.val + 1)).length = m.val - n.val + 1 := by
-      rw [List.length_take, List.length_drop]
-      have : m.val - n.val + 1 ≤ path.length - n.val := by omega
-      simp [Nat.min_eq_left this]
-    rw [List.getLast?_eq_getElem?, h_cycle_length]
-    have h_idx : m.val - n.val + 1 - 1 = m.val - n.val := by omega
-    rw [h_idx]
-    simp only [List.getElem?_take, List.getElem?_drop]
-    have h_in_bounds : m.val - n.val < m.val - n.val + 1 := by omega
-    simp only [h_in_bounds, ↓reduceIte]
-    have : n.val + (m.val - n.val) = m.val := by omega
+    rw [getLast_drop_take path n.val (m.val - n.val + 1) h_n_lt_len (by omega) (by omega)]
+    have : n.val + (m.val - n.val + 1) - 1 = m.val := by omega
     simp only [this]
-    have h_m_in_bounds : m.val < path.length := h_m_lt_len
     aesop
   rw [h_head, h_last]
 
