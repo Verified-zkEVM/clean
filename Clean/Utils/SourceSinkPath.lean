@@ -162,6 +162,7 @@ lemma containsPath_has_positive_transition (R : Run S) (path : List S)
   have h_bound := h_contains t
   omega
 
+omit [DecidableEq S] [Fintype S] in
 /-- Zipping drops of consecutive indices produces a sublist of zipping a list with its tail. -/
 lemma zip_drop_sublist (l : List S) (n : ℕ) :
     ((l.drop n).zip (l.drop (n + 1))).Sublist (l.zip l.tail) := by
@@ -181,6 +182,7 @@ lemma zip_drop_sublist (l : List S) (n : ℕ) :
         rw [List.tail_cons]
         simp [List.zip_cons_cons]
 
+omit [Fintype S] in
 /-- If a path is contained in a run, dropping elements preserves containment. -/
 lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
     (h_contains : R.containsPath path) :
@@ -195,6 +197,7 @@ lemma containsPath_drop (R : Run S) (path : List S) (n : ℕ)
   have h_original := h_contains t
   omega
 
+omit [DecidableEq S] [Fintype S] in
 /-- Zipping takes of two lists produces a sublist of zipping the original lists. -/
 lemma zip_take_sublist (l1 l2 : List S) (n m : ℕ) :
     ((l1.take n).zip (l2.take m)).Sublist (l1.zip l2) := by
@@ -213,6 +216,7 @@ lemma zip_take_sublist (l1 l2 : List S) (n m : ℕ) :
           simp only [List.take_succ_cons, List.zip_cons_cons]
           exact List.Sublist.cons₂ (h1, h2) (zip_take_sublist t1 t2 n' m')
 
+omit [Fintype S] in
 /-- If a path is contained in a run, taking elements preserves containment. -/
 lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
     (h_contains : R.containsPath path) :
@@ -236,6 +240,7 @@ lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
   have h_original := h_contains t
   omega
 
+omit [Fintype S] in
 /-- If a run is acyclic and contains a path, the path has no duplicate vertices. -/
 lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     (h_acyclic : R.isAcyclic)
@@ -266,7 +271,7 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     -- Since m < path.length, we have m - n < path.length - n
     -- So min(m - n + 1, path.length - n) = m - n + 1
     have : m.val - n.val + 1 ≤ path.length - n.val := by omega
-    simp [Nat.min_eq_left this]
+    simp only [Nat.min_eq_left this, ge_iff_le, Nat.reduceLeDiff]
     omega
   have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? := by
     -- cycle = (path.drop n).take (m - n + 1)
@@ -298,7 +303,7 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
       -- Now show cycle[m - n] = path[m]
       simp only [List.getElem?_take, List.getElem?_drop]
       have h_in_bounds : m.val - n.val < m.val - n.val + 1 := by omega
-      simp [h_in_bounds]
+      simp only [h_in_bounds, ↓reduceIte]
       have : n.val + (m.val - n.val) = m.val := by omega
       simp only [this]
       have h_m_in_bounds : m.val < path.length := h_m_lt_len
@@ -318,6 +323,7 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
   push_neg at h_acyclic
   apply h_acyclic cycle h_cycle_len h_cycle_starts_ends_with_x h_cycle_contained
 
+omit [Fintype S] in
 /-- Appending an element to a non-empty path adds exactly one transition from the last element. -/
 lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
     (h_nonempty : path ≠ [])
@@ -333,7 +339,7 @@ lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
     have : x = h := by simp at h_last; exact h_last.symm
     simp [this]
   | cons h2 t2 ih =>
-    simp [List.zip_cons_cons, List.count_cons]
+    simp only [List.cons_append, List.zip_cons_cons, List.count_cons, beq_iff_eq]
     by_cases h_eq : (h, h2) = (x, y)
     · -- This contradicts h_not_in
       exfalso
@@ -350,6 +356,7 @@ lemma countTransitionInPath_append_singleton (path : List S) (x y : S)
         simp at h_not_in
         exact h_not_in.2
 
+omit [Fintype S] in
 /-- Appending an element doesn't add a transition that's different from (last, new). -/
 lemma countTransitionInPath_append_singleton_other (path : List S) (x y : S) (t : Transition S)
     (h_nonempty : path ≠ [])
@@ -361,11 +368,14 @@ lemma countTransitionInPath_append_singleton_other (path : List S) (x y : S) (t 
   rw [List.cons_append, List.tail_cons]
   induction t' generalizing h with
   | nil =>
-    simp [List.count]
+    simp only [List.count, List.nil_append, List.zip_cons_cons, List.zip_nil_right,
+      List.countP_singleton, beq_iff_eq, List.tail_cons, List.countP_nil, ite_eq_right_iff,
+      one_ne_zero, imp_false]
     intro h_eq; subst h_eq; simp at h_last; subst h_last; exact h_ne rfl
   | cons h2 t2 ih =>
     rw [List.tail_cons]
-    simp [List.zip_cons_cons, List.count_cons]
+    simp only [List.cons_append, List.zip_cons_cons, List.count_cons, beq_iff_eq,
+      Nat.add_right_cancel_iff]
     -- Now we need to apply IH for h2 :: t2
     apply ih
     · simp
@@ -381,7 +391,7 @@ lemma mem_of_mem_zip_fst {α β : Type*} (l1 : List α) (l2 : List β) (a : α) 
     cases l2 with
     | nil => simp at h_mem
     | cons h2 t2 =>
-      simp [List.zip_cons_cons] at h_mem
+      simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h_mem
       cases h_mem with
       | inl h_eq =>
         have : a = h1 := h_eq.1
@@ -390,6 +400,7 @@ lemma mem_of_mem_zip_fst {α β : Type*} (l1 : List α) (l2 : List β) (a : α) 
         have : a ∈ t1 := ih t2 h_rest
         exact List.mem_cons_of_mem h1 this
 
+omit [Fintype S] in
 /-- If a path has no duplicates, each transition appears at most once. -/
 lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
     (t : Transition S) :
@@ -408,7 +419,7 @@ lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
       | nil => simp
       | cons h2 t2 =>
         rw [List.tail_cons]
-        simp [List.zip_cons_cons]
+        simp only [List.zip_cons_cons, List.nodup_cons]
         have ⟨h_not_in, h_nodup_tail⟩ := List.nodup_cons.mp h_nodup
         constructor
         · -- Prove (h, h2) ∉ (h2 :: t2).zip t2
@@ -419,7 +430,7 @@ lemma nodup_transition_count_le_one (path : List S) (h_nodup : path.Nodup)
           | nil =>
             simp [List.zip] at h_contra
           | cons h3 t3 =>
-            simp [List.zip_cons_cons] at h_contra
+            simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h_contra
             cases h_contra with
             | inl h_eq =>
               -- (h, h2) = (h2, h3), so h = h2
@@ -465,10 +476,11 @@ lemma countAsFirst_cons (hd : S) (tl : List S) (x : S) :
     simp [List.zip, List.tail, List.countP]
   | cons hd2 tl2 =>
     -- [hd, hd2] ++ tl2: zip creates (hd, hd2) :: rest
-    simp [List.zip, List.tail]
+    simp only [List.zip, List.tail, List.zipWith_cons_cons, ne_eq, reduceCtorEq, not_false_eq_true,
+      and_true]
     rw [List.countP_cons]
     simp
-    by_cases h : hd = x <;> simp [h]
+    by_cases h : hd = x <;> simp only [h, ↓reduceIte, add_zero, zero_add]
     omega
 
 set_option linter.unusedSectionVars false in
@@ -482,10 +494,10 @@ lemma countAsSecond_cons (hd : S) (tl : List S) (x : S) :
     simp [List.zip, List.tail, List.countP]
   | cons hd2 tl2 =>
     -- [hd, hd2] ++ tl2: zip creates (hd, hd2) :: rest
-    simp [List.zip, List.tail, List.head?]
+    simp only [List.zip, List.tail, List.zipWith_cons_cons, List.head?, Option.some.injEq]
     rw [List.countP_cons]
     simp
-    by_cases h : hd2 = x <;> simp [h]
+    by_cases h : hd2 = x <;> simp only [h, ↓reduceIte, add_zero, zero_add]
     omega
 
 set_option linter.unusedSectionVars false in
@@ -510,13 +522,9 @@ lemma countAsFirst_add_last_eq_countAsSecond_add_head (xs : List S) (x : S) :
       simp
     | cons hd2 tl2 =>
       -- At least 2 elements: [hd, hd2] ++ tl2
-      simp [List.head?, List.getLast?] at ih ⊢
-      -- LHS = (if hd = x then 1 else 0) + countAsFirst (hd2::tl2) x + last
-      -- RHS = (if hd2 = x then 1 else 0) + countAsSecond (hd2::tl2) x + 1
-      -- IH: countAsFirst (hd2::tl2) x + last = countAsSecond (hd2::tl2) x + (if hd2 = x then 1 else 0)
-      -- So: LHS = (if hd = x then 1 else 0) + countAsSecond (hd2::tl2) x + (if hd2 = x then 1 else 0)
-      --         = (if hd2 = x then 1 else 0) + countAsSecond (hd2::tl2) x + (if hd = x then 1 else 0)
-      --         = RHS ✓
+      simp only [List.getLast?, Option.some.injEq, List.head?, ne_eq, reduceCtorEq,
+        not_false_eq_true, and_true,
+        List.getLast_cons] at ih ⊢
       omega
 
 set_option linter.unusedSectionVars false in
@@ -696,6 +704,7 @@ lemma size_removeCycle_lt (R : Run S) (cycle : List S)
   -- Apply the sum_decrease lemma
   exact sum_decrease R (fun t => R t - countTransitionInPath t cycle) (x, y) h_decrease h_others_le
 
+omit [Fintype S] in
 /-- Removing a cycle gives a smaller or equal run at each transition. -/
 lemma removeCycle_le (R : Run S) (cycle : List S) (t : Transition S) :
     (R.removeCycle cycle) t ≤ R t := by
@@ -725,6 +734,7 @@ lemma exists_smaller_run_with_same_netFlow (R : Run S) (h_cycle : R.hasCycle) :
     intro t
     exact removeCycle_le R cycle t
 
+omit [Fintype S] in
 /-- If a run has a self-loop, it contradicts acyclicity. -/
 lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge : R (s, s) > 0) : False := by
   unfold Run.isAcyclic Run.hasCycle at h_acyclic
@@ -734,10 +744,11 @@ lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge
   · simp
   · intro t
     unfold countTransitionInPath
-    simp [List.zip, List.tail]
+    simp only [List.zip, List.tail, List.zipWith_cons_cons, List.zipWith_nil_right, List.nodup_cons,
+      List.not_mem_nil, not_false_eq_true, List.nodup_nil, and_self]
     by_cases h_t : t = (s, s)
     · subst h_t
-      simp [List.count]
+      simp only [List.count, BEq.rfl, List.countP_cons_of_pos, List.countP_nil, zero_add]
       omega
     · have : List.count t [(s, s)] = 0 := by
         simp only [List.count_cons, List.count_nil, beq_iff_eq]
@@ -746,6 +757,7 @@ lemma acyclic_no_self_loop (R : Run S) (s : S) (h_acyclic : R.isAcyclic) (h_edge
         · rfl
       omega
 
+omit [Fintype S] in
 /-- If a run has a 2-cycle between distinct vertices, it contradicts acyclicity. -/
 lemma acyclic_no_two_cycle (R : Run S) (a b : S)
     (h_acyclic : R.isAcyclic) (h_ne : a ≠ b)
@@ -757,27 +769,29 @@ lemma acyclic_no_two_cycle (R : Run S) (a b : S)
   · simp
   · intro t
     unfold countTransitionInPath
-    simp [List.zip, List.tail]
+    simp only [List.zip, List.tail, List.zipWith_cons_cons, List.zipWith_nil_right]
     by_cases h1 : t = (a, b)
     · subst h1
-      simp [List.count]
+      simp only [List.count, BEq.rfl, List.countP_cons_of_pos, List.countP_singleton, beq_iff_eq]
       have : ¬(b, a) = (a, b) := by
         intro h_eq
         have := Prod.mk_inj.mp h_eq
         exact h_ne this.1.symm
-      simp [beq_iff_eq, this]
+      simp only [this, ↓reduceIte, zero_add, ge_iff_le]
       omega
     · by_cases h2 : t = (b, a)
       · subst h2
-        simp [List.count]
+        simp only [List.count]
         have : ¬(a, b) = (b, a) := by
           intro h_eq
           have := Prod.mk_inj.mp h_eq
           exact h_ne this.1
-        simp [beq_iff_eq, this]
+        simp only [beq_iff_eq, this, not_false_eq_true, List.countP_cons_of_neg, BEq.rfl,
+          List.countP_cons_of_pos, List.countP_nil, zero_add, ge_iff_le]
         omega
       · have : List.count t [(a, b), (b, a)] = 0 := by
-          simp [List.count]
+          simp only [List.count, List.countP_eq_zero, List.mem_cons, List.not_mem_nil, or_false,
+            beq_iff_eq, forall_eq_or_imp, forall_eq]
           constructor
           · intro h_eq; cases h_eq; exact h1 rfl
           · intro h_eq; cases h_eq; exact h2 rfl
@@ -801,8 +815,8 @@ lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
     | nil =>
       simp at h_in
     | cons head2 tail2 =>
-      simp [List.getLast?_cons_cons] at h_last
-      simp [List.tail_cons, List.zip_cons_cons] at h_in
+      simp only [List.getLast?_cons_cons] at h_last
+      simp only [List.tail_cons, List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h_in
       -- l.Nodup means head ≠ head2, head ∉ tail2, and (head2 :: tail2).Nodup
       have h_nodup_tail := List.nodup_cons.mp h_nodup
       cases h_in with
@@ -828,11 +842,11 @@ lemma last_not_in_zip_tail {α : Type*} [DecidableEq α] (l : List α) (x : α)
         -- Apply IH to head2 :: tail2 with its Nodup property
         exact ih h_nodup_tail.2 h_last h_in_rest
 
+omit [Fintype S] in
 /-- If there's an edge from current to y, and y is in the path from root to current,
     then we can construct a cycle, contradicting acyclicity. -/
 lemma acyclic_edge_not_in_path (R : Run S) (path : List S) (current y : S)
     (h_acyclic : R.isAcyclic)
-    (h_nonempty : path ≠ [])
     (h_end : path.getLast? = some current)
     (h_contains : R.containsPath path)
     (h_edge : R (current, y) > 0)
@@ -1013,7 +1027,7 @@ lemma acyclic_has_leaf_aux (R : Run S) (root current : S)
         -- path ends with current, current → y, y → z, and z ∈ path
         -- This creates a cycle: (suffix of path from z to current) → y → z
         have h_z_in_extended : z ∈ path ++ [y] := by simp [h_z_in_path]
-        exact acyclic_edge_not_in_path R (path ++ [y]) y z h_acyclic (by simp [h_nonempty]) (by simp) (containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge) h_z_pos h_z_in_extended
+        exact acyclic_edge_not_in_path R (path ++ [y]) y z h_acyclic (by simp [h_nonempty]) (containsPath_append_singleton R path current y h_nonempty h_end h_contains h_y_not_in_path h_edge) h_z_pos h_z_in_extended
       | inr h_z_eq_y =>
         -- z = y, so we have a self-loop y → y
         rw [h_z_eq_y] at h_z_pos
@@ -1164,11 +1178,11 @@ lemma last_has_incoming_transition {α : Type*} (l : List α) (x : α)
     | cons hd2 tl2 =>
       -- l = [hd, hd2] ++ tl2, so l.tail = [hd2] ++ tl2
       -- getLast of l is getLast of tail
-      simp [List.tail, List.getLast?_cons_cons] at h_last
+      simp only [List.getLast?_cons_cons] at h_last
       -- If tl2 = [], then getLast? = some hd2, so x = hd2, and (hd, hd2) is in zip
       cases tl2 with
       | nil =>
-        simp [List.getLast?] at h_last
+        simp only [List.getLast?, List.getLast_singleton, Option.some.injEq] at h_last
         subst h_last
         use hd
         simp [List.zip]
@@ -1187,6 +1201,7 @@ lemma last_has_incoming_transition {α : Type*} (l : List α) (x : α)
         right
         exact h_y_in
 
+omit [Fintype S] in
 /-- A leaf reachable from a root (with root ≠ leaf) must have an incoming edge. -/
 lemma reachable_leaf_has_incoming_edge (R : Run S) (root leaf : S)
     (h_leaf : R.isLeaf root leaf)
@@ -1207,12 +1222,13 @@ lemma reachable_leaf_has_incoming_edge (R : Run S) (root leaf : S)
       cases tl with
       | nil =>
         -- Singleton list [hd]
-        simp [List.head?, List.getLast?] at h_head h_last
+        simp only [List.head?, Option.some.injEq, List.getLast?,
+          List.getLast_singleton] at h_head h_last
         have : root = leaf := by rw [← h_head, ← h_last]
         exact h_ne this
       | cons hd2 tl2 =>
         -- Length is at least 2
-        simp [List.length] at h_not
+        simp only [List.length] at h_not
         omega
   -- Use the helper lemma to get a transition into leaf
   obtain ⟨y, h_y_leaf_in⟩ := last_has_incoming_transition path leaf h_len h_last
