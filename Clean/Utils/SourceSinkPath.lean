@@ -422,8 +422,36 @@ lemma mem_of_mem_zip_fst {α β : Type*} (l1 : List α) (l2 : List β) (a : α) 
         exact List.mem_cons_of_mem h1 this
 
 omit [DecidableEq S] [Fintype S] in
+/-- If h is not in the tail t, then (h, h.next) is not in t.zip t.tail where h.next is the head of t. -/
+lemma head_pair_not_in_tail_zip {α : Type*} [DecidableEq α] (h : α) (t : List α)
+    (h_not_in : h ∉ t) :
+    ∀ h2, (h, h2) ∉ t.zip t.tail := by
+  intro h2
+  cases t with
+  | nil => simp
+  | cons h2' t2 =>
+    intro h_contra
+    cases t2 with
+    | nil => simp [List.zip] at h_contra
+    | cons h3 t3 =>
+      rw [List.tail_cons, List.zip_cons_cons, List.mem_cons] at h_contra
+      cases h_contra with
+      | inl h_eq =>
+        -- (h, h2) = (h2', h3), so h = h2'
+        have : h = h2' := (Prod.mk_inj.mp h_eq).1
+        subst this
+        -- Now h_not_in says h2' ∉ h2' :: h3 :: t3, but h2' is the head
+        simp at h_not_in
+      | inr h_rest =>
+        -- (h, h2) ∈ (h3 :: t3).zip t3
+        -- This means h ∈ h3 :: t3, so h ∈ h2' :: h3 :: t3
+        have h_in_t3 : h ∈ h3 :: t3 := mem_of_mem_zip_fst (h3 :: t3) t3 h h2 h_rest
+        have : h ∈ h2' :: h3 :: t3 := List.mem_cons_of_mem h2' h_in_t3
+        contradiction
+
+omit [DecidableEq S] [Fintype S] in
 /-- If a list has no duplicates, its zip with tail also has no duplicates. -/
-lemma nodup_zip_tail (path : List S) (h_nodup : path.Nodup) :
+lemma nodup_zip_tail [DecidableEq S] (path : List S) (h_nodup : path.Nodup) :
     (path.zip path.tail).Nodup := by
   induction path with
   | nil => simp
@@ -435,30 +463,8 @@ lemma nodup_zip_tail (path : List S) (h_nodup : path.Nodup) :
       simp only [List.zip_cons_cons, List.nodup_cons]
       have ⟨h_not_in, h_nodup_tail⟩ := List.nodup_cons.mp h_nodup
       constructor
-      · -- Prove (h, h2) ∉ (h2 :: t2).zip t2
-        intro h_contra
-        -- If (h, h2) ∈ (h2 :: t2).zip t2, then h must be in h2 :: t2
-        -- But we know h ∉ h2 :: t2, contradiction
-        cases t2 with
-        | nil =>
-          simp [List.zip] at h_contra
-        | cons h3 t3 =>
-          simp only [List.zip_cons_cons, List.mem_cons, Prod.mk.injEq] at h_contra
-          cases h_contra with
-          | inl h_eq =>
-            -- (h, h2) = (h2, h3), so h = h2
-            have : h = h2 := h_eq.1
-            subst this
-            -- Now h_not_in says h2 ∉ h2 :: t3, but h2 is the head
-            simp at h_not_in
-          | inr h_rest =>
-            -- (h, h2) ∈ (h3 :: t3).zip t3
-            -- This means h ∈ h3 :: t3, so h ∈ h2 :: h3 :: t3
-            have h_in_t3 : h ∈ h3 :: t3 := mem_of_mem_zip_fst (h3 :: t3) t3 h h2 h_rest
-            have : h ∈ h2 :: h3 :: t3 := List.mem_cons_of_mem h2 h_in_t3
-            contradiction
-      · -- Prove ((h2 :: t2).zip t2).Nodup
-        exact ih h_nodup_tail
+      · exact head_pair_not_in_tail_zip h (h2 :: t2) h_not_in h2
+      · exact ih h_nodup_tail
 
 omit [Fintype S] in
 /-- If a path has no duplicates, each transition appears at most once. -/
@@ -827,14 +833,8 @@ lemma drop_of_lt_length_nonempty {α : Type*} (path : List α) (i : ℕ)
     (h_i_lt : i < path.length) :
     path.drop i ≠ [] := by
   intro h_empty
-  have : path.drop i = [] → i ≥ path.length := by
-    have : (path.drop i).length > 0 := by
-      rw [List.length_drop]
-      omega
-    intro h
-    rw [h] at this
-    simp at this
-  have : i ≥ path.length := this h_empty
+  have : (path.drop i).length = 0 := by simp [h_empty]
+  rw [List.length_drop] at this
   omega
 
 omit [Fintype S] in
