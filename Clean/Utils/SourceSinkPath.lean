@@ -1046,18 +1046,23 @@ lemma acyclic_has_leaf (R : Run S) (root : S)
     exact acyclic_no_self_loop R root h_acyclic h_pos
   · exact h_pos
 
+/-- A single element is at most the sum of all elements when all are nonnegative. -/
+lemma single_le_sum_of_nonneg {α : Type*} [Fintype α] (f : α → ℤ) (a : α)
+    (h_nonneg : ∀ x, f x ≥ 0) :
+    f a ≤ ∑ x : α, f x := by
+  calc f a
+    = ∑ x ∈ ({a} : Finset α), f x := by simp
+  _ ≤ ∑ x : α, f x := by
+      apply Finset.sum_le_univ_sum_of_nonneg
+      intro x
+      exact h_nonneg x
+
 /-- If one element of a sum is positive and all elements are nonnegative, the sum is positive. -/
 lemma sum_pos_of_pos_element {α : Type*} [Fintype α] (f : α → ℤ) (a : α)
     (h_pos : f a > 0)
     (h_nonneg : ∀ x, f x ≥ 0) :
     ∑ x : α, f x > 0 := by
-  have h_a_in_sum : f a ≤ ∑ x : α, f x := by
-    calc f a
-      = ∑ x ∈ ({a} : Finset α), f x := by simp
-    _ ≤ ∑ x : α, f x := by
-        apply Finset.sum_le_univ_sum_of_nonneg
-        intro x
-        exact h_nonneg x
+  have h_a_in_sum : f a ≤ ∑ x : α, f x := single_le_sum_of_nonneg f a h_nonneg
   omega
 
 /-- A leaf with an incoming edge has negative net flow. -/
