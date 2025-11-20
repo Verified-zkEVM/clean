@@ -240,6 +240,40 @@ lemma containsPath_take (R : Run S) (path : List S) (n : ℕ)
   have h_original := h_contains t
   omega
 
+omit [DecidableEq S] [Fintype S] in
+/-- If path[n] = path[m] = x, then the sublist from n to m forms a cycle starting and ending with x. -/
+lemma drop_take_cycle_same_endpoints (path : List S) (x : S) (n m : Fin path.length)
+    (h_n_lt_m : n < m)
+    (h_x_at_n : path[n] = x)
+    (h_x_at_m : path[m] = x) :
+    ((path.drop n.val).take (m.val - n.val + 1)).head? =
+    ((path.drop n.val).take (m.val - n.val + 1)).getLast? := by
+  have h_n_lt_len : n.val < path.length := n.isLt
+  have h_m_lt_len : m.val < path.length := m.isLt
+  have h_head : ((path.drop n.val).take (m.val - n.val + 1)).head? = some x := by
+    rw [List.head?_take]
+    have h_take_nonzero : m.val - n.val + 1 ≠ 0 := by omega
+    simp only [if_neg h_take_nonzero]
+    rw [List.head?_drop]
+    have h_n_in_bounds : n.val < path.length := h_n_lt_len
+    aesop
+  have h_last : ((path.drop n.val).take (m.val - n.val + 1)).getLast? = some x := by
+    have h_cycle_length : ((path.drop n.val).take (m.val - n.val + 1)).length = m.val - n.val + 1 := by
+      rw [List.length_take, List.length_drop]
+      have : m.val - n.val + 1 ≤ path.length - n.val := by omega
+      simp [Nat.min_eq_left this]
+    rw [List.getLast?_eq_getElem?, h_cycle_length]
+    have h_idx : m.val - n.val + 1 - 1 = m.val - n.val := by omega
+    rw [h_idx]
+    simp only [List.getElem?_take, List.getElem?_drop]
+    have h_in_bounds : m.val - n.val < m.val - n.val + 1 := by omega
+    simp only [h_in_bounds, ↓reduceIte]
+    have : n.val + (m.val - n.val) = m.val := by omega
+    simp only [this]
+    have h_m_in_bounds : m.val < path.length := h_m_lt_len
+    aesop
+  rw [h_head, h_last]
+
 omit [Fintype S] in
 /-- If a run is acyclic and contains a path, the path has no duplicate vertices. -/
 lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
@@ -273,39 +307,8 @@ lemma acyclic_containsPath_nodup (R : Run S) (path : List S)
     have : m.val - n.val + 1 ≤ path.length - n.val := by omega
     simp only [Nat.min_eq_left this, ge_iff_le, Nat.reduceLeDiff]
     omega
-  have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? := by
-    -- cycle = (path.drop n).take (m - n + 1)
-    -- head? of (path.drop n) is path[n]
-    -- getLast? of cycle needs careful handling with take
-    have h_head : cycle.head? = some x := by
-      simp only [cycle]
-      rw [List.head?_take]
-      have h_take_nonzero : m.val - n.val + 1 ≠ 0 := by omega
-      simp only [if_neg h_take_nonzero]
-      rw [List.head?_drop]
-      have h_n_in_bounds : n.val < path.length := h_n_lt_len
-      aesop
-    have h_last : cycle.getLast? = some x := by
-      simp only [cycle]
-      -- cycle.length = m - n + 1, so getLast is at index (m - n)
-      -- which corresponds to path[n + (m - n)] = path[m]
-      have h_cycle_length : cycle.length = m.val - n.val + 1 := by
-        simp only [cycle]
-        rw [List.length_take, List.length_drop]
-        have : m.val - n.val + 1 ≤ path.length - n.val := by omega
-        simp [Nat.min_eq_left this]
-      rw [List.getLast?_eq_getElem?, h_cycle_length]
-      have h_idx : m.val - n.val + 1 - 1 = m.val - n.val := by omega
-      rw [h_idx]
-      -- Now show cycle[m - n] = path[m]
-      simp only [List.getElem?_take, List.getElem?_drop]
-      have h_in_bounds : m.val - n.val < m.val - n.val + 1 := by omega
-      simp only [h_in_bounds, ↓reduceIte]
-      have : n.val + (m.val - n.val) = m.val := by omega
-      simp only [this]
-      have h_m_in_bounds : m.val < path.length := h_m_lt_len
-      aesop
-    rw [h_head, h_last]
+  have h_cycle_starts_ends_with_x : cycle.head? = cycle.getLast? :=
+    drop_take_cycle_same_endpoints path x n m h_n_lt_m h_x_at_n.symm h_x_at_m.symm
   have h_cycle_contained : R.containsPath cycle := by
     -- cycle = (path.drop n).take (m - n + 1)
     -- First apply drop, then take
