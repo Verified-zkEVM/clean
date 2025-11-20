@@ -846,6 +846,28 @@ lemma drop_of_lt_length_nonempty {α : Type*} (path : List α) (i : ℕ)
   omega
 
 omit [Fintype S] in
+/-- Appending an element to a suffix to form a cycle preserves containsPath property. -/
+lemma cycle_from_suffix_contains (R : Run S) (suffix : List S) (current y : S)
+    (h_suffix_nodup : suffix.Nodup)
+    (h_contains_suffix : R.containsPath suffix)
+    (h_suffix_nonempty : suffix ≠ [])
+    (h_suffix_last : suffix.getLast? = some current)
+    (h_edge : R (current, y) > 0) :
+    ∀ t : Transition S, countTransitionInPath t (suffix ++ [y]) ≤ R t := by
+  intro t
+  by_cases h_t_eq : t = (current, y)
+  · subst h_t_eq
+    have h_not_in : (current, y) ∉ suffix.zip suffix.tail :=
+      last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
+    have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
+    unfold countTransitionInPath at h_count_one ⊢
+    omega
+  · have h_count_same := countTransitionInPath_append_singleton_other suffix current y t h_suffix_nonempty h_suffix_last h_t_eq
+    unfold countTransitionInPath at h_count_same ⊢
+    rw [h_count_same]
+    exact h_contains_suffix t
+
+omit [Fintype S] in
 /-- If a run contains an acyclic path and has an edge from the end back into the path,
     then the run has a cycle. -/
 lemma path_with_back_edge_creates_cycle (R : Run S) (path : List S) (current y : S)
@@ -875,21 +897,9 @@ lemma path_with_back_edge_creates_cycle (R : Run S) (path : List S) (current y :
     have h_suffix_contains : R.containsPath suffix := by
       unfold suffix
       exact containsPath_drop R path i h_contains
-    intro t
-    unfold countTransitionInPath at h_suffix_contains ⊢
-    by_cases h_t_eq : t = (current, y)
-    · subst h_t_eq
-      have h_path_nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
-      have h_suffix_nodup : suffix.Nodup := by grind
-      have h_not_in : (current, y) ∉ suffix.zip suffix.tail :=
-        last_not_in_zip_tail suffix current h_suffix_nodup h_suffix_last y
-      have h_count_one := countTransitionInPath_append_singleton suffix current y h_suffix_nonempty h_suffix_last h_not_in
-      unfold countTransitionInPath at h_count_one
-      aesop
-    · have h_count_same := countTransitionInPath_append_singleton_other suffix current y t h_suffix_nonempty h_suffix_last h_t_eq
-      unfold countTransitionInPath at h_count_same
-      rw [h_count_same]
-      exact h_suffix_contains t
+    have h_path_nodup := acyclic_containsPath_nodup R path h_acyclic h_contains
+    have h_suffix_nodup : suffix.Nodup := by grind
+    exact cycle_from_suffix_contains R suffix current y h_suffix_nodup h_suffix_contains h_suffix_nonempty h_suffix_last h_edge
 
 omit [Fintype S] in
 /-- If there's an edge from current to y, and y is in the path from root to current,
