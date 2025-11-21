@@ -150,6 +150,7 @@ def ConstraintsHold (eval : Environment F) : List (Operation F) → Prop
     table.Contains (entry.map eval) ∧ ConstraintsHold eval ops
   | .subcircuit s :: ops =>
     ConstraintsHoldFlat eval s.ops ∧ ConstraintsHold eval ops
+  | .add _ _ :: ops => ConstraintsHold eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Soundness`.
@@ -163,6 +164,7 @@ def ConstraintsHold.Soundness (eval : Environment F) : List (Operation F) → Pr
     table.Soundness (entry.map eval) ∧ ConstraintsHold.Soundness eval ops
   | .subcircuit s :: ops =>
     s.Soundness eval ∧ ConstraintsHold.Soundness eval ops
+  | .add _ _ :: ops => ConstraintsHold.Soundness eval ops
 
 /--
 Version of `ConstraintsHold` that replaces the statement of subcircuits with their `Completeness`.
@@ -176,6 +178,7 @@ def ConstraintsHold.Completeness (eval : Environment F) : List (Operation F) →
     table.Completeness (entry.map eval) ∧ ConstraintsHold.Completeness eval ops
   | .subcircuit s :: ops =>
     s.Completeness eval ∧ ConstraintsHold.Completeness eval ops
+  | .add _ _ :: ops => ConstraintsHold.Completeness eval ops
 end Circuit
 
 /--
@@ -198,6 +201,7 @@ def Environment.UsesLocalWitnessesCompleteness (env : Environment F) (offset : �
   | .assert _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .lookup _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
   | .subcircuit s :: ops => s.UsesLocalWitnesses env ∧ env.UsesLocalWitnessesCompleteness (offset + s.localLength) ops
+  | .add _ _ :: ops => env.UsesLocalWitnessesCompleteness offset ops
 
 /-- Same as `UsesLocalWitnesses`, but on flat operations -/
 def Environment.UsesLocalWitnessesFlat (env : Environment F) (n : ℕ) (ops : List (FlatOperation F)) : Prop :=
@@ -427,6 +431,7 @@ def FlatOperation.dynamicWitness (op : FlatOperation F) (acc : List F) : List F 
   | .witness _ compute => (compute (.fromList acc)).toList
   | .assert _ => []
   | .lookup _ => []
+  | .add _ _ => []
 
 def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (init : List F) : List F :=
   ops.foldl (fun (acc : List F) (op : FlatOperation F) =>
@@ -467,6 +472,7 @@ def FlatOperation.witnessGenerators : (l : List (FlatOperation F)) → Vector (E
   | .witness m c :: ops => Vector.mapFinRange m (fun i env => (c env)[i.val]) ++ witnessGenerators ops
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
+  | .add _ _ :: ops => witnessGenerators ops
 
 def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment F → F) ops.localLength
   | [] => #v[]
@@ -474,6 +480,7 @@ def Operations.witnessGenerators : (ops : Operations F) → Vector (Environment 
   | .assert _ :: ops => witnessGenerators ops
   | .lookup _ :: ops => witnessGenerators ops
   | .subcircuit s :: ops => (s.localLength_eq ▸ FlatOperation.witnessGenerators s.ops) ++ witnessGenerators ops
+  | .add _ _ :: ops => witnessGenerators ops
 
 -- statements about constant length or output
 
