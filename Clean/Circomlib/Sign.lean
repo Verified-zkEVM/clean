@@ -39,6 +39,7 @@ def main (input : Vector (Expression (F p)) 254) :=
 def circuit : FormalCircuit (F p) (fields 254) field where
   main
   localLength input := (CompConstant.circuit ((p - 1) / 2)).localLength input
+  localAdds_eq _ _ _ := by sorry
 
   Assumptions input :=
     -- Input should be binary representation of a field element

@@ -36,6 +36,12 @@ def FormalCircuit.concat
     output_eq := by
       intro input offset
       simp only [Circuit.bind_def, Circuit.output, circuit_norm]
+    localAdds_eq := by
+      intro input env offset
+      simp [Circuit.bind_def, circuit_norm, Operations.collectAdds]
+      constructor
+      · rfl
+      · rfl
   }
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output

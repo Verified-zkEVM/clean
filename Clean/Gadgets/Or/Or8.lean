@@ -89,6 +89,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
 instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   localLength _ := 1
+  localAdds_eq _ _ _ := by simp [main, circuit_norm]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_constraint

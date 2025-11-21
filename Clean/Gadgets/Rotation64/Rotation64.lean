@@ -42,6 +42,7 @@ def elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 where
   main := main off
   localLength _ := 16
   output _ i0 := output off i0
+  localAdds_eq _ _ _ := by sorry
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds

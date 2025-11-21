@@ -48,6 +48,7 @@ def Spec [DecidableEq F] (input : Inputs M F) (output : M F) : Prop :=
 instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M where
   main
   localLength _ := 0
+  localAdds_eq _ _ _ := by simp [main, circuit_norm]
 
 theorem soundness [DecidableEq F] : Soundness F (elaborated (F:=F) (M:=M)) Assumptions Spec := by
   circuit_proof_start

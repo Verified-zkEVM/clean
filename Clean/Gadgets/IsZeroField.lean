@@ -26,6 +26,9 @@ def main (x : Var field F) : Circuit F (Var field F) := do
 instance elaborated : ElaboratedCircuit F field field where
   main
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
+  localAdds_eq _ _ _ := by
+    simp [main, circuit_norm, Operations.collectAdds]
+    constructor <;> rfl
 
 def Assumptions (_ : F) : Prop := True
 

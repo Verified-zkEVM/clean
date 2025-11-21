@@ -364,6 +364,15 @@ def forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F Unit :=
   xs.forM body
 
+@[circuit_norm]
+theorem forEach_cons {m : ℕ} (x : α) (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+    (constant : ConstantLength body) :
+    forEach (Vector.cons x xs) body constant = body x *> forEach xs body constant := by
+  unfold forEach
+  rw [Vector.forM_toList, Vector.cons, Vector.toList_mk, List.forM_cons]
+  rw [←Vector.forM_toList]
+  rfl
+
 def map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F (Vector β m) :=
   xs.mapM body
@@ -657,5 +666,17 @@ lemma foldlRange.usesLocalWitnesses :
   simp only [env.usesLocalWitnessesCompleteness_iff_forAll, foldlRange.forAll]
 
 end foldlRange
+
+theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).collectAdds env = []) :
+    ((forEach xs body constant).operations offset).collectAdds env = [] := by
+  induction xs using Vector.induct generalizing offset
+  · rfl
+  case cons n a as ih =>
+    simp only [circuit_norm, Circuit.operations]
+    rw [h_body]
+    rw [ih]
+    simp
 
 end Circuit

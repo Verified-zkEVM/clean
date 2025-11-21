@@ -48,6 +48,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output.val = input.1.val ^^^ input.2.val
     ∧ IsBool output
 
+  localAdds_eq _ _ _ := by sorry
+
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
@@ -90,6 +92,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output.val = input.1.val &&& input.2.val
     ∧ IsBool output
 
+  localAdds_eq _ _ _ := by sorry
+
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
@@ -130,6 +134,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output.val = input.1.val ||| input.2.val
     ∧ IsBool output
 
+  localAdds_eq _ _ _ := by sorry
+
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
@@ -169,6 +175,8 @@ def circuit : FormalCircuit (F p) field field where
   Spec input output :=
     output.val = 1 - input.val
     ∧ IsBool output
+
+  localAdds_eq _ _ _ := by sorry
 
   soundness := by
     rintro _ _ _ _ h_env h_in h_hold
@@ -212,6 +220,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
     output.val = 1 - (input.1.val &&& input.2.val)
     ∧ IsBool output
 
+  localAdds_eq _ _ _ := by sorry
+
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
     simp only [circuit_norm, main] at h_env h_hold ⊢
@@ -253,6 +263,8 @@ def circuit : FormalCircuit (F p) fieldPair field where
   Spec input output :=
     output.val = 1 - (input.1.val ||| input.2.val)
     ∧ IsBool output
+
+  localAdds_eq _ _ _ := by sorry
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -1022,6 +1034,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   localLength _ := n - 1
   localLength_eq := localLength_eq n
   subcircuitsConsistent := subcircuitsConsistent n
+
+  localAdds_eq _ _ _ := by sorry
 
   Assumptions := Assumptions n
   Spec := Spec n

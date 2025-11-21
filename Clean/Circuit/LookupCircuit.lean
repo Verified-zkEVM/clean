@@ -75,6 +75,8 @@ def lookupCircuit (circuit : LookupCircuit F α β) : FormalCircuit F α β wher
   Assumptions := circuit.Assumptions
   Spec := circuit.Spec
 
+  localAdds_eq _ _ _ := by simp [circuit_norm]
+
   soundness := by
     intro n env input_var input h_input h_assumptions h_holds
     simp_all only [circuit_norm, toTable]

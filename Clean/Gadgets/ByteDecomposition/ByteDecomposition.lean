@@ -45,6 +45,7 @@ def elaborated (offset : Fin 8) : ElaboratedCircuit (F p) field Outputs where
   main := main offset
   localLength _ := 2
   output _ i0 := varFromOffset Outputs i0
+  localAdds_eq _ _ _ := by sorry
 
 theorem soundness (offset : Fin 8) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var (x : F p) h_input (x_byte : x.val < 256) h_holds

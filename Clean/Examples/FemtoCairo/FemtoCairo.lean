@@ -95,6 +95,7 @@ def decodeInstructionCircuit : GeneralFormalCircuit (F p) field DecodedInstructi
       }
     }
   localLength _ := 8
+  localAdds_eq _ _ _ := by sorry
 
   Assumptions
   | instruction => instruction.val < 256
@@ -323,6 +324,7 @@ def fetchInstructionCircuit
     return { rawInstrType, op1, op2, op3 }
 
   localLength _ := 4
+  localAdds_eq _ _ _ := by sorry
   Assumptions
   | pc => pc.val + 3 < programSize
 
@@ -428,6 +430,7 @@ def readFromMemoryCircuit
     return value
 
   localLength _ := 5
+  localAdds_eq _ _ _ := by sorry
   Assumptions
   | {state, mode, offset} =>
     ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
@@ -569,6 +572,7 @@ def nextStateCircuit : GeneralFormalCircuit (F p) StateTransitionInput State whe
     return nextState
 
   localLength _ := 3
+  localAdds_eq _ _ _ := by sorry
   Assumptions
   | {state, decoded, v1, v2, v3} =>
     DecodedInstructionType.isEncodedCorrectly decoded.instrType ∧
@@ -825,6 +829,7 @@ def femtoCairoStepElaboratedCircuit
       -- Compute next state
       nextStateCircuit { state, decoded, v1, v2, v3 }
     localLength := 30
+    localAdds_eq _ _ _ := by sorry
 
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
