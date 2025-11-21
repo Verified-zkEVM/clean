@@ -113,6 +113,9 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
+  -- compute the local adds from this subcircuit's operations (defaults to empty)
+  localAdds : Environment F → List (NamedList F × ℤ) := fun _ => []
+
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
     ConstraintsHoldFlat env ops → Soundness env
@@ -232,6 +235,16 @@ def induct {motive : Operations F → Sort*}
   | .lookup l :: ops => lookup l ops (induct empty witness assert lookup subcircuit add ops)
   | .subcircuit s :: ops => subcircuit s ops (induct empty witness assert lookup subcircuit add ops)
   | .add mult nl :: ops => add mult nl ops (induct empty witness assert lookup subcircuit add ops)
+
+/-- Collect all add operations from the operations list, evaluating their expressions -/
+def collectAdds (env : Environment F) : Operations F → List (NamedList F × ℤ)
+  | [] => []
+  | .add mult nl :: ops => (nl.eval env, mult) :: collectAdds env ops
+  | .witness _ _ :: ops => collectAdds env ops
+  | .assert _ :: ops => collectAdds env ops
+  | .lookup _ :: ops => collectAdds env ops
+  | .subcircuit s :: ops => s.localAdds env ++ collectAdds env ops
+
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition

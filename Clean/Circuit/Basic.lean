@@ -395,6 +395,94 @@ structure GeneralFormalCircuit (F : Type) (Input Output : TypeMap) [Field F] [Pr
   Spec : Input F → Output F → Prop -- the statement to be proved for soundness. (Might have to include `Assumptions` on the inputs, as a hypothesis.)
   soundness : GeneralFormalCircuit.Soundness F elaborated Spec
   completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+
+/-- Soundness for circuits that change multisets -/
+@[circuit_norm]
+def SoundnessChangingMultiset (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Assumptions : Input F → Prop)
+    (Spec : Input F → Output F → List (NamedList F × ℤ) → Prop)
+    (localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ)) :=
+  ∀ offset : ℕ, ∀ env,
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  Assumptions input →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  let output := eval env (circuit.output input_var offset)
+  let adds := localAdds input_var env offset
+  Spec input output adds
+
+/-- FormalCircuit variant for circuits that change multisets -/
+structure FormalCircuitChangingMultiset (F : Type) [Field F] (Input Output : TypeMap) [ProvableType Input] [ProvableType Output]
+    extends elaborated : ElaboratedCircuit F Input Output where
+  Assumptions (_ : Input F) : Prop := True
+  /-- Compute local adds from operations (defaults to empty) -/
+  localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ) := fun _ _ _ => []
+  Spec : Input F → Output F → List (NamedList F × ℤ) → Prop
+  soundness : SoundnessChangingMultiset F elaborated Assumptions Spec localAdds
+  completeness : Completeness F elaborated Assumptions
+
+/-- Soundness for assertions that change multisets -/
+@[circuit_norm]
+def FormalAssertion.SoundnessChangingMultiset (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
+    (Assumptions : Input F → Prop)
+    (Spec : Input F → List (NamedList F × ℤ) → Prop)
+    (localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ)) :=
+  ∀ offset : ℕ, ∀ env,
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  Assumptions input →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  let adds := localAdds input_var env offset
+  Spec input adds
+
+/-- Completeness for assertions that change multisets -/
+@[circuit_norm]
+def FormalAssertion.CompletenessChangingMultiset (F : Type) [Field F] (circuit : ElaboratedCircuit F Input unit)
+    (Assumptions : Input F → Prop)
+    (Spec : Input F → List (NamedList F × ℤ) → Prop)
+    (localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ)) :=
+  ∀ offset, ∀ env, ∀ input_var : Var Input F,
+  env.UsesLocalWitnessesCompleteness offset (circuit.main input_var |>.operations offset) →
+  ∀ input : Input F, eval env input_var = input →
+  let adds := localAdds input_var env offset
+  Assumptions input → Spec input adds →
+  ConstraintsHold.Completeness env (circuit.main input_var |>.operations offset)
+
+/-- FormalAssertion variant for assertions that change multisets -/
+structure FormalAssertionChangingMultiset (F : Type) (Input : TypeMap) [Field F] [ProvableType Input]
+    extends elaborated : ElaboratedCircuit F Input unit where
+  Assumptions : Input F → Prop
+  /-- Compute local adds from operations (defaults to empty) -/
+  localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ) := fun _ _ _ => []
+  Spec : Input F → List (NamedList F × ℤ) → Prop
+  soundness : FormalAssertion.SoundnessChangingMultiset F elaborated Assumptions Spec localAdds
+  completeness : FormalAssertion.CompletenessChangingMultiset F elaborated Assumptions Spec localAdds
+
+  -- assertions commonly don't introduce internal witnesses, so this is a convenient default
+  localLength _ := 0
+  -- the output has to be unit
+  output _ _ := ()
+
+/-- Soundness for general circuits that change multisets -/
+@[circuit_norm]
+def GeneralFormalCircuit.SoundnessChangingMultiset (F : Type) [Field F] (circuit : ElaboratedCircuit F Input Output)
+    (Spec : Input F → Output F → List (NamedList F × ℤ) → Prop)
+    (localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ)) :=
+  ∀ offset : ℕ, ∀ env,
+  ∀ input_var : Var Input F, ∀ input : Input F, eval env input_var = input →
+  ConstraintsHold.Soundness env (circuit.main input_var |>.operations offset) →
+  let output := eval env (circuit.output input_var offset)
+  let adds := localAdds input_var env offset
+  Spec input output adds
+
+/-- GeneralFormalCircuit variant for circuits that change multisets -/
+structure GeneralFormalCircuitChangingMultiset (F : Type) (Input Output : TypeMap) [Field F] [ProvableType Input] [ProvableType Output]
+    extends elaborated : ElaboratedCircuit F Input Output where
+  Assumptions : Input F → Prop
+  /-- Compute local adds from operations (defaults to empty) -/
+  localAdds : Var Input F → Environment F → ℕ → List (NamedList F × ℤ) := fun _ _ _ => []
+  Spec : Input F → Output F → List (NamedList F × ℤ) → Prop
+  soundness : GeneralFormalCircuit.SoundnessChangingMultiset F elaborated Spec localAdds
+  completeness : GeneralFormalCircuit.Completeness F elaborated Assumptions
+
 end
 
 export Circuit (witnessVar witnessField witnessVars witnessVector assertZero lookup)
