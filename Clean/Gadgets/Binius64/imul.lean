@@ -74,6 +74,89 @@ private def unsignedMulVals
     Vector (F p) 64 × Vector (F p) 64 :=
   unsignedMulVec lhs rhs
 
+private lemma convolutionCoeff_eval
+    (env : Environment (F p))
+    (lhs rhs : Vector (Expression (F p)) 64) (n : ℕ) :
+    Expression.eval env (convolutionCoeff lhs rhs n) =
+      convolutionCoeff (Vector.map (Expression.eval env) lhs)
+        (Vector.map (Expression.eval env) rhs) n := by
+  classical
+  set lhsVals := Vector.map (Expression.eval env) lhs
+  set rhsVals := Vector.map (Expression.eval env) rhs
+  let f :=
+    fun (acc : Expression (F p)) i =>
+      if hi : i < 64 then
+        if hle : i ≤ n then
+          let j := n - i
+          if hj : j < 64 then
+            let lhsIdx : Fin 64 := ⟨i, hi⟩
+            let rhsIdx : Fin 64 := ⟨j, hj⟩
+            acc + lhs[lhsIdx] * rhs[rhsIdx]
+          else
+            acc
+        else
+          acc
+      else
+        acc
+  let g :=
+    fun (acc : F p) i =>
+      if hi : i < 64 then
+        if hle : i ≤ n then
+          let j := n - i
+          if hj : j < 64 then
+            let lhsIdx : Fin 64 := ⟨i, hi⟩
+            let rhsIdx : Fin 64 := ⟨j, hj⟩
+            acc + lhsVals[lhsIdx] * rhsVals[rhsIdx]
+          else
+            acc
+        else
+          acc
+      else
+        acc
+  have hstep :
+      ∀ acc i, Expression.eval env (f acc i) =
+        g (Expression.eval env acc) i := by
+    intro acc i
+    by_cases hi : i < 64
+    · by_cases hle : i ≤ n
+      · by_cases hj : n - i < 64
+        · simp [f, g, hi, hle, hj, lhsVals, rhsVals, eval_add, eval_mul']
+        · simp [f, g, hi, hle, hj]
+      · simp [f, g, hi, hle]
+    · simp [f, g, hi]
+  have hfold :
+      ∀ (l : List ℕ) (acc : Expression (F p)),
+        Expression.eval env (l.foldl f acc) =
+          l.foldl g (Expression.eval env acc) := by
+    intro l
+    induction l with
+    | nil =>
+        intro acc
+        rfl
+    | cons a l ih =>
+        intro acc
+        have := hstep acc a
+        simpa [List.foldl, this] using ih (f acc a)
+  simpa [convolutionCoeff, lhsVals, rhsVals, f, g] using
+    hfold (List.range 64) 0
+
+private lemma unsignedMulExpr_eval
+    (env : Environment (F p))
+    (lhs rhs : Vector (Expression (F p)) 64) :
+    let (highExpr, lowExpr) := unsignedMulExpr lhs rhs
+    let lhsVals := Vector.map (Expression.eval env) lhs
+    let rhsVals := Vector.map (Expression.eval env) rhs
+    let (highVals, lowVals) := unsignedMulVals lhsVals rhsVals
+    Vector.map (Expression.eval env) highExpr = highVals ∧
+      Vector.map (Expression.eval env) lowExpr = lowVals := by
+  classical
+  dsimp [unsignedMulExpr, unsignedMulVals, unsignedMulVec]
+  refine And.intro ?_ ?_
+  · ext i
+    simp [Vector.getElem_map, Vector.getElem_ofFn, convolutionCoeff_eval]
+  · ext i
+    simp [Vector.getElem_map, Vector.getElem_ofFn, convolutionCoeff_eval]
+
 def main (k m : ShiftKind) (a b : Fin 64)
     (input : Var (IMulInputs k m a b) (F p)) :
     Circuit (F p) (Var IMulOutputs (F p)) := do
@@ -101,12 +184,91 @@ theorem soundness (k m : ShiftKind) (a b : Fin 64) :
     Soundness (F p) (elaborated (k:=k) (m:=m) (a:=a) (b:=b))
       (Assumptions (k:=k) (m:=m) (a:=a) (b:=b))
       (Spec (k:=k) (m:=m) (a:=a) (b:=b)) := by
-  sorry
+  circuit_proof_start
+  classical
+  have h_eval :=
+    unsignedMulExpr_eval (env := env)
+      (lhs := (applyShiftExpr input_var.lhs i₀).1)
+      (rhs :=
+        (applyShiftExpr input_var.rhs
+          (i₀ + Operations.localLength (applyShiftExpr input_var.lhs i₀).2)).1)
+  obtain ⟨h_high, h_low⟩ := h_eval
+  have hl :
+      Vector.map (Expression.eval env) (applyShiftExpr input_var.lhs i₀).1 =
+        applyShift
+          ({ wire := Vector.map (Expression.eval env) input_var.lhs.wire } :
+            SVI k a (F p)) := by
+    simp [applyShiftExpr, applyShift, map_eval_applyShiftVec, circuit_norm]
+  have hr :
+      Vector.map (Expression.eval env)
+          (applyShiftExpr input_var.rhs
+            (i₀ + Operations.localLength (applyShiftExpr input_var.lhs i₀).2)).1 =
+        applyShift
+          ({ wire := Vector.map (Expression.eval env) input_var.rhs.wire } :
+            SVI m b (F p)) := by
+    simp [applyShiftExpr, applyShift, map_eval_applyShiftVec, circuit_norm]
+  have h_congr_high :
+      (unsignedMulVals
+          (Vector.map (Expression.eval env) (applyShiftExpr input_var.lhs i₀).1)
+          (Vector.map (Expression.eval env)
+            (applyShiftExpr input_var.rhs
+              (i₀ + Operations.localLength (applyShiftExpr input_var.lhs i₀).2)).1)).1 =
+        (unsignedMulVals
+          (applyShift
+            ({ wire := Vector.map (Expression.eval env) input_var.lhs.wire } :
+              SVI k a (F p)))
+          (applyShift
+            ({ wire := Vector.map (Expression.eval env) input_var.rhs.wire } :
+              SVI m b (F p)))).1 := by
+    have h₁ :=
+      congrArg (fun lhs =>
+        (unsignedMulVals lhs
+          (Vector.map (Expression.eval env)
+            (applyShiftExpr input_var.rhs
+              (i₀ + Operations.localLength (applyShiftExpr input_var.lhs i₀).2)).1)).1) hl
+    have h₂ :=
+      congrArg (fun rhs =>
+        (unsignedMulVals
+          (applyShift
+            ({ wire := Vector.map (Expression.eval env) input_var.lhs.wire } :
+              SVI k a (F p))) rhs).1) hr
+    simpa [applyShift] using h₁.trans h₂
+  have h_congr_low :
+      (unsignedMulVals
+          (Vector.map (Expression.eval env) (applyShiftExpr input_var.lhs i₀).1)
+          (Vector.map (Expression.eval env)
+            (applyShiftExpr input_var.rhs
+              (i₀ + Operations.localLength (applyShiftExpr input_var.lhs i₀).2)).1)).2 =
+        (unsignedMulVals
+          (applyShift
+            ({ wire := Vector.map (Expression.eval env) input_var.lhs.wire } :
+              SVI k a (F p)))
+          (applyShift
+            ({ wire := Vector.map (Expression.eval env) input_var.rhs.wire } :
+              SVI m b (F p)))).2 := by
+    have h₁ :=
+      congrArg (fun lhs =>
+        (unsignedMulVals lhs
+          (Vector.map (Expression.eval env)
+            (applyShiftExpr input_var.rhs
+              (i₀ + Operations.localLength (applyShiftExpr input_var.lhs i₀).2)).1)).2) hl
+    have h₂ :=
+      congrArg (fun rhs =>
+        (unsignedMulVals
+          (applyShift
+            ({ wire := Vector.map (Expression.eval env) input_var.lhs.wire } :
+              SVI k a (F p))) rhs).2) hr
+    simpa [applyShift] using h₁.trans h₂
+  have h_high' := h_high.trans h_congr_high
+  have h_low' := h_low.trans h_congr_low
+  cases h_input
+  simpa [Spec] using And.intro h_high' h_low'
 
 theorem completeness (k m : ShiftKind) (a b : Fin 64) :
     Completeness (F p) (elaborated (k:=k) (m:=m) (a:=a) (b:=b))
       (Assumptions) := by
-  sorry
+  circuit_proof_start
+  simp [applyShiftExpr, circuit_norm]
 
 def circuit (k m : ShiftKind) (a b : Fin 64) :
     FormalCircuit (F p) (IMulInputs k m a b) IMulOutputs where
