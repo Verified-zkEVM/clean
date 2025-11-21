@@ -120,7 +120,7 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
 def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
+  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp, localAdds_eq := by simp [circuit_norm] }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
@@ -144,7 +144,7 @@ def Spec (input : unit (F p)) (output : unit (F p)) : Prop :=
   TestSpec input output
 
 def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
+  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp, localAdds_eq := by simp [circuit_norm] }
 
 example : Soundness (F p) testCircuit Assumptions Spec := by
   circuit_proof_start
@@ -157,7 +157,7 @@ end UnfoldTest2
 namespace UnfoldTest3
 -- Test that elaborated definition is unfolded
 def testCircuit : ElaboratedCircuit (F p) unit unit :=
-  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp }
+  { main := fun _ => pure (), output := fun _ _ => (), localLength := 0, output_eq := by simp, localAdds_eq := by simp [circuit_norm] }
 
 def elaborated : ElaboratedCircuit (F p) unit unit :=
   testCircuit

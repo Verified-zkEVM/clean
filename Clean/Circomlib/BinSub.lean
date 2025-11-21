@@ -127,6 +127,8 @@ def circuit (n : ℕ) [hn : NeZero n] [NonEmptyProvableType (fields n)] (hnout :
         fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] =
           fieldFromBits output + aux * (2^n : F p)
 
+  localAdds_eq _ _ _ := by sorry
+
   soundness := by
     sorry
 

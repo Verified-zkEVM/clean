@@ -86,6 +86,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> decide
       output[i] = (c[i])[idx]
 
+  localAdds_eq _ _ _ := by sorry
+
   soundness := by
     simp only [circuit_norm, main]
     intro offset env input_var input h_input h_assumptions h_output
@@ -199,6 +201,8 @@ def circuit : FormalCircuit (F p) Inputs field where
       simp only [idx, s0, s1]
       split <;> split <;> decide
     output = c[idx]
+
+  localAdds_eq _ _ _ := by sorry
 
   soundness := by
     simp only [circuit_norm, main]

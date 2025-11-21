@@ -79,6 +79,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field where
   main
   localLength _ := 1
   output _ i := var ⟨i⟩
+  localAdds_eq _ _ _ := by simp [main, circuit_norm]
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   intro i env ⟨ x_var, y_var ⟩ ⟨ x, y ⟩ h_input h_assumptions h_xor

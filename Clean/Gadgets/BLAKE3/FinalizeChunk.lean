@@ -102,6 +102,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) where
   main
   localLength input := 2*4 + (4 + (4 + (5376 + 64)))
+  localAdds_eq _ _ _ := by sorry
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   input.state.Normalized ∧

@@ -16,6 +16,7 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
 instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   main
   localLength _ := 480
+  localAdds_eq _ _ _ := by sorry
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 

@@ -29,6 +29,10 @@ instance elaborated : ElaboratedCircuit F M field where
   localLength _ := 2 * size M
   localLength_eq := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
+  localAdds_eq := by
+    intro input env offset
+    simp [main, circuit_norm]
+    sorry
   subcircuitsConsistent := by
     simp +arith [circuit_norm, main, IsZeroField.circuit]
 

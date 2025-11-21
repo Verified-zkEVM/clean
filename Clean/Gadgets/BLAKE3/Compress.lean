@@ -30,6 +30,7 @@ instance elaborated : ElaboratedCircuit (F p) ApplyRounds.Inputs BLAKE3State whe
   output_eq := by
     intro input offset
     simp only [main, Circuit.bind_def, Circuit.output, circuit_norm]
+  localAdds_eq _ _ _ := by sorry
 
 def Assumptions (input : ApplyRounds.Inputs (F p)) : Prop :=
   ApplyRounds.Assumptions input

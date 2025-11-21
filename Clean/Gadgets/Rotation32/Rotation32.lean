@@ -41,6 +41,7 @@ def elaborated (off : Fin 32) : ElaboratedCircuit (F p) U32 U32 where
   main := main off
   localLength _ := 8
   output _inputs i0 := output off i0
+  localAdds_eq _ _ _ := by sorry
 
 theorem soundness (offset : Fin 32) : Soundness (F p) (circuit := elaborated offset) Assumptions (Spec offset) := by
   intro i0 env x_var x h_input x_normalized h_holds

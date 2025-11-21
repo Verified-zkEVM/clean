@@ -245,6 +245,29 @@ def collectAdds (env : Environment F) : Operations F → List (NamedList F × �
   | .lookup _ :: ops => collectAdds env ops
   | .subcircuit s :: ops => s.localAdds env ++ collectAdds env ops
 
+@[circuit_norm]
+theorem collectAdds_nil (env : Environment F) : collectAdds env ([] : Operations F) = [] := rfl
+
+@[circuit_norm]
+theorem collectAdds_assert (env : Environment F) (e : Expression F) (ops : Operations F) :
+    collectAdds env (.assert e :: ops) = collectAdds env ops := rfl
+
+@[circuit_norm]
+theorem collectAdds_witness (env : Environment F) (m : ℕ) (c : Environment F → Vector F m) (ops : Operations F) :
+    collectAdds env (.witness m c :: ops) = collectAdds env ops := rfl
+
+@[circuit_norm]
+theorem collectAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operations F) :
+    collectAdds env (.lookup l :: ops) = collectAdds env ops := rfl
+
+@[circuit_norm]
+theorem collectAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
+    collectAdds env (ops1 ++ ops2) = collectAdds env ops1 ++ collectAdds env ops2 := by
+  induction ops1 with
+  | nil => rfl
+  | cons op ops1 ih =>
+    cases op <;> simp [collectAdds, ih]
+
 end Operations
 
 -- generic folding over `Operations` resulting in a proposition

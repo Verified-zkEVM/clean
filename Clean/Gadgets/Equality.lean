@@ -29,6 +29,12 @@ def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circu
   let diffs := (toVars x).zip (toVars y) |>.map (fun (xi, yi) => xi - yi)
   .forEach diffs assertZero
 
+theorem main_collectAdds {α : TypeMap} [ProvableType α] (input : Var (ProvablePair α α) F) (env : Environment F) (offset : ℕ) :
+    (main input |>.operations offset).collectAdds env = [] := by
+  simp only [main]
+  apply Circuit.collectAdds_forEach
+  intro x n; simp [circuit_norm]
+
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where
   main
@@ -36,6 +42,7 @@ instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (Prov
   output _ _ := ()
 
   localLength_eq _ n := by simp only [main, circuit_norm, mul_zero]
+  localAdds_eq := main_collectAdds
   subcircuitsConsistent n := by simp only [main, circuit_norm]
 
 @[simps! (attr := circuit_norm) (config := {isSimp := false})]
