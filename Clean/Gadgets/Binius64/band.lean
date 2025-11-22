@@ -112,8 +112,7 @@ theorem soundness (k m : ShiftKind) (a b : Fin 64) :
 theorem completeness (k m : ShiftKind) (a b : Fin 64) :
     Completeness (F p) (elaborated (k:=k) (m:=m) (a:=a) (b:=b))
       (Assumptions) := by
-  circuit_proof_start
-  simp [applyShiftExpr, circuit_norm]
+  circuit_proof_start [applyShiftExpr]
 
 def circuit (k m : ShiftKind) (a b : Fin 64) :
     FormalCircuit (F p) (BandInputs k m a b) (SVI .sll 0) where
