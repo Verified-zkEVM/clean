@@ -84,10 +84,10 @@ instance : HDiv (Expression F) ℕ (Expression F) where
 instance {n : ℕ} : OfNat (Variable F) n where
   ofNat := { index := n }
 
-@[simp] lemma eval_const (env : Environment F) (c : F) :
+@[circuit_norm] lemma eval_const (env : Environment F) (c : F) :
     Expression.eval env (.const c) = c := rfl
 
-@[simp] lemma eval_zero (env : Environment F) :
+@[circuit_norm] lemma eval_zero (env : Environment F) :
     Expression.eval env (0 : Expression F) = 0 := rfl
 end Expression
 
@@ -111,13 +111,13 @@ lemma eval_mul (env : Environment F) (a b : Expression F) :
     Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
   simp only [Expression.eval]
 
-@[simp, circuit_norm]
+@[circuit_norm]
 lemma eval_add (env : Environment F) (a b : Expression F) :
     Expression.eval env (a + b) =
       Expression.eval env a + Expression.eval env b := by
   simp [Expression.eval]
 
-@[simp, circuit_norm]
+@[circuit_norm]
 lemma eval_mul' (env : Environment F) (a b : Expression F) :
     Expression.eval env (a * b) =
       Expression.eval env a * Expression.eval env b := by

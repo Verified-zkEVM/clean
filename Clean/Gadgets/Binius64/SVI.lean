@@ -99,18 +99,18 @@ def applyShiftExpr (x : SVI k a (Expression (F p))) :
     Circuit (F p) (Vector (Expression (F p)) 64) :=
   return applyShiftVec x.wire k a
 
-@[simp] lemma applyShiftExpr_localLength
+lemma applyShiftExpr_localLength
     (x : SVI k a (Expression (F p))) (offset : ℕ) :
     (applyShiftExpr x).localLength offset = 0 := by
   simp_all [circuit_norm, applyShiftExpr]
 
-@[simp] lemma applyShiftExpr_subcircuitsConsistent
+lemma applyShiftExpr_subcircuitsConsistent
     (x : SVI k a (Expression (F p))) (offset : ℕ) :
     ((applyShiftExpr x).operations offset).SubcircuitsConsistent offset := by
   simp [applyShiftExpr, Operations.SubcircuitsConsistent,
     Operations.forAll, Circuit.pure_def, Circuit.operations]
 
-@[simp] lemma map_eval_applyShiftVec
+lemma map_eval_applyShiftVec
     (env : Environment (F p))
     (wire : Vector (Expression (F p)) 64)
     (kind : ShiftKind) (amount : Fin 64) :
@@ -124,20 +124,20 @@ def applyShiftExpr (x : SVI k a (Expression (F p))) :
       · ext i
         rename_i hi
         by_cases hLe : amount ≤ (⟨i, hi⟩ : Fin 64)
-        · simp [applyShiftVec, shiftLeftLogical, hZero, hLe]
-        · simp [applyShiftVec, shiftLeftLogical, hZero, hLe]
+        · simp [applyShiftVec, shiftLeftLogical, hZero, hLe, Expression.eval_zero]
+        · simp [applyShiftVec, shiftLeftLogical, hZero, hLe, Expression.eval_zero]
   | srl =>
       ext i
       rename_i hi
       by_cases hSrc : i + amount.val < 64
-      · simp [applyShiftVec, shiftRightLogical, hSrc]
-      · simp [applyShiftVec, shiftRightLogical, hSrc]
+      · simp [applyShiftVec, shiftRightLogical, hSrc, Expression.eval_zero]
+      · simp [applyShiftVec, shiftRightLogical, hSrc, Expression.eval_zero]
   | sra =>
       ext i
       rename_i hi
       by_cases hSrc : i + amount.val < 64
-      · simp [applyShiftVec, shiftRightArithmetic, hSrc]
-      · simp [applyShiftVec, shiftRightArithmetic, hSrc]
+      · simp [applyShiftVec, shiftRightArithmetic, hSrc, Expression.eval_zero]
+      · simp [applyShiftVec, shiftRightArithmetic, hSrc, Expression.eval_zero]
 
 end Evaluation
 
