@@ -450,7 +450,10 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
       ElaboratedCircuit.main, Circuit.operations, ElaboratedCircuit.localLength, List.cons_append,
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
       Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds]
+    rfl
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
