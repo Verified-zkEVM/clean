@@ -97,8 +97,10 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
 def elaborated (c : ℕ) : ElaboratedCircuit (F p) (fields 254) field where
   main := main c
   localLength _ := 127 + 1 + 135 + 1
-  output _ _ := varFromOffset field 0
-  output_eq := by simp only [circuit_norm, main]; sorry
+  output _ i0 := varFromOffset field (i0 + 127 + 1 + 135)
+  output_eq := by
+    intro offset
+    simp only [circuit_norm, main, Num2Bits.circuit]
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
     simp only [Operations.collectAdds]
