@@ -122,7 +122,10 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   Spec input output :=
     input.val < 2^n ∧ output = fieldToBits n input
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm]
+    simp only [Operations.collectAdds]
+    rfl
 
   soundness := by
     circuit_proof_start [arbitraryBitLengthCircuit]
@@ -195,7 +198,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     output = fieldFromBits input
     ∧ output.val < 2^n
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds]
+    simp
+    rfl
 
   soundness := by
     circuit_proof_start

@@ -41,7 +41,10 @@ def circuit : FormalCircuit (F p) field field where
   Spec input output :=
     output = (if input = 0 then 1 else 0)
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds]
+    rfl
 
   soundness := by
     circuit_proof_start
@@ -94,7 +97,10 @@ def circuit : FormalCircuit (F p) fieldPair field where
   Spec input output :=
     output = (if input.1 = input.2 then 1 else 0)
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds]
+    rfl
 
   completeness := by
     simp only [circuit_norm, main, IsZero.circuit]
@@ -158,7 +164,10 @@ def circuit : FormalAssertion (F p) Inputs where
   main
   localLength _ := 2
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds]
+    rfl
 
   Assumptions := fun { enabled, inp } =>
     enabled = 0 ∨ enabled = 1
@@ -234,7 +243,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   output _ i := var ⟨ i + n + 1 ⟩
   output_eq := by simp +arith [circuit_norm, main, Num2Bits.circuit]
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds]
+    rfl
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -438,7 +450,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localLength _ := n + 2
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm]
+    simp only [Operations.collectAdds]
+    rfl
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
@@ -484,7 +499,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localLength _ := n + 2
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm]
+    simp only [Operations.collectAdds]
+    rfl
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -517,7 +535,10 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localLength _ := n + 2
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm]
+    simp only [Operations.collectAdds]
+    rfl
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>

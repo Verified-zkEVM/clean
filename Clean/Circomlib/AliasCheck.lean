@@ -40,7 +40,8 @@ def circuit : FormalAssertion (F p) (fields 254) where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    sorry
+    simp only [Operations.collectAdds]
+    rfl
 
   soundness := by
     simp only [circuit_norm, main, CompConstant.circuit]

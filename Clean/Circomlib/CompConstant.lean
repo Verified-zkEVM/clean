@@ -101,7 +101,9 @@ def elaborated (c : ℕ) : ElaboratedCircuit (F p) (fields 254) field where
   output_eq := by simp only [circuit_norm, main]; sorry
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    sorry
+    simp only [Operations.collectAdds]
+    -- All subcircuits use .toSubcircuit which has localAdds = fun _ => []
+    rfl
 
 def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   elaborated := elaborated c
