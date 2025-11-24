@@ -75,7 +75,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, main, Operations.collectAdds]
+    sorry
 
   soundness := by
     simp only [circuit_norm, main]
@@ -192,7 +194,9 @@ def circuit : FormalCircuit (F p) Inputs field where
     let ⟨c, s⟩ := input
     output = if s = 0 then c[0] else c[1]
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, main, MultiMux1.circuit, Operations.collectAdds]
+    sorry
 
   soundness := by
     simp only [circuit_norm, main]

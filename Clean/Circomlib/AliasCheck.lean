@@ -38,7 +38,9 @@ def circuit : FormalAssertion (F p) (fields 254) where
 
   Spec bits := fromBits (bits.map ZMod.val) < p
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, main, Operations.collectAdds]
+    sorry
 
   soundness := by
     simp only [circuit_norm, main, CompConstant.circuit]

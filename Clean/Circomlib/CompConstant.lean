@@ -108,7 +108,9 @@ def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
   Spec bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, Operations.collectAdds]
+    sorry
 
   soundness := by
     simp only [circuit_norm, main]
