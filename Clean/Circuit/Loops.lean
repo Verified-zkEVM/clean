@@ -692,4 +692,11 @@ theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β
     rw [Operations.collectAdds_append, Operations.collectAdds_append]
     simp only [Operations.collectAdds, h_body, List.append_nil, ih]
 
+theorem collectAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ i n, ((body i).operations n).collectAdds env = []) :
+    ((mapFinRange m body constant).operations offset).collectAdds env = [] := by
+  unfold mapFinRange Vector.mapFinRangeM
+  exact collectAdds_map (Vector.finRange m) body constant env offset h_body
+
 end Circuit

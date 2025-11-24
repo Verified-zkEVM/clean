@@ -29,7 +29,9 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
 instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow where
   main
   localLength _ := 120
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, main, Rotation64.circuit, Xor64.circuit, Operations.collectAdds]
+    repeat (first | rfl | constructor)
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 

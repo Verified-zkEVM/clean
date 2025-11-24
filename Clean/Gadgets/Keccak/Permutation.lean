@@ -29,7 +29,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
   output _ i0 := stateVar i0 23
 
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, main, KeccakRound.circuit, Operations.collectAdds]
+    sorry
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 

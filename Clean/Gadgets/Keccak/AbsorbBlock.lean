@@ -33,7 +33,9 @@ instance elaborated : ElaboratedCircuit (F p) Input KeccakState where
   output _ i0 := Permutation.stateVar (i0 + 136) 23
 
   localLength_eq _ _ := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, main, RATE, Xor64.circuit, Permutation.circuit, Operations.collectAdds]
+    sorry
   output_eq input i0 := by simp only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
   subcircuitsConsistent _ _ := by simp +arith only [main, circuit_norm, Xor64.circuit, Permutation.circuit, RATE]
 

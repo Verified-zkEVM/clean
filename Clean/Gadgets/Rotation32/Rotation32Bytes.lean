@@ -82,8 +82,6 @@ def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 := {
   elaborated off with
   main := main off
   Assumptions
-  localAdds_eq _ _ _ := by sorry
-
   Spec := Spec off
   soundness := soundness off
   completeness := completeness off
