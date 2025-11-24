@@ -37,7 +37,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs U32 where
   main := main
   localLength _ := 8
   output _ i0 := ⟨var ⟨i0⟩, var ⟨i0 + 2⟩, var ⟨i0 + 4⟩, var ⟨i0 + 6⟩ ⟩
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by simp [circuit_norm, main, Operations.collectAdds]; rfl
 
 theorem soundness : Soundness (F p) elaborated Assumptions Spec := by
   rintro i0 env ⟨ x_var, y_var, carry_in_var ⟩ ⟨ x, y, carry_in ⟩ h_inputs as h
