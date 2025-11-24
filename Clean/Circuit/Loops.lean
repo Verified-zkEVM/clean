@@ -679,4 +679,17 @@ theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : 
     rw [ih]
     simp
 
+theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
+    (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
+    (h_body : ∀ x n, ((body x).operations n).collectAdds env = []) :
+    ((map xs body constant).operations offset).collectAdds env = [] := by
+  unfold map
+  induction xs using Vector.induct generalizing offset
+  case nil =>
+    simp [Circuit.operations, Circuit.pure_operations_eq, Operations.collectAdds]
+  case cons x xs ih =>
+    simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
+    rw [Operations.collectAdds_append, Operations.collectAdds_append]
+    simp only [Operations.collectAdds, h_body, List.append_nil, ih]
+
 end Circuit

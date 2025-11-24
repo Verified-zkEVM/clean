@@ -37,7 +37,9 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     intro input offset
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
     rfl
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp [circuit_norm, Round.circuit, Permute.circuit, Operations.collectAdds]
+    constructor <;> rfl
   output := fun input offset =>
     let state_out := Round.circuit.output input offset
     let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
