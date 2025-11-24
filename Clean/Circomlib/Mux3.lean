@@ -107,9 +107,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> split <;> decide
       output[i] = (c[i])[idx]
 
-  localAdds_eq _ _ _ := by
-    simp [circuit_norm, main, Operations.collectAdds]
-    sorry
+  localAdds_eq input env offset := by
+    simp only [circuit_norm, main]
+    simp only [Operations.collectAdds, List.append_nil]
+    simp only [Gadgets.Equality.circuit]
+    rfl
 
   soundness := by
     simp only [circuit_norm, main]
@@ -226,9 +228,9 @@ def circuit : FormalCircuit (F p) Inputs field where
       split <;> split <;> split <;> decide
     output = c[idx]
 
-  localAdds_eq _ _ _ := by
-    simp [circuit_norm, main, Operations.collectAdds]
-    sorry
+  localAdds_eq input env offset := by
+    simp only [circuit_norm, main]
+    exact (MultiMux3.circuit 1).localAdds_eq { c := #v[input.c], s := input.s } env offset
 
   soundness := by
     simp only [circuit_norm, main]
