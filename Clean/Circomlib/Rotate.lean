@@ -39,7 +39,13 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
 
   soundness := by
     circuit_proof_start
-    sorry
+    rw [h_holds]
+    simp only [circuit_norm, Vector.rotate, Vector.map_mapFinRange]
+    rw [Vector.ext_iff]
+    intro i hi
+    simp only [circuit_norm, Vector.getElem_map]
+    rw [← h_input]
+    simp only [circuit_norm]
 
   completeness := by
     circuit_proof_start
