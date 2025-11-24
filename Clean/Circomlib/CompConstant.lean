@@ -94,23 +94,23 @@ def main (ct : ℕ) (input : Vector (Expression (F p)) 254) := do
   let out <== bits[127]
   return out
 
-def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
+def elaborated (c : ℕ) : ElaboratedCircuit (F p) (fields 254) field where
   main := main c
-  localLength _ := 127 + 1 + 135 + 1  -- parts witness + sout witness + Num2Bits + out witness
-  localLength_eq := by simp only [circuit_norm, main, Num2Bits.circuit]
-  subcircuitsConsistent input n := by
-    simp only [circuit_norm, main, Num2Bits.circuit]
-    and_intros <;> ac_rfl
+  localLength _ := 127 + 1 + 135 + 1
+  output _ _ := varFromOffset field 0
+  output_eq := by simp only [circuit_norm, main]; sorry
+  localAdds_eq _ _ _ := by
+    simp only [circuit_norm, main]
+    sorry
+
+def circuit (c : ℕ) : FormalCircuit (F p) (fields 254) field where
+  elaborated := elaborated c
 
   Assumptions input :=
     ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 
   Spec bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
-
-  localAdds_eq _ _ _ := by
-    simp [circuit_norm, Operations.collectAdds]
-    sorry
 
   soundness := by
     simp only [circuit_norm, main]
