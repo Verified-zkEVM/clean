@@ -22,7 +22,6 @@ there exists a permutation of the original list, such that it is sorted first by
 if addr1 = addr2, then readValue2 = writeValue1, and if addr1 ≠ addr2, then readValue2 = 0.
 Additionally, the first value of the array (t, addr, readValue, writeValue) must have readValue = 0.
 
-
 [Blu+91] Manuel Blum et al. "Checking the correctness of memories"
 -/
 
@@ -250,7 +249,6 @@ theorem MemoryAccessList.noTimestampDup_of_TimestampSorted
   apply List.Pairwise.imp sort_imp_nodup
   simp_all only
 
-
 def MemoryAccessList.lastWriteValue (accesses : MemoryAccessList) (h : accesses.isTimestampSorted) (addr : ℕ) : ℕ := match accesses with
   -- initially the memory is all zero
   | [] => 0
@@ -268,7 +266,6 @@ def MemoryAccessList.isConsistentOnline (accesses : MemoryAccessList) (h : acces
     -- here we need to check that the readValue is consistent with the previous writes to the same address
     readValue = MemoryAccessList.lastWriteValue rest (List.Sorted.of_cons h) addr
     ∧ MemoryAccessList.isConsistentOnline rest (List.Sorted.of_cons h)
-
 
 example : MemoryAccessList.isConsistentOnline [] (by simp [MemoryAccessList.isTimestampSorted]) := by trivial
 
@@ -295,7 +292,6 @@ example : ¬ MemoryAccessList.isConsistentOnline [
 -/
 def MemoryAccessList.filterAddress (accesses : MemoryAccessList) (addr : ℕ) : MemoryAccessList :=
   accesses.filter (fun (_timestamp, addr', _readValue, _writeValue) => addr' = addr)
-
 
 /--
   A filtered sorted memory access list is sorted as well.
@@ -407,7 +403,6 @@ theorem MemoryAccessList.lastWriteValue_filter (accesses : MemoryAccessList)
         exact h_sorted_tail
       specialize ih h_sorted_tail h_sorted_tail'
       simp only [h_addr, ↓reduceIte, ih]
-
 
 /--
   If a memory access list is online consistent, then the filtered list for a specific address is
@@ -546,7 +541,6 @@ theorem MemoryAccessList.isConsistent_iff_all_single_address (accesses : MemoryA
         simp_all only [implies_true, true_and]
         apply List.Sorted.filter
         assumption
-
 
       have h' := MemoryAccessList.lastWriteValue_filter tail h_sorted' a h_tail_filter_sorted
 
