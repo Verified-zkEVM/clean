@@ -11,6 +11,15 @@ structure State (F : Type) where
   pc : F
   ap : F
   fp : F
+deriving DecidableEq
+
+instance {α : Type} [Fintype α] : Fintype (State α) :=
+  Fintype.ofEquiv (α × α × α) {
+    toFun := fun (pc, ap, fp) => ⟨pc, ap, fp⟩
+    invFun := fun s => (s.pc, s.ap, s.fp)
+    left_inv := fun _ => rfl
+    right_inv := fun _ => rfl
+  }
 
 /--
   Raw instruction that is fetched from the program memory,
