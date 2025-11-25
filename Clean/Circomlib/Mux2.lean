@@ -88,9 +88,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, List.append_nil]
-    simp only [Gadgets.Equality.circuit]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     simp only [circuit_norm, main]
@@ -188,10 +186,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     simp only [main, circuit_norm]
     rfl
 
-  subcircuitsConsistent := by
-    intro input offset
-    simp only [main, circuit_norm]
-
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
@@ -207,8 +201,7 @@ def circuit : FormalCircuit (F p) Inputs field where
     output = c[idx]
 
   localAdds_eq input env offset := by
-    simp only [circuit_norm, main]
-    exact (MultiMux2.circuit 1).localAdds_eq { c := #v[input.c], s := input.s } env offset
+    simp only [main, MultiMux2.circuit, circuit_norm, Operations.collectAdds]
 
   soundness := by
     simp only [circuit_norm, main]

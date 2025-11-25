@@ -50,10 +50,9 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     Num2Bits.main, AliasCheck.circuit]
   localAdds_eq _ _ _ := by
     simp only [main, Num2Bits.main, circuit_norm, Operations.collectAdds]
-    rw [Circuit.collectAdds_foldlRange']
-    · simp only [circuit_norm, List.append_nil]
-    · intro (lc1, e2) i k
-      simp only [circuit_norm, Operations.collectAdds, List.append_nil]
+    apply Circuit.collectAdds_foldlRange'
+    intro (lc1, e2) i k
+    simp only [circuit_norm, Operations.collectAdds, add_zero]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
@@ -199,10 +198,9 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
   localAdds_eq _ _ _ := by
     simp only [main, circuit_norm, Operations.collectAdds]
-    rw [Circuit.collectAdds_foldlRange']
-    · simp only [circuit_norm, List.append_nil]
-    · intro lc1 i k
-      simp only [circuit_norm, Operations.collectAdds, List.append_nil]
+    apply Circuit.collectAdds_foldlRange'
+    intro lc1 i k
+    simp only [circuit_norm, Operations.collectAdds, add_zero]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 

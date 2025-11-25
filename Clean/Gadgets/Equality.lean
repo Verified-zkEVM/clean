@@ -30,10 +30,10 @@ def main {α : TypeMap} [ProvableType α] (input : Var α F × Var α F) : Circu
   .forEach diffs assertZero
 
 theorem main_collectAdds {α : TypeMap} [ProvableType α] (input : Var (ProvablePair α α) F) (env : Environment F) (offset : ℕ) :
-    (main input |>.operations offset).collectAdds env = [] := by
+    (main input |>.operations offset).collectAdds env = 0 := by
   simp only [main]
   apply Circuit.collectAdds_forEach
-  intro x n; simp [circuit_norm]
+  intro x n; simp only [circuit_norm, Operations.collectAdds]
 
 @[reducible]
 instance elaborated (α : TypeMap) [ProvableType α] : ElaboratedCircuit F (ProvablePair α α) unit where

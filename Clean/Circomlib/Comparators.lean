@@ -43,8 +43,7 @@ def circuit : FormalCircuit (F p) field field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     circuit_proof_start
@@ -99,8 +98,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   completeness := by
     simp only [circuit_norm, main, IsZero.circuit]
@@ -166,8 +164,7 @@ def circuit : FormalAssertion (F p) Inputs where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions := fun { enabled, inp } =>
     enabled = 0 ∨ enabled = 1
@@ -245,8 +242,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -452,8 +448,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
@@ -501,8 +496,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
@@ -537,8 +531,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>

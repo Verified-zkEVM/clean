@@ -50,8 +50,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -97,8 +96,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -142,8 +140,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -187,8 +184,7 @@ def circuit : FormalCircuit (F p) field field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ _ _ h_env h_in h_hold
@@ -234,8 +230,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -281,8 +276,7 @@ def circuit : FormalCircuit (F p) fieldPair field where
 
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     rintro _ _ ⟨ _, _ ⟩ ⟨ _, _ ⟩ h_env ⟨ h_a, h_b ⟩ h_hold
@@ -406,16 +400,16 @@ theorem Circuit.subcircuitsConsistent_bind {α β : Type} (f : Circuit (F p) α)
 
 -- Helper theorem for collectAdds
 theorem collectAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environment (F p)) (offset : ℕ) :
-    Operations.collectAdds env ((main input).operations offset) = [] := by
+    Operations.collectAdds env ((main input).operations offset) = 0 := by
   induction n using Nat.strong_induction_on generalizing offset with
   | _ n IH =>
     match n with
     | 0 =>
       simp only [main, Circuit.operations, Circuit.pure_def]
-      simp only [Operations.collectAdds]
+      simp only [Operations.collectAdds, circuit_norm]
     | 1 =>
       simp only [main, Circuit.operations, Circuit.pure_def]
-      simp only [Operations.collectAdds]
+      simp only [Operations.collectAdds, circuit_norm]
     | 2 =>
       simp only [main, Circuit.operations]
       exact AND.circuit.localAdds_eq (input[0], input[1]) env offset
@@ -428,7 +422,7 @@ theorem collectAdds_eq (n : ℕ) (input : Var (fields n) (F p)) (env : Environme
       simp only [Circuit.operations, Circuit.bind_def]
       rw [Operations.collectAdds_append, Operations.collectAdds_append]
       simp only [IH _ h_n1_lt, IH _ h_n2_lt]
-      simp only [List.nil_append]
+      simp only [zero_add]
       exact AND.circuit.localAdds_eq _ env _
 
 -- Helper theorem for subcircuitsConsistent

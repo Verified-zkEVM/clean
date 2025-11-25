@@ -113,8 +113,7 @@ def decodeInstructionElaborated : ElaboratedCircuit (F p) field DecodedInstructi
   localLength _ := 8
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, decodeInstructionMain]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
 /--
 Circuit that decodes a femtoCairo instruction into a one-hot representation.
@@ -452,8 +451,7 @@ def readFromMemoryCircuit
   localLength _ := 5
   localAdds_eq _ _ _ := by
     simp only [circuit_norm]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
   Assumptions
   | {state, mode, offset} =>
     ∀ addr ∈ Spec.dataMemoryAddresses memory offset state.ap state.fp,
@@ -855,8 +853,7 @@ def femtoCairoStepElaboratedCircuit
     localLength := 30
     localAdds_eq _ _ _ := by
       simp only [circuit_norm]
-      simp only [Operations.collectAdds]
-      rfl
+      simp only [Operations.collectAdds, circuit_norm]
 
 def femtoCairoCircuitSpec
     {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))

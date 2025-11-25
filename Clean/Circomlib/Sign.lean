@@ -42,8 +42,7 @@ def elaborated : ElaboratedCircuit (F p) (fields 254) field where
   output input offset := (CompConstant.circuit ((p - 1) / 2)).output input offset
   localAdds_eq _ _ _ := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
 def circuit : FormalCircuit (F p) (fields 254) field where
   elaborated := elaborated

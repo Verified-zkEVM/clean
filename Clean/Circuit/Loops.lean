@@ -669,8 +669,8 @@ end foldlRange
 
 theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ x n, Operations.collectAdds env ((body x) n).2 = []) :
-    Operations.collectAdds env ((forEach xs body constant) offset).2 = [] := by
+    (h_body : ∀ x n, Operations.collectAdds env ((body x) n).2 = 0) :
+    Operations.collectAdds env ((forEach xs body constant) offset).2 = 0 := by
   induction xs using Vector.induct generalizing offset
   · rfl
   case cons n a as ih =>
@@ -680,8 +680,8 @@ theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : 
 
 theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ x n, ((body x).operations n).collectAdds env = []) :
-    ((map xs body constant).operations offset).collectAdds env = [] := by
+    (h_body : ∀ x n, ((body x).operations n).collectAdds env = 0) :
+    ((map xs body constant).operations offset).collectAdds env = 0 := by
   unfold map
   induction xs using Vector.induct generalizing offset
   case nil =>
@@ -689,12 +689,12 @@ theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β
   case cons x xs ih =>
     simp only [MapM.mapM_cons, Circuit.bind_operations_eq, Circuit.pure_operations_eq]
     rw [Operations.collectAdds_append, Operations.collectAdds_append]
-    simp only [Operations.collectAdds, h_body, List.append_nil, ih]
+    simp only [Operations.collectAdds, h_body, add_zero, ih]
 
 theorem collectAdds_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ i n, ((body i).operations n).collectAdds env = []) :
-    ((mapFinRange m body constant).operations offset).collectAdds env = [] := by
+    (h_body : ∀ i n, ((body i).operations n).collectAdds env = 0) :
+    ((mapFinRange m body constant).operations offset).collectAdds env = 0 := by
   unfold mapFinRange Vector.mapFinRangeM
   exact collectAdds_map (Vector.finRange m) body constant env offset h_body
 
@@ -703,18 +703,18 @@ theorem collectAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector �
     (const_out : ConstantOutput (fun (s, a) => body s a))
     (constant : ConstantLength (fun (s, a) => body s a))
     (env : Environment F) (offset : ℕ)
-    (h_body : ∀ s x n, ((body s x).operations n).collectAdds env = []) :
-    ((foldl xs init body const_out constant).operations offset).collectAdds env = [] := by
+    (h_body : ∀ s x n, ((body s x).operations n).collectAdds env = 0) :
+    ((foldl xs init body const_out constant).operations offset).collectAdds env = 0 := by
   induction xs using Vector.induct generalizing offset init
   case nil =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.toList_mk, List.foldlM_nil]
-    simp [Circuit.operations, Operations.collectAdds]
+    simp only [pure_operations_eq, Operations.collectAdds]
   case cons x xs ih =>
     simp only [foldl]
     rw [Vector.foldlM_toList, Vector.cons, Vector.toList_mk, List.foldlM_cons]
     simp only [Circuit.bind_operations_eq, Operations.collectAdds_append]
-    rw [h_body, List.nil_append, ←Vector.foldlM_toList]
+    rw [h_body, zero_add, ←Vector.foldlM_toList]
     exact ih _ _
 
 theorem collectAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m)]
@@ -722,8 +722,8 @@ theorem collectAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m
     (const_out : ConstantOutput (fun (s, a) => body s a))
     (constant : ConstantLength (fun (s, a) => body s a))
     (env : Environment F) (offset : ℕ)
-    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = []) :
-    ((foldlRange m init body constant).operations offset).collectAdds env = [] := by
+    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = 0) :
+    ((foldlRange m init body constant).operations offset).collectAdds env = 0 := by
   unfold foldlRange
   exact collectAdds_foldl (Vector.finRange m) init body const_out constant env offset h_body
 
@@ -732,15 +732,15 @@ theorem collectAdds_foldlRange' [Inhabited β] {m : ℕ}
     (init : β) (body : β → Fin m → Circuit F β)
     (constant : ConstantLength (fun (s, a) => body s a))
     (env : Environment F) (offset : ℕ)
-    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = []) :
-    ((foldlRange m init body constant).operations offset).collectAdds env = [] := by
+    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = 0) :
+    ((foldlRange m init body constant).operations offset).collectAdds env = 0 := by
   simp only [foldlRange]
   rw [Vector.foldlM_toList]
   induction (Vector.finRange m).toList generalizing offset init with
   | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.collectAdds]
   | cons x xs ih =>
     simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.collectAdds_append]
-    rw [h_body, List.nil_append]
+    rw [h_body, zero_add]
     exact ih ((body init x).output offset) (offset + (body init x).localLength offset)
 
 end Circuit

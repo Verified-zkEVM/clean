@@ -77,9 +77,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
 
   localAdds_eq input env offset := by
     simp only [circuit_norm, main]
-    simp only [Operations.collectAdds, List.append_nil]
-    simp only [Gadgets.Equality.circuit]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
   soundness := by
     simp only [circuit_norm, main]

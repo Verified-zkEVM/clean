@@ -94,8 +94,7 @@ def conditionalDecodeElaborated :
   localLength _ := 8  -- Same as decodeInstructionCircuit since Conditional adds 0
   localAdds_eq _ _ _ := by
     simp only [conditionalDecodeMain, circuit_norm, decodeInstructionCircuit, Gadgets.Conditional.circuit]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [Operations.collectAdds, circuit_norm]
 
 /--
 Conditional decode circuit as GeneralFormalCircuit.

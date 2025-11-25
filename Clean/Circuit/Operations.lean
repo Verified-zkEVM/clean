@@ -2,6 +2,7 @@ import Clean.Circuit.Expression
 import Clean.Circuit.Lookup
 import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
+import Mathlib.Data.Finsupp.Defs
 
 variable {F : Type} [Field F] {α : Type} {n : ℕ}
 
@@ -21,6 +22,27 @@ def eval (env : Environment F) (nl : NamedList (Expression F)) : NamedList F :=
   { name := nl.name, values := nl.values.map (Expression.eval env) }
 
 end NamedList
+
+/--
+An `InteractionDelta` represents a change to an interaction (multiset argument), as a finite map
+from named lists to their multiplicities. Using `Finsupp` gives us a canonical representation:
+entries with multiplicity 0 are not stored, so two deltas are equal iff they have the same
+non-zero entries.
+-/
+abbrev InteractionDelta (F : Type) [Zero F] := Finsupp (NamedList F) F
+
+namespace InteractionDelta
+variable {F : Type} [Field F]
+
+/-- Create a singleton interaction delta with one named list and its multiplicity -/
+noncomputable def single (nl : NamedList F) (mult : F) : InteractionDelta F :=
+  Finsupp.single nl mult
+
+theorem add_zero' (d : InteractionDelta F) : d + 0 = d := add_zero d
+
+theorem zero_add' (d : InteractionDelta F) : 0 + d = d := zero_add d
+
+end InteractionDelta
 
 /--
 `FlatOperation` models the operations that can be done in a circuit, in a simple/flat way.
@@ -113,8 +135,8 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   -- even though it could be derived from the operations
   localLength : ℕ
 
-  -- compute the local adds from this subcircuit's operations (defaults to empty)
-  localAdds : Environment F → List (NamedList F × F) := fun _ => []
+  -- compute the local interaction delta from this subcircuit's operations (defaults to empty)
+  localAdds : Environment F → InteractionDelta F := fun _ => 0
 
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
@@ -237,16 +259,16 @@ def induct {motive : Operations F → Sort*}
   | .add mult nl :: ops => add mult nl ops (induct empty witness assert lookup subcircuit add ops)
 
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-def collectAdds (env : Environment F) : Operations F → List (NamedList F × F)
-  | [] => []
-  | .add mult nl :: ops => (nl.eval env, mult.eval env) :: collectAdds env ops
+noncomputable def collectAdds (env : Environment F) : Operations F → InteractionDelta F
+  | [] => 0
+  | .add mult nl :: ops => InteractionDelta.single (nl.eval env) (mult.eval env) + collectAdds env ops
   | .witness _ _ :: ops => collectAdds env ops
   | .assert _ :: ops => collectAdds env ops
   | .lookup _ :: ops => collectAdds env ops
-  | .subcircuit s :: ops => s.localAdds env ++ collectAdds env ops
+  | .subcircuit s :: ops => s.localAdds env + collectAdds env ops
 
 @[circuit_norm]
-theorem collectAdds_nil (env : Environment F) : collectAdds env ([] : Operations F) = [] := rfl
+theorem collectAdds_nil (env : Environment F) : collectAdds env ([] : Operations F) = 0 := rfl
 
 @[circuit_norm]
 theorem collectAdds_assert (env : Environment F) (e : Expression F) (ops : Operations F) :
@@ -262,11 +284,11 @@ theorem collectAdds_lookup (env : Environment F) (l : Lookup F) (ops : Operation
 
 @[circuit_norm]
 theorem collectAdds_append (env : Environment F) (ops1 ops2 : Operations F) :
-    collectAdds env (ops1 ++ ops2) = collectAdds env ops1 ++ collectAdds env ops2 := by
+    collectAdds env (ops1 ++ ops2) = collectAdds env ops1 + collectAdds env ops2 := by
   induction ops1 with
-  | nil => rfl
+  | nil => simp [collectAdds]
   | cons op ops1 ih =>
-    cases op <;> simp [collectAdds, ih]
+    cases op <;> simp only [List.cons_append, collectAdds, ih, add_assoc]
 
 end Operations
 

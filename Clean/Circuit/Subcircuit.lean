@@ -424,7 +424,7 @@ Simplifies localAdds for FormalCircuit.toSubcircuit to avoid unfolding the entir
 theorem FormalCircuit.toSubcircuit_localAdds
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : FormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = [] := by
+    (circuit.toSubcircuit n input_var).localAdds env = 0 := by
   rfl
 
 /--
@@ -434,7 +434,7 @@ Simplifies localAdds for GeneralFormalCircuit.toSubcircuit to avoid unfolding th
 theorem GeneralFormalCircuit.toSubcircuit_localAdds
     {F : Type} [Field F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (circuit : GeneralFormalCircuit F Input Output) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = [] := by
+    (circuit.toSubcircuit n input_var).localAdds env = 0 := by
   rfl
 
 /--
@@ -444,7 +444,7 @@ Simplifies localAdds for FormalAssertion.toSubcircuit to avoid unfolding the ent
 theorem FormalAssertion.toSubcircuit_localAdds
     {F : Type} [Field F] {Input : TypeMap} [ProvableType Input]
     (circuit : FormalAssertion F Input) (n : ℕ) (input_var : Var Input F) (env : Environment F) :
-    (circuit.toSubcircuit n input_var).localAdds env = [] := by
+    (circuit.toSubcircuit n input_var).localAdds env = 0 := by
   rfl
 
 -- Simplification lemmas for toSubcircuit.Soundness
