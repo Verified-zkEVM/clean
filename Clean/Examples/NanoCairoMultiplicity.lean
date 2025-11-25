@@ -39,7 +39,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /-- Emit an add operation to the global multiset -/
 @[circuit_norm]
-def emitAdd (name : String) (multiplicity : ℤ) (values : List (Expression (F p))) : Circuit (F p) Unit := fun _ =>
+def emitAdd (name : String) (multiplicity : Expression (F p)) (values : List (Expression (F p))) : Circuit (F p) Unit := fun _ =>
   ((), [.add multiplicity { name, values }])
 
 /-- The step circuit that wraps FemtoCairo's step circuit and adds multiplicity tracking -/

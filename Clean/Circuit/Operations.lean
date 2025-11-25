@@ -33,7 +33,7 @@ inductive FlatOperation (F : Type) where
   | witness : (m : ℕ) → (Environment F → Vector F m) → FlatOperation F
   | assert : Expression F → FlatOperation F
   | lookup : Lookup F → FlatOperation F
-  | add : (multiplicity : ℤ) → NamedList (Expression F) → FlatOperation F
+  | add : (multiplicity : Expression F) → NamedList (Expression F) → FlatOperation F
 
 namespace FlatOperation
 instance [Repr F] : Repr (FlatOperation F) where
@@ -114,7 +114,7 @@ structure Subcircuit (F : Type) [Field F] (offset : ℕ) where
   localLength : ℕ
 
   -- compute the local adds from this subcircuit's operations (defaults to empty)
-  localAdds : Environment F → List (NamedList F × ℤ) := fun _ => []
+  localAdds : Environment F → List (NamedList F × F) := fun _ => []
 
   -- `Soundness` needs to follow from the constraints for any witness
   imply_soundness : ∀ env,
@@ -146,7 +146,7 @@ inductive Operation (F : Type) [Field F] where
   | assert : Expression F → Operation F
   | lookup : Lookup F → Operation F
   | subcircuit : {n : ℕ} → Subcircuit F n → Operation F
-  | add : (multiplicity : ℤ) → NamedList (Expression F) → Operation F
+  | add : (multiplicity : Expression F) → NamedList (Expression F) → Operation F
 
 namespace Operation
 instance [Repr F] : Repr (Operation F) where
@@ -237,9 +237,9 @@ def induct {motive : Operations F → Sort*}
   | .add mult nl :: ops => add mult nl ops (induct empty witness assert lookup subcircuit add ops)
 
 /-- Collect all add operations from the operations list, evaluating their expressions -/
-def collectAdds (env : Environment F) : Operations F → List (NamedList F × ℤ)
+def collectAdds (env : Environment F) : Operations F → List (NamedList F × F)
   | [] => []
-  | .add mult nl :: ops => (nl.eval env, mult) :: collectAdds env ops
+  | .add mult nl :: ops => (nl.eval env, mult.eval env) :: collectAdds env ops
   | .witness _ _ :: ops => collectAdds env ops
   | .assert _ :: ops => collectAdds env ops
   | .lookup _ :: ops => collectAdds env ops
@@ -281,7 +281,7 @@ structure Condition (F : Type) [Field F] where
   assert (offset : ℕ) (_ : Expression F) : Prop := True
   lookup (offset : ℕ) (_ : Lookup F) : Prop := True
   subcircuit (offset : ℕ) {m : ℕ} (_ : Subcircuit F m) : Prop := True
-  add (offset : ℕ) (_ : ℤ) (_ : NamedList (Expression F)) : Prop := True
+  add (offset : ℕ) (_ : Expression F) (_ : NamedList (Expression F)) : Prop := True
 
 @[circuit_norm]
 def Condition.apply (condition : Condition F) (offset : ℕ) : Operation F → Prop
