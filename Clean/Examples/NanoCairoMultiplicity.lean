@@ -78,8 +78,7 @@ def isStateNL (nl : NamedList (F p)) (s : State (F p)) : Bool :=
 
 /-- Compute the net flow at a state from collected adds -/
 def netFlowFromAdds (adds : List (NamedList (F p) × ℤ)) (state : State (F p)) : ℤ :=
-  adds.foldl (fun acc (nl, mult) =>
-    if isStateNL nl state then acc + mult else acc) 0
+  ∑ i : Fin adds.length, if isStateNL adds[i].1 state then adds[i].2 else 0
 
 /-- A valid execution path: each consecutive pair is a valid transition -/
 def validExecutionPath
