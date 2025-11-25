@@ -718,4 +718,14 @@ theorem collectAdds_foldl [Inhabited β] [Inhabited α] {m : ℕ} (xs : Vector �
     rw [h_body, List.nil_append, ←Vector.foldlM_toList]
     exact ih _ _
 
+theorem collectAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m)]
+    (init : β) (body : β → Fin m → Circuit F β)
+    (const_out : ConstantOutput (fun (s, a) => body s a))
+    (constant : ConstantLength (fun (s, a) => body s a))
+    (env : Environment F) (offset : ℕ)
+    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = []) :
+    ((foldlRange m init body constant).operations offset).collectAdds env = [] := by
+  unfold foldlRange
+  exact collectAdds_foldl (Vector.finRange m) init body const_out constant env offset h_body
+
 end Circuit
