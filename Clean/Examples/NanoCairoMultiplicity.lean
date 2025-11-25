@@ -76,7 +76,8 @@ def stateToNamedList (s : State (F p)) : NamedList (F p) :=
 def isStateNL (nl : NamedList (F p)) (s : State (F p)) : Bool :=
   nl.name = "state" ∧ nl.values = [s.pc, s.ap, s.fp]
 
-/-- Compute the net flow at a state from collected adds -/
+/-- Compute the net flow at a state from collected adds.
+    Sums multiplicities directly: +1 for destination entries, -1 for source entries. -/
 def netFlowFromAdds (adds : List (NamedList (F p) × ℤ)) (state : State (F p)) : ℤ :=
   ∑ i : Fin adds.length, if isStateNL adds[i].1 state then adds[i].2 else 0
 
@@ -106,16 +107,56 @@ def buildRun
     else
       0
 
-/-- Key lemma: The net flow from adds equals the net flow from the Run -/
-theorem netFlow_from_run_eq
-    {programSize : ℕ} [NeZero programSize] (program : Fin programSize → (F p))
-    {memorySize : ℕ} [NeZero memorySize] (memory : Fin memorySize → (F p))
+/-- A well-formed transition list: alternates between (src, -1), (dst, +1) pairs -/
+def WellFormedTransitionList (adds : List (NamedList (F p) × ℤ)) : Prop :=
+  adds.length % 2 = 0 ∧
+  ∀ i, (h : 2 * i + 1 < adds.length) →
+    (adds[2 * i]'(by omega)).2 = -1 ∧ (adds[2 * i + 1]'h).2 = 1
+
+/-- Count outgoing transitions from state s (even indices) -/
+def countOutgoing (adds : List (NamedList (F p) × ℤ)) (s : State (F p)) : ℕ :=
+  ((List.range adds.length).zip adds).countP fun (i, entry) => i % 2 = 0 ∧ isStateNL entry.1 s
+
+/-- Count incoming transitions to state s (odd indices) -/
+def countIncoming (adds : List (NamedList (F p) × ℤ)) (s : State (F p)) : ℕ :=
+  ((List.range adds.length).zip adds).countP fun (i, entry) => i % 2 = 1 ∧ isStateNL entry.1 s
+
+/-- Helper: value at index i in a well-formed list -/
+lemma wellformed_value_at_index
+    (adds : List (NamedList (F p) × ℤ))
+    (h_even : adds.length % 2 = 0)
+    (h_alt : ∀ i, (h : 2 * i + 1 < adds.length) → (adds[2 * i]'(by omega)).2 = -1 ∧ (adds[2 * i + 1]'h).2 = 1)
+    (i : Fin adds.length) :
+    adds[i].2 = if i.val % 2 = 0 then -1 else 1 := by
+  have hi := i.isLt
+  by_cases h : i.val % 2 = 0
+  · simp only [h, ↓reduceIte]
+    set k := i.val / 2 with hk_def
+    have hk : i.val = 2 * k := by omega
+    have hk_bound : 2 * k + 1 < adds.length := by omega
+    have heq := (h_alt k hk_bound).1
+    simp only [← hk] at heq
+    exact heq
+  · simp only [h, ↓reduceIte]
+    set k := i.val / 2 with hk_def
+    have hk : i.val = 2 * k + 1 := by omega
+    have hk_bound : 2 * k + 1 < adds.length := by omega
+    have heq := (h_alt k hk_bound).2
+    simp only [← hk] at heq
+    exact heq
+
+/-- For a well-formed transition list, netFlowFromAdds equals incoming - outgoing.
+    The proof requires relating Finset.sum of indicators to List.countP over zipped lists. -/
+theorem netFlowFromAdds_eq_incoming_minus_outgoing
     (adds : List (NamedList (F p) × ℤ))
     (s : State (F p))
-    (h_wellformed : ∀ (nl : NamedList (F p)) (m : ℤ), (nl, m) ∈ adds →
-      nl.name = "state" → (m = 1 ∨ m = -1)) :
-    netFlowFromAdds adds s =
-      Utils.StateTransition.Run.netFlow (buildRun program memory adds) s := by
+    (h_wf : WellFormedTransitionList adds) :
+    netFlowFromAdds adds s = (countIncoming adds s : ℤ) - (countOutgoing adds s : ℤ) := by
+  -- The proof idea:
+  -- 1. For even indices i, adds[i].2 = -1, so contribution is -1 if isStateNL
+  -- 2. For odd indices i, adds[i].2 = 1, so contribution is +1 if isStateNL
+  -- 3. Sum = (count of odd indices with isStateNL) - (count of even indices with isStateNL)
+  --        = countIncoming - countOutgoing
   sorry
 
 /-- Main soundness theorem: valid circuit constraints imply valid execution path exists -/
