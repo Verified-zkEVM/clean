@@ -51,8 +51,7 @@ def elaborated (off : Fin 8) : ElaboratedCircuit (F p) U32 U32 where
     simp only [circuit_norm, main, Operations.collectAdds, List.append_nil]
     apply Circuit.collectAdds_map
     intro x n
-    simp [circuit_norm, Operations.collectAdds]
-    rfl
+    simp only [circuit_norm, Operations.collectAdds]
   output_eq _ _ := by
     simp only [circuit_norm, main, output, ByteDecomposition.circuit, ByteDecomposition.elaborated]
     apply congrArg U32.fromLimbs

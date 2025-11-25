@@ -48,7 +48,12 @@ def circuit : FormalCircuit (F p) field (fields 254) where
   localLength _ := 254 + 127 + 1 + 135 + 1 -- Num2Bits + AliasCheck
   localLength_eq := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [main, Num2Bits.main, circuit_norm, Operations.collectAdds]
+    rw [Circuit.collectAdds_foldlRange']
+    · simp only [circuit_norm, List.append_nil]
+    · intro (lc1, e2) i k
+      simp only [circuit_norm, Operations.collectAdds, List.append_nil]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Num2Bits.main, AliasCheck.circuit]
 
@@ -127,7 +132,8 @@ def circuit : FormalCircuit (F p) (fields 254) field where
   localLength _ := (127 + 1 + 135 + 1) + 1  -- AliasCheck + Bits2Num
   localLength_eq := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [main, circuit_norm, Operations.collectAdds, Bits2Num.main]
   subcircuitsConsistent := by simp +arith [circuit_norm, main,
     Bits2Num.main, AliasCheck.circuit]
 
@@ -191,7 +197,12 @@ def circuit (n : ℕ) (hn : 2^n < p) : FormalCircuit (F p) field (fields n) wher
   main := main n
   localLength _ := n + 2 -- witness + IsZero
   localLength_eq := by simp [circuit_norm, main, IsZero.circuit]
-  localAdds_eq _ _ _ := by sorry
+  localAdds_eq _ _ _ := by
+    simp only [main, circuit_norm, Operations.collectAdds]
+    rw [Circuit.collectAdds_foldlRange']
+    · simp only [circuit_norm, List.append_nil]
+    · intro lc1 i k
+      simp only [circuit_norm, Operations.collectAdds, List.append_nil]
   subcircuitsConsistent := by
     simp +arith only [circuit_norm, main, IsZero.circuit]
 

@@ -30,11 +30,10 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
 
   localLength_eq state i0 := by simp only [main, circuit_norm, KeccakRound.circuit]
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main, Operations.collectAdds]
+    simp only [circuit_norm, main]
     apply Circuit.collectAdds_foldl
     intro state rc n
     simp [circuit_norm, KeccakRound.circuit, Operations.collectAdds]
-    rfl
   subcircuitsConsistent state i0 := by simp only [main, circuit_norm]
   output_eq state i0 := by simp only [main, stateVar, circuit_norm, KeccakRound.circuit]
 

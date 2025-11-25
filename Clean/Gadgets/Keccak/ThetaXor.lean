@@ -28,8 +28,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState where
     simp only [circuit_norm, main, Operations.collectAdds]
     apply Circuit.collectAdds_mapFinRange
     intro i n
-    simp [circuit_norm, Xor64.circuit, Operations.collectAdds]
-    rfl
+    simp only [circuit_norm, Xor64.circuit, Operations.collectAdds]
   subcircuitsConsistent _ i := by simp only [main, circuit_norm]
 
 def Assumptions (inputs : Inputs (F p)) : Prop :=

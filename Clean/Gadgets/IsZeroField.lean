@@ -27,8 +27,7 @@ instance elaborated : ElaboratedCircuit F field field where
   main
   localLength _ := 2  -- 2 witnesses: isZero and x_inv
   localAdds_eq _ _ _ := by
-    simp [main, circuit_norm, Operations.collectAdds]
-    constructor <;> rfl
+    simp only [main, circuit_norm, Operations.collectAdds]
 
 def Assumptions (_ : F) : Prop := True
 

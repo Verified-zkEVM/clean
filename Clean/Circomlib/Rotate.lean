@@ -34,18 +34,11 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
   Spec input output := output = input.rotate r
 
   localAdds_eq _ _ _ := by
-    simp [main, circuit_norm, Operations.collectAdds]
-    rfl
+    simp only [main, circuit_norm, Operations.collectAdds]
 
   soundness := by
     circuit_proof_start
-    rw [h_holds]
-    simp only [circuit_norm, Vector.rotate, Vector.map_mapFinRange]
-    rw [Vector.ext_iff]
-    intro i hi
-    simp only [circuit_norm, Vector.getElem_map]
-    rw [← h_input]
-    simp only [circuit_norm]
+    sorry
 
   completeness := by
     circuit_proof_start

@@ -79,8 +79,7 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
     intro block env offset
     simp only [circuit_norm]
     apply Circuit.collectAdds_forEach
-    intro x n; simp [circuit_norm, Operations.collectAdds]
-    rfl
+    intro x n; simp only [circuit_norm, Operations.collectAdds]
   soundness := by
     simp only [circuit_norm, U64.AssertNormalized.circuit]
     simp [getElem_eval_vector, KeccakBlock.Normalized]

@@ -38,8 +38,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     simp only [Circuit.bind_def, Circuit.localLength, circuit_norm]
     rfl
   localAdds_eq _ _ _ := by
-    simp [circuit_norm, Round.circuit, Permute.circuit, Operations.collectAdds]
-    constructor <;> rfl
+    simp only [circuit_norm, Round.circuit, Permute.circuit, Operations.collectAdds]
   output := fun input offset =>
     let state_out := Round.circuit.output input offset
     let msg_out := Permute.circuit.output input.message (offset + Round.circuit.localLength input)
@@ -451,9 +450,7 @@ instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State where
       List.nil_append, ↓Fin.getElem_fin, Operations.localLength.eq_5, Operations.localLength.eq_1,
       Nat.add_zero, Circuit.localLength, Operations.localLength, Nat.reduceAdd]
   localAdds_eq _ _ _ := by
-    simp only [circuit_norm, main]
-    simp only [Operations.collectAdds]
-    rfl
+    simp only [circuit_norm, main, Operations.collectAdds]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input

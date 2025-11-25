@@ -33,8 +33,7 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState where
     simp only [circuit_norm, main, Operations.collectAdds]
     apply Circuit.collectAdds_map
     intro ⟨i, s⟩ n
-    simp [circuit_norm, Rotation64.circuit, Operations.collectAdds]
-    rfl
+    simp only [circuit_norm, Rotation64.circuit, Operations.collectAdds]
   subcircuitsConsistent _ _ := by simp only [main, circuit_norm]
 
 -- recharacterize rhoPi as a loop

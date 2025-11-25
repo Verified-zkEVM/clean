@@ -669,14 +669,13 @@ end foldlRange
 
 theorem collectAdds_forEach {m : ℕ} (xs : Vector α m) [Inhabited α] (body : α → Circuit F Unit)
     (constant : ConstantLength body) (env : Environment F) (offset : ℕ)
-    (h_body : ∀ x n, ((body x).operations n).collectAdds env = []) :
-    ((forEach xs body constant).operations offset).collectAdds env = [] := by
+    (h_body : ∀ x n, Operations.collectAdds env ((body x) n).2 = []) :
+    Operations.collectAdds env ((forEach xs body constant) offset).2 = [] := by
   induction xs using Vector.induct generalizing offset
   · rfl
   case cons n a as ih =>
-    simp only [circuit_norm, Circuit.operations]
-    rw [h_body]
-    rw [ih]
+    simp only [circuit_norm, Operations.collectAdds_append]
+    rw [h_body, ih]
     simp
 
 theorem collectAdds_map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
@@ -727,5 +726,21 @@ theorem collectAdds_foldlRange [Inhabited β] {m : ℕ} [inst : Inhabited (Fin m
     ((foldlRange m init body constant).operations offset).collectAdds env = [] := by
   unfold foldlRange
   exact collectAdds_foldl (Vector.finRange m) init body const_out constant env offset h_body
+
+/-- Version of collectAdds_foldlRange that works for all m including 0. -/
+theorem collectAdds_foldlRange' [Inhabited β] {m : ℕ}
+    (init : β) (body : β → Fin m → Circuit F β)
+    (constant : ConstantLength (fun (s, a) => body s a))
+    (env : Environment F) (offset : ℕ)
+    (h_body : ∀ s i n, ((body s i).operations n).collectAdds env = []) :
+    ((foldlRange m init body constant).operations offset).collectAdds env = [] := by
+  simp only [foldlRange]
+  rw [Vector.foldlM_toList]
+  induction (Vector.finRange m).toList generalizing offset init with
+  | nil => simp only [List.foldlM_nil, pure_operations_eq, Operations.collectAdds]
+  | cons x xs ih =>
+    simp only [List.foldlM_cons, Circuit.bind_operations_eq, Operations.collectAdds_append]
+    rw [h_body, List.nil_append]
+    exact ih ((body init x).output offset) (offset + (body init x).localLength offset)
 
 end Circuit
